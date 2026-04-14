@@ -16,7 +16,7 @@ For every specification (spec), you MUST follow this sequence strictly:
 *   **One spec at a time:** Never work on multiple behaviors simultaneously.
 *   **Smallest Implementation:** If 5 lines pass the test, do not write 6.
 *   **No Big Design Upfront:** Do not create abstractions for hypothetical future needs.
-*   **Test as Documentation:** Test names must describe expected behavior using the **Given/When/Then** pattern.
+*   **Test as Documentation:** Test function names MUST follow the format `Test_Given<Context>_When<Action>_Then<Outcome>` — e.g. `Test_GivenNoArgs_WhenHelpFlag_ThenPrintsToolName`.
 
 ## 3. Go Coding Standards
 
@@ -27,7 +27,8 @@ For every specification (spec), you MUST follow this sequence strictly:
     *   Use `testify` (`assert`/`require`) for assertions.
     *   Use `Mockery` for interface mocks (prefer exact values/typed matchers over `mock.Anything`).
 *   **Quality Gate:** Minimum coverage threshold is **80%**. The pre-commit hook will fail if below this.
-*   **Test Pattern:** Every test MUST follow the **Given/When/Then** structure:
+*   **Test Pattern:** Every test MUST follow the **Given/When/Then** structure in both name and body:
+    *   **Name:** `Test_Given<Context>_When<Action>_Then<Outcome>`
     *   `// Given:` — arrange initial state and dependencies
     *   `// When:` — execute the action under test
     *   `// Then:` — assert the expected outcome

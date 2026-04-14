@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestVersionCommand_PrintsCurrentVersion(t *testing.T) {
+func Test_GivenVersionArgs_WhenVersionCommandExecuted_ThenPrintsV010(t *testing.T) {
 	// Given: a captured output buffer and version args
 	buf := &bytes.Buffer{}
 
@@ -20,7 +20,7 @@ func TestVersionCommand_PrintsCurrentVersion(t *testing.T) {
 	assert.Contains(t, buf.String(), "v0.1.0")
 }
 
-func TestVersionCommand_ShortDescription(t *testing.T) {
+func Test_GivenFreshRootCmd_WhenVersionSubcommandInspected_ThenHasNonEmptyShortDescription(t *testing.T) {
 	// Given: a fresh root command
 	cmd := buildRootCmd()
 

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRootCommand_Help(t *testing.T) {
+func Test_GivenHelpFlag_WhenRootCommandExecuted_ThenPrintsToolName(t *testing.T) {
 	// Given: a captured output buffer and --help args
 	buf := &bytes.Buffer{}
 
@@ -21,7 +21,7 @@ func TestRootCommand_Help(t *testing.T) {
 	assert.Contains(t, buf.String(), "athena")
 }
 
-func TestRootCommand_HasVersionSubcommand(t *testing.T) {
+func Test_GivenFreshRootCmd_WhenInspectingSubcommands_ThenVersionIsPresent(t *testing.T) {
 	// Given: a fresh root command
 	cmd := buildRootCmd()
 
@@ -35,7 +35,7 @@ func TestRootCommand_HasVersionSubcommand(t *testing.T) {
 	assert.Contains(t, subcommandNames, "version")
 }
 
-func TestExecute_RunsWithoutError(t *testing.T) {
+func Test_GivenHelpArgs_WhenExecuteCalled_ThenNoError(t *testing.T) {
 	// Given: a captured output buffer and --help args
 	buf := &bytes.Buffer{}
 
@@ -46,7 +46,7 @@ func TestExecute_RunsWithoutError(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestExecute_HappyPath(t *testing.T) {
+func Test_GivenHelpFlag_WhenExecutePublicEntryPoint_ThenPrintsToolName(t *testing.T) {
 	// Given: os.Args set to --help and stdout redirected to discard output
 	oldArgs := os.Args
 	os.Args = []string{"athena", "--help"}

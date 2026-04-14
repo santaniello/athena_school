@@ -40,7 +40,9 @@ For each spec, the cycle MUST be followed in this exact order:
 - Tests in the same package with `_test.go` suffix
 - Test coverage: every behavior documented in a spec must have a test
 - Minimum coverage threshold: **80%** — the pre-commit hook will refuse to proceed if overall coverage is below this value
-- Tests must follow the **GivenWhenThen** pattern: arrange the initial state (Given), execute the action (When), assert the outcome (Then)
+- Tests must follow the **GivenWhenThen** pattern both in name and body:
+  - **Function name:** `Test_Given<Context>_When<Action>_Then<Outcome>` — e.g. `Test_GivenNoArgs_WhenHelpFlag_ThenPrintsToolName`
+  - **Body:** three labeled sections — `// Given:` (arrange), `// When:` (act), `// Then:` (assert)
 - Use **testify** for assertions (`assert` / `require`)
 - Use **Mockery** to generate mocks from interfaces
 - Mock parameters must be typed explicitly — avoid `mock.AnythingOfType` and `mock.Anything` unless there is no viable alternative; prefer exact values or typed matchers
@@ -82,7 +84,7 @@ For each spec, the cycle MUST be followed in this exact order:
 
 - After every change, evaluate whether `README.md` needs to be updated — update it if the change affects usage, commands, configuration, or project structure
 - Architecture documentation lives in `docs/` at the project root — every structural decision must be reflected there
-- `CHANGELOG.md` follows the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) standard — every change must add an entry to the `[Unreleased]` section
+- `CHANGELOG.md` follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) standard — every change must add an entry to the `[Unreleased]` section
 
 ## What the AI must NOT do
 
