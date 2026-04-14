@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export PATH="$HOME/go/bin:$PATH"
+
+echo "Running pre-commit quality gate..."
+
+# 1. Tests
+echo "-> Running tests..."
+go test ./...
+
+# 2. Coverage (minimum 80%)
+echo "-> Checking coverage..."
+go test ./... -coverprofile=coverage.out 2>/dev/null || true
+if [ ! -f coverage.out ]; then
+  echo "FAIL: coverage.out was not generated."
+  exit 1
+fi
+TOTAL=$(go tool cover -func=coverage.out | grep '^total:' | awk '{print $3}' | tr -d '%')
+rm -f coverage.out
+echo "   Coverage: ${TOTAL}%"
+if awk "BEGIN{exit !($TOTAL < 80)}"; then
+  echo "FAIL: Coverage ${TOTAL}% is below the 80% threshold."
+  exit 1
+fi
+
+# 3. Lint (golangci-lint includes gosec; fallback to go vet)
+echo "-> Running lint..."
+if command -v golangci-lint &>/dev/null && golangci-lint run --version &>/dev/null 2>&1; then
+  golangci-lint run
+else
+  go vet ./...
+fi
+
+# 4. Vulnerabilities
+echo "-> Running govulncheck..."
+govulncheck ./...
+
+echo "OK: All quality gates passed."
