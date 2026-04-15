@@ -1,0 +1,6 @@
+all: false
+dir: internal/platform/llm
+output: internal/study/mocks
+outpkg: mocks
+filename: mock_llm_provider.go
+name: LLMProvider

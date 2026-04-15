@@ -11,7 +11,7 @@ go test ./...
 
 # 2. Coverage (minimum 80%)
 echo "-> Checking coverage..."
-go test ./... -coverprofile=coverage.out 2>/dev/null || true
+go test ./... -coverprofile=coverage.out -coverpkg=./... 2>/dev/null || true
 if [ ! -f coverage.out ]; then
   echo "FAIL: coverage.out was not generated."
   exit 1

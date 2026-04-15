@@ -33,6 +33,7 @@ func buildRootCmd() *cobra.Command {
 
 	cmd.AddCommand(newVersionCmd())
 	cmd.AddCommand(newConfigCmd(configPath))
+	cmd.AddCommand(newStudyCmd(configPath))
 	return cmd
 }
 

@@ -80,7 +80,7 @@ type ollamaResponse struct {
 func (c *Client) Chat(ctx context.Context, req Request) (Response, error) {
 	messages := make([]ollamaMessage, len(req.Messages))
 	for i, m := range req.Messages {
-		messages[i] = ollamaMessage{Role: m.Role, Content: m.Content}
+		messages[i] = ollamaMessage(m)
 	}
 
 	body, err := json.Marshal(ollamaRequest{

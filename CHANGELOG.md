@@ -15,3 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Config system: `internal/platform/config` package with `Load`, `Save`, and `DefaultPath`
 - `athena config get` command — prints current provider and model
 - `athena config set <key> <value>` command — persists provider, model, and ollama.host to `~/.config/athena/config.yaml`
+- `athena study <topic> [subtopic]` command — interactive guided study session with LLM-driven explanation, question, and answer evaluation
+- `internal/study` package with `Session`, prompt builders, and spinner-based UX
+- Animated spinner for all LLM calls via `github.com/briandowns/spinner`
+- Mockery configuration for generating typed mocks of `LLMProvider`
+- Coverage measurement updated to use `-coverpkg=./...` for accurate cross-package reporting
