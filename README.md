@@ -8,6 +8,32 @@ Athena is an active learning CLI for developers. It guides you through technical
 go install github.com/fsantaniello/athena_school/cmd/athena@latest
 ```
 
+## Running Ollama with Docker
+
+The easiest way to run Ollama locally is via Docker Compose:
+
+```bash
+# Start Ollama in the background
+docker compose up -d
+
+# Pull the default model (only needed once — data is persisted in a Docker volume)
+docker compose exec ollama ollama pull llama3
+```
+
+Ollama will be available at `http://localhost:11434`, which is the default host used by `athena`.
+
+To point `athena` at a different Ollama instance, set the `OLLAMA_HOST` environment variable:
+
+```bash
+OLLAMA_HOST=http://my-server:11434 athena study system-design
+```
+
+Or persist it permanently:
+
+```bash
+athena config set ollama.host http://my-server:11434
+```
+
 ## Configuration
 
 ```bash

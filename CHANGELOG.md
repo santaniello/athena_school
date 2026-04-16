@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `docker-compose.yml` to run Ollama locally (CPU mode) with a persistent volume
+- `OLLAMA_HOST` environment variable support in config — overrides the default Ollama host without editing the config file
 - Bootstrap CLI with `cobra` — root command with help output and subcommand listing
 - `version` command printing the current semantic version (`v0.1.0`)
 - Pre-commit quality gate enforcing tests, coverage (≥ 80%), lint, and security checks
