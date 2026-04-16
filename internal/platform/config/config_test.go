@@ -132,6 +132,18 @@ func Test_GivenDefaultPath_WhenCalled_ThenReturnsXDGPath(t *testing.T) {
 	assert.Contains(t, path, filepath.Join(".config", "athena", "config.yaml"))
 }
 
+func Test_GivenOllamaHostEnvVar_WhenLoad_ThenUsesEnvVarHost(t *testing.T) {
+	// Given:
+	t.Setenv("OLLAMA_HOST", "http://custom-host:11434")
+
+	// When:
+	cfg, err := config.Load("/nonexistent/path/config.yaml")
+
+	// Then:
+	require.NoError(t, err)
+	assert.Equal(t, "http://custom-host:11434", cfg.Ollama.Host)
+}
+
 func Test_GivenSavedFile_WhenSave_ThenFilePermissionsAre0600(t *testing.T) {
 	// Given:
 	dir := t.TempDir()

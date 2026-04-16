@@ -27,10 +27,14 @@ type OllamaConfig struct {
 }
 
 func defaults() *Config {
+	host := DefaultOllamaHost
+	if v := os.Getenv("OLLAMA_HOST"); v != "" {
+		host = v
+	}
 	return &Config{
 		Provider: DefaultProvider,
 		Model:    DefaultModel,
-		Ollama:   OllamaConfig{Host: DefaultOllamaHost},
+		Ollama:   OllamaConfig{Host: host},
 	}
 }
 
