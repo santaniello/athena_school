@@ -71,6 +71,7 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
+          install-mode: goinstall
 
       - name: Check for known vulnerabilities
         run: |
