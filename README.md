@@ -99,24 +99,27 @@ make lint            # golangci-lint run
 
 ```text
 athena/
-├── cmd/
-│   └── athena/              # Wails entrypoint
+├── main.go                  # Wails entrypoint (required at project root)
+├── wails.json                # Wails project config
 ├── internal/
-│   ├── domain/              # pure business rules
-│   ├── application/         # use cases
-│   ├── infrastructure/      # SQLite, OpenRouter, filesystem
+│   ├── domain/               # pure business rules
+│   ├── application/          # use cases
+│   ├── infrastructure/       # SQLite, OpenRouter, filesystem
 │   └── interfaces/
-│       └── desktop/         # Wails bindings
-├── frontend/                # React + TypeScript
-├── server/                  # Auth + license HTTP server
-├── specs/                   # Product and implementation specs
-│   ├── Athena.md            # Product spec
-│   ├── Planning.md          # Implementation plan (authoritative)
-│   ├── phases/              # Per-phase detailed specs
-│   └── decisions/           # Architecture Decision Records (ADRs)
+│       └── desktop/          # Wails bindings (App struct)
+├── frontend/                 # React + TypeScript (Vite)
+├── build/                    # Wails packaging assets (icons, platform manifests)
+├── server/                   # Auth + license HTTP server
+├── specs/                    # Product and implementation specs
+│   ├── Athena.md              # Product spec
+│   ├── Planning.md            # Implementation plan (authoritative)
+│   ├── phases/                # Per-phase detailed specs
+│   └── decisions/             # Architecture Decision Records (ADRs)
 ├── go.mod
 └── Makefile
 ```
+
+> Note: `main.go` lives at the project root, not under `cmd/`, because Wails v2 requires the main package (and its `//go:embed all:frontend/dist` directive) to sit next to `wails.json` and `frontend/`. The real Wails bindings still live in `internal/interfaces/desktop/`, kept as thin as the hexagonal architecture rules require.
 
 ---
 

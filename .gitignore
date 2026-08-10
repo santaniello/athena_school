@@ -11,8 +11,8 @@ vendor/
 *.out
 
 # Wails
-/build/
-/wailsjs/
+/build/bin/
+frontend/package.json.md5
 
 # Node / frontend
 node_modules/

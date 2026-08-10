@@ -79,19 +79,22 @@ Pagamentos       Paddle
 
 ```text
 athena/
-├── cmd/
-│   └── athena/              # Wails entrypoint
+├── main.go                  # Wails entrypoint (Wails v2 exige main.go na raiz)
+├── wails.json                # Config do projeto Wails
 ├── internal/
-│   ├── domain/              # regras de negócio puras
-│   ├── application/         # casos de uso
-│   ├── infrastructure/      # SQLite, OpenRouter, filesystem
+│   ├── domain/                # regras de negócio puras
+│   ├── application/           # casos de uso
+│   ├── infrastructure/        # SQLite, OpenRouter, filesystem
 │   └── interfaces/
-│       └── desktop/         # Wails bindings
-├── frontend/                # React + TypeScript (gerado pelo Wails)
+│       └── desktop/           # Wails bindings (App struct)
+├── frontend/                 # React + TypeScript (gerado pelo Wails)
+├── build/                    # Assets de empacotamento do Wails (ícones, manifests)
 ├── go.mod
 ├── go.sum
 └── Makefile
 ```
+
+> `cmd/athena/` foi descartado: o Wails v2 não suporta main package fora da raiz do projeto (a diretiva `//go:embed all:frontend/dist` também exige isso), então o entrypoint mora em `main.go` na raiz. Os bindings de verdade continuam em `internal/interfaces/desktop/`.
 
 #### Wails
 - [ ] `wails init` com template React + TypeScript

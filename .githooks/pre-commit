@@ -12,8 +12,12 @@ if [ ! -f go.mod ]; then
 fi
 
 # 1. Tests + coverage in a single pass
+# The root main package is excluded from coverage: it only wires up
+# wails.Run(), which opens a real OS window and cannot run under `go test`.
 echo "-> Running tests with coverage..."
-go test -coverprofile=coverage.out ./...
+MODULE="$(go list -m)"
+PACKAGES="$(go list ./... | grep -v "^${MODULE}\$")"
+go test -coverprofile=coverage.out ${PACKAGES}
 if [ ! -f coverage.out ]; then
   echo "FAIL: coverage.out was not generated."
   exit 1
