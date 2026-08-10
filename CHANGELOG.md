@@ -9,3 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Repository scaffold: go.mod, Makefile, directory structure, .gitignore
+- Wails v2 + React + TypeScript desktop shell (`wails dev`/`wails build`)
+
+### Changed
+- Moved the Wails entrypoint from `cmd/athena/` to root `main.go`: Wails v2 does not support a main package outside the project root

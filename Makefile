@@ -1,8 +1,8 @@
 build:
-	wails build
+	wails build -tags webkit2_41
 
 dev:
-	wails dev
+	wails dev -tags webkit2_41
 
 test:
 	go test ./...
