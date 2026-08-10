@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export PATH="$HOME/go/bin:$PATH"
+
+echo "Running pre-commit quality gate..."
+
+# Skip Go checks when the module has not been initialised yet (early setup commits)
+if [ ! -f go.mod ]; then
+  echo "SKIP: go.mod not found — skipping Go quality gates."
+  exit 0
+fi
+
+# 1. Tests + coverage in a single pass
+echo "-> Running tests with coverage..."
+go test -coverprofile=coverage.out ./...
+if [ ! -f coverage.out ]; then
+  echo "FAIL: coverage.out was not generated."
+  exit 1
+fi
+TOTAL=$(go tool cover -func=coverage.out | grep '^total:' | awk '{print $3}' | tr -d '%')
+rm -f coverage.out
+echo "   Coverage: ${TOTAL}%"
+if awk "BEGIN{exit !($TOTAL < 80)}"; then
+  echo "FAIL: Coverage ${TOTAL}% is below the 80% threshold."
+  exit 1
+fi
+
+# 2. Security finding suppression (AGENTS.md: never suppress gosec/nolint findings)
+echo "-> Checking for suppressed security findings..."
+if grep -rn --include="*.go" -E '//\s*(nolint:.*gosec|nosec)' .; then
+  echo "FAIL: Security finding suppression detected. Fix the root cause instead."
+  exit 1
+fi
+
+# 3. Code smells + security (golangci-lint includes gosec)
+echo "-> Running lint..."
+if command -v golangci-lint &>/dev/null && golangci-lint run --version &>/dev/null 2>&1; then
+  golangci-lint run
+else
+  go vet ./...
+fi
+
+# 4. Vulnerabilities
+echo "-> Running govulncheck..."
+govulncheck ./...
+
+echo "OK: All quality gates passed."
