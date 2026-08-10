@@ -99,7 +99,7 @@ make lint            # golangci-lint run
 
 ### Continuous Integration (`.github/workflows/ci.yml`)
 
-Runs on every push and on pull requests targeting `main` or `develop`. It enforces the same quality gate as the local pre-commit hook (`make install-hooks`), so nothing that would fail locally can pass on CI:
+Runs on pull requests targeting `main` or `develop`, and on direct pushes to `main`/`develop`. Feature branches are validated once their PR is open, avoiding duplicate runs for the same commit. It enforces the same quality gate as the local pre-commit hook (`make install-hooks`), so nothing that would fail locally can pass on CI:
 
 1. `go test -race -coverprofile=coverage.out` — the root `main` package is excluded, since it only wires `wails.Run()` and can't run under `go test`
 2. Coverage must be **≥ 80%**

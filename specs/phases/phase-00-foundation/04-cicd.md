@@ -9,7 +9,7 @@ Every version tag triggers a cross-platform release build with distributable art
 
 ### `ci.yml`
 
-Triggered on: push to any branch, pull request to `main`.
+Triggered on: pull request to `main` or `develop`, and direct push to `main`/`develop`. (Deviates from "push to any branch" to avoid double-running CI on the same commit once a PR is open — see `.github/workflows/ci.yml`.)
 
 Steps:
 - [x] Checkout + Go setup (`actions/setup-go`)
