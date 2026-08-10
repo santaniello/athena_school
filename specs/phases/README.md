@@ -1,164 +1,178 @@
 # Athena — Implementation Phases
 
-Cada fase entrega software funcionando. Não inicie a próxima fase antes de a atual estar completa e testada.
+Each phase delivers working software. Do not start the next phase before the current one is complete and tested.
+
+> **Reference:** `specs/Planning.md` is the authoritative source. This directory contains the detailed specs per phase.
 
 ---
 
-## Estrutura de Diretórios (Package-Oriented Design)
+## Stack
 
-```
-athena/
-├── cmd/
-│   └── athena/              # CLI wiring: Cobra setup, flags, output — imports internal/
-│       ├── main.go
-│       ├── root.go
-│       ├── study.go
-│       └── ...
-├── internal/
-│   ├── study/               # domain: study session logic
-│   ├── challenge/           # domain: challenge logic
-│   ├── interview/           # domain: interview logic
-│   ├── progress/            # domain: progress tracking
-│   ├── rag/                 # domain: RAG / semantic search
-│   └── platform/            # foundational packages (no app policy)
-│       ├── config/          # config load/save (YAML)
-│       ├── llm/             # LLMProvider interface + factory
-│       │   └── ollama/      # Ollama HTTP implementation
-│       └── storage/         # persistence layer (future)
-├── go.mod
-└── Makefile
+```text
+Frontend         React + TypeScript
+Desktop bridge   Wails v2
+Core             Go (Clean/Hexagonal)
+Local DB         SQLite (modernc.org/sqlite — pure Go, no CGO)
+Vector store     Local (initial phase)
+LLM              OpenRouter API
+Auth backend     Go HTTP API (accounts + licenses)
+CI/CD            GitHub Actions
+Payments         Paddle
 ```
 
-**Import rules:**
-- `cmd/athena/` → may import `internal/` (domain) and `internal/platform/`
-- `internal/<domain>/` → may import `internal/platform/`; never imports `cmd/`
-- `internal/platform/<pkg>/` → may NOT import siblings at the same level; sets no app policy
+---
+
+## Principles
+
+- **Incremental** — each phase ships usable software
+- **Core-first** — business rules never live in the frontend
+- **Knowledge-first** — query local knowledge before calling the LLM
+- **Local-first** — user data stays on device; server manages only auth and licenses
+- **Simple design** — no premature abstractions; solve the current problem
+- **TDD** — tests before implementation; minimum 80% coverage
 
 ---
 
-## Princípios (XP)
+## Overview
 
-- **Incrementos pequenos** — cada spec é implementável em 1-3 dias
-- **Working software first** — nada de scaffolding sem funcionalidade real
-- **Simple design** — o mínimo necessário para o requisito, sem abstrações prematuras
-- **Test as you go** — cada spec tem critérios de aceitação verificáveis
-
----
-
-## Visão Geral
-
-| Fase | Foco | Entrega |
-|---|---|---|
-| [Phase 01](phase-01-foundation/) | Fundação | CLI funcional + Ollama + `study` |
-| [Phase 02](phase-02-challenge/) | Prática ativa | `challenge` + tracking de progresso |
-| [Phase 03](phase-03-interview/) | Simulação | `interview` + source modes + subtópicos |
-| [Phase 04](phase-04-rag/) | Notas pessoais | `ingest` + busca semântica |
-| [Phase 05](phase-05-tui/) | UX do terminal | Interface TUI com Bubble Tea |
-| [Phase 06](phase-06-gui/) | Expansão | Dashboard web + multi-provider |
-| [Phase 07](phase-07-algorithms/) | Código | `algo` + execução + coding interview |
+| Phase | Name | Goal | Depends on |
+|---|---|---|---|
+| [0](phase-00-foundation/) | Foundation | Repo, tooling, CI/CD | — |
+| [1](phase-01-desktop-mvp/) | Desktop MVP | Login, onboarding, study | Phase 0 |
+| [2](phase-02-knowledge-engine/) | Knowledge Engine | Knowledge Base + RAG + notes | Phase 1 |
+| [3](phase-03-learning-intelligence/) | Learning Intelligence | Challenge + Gap Detection + Flashcards | Phase 2 |
+| [4](phase-04-interview-mode/) | Interview Mode | Full interview simulation | Phase 3 |
+| [5](phase-05-comercializacao/) | Comercialização | Plans, payment, macOS, feature gating | Phase 1 |
+| [6](phase-06-voice-interview/) | Voice Interview | Audio interview (STT + TTS) | Phase 4 |
+| [7](phase-07-advanced-features/) | Advanced Features | Whiteboard, Knowledge Graph, Algorithm Mode | Phase 4 |
 
 ---
 
-## Phase 01 — Foundation
+## Phase 0 — Foundation
 
-> **Objetivo:** Ter um `athena study system-design caching` funcionando end-to-end com Ollama.
+**Done when:** `wails dev` opens a blank desktop window with no errors; `go test ./...` passes; pushing tag `v0.0.1` produces Windows and Linux binaries in GitHub Releases.
 
-| Spec | Descrição |
+| Spec | Description |
 |---|---|
-| [01-project-setup.md](phase-01-foundation/01-project-setup.md) | Go module, Cobra CLI, Makefile |
-| [02-config-system.md](phase-01-foundation/02-config-system.md) | Config persistente em YAML |
-| [03-llm-provider.md](phase-01-foundation/03-llm-provider.md) | Interface `LLMProvider` + Ollama |
-| [04-study-command.md](phase-01-foundation/04-study-command.md) | Sessão de estudo interativa |
-
-**Done when:** `athena study system-design caching` explica o tópico, pergunta algo, e dá feedback.
+| [01-repo-setup.md](phase-00-foundation/01-repo-setup.md) | gitignore, CLAUDE.md, go.mod, directory structure |
+| [02-wails-setup.md](phase-00-foundation/02-wails-setup.md) | Wails init, build, dev mode |
+| [03-quality-gates.md](phase-00-foundation/03-quality-gates.md) | Pre-commit hooks, lint, vuln check |
+| [04-cicd.md](phase-00-foundation/04-cicd.md) | GitHub Actions: CI + release matrix |
 
 ---
 
-## Phase 02 — Challenge & Progress
+## Phase 1 — Desktop MVP
 
-> **Objetivo:** Prática com problemas reais e histórico de evolução.
+**Done when:** User installs on Windows or Linux, creates an account, confirms email, completes conversational onboarding, opens the main screen, and runs a full study session with streaming personalized response. 7-day trial visible in the UI.
 
-| Spec | Descrição |
+| Spec | Description |
 |---|---|
-| [01-challenge-command.md](phase-02-challenge/01-challenge-command.md) | Desafio com avaliação por critérios |
-| [02-progress-tracking.md](phase-02-challenge/02-progress-tracking.md) | Score persistido + `athena progress` |
-
-**Done when:** `athena challenge system-design` e `athena progress` mostram evolução.
+| [01-auth-backend.md](phase-01-desktop-mvp/01-auth-backend.md) | HTTP auth server: register, login, refresh, plan |
+| [02-auth-ui.md](phase-01-desktop-mvp/02-auth-ui.md) | Login/register/recovery screens + Wails bindings |
+| [03-trial.md](phase-01-desktop-mvp/03-trial.md) | 7-day trial, badge, blocking modal |
+| [04-onboarding.md](phase-01-desktop-mvp/04-onboarding.md) | Conversational onboarding → UserProfile |
+| [05-llm-service.md](phase-01-desktop-mvp/05-llm-service.md) | OpenRouter: LLMProvider, streaming, model router, budget |
+| [06-study-mode.md](phase-01-desktop-mvp/06-study-mode.md) | Study session with personalization and streaming |
+| [07-sqlite.md](phase-01-desktop-mvp/07-sqlite.md) | Local SQLite schema: sessions, messages, usage |
+| [08-settings.md](phase-01-desktop-mvp/08-settings.md) | Settings screen: OpenRouter key, profile fields |
+| [09-auto-update.md](phase-01-desktop-mvp/09-auto-update.md) | GitHub Releases check + silent update notification |
 
 ---
 
-## Phase 03 — Interview & Navigation
+## Phase 2 — Knowledge Engine
 
-> **Objetivo:** Simulação de entrevista com timer, controle de fonte e navegação por subtópicos.
+**Done when:** User imports a Markdown folder, runs a study session that uses the notes as context, reviews and approves Knowledge Items at session end, and sees the Knowledge Explorer organized by topic.
 
-| Spec | Descrição |
+| Spec | Description |
 |---|---|
-| [01-interview-command.md](phase-03-interview/01-interview-command.md) | Entrevista cronometrada multi-questão |
-| [02-source-modes.md](phase-03-interview/02-source-modes.md) | `--source notes/web/strict-notes` |
-| [03-subtopics.md](phase-03-interview/03-subtopics.md) | Sugestão e seleção de subtópicos |
-
-**Done when:** `athena interview system-design --source web` roda 3 questões com timer e score final.
+| [01-knowledge-item.md](phase-02-knowledge-engine/01-knowledge-item.md) | KnowledgeItem domain model + SQLite schema |
+| [02-knowledge-extraction.md](phase-02-knowledge-engine/02-knowledge-extraction.md) | Post-session LLM extraction → draft items |
+| [03-notes-import.md](phase-02-knowledge-engine/03-notes-import.md) | Markdown ingest pipeline: parse → chunk → embed |
+| [04-vector-search.md](phase-02-knowledge-engine/04-vector-search.md) | Pure-Go cosine similarity vector store |
+| [05-rag-integration.md](phase-02-knowledge-engine/05-rag-integration.md) | Knowledge-first retrieval flow |
+| [06-knowledge-explorer.md](phase-02-knowledge-engine/06-knowledge-explorer.md) | Sidebar tree UI + detail screen + actions |
+| [07-knowledge-review.md](phase-02-knowledge-engine/07-knowledge-review.md) | Draft review queue + pending badge |
 
 ---
 
-## Phase 04 — RAG (Notes Integration)
+## Phase 3 — Learning Intelligence
 
-> **Objetivo:** Notas pessoais do usuário como base de conhecimento.
+**Done when:** User runs a challenge and receives structured evaluation; gap dashboard shows weak topics; flashcards are generated from approved Knowledge Items; daily review session works with SM-2.
 
-| Spec | Descrição |
+| Spec | Description |
 |---|---|
-| [01-ingest-command.md](phase-04-rag/01-ingest-command.md) | Indexação de arquivos Markdown |
-| [02-semantic-search.md](phase-04-rag/02-semantic-search.md) | Recuperação por similaridade + injeção no prompt |
-
-**Done when:** `athena ingest ./notes && athena study caching --source notes` usa as notas do usuário.
+| [01-challenge-mode.md](phase-03-learning-intelligence/01-challenge-mode.md) | ChallengeSession domain + LLM problem generation |
+| [02-evaluation-engine.md](phase-03-learning-intelligence/02-evaluation-engine.md) | Structured JSON evaluation + results UI |
+| [03-progress-tracking.md](phase-03-learning-intelligence/03-progress-tracking.md) | Per-topic metrics aggregation + progress screen |
+| [04-gap-detection.md](phase-03-learning-intelligence/04-gap-detection.md) | Gap analysis algorithm + dashboard UI |
+| [05-flashcards.md](phase-03-learning-intelligence/05-flashcards.md) | Flashcard model, SM-2 scheduler, review UI |
+| [06-knowledge-promotion.md](phase-03-learning-intelligence/06-knowledge-promotion.md) | Draft → approved + auto flashcard generation |
 
 ---
 
-## Phase 05 — TUI
+## Phase 4 — Interview Mode
 
-> **Objetivo:** Interface de terminal rica e fluida.
+**Done when:** User completes an interview with 3+ questions and a timer, receives a per-question evaluation report and final score, can browse interview history, and the domain matches the user profile.
 
-| Spec | Descrição |
+| Spec | Description |
 |---|---|
-| [01-tui-interface.md](phase-05-tui/01-tui-interface.md) | Bubble Tea: layout, viewport, timer |
-
-**Done when:** `athena tui` permite rodar qualquer sessão com layout visual completo.
+| [01-interview-session.md](phase-04-interview-mode/01-interview-session.md) | InterviewSession domain + progressive LLM conduct |
+| [02-timer.md](phase-04-interview-mode/02-timer.md) | Configurable timer per question |
+| [03-interview-evaluation.md](phase-04-interview-mode/03-interview-evaluation.md) | Per-answer + aggregate evaluation + report |
+| [04-interview-history.md](phase-04-interview-mode/04-interview-history.md) | History list UI + detail + topic evolution |
+| [05-domain-aware-evaluation.md](phase-04-interview-mode/05-domain-aware-evaluation.md) | Domain-specific evaluation criteria via UserProfile |
 
 ---
 
-## Phase 06 — GUI & Multi-Provider
+## Phase 5 — Comercialização
 
-> **Objetivo:** Dashboard web de progresso e suporte a provedores cloud.
+**Done when:** Trial expires and user can upgrade with real payment; locked features clearly indicate their plan; macOS build works in CI; app published on main distribution channels.
 
-| Spec | Descrição |
+| Spec | Description |
 |---|---|
-| [01-dashboard.md](phase-06-gui/01-dashboard.md) | Web server + mapa de conhecimento |
-| [02-multi-provider.md](phase-06-gui/02-multi-provider.md) | OpenAI, Claude, Gemini |
-
-**Done when:** `athena serve` abre dashboard; `--provider openai` funciona.
+| [01-plans-feature-gating.md](phase-05-comercializacao/01-plans-feature-gating.md) | Plan model + licensing service + UI lock icons |
+| [02-paddle-integration.md](phase-05-comercializacao/02-paddle-integration.md) | Paddle products, webhook, checkout flow |
+| [03-plans-screen.md](phase-05-comercializacao/03-plans-screen.md) | Comparison table + monthly/annual toggle |
+| [04-macos-distribution.md](phase-05-comercializacao/04-macos-distribution.md) | Code signing, notarization, dmg artifact |
+| [05-distribution-channels.md](phase-05-comercializacao/05-distribution-channels.md) | Windows installer + winget; Linux AppImage + deb + Flathub |
 
 ---
 
-## Phase 07 — Algorithm Mode
+## Phase 6 — Voice Interview
 
-> **Objetivo:** Prática de algoritmos com execução real de código.
+**Done when:** User completes a full interview speaking and listening; the AI transcribes the answer, evaluates it, and asks the next question by voice; history is saved with text transcript.
 
-| Spec | Descrição |
+| Spec | Description |
 |---|---|
-| [01-algo-command.md](phase-07-algorithms/01-algo-command.md) | Problema → editor → testes → feedback |
-
-**Done when:** `athena algo two-sum --run solution.go` roda testes e avalia a solução.
+| [01-audio-providers.md](phase-06-voice-interview/01-audio-providers.md) | STT (Whisper) + TTS (OpenAI TTS) infrastructure |
+| [02-voice-ui.md](phase-06-voice-interview/02-voice-ui.md) | Microphone controls, live transcript, speaking indicator |
 
 ---
 
-## Dependências entre Fases
+## Phase 7 — Advanced Features
 
-```
-Phase 01 (Foundation)
-    └── Phase 02 (Challenge + Progress)
-            └── Phase 03 (Interview + Source Modes + Subtopics)
-                    └── Phase 04 (RAG)        ← depende de Phase 03 (source modes)
-                    └── Phase 05 (TUI)        ← depende de Phase 03 (sessions completas)
-                            └── Phase 06 (GUI + Multi-Provider)
-                                    └── Phase 07 (Algorithms)
+**Done when:** Knowledge Graph shows concept relations; user draws an architecture and receives a scored evaluation; Algorithm Mode runs safely isolated code (IT users only).
+
+| Spec | Description |
+|---|---|
+| [01-knowledge-graph.md](phase-07-advanced-features/01-knowledge-graph.md) | Concept relations model + graph UI |
+| [02-whiteboard-mode.md](phase-07-advanced-features/02-whiteboard-mode.md) | Semantic diagram model + visual editor + evaluation |
+| [03-algorithm-mode.md](phase-07-advanced-features/03-algorithm-mode.md) | Code editor + sandboxed execution + evaluation |
+
+---
+
+## Dependency Graph
+
+```text
+Phase 0 (Foundation)
+    ↓
+Phase 1 (Desktop MVP)
+    ↓                 ↘
+Phase 2              Phase 5 (in parallel with 2–4)
+    ↓
+Phase 3
+    ↓
+Phase 4
+    ↓         ↘
+Phase 6      Phase 7
 ```
