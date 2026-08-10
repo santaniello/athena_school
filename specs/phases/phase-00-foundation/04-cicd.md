@@ -12,20 +12,20 @@ Every version tag triggers a cross-platform release build with distributable art
 Triggered on: push to any branch, pull request to `main`.
 
 Steps:
-- [ ] Checkout + Go setup (`actions/setup-go`)
-- [ ] `go test -race -coverprofile=coverage.out ./...`
-- [ ] Coverage threshold check — fail if below 80%
-- [ ] Suppression check — `grep -rn --include="*.go" -E '//\s*(nolint:.*gosec|nosec)' .` must return no matches
-- [ ] `golangci-lint run` (via `golangci-lint-action`)
-- [ ] `govulncheck ./...`
+- [x] Checkout + Go setup (`actions/setup-go`)
+- [x] `go test -race -coverprofile=coverage.out ./...`
+- [x] Coverage threshold check — fail if below 80%
+- [x] Suppression check — `grep -rn --include="*.go" -E '//\s*(nolint:.*gosec|nosec)' .` must return no matches
+- [x] `golangci-lint run` (via `golangci-lint-action`)
+- [x] `govulncheck ./...`
 
 ### `release.yml`
 
 Triggered on: push of tag matching `v*`.
 
-- [ ] Build matrix: `[windows-latest, ubuntu-latest]`
-- [ ] Each runner: `wails build` → produces binary
-- [ ] Artifacts uploaded to GitHub Releases automatically via `softprops/action-gh-release`
+- [x] Build matrix: `[windows-latest, ubuntu-latest]`
+- [x] Each runner: `wails build` → produces binary
+- [x] Artifacts uploaded to GitHub Releases automatically via `softprops/action-gh-release`
 
 > **Note:** macOS builds require an Apple Developer certificate for code signing.
 > Add `macos-latest` to the matrix only when the signing workflow is in place (Phase 0.5 or later).

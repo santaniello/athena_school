@@ -95,6 +95,35 @@ make lint            # golangci-lint run
 
 ---
 
+## CI/CD
+
+### Continuous Integration (`.github/workflows/ci.yml`)
+
+Runs on every push and on pull requests targeting `main` or `develop`. It enforces the same quality gate as the local pre-commit hook (`make install-hooks`), so nothing that would fail locally can pass on CI:
+
+1. `go test -race -coverprofile=coverage.out` — the root `main` package is excluded, since it only wires `wails.Run()` and can't run under `go test`
+2. Coverage must be **≥ 80%**
+3. No `//nosec` or `//nolint:gosec` suppression anywhere in `.go` files
+4. `golangci-lint run`
+5. `govulncheck ./...`
+
+Any failing step blocks the PR. The workflow also builds the frontend (`npm ci && npm run build`) and installs the Linux `libgtk-3-dev`/`libwebkit2gtk-4.1-dev` headers first, since the `main` package embeds `frontend/dist` and requires cgo to compile.
+
+### Releases (`.github/workflows/release.yml`)
+
+Triggered only by pushing a tag matching `v*` — regular pushes and PRs never create a release. It builds `wails build` on `ubuntu-latest` and `windows-latest`, then publishes both binaries to a GitHub Release for that tag.
+
+To cut a release:
+
+```bash
+git tag v0.1.0
+git push --tags
+```
+
+This creates a GitHub Release with `athena` (Linux) and `athena.exe` (Windows) attached. macOS isn't in the build matrix yet — it needs an Apple Developer certificate for code signing, planned for a later phase.
+
+---
+
 ## Project Structure
 
 ```text
