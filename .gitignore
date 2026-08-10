@@ -1,4 +1,34 @@
+# Go
+/bin/
+/athena
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+vendor/
+*.test
+*.out
+
+# Wails
+/build/
+/wailsjs/
+
+# Node / frontend
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE / tools
 .idea/
 
+# Test artifacts
 coverage.out
 memory/
