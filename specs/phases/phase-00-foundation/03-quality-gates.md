@@ -7,9 +7,10 @@ Every commit passes automated quality checks before it can be pushed.
 ## Tasks
 
 - [ ] `.githooks/pre-commit` script running:
-  - `go test ./...`
+  - `go test -coverprofile=coverage.out ./...` (single pass for tests + coverage)
   - Coverage check — fail if below 80%
-  - `golangci-lint run`
+  - Suppression check — fail if any `.go` file contains `//nolint:.*gosec` or `//nosec`
+  - `golangci-lint run` (falls back to `go vet` if not installed)
   - `govulncheck ./...`
 - [ ] `make install-hooks` wires the hook path via `git config core.hooksPath .githooks`
 - [ ] `.golangci.yml` with a baseline linter set (errcheck, govet, staticcheck, unused)
