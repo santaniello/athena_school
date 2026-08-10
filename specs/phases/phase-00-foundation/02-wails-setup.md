@@ -6,9 +6,9 @@ Desktop shell running. An empty Wails + React + TypeScript window opens without 
 
 ## Tasks
 
-- [ ] `wails init` with React + TypeScript template
-- [ ] `wails build` produces a working binary for the host OS
-- [ ] `wails dev` launches the dev window with hot reload
+- [x] `wails init` with React + TypeScript template
+- [x] `wails build` produces a working binary for the host OS
+- [x] `wails dev` launches the dev window with hot reload
 
 ## Acceptance Criteria
 
