@@ -11,6 +11,11 @@ import (
 	"github.com/santaniello/athena/internal/interfaces/desktop"
 )
 
+// frontend/ must stay inside this module (no nested go.mod) for this
+// directive to work — go:embed cannot reach into a different Go module.
+// That's why the node_modules-vs-Go-tooling firewall lives one level
+// deeper, at frontend/node_modules/go.mod, instead of here.
+//
 //go:embed all:frontend/dist
 var assets embed.FS
 
