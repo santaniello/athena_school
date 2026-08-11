@@ -1,0 +1,12 @@
+# Gremlins mutation testing config.
+# Scope: business logic only (internal/domain, internal/application), per
+# ADR-001 (hexagonal architecture) and ADR-002 (mutation testing). Target
+# paths are passed as CLI args (see `make mutation-go`), not configured here.
+unleash:
+  dry-run: false
+  workers: 0 # 0 = auto (num CPU)
+  timeout-coefficient: 3
+  threshold-efficacy: 60
+  threshold-mcover: 80
+  exclude-files:
+    - ".*_test\\.go$"

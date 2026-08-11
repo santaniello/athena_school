@@ -17,7 +17,8 @@ For each spec, the cycle MUST be followed in this exact order:
     - Tests must continue to pass after any refactoring
 
 4. **Commit**
-    - Only after: tests passing + coverage ≥ threshold + lint ok + vulnerability ok
+    - Only after: tests passing + coverage ≥ threshold + no surviving mutants in changed
+      `internal/domain`/`internal/application` code + lint ok + vulnerability ok
 
 ## Development methodology (Extreme Programming)
 
@@ -56,6 +57,10 @@ interfaces/desktop  →  application  →  domain  ←  infrastructure
 - Tests in the same package with `_test.go` suffix
 - Test coverage: every behavior documented in a spec must have a test
 - Minimum coverage threshold: **80%** — CI will reject PRs below this value
+- Mutation testing: changes to `internal/domain/` or `internal/application/` must be
+  verified with `make mutation-go` before commit — a surviving mutant means the test
+  asserts too little, not that a new test is missing; strengthen the existing
+  assertion instead of adding a redundant one
 - Tests must follow the **GivenWhenThen** pattern: arrange the initial state (Given), execute the action (When), assert the outcome (Then)
 - Use **testify** for assertions (`assert` / `require`)
 - Use **Mockery** to generate mocks from interfaces
