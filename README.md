@@ -91,7 +91,52 @@ make build           # produces binary in build/bin/
 ```bash
 make test            # go test ./... with race detector
 make lint            # golangci-lint run
+
+cd frontend
+npm run lint          # eslint .
+npm run format:check  # prettier --check .
+npm run test:coverage # vitest run --coverage (80% threshold)
 ```
+
+---
+
+## CI/CD
+
+### Continuous Integration (`.github/workflows/ci.yml`)
+
+Runs on pull requests targeting `main` or `develop`, and on direct pushes to `main`/`develop`. Feature branches are validated once their PR is open, avoiding duplicate runs for the same commit. It enforces the same quality gate as the local pre-commit hook (`make install-hooks`), so nothing that would fail locally can pass on CI:
+
+1. `go test -race -coverprofile=coverage.out` — the root `main` package is excluded, since it only wires `wails.Run()` and can't run under `go test`
+2. Coverage must be **≥ 80%**
+3. No `//nosec` or `//nolint:gosec` suppression anywhere in `.go` files
+4. `golangci-lint run`
+5. `govulncheck ./...`
+
+Any failing step blocks the PR. The workflow also builds the frontend (`npm ci && npm run build`), lints and format-checks it (`npm run lint`, `npm run format:check`), runs its tests with an 80% coverage gate (`npm run test:coverage`), and installs the Linux `libgtk-3-dev`/`libwebkit2gtk-4.1-dev` headers first, since the `main` package embeds `frontend/dist` and requires cgo to compile.
+
+Two more jobs run alongside `quality-gate`:
+
+- **`secret-scan`** — full git-history scan with `gitleaks`, on every push and PR
+- **`commit-lint`** — validates every commit message in a PR against the Conventional Commits format (see below); runs only on `pull_request` events
+
+Dependency updates (Go modules, npm packages, GitHub Actions) are proposed weekly by Dependabot (`.github/dependabot.yml`).
+
+### Conventional Commits
+
+Commit messages must follow `<type>(<scope>): <description>` (scope optional), with `type` one of `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`. `make install-hooks` installs a local `commit-msg` hook that rejects non-conforming messages before they're committed; the `commit-lint` CI job is the backstop for anyone who skips the hook or commits with `--no-verify`.
+
+### Releases (`.github/workflows/release.yml`)
+
+Triggered only by pushing a tag matching `v*` — regular pushes and PRs never create a release. It builds `wails build` on `ubuntu-latest` and `windows-latest`, then publishes both binaries to a GitHub Release for that tag.
+
+To cut a release:
+
+```bash
+git tag v0.1.0
+git push --tags
+```
+
+This creates a GitHub Release with `athena` (Linux) and `athena.exe` (Windows) attached. macOS isn't in the build matrix yet — it needs an Apple Developer certificate for code signing, planned for a later phase.
 
 ---
 

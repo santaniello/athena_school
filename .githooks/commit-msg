@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+COMMIT_MSG_FILE="$1"
+SUBJECT="$(head -n1 "$COMMIT_MSG_FILE")"
+
+# Let git-generated merge/revert/fixup commits through untouched
+if [[ "$SUBJECT" =~ ^(Merge|Revert|fixup!|squash!) ]]; then
+  exit 0
+fi
+
+PATTERN='^(feat|fix|refactor|test|docs|chore|ci)(\([a-zA-Z0-9_./-]+\))?: [a-z0-9].*[^. ]$'
+
+if [[ ! "$SUBJECT" =~ $PATTERN ]]; then
+  echo "ERROR: commit message does not follow Conventional Commits format." >&2
+  echo "  Expected: <type>(<scope>): <description>" >&2
+  echo "  Types: feat, fix, refactor, test, docs, chore, ci" >&2
+  echo "  Description: lowercase, imperative mood, no trailing period" >&2
+  echo "  Got: $SUBJECT" >&2
+  exit 1
+fi

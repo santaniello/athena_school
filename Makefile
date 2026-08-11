@@ -11,4 +11,4 @@ lint:
 	golangci-lint run
 
 install-hooks:
-	git config core.hooksPath .githooks && chmod +x .githooks/pre-commit
+	git config core.hooksPath .githooks && chmod +x .githooks/pre-commit .githooks/commit-msg

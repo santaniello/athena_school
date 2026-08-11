@@ -31,4 +31,5 @@ Thumbs.db
 
 # Test artifacts
 coverage.out
+frontend/coverage/
 memory/
