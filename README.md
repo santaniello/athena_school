@@ -201,6 +201,12 @@ The auth server only manages accounts and licenses. Your notes and knowledge bas
 
 ---
 
+## License
+
+Athena is licensed under the [Business Source License 1.1](LICENSE). You may use, modify, and self-host the source for development, testing, and personal/internal evaluation. Running it as a competing commercial service in production requires a commercial license from the author, and the source may not be used to train, fine-tune, or evaluate machine learning or AI models. Each release automatically converts to Apache License 2.0 four years after publication.
+
+---
+
 ## Docs
 
 - [Product Spec](specs/Athena.md)
