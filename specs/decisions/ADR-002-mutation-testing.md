@@ -19,7 +19,7 @@ The project is early-stage: `internal/domain`, `internal/application`, and `inte
 
 **Adopt mutation testing as a mandatory, CI-enforced quality gate**, alongside the existing coverage/lint/vulnerability gates:
 
-- **Backend (Go):** [Gremlins](https://github.com/go-gremlins/gremlins) (`go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0`), scoped to `internal/domain/...` and `internal/application/...`.
+- **Backend (Go):** [Gremlins](https://github.com/go-gremlins/gremlins) (`go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0`), scoped to `internal/domain` and `internal/application` (run once per package — `gremlins unleash` only accepts a single path argument and recurses into subpackages on its own).
 - **Frontend (React/TS):** [StrykerJS](https://stryker-mutator.io/) (`@stryker-mutator/core` + `@stryker-mutator/vitest-runner`), scoped to `frontend/src/**/*.{ts,tsx}` excluding entrypoints and test files.
 
 Both run as required, separate jobs in `.github/workflows/ci.yml` (`mutation-go`, `mutation-frontend`) from the first PR that introduces them, gated by conservative starting thresholds (Gremlins `threshold-efficacy: 60` / `threshold-mcover: 80`; Stryker `break: 60`). Neither tool runs in `.githooks/pre-commit`.

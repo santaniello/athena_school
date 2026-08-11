@@ -105,19 +105,8 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Check for mutable Go code
-        id: check
-        run: |
-          if find internal/domain internal/application -name '*.go' ! -name '*_test.go' 2>/dev/null | grep -q .; then
-            echo "has_code=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_code=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No code yet in internal/domain or internal/application — skipping mutation testing."
-          fi
-
       - name: Run mutation testing (Gremlins)
-        if: steps.check.outputs.has_code == 'true'
-        run: go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 unleash ./internal/domain/... ./internal/application/...
+        run: make mutation-go
 
   mutation-frontend:
     runs-on: ubuntu-latest

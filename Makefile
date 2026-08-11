@@ -11,7 +11,13 @@ lint:
 	golangci-lint run
 
 mutation-go:
-	go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 unleash ./internal/domain/... ./internal/application/...
+	@for dir in internal/domain internal/application; do \
+		if find "$$dir" -name '*.go' ! -name '*_test.go' | grep -q .; then \
+			go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 unleash ./$$dir || exit 1; \
+		else \
+			echo "No code yet in $$dir — skipping mutation testing."; \
+		fi; \
+	done
 
 mutation-frontend:
 	cd frontend && npm run mutation
