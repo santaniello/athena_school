@@ -10,6 +10,13 @@ Additional Use Grant:  You may use the Licensed Work for development,
                        purposes. You may not use the Licensed Work to
                        provide a commercial product or service that
                        competes with the Licensed Work in production.
+                       You may not use the Licensed Work, in whole or
+                       in part, and whether in original or modified
+                       form, to train, fine-tune, evaluate, or
+                       otherwise develop any machine learning or
+                       artificial intelligence model, or as input to
+                       any automated system that generates code or
+                       other output derived from it.
 Change Date:           2030-08-11
 Change License:        Apache License, Version 2.0
 
