@@ -16,7 +16,7 @@ fi
 # wails.Run(), which opens a real OS window and cannot run under `go test`.
 echo "-> Running tests with coverage..."
 MODULE="$(go list -m)"
-PACKAGES="$(go list ./... | grep -v "^${MODULE}\$")"
+PACKAGES="$(go list ./... | grep -v "^${MODULE}\$" | grep -v '/mocks$')"
 go test -coverprofile=coverage.out ${PACKAGES}
 if [ ! -f coverage.out ]; then
   echo "FAIL: coverage.out was not generated."

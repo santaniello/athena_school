@@ -63,7 +63,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           MODULE="$(go list -m)"
-          PACKAGES="$(go list ./... | grep -v "^${MODULE}\$")"
+          PACKAGES="$(go list ./... | grep -v "^${MODULE}\$" | grep -v '/mocks$')"
           go test -race -coverprofile=coverage.out ${PACKAGES}
 
       - name: Check coverage threshold

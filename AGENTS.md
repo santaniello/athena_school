@@ -63,8 +63,9 @@ interfaces/desktop  →  application  →  domain  ←  infrastructure
   assertion instead of adding a redundant one
 - Tests must follow the **GivenWhenThen** pattern: arrange the initial state (Given), execute the action (When), assert the outcome (Then)
 - Use **testify** for assertions (`assert` / `require`)
-- Use **Mockery** to generate mocks from interfaces
+- Use **Mockery** (`make mock`) to generate mocks from interfaces into a sibling `mocks` subpackage (never in-package) — see [ADR-003](specs/decisions/ADR-003-mocking-strategy.md) for the full rationale, including the frontend mocking approach
 - Mock parameters must be typed explicitly — avoid `mock.AnythingOfType` and `mock.Anything` unless there is no viable alternative; prefer exact values or typed matchers
+- Generated mocks are excluded from the coverage threshold and from `make mutation-go` — they are not hand-written business logic
 
 ## Security rules
 

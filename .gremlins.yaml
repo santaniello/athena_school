@@ -19,3 +19,6 @@ unleash:
     mutant-coverage: 80
   exclude-files:
     - ".*_test\\.go$"
+    # Mockery-generated mocks (see ADR-003) — gremlins recurses into
+    # subpackages regardless of directory scoping, so this must be explicit.
+    - ".*/mocks/.*\\.go$"

@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `frontend/scripts/postinstall.mjs`: writes a throwaway `go.mod` into `frontend/node_modules` after every install, firewalling it from the root Go module so stray `.go` files shipped inside npm packages (e.g. `flatted`) don't break `go build`/`go vet`/`go test`/`golangci-lint` from the repo root
 - Mutation testing: [Gremlins](https://github.com/go-gremlins/gremlins) for `internal/domain`/`internal/application` (`.gremlins.yaml`, `make mutation-go`) and [StrykerJS](https://stryker-mutator.io/) for `frontend/src` (`frontend/stryker.config.mjs`, `make mutation-frontend`/`npm run mutation`), wired as required `mutation-go`/`mutation-frontend` CI jobs; see [ADR-002](specs/decisions/ADR-002-mutation-testing.md)
 - `AGENTS.md`: TDD commit gate and Go code rules now require no surviving mutants in changed `internal/domain`/`internal/application` code before commit
+- Mocking strategy: [Mockery](https://vektra.github.io/mockery/) wired up for the Go backend (`.mockery.yaml`, `make mock`), generating mocks into a sibling `mocks` subpackage excluded from the coverage gate (`ci.yml`, `.githooks/pre-commit`) and from `make mutation-go` (`.gremlins.yaml`); frontend keeps Vitest's native `vi.mock()`/`vi.fn()` with no added library; see [ADR-003](specs/decisions/ADR-003-mocking-strategy.md)
 
 ### Changed
 - Moved the Wails entrypoint from `cmd/athena/` to root `main.go`: Wails v2 does not support a main package outside the project root
