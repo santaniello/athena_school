@@ -92,3 +92,39 @@ jobs:
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
           govulncheck ./...
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  commit-lint:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout (full PR history)
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate commit messages
+        run: |
+          chmod +x .githooks/commit-msg
+          FAILED=0
+          while IFS= read -r subject; do
+            TMP="$(mktemp)"
+            printf '%s\n' "$subject" > "$TMP"
+            if ! .githooks/commit-msg "$TMP"; then
+              FAILED=1
+            fi
+            rm -f "$TMP"
+          done < <(git log --format=%s "origin/${{ github.base_ref }}..HEAD")
+          exit $FAILED
