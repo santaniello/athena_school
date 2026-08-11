@@ -1,0 +1,16 @@
+# Mockery config. See ADR-003 (specs/decisions/ADR-003-mocking-strategy.md)
+# for the rationale: mocks are generated into a sibling "mocks" subpackage
+# (never in-package) so the coverage gate and Gremlins can exclude them by
+# path pattern.
+with-expecter: true
+dir: "{{.InterfaceDir}}/mocks"
+outpkg: mocks
+packages:
+  github.com/santaniello/athena/internal/domain:
+    config:
+      recursive: true
+      all: true
+  github.com/santaniello/athena/internal/application:
+    config:
+      recursive: true
+      all: true

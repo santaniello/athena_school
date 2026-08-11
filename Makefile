@@ -22,5 +22,8 @@ mutation-go:
 mutation-frontend:
 	cd frontend && npm run mutation
 
+mock:
+	go run github.com/vektra/mockery/v2@v2.53.3
+
 install-hooks:
 	git config core.hooksPath .githooks && chmod +x .githooks/pre-commit .githooks/commit-msg
