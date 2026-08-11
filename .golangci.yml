@@ -11,3 +11,21 @@ linters:
     - staticcheck
     - unused
     - gosec
+    - revive
+    - gocritic
+    - bodyclose
+    - sqlclosecheck
+    - misspell
+  settings:
+    gocritic:
+      disabled-tags:
+        - opinionated
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/santaniello/athena

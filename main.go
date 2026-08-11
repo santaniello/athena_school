@@ -1,12 +1,14 @@
+// Package main is the desktop entry point for the Athena application.
 package main
 
 import (
 	"embed"
 
-	"github.com/santaniello/athena/internal/interfaces/desktop"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+
+	"github.com/santaniello/athena/internal/interfaces/desktop"
 )
 
 //go:embed all:frontend/dist
