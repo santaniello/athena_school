@@ -1,0 +1,21 @@
+# Gremlins mutation testing config.
+# Scope: business logic only (internal/domain, internal/application), per
+# ADR-001 (hexagonal architecture) and ADR-002 (mutation testing). Target
+# paths are passed as CLI args (see `make mutation-go`), not configured here.
+unleash:
+  dry-run: false
+  workers: 0 # 0 = auto (num CPU)
+  # Small, fast-running packages (as this repo starts out) have a baseline
+  # test time near zero, so the timeout budget (baseline * coefficient) must
+  # be large enough to absorb the fixed per-mutant compile+spawn overhead —
+  # a low coefficient causes spurious TIMED OUT results even on correct code.
+  timeout-coefficient: 10
+  # Nested under `threshold:`, not flat `threshold-efficacy`/`threshold-mcover`
+  # keys — gremlins' internal config keys are `unleash.threshold.efficacy` and
+  # `unleash.threshold.mutant-coverage` (verified against v0.6.0 source; the
+  # flat hyphenated form is silently ignored and never fails the build).
+  threshold:
+    efficacy: 60
+    mutant-coverage: 80
+  exclude-files:
+    - ".*_test\\.go$"

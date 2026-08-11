@@ -98,6 +98,17 @@ npm run format:check  # prettier --check .
 npm run test:coverage # vitest run --coverage (80% threshold)
 ```
 
+### Mutation Testing
+
+Coverage only proves a line *ran* during a test, not that the test would *notice* a bug on that line. Mutation testing checks this: it introduces small, deliberate bugs ("mutants" — e.g. `>` becomes `>=`) into the code and re-runs the tests against each one. A mutant that survives (all tests still pass) means the test asserts too little.
+
+```bash
+make mutation-go        # Gremlins, scoped to internal/domain and internal/application
+make mutation-frontend  # StrykerJS, scoped to frontend/src
+```
+
+Both run as required CI jobs (`mutation-go`, `mutation-frontend`) on every PR, alongside the coverage gate — never in the pre-commit hook, since re-running tests per mutant is too slow for a tight TDD loop. See [ADR-002](specs/decisions/ADR-002-mutation-testing.md) for the full rationale, tool comparison, and threshold rollout plan.
+
 ---
 
 ## CI/CD
@@ -112,14 +123,18 @@ Runs on pull requests targeting `main` or `develop`, and on direct pushes to `ma
 4. `golangci-lint run`
 5. `govulncheck ./...`
 
-Any failing step blocks the PR. The workflow also builds the frontend (`npm ci && npm run build`), lints and format-checks it (`npm run lint`, `npm run format:check`), runs its tests with an 80% coverage gate (`npm run test:coverage`), and installs the Linux `libgtk-3-dev`/`libwebkit2gtk-4.1-dev` headers first, since the `main` package embeds `frontend/dist` and requires cgo to compile.
+A failing step makes the job report a failing status on the PR. The workflow also builds the frontend (`npm ci && npm run build`), lints and format-checks it (`npm run lint`, `npm run format:check`), runs its tests with an 80% coverage gate (`npm run test:coverage`), and installs the Linux `libgtk-3-dev`/`libwebkit2gtk-4.1-dev` headers first, since the `main` package embeds `frontend/dist` and requires cgo to compile.
 
-Two more jobs run alongside `quality-gate`:
+Three more jobs run alongside `quality-gate`:
 
+- **`mutation-go`** — [Gremlins](https://github.com/go-gremlins/gremlins) mutation testing on `internal/domain`/`internal/application` (skipped gracefully while those packages are still empty)
+- **`mutation-frontend`** — [StrykerJS](https://stryker-mutator.io/) mutation testing on `frontend/src`
 - **`secret-scan`** — full git-history scan with `gitleaks`, on every push and PR
 - **`commit-lint`** — validates every commit message in a PR against the Conventional Commits format (see below); runs only on `pull_request` events
 
 Dependency updates (Go modules, npm packages, GitHub Actions) are proposed weekly by Dependabot (`.github/dependabot.yml`).
+
+> **Checks are visible, not merge-blocking (for now).** This repository is private on the GitHub Free plan, which does not support branch protection rules or repository rulesets for private repos (`gh api repos/.../branches/main/protection` and `.../rulesets` both return `403 Upgrade to GitHub Pro or make this repository public`). This means none of the jobs above — including the pre-existing `quality-gate` — are wired as *required status checks*: a red CI run shows clearly on the PR, but the "Merge pull request" button is not disabled by GitHub. Until the repo goes public or upgrades to a paid plan, avoiding a bad merge relies on checking the PR status before merging, not on GitHub enforcement.
 
 ### Conventional Commits
 
@@ -192,3 +207,4 @@ The auth server only manages accounts and licenses. Your notes and knowledge bas
 - [Implementation Plan](specs/Planning.md)
 - [Phase Specs](specs/phases/README.md)
 - [ADR-001 — Hexagonal Architecture](specs/decisions/ADR-001-hexagonal-architecture.md)
+- [ADR-002 — Mutation Testing](specs/decisions/ADR-002-mutation-testing.md)

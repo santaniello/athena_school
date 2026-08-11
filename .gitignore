@@ -32,4 +32,6 @@ Thumbs.db
 # Test artifacts
 coverage.out
 frontend/coverage/
+frontend/reports/
+frontend/.stryker-tmp/
 memory/
