@@ -40,6 +40,21 @@ jobs:
           npm ci
           npm run build
 
+      - name: Lint frontend
+        run: |
+          cd frontend
+          npm run lint
+
+      - name: Check frontend formatting
+        run: |
+          cd frontend
+          npm run format:check
+
+      - name: Test frontend
+        run: |
+          cd frontend
+          npm run test:coverage
+
       - name: Install Linux cgo dependencies
         run: |
           sudo apt-get update
