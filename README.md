@@ -91,6 +91,11 @@ make build           # produces binary in build/bin/
 ```bash
 make test            # go test ./... with race detector
 make lint            # golangci-lint run
+
+cd frontend
+npm run lint          # eslint .
+npm run format:check  # prettier --check .
+npm run test:coverage # vitest run --coverage (80% threshold)
 ```
 
 ---
@@ -107,7 +112,18 @@ Runs on pull requests targeting `main` or `develop`, and on direct pushes to `ma
 4. `golangci-lint run`
 5. `govulncheck ./...`
 
-Any failing step blocks the PR. The workflow also builds the frontend (`npm ci && npm run build`) and installs the Linux `libgtk-3-dev`/`libwebkit2gtk-4.1-dev` headers first, since the `main` package embeds `frontend/dist` and requires cgo to compile.
+Any failing step blocks the PR. The workflow also builds the frontend (`npm ci && npm run build`), lints and format-checks it (`npm run lint`, `npm run format:check`), runs its tests with an 80% coverage gate (`npm run test:coverage`), and installs the Linux `libgtk-3-dev`/`libwebkit2gtk-4.1-dev` headers first, since the `main` package embeds `frontend/dist` and requires cgo to compile.
+
+Two more jobs run alongside `quality-gate`:
+
+- **`secret-scan`** — full git-history scan with `gitleaks`, on every push and PR
+- **`commit-lint`** — validates every commit message in a PR against the Conventional Commits format (see below); runs only on `pull_request` events
+
+Dependency updates (Go modules, npm packages, GitHub Actions) are proposed weekly by Dependabot (`.github/dependabot.yml`).
+
+### Conventional Commits
+
+Commit messages must follow `<type>(<scope>): <description>` (scope optional), with `type` one of `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`. `make install-hooks` installs a local `commit-msg` hook that rejects non-conforming messages before they're committed; the `commit-lint` CI job is the backstop for anyone who skips the hook or commits with `--no-verify`.
 
 ### Releases (`.github/workflows/release.yml`)
 
