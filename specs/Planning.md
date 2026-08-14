@@ -162,10 +162,10 @@ type AccountRepository interface {
 Hoje a única implementação é local (`internal/infrastructure/sqlite`, tabela `accounts`). Uma implementação remota futura satisfaz a mesma interface sem alterar `internal/application/auth/`.
 
 **Tarefas:**
-- [ ] `internal/domain/auth/` — `Account`, `AccountRepository`
-- [ ] `internal/application/auth/` — casos de uso `Register`, `Login`, `ResetLocalAccount`
-- [ ] `internal/infrastructure/sqlite/` — implementação local do `AccountRepository`
-- [ ] Sem JWT, sem SMTP, sem servidor HTTP — tudo roda no processo local
+- [x] `internal/domain/auth/` — `Account`, `AccountRepository`
+- [x] `internal/application/auth/` — casos de uso `Register`, `Login`, `ResetLocalAccount`
+- [x] `internal/infrastructure/sqlite/` — implementação local do `AccountRepository`
+- [x] Sem JWT, sem SMTP, sem servidor HTTP — tudo roda no processo local
 
 ### 1.2 — Tela de Login e Criação de Conta (Desktop)
 

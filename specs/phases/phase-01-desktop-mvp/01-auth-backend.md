@@ -42,10 +42,10 @@ Today the only implementation is local (`internal/infrastructure/sqlite`, `accou
 
 ## Tasks
 
-- [ ] `internal/domain/auth/` — `Account` struct, `AccountRepository` port
-- [ ] `internal/application/auth/` — `Register`, `Login`, `ResetLocalAccount` use cases
-- [ ] `internal/infrastructure/sqlite/` — `AccountRepository` implementation (see [07-sqlite.md](07-sqlite.md))
-- [ ] Local session read/write at `~/.athena/session.json`
+- [x] `internal/domain/auth/` — `Account` struct, `AccountRepository` port
+- [x] `internal/application/auth/` — `Register`, `Login`, `ResetLocalAccount` use cases
+- [x] `internal/infrastructure/sqlite/` — `AccountRepository` implementation (see [07-sqlite.md](07-sqlite.md))
+- [x] Local session read/write at `~/.athena/session.json`
 
 ## Acceptance Criteria
 
