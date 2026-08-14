@@ -2,7 +2,7 @@
 
 ## Goal
 
-User can configure the OpenRouter API key and update their profile fields without re-running onboarding.
+User can configure the OpenRouter API key and update their profile fields without re-running onboarding. This is also where the user edits the key first entered at the onboarding gate (see [04-onboarding.md](04-onboarding.md)) — both screens share the same test-call validation logic; do not duplicate it.
 
 ## Config File
 

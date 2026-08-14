@@ -15,7 +15,7 @@ Core             Go (Clean/Hexagonal)
 Local DB         SQLite (modernc.org/sqlite — pure Go, no CGO)
 Vector store     Local (initial phase)
 LLM              OpenRouter API
-Auth backend     Go HTTP API (accounts + licenses)
+Auth backend     Local (SQLite), remote-ready port (see phase 1.1)
 CI/CD            GitHub Actions
 Payments         Paddle
 ```
@@ -63,14 +63,13 @@ Payments         Paddle
 
 ## Phase 1 — Desktop MVP
 
-**Done when:** User installs on Windows or Linux, creates an account, confirms email, completes conversational onboarding, opens the main screen, and runs a full study session with streaming personalized response. 7-day trial visible in the UI.
+**Done when:** User installs on Windows or Linux, creates a local account, connects an OpenRouter key, completes conversational onboarding, opens the main screen, and runs a full study session with streaming personalized response.
 
 | Spec | Description |
 |---|---|
-| [01-auth-backend.md](phase-01-desktop-mvp/01-auth-backend.md) | HTTP auth server: register, login, refresh, plan |
-| [02-auth-ui.md](phase-01-desktop-mvp/02-auth-ui.md) | Login/register/recovery screens + Wails bindings |
-| [03-trial.md](phase-01-desktop-mvp/03-trial.md) | 7-day trial, badge, blocking modal |
-| [04-onboarding.md](phase-01-desktop-mvp/04-onboarding.md) | Conversational onboarding → UserProfile |
+| [01-auth-backend.md](phase-01-desktop-mvp/01-auth-backend.md) | Local auth core: Account, AccountRepository port, local session |
+| [02-auth-ui.md](phase-01-desktop-mvp/02-auth-ui.md) | Login/register/local-reset screens + Wails bindings |
+| [04-onboarding.md](phase-01-desktop-mvp/04-onboarding.md) | OpenRouter key gate + conversational onboarding → UserProfile |
 | [05-llm-service.md](phase-01-desktop-mvp/05-llm-service.md) | OpenRouter: LLMProvider, streaming, model router, budget |
 | [06-study-mode.md](phase-01-desktop-mvp/06-study-mode.md) | Study session with personalization and streaming |
 | [07-sqlite.md](phase-01-desktop-mvp/07-sqlite.md) | Local SQLite schema: sessions, messages, usage |

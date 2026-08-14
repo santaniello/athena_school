@@ -131,69 +131,59 @@ install-hooks: git config core.hooksPath .githooks && chmod +x .githooks/pre-com
 
 ## Fase 1 — Desktop MVP
 
-**Objetivo:** Produto mínimo enviável. Usuário instala, cria conta, faz onboarding e estuda. Trial de 7 dias ativo.
+**Objetivo:** Produto mínimo enviável. Usuário cria uma conta local, conecta sua chave OpenRouter, faz onboarding e estuda. Sem planos pagos ou trial nesta fase — comercialização fica para a Fase 5, quando for retomada.
 
 Esta fase combina o que o spec chama de "Fase 1 — Core MVP" e "Fase 2 — Desktop MVP" porque não faz sentido entregar um Core sem interface.
 
-### 1.1 — Backend de Auth e Licença
+### 1.1 — Núcleo de Auth Local
 
-Servidor HTTP leve (Go). Responsabilidade única: contas e licenças.
+Sem servidor remoto nesta fase. Conta criada e validada 100% localmente, desenhado como porta hexagonal para permitir trocar por um backend remoto no futuro sem reescrever os casos de uso.
 
 **Entidades:**
 ```go
 type Account struct {
-    ID        string
-    Email     string
-    Password  string // bcrypt
-    Plan      string // trial | essencial | pro | expert
-    TrialEnds time.Time
-    CreatedAt time.Time
+    ID           string
+    Email        string
+    PasswordHash string // bcrypt
+    CreatedAt    time.Time
 }
 ```
 
-**Endpoints:**
-```text
-POST /auth/register      → cria conta, envia e-mail de confirmação
-POST /auth/login         → retorna JWT
-POST /auth/refresh       → renova token
-POST /auth/forgot        → inicia recuperação de senha
-GET  /account/plan       → retorna plano e status do trial
-POST /webhooks/paddle    → recebe eventos de pagamento
+**Porta (`internal/domain/auth/`):**
+```go
+type AccountRepository interface {
+    Create(ctx context.Context, account Account) error
+    FindByEmail(ctx context.Context, email string) (Account, error)
+    UpdatePassword(ctx context.Context, id string, passwordHash string) error
+    Delete(ctx context.Context, id string) error
+}
 ```
 
+Hoje a única implementação é local (`internal/infrastructure/sqlite`, tabela `accounts`). Uma implementação remota futura satisfaz a mesma interface sem alterar `internal/application/auth/`.
+
 **Tarefas:**
-- [ ] Módulo Go separado ou subdiretório `server/`
-- [ ] JWT com expiração de 24h + refresh token de 30 dias
-- [ ] Envio de e-mail via SMTP (confirmação + recuperação)
-- [ ] Armazenamento: PostgreSQL (servidor) ou SQLite (início simples)
-- [ ] Deploy: Railway, Fly.io ou VPS simples
+- [ ] `internal/domain/auth/` — `Account`, `AccountRepository`
+- [ ] `internal/application/auth/` — casos de uso `Register`, `Login`, `ResetLocalAccount`
+- [ ] `internal/infrastructure/sqlite/` — implementação local do `AccountRepository`
+- [ ] Sem JWT, sem SMTP, sem servidor HTTP — tudo roda no processo local
 
 ### 1.2 — Tela de Login e Criação de Conta (Desktop)
 
 **Fluxo:**
 ```text
-App abre → sem token local → tela de login
-Login bem-sucedido → token salvo localmente → próxima tela
+App abre → sem sessão local → tela de login
+Login/registro bem-sucedido → sessão salva localmente → gate de chave OpenRouter (1.4) → próxima tela
 ```
 
 **UI (React):**
 - [ ] Tela de login (e-mail + senha + botão entrar)
-- [ ] Tela de criação de conta (nome + e-mail + senha + confirmar)
-- [ ] Tela de confirmação pendente ("verifique seu e-mail")
-- [ ] Tela de recuperação de senha
-- [ ] Wails binding: `Login(email, password)`, `Register(name, email, password)`
+- [ ] Tela de criação de conta (e-mail + senha + confirmar)
+- [ ] Tela de reset de conta local (substitui "recuperação de senha" — sem e-mail/servidor, é um reset destrutivo, não recuperação real)
+- [ ] Wails binding: `Login(email, password)`, `Register(email, password)`, `ResetLocalAccount(email)`
 
 **Go (Core):**
-- [ ] `internal/application/auth/` — casos de uso de autenticação
-- [ ] Token armazenado localmente em `~/.athena/session.json`
-- [ ] Grace period: 7 dias offline com token cacheado
-
-### 1.3 — Trial
-
-- [ ] Ao criar conta: `trial_ends = now + 7 dias`
-- [ ] App verifica plano no login e exibe badge "Trial — X dias restantes"
-- [ ] Ao expirar: modal bloqueante com tela de planos
-- [ ] Trial com acesso completo a todas as funcionalidades disponíveis na fase
+- [ ] `internal/application/auth/` — casos de uso de autenticação (ver 1.1)
+- [ ] Sessão armazenada localmente em `~/.athena/session.json`, sem expiração atrelada a servidor
 
 ### 1.4 — Onboarding Interview
 
@@ -202,9 +192,13 @@ Disparado após primeiro login bem-sucedido (sem perfil local).
 **Fluxo:**
 ```text
 Primeiro login → sem UserProfile local → tela de onboarding
+Sem openrouter_key em ~/.athena/config.yaml → tela obrigatória "Conecte sua chave OpenRouter"
+  (input mascarado, validado por chamada de teste — mesma validação da seção 1.8) → chave salva
 LLM conduz entrevista conversacional (3–5 perguntas)
 Usuário responde → perfil gerado → confirmação → salvo localmente
 ```
+
+A entrevista depende de uma chamada LLM (ver 1.5), por isso não pode começar sem uma chave OpenRouter válida. O gate só aparece uma vez; a tela de configurações (1.8) permite trocar a chave depois.
 
 **Perguntas coletadas:**
 - Nome
@@ -219,6 +213,7 @@ Usuário responde → perfil gerado → confirmação → salvo localmente
 - [ ] `internal/domain/profile/` — `UserProfile` struct
 - [ ] `internal/application/onboarding/` — lógica de condução da entrevista
 - [ ] `UserProfile` salvo em `~/.athena/profile.json`
+- [ ] UI: gate "Conecte sua chave OpenRouter", exibido antes da entrevista quando `openrouter_key` está ausente
 - [ ] UI: chat conversacional simples (não formulário)
 - [ ] Tela de confirmação do perfil com opção de editar
 
@@ -277,6 +272,13 @@ System: Você é {AssistantName}, assistente de aprendizado de {Name}.
 - [ ] Schema inicial:
 
 ```sql
+CREATE TABLE accounts (
+    id TEXT PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at DATETIME
+);
+
 CREATE TABLE sessions (
     id TEXT PRIMARY KEY,
     topic TEXT,
@@ -319,11 +321,10 @@ CREATE TABLE usage (
 ### Done when (Fase 1)
 
 - Usuário instala no Windows ou Linux
-- Cria conta, confirma e-mail
+- Cria uma conta local e conecta sua chave OpenRouter
 - Passa pelo onboarding conversacional
 - Abre a tela principal e faz uma sessão de estudo completa
 - Resposta chega em streaming com personalização baseada no perfil
-- Trial de 7 dias ativo e visível na UI
 
 ---
 
@@ -854,10 +855,11 @@ type Edge struct {
 Estes itens devem ser considerados em todas as fases:
 
 ### Segurança
-- Tokens JWT com expiração curta + refresh
+- Fase 1: auth 100% local (senha com hash bcrypt em SQLite), sem JWT nem chamada de rede
+- Tokens JWT com expiração curta + refresh — só se aplica quando um backend remoto de auth existir (Fase 5+); a porta `AccountRepository` (1.1) já é desenhada para essa troca
 - Chave OpenRouter nunca enviada para o servidor próprio (fica local)
 - Execução de código em sandbox (Fase 7)
-- HTTPS obrigatório nas chamadas à API de auth
+- HTTPS obrigatório nas chamadas à API de auth, quando essa API existir
 
 ### Observabilidade
 - Logs estruturados (JSON) em `~/.athena/logs/`
@@ -865,9 +867,9 @@ Estes itens devem ser considerados em todas as fases:
 - Erros do LLM reportados claramente na UI
 
 ### Offline
-- App funciona offline para funcionalidades locais (Knowledge Base, flashcards)
-- LLM e auth requerem internet
-- Grace period de 7 dias para validação de licença offline
+- App funciona offline para funcionalidades locais (Knowledge Base, flashcards, auth — tudo local na Fase 1)
+- Somente o LLM requer internet
+- Grace period de validação de licença offline — só se aplica quando houver licenciamento remoto (Fase 5+); não existe licença para validar na Fase 1
 
 ### Internacionalização
 - App inicialmente em Português (BR)
