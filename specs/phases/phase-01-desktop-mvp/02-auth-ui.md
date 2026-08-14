@@ -13,9 +13,9 @@ Successful login/register → session saved locally → OpenRouter key gate (see
 
 ## UI Screens (React)
 
-- [ ] Login screen (email + password + submit)
-- [ ] Create account screen (email + password + confirm)
-- [ ] Reset local account screen ("forgot password" replacement — explains this deletes the local account so the user can register again; not a real recovery, since there is no email/server)
+- [x] Login screen (email + password + submit)
+- [x] Create account screen (email + password + confirm)
+- [x] Reset local account screen ("forgot password" replacement — explains this deletes the local account so the user can register again; not a real recovery, since there is no email/server)
 
 ## Wails Bindings (Go)
 
@@ -23,12 +23,15 @@ Successful login/register → session saved locally → OpenRouter key gate (see
 func (a *App) Login(email, password string) (LoginResult, error)
 func (a *App) Register(email, password string) error
 func (a *App) ResetLocalAccount(email string) error
+func (a *App) HasLocalSession() bool
 ```
+
+`HasLocalSession` was added beyond the original list above: the Flow section requires the frontend to know on startup whether a local session already exists so it can skip the login screen, and none of the other three bindings cover that.
 
 ## Core (`internal/application/auth/`)
 
-- [ ] Use cases: `Login`, `Register`, `ResetLocalAccount` (see [01-auth-backend.md](01-auth-backend.md))
-- [ ] Session stored locally at `~/.athena/session.json`
+- [x] Use cases: `Login`, `Register`, `ResetLocalAccount` (see [01-auth-backend.md](01-auth-backend.md))
+- [x] Session stored locally at `~/.athena/session.json`
 
 ## Acceptance Criteria
 
