@@ -1,6 +1,11 @@
 import { useState } from 'react'
 import { ResetLocalAccount } from '../../wailsjs/go/desktop/App'
 import { authErrorMessage } from '../lib/authErrors'
+import { AuthLayout } from '@/components/auth-layout'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 interface ResetAccountScreenProps {
   onDone: () => void
@@ -23,33 +28,42 @@ function ResetAccountScreen({ onDone, onCancel }: ResetAccountScreenProps) {
   }
 
   return (
-    <div className="auth-screen">
-      <h1>Resetar conta local</h1>
-      <p>
+    <AuthLayout title="Resetar conta local">
+      <p className="text-sm text-muted-foreground">
         Esta ação apaga a conta local e todos os dados associados a ela, para que você possa criar
         uma nova conta com o mesmo e-mail. Isso não é uma recuperação de senha de verdade — como não
         há servidor nem e-mail, não é possível recuperar a senha atual.
       </p>
 
-      <form onSubmit={handleSubmit}>
-        <label htmlFor="reset-email">E-mail</label>
-        <input
-          id="reset-email"
-          type="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          required
-        />
+      <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+        <div className="flex flex-col gap-1.5 text-left">
+          <Label htmlFor="reset-email">E-mail</Label>
+          <Input
+            id="reset-email"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            required
+          />
+        </div>
 
-        {error && <p className="auth-error">{error}</p>}
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-        <button type="submit">Excluir conta local</button>
+        <Button type="submit" variant="destructive">
+          Excluir conta local
+        </Button>
       </form>
 
-      <button type="button" onClick={onCancel}>
-        Cancelar
-      </button>
-    </div>
+      <div className="flex justify-center">
+        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+          Cancelar
+        </Button>
+      </div>
+    </AuthLayout>
   )
 }
 

@@ -2,6 +2,11 @@ import { useState } from 'react'
 import { Login, Register } from '../../wailsjs/go/desktop/App'
 import type { desktop } from '../../wailsjs/go/models'
 import { authErrorMessage } from '../lib/authErrors'
+import { AuthLayout } from '@/components/auth-layout'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 interface RegisterScreenProps {
   onSuccess: (result: desktop.LoginResult) => void
@@ -33,45 +38,56 @@ function RegisterScreen({ onSuccess, onNavigateToLogin }: RegisterScreenProps) {
   }
 
   return (
-    <div className="auth-screen">
-      <h1>Criar conta</h1>
-      <form onSubmit={handleSubmit}>
-        <label htmlFor="register-email">E-mail</label>
-        <input
-          id="register-email"
-          type="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          required
-        />
+    <AuthLayout title="Criar conta">
+      <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+        <div className="flex flex-col gap-1.5 text-left">
+          <Label htmlFor="register-email">E-mail</Label>
+          <Input
+            id="register-email"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            required
+          />
+        </div>
 
-        <label htmlFor="register-password">Senha</label>
-        <input
-          id="register-password"
-          type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          required
-        />
+        <div className="flex flex-col gap-1.5 text-left">
+          <Label htmlFor="register-password">Senha</Label>
+          <Input
+            id="register-password"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+          />
+        </div>
 
-        <label htmlFor="register-confirm-password">Confirmar senha</label>
-        <input
-          id="register-confirm-password"
-          type="password"
-          value={confirmPassword}
-          onChange={(event) => setConfirmPassword(event.target.value)}
-          required
-        />
+        <div className="flex flex-col gap-1.5 text-left">
+          <Label htmlFor="register-confirm-password">Confirmar senha</Label>
+          <Input
+            id="register-confirm-password"
+            type="password"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            required
+          />
+        </div>
 
-        {error && <p className="auth-error">{error}</p>}
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-        <button type="submit">Criar conta</button>
+        <Button type="submit">Criar conta</Button>
       </form>
 
-      <button type="button" onClick={onNavigateToLogin}>
-        Já tenho conta
-      </button>
-    </div>
+      <div className="flex justify-center">
+        <Button type="button" variant="ghost" size="sm" onClick={onNavigateToLogin}>
+          Já tenho conta
+        </Button>
+      </div>
+    </AuthLayout>
   )
 }
 

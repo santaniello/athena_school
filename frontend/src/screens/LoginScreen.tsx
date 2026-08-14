@@ -2,6 +2,11 @@ import { useState } from 'react'
 import { Login } from '../../wailsjs/go/desktop/App'
 import type { desktop } from '../../wailsjs/go/models'
 import { authErrorMessage } from '../lib/authErrors'
+import { AuthLayout } from '@/components/auth-layout'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 interface LoginScreenProps {
   onSuccess: (result: desktop.LoginResult) => void
@@ -26,39 +31,48 @@ function LoginScreen({ onSuccess, onNavigateToRegister, onNavigateToReset }: Log
   }
 
   return (
-    <div className="auth-screen">
-      <h1>Entrar</h1>
-      <form onSubmit={handleSubmit}>
-        <label htmlFor="login-email">E-mail</label>
-        <input
-          id="login-email"
-          type="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          required
-        />
+    <AuthLayout title="Entrar">
+      <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+        <div className="flex flex-col gap-1.5 text-left">
+          <Label htmlFor="login-email">E-mail</Label>
+          <Input
+            id="login-email"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            required
+          />
+        </div>
 
-        <label htmlFor="login-password">Senha</label>
-        <input
-          id="login-password"
-          type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          required
-        />
+        <div className="flex flex-col gap-1.5 text-left">
+          <Label htmlFor="login-password">Senha</Label>
+          <Input
+            id="login-password"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+          />
+        </div>
 
-        {error && <p className="auth-error">{error}</p>}
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-        <button type="submit">Entrar</button>
+        <Button type="submit">Entrar</Button>
       </form>
 
-      <button type="button" onClick={onNavigateToRegister}>
-        Criar conta
-      </button>
-      <button type="button" onClick={onNavigateToReset}>
-        Esqueci minha senha
-      </button>
-    </div>
+      <div className="flex justify-center gap-2">
+        <Button type="button" variant="ghost" size="sm" onClick={onNavigateToRegister}>
+          Criar conta
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={onNavigateToReset}>
+          Esqueci minha senha
+        </Button>
+      </div>
+    </AuthLayout>
   )
 }
 

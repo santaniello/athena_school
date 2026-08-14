@@ -5,7 +5,6 @@ import LoginScreen from './screens/LoginScreen'
 import RegisterScreen from './screens/RegisterScreen'
 import ResetAccountScreen from './screens/ResetAccountScreen'
 import MainScreen from './screens/MainScreen'
-import './App.css'
 
 type View = 'checking' | 'login' | 'register' | 'reset' | 'main'
 
@@ -23,7 +22,7 @@ function App() {
   }
 
   return (
-    <div id="App">
+    <>
       {view === 'login' && (
         <LoginScreen
           onSuccess={handleAuthSuccess}
@@ -38,7 +37,7 @@ function App() {
         <ResetAccountScreen onDone={() => setView('register')} onCancel={() => setView('login')} />
       )}
       {view === 'main' && <MainScreen email={session?.email} />}
-    </div>
+    </>
   )
 }
 

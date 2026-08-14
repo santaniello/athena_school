@@ -1,12 +1,16 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import '@fontsource/cinzel/700.css';
+
+/* Athena is a fixed dark theme evoking the Aegean night sky, marble and
+   laurel gold — there is no light-mode toggle in the product. */
+
 html {
-  background-color: rgba(27, 38, 54, 1);
-  text-align: center;
-  color: white;
+  background-color: oklch(0.19 0.035 258);
 }
 
 body {
   margin: 0;
-  color: white;
   font-family:
     'Nunito',
     -apple-system,
@@ -31,7 +35,70 @@ body {
     url('assets/fonts/nunito-v16-latin-regular.woff2') format('woff2');
 }
 
-#app {
-  height: 100vh;
-  text-align: center;
+@theme inline {
+  --font-heading: 'Cinzel', serif;
+  --font-sans: 'Nunito', sans-serif;
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+}
+
+:root {
+  /* Aegean night sky */
+  --background: oklch(0.19 0.035 258);
+  /* Warm marble white */
+  --foreground: oklch(0.96 0.008 85);
+  /* Panel, one step lighter than the page background */
+  --card: oklch(0.24 0.035 258);
+  --card-foreground: oklch(0.96 0.008 85);
+  --popover: oklch(0.24 0.035 258);
+  --popover-foreground: oklch(0.96 0.008 85);
+  /* Laurel gold */
+  --primary: oklch(0.8 0.14 86);
+  --primary-foreground: oklch(0.2 0.03 258);
+  /* Muted stone-blue */
+  --secondary: oklch(0.34 0.02 255);
+  --secondary-foreground: oklch(0.96 0.008 85);
+  --muted: oklch(0.28 0.02 255);
+  --muted-foreground: oklch(0.7 0.02 90);
+  /* Terracotta-tinted hover accent */
+  --accent: oklch(0.34 0.05 40);
+  --accent-foreground: oklch(0.96 0.008 85);
+  /* Terracotta, for errors */
+  --destructive: oklch(0.6 0.19 32);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 10%);
+  --ring: oklch(0.8 0.14 86);
+  --radius: 0.75rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
 }
