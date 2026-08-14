@@ -27,4 +27,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Frontend design system: Tailwind CSS v4 + shadcn/ui (`frontend/components.json`, `frontend/src/components/ui`), with a custom dark theme (`frontend/src/style.css`) evoking the Aegean night sky, marble and laurel gold, self-hosted Cinzel + Nunito fonts, and a hand-drawn Greek key divider component (`frontend/src/components/greek-key-divider.tsx`)
 
 ### Changed
+- Raised the mutation testing break threshold from 60% to 80% for both `make mutation-go` (`.gremlins.yaml` `unleash.threshold.efficacy`) and `make mutation-frontend`/`npm run mutation` (`frontend/stryker.config.mjs` `thresholds.break`); Stryker's `mutate` glob now also excludes vendored shadcn/ui code (`frontend/src/components/ui/**`, `frontend/src/lib/utils.ts`) to match the coverage gate
 - Moved the Wails entrypoint from `cmd/athena/` to root `main.go`: Wails v2 does not support a main package outside the project root
