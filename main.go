@@ -3,11 +3,16 @@ package main
 
 import (
 	"embed"
+	"log"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 
+	"github.com/santaniello/athena/internal/application/auth"
+	"github.com/santaniello/athena/internal/infrastructure/athenahome"
+	"github.com/santaniello/athena/internal/infrastructure/session"
+	"github.com/santaniello/athena/internal/infrastructure/sqlite"
 	"github.com/santaniello/athena/internal/interfaces/desktop"
 )
 
@@ -20,9 +25,30 @@ import (
 var assets embed.FS
 
 func main() {
-	app := desktop.NewApp()
+	dbPath, err := athenahome.File("athena.db")
+	if err != nil {
+		log.Fatalf("resolving database path: %v", err)
+	}
+	sessionPath, err := athenahome.File("session.json")
+	if err != nil {
+		log.Fatalf("resolving session path: %v", err)
+	}
+	db, err := sqlite.Open(dbPath)
+	if err != nil {
+		log.Fatalf("opening database: %v", err)
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Printf("closing database: %v", err)
+		}
+	}()
 
-	err := wails.Run(&options.App{
+	accounts := sqlite.NewAccountRepository(db)
+	sessions := session.NewStore(sessionPath)
+	authService := auth.NewService(accounts, sessions)
+	app := desktop.NewApp(authService, sessions)
+
+	err = wails.Run(&options.App{
 		Title:  "Athena",
 		Width:  1024,
 		Height: 768,
