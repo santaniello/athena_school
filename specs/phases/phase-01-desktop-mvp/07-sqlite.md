@@ -2,7 +2,7 @@
 
 ## Goal
 
-All session data is stored locally in SQLite using a pure-Go driver (no CGO).
+All session data is stored locally in SQLite using a pure-Go driver (no CGO). The `accounts` table also backs local auth (see [01-auth-backend.md](01-auth-backend.md)) — there is no remote database in this phase.
 
 ## Driver
 
@@ -11,6 +11,13 @@ All session data is stored locally in SQLite using a pure-Go driver (no CGO).
 ## Schema
 
 ```sql
+CREATE TABLE accounts (
+    id            TEXT PRIMARY KEY,
+    email         TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at    DATETIME
+);
+
 CREATE TABLE sessions (
     id         TEXT PRIMARY KEY,
     topic      TEXT,
@@ -48,6 +55,7 @@ CREATE TABLE usage (
 ## Acceptance Criteria
 
 - `~/.athena/athena.db` is created on first launch
+- A registered local account has a row in `accounts` with a bcrypt `password_hash`, never a plaintext password
 - A completed study session has a row in `sessions` and rows in `messages`
 - Token usage from each LLM call has a row in `usage`
 - Running the app a second time does not re-run migrations or corrupt the database

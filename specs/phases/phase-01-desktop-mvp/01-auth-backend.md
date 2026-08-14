@@ -1,44 +1,56 @@
-# Phase 1.1 — Auth & License Backend
+# Phase 1.1 — Local Auth Core
 
 ## Goal
 
-Lightweight HTTP server (Go) responsible solely for accounts and licenses.
+Account creation and login run entirely on-device — no remote server in this phase. The design is a hexagonal port so a remote implementation can replace the local one later without touching use cases or UI.
 
 ## Domain
 
 ```go
 type Account struct {
-    ID        string
-    Email     string
-    Password  string // bcrypt
-    Plan      string // trial | essencial | pro | expert
-    TrialEnds time.Time
-    CreatedAt time.Time
+    ID           string
+    Email        string
+    PasswordHash string // bcrypt
+    CreatedAt    time.Time
 }
 ```
 
-## Endpoints
+## Port (`internal/domain/auth/`)
 
-```text
-POST /auth/register      → create account, send confirmation email
-POST /auth/login         → return JWT + refresh token
-POST /auth/refresh       → renew access token
-POST /auth/forgot        → initiate password recovery
-GET  /account/plan       → return plan and trial status
-POST /webhooks/paddle    → receive payment events
+```go
+type AccountRepository interface {
+    Create(ctx context.Context, account Account) error
+    FindByEmail(ctx context.Context, email string) (Account, error)
+    UpdatePassword(ctx context.Context, id string, passwordHash string) error
+    Delete(ctx context.Context, id string) error
+}
 ```
+
+Today the only implementation is local (`internal/infrastructure/sqlite`, `accounts` table — see [07-sqlite.md](07-sqlite.md)). A future remote implementation (e.g. `internal/infrastructure/httpapi`) satisfies the same interface; use cases in `internal/application/auth/` never depend on which one is wired in.
+
+## Use Cases (`internal/application/auth/`)
+
+- `Register(email, password string) error` — hashes the password (bcrypt), creates the local `Account`
+- `Login(email, password string) (Account, error)` — validates credentials against the local hash
+- `ResetLocalAccount(email string) error` — deletes and allows recreating the local account; there is no email-based recovery (no remote server, no SMTP), so this is a destructive local reset, not a real recovery flow
+
+## Local Session
+
+- On successful login, write a session marker to `~/.athena/session.json` (account ID + timestamp)
+- On subsequent launches, a valid local session skips the login screen and goes straight to the main flow
+- No token, no expiry tied to a server — this replaces the old "offline grace period" concept, which only made sense with a remote-issued JWT
 
 ## Tasks
 
-- [ ] Separate Go module or `server/` subdirectory
-- [ ] JWT with 24h expiry + 30-day refresh token
-- [ ] Email dispatch via SMTP (confirmation + recovery)
-- [ ] Storage: SQLite for development; PostgreSQL-ready interface
-- [ ] Deploy target: Railway, Fly.io, or VPS
+- [x] `internal/domain/auth/` — `Account` struct, `AccountRepository` port
+- [x] `internal/application/auth/` — `Register`, `Login`, `ResetLocalAccount` use cases
+- [x] `internal/infrastructure/sqlite/` — `AccountRepository` implementation (see [07-sqlite.md](07-sqlite.md))
+- [x] Local session read/write at `~/.athena/session.json`
 
 ## Acceptance Criteria
 
-- `POST /auth/register` creates an account and sends confirmation email
-- `POST /auth/login` with valid credentials returns a JWT
-- `GET /account/plan` returns `{ plan: "trial", trial_ends: "..." }` for a new account
-- All endpoints return structured JSON errors on failure
+- `Register` creates a local account with a bcrypt-hashed password; a duplicate email is rejected
+- `Login` with valid local credentials succeeds and writes `~/.athena/session.json`
+- `Login` with invalid credentials fails with a descriptive error, no panic
+- `ResetLocalAccount` removes the existing local account so a new one can be registered with the same email
+- No network call is made at any point in this flow
