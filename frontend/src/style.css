@@ -2,11 +2,11 @@
 @import 'tw-animate-css';
 @import '@fontsource/cinzel/700.css';
 
-/* Athena is a fixed dark theme evoking the Aegean night sky, marble and
-   laurel gold — there is no light-mode toggle in the product. */
+/* Athena is a fixed dark theme evoking black-figure pottery (potter's
+   black glaze), marble and laurel gold — there is no light-mode toggle. */
 
 html {
-  background-color: oklch(0.19 0.035 258);
+  background-color: oklch(0.14 0.015 50);
 }
 
 body {
@@ -63,25 +63,25 @@ body {
 }
 
 :root {
-  /* Aegean night sky */
-  --background: oklch(0.19 0.035 258);
+  /* Potter's black — the glaze of black-figure/red-figure Attic pottery */
+  --background: oklch(0.14 0.015 50);
   /* Warm marble white */
   --foreground: oklch(0.96 0.008 85);
   /* Panel, one step lighter than the page background */
-  --card: oklch(0.24 0.035 258);
+  --card: oklch(0.19 0.02 50);
   --card-foreground: oklch(0.96 0.008 85);
-  --popover: oklch(0.24 0.035 258);
+  --popover: oklch(0.19 0.02 50);
   --popover-foreground: oklch(0.96 0.008 85);
   /* Laurel gold */
   --primary: oklch(0.8 0.14 86);
-  --primary-foreground: oklch(0.2 0.03 258);
-  /* Muted stone-blue */
-  --secondary: oklch(0.34 0.02 255);
+  --primary-foreground: oklch(0.16 0.015 50);
+  /* Muted warm stone */
+  --secondary: oklch(0.28 0.015 50);
   --secondary-foreground: oklch(0.96 0.008 85);
-  --muted: oklch(0.28 0.02 255);
-  --muted-foreground: oklch(0.7 0.02 90);
+  --muted: oklch(0.22 0.015 50);
+  --muted-foreground: oklch(0.68 0.02 80);
   /* Terracotta-tinted hover accent */
-  --accent: oklch(0.34 0.05 40);
+  --accent: oklch(0.3 0.05 40);
   --accent-foreground: oklch(0.96 0.008 85);
   /* Terracotta, for errors */
   --destructive: oklch(0.6 0.19 32);
