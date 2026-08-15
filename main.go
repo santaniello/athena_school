@@ -10,7 +10,11 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 
 	"github.com/santaniello/athena/internal/application/auth"
+	"github.com/santaniello/athena/internal/application/onboarding"
 	"github.com/santaniello/athena/internal/infrastructure/athenahome"
+	"github.com/santaniello/athena/internal/infrastructure/configfile"
+	"github.com/santaniello/athena/internal/infrastructure/openrouter"
+	"github.com/santaniello/athena/internal/infrastructure/profilefile"
 	"github.com/santaniello/athena/internal/infrastructure/session"
 	"github.com/santaniello/athena/internal/infrastructure/sqlite"
 	"github.com/santaniello/athena/internal/interfaces/desktop"
@@ -33,6 +37,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("resolving session path: %v", err)
 	}
+	profilePath, err := athenahome.File("profile.json")
+	if err != nil {
+		log.Fatalf("resolving profile path: %v", err)
+	}
+	configPath, err := athenahome.File("config.yaml")
+	if err != nil {
+		log.Fatalf("resolving config path: %v", err)
+	}
 	db, err := sqlite.Open(dbPath)
 	if err != nil {
 		log.Fatalf("opening database: %v", err)
@@ -46,7 +58,13 @@ func main() {
 	accounts := sqlite.NewAccountRepository(db)
 	sessions := session.NewStore(sessionPath)
 	authService := auth.NewService(accounts, sessions)
-	app := desktop.NewApp(authService, sessions)
+
+	profiles := profilefile.NewStore(profilePath)
+	configStore := configfile.NewStore(configPath)
+	keyValidator := openrouter.NewValidator("")
+	onboardingService := onboarding.NewService(profiles, configStore, keyValidator)
+
+	app := desktop.NewApp(authService, sessions, onboardingService, profiles, configStore)
 
 	err = wails.Run(&options.App{
 		Title:  "Athena",

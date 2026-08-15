@@ -14,6 +14,28 @@ export namespace desktop {
 	        this.email = source["email"];
 	    }
 	}
+	export class UserProfileInput {
+	    name: string;
+	    assistantName: string;
+	    area: string;
+	    experienceLevel: string;
+	    goals: string[];
+	    studyStyle: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UserProfileInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.assistantName = source["assistantName"];
+	        this.area = source["area"];
+	        this.experienceLevel = source["experienceLevel"];
+	        this.goals = source["goals"];
+	        this.studyStyle = source["studyStyle"];
+	    }
+	}
 
 }
 

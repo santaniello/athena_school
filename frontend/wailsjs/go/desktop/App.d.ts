@@ -4,8 +4,16 @@ import {desktop} from '../models';
 
 export function HasLocalSession():Promise<boolean>;
 
+export function HasOpenRouterKey():Promise<boolean>;
+
+export function HasUserProfile():Promise<boolean>;
+
 export function Login(arg1:string,arg2:string):Promise<desktop.LoginResult>;
 
 export function Register(arg1:string,arg2:string):Promise<void>;
 
 export function ResetLocalAccount(arg1:string):Promise<void>;
+
+export function SaveOpenRouterKey(arg1:string):Promise<void>;
+
+export function SaveProfile(arg1:desktop.UserProfileInput):Promise<void>;
