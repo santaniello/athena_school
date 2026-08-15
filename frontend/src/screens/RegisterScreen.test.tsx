@@ -60,7 +60,9 @@ describe('RegisterScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Create account' }))
 
     // Then an inline error message is shown
-    expect(await screen.findByText('An account with this email already exists.')).toBeInTheDocument()
+    expect(
+      await screen.findByText('An account with this email already exists.'),
+    ).toBeInTheDocument()
   })
 
   it('navigates back to the login screen', async () => {

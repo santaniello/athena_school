@@ -142,9 +142,7 @@ describe('App', () => {
 
     // Then the user stays on the key gate with an inline error
     expect(await screen.findByText('Invalid or unauthorized key.')).toBeInTheDocument()
-    expect(
-      screen.getByRole('heading', { name: 'Connect your OpenRouter key' }),
-    ).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Connect your OpenRouter key' })).toBeInTheDocument()
   })
 
   it('shows onboarding after the key is saved when no profile exists yet', async () => {
@@ -162,7 +160,9 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Connect' }))
 
     // Then the onboarding form is shown next
-    expect(await screen.findByRole('heading', { name: 'Tell us about yourself' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Tell us about yourself' }),
+    ).toBeInTheDocument()
   })
 
   it('navigates from register back to login', async () => {

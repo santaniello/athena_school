@@ -22,8 +22,7 @@ const PROFILE_ERROR_MESSAGES: Record<string, string> = {
   'name is required': 'Enter your name.',
   'assistant name is required': 'Enter what you want to call the assistant.',
   'area is required': 'Enter your area of study or work.',
-  'experience level must be beginner, intermediate or advanced':
-    'Select a valid experience level.',
+  'experience level must be beginner, intermediate or advanced': 'Select a valid experience level.',
   'at least one goal is required': 'Add at least one goal.',
   'study style must be direct, practical_examples or step_by_step': 'Select a valid study style.',
   'assistant language must be pt or en': 'Select a valid assistant language.',

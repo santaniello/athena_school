@@ -74,7 +74,9 @@ function OnboardingFormScreen({ draft, onChange, onNext }: OnboardingFormScreenP
         </div>
 
         <div className="flex flex-col gap-1.5 text-left">
-          <Label htmlFor="onboarding-assistant-name">What would you like to call the assistant?</Label>
+          <Label htmlFor="onboarding-assistant-name">
+            What would you like to call the assistant?
+          </Label>
           <Input
             id="onboarding-assistant-name"
             value={draft.assistantName}
