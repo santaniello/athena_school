@@ -30,7 +30,6 @@ function isDraftComplete(draft: ProfileDraft): boolean {
     draft.name.trim() !== '' &&
     draft.assistantName.trim() !== '' &&
     draft.area.trim() !== '' &&
-    draft.specialty.trim() !== '' &&
     draft.experienceLevel !== '' &&
     draft.goals.length > 0 &&
     draft.studyStyle.trim() !== ''
@@ -78,16 +77,6 @@ function OnboardingFormScreen({ draft, onChange, onNext }: OnboardingFormScreenP
             id="onboarding-area"
             value={draft.area}
             onChange={(event) => updateField('area', event.target.value)}
-            required
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5 text-left">
-          <Label htmlFor="onboarding-specialty">Foco específico</Label>
-          <Input
-            id="onboarding-specialty"
-            value={draft.specialty}
-            onChange={(event) => updateField('specialty', event.target.value)}
             required
           />
         </div>

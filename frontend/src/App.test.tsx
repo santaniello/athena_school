@@ -215,7 +215,6 @@ describe('App', () => {
     await user.type(screen.getByLabelText('Nome'), 'Ana')
     await user.type(screen.getByLabelText('Como quer chamar o assistente?'), 'Atena')
     await user.type(screen.getByLabelText('Área de atuação ou estudo'), 'Engenharia de Software')
-    await user.type(screen.getByLabelText('Foco específico'), 'Backend')
     await user.click(screen.getByRole('combobox', { name: 'Nível de experiência' }))
     await user.click(await screen.findByRole('option', { name: 'Intermediário' }))
     await user.type(screen.getByLabelText('Objetivos'), 'SQL{Enter}')

@@ -24,7 +24,6 @@ const FIELD_LABELS: Record<keyof ProfileDraft, string> = {
   name: 'Nome',
   assistantName: 'Nome do assistente',
   area: 'Área',
-  specialty: 'Foco específico',
   experienceLevel: 'Nível de experiência',
   goals: 'Objetivos',
   studyStyle: 'Estilo de estudo',

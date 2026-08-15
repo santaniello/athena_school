@@ -8,7 +8,6 @@ export interface ProfileDraft {
   name: string
   assistantName: string
   area: string
-  specialty: string
   experienceLevel: string
   goals: string[]
   studyStyle: string

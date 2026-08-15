@@ -37,7 +37,6 @@ describe('profileErrorMessage', () => {
       ['name is required', 'Informe seu nome.'],
       ['assistant name is required', 'Informe como quer chamar o assistente.'],
       ['area is required', 'Informe sua área de atuação ou estudo.'],
-      ['specialty is required', 'Informe seu foco específico.'],
       [
         'experience level must be beginner, intermediate or advanced',
         'Selecione um nível de experiência válido.',

@@ -33,7 +33,6 @@ function completeDraft(): ProfileDraft {
     name: 'Ana',
     assistantName: 'Atena',
     area: 'Engenharia de Software',
-    specialty: 'Backend',
     experienceLevel: 'intermediate',
     goals: ['SQL', 'System Design'],
     studyStyle: 'Prática com exercícios',
@@ -66,7 +65,6 @@ describe('OnboardingConfirmScreen', () => {
       'Nome',
       'Nome do assistente',
       'Área',
-      'Foco específico',
       'Nível de experiência',
       'Objetivos',
       'Estilo de estudo',
@@ -81,16 +79,16 @@ describe('OnboardingConfirmScreen', () => {
     render(
       <OnboardingConfirmScreen draft={completeDraft()} onChange={vi.fn()} onConfirmed={vi.fn()} />,
     )
-    const specialtyRow = within(screen.getByTestId('onboarding-confirm-row-specialty'))
+    const areaRow = within(screen.getByTestId('onboarding-confirm-row-area'))
 
     // When clicking Editar, then Salvar
-    await user.click(specialtyRow.getByRole('button', { name: 'Editar' }))
-    expect(specialtyRow.getByRole('button', { name: 'Salvar' })).toBeInTheDocument()
-    await user.click(specialtyRow.getByRole('button', { name: 'Salvar' }))
+    await user.click(areaRow.getByRole('button', { name: 'Editar' }))
+    expect(areaRow.getByRole('button', { name: 'Salvar' })).toBeInTheDocument()
+    await user.click(areaRow.getByRole('button', { name: 'Salvar' }))
 
     // Then it is back to the read-only display
-    expect(specialtyRow.getByRole('button', { name: 'Editar' })).toBeInTheDocument()
-    expect(specialtyRow.getByText('Backend')).toBeInTheDocument()
+    expect(areaRow.getByRole('button', { name: 'Editar' })).toBeInTheDocument()
+    expect(areaRow.getByText('Engenharia de Software')).toBeInTheDocument()
   })
 
   it('edits a text field inline and reports the change through onChange', async () => {
@@ -99,15 +97,15 @@ describe('OnboardingConfirmScreen', () => {
     const user = userEvent.setup()
     render(<ControlledHarness onChange={onChange} />)
 
-    // When clicking Editar on the Specialty row and changing its value
-    const specialtyRow = within(screen.getByTestId('onboarding-confirm-row-specialty'))
-    await user.click(specialtyRow.getByRole('button', { name: 'Editar' }))
-    const input = specialtyRow.getByLabelText('Foco específico')
+    // When clicking Editar on the Area row and changing its value
+    const areaRow = within(screen.getByTestId('onboarding-confirm-row-area'))
+    await user.click(areaRow.getByRole('button', { name: 'Editar' }))
+    const input = areaRow.getByLabelText('Área')
     await user.clear(input)
-    await user.type(input, 'Frontend')
+    await user.type(input, 'Design')
 
     // Then onChange was last called with the fully edited field
-    expect(onChange).toHaveBeenLastCalledWith({ ...completeDraft(), specialty: 'Frontend' })
+    expect(onChange).toHaveBeenLastCalledWith({ ...completeDraft(), area: 'Design' })
   })
 
   it('edits the goals field inline through the tag input', async () => {

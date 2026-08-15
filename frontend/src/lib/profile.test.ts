@@ -10,7 +10,6 @@ const draft: ProfileDraft = {
   name: 'Ana',
   assistantName: 'Atena',
   area: 'Engenharia de Software',
-  specialty: 'Backend',
   experienceLevel: 'intermediate',
   goals: ['SQL', 'System Design'],
   studyStyle: 'Prática com exercícios',

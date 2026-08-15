@@ -14,7 +14,6 @@ function emptyDraft(): ProfileDraft {
     name: '',
     assistantName: '',
     area: '',
-    specialty: '',
     experienceLevel: '',
     goals: [],
     studyStyle: '',

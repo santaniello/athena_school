@@ -22,7 +22,6 @@ const PROFILE_ERROR_MESSAGES: Record<string, string> = {
   'name is required': 'Informe seu nome.',
   'assistant name is required': 'Informe como quer chamar o assistente.',
   'area is required': 'Informe sua área de atuação ou estudo.',
-  'specialty is required': 'Informe seu foco específico.',
   'experience level must be beginner, intermediate or advanced':
     'Selecione um nível de experiência válido.',
   'at least one goal is required': 'Adicione pelo menos um objetivo.',
