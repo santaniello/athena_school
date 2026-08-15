@@ -2,16 +2,11 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"embed"
 	"log"
-	"os"
 	"os/exec"
 	goruntime "runtime"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/wailsapp/wails/v2"
@@ -117,54 +112,34 @@ func main() {
 // wmctrl's activation request carries the EWMH "pager" source indicator,
 // which these window managers trust instead.
 //
-// Matched by our own PID (via `wmctrl -lp`), not by title or WM_CLASS: a
-// title match is ambiguous on a machine developing this app, where an
-// editor/IDE window legitimately has "athena" in its title too, and
-// options.Linux.ProgramName doesn't help — Wails calls g_set_prgname after
-// the window is already created, too late to affect its WM_CLASS.
+// Matched by the window's exact title ("Athena", set via options.App.Title),
+// not by PID: an earlier PID-based version parsed `wmctrl -lp` and fed the
+// resulting window ID back into a second wmctrl call, which gosec's G204
+// flags on any exec.Command argument that isn't a string literal — with no
+// exception for values that were validated first, since the check is purely
+// syntactic. A literal title keeps every exec.Command argument constant. The
+// trade-off: on a machine developing this app, a window from another
+// process (e.g. an editor/IDE tab) that also has the exact title "Athena"
+// would be activated instead — an unlikely collision, and not destructive
+// even if it happens.
 //
 // OnStartup can fire before the window manager has finished mapping/
 // registering the window (observed directly: under a loaded system, the
-// window took ~65s to show up in `wmctrl -lp` instead of the usual ~8s), so
-// a single attempt isn't reliable — retry for a few seconds. No-op (logged)
-// if wmctrl isn't installed, or if the window still isn't found once the
-// retry budget runs out.
+// window took ~65s to show up instead of the usual ~8s), so a single
+// attempt isn't reliable — retry for a few seconds. No-op (logged) if
+// wmctrl isn't installed, or if the window still isn't found once the retry
+// budget runs out.
 func activateLinuxWindow() {
 	if _, err := exec.LookPath("wmctrl"); err != nil {
 		log.Printf("wmctrl not installed, cannot bring the window to the foreground: %v", err)
 		return
 	}
 
-	pid := strconv.Itoa(os.Getpid())
 	for range 20 {
-		if activateWindowByPID(pid) {
+		if exec.Command("wmctrl", "-F", "-a", "Athena").Run() == nil {
 			return
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
-}
-
-// activateWindowByPID looks up the window owned by the given PID via
-// `wmctrl -lp` and, if found, asks the window manager to raise and focus
-// it. Returns false if the window isn't found yet, so the caller can retry.
-func activateWindowByPID(pid string) bool {
-	out, err := exec.Command("wmctrl", "-lp").Output()
-	if err != nil {
-		log.Printf("listing windows via wmctrl: %v", err)
-		return false
-	}
-
-	scanner := bufio.NewScanner(bytes.NewReader(out))
-	for scanner.Scan() {
-		// Columns: <window id> <desktop> <pid> <client machine> <title...>
-		fields := strings.Fields(scanner.Text())
-		if len(fields) < 3 || fields[2] != pid {
-			continue
-		}
-		if err := exec.Command("wmctrl", "-i", "-a", fields[0]).Run(); err != nil {
-			log.Printf("activating window via wmctrl: %v", err)
-		}
-		return true
-	}
-	return false
+	log.Print("could not find the Athena window via wmctrl within the retry budget")
 }
