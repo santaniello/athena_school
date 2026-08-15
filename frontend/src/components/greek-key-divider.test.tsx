@@ -31,4 +31,17 @@ describe('GreekKeyDivider', () => {
     expect(divider.className).toContain('bg-primary/80')
     expect(divider.className).toContain('scale-y-[-1]')
   })
+
+  it('renders a full-height strip that repeats along y when vertical', () => {
+    // Given orientation="vertical" (e.g. framing the left/right screen edges)
+    render(<GreekKeyDivider orientation="vertical" />)
+
+    // When inspecting the rendered element
+    const divider = screen.getByRole('presentation')
+
+    // Then it swaps to a vertical strip with the mask repeating along y
+    expect(divider.className).toContain('h-full')
+    expect(divider.className).toContain('w-2.5')
+    expect(divider.style.maskRepeat).toBe('repeat-y')
+  })
 })

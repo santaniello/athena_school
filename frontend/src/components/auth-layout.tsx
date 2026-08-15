@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { GreekKeyDivider } from '@/components/greek-key-divider'
+import { AthenaLogo } from '@/components/athena-logo'
 
 interface AuthLayoutProps {
   title: string
@@ -16,9 +17,12 @@ function AuthLayout({ title, children }: AuthLayoutProps) {
       <Card className="w-full max-w-sm">
         <CardHeader className="items-center gap-3 text-center">
           <GreekKeyDivider />
-          <h1 className="font-heading text-2xl font-bold tracking-[0.15em] text-primary uppercase">
-            {title}
-          </h1>
+          <div className="flex items-center justify-center gap-2">
+            <AthenaLogo className="h-9 w-9 shrink-0" />
+            <h1 className="font-heading text-2xl font-bold tracking-[0.15em] text-primary uppercase">
+              {title}
+            </h1>
+          </div>
           <GreekKeyDivider className="scale-y-[-1]" />
         </CardHeader>
         <CardContent className="flex flex-col gap-4">{children}</CardContent>

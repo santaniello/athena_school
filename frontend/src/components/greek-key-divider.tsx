@@ -2,6 +2,7 @@ import { cn } from '@/lib/utils'
 
 interface GreekKeyDividerProps {
   className?: string
+  orientation?: 'horizontal' | 'vertical'
 }
 
 // A tiled meander (Greek key) motif, used as a decorative divider on auth
@@ -15,16 +16,17 @@ const TILE_MASK = encodeURIComponent(
 )
 const maskImage = `url("data:image/svg+xml,${TILE_MASK}")`
 
-function GreekKeyDivider({ className }: GreekKeyDividerProps) {
+function GreekKeyDivider({ className, orientation = 'horizontal' }: GreekKeyDividerProps) {
+  const isVertical = orientation === 'vertical'
   return (
     <div
       role="presentation"
-      className={cn('h-2.5 w-full bg-primary/80', className)}
+      className={cn(isVertical ? 'h-full w-2.5' : 'h-2.5 w-full', 'bg-primary/80', className)}
       style={{
         maskImage,
         WebkitMaskImage: maskImage,
-        maskRepeat: 'repeat-x',
-        WebkitMaskRepeat: 'repeat-x',
+        maskRepeat: isVertical ? 'repeat-y' : 'repeat-x',
+        WebkitMaskRepeat: isVertical ? 'repeat-y' : 'repeat-x',
         maskSize: '10px 10px',
         WebkitMaskSize: '10px 10px',
       }}
