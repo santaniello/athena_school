@@ -53,6 +53,8 @@ describe('OnboardingConfirmScreen', () => {
     expect(screen.getByText('Atena')).toBeInTheDocument()
     expect(screen.getByText('SQL, System Design')).toBeInTheDocument()
     expect(screen.getByText('Intermediate')).toBeInTheDocument()
+    expect(screen.getByText('Lots of practical examples')).toBeInTheDocument()
+    expect(screen.getByText('English')).toBeInTheDocument()
   })
 
   it('shows every field label', () => {
@@ -139,10 +141,15 @@ describe('OnboardingConfirmScreen', () => {
     )
     const levelRow = within(screen.getByTestId('onboarding-confirm-row-experienceLevel'))
 
-    // When clicking Edit on the experience level row and picking a new level
+    // When clicking Edit on the experience level row and opening the dropdown
     await user.click(levelRow.getByRole('button', { name: 'Edit' }))
     await user.click(screen.getByRole('combobox', { name: 'Experience level' }))
-    await user.click(await screen.findByRole('option', { name: 'Advanced' }))
+
+    // Then every level is offered, not just the currently selected one
+    expect(await screen.findByRole('option', { name: 'Beginner' })).toBeInTheDocument()
+
+    // When picking a new level
+    await user.click(screen.getByRole('option', { name: 'Advanced' }))
 
     // Then onChange is called with the new level
     expect(onChange).toHaveBeenCalledWith({ ...completeDraft(), experienceLevel: 'advanced' })
@@ -157,13 +164,36 @@ describe('OnboardingConfirmScreen', () => {
     )
     const styleRow = within(screen.getByTestId('onboarding-confirm-row-studyStyle'))
 
-    // When clicking Edit on the study style row and picking a new style
+    // When clicking Edit on the study style row and opening the dropdown
     await user.click(styleRow.getByRole('button', { name: 'Edit' }))
     await user.click(screen.getByRole('combobox', { name: 'Study style' }))
-    await user.click(await screen.findByRole('option', { name: 'Direct and to the point' }))
+
+    // Then every style is offered, not just the currently selected one
+    expect(await screen.findByRole('option', { name: 'Detailed step by step' })).toBeInTheDocument()
+
+    // When picking a new style
+    await user.click(screen.getByRole('option', { name: 'Direct and to the point' }))
 
     // Then onChange is called with the new style
     expect(onChange).toHaveBeenCalledWith({ ...completeDraft(), studyStyle: 'direct' })
+  })
+
+  it('edits the assistant language inline through the dropdown', async () => {
+    // Given a filled draft
+    const onChange = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <OnboardingConfirmScreen draft={completeDraft()} onChange={onChange} onConfirmed={vi.fn()} />,
+    )
+    const languageRow = within(screen.getByTestId('onboarding-confirm-row-assistantLanguage'))
+
+    // When clicking Edit on the assistant language row and picking a new language
+    await user.click(languageRow.getByRole('button', { name: 'Edit' }))
+    await user.click(screen.getByRole('combobox', { name: 'Assistant language' }))
+    await user.click(await screen.findByRole('option', { name: 'Portuguese' }))
+
+    // Then onChange is called with the new language
+    expect(onChange).toHaveBeenCalledWith({ ...completeDraft(), assistantLanguage: 'pt' })
   })
 
   it('shows no error alert before any confirmation attempt', () => {
@@ -195,6 +225,41 @@ describe('OnboardingConfirmScreen', () => {
     // Then SaveProfile is called with the equivalent input and onConfirmed fires
     expect(SaveProfile).toHaveBeenCalledWith(expect.objectContaining(completeDraft()))
     await waitFor(() => expect(onConfirmed).toHaveBeenCalledOnce())
+  })
+
+  it('clears a previous error and shows a saving state on a later confirmation attempt', async () => {
+    // Given a first save attempt that fails, followed by one that stays pending during the assertion
+    let resolveSecondCall: () => void = () => {}
+    vi.mocked(SaveProfile)
+      .mockRejectedValueOnce(new Error('at least one goal is required'))
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveSecondCall = resolve
+        }),
+      )
+    const user = userEvent.setup()
+    render(
+      <OnboardingConfirmScreen draft={completeDraft()} onChange={vi.fn()} onConfirmed={vi.fn()} />,
+    )
+
+    // When the first attempt fails
+    await user.click(screen.getByRole('button', { name: 'Confirm and save' }))
+    expect(await screen.findByText('Add at least one goal.')).toBeInTheDocument()
+
+    // And a second attempt is submitted
+    await user.click(screen.getByRole('button', { name: 'Confirm and save' }))
+
+    // Then the previous error is gone and the button shows a saving state
+    expect(screen.queryByText('Add at least one goal.')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled()
+
+    // When the pending save resolves
+    resolveSecondCall()
+
+    // Then the button reverts to its normal, enabled state
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Confirm and save' })).toBeEnabled(),
+    )
   })
 
   it('shows an inline error and does not call onConfirmed on failure', async () => {
