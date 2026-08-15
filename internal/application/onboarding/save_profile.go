@@ -14,7 +14,6 @@ func (s *Service) SaveProfile(profile domainprofile.UserProfile) (domainprofile.
 	profile.Name = strings.TrimSpace(profile.Name)
 	profile.AssistantName = strings.TrimSpace(profile.AssistantName)
 	profile.Area = strings.TrimSpace(profile.Area)
-	profile.Specialty = strings.TrimSpace(profile.Specialty)
 	profile.StudyStyle = strings.TrimSpace(profile.StudyStyle)
 	profile.CreatedAt = time.Now().UTC()
 

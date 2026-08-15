@@ -20,7 +20,6 @@ func TestStore_SaveThenLoad_roundTrips(t *testing.T) {
 		Name:            "Ana",
 		AssistantName:   "Atena",
 		Area:            "Engenharia de Software",
-		Specialty:       "Backend",
 		ExperienceLevel: profile.ExperienceLevelIntermediate,
 		Goals:           []string{"SQL", "System Design"},
 		StudyStyle:      "Prática com exercícios",

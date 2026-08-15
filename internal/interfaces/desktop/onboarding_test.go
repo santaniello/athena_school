@@ -120,7 +120,6 @@ func validProfileInput() UserProfileInput {
 		Name:            "Ana",
 		AssistantName:   "Atena",
 		Area:            "Engenharia de Software",
-		Specialty:       "Backend",
 		ExperienceLevel: domainprofile.ExperienceLevelIntermediate,
 		Goals:           []string{"SQL", "System Design"},
 		StudyStyle:      "Prática com exercícios",

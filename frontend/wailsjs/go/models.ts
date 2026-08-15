@@ -18,7 +18,6 @@ export namespace desktop {
 	    name: string;
 	    assistantName: string;
 	    area: string;
-	    specialty: string;
 	    experienceLevel: string;
 	    goals: string[];
 	    studyStyle: string;
@@ -32,7 +31,6 @@ export namespace desktop {
 	        this.name = source["name"];
 	        this.assistantName = source["assistantName"];
 	        this.area = source["area"];
-	        this.specialty = source["specialty"];
 	        this.experienceLevel = source["experienceLevel"];
 	        this.goals = source["goals"];
 	        this.studyStyle = source["studyStyle"];

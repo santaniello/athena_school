@@ -11,7 +11,6 @@ func validProfile() UserProfile {
 		Name:            "Ana",
 		AssistantName:   "Atena",
 		Area:            "Engenharia de Software",
-		Specialty:       "Backend",
 		ExperienceLevel: ExperienceLevelIntermediate,
 		Goals:           []string{"SQL", "System Design"},
 		StudyStyle:      "Prática com exercícios",
@@ -63,18 +62,6 @@ func TestUserProfile_Validate_returnsError_whenAreaIsEmpty(t *testing.T) {
 
 	// Then it fails with the area-required error
 	assert.ErrorIs(t, err, ErrAreaRequired)
-}
-
-func TestUserProfile_Validate_returnsError_whenSpecialtyIsEmpty(t *testing.T) {
-	// Given a profile with a blank specialty
-	p := validProfile()
-	p.Specialty = ""
-
-	// When validating it
-	err := p.Validate()
-
-	// Then it fails with the specialty-required error
-	assert.ErrorIs(t, err, ErrSpecialtyRequired)
 }
 
 func TestUserProfile_Validate_returnsError_whenExperienceLevelIsNotOneOfTheAllowedValues(t *testing.T) {

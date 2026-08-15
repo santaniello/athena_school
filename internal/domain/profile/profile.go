@@ -21,7 +21,6 @@ var (
 	ErrNameRequired           = errors.New("name is required")
 	ErrAssistantNameRequired  = errors.New("assistant name is required")
 	ErrAreaRequired           = errors.New("area is required")
-	ErrSpecialtyRequired      = errors.New("specialty is required")
 	ErrInvalidExperienceLevel = errors.New("experience level must be beginner, intermediate or advanced")
 	ErrGoalsRequired          = errors.New("at least one goal is required")
 	ErrStudyStyleRequired     = errors.New("study style is required")
@@ -33,7 +32,6 @@ type UserProfile struct {
 	Name            string    `json:"name"`
 	AssistantName   string    `json:"assistant_name"`
 	Area            string    `json:"area"`
-	Specialty       string    `json:"specialty"`
 	ExperienceLevel string    `json:"experience_level"` // beginner | intermediate | advanced
 	Goals           []string  `json:"goals"`
 	StudyStyle      string    `json:"study_style"`
@@ -52,9 +50,6 @@ func (p UserProfile) Validate() error {
 	}
 	if strings.TrimSpace(p.Area) == "" {
 		return ErrAreaRequired
-	}
-	if strings.TrimSpace(p.Specialty) == "" {
-		return ErrSpecialtyRequired
 	}
 	switch p.ExperienceLevel {
 	case ExperienceLevelBeginner, ExperienceLevelIntermediate, ExperienceLevelAdvanced:

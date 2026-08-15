@@ -10,7 +10,6 @@ type UserProfileInput struct {
 	Name            string   `json:"name"`
 	AssistantName   string   `json:"assistantName"`
 	Area            string   `json:"area"`
-	Specialty       string   `json:"specialty"`
 	ExperienceLevel string   `json:"experienceLevel"`
 	Goals           []string `json:"goals"`
 	StudyStyle      string   `json:"studyStyle"`
@@ -43,7 +42,6 @@ func (a *App) SaveProfile(input UserProfileInput) error {
 		Name:            input.Name,
 		AssistantName:   input.AssistantName,
 		Area:            input.Area,
-		Specialty:       input.Specialty,
 		ExperienceLevel: input.ExperienceLevel,
 		Goals:           input.Goals,
 		StudyStyle:      input.StudyStyle,
