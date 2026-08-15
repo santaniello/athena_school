@@ -24,7 +24,7 @@ function RegisterScreen({ onSuccess, onNavigateToLogin }: RegisterScreenProps) {
     setError('')
 
     if (password !== confirmPassword) {
-      setError('As senhas não coincidem.')
+      setError("Passwords don't match.")
       return
     }
 
@@ -38,10 +38,10 @@ function RegisterScreen({ onSuccess, onNavigateToLogin }: RegisterScreenProps) {
   }
 
   return (
-    <AuthLayout title="Criar conta">
+    <AuthLayout title="Create account">
       <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
         <div className="flex flex-col gap-1.5 text-left">
-          <Label htmlFor="register-email">E-mail</Label>
+          <Label htmlFor="register-email">Email</Label>
           <Input
             id="register-email"
             type="email"
@@ -52,7 +52,7 @@ function RegisterScreen({ onSuccess, onNavigateToLogin }: RegisterScreenProps) {
         </div>
 
         <div className="flex flex-col gap-1.5 text-left">
-          <Label htmlFor="register-password">Senha</Label>
+          <Label htmlFor="register-password">Password</Label>
           <Input
             id="register-password"
             type="password"
@@ -63,7 +63,7 @@ function RegisterScreen({ onSuccess, onNavigateToLogin }: RegisterScreenProps) {
         </div>
 
         <div className="flex flex-col gap-1.5 text-left">
-          <Label htmlFor="register-confirm-password">Confirmar senha</Label>
+          <Label htmlFor="register-confirm-password">Confirm password</Label>
           <Input
             id="register-confirm-password"
             type="password"
@@ -79,12 +79,12 @@ function RegisterScreen({ onSuccess, onNavigateToLogin }: RegisterScreenProps) {
           </Alert>
         )}
 
-        <Button type="submit">Criar conta</Button>
+        <Button type="submit">Create account</Button>
       </form>
 
       <div className="flex justify-center">
         <Button type="button" variant="ghost" size="sm" onClick={onNavigateToLogin}>
-          Já tenho conta
+          I already have an account
         </Button>
       </div>
     </AuthLayout>

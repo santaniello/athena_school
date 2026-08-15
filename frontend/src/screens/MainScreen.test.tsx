@@ -8,7 +8,7 @@ describe('MainScreen', () => {
     render(<MainScreen email={undefined} />)
 
     // Then it still renders the placeholder main screen
-    expect(screen.getByRole('heading', { name: /bem-vindo/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /welcome/i })).toBeInTheDocument()
   })
 
   it('greets the logged-in account by email when known', () => {

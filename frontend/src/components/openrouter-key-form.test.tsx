@@ -24,12 +24,12 @@ describe('OpenRouterKeyForm', () => {
       .mockResolvedValueOnce()
     const user = userEvent.setup()
     render(<OpenRouterKeyForm onSaved={vi.fn()} />)
-    await user.type(screen.getByLabelText('Chave da OpenRouter'), 'sk-or-invalid')
-    await user.click(screen.getByRole('button', { name: 'Conectar' }))
+    await user.type(screen.getByLabelText('OpenRouter key'), 'sk-or-invalid')
+    await user.click(screen.getByRole('button', { name: 'Connect' }))
     expect(await screen.findByRole('alert')).toBeInTheDocument()
 
     // When submitting again
-    await user.click(screen.getByRole('button', { name: 'Conectar' }))
+    await user.click(screen.getByRole('button', { name: 'Connect' }))
 
     // Then the error alert is gone
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
@@ -43,8 +43,8 @@ describe('OpenRouterKeyForm', () => {
     render(<OpenRouterKeyForm onSaved={onSaved} />)
 
     // When the user submits a key
-    await user.type(screen.getByLabelText('Chave da OpenRouter'), 'sk-or-valid')
-    await user.click(screen.getByRole('button', { name: 'Conectar' }))
+    await user.type(screen.getByLabelText('OpenRouter key'), 'sk-or-valid')
+    await user.click(screen.getByRole('button', { name: 'Connect' }))
 
     // Then the binding is called with that key and onSaved fires
     expect(SaveOpenRouterKey).toHaveBeenCalledWith('sk-or-valid')
@@ -63,11 +63,11 @@ describe('OpenRouterKeyForm', () => {
     render(<OpenRouterKeyForm onSaved={vi.fn()} />)
 
     // When the user submits a key
-    await user.type(screen.getByLabelText('Chave da OpenRouter'), 'sk-or-valid')
-    await user.click(screen.getByRole('button', { name: 'Conectar' }))
+    await user.type(screen.getByLabelText('OpenRouter key'), 'sk-or-valid')
+    await user.click(screen.getByRole('button', { name: 'Connect' }))
 
     // Then the button is disabled and shows a validating label
-    const button = await screen.findByRole('button', { name: 'Validando...' })
+    const button = await screen.findByRole('button', { name: 'Validating...' })
     expect(button).toBeDisabled()
 
     resolveCall()
@@ -83,11 +83,11 @@ describe('OpenRouterKeyForm', () => {
     render(<OpenRouterKeyForm onSaved={onSaved} />)
 
     // When the user submits an invalid key
-    await user.type(screen.getByLabelText('Chave da OpenRouter'), 'sk-or-invalid')
-    await user.click(screen.getByRole('button', { name: 'Conectar' }))
+    await user.type(screen.getByLabelText('OpenRouter key'), 'sk-or-invalid')
+    await user.click(screen.getByRole('button', { name: 'Connect' }))
 
-    // Then an inline PT-BR error is shown and onSaved never fires
-    expect(await screen.findByText('Chave inválida ou não autorizada.')).toBeInTheDocument()
+    // Then an inline error is shown and onSaved never fires
+    expect(await screen.findByText('Invalid or unauthorized key.')).toBeInTheDocument()
     expect(onSaved).not.toHaveBeenCalled()
   })
 })

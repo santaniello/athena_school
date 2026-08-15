@@ -20,10 +20,10 @@ describe('RegisterScreen', () => {
     render(<RegisterScreen onSuccess={onSuccess} onNavigateToLogin={vi.fn()} />)
 
     // When the user submits the register form with matching passwords
-    await user.type(screen.getByLabelText('E-mail'), 'new@athena.dev')
-    await user.type(screen.getByLabelText('Senha'), 's3cr3t-password')
-    await user.type(screen.getByLabelText('Confirmar senha'), 's3cr3t-password')
-    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
+    await user.type(screen.getByLabelText('Email'), 'new@athena.dev')
+    await user.type(screen.getByLabelText('Password'), 's3cr3t-password')
+    await user.type(screen.getByLabelText('Confirm password'), 's3cr3t-password')
+    await user.click(screen.getByRole('button', { name: 'Create account' }))
 
     // Then the account is created, the user is logged in, and no email-confirmation step is shown
     expect(Register).toHaveBeenCalledWith('new@athena.dev', 's3cr3t-password')
@@ -37,13 +37,13 @@ describe('RegisterScreen', () => {
     render(<RegisterScreen onSuccess={vi.fn()} onNavigateToLogin={vi.fn()} />)
 
     // When the user submits mismatched passwords
-    await user.type(screen.getByLabelText('E-mail'), 'new@athena.dev')
-    await user.type(screen.getByLabelText('Senha'), 's3cr3t-password')
-    await user.type(screen.getByLabelText('Confirmar senha'), 'different-password')
-    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
+    await user.type(screen.getByLabelText('Email'), 'new@athena.dev')
+    await user.type(screen.getByLabelText('Password'), 's3cr3t-password')
+    await user.type(screen.getByLabelText('Confirm password'), 'different-password')
+    await user.click(screen.getByRole('button', { name: 'Create account' }))
 
     // Then an inline error is shown and Register is never called
-    expect(await screen.findByText('As senhas não coincidem.')).toBeInTheDocument()
+    expect(await screen.findByText("Passwords don't match.")).toBeInTheDocument()
     expect(Register).not.toHaveBeenCalled()
   })
 
@@ -54,13 +54,15 @@ describe('RegisterScreen', () => {
     render(<RegisterScreen onSuccess={vi.fn()} onNavigateToLogin={vi.fn()} />)
 
     // When the user submits the register form
-    await user.type(screen.getByLabelText('E-mail'), 'dup@athena.dev')
-    await user.type(screen.getByLabelText('Senha'), 's3cr3t-password')
-    await user.type(screen.getByLabelText('Confirmar senha'), 's3cr3t-password')
-    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
+    await user.type(screen.getByLabelText('Email'), 'dup@athena.dev')
+    await user.type(screen.getByLabelText('Password'), 's3cr3t-password')
+    await user.type(screen.getByLabelText('Confirm password'), 's3cr3t-password')
+    await user.click(screen.getByRole('button', { name: 'Create account' }))
 
-    // Then an inline PT-BR error message is shown
-    expect(await screen.findByText('Já existe uma conta com este e-mail.')).toBeInTheDocument()
+    // Then an inline error message is shown
+    expect(
+      await screen.findByText('An account with this email already exists.'),
+    ).toBeInTheDocument()
   })
 
   it('navigates back to the login screen', async () => {
@@ -70,7 +72,7 @@ describe('RegisterScreen', () => {
     render(<RegisterScreen onSuccess={vi.fn()} onNavigateToLogin={onNavigateToLogin} />)
 
     // When the user clicks the back-to-login action
-    await user.click(screen.getByRole('button', { name: 'Já tenho conta' }))
+    await user.click(screen.getByRole('button', { name: 'I already have an account' }))
 
     // Then the callback fires
     expect(onNavigateToLogin).toHaveBeenCalledOnce()

@@ -21,24 +21,42 @@ interface OnboardingConfirmScreenProps {
 }
 
 const FIELD_LABELS: Record<keyof ProfileDraft, string> = {
-  name: 'Nome',
-  assistantName: 'Nome do assistente',
-  area: 'Área',
-  experienceLevel: 'Nível de experiência',
-  goals: 'Objetivos',
-  studyStyle: 'Estilo de estudo',
+  name: 'Name',
+  assistantName: 'Assistant name',
+  area: 'Area',
+  experienceLevel: 'Experience level',
+  goals: 'Goals',
+  studyStyle: 'Study style',
+  assistantLanguage: 'Assistant language',
 }
 
 const EXPERIENCE_LEVEL_LABELS: Record<string, string> = {
-  beginner: 'Iniciante',
-  intermediate: 'Intermediário',
-  advanced: 'Avançado',
+  beginner: 'Beginner',
+  intermediate: 'Intermediate',
+  advanced: 'Advanced',
+}
+
+const ASSISTANT_LANGUAGE_LABELS: Record<string, string> = {
+  pt: 'Portuguese',
+  en: 'English',
+}
+
+const STUDY_STYLE_LABELS: Record<string, string> = {
+  direct: 'Direct and to the point',
+  practical_examples: 'Lots of practical examples',
+  step_by_step: 'Detailed step by step',
 }
 
 function displayValue(field: keyof ProfileDraft, draft: ProfileDraft): string {
   if (field === 'goals') return draft.goals.join(', ')
   if (field === 'experienceLevel') {
     return EXPERIENCE_LEVEL_LABELS[draft.experienceLevel] ?? draft.experienceLevel
+  }
+  if (field === 'assistantLanguage') {
+    return ASSISTANT_LANGUAGE_LABELS[draft.assistantLanguage] ?? draft.assistantLanguage
+  }
+  if (field === 'studyStyle') {
+    return STUDY_STYLE_LABELS[draft.studyStyle] ?? draft.studyStyle
   }
   return draft[field] as string
 }
@@ -70,11 +88,11 @@ function OnboardingConfirmScreen({ draft, onChange, onConfirmed }: OnboardingCon
           <TagInput
             value={draft.goals}
             onChange={(goals) => onChange({ ...draft, goals })}
-            placeholder="Digite um objetivo e pressione Enter"
+            placeholder="Type a goal and press Enter"
             aria-label={FIELD_LABELS.goals}
           />
           <p className="text-xs text-muted-foreground">
-            Pressione Enter ou vírgula após cada objetivo para adicioná-lo.
+            Press Enter or comma after each goal to add it.
           </p>
         </div>
       )
@@ -86,10 +104,48 @@ function OnboardingConfirmScreen({ draft, onChange, onConfirmed }: OnboardingCon
           onValueChange={(value) => onChange({ ...draft, experienceLevel: value })}
         >
           <SelectTrigger className="w-full" aria-label={FIELD_LABELS.experienceLevel}>
-            <SelectValue placeholder="Selecione um nível" />
+            <SelectValue placeholder="Select a level" />
           </SelectTrigger>
           <SelectContent>
             {Object.entries(EXPERIENCE_LEVEL_LABELS).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )
+    }
+    if (field === 'assistantLanguage') {
+      return (
+        <Select
+          value={draft.assistantLanguage}
+          onValueChange={(value) => onChange({ ...draft, assistantLanguage: value })}
+        >
+          <SelectTrigger className="w-full" aria-label={FIELD_LABELS.assistantLanguage}>
+            <SelectValue placeholder="Select a language" />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(ASSISTANT_LANGUAGE_LABELS).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )
+    }
+    if (field === 'studyStyle') {
+      return (
+        <Select
+          value={draft.studyStyle}
+          onValueChange={(value) => onChange({ ...draft, studyStyle: value })}
+        >
+          <SelectTrigger className="w-full" aria-label={FIELD_LABELS.studyStyle}>
+            <SelectValue placeholder="Select a style" />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(STUDY_STYLE_LABELS).map(([value, label]) => (
               <SelectItem key={value} value={value}>
                 {label}
               </SelectItem>
@@ -108,7 +164,7 @@ function OnboardingConfirmScreen({ draft, onChange, onConfirmed }: OnboardingCon
   }
 
   return (
-    <AuthLayout title="Confirme seu perfil">
+    <AuthLayout title="Confirm your profile">
       <div className="flex flex-col gap-3 text-left">
         {(Object.keys(FIELD_LABELS) as Array<keyof ProfileDraft>).map((field) => (
           <div
@@ -126,7 +182,7 @@ function OnboardingConfirmScreen({ draft, onChange, onConfirmed }: OnboardingCon
                 size="sm"
                 onClick={() => setEditingField(editingField === field ? null : field)}
               >
-                {editingField === field ? 'Salvar' : 'Editar'}
+                {editingField === field ? 'Save' : 'Edit'}
               </Button>
             </div>
             {editingField === field ? (
@@ -145,7 +201,7 @@ function OnboardingConfirmScreen({ draft, onChange, onConfirmed }: OnboardingCon
       )}
 
       <Button type="button" onClick={handleConfirm} disabled={isSaving}>
-        {isSaving ? 'Salvando...' : 'Confirmar e salvar'}
+        {isSaving ? 'Saving...' : 'Confirm and save'}
       </Button>
     </AuthLayout>
   )

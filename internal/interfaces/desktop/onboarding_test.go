@@ -117,12 +117,13 @@ func mockMatchesProfileNamed(name string) interface{} {
 
 func validProfileInput() UserProfileInput {
 	return UserProfileInput{
-		Name:            "Ana",
-		AssistantName:   "Atena",
-		Area:            "Engenharia de Software",
-		ExperienceLevel: domainprofile.ExperienceLevelIntermediate,
-		Goals:           []string{"SQL", "System Design"},
-		StudyStyle:      "Prática com exercícios",
+		Name:              "Ana",
+		AssistantName:     "Atena",
+		Area:              "Engenharia de Software",
+		ExperienceLevel:   domainprofile.ExperienceLevelIntermediate,
+		Goals:             []string{"SQL", "System Design"},
+		StudyStyle:        domainprofile.StudyStylePracticalExamples,
+		AssistantLanguage: domainprofile.AssistantLanguageEnglish,
 	}
 }
 

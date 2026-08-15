@@ -91,6 +91,38 @@ body {
   --radius: 0.75rem;
 }
 
+/* Splash screen: the frame strips use tw-animate-css's slide-in utilities
+   directly, but the logo needs two animations running at once (a one-shot
+   entrance plus an indefinite pulse) — Tailwind's animate-* utilities each
+   set the whole `animation` shorthand, so they can't be composed via
+   classes without one clobbering the other. Hand-rolled here instead. */
+@keyframes athena-logo-in {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes athena-logo-pulse {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  50% {
+    filter: drop-shadow(0 0 10px oklch(0.8 0.14 86 / 55%));
+  }
+}
+
+.animate-athena-logo {
+  animation:
+    athena-logo-in 500ms ease-out 550ms both,
+    athena-logo-pulse 2400ms ease-in-out 1050ms infinite;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

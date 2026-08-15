@@ -20,9 +20,20 @@ interface OnboardingFormScreenProps {
 }
 
 const EXPERIENCE_LEVELS: Array<{ value: string; label: string }> = [
-  { value: 'beginner', label: 'Iniciante' },
-  { value: 'intermediate', label: 'Intermediário' },
-  { value: 'advanced', label: 'Avançado' },
+  { value: 'beginner', label: 'Beginner' },
+  { value: 'intermediate', label: 'Intermediate' },
+  { value: 'advanced', label: 'Advanced' },
+]
+
+const ASSISTANT_LANGUAGES: Array<{ value: string; label: string }> = [
+  { value: 'pt', label: 'Portuguese' },
+  { value: 'en', label: 'English' },
+]
+
+const STUDY_STYLES: Array<{ value: string; label: string }> = [
+  { value: 'direct', label: 'Direct and to the point' },
+  { value: 'practical_examples', label: 'Lots of practical examples' },
+  { value: 'step_by_step', label: 'Detailed step by step' },
 ]
 
 function isDraftComplete(draft: ProfileDraft): boolean {
@@ -32,7 +43,8 @@ function isDraftComplete(draft: ProfileDraft): boolean {
     draft.area.trim() !== '' &&
     draft.experienceLevel !== '' &&
     draft.goals.length > 0 &&
-    draft.studyStyle.trim() !== ''
+    draft.studyStyle !== '' &&
+    draft.assistantLanguage !== ''
   )
 }
 
@@ -49,10 +61,10 @@ function OnboardingFormScreen({ draft, onChange, onNext }: OnboardingFormScreenP
   }
 
   return (
-    <AuthLayout title="Conte sobre você">
+    <AuthLayout title="Tell us about yourself">
       <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
         <div className="flex flex-col gap-1.5 text-left">
-          <Label htmlFor="onboarding-name">Nome</Label>
+          <Label htmlFor="onboarding-name">Name</Label>
           <Input
             id="onboarding-name"
             value={draft.name}
@@ -62,7 +74,9 @@ function OnboardingFormScreen({ draft, onChange, onNext }: OnboardingFormScreenP
         </div>
 
         <div className="flex flex-col gap-1.5 text-left">
-          <Label htmlFor="onboarding-assistant-name">Como quer chamar o assistente?</Label>
+          <Label htmlFor="onboarding-assistant-name">
+            What would you like to call the assistant?
+          </Label>
           <Input
             id="onboarding-assistant-name"
             value={draft.assistantName}
@@ -72,7 +86,26 @@ function OnboardingFormScreen({ draft, onChange, onNext }: OnboardingFormScreenP
         </div>
 
         <div className="flex flex-col gap-1.5 text-left">
-          <Label htmlFor="onboarding-area">Área de atuação ou estudo</Label>
+          <Label htmlFor="onboarding-assistant-language">Assistant language</Label>
+          <Select
+            value={draft.assistantLanguage}
+            onValueChange={(value) => updateField('assistantLanguage', value)}
+          >
+            <SelectTrigger id="onboarding-assistant-language" className="w-full">
+              <SelectValue placeholder="Select a language" />
+            </SelectTrigger>
+            <SelectContent>
+              {ASSISTANT_LANGUAGES.map((language) => (
+                <SelectItem key={language.value} value={language.value}>
+                  {language.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5 text-left">
+          <Label htmlFor="onboarding-area">Area of study or work</Label>
           <Input
             id="onboarding-area"
             value={draft.area}
@@ -82,13 +115,13 @@ function OnboardingFormScreen({ draft, onChange, onNext }: OnboardingFormScreenP
         </div>
 
         <div className="flex flex-col gap-1.5 text-left">
-          <Label htmlFor="onboarding-experience-level">Nível de experiência</Label>
+          <Label htmlFor="onboarding-experience-level">Experience level</Label>
           <Select
             value={draft.experienceLevel}
             onValueChange={(value) => updateField('experienceLevel', value)}
           >
             <SelectTrigger id="onboarding-experience-level" className="w-full">
-              <SelectValue placeholder="Selecione um nível" />
+              <SelectValue placeholder="Select a level" />
             </SelectTrigger>
             <SelectContent>
               {EXPERIENCE_LEVELS.map((level) => (
@@ -101,30 +134,39 @@ function OnboardingFormScreen({ draft, onChange, onNext }: OnboardingFormScreenP
         </div>
 
         <div className="flex flex-col gap-1.5 text-left">
-          <Label htmlFor="onboarding-goals">Objetivos</Label>
+          <Label htmlFor="onboarding-goals">Goals</Label>
           <TagInput
             id="onboarding-goals"
             value={draft.goals}
             onChange={(goals) => updateField('goals', goals)}
-            placeholder="Digite um objetivo e pressione Enter"
+            placeholder="Type a goal and press Enter"
           />
           <p className="text-xs text-muted-foreground">
-            Pressione Enter ou vírgula após cada objetivo para adicioná-lo.
+            Press Enter or comma after each goal to add it.
           </p>
         </div>
 
         <div className="flex flex-col gap-1.5 text-left">
-          <Label htmlFor="onboarding-study-style">Estilo de estudo preferido</Label>
-          <Input
-            id="onboarding-study-style"
+          <Label htmlFor="onboarding-study-style">Preferred study style</Label>
+          <Select
             value={draft.studyStyle}
-            onChange={(event) => updateField('studyStyle', event.target.value)}
-            required
-          />
+            onValueChange={(value) => updateField('studyStyle', value)}
+          >
+            <SelectTrigger id="onboarding-study-style" className="w-full">
+              <SelectValue placeholder="Select a style" />
+            </SelectTrigger>
+            <SelectContent>
+              {STUDY_STYLES.map((style) => (
+                <SelectItem key={style.value} value={style.value}>
+                  {style.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <Button type="submit" disabled={!isDraftComplete(draft)}>
-          Continuar
+          Continue
         </Button>
       </form>
     </AuthLayout>

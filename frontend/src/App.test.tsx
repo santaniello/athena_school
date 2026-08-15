@@ -36,11 +36,11 @@ describe('App', () => {
     render(<App />)
 
     // Then the login screen is shown, and no other screen is rendered alongside it
-    expect(await screen.findByRole('heading', { name: 'Entrar' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Log in' })).toBeInTheDocument()
     expect(
-      screen.queryByRole('heading', { name: 'Conecte sua chave OpenRouter' }),
+      screen.queryByRole('heading', { name: 'Connect your OpenRouter key' }),
     ).not.toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: /bem-vindo/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /welcome/i })).not.toBeInTheDocument()
   })
 
   it('skips straight to the main screen when a local session already exists', async () => {
@@ -51,9 +51,9 @@ describe('App', () => {
     render(<App />)
 
     // Then it skips the login screen entirely, and no key gate is shown
-    expect(await screen.findByRole('heading', { name: /bem-vindo/i })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /welcome/i })).toBeInTheDocument()
     expect(
-      screen.queryByRole('heading', { name: 'Conecte sua chave OpenRouter' }),
+      screen.queryByRole('heading', { name: 'Connect your OpenRouter key' }),
     ).not.toBeInTheDocument()
   })
 
@@ -64,14 +64,14 @@ describe('App', () => {
     vi.mocked(Login).mockResolvedValueOnce({ accountId: 'acc-1', email: 'new@athena.dev' })
     const user = userEvent.setup()
     render(<App />)
-    await screen.findByRole('heading', { name: 'Entrar' })
+    await screen.findByRole('heading', { name: 'Log in' })
 
     // When the user goes to the register screen and creates an account
-    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
-    await user.type(screen.getByLabelText('E-mail'), 'new@athena.dev')
-    await user.type(screen.getByLabelText('Senha'), 's3cr3t-password')
-    await user.type(screen.getByLabelText('Confirmar senha'), 's3cr3t-password')
-    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
+    await user.click(screen.getByRole('button', { name: 'Create account' }))
+    await user.type(screen.getByLabelText('Email'), 'new@athena.dev')
+    await user.type(screen.getByLabelText('Password'), 's3cr3t-password')
+    await user.type(screen.getByLabelText('Confirm password'), 's3cr3t-password')
+    await user.click(screen.getByRole('button', { name: 'Create account' }))
 
     // Then the user lands directly on the main screen
     expect(await screen.findByText('new@athena.dev')).toBeInTheDocument()
@@ -83,12 +83,12 @@ describe('App', () => {
     vi.mocked(Login).mockResolvedValueOnce({ accountId: 'acc-1', email: 'user@athena.dev' })
     const user = userEvent.setup()
     render(<App />)
-    await screen.findByRole('heading', { name: 'Entrar' })
+    await screen.findByRole('heading', { name: 'Log in' })
 
     // When the user logs in
-    await user.type(screen.getByLabelText('E-mail'), 'user@athena.dev')
-    await user.type(screen.getByLabelText('Senha'), 's3cr3t-password')
-    await user.click(screen.getByRole('button', { name: 'Entrar' }))
+    await user.type(screen.getByLabelText('Email'), 'user@athena.dev')
+    await user.type(screen.getByLabelText('Password'), 's3cr3t-password')
+    await user.click(screen.getByRole('button', { name: 'Log in' }))
 
     // Then the user reaches the main screen
     expect(await screen.findByText('user@athena.dev')).toBeInTheDocument()
@@ -100,15 +100,15 @@ describe('App', () => {
     vi.mocked(ResetLocalAccount).mockResolvedValueOnce(undefined)
     const user = userEvent.setup()
     render(<App />)
-    await screen.findByRole('heading', { name: 'Entrar' })
+    await screen.findByRole('heading', { name: 'Log in' })
 
     // When the user goes through the reset flow
-    await user.click(screen.getByRole('button', { name: 'Esqueci minha senha' }))
-    await user.type(screen.getByLabelText('E-mail'), 'user@athena.dev')
-    await user.click(screen.getByRole('button', { name: 'Excluir conta local' }))
+    await user.click(screen.getByRole('button', { name: 'Forgot my password' }))
+    await user.type(screen.getByLabelText('Email'), 'user@athena.dev')
+    await user.click(screen.getByRole('button', { name: 'Delete local account' }))
 
     // Then the app returns to the create-account screen
-    expect(await screen.findByRole('heading', { name: 'Criar conta' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Create account' })).toBeInTheDocument()
   })
 
   it('shows the OpenRouter key gate before the main screen when no key is configured', async () => {
@@ -121,7 +121,7 @@ describe('App', () => {
 
     // Then the key gate is shown instead of the main screen
     expect(
-      await screen.findByRole('heading', { name: 'Conecte sua chave OpenRouter' }),
+      await screen.findByRole('heading', { name: 'Connect your OpenRouter key' }),
     ).toBeInTheDocument()
   })
 
@@ -134,17 +134,15 @@ describe('App', () => {
     )
     const user = userEvent.setup()
     render(<App />)
-    await screen.findByRole('heading', { name: 'Conecte sua chave OpenRouter' })
+    await screen.findByRole('heading', { name: 'Connect your OpenRouter key' })
 
     // When submitting an invalid key
-    await user.type(screen.getByLabelText('Chave da OpenRouter'), 'sk-or-invalid')
-    await user.click(screen.getByRole('button', { name: 'Conectar' }))
+    await user.type(screen.getByLabelText('OpenRouter key'), 'sk-or-invalid')
+    await user.click(screen.getByRole('button', { name: 'Connect' }))
 
     // Then the user stays on the key gate with an inline error
-    expect(await screen.findByText('Chave inválida ou não autorizada.')).toBeInTheDocument()
-    expect(
-      screen.getByRole('heading', { name: 'Conecte sua chave OpenRouter' }),
-    ).toBeInTheDocument()
+    expect(await screen.findByText('Invalid or unauthorized key.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Connect your OpenRouter key' })).toBeInTheDocument()
   })
 
   it('shows onboarding after the key is saved when no profile exists yet', async () => {
@@ -155,14 +153,16 @@ describe('App', () => {
     vi.mocked(SaveOpenRouterKey).mockResolvedValueOnce(undefined)
     const user = userEvent.setup()
     render(<App />)
-    await screen.findByRole('heading', { name: 'Conecte sua chave OpenRouter' })
+    await screen.findByRole('heading', { name: 'Connect your OpenRouter key' })
 
     // When submitting a valid key
-    await user.type(screen.getByLabelText('Chave da OpenRouter'), 'sk-or-valid')
-    await user.click(screen.getByRole('button', { name: 'Conectar' }))
+    await user.type(screen.getByLabelText('OpenRouter key'), 'sk-or-valid')
+    await user.click(screen.getByRole('button', { name: 'Connect' }))
 
     // Then the onboarding form is shown next
-    expect(await screen.findByRole('heading', { name: 'Conte sobre você' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Tell us about yourself' }),
+    ).toBeInTheDocument()
   })
 
   it('navigates from register back to login', async () => {
@@ -170,15 +170,15 @@ describe('App', () => {
     vi.mocked(HasLocalSession).mockResolvedValueOnce(false)
     const user = userEvent.setup()
     render(<App />)
-    await screen.findByRole('heading', { name: 'Entrar' })
+    await screen.findByRole('heading', { name: 'Log in' })
 
     // When going to the register screen and back to login
-    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
-    await screen.findByRole('heading', { name: 'Criar conta' })
-    await user.click(screen.getByRole('button', { name: 'Já tenho conta' }))
+    await user.click(screen.getByRole('button', { name: 'Create account' }))
+    await screen.findByRole('heading', { name: 'Create account' })
+    await user.click(screen.getByRole('button', { name: 'I already have an account' }))
 
     // Then the login screen is shown again
-    expect(await screen.findByRole('heading', { name: 'Entrar' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Log in' })).toBeInTheDocument()
   })
 
   it('cancels out of the reset flow back to login', async () => {
@@ -186,15 +186,15 @@ describe('App', () => {
     vi.mocked(HasLocalSession).mockResolvedValueOnce(false)
     const user = userEvent.setup()
     render(<App />)
-    await screen.findByRole('heading', { name: 'Entrar' })
+    await screen.findByRole('heading', { name: 'Log in' })
 
     // When going to the reset screen and cancelling
-    await user.click(screen.getByRole('button', { name: 'Esqueci minha senha' }))
-    await screen.findByLabelText('E-mail')
-    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+    await user.click(screen.getByRole('button', { name: 'Forgot my password' }))
+    await screen.findByLabelText('Email')
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
 
     // Then the login screen is shown again
-    expect(await screen.findByRole('heading', { name: 'Entrar' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Log in' })).toBeInTheDocument()
   })
 
   it('completes onboarding end-to-end and reaches the main screen', async () => {
@@ -206,25 +206,28 @@ describe('App', () => {
     vi.mocked(SaveProfile).mockResolvedValueOnce()
     const user = userEvent.setup()
     render(<App />)
-    await screen.findByRole('heading', { name: 'Conecte sua chave OpenRouter' })
+    await screen.findByRole('heading', { name: 'Connect your OpenRouter key' })
 
     // When connecting the key and filling out onboarding
-    await user.type(screen.getByLabelText('Chave da OpenRouter'), 'sk-or-valid')
-    await user.click(screen.getByRole('button', { name: 'Conectar' }))
-    await screen.findByRole('heading', { name: 'Conte sobre você' })
-    await user.type(screen.getByLabelText('Nome'), 'Ana')
-    await user.type(screen.getByLabelText('Como quer chamar o assistente?'), 'Atena')
-    await user.type(screen.getByLabelText('Área de atuação ou estudo'), 'Engenharia de Software')
-    await user.click(screen.getByRole('combobox', { name: 'Nível de experiência' }))
-    await user.click(await screen.findByRole('option', { name: 'Intermediário' }))
-    await user.type(screen.getByLabelText('Objetivos'), 'SQL{Enter}')
-    await user.type(screen.getByLabelText('Estilo de estudo preferido'), 'Prática')
-    await user.click(screen.getByRole('button', { name: 'Continuar' }))
-    await screen.findByRole('heading', { name: 'Confirme seu perfil' })
-    await user.click(screen.getByRole('button', { name: 'Confirmar e salvar' }))
+    await user.type(screen.getByLabelText('OpenRouter key'), 'sk-or-valid')
+    await user.click(screen.getByRole('button', { name: 'Connect' }))
+    await screen.findByRole('heading', { name: 'Tell us about yourself' })
+    await user.type(screen.getByLabelText('Name'), 'Ana')
+    await user.type(screen.getByLabelText('What would you like to call the assistant?'), 'Atena')
+    await user.click(screen.getByRole('combobox', { name: 'Assistant language' }))
+    await user.click(await screen.findByRole('option', { name: 'English' }))
+    await user.type(screen.getByLabelText('Area of study or work'), 'Software Engineering')
+    await user.click(screen.getByRole('combobox', { name: 'Experience level' }))
+    await user.click(await screen.findByRole('option', { name: 'Intermediate' }))
+    await user.type(screen.getByLabelText('Goals'), 'SQL{Enter}')
+    await user.click(screen.getByRole('combobox', { name: 'Preferred study style' }))
+    await user.click(await screen.findByRole('option', { name: 'Lots of practical examples' }))
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByRole('heading', { name: 'Confirm your profile' })
+    await user.click(screen.getByRole('button', { name: 'Confirm and save' }))
 
     // Then the app reaches the main screen
-    expect(await screen.findByRole('heading', { name: /bem-vindo/i })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /welcome/i })).toBeInTheDocument()
   })
 
   it('skips the key gate and onboarding for a returning user with both already set up', async () => {
@@ -237,6 +240,22 @@ describe('App', () => {
     render(<App />)
 
     // Then it goes straight to the main screen
-    expect(await screen.findByRole('heading', { name: /bem-vindo/i })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /welcome/i })).toBeInTheDocument()
+  })
+
+  it('keeps the splash animation up for a minimum duration even when the session check resolves instantly', async () => {
+    // Given no local session, resolved as fast as a mocked promise allows
+    vi.mocked(HasLocalSession).mockResolvedValueOnce(false)
+
+    // When the app mounts
+    render(<App />)
+
+    // Then the login screen hasn't taken over yet, well after the check has
+    // resolved — a bare "await the check" would already have swapped it out
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(screen.queryByRole('heading', { name: 'Log in' })).not.toBeInTheDocument()
+
+    // And the login screen only takes over once the minimum splash duration elapses
+    expect(await screen.findByRole('heading', { name: 'Log in' })).toBeInTheDocument()
   })
 })

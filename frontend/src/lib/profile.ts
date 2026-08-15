@@ -11,6 +11,7 @@ export interface ProfileDraft {
   experienceLevel: string
   goals: string[]
   studyStyle: string
+  assistantLanguage: string
 }
 
 // Error mapping happens at the call site (see lib/onboardingErrors.ts), same

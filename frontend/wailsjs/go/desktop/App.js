@@ -33,3 +33,7 @@ export function SaveOpenRouterKey(arg1) {
 export function SaveProfile(arg1) {
   return window['go']['desktop']['App']['SaveProfile'](arg1);
 }
+
+export function Startup(arg1) {
+  return window['go']['desktop']['App']['Startup'](arg1);
+}

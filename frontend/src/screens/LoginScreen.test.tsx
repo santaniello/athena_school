@@ -24,9 +24,9 @@ describe('LoginScreen', () => {
     )
 
     // When the user submits the login form
-    await user.type(screen.getByLabelText('E-mail'), 'user@athena.dev')
-    await user.type(screen.getByLabelText('Senha'), 's3cr3t-password')
-    await user.click(screen.getByRole('button', { name: 'Entrar' }))
+    await user.type(screen.getByLabelText('Email'), 'user@athena.dev')
+    await user.type(screen.getByLabelText('Password'), 's3cr3t-password')
+    await user.click(screen.getByRole('button', { name: 'Log in' }))
 
     // Then Login is called with the entered values and onSuccess fires
     expect(Login).toHaveBeenCalledWith('user@athena.dev', 's3cr3t-password')
@@ -46,12 +46,12 @@ describe('LoginScreen', () => {
     )
 
     // When the user submits the login form
-    await user.type(screen.getByLabelText('E-mail'), 'user@athena.dev')
-    await user.type(screen.getByLabelText('Senha'), 'wrong-password')
-    await user.click(screen.getByRole('button', { name: 'Entrar' }))
+    await user.type(screen.getByLabelText('Email'), 'user@athena.dev')
+    await user.type(screen.getByLabelText('Password'), 'wrong-password')
+    await user.click(screen.getByRole('button', { name: 'Log in' }))
 
-    // Then an inline PT-BR error message is shown
-    expect(await screen.findByText('E-mail ou senha inválidos.')).toBeInTheDocument()
+    // Then an inline error message is shown
+    expect(await screen.findByText('Invalid email or password.')).toBeInTheDocument()
   })
 
   it('navigates to the register and reset screens', async () => {
@@ -68,8 +68,8 @@ describe('LoginScreen', () => {
     )
 
     // When the user clicks the navigation actions
-    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
-    await user.click(screen.getByRole('button', { name: 'Esqueci minha senha' }))
+    await user.click(screen.getByRole('button', { name: 'Create account' }))
+    await user.click(screen.getByRole('button', { name: 'Forgot my password' }))
 
     // Then the corresponding callbacks fire
     expect(onNavigateToRegister).toHaveBeenCalledOnce()

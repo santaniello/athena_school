@@ -31,10 +31,10 @@ function LoginScreen({ onSuccess, onNavigateToRegister, onNavigateToReset }: Log
   }
 
   return (
-    <AuthLayout title="Entrar">
+    <AuthLayout title="Log in">
       <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
         <div className="flex flex-col gap-1.5 text-left">
-          <Label htmlFor="login-email">E-mail</Label>
+          <Label htmlFor="login-email">Email</Label>
           <Input
             id="login-email"
             type="email"
@@ -45,7 +45,7 @@ function LoginScreen({ onSuccess, onNavigateToRegister, onNavigateToReset }: Log
         </div>
 
         <div className="flex flex-col gap-1.5 text-left">
-          <Label htmlFor="login-password">Senha</Label>
+          <Label htmlFor="login-password">Password</Label>
           <Input
             id="login-password"
             type="password"
@@ -61,15 +61,15 @@ function LoginScreen({ onSuccess, onNavigateToRegister, onNavigateToReset }: Log
           </Alert>
         )}
 
-        <Button type="submit">Entrar</Button>
+        <Button type="submit">Log in</Button>
       </form>
 
       <div className="flex justify-center gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={onNavigateToRegister}>
-          Criar conta
+          Create account
         </Button>
         <Button type="button" variant="ghost" size="sm" onClick={onNavigateToReset}>
-          Esqueci minha senha
+          Forgot my password
         </Button>
       </div>
     </AuthLayout>

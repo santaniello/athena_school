@@ -8,12 +8,13 @@ import (
 
 func validProfile() UserProfile {
 	return UserProfile{
-		Name:            "Ana",
-		AssistantName:   "Atena",
-		Area:            "Engenharia de Software",
-		ExperienceLevel: ExperienceLevelIntermediate,
-		Goals:           []string{"SQL", "System Design"},
-		StudyStyle:      "Prática com exercícios",
+		Name:              "Ana",
+		AssistantName:     "Atena",
+		Area:              "Engenharia de Software",
+		ExperienceLevel:   ExperienceLevelIntermediate,
+		Goals:             []string{"SQL", "System Design"},
+		StudyStyle:        StudyStylePracticalExamples,
+		AssistantLanguage: AssistantLanguageEnglish,
 	}
 }
 
@@ -100,14 +101,26 @@ func TestUserProfile_Validate_returnsError_whenGoalsOnlyContainsBlankEntries(t *
 	assert.ErrorIs(t, err, ErrGoalsRequired)
 }
 
-func TestUserProfile_Validate_returnsError_whenStudyStyleIsEmpty(t *testing.T) {
-	// Given a profile with a blank study style
+func TestUserProfile_Validate_returnsError_whenStudyStyleIsNotOneOfTheAllowedValues(t *testing.T) {
+	// Given a profile with a study style outside the allowed values
 	p := validProfile()
-	p.StudyStyle = ""
+	p.StudyStyle = "whatever"
 
 	// When validating it
 	err := p.Validate()
 
-	// Then it fails with the study-style-required error
-	assert.ErrorIs(t, err, ErrStudyStyleRequired)
+	// Then it fails with the invalid-study-style error
+	assert.ErrorIs(t, err, ErrInvalidStudyStyle)
+}
+
+func TestUserProfile_Validate_returnsError_whenAssistantLanguageIsNotOneOfTheAllowedValues(t *testing.T) {
+	// Given a profile with an assistant language outside pt/en
+	p := validProfile()
+	p.AssistantLanguage = "fr"
+
+	// When validating it
+	err := p.Validate()
+
+	// Then it fails with the invalid-assistant-language error
+	assert.ErrorIs(t, err, ErrInvalidAssistantLanguage)
 }
