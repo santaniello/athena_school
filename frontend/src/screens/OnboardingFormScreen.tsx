@@ -119,6 +119,9 @@ function OnboardingFormScreen({ draft, onChange, onNext }: OnboardingFormScreenP
             onChange={(goals) => updateField('goals', goals)}
             placeholder="Digite um objetivo e pressione Enter"
           />
+          <p className="text-xs text-muted-foreground">
+            Pressione Enter ou vírgula após cada objetivo para adicioná-lo.
+          </p>
         </div>
 
         <div className="flex flex-col gap-1.5 text-left">

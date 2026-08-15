@@ -67,12 +67,17 @@ function OnboardingConfirmScreen({ draft, onChange, onConfirmed }: OnboardingCon
   function renderEditor(field: keyof ProfileDraft) {
     if (field === 'goals') {
       return (
-        <TagInput
-          value={draft.goals}
-          onChange={(goals) => onChange({ ...draft, goals })}
-          placeholder="Digite um objetivo e pressione Enter"
-          aria-label={FIELD_LABELS.goals}
-        />
+        <div className="flex flex-col gap-1.5">
+          <TagInput
+            value={draft.goals}
+            onChange={(goals) => onChange({ ...draft, goals })}
+            placeholder="Digite um objetivo e pressione Enter"
+            aria-label={FIELD_LABELS.goals}
+          />
+          <p className="text-xs text-muted-foreground">
+            Pressione Enter ou vírgula após cada objetivo para adicioná-lo.
+          </p>
+        </div>
       )
     }
     if (field === 'experienceLevel') {
