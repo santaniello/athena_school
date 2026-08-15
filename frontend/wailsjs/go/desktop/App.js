@@ -6,6 +6,14 @@ export function HasLocalSession() {
   return window['go']['desktop']['App']['HasLocalSession']();
 }
 
+export function HasOpenRouterKey() {
+  return window['go']['desktop']['App']['HasOpenRouterKey']();
+}
+
+export function HasUserProfile() {
+  return window['go']['desktop']['App']['HasUserProfile']();
+}
+
 export function Login(arg1, arg2) {
   return window['go']['desktop']['App']['Login'](arg1, arg2);
 }
@@ -16,4 +24,12 @@ export function Register(arg1, arg2) {
 
 export function ResetLocalAccount(arg1) {
   return window['go']['desktop']['App']['ResetLocalAccount'](arg1);
+}
+
+export function SaveOpenRouterKey(arg1) {
+  return window['go']['desktop']['App']['SaveOpenRouterKey'](arg1);
+}
+
+export function SaveProfile(arg1) {
+  return window['go']['desktop']['App']['SaveProfile'](arg1);
 }
