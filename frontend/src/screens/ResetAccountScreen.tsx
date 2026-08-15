@@ -28,16 +28,16 @@ function ResetAccountScreen({ onDone, onCancel }: ResetAccountScreenProps) {
   }
 
   return (
-    <AuthLayout title="Resetar conta local">
+    <AuthLayout title="Reset local account">
       <p className="text-sm text-muted-foreground">
-        Esta ação apaga a conta local e todos os dados associados a ela, para que você possa criar
-        uma nova conta com o mesmo e-mail. Isso não é uma recuperação de senha de verdade — como não
-        há servidor nem e-mail, não é possível recuperar a senha atual.
+        This action deletes the local account and all data associated with it, so you can create a
+        new account with the same email. This is not a real password recovery — since there is no
+        server or email, the current password cannot be recovered.
       </p>
 
       <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
         <div className="flex flex-col gap-1.5 text-left">
-          <Label htmlFor="reset-email">E-mail</Label>
+          <Label htmlFor="reset-email">Email</Label>
           <Input
             id="reset-email"
             type="email"
@@ -54,13 +54,13 @@ function ResetAccountScreen({ onDone, onCancel }: ResetAccountScreenProps) {
         )}
 
         <Button type="submit" variant="destructive">
-          Excluir conta local
+          Delete local account
         </Button>
       </form>
 
       <div className="flex justify-center">
         <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
-          Cancelar
+          Cancel
         </Button>
       </div>
     </AuthLayout>

@@ -14,8 +14,8 @@ describe('ResetAccountScreen', () => {
     render(<ResetAccountScreen onDone={vi.fn()} onCancel={vi.fn()} />)
 
     // Then it explains the destructive, non-recovery nature of the action
-    expect(screen.getByText(/apaga a conta local/i)).toBeInTheDocument()
-    expect(screen.getByText(/não é uma recuperação/i)).toBeInTheDocument()
+    expect(screen.getByText(/deletes the local account/i)).toBeInTheDocument()
+    expect(screen.getByText(/not a real password recovery/i)).toBeInTheDocument()
   })
 
   it('deletes the local account and returns to the create-account screen', async () => {
@@ -26,8 +26,8 @@ describe('ResetAccountScreen', () => {
     render(<ResetAccountScreen onDone={onDone} onCancel={vi.fn()} />)
 
     // When the user confirms the reset for their email
-    await user.type(screen.getByLabelText('E-mail'), 'user@athena.dev')
-    await user.click(screen.getByRole('button', { name: 'Excluir conta local' }))
+    await user.type(screen.getByLabelText('Email'), 'user@athena.dev')
+    await user.click(screen.getByRole('button', { name: 'Delete local account' }))
 
     // Then the account is removed and the caller is told to go back to Register
     expect(ResetLocalAccount).toHaveBeenCalledWith('user@athena.dev')
@@ -41,11 +41,11 @@ describe('ResetAccountScreen', () => {
     render(<ResetAccountScreen onDone={vi.fn()} onCancel={vi.fn()} />)
 
     // When the user confirms the reset for an unknown email
-    await user.type(screen.getByLabelText('E-mail'), 'missing@athena.dev')
-    await user.click(screen.getByRole('button', { name: 'Excluir conta local' }))
+    await user.type(screen.getByLabelText('Email'), 'missing@athena.dev')
+    await user.click(screen.getByRole('button', { name: 'Delete local account' }))
 
-    // Then an inline PT-BR error message is shown
-    expect(await screen.findByText('Nenhuma conta encontrada com este e-mail.')).toBeInTheDocument()
+    // Then an inline error message is shown
+    expect(await screen.findByText('No account found with this email.')).toBeInTheDocument()
   })
 
   it('cancels back to the login screen', async () => {
@@ -55,7 +55,7 @@ describe('ResetAccountScreen', () => {
     render(<ResetAccountScreen onDone={vi.fn()} onCancel={onCancel} />)
 
     // When the user clicks cancel
-    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
 
     // Then the callback fires
     expect(onCancel).toHaveBeenCalledOnce()

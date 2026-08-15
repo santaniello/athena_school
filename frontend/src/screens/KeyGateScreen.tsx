@@ -7,10 +7,9 @@ interface KeyGateScreenProps {
 
 function KeyGateScreen({ onSaved }: KeyGateScreenProps) {
   return (
-    <AuthLayout title="Conecte sua chave OpenRouter">
+    <AuthLayout title="Connect your OpenRouter key">
       <p className="text-sm text-muted-foreground">
-        Para personalizar e conduzir suas futuras sessões de estudo, o Athena precisa de uma chave
-        da OpenRouter.
+        To personalize and run your future study sessions, Athena needs an OpenRouter key.
       </p>
       <OpenRouterKeyForm onSaved={onSaved} />
     </AuthLayout>

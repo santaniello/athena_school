@@ -7,12 +7,13 @@ import (
 // UserProfileInput is the desktop-facing DTO for SaveProfile. It is
 // deliberately decoupled from profile.UserProfile's on-disk JSON shape.
 type UserProfileInput struct {
-	Name            string   `json:"name"`
-	AssistantName   string   `json:"assistantName"`
-	Area            string   `json:"area"`
-	ExperienceLevel string   `json:"experienceLevel"`
-	Goals           []string `json:"goals"`
-	StudyStyle      string   `json:"studyStyle"`
+	Name              string   `json:"name"`
+	AssistantName     string   `json:"assistantName"`
+	Area              string   `json:"area"`
+	ExperienceLevel   string   `json:"experienceLevel"`
+	Goals             []string `json:"goals"`
+	StudyStyle        string   `json:"studyStyle"`
+	AssistantLanguage string   `json:"assistantLanguage"`
 }
 
 // HasOpenRouterKey reports whether an OpenRouter key is already configured,
@@ -39,12 +40,13 @@ func (a *App) HasUserProfile() bool {
 // onboarding.
 func (a *App) SaveProfile(input UserProfileInput) error {
 	_, err := a.onboarding.SaveProfile(domainprofile.UserProfile{
-		Name:            input.Name,
-		AssistantName:   input.AssistantName,
-		Area:            input.Area,
-		ExperienceLevel: input.ExperienceLevel,
-		Goals:           input.Goals,
-		StudyStyle:      input.StudyStyle,
+		Name:              input.Name,
+		AssistantName:     input.AssistantName,
+		Area:              input.Area,
+		ExperienceLevel:   input.ExperienceLevel,
+		Goals:             input.Goals,
+		StudyStyle:        input.StudyStyle,
+		AssistantLanguage: input.AssistantLanguage,
 	})
 	return err
 }

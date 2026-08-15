@@ -17,6 +17,7 @@ function emptyDraft(): ProfileDraft {
     experienceLevel: '',
     goals: [],
     studyStyle: '',
+    assistantLanguage: '',
   }
 }
 

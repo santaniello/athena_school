@@ -35,7 +35,7 @@ function OpenRouterKeyForm({ onSaved }: OpenRouterKeyFormProps) {
   return (
     <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
       <div className="flex flex-col gap-1.5 text-left">
-        <Label htmlFor="openrouter-key">Chave da OpenRouter</Label>
+        <Label htmlFor="openrouter-key">OpenRouter key</Label>
         <Input
           id="openrouter-key"
           type="password"
@@ -52,7 +52,7 @@ function OpenRouterKeyForm({ onSaved }: OpenRouterKeyFormProps) {
       )}
 
       <Button type="submit" disabled={isValidating}>
-        {isValidating ? 'Validando...' : 'Conectar'}
+        {isValidating ? 'Validating...' : 'Connect'}
       </Button>
     </form>
   )

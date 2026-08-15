@@ -12,7 +12,8 @@ const draft: ProfileDraft = {
   area: 'Engenharia de Software',
   experienceLevel: 'intermediate',
   goals: ['SQL', 'System Design'],
-  studyStyle: 'Prática com exercícios',
+  studyStyle: 'practical_examples',
+  assistantLanguage: 'en',
 }
 
 describe('saveUserProfile', () => {

@@ -17,8 +17,8 @@ describe('KeyGateScreen', () => {
     render(<KeyGateScreen onSaved={onSaved} />)
 
     // When the user submits a key
-    await user.type(screen.getByLabelText('Chave da OpenRouter'), 'sk-or-valid')
-    await user.click(screen.getByRole('button', { name: 'Conectar' }))
+    await user.type(screen.getByLabelText('OpenRouter key'), 'sk-or-valid')
+    await user.click(screen.getByRole('button', { name: 'Connect' }))
 
     // Then onSaved fires
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce())

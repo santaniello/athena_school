@@ -17,13 +17,14 @@ func TestStore_SaveThenLoad_roundTrips(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "profile.json")
 	store := NewStore(path)
 	original := profile.UserProfile{
-		Name:            "Ana",
-		AssistantName:   "Atena",
-		Area:            "Engenharia de Software",
-		ExperienceLevel: profile.ExperienceLevelIntermediate,
-		Goals:           []string{"SQL", "System Design"},
-		StudyStyle:      "Prática com exercícios",
-		CreatedAt:       time.Now().UTC().Truncate(time.Second),
+		Name:              "Ana",
+		AssistantName:     "Atena",
+		Area:              "Engenharia de Software",
+		ExperienceLevel:   profile.ExperienceLevelIntermediate,
+		Goals:             []string{"SQL", "System Design"},
+		StudyStyle:        profile.StudyStylePracticalExamples,
+		AssistantLanguage: profile.AssistantLanguageEnglish,
+		CreatedAt:         time.Now().UTC().Truncate(time.Second),
 	}
 
 	// When saving it and loading it back

@@ -21,6 +21,7 @@ export namespace desktop {
 	    experienceLevel: string;
 	    goals: string[];
 	    studyStyle: string;
+	    assistantLanguage: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new UserProfileInput(source);
@@ -34,6 +35,7 @@ export namespace desktop {
 	        this.experienceLevel = source["experienceLevel"];
 	        this.goals = source["goals"];
 	        this.studyStyle = source["studyStyle"];
+	        this.assistantLanguage = source["assistantLanguage"];
 	    }
 	}
 
