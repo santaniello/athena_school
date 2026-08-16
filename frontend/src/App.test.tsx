@@ -16,11 +16,21 @@ import App from './App'
 vi.mock('../wailsjs/go/desktop/App', () => ({
   HasLocalSession: vi.fn(),
   // Onboarding is already complete by default, so the existing auth tests
-  // below reach the main screen exactly as before; tests that care about
+  // below reach the app shell exactly as before; tests that care about
   // the key gate / onboarding routing override these per-call.
   HasOpenRouterKey: vi.fn().mockResolvedValue(true),
   HasUserProfile: vi.fn().mockResolvedValue(true),
+  GetProfile: vi.fn().mockResolvedValue({
+    name: 'Ana',
+    assistantName: 'Athena',
+    area: '',
+    experienceLevel: '',
+    goals: [],
+    studyStyle: '',
+    assistantLanguage: '',
+  }),
   Login: vi.fn(),
+  Logout: vi.fn(),
   Register: vi.fn(),
   ResetLocalAccount: vi.fn(),
   SaveOpenRouterKey: vi.fn(),
@@ -40,10 +50,10 @@ describe('App', () => {
     expect(
       screen.queryByRole('heading', { name: 'Connect your OpenRouter key' }),
     ).not.toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: /welcome/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Home', level: 1 })).not.toBeInTheDocument()
   })
 
-  it('skips straight to the main screen when a local session already exists', async () => {
+  it('skips straight to the app shell when a local session already exists', async () => {
     // Given a local session already exists on disk
     vi.mocked(HasLocalSession).mockResolvedValueOnce(true)
 
@@ -51,7 +61,7 @@ describe('App', () => {
     render(<App />)
 
     // Then it skips the login screen entirely, and no key gate is shown
-    expect(await screen.findByRole('heading', { name: /welcome/i })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Home', level: 1 })).toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { name: 'Connect your OpenRouter key' }),
     ).not.toBeInTheDocument()
@@ -73,11 +83,11 @@ describe('App', () => {
     await user.type(screen.getByLabelText('Confirm password'), 's3cr3t-password')
     await user.click(screen.getByRole('button', { name: 'Create account' }))
 
-    // Then the user lands directly on the main screen
-    expect(await screen.findByText('new@athena.dev')).toBeInTheDocument()
+    // Then the user lands directly in the app shell
+    expect(await screen.findByRole('heading', { name: 'Home', level: 1 })).toBeInTheDocument()
   })
 
-  it('logs an existing user in and reaches the main screen', async () => {
+  it('logs an existing user in and reaches the app shell', async () => {
     // Given no local session, and Login succeeds
     vi.mocked(HasLocalSession).mockResolvedValueOnce(false)
     vi.mocked(Login).mockResolvedValueOnce({ accountId: 'acc-1', email: 'user@athena.dev' })
@@ -90,8 +100,8 @@ describe('App', () => {
     await user.type(screen.getByLabelText('Password'), 's3cr3t-password')
     await user.click(screen.getByRole('button', { name: 'Log in' }))
 
-    // Then the user reaches the main screen
-    expect(await screen.findByText('user@athena.dev')).toBeInTheDocument()
+    // Then the user reaches the app shell
+    expect(await screen.findByRole('heading', { name: 'Home', level: 1 })).toBeInTheDocument()
   })
 
   it('resets the local account and returns to the create-account screen', async () => {
@@ -111,7 +121,7 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: 'Create account' })).toBeInTheDocument()
   })
 
-  it('shows the OpenRouter key gate before the main screen when no key is configured', async () => {
+  it('shows the OpenRouter key gate before the app shell when no key is configured', async () => {
     // Given an existing local session but no OpenRouter key yet
     vi.mocked(HasLocalSession).mockResolvedValueOnce(true)
     vi.mocked(HasOpenRouterKey).mockResolvedValueOnce(false)
@@ -119,7 +129,7 @@ describe('App', () => {
     // When the app mounts
     render(<App />)
 
-    // Then the key gate is shown instead of the main screen
+    // Then the key gate is shown instead of the app shell
     expect(
       await screen.findByRole('heading', { name: 'Connect your OpenRouter key' }),
     ).toBeInTheDocument()
@@ -197,7 +207,7 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: 'Log in' })).toBeInTheDocument()
   })
 
-  it('completes onboarding end-to-end and reaches the main screen', async () => {
+  it('completes onboarding end-to-end and reaches the app shell', async () => {
     // Given an existing local session, no key, and no profile
     vi.mocked(HasLocalSession).mockResolvedValueOnce(true)
     vi.mocked(HasOpenRouterKey).mockResolvedValueOnce(false)
@@ -226,8 +236,8 @@ describe('App', () => {
     await screen.findByRole('heading', { name: 'Confirm your profile' })
     await user.click(screen.getByRole('button', { name: 'Confirm and save' }))
 
-    // Then the app reaches the main screen
-    expect(await screen.findByRole('heading', { name: /welcome/i })).toBeInTheDocument()
+    // Then the app reaches the app shell
+    expect(await screen.findByRole('heading', { name: 'Home', level: 1 })).toBeInTheDocument()
   })
 
   it('skips the key gate and onboarding for a returning user with both already set up', async () => {
@@ -239,8 +249,8 @@ describe('App', () => {
     // When the app mounts
     render(<App />)
 
-    // Then it goes straight to the main screen
-    expect(await screen.findByRole('heading', { name: /welcome/i })).toBeInTheDocument()
+    // Then it goes straight to the app shell
+    expect(await screen.findByRole('heading', { name: 'Home', level: 1 })).toBeInTheDocument()
   })
 
   it('keeps the splash animation up for a minimum duration even when the session check resolves instantly', async () => {

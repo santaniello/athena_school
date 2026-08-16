@@ -56,3 +56,12 @@ func (s *Store) Load() (auth.Session, error) {
 	}
 	return auth.Session{AccountID: file.AccountID, CreatedAt: file.CreatedAt}, nil
 }
+
+// Clear removes the session marker from disk. It is a no-op if no session
+// file exists.
+func (s *Store) Clear() error {
+	if err := os.Remove(s.path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("session: removing session file: %w", err)
+	}
+	return nil
+}

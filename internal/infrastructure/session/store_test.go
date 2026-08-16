@@ -69,3 +69,29 @@ func TestStore_Load_returnsErrorWhenNoSessionExists(t *testing.T) {
 	// Then it returns an error instead of a zero-value session
 	assert.Error(t, err)
 }
+
+func TestStore_Clear_removesAnExistingSessionFile(t *testing.T) {
+	// Given a store with a saved session
+	path := filepath.Join(t.TempDir(), "session.json")
+	store := NewStore(path)
+	require.NoError(t, store.Save(auth.Session{AccountID: "acc-1", CreatedAt: time.Now()}))
+
+	// When clearing it
+	err := store.Clear()
+
+	// Then it succeeds and the session file no longer exists
+	require.NoError(t, err)
+	_, statErr := os.Stat(path)
+	assert.True(t, os.IsNotExist(statErr))
+}
+
+func TestStore_Clear_isNoopWhenNoSessionExists(t *testing.T) {
+	// Given a store pointing at a session file that was never saved
+	store := NewStore(filepath.Join(t.TempDir(), "session.json"))
+
+	// When clearing it
+	err := store.Clear()
+
+	// Then it does not return an error
+	assert.NoError(t, err)
+}

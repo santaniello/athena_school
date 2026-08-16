@@ -36,6 +36,25 @@ func (a *App) HasUserProfile() bool {
 	return err == nil
 }
 
+// GetProfile reads back the saved UserProfile, so the frontend can
+// personalize the home screen greeting. See
+// specs/phases/phase-01-desktop-mvp/03-home-screen.md.
+func (a *App) GetProfile() (UserProfileInput, error) {
+	profile, err := a.profiles.Load()
+	if err != nil {
+		return UserProfileInput{}, err
+	}
+	return UserProfileInput{
+		Name:              profile.Name,
+		AssistantName:     profile.AssistantName,
+		Area:              profile.Area,
+		ExperienceLevel:   profile.ExperienceLevel,
+		Goals:             profile.Goals,
+		StudyStyle:        profile.StudyStyle,
+		AssistantLanguage: profile.AssistantLanguage,
+	}, nil
+}
+
 // SaveProfile validates and persists the profile collected during
 // onboarding.
 func (a *App) SaveProfile(input UserProfileInput) error {

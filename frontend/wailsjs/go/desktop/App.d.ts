@@ -3,6 +3,8 @@
 import {desktop} from '../models';
 import {context} from '../models';
 
+export function GetProfile():Promise<desktop.UserProfileInput>;
+
 export function HasLocalSession():Promise<boolean>;
 
 export function HasOpenRouterKey():Promise<boolean>;
@@ -10,6 +12,8 @@ export function HasOpenRouterKey():Promise<boolean>;
 export function HasUserProfile():Promise<boolean>;
 
 export function Login(arg1:string,arg2:string):Promise<desktop.LoginResult>;
+
+export function Logout():Promise<void>;
 
 export function Register(arg1:string,arg2:string):Promise<void>;
 

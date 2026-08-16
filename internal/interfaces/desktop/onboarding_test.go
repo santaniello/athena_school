@@ -140,6 +140,44 @@ func TestApp_SaveProfile_savesProfile_whenValid(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestApp_GetProfile_returnsProfile_whenItExists(t *testing.T) {
+	// Given an App backed by a profile store with a saved profile
+	profiles := profilemocks.NewMockStore(t)
+	input := validProfileInput()
+	saved := domainprofile.UserProfile{
+		Name:              input.Name,
+		AssistantName:     input.AssistantName,
+		Area:              input.Area,
+		ExperienceLevel:   input.ExperienceLevel,
+		Goals:             input.Goals,
+		StudyStyle:        input.StudyStyle,
+		AssistantLanguage: input.AssistantLanguage,
+	}
+	profiles.EXPECT().Load().Return(saved, nil).Once()
+	app := newTestOnboardingApp(t, profiles, configmocks.NewMockStore(t), configmocks.NewMockKeyValidator(t))
+
+	// When reading the profile back
+	got, err := app.GetProfile()
+
+	// Then it returns the saved fields
+	require.NoError(t, err)
+	assert.Equal(t, input, got)
+}
+
+func TestApp_GetProfile_propagatesLoadError_whenNoProfileExists(t *testing.T) {
+	// Given an App backed by a profile store with no saved profile
+	profiles := profilemocks.NewMockStore(t)
+	profiles.EXPECT().Load().Return(domainprofile.UserProfile{}, assert.AnError).Once()
+	app := newTestOnboardingApp(t, profiles, configmocks.NewMockStore(t), configmocks.NewMockKeyValidator(t))
+
+	// When reading the profile back
+	got, err := app.GetProfile()
+
+	// Then the error is surfaced unchanged and no profile is returned
+	assert.ErrorIs(t, err, assert.AnError)
+	assert.Equal(t, UserProfileInput{}, got)
+}
+
 func TestApp_SaveProfile_propagatesValidationError_whenGoalsIsMissing(t *testing.T) {
 	// Given an App backed by a profile store that must never be called
 	profiles := profilemocks.NewMockStore(t)

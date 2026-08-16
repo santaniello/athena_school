@@ -32,3 +32,9 @@ func (a *App) HasLocalSession() bool {
 	_, err := a.sessions.Load()
 	return err == nil
 }
+
+// Logout clears the local session so the frontend can return to the login
+// screen. See specs/phases/phase-01-desktop-mvp/03-home-screen.md.
+func (a *App) Logout() error {
+	return a.sessions.Clear()
+}
