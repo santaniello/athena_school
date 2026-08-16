@@ -39,7 +39,7 @@ fi
 
 # 3. Code smells + security (golangci-lint includes gosec)
 echo "-> Running lint..."
-if command -v golangci-lint &>/dev/null && golangci-lint run --version &>/dev/null 2>&1; then
+if command -v golangci-lint &>/dev/null && golangci-lint --version &>/dev/null 2>&1; then
   golangci-lint run
 else
   go vet ./...

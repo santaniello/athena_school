@@ -10,4 +10,13 @@ var migrations = []string{
 		password_hash TEXT NOT NULL,
 		created_at    DATETIME
 	)`,
+	`CREATE TABLE IF NOT EXISTS usage (
+		id            TEXT PRIMARY KEY,
+		session_id    TEXT,
+		model         TEXT,
+		input_tokens  INTEGER,
+		output_tokens INTEGER,
+		cost          REAL,
+		created_at    DATETIME
+	)`,
 }
