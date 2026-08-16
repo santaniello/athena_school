@@ -9,6 +9,19 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   Logout: vi.fn(),
 }))
 
+// StudyScreen subscribes to study events as soon as it mounts (see
+// StudyScreen.tsx), so rendering it here — even without starting a session —
+// needs this mocked, or it reaches the real (unavailable in jsdom) Wails
+// runtime.
+vi.mock('@/lib/study', () => ({
+  startStudySession: vi.fn(),
+  sendStudyMessage: vi.fn(),
+  endStudySession: vi.fn(),
+  onStudyChunk: vi.fn(() => vi.fn()),
+  onStudyDone: vi.fn(() => vi.fn()),
+  onStudyError: vi.fn(() => vi.fn()),
+}))
+
 const profileResult = {
   name: 'Felipe',
   assistantName: 'Athena',

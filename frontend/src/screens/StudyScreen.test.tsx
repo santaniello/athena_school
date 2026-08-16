@@ -60,6 +60,37 @@ describe('StudyScreen', () => {
     expect(screen.getByRole('button', { name: 'Start session' })).toBeEnabled()
   })
 
+  it('does not lose the opening turn or get stuck disabled when events fire before the call resolves', async () => {
+    // Given a StartStudySession call that — like the real Wails binding —
+    // emits "study:chunk"/"study:done" synchronously from inside the call,
+    // before its own promise resolves (the binding blocks until the whole
+    // stream finishes and only then returns). If the screen subscribed to
+    // events only after sessionId were set (i.e. only after this call
+    // resolves), it would miss both events and get stuck with isStreaming
+    // stuck true forever, which is exactly the bug being regression-tested.
+    const handlers = setupSubscriptions()
+    vi.mocked(startStudySession).mockImplementationOnce(async (topic) => {
+      handlers.chunk?.('Welcome! ')
+      handlers.chunk?.('Ask me anything.')
+      handlers.done?.()
+      return { id: 'session-1', topic, startedAt: '2026-08-16T10:00:00Z' }
+    })
+    const user = userEvent.setup()
+    render(<StudyScreen />)
+    await user.type(screen.getByLabelText(/study today/i), 'Distributed systems')
+
+    // When starting the session
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'Start session' }))
+    })
+
+    // Then the opening message was captured and the send button is usable
+    expect(await screen.findByText('Welcome! Ask me anything.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
+    await user.type(screen.getByPlaceholderText(/type your answer/i), 'What is cache?')
+    expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled()
+  })
+
   it('shows no error alert on the topic step before anything has failed', () => {
     // Given the screen just mounted, with no error yet
     setupSubscriptions()

@@ -37,9 +37,14 @@ function StudyScreen({ onEndSession }: StudyScreenProps) {
   const [error, setError] = useState<string | null>(null)
   const streamingTextRef = useRef('')
 
+  // Subscribed once on mount, not gated on sessionId: the "study:chunk"/
+  // "study:done" events for a session's opening turn are emitted by the Go
+  // binding *before* StartStudySession's own promise resolves (it blocks
+  // until the whole stream finishes, then returns). Subscribing only after
+  // sessionId is set — which happens only once that promise resolves —
+  // would always miss the opening turn's events entirely, leaving
+  // isStreaming stuck true and the send button permanently disabled.
   useEffect(() => {
-    if (!sessionId) return
-
     const offChunk = onStudyChunk((chunk) => {
       streamingTextRef.current += chunk
       setStreamingText(streamingTextRef.current)
@@ -59,14 +64,14 @@ function StudyScreen({ onEndSession }: StudyScreenProps) {
     })
 
     // First use of Wails runtime events in this codebase: EventsOn returns
-    // its own unsubscribe function, which must run on unmount/session
-    // change or the listener leaks across study sessions.
+    // its own unsubscribe function, which must run on unmount to avoid
+    // leaking a listener.
     return () => {
       offChunk()
       offDone()
       offError()
     }
-  }, [sessionId])
+  }, [])
 
   async function handleStart() {
     const trimmedTopic = topic.trim()
