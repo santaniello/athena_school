@@ -1,4 +1,4 @@
-import { SaveProfile } from '../../wailsjs/go/desktop/App'
+import { GetProfile, SaveProfile } from '../../wailsjs/go/desktop/App'
 import { desktop } from '../../wailsjs/go/models'
 
 // Plain-string mirror of UserProfileInput, used to hold the onboarding draft
@@ -18,4 +18,19 @@ export interface ProfileDraft {
 // as authErrorMessage.
 export async function saveUserProfile(draft: ProfileDraft): Promise<void> {
   await SaveProfile(desktop.UserProfileInput.createFrom(draft))
+}
+
+// Reads the saved profile back, for the home screen greeting (see
+// specs/phases/phase-01-desktop-mvp/03-home-screen.md).
+export async function getUserProfile(): Promise<ProfileDraft> {
+  const profile = await GetProfile()
+  return {
+    name: profile.name,
+    assistantName: profile.assistantName,
+    area: profile.area,
+    experienceLevel: profile.experienceLevel,
+    goals: profile.goals,
+    studyStyle: profile.studyStyle,
+    assistantLanguage: profile.assistantLanguage,
+  }
 }

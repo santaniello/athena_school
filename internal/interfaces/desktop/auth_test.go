@@ -116,6 +116,32 @@ func TestApp_ResetLocalAccount_deletesAccount(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestApp_Logout_clearsTheLocalSession(t *testing.T) {
+	// Given an App backed by a session store that accepts being cleared
+	sessions := mocks.NewMockSessionStore(t)
+	sessions.EXPECT().Clear().Return(nil).Once()
+	app := newTestApp(t, mocks.NewMockAccountRepository(t), sessions)
+
+	// When logging out
+	err := app.Logout()
+
+	// Then it succeeds
+	require.NoError(t, err)
+}
+
+func TestApp_Logout_propagatesClearError(t *testing.T) {
+	// Given an App backed by a session store that fails to clear
+	sessions := mocks.NewMockSessionStore(t)
+	sessions.EXPECT().Clear().Return(assert.AnError).Once()
+	app := newTestApp(t, mocks.NewMockAccountRepository(t), sessions)
+
+	// When logging out
+	err := app.Logout()
+
+	// Then the error is surfaced unchanged
+	assert.ErrorIs(t, err, assert.AnError)
+}
+
 func TestApp_ResetLocalAccount_propagatesAccountNotFoundError(t *testing.T) {
 	// Given an App backed by an account repository with no matching account
 	accounts := mocks.NewMockAccountRepository(t)

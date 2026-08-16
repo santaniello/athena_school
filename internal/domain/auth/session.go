@@ -13,4 +13,5 @@ type Session struct {
 type SessionStore interface {
 	Save(session Session) error
 	Load() (Session, error)
+	Clear() error
 }

@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react'
 import { HasLocalSession, HasOpenRouterKey, HasUserProfile } from '../wailsjs/go/desktop/App'
-import type { desktop } from '../wailsjs/go/models'
 import LoginScreen from './screens/LoginScreen'
 import RegisterScreen from './screens/RegisterScreen'
 import ResetAccountScreen from './screens/ResetAccountScreen'
 import KeyGateScreen from './screens/KeyGateScreen'
 import OnboardingScreen from './screens/OnboardingScreen'
-import MainScreen from './screens/MainScreen'
+import { AppShell } from './components/app-shell'
 import { SplashScreen } from './components/splash-screen'
 
-type View = 'checking' | 'login' | 'register' | 'reset' | 'key-gate' | 'onboarding' | 'main'
+type View = 'checking' | 'login' | 'register' | 'reset' | 'key-gate' | 'onboarding' | 'app'
 
 // The boot splash's Greek-key-frame-then-logo choreography takes ~1.05s to
 // settle (see splash-screen.tsx). A local session check usually resolves
@@ -24,11 +23,12 @@ function wait(ms: number): Promise<void> {
 
 // Decides what to show after authentication: the mandatory OpenRouter key
 // gate first (see specs/phases/phase-01-desktop-mvp/04-onboarding.md), then
-// onboarding if the profile hasn't been collected yet, else straight in.
+// onboarding if the profile hasn't been collected yet, else straight into
+// the app shell (see specs/phases/phase-01-desktop-mvp/03-home-screen.md).
 async function resolvePostAuthView(): Promise<View> {
   if (!(await HasOpenRouterKey())) return 'key-gate'
   if (!(await HasUserProfile())) return 'onboarding'
-  return 'main'
+  return 'app'
 }
 
 async function resolveInitialView(): Promise<View> {
@@ -37,7 +37,6 @@ async function resolveInitialView(): Promise<View> {
 
 function App() {
   const [view, setView] = useState<View>('checking')
-  const [session, setSession] = useState<desktop.LoginResult | null>(null)
 
   useEffect(() => {
     Promise.all([resolveInitialView(), wait(MIN_SPLASH_MS)]).then(([resolvedView]) => {
@@ -45,8 +44,7 @@ function App() {
     })
   }, [])
 
-  async function handleAuthSuccess(result: desktop.LoginResult) {
-    setSession(result)
+  async function handleAuthSuccess() {
     setView(await resolvePostAuthView())
   }
 
@@ -69,8 +67,8 @@ function App() {
       {view === 'key-gate' && (
         <KeyGateScreen onSaved={() => void resolvePostAuthView().then(setView)} />
       )}
-      {view === 'onboarding' && <OnboardingScreen onComplete={() => setView('main')} />}
-      {view === 'main' && <MainScreen email={session?.email} />}
+      {view === 'onboarding' && <OnboardingScreen onComplete={() => setView('app')} />}
+      {view === 'app' && <AppShell onLogout={() => setView('login')} />}
     </>
   )
 }

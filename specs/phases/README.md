@@ -69,6 +69,7 @@ Payments         Paddle
 |---|---|
 | [01-auth-backend.md](phase-01-desktop-mvp/01-auth-backend.md) | Local auth core: Account, AccountRepository port, local session |
 | [02-auth-ui.md](phase-01-desktop-mvp/02-auth-ui.md) | Login/register/local-reset screens + Wails bindings |
+| [03-home-screen.md](phase-01-desktop-mvp/03-home-screen.md) | Navigation shell (sidebar + topbar) + Home screen |
 | [04-onboarding.md](phase-01-desktop-mvp/04-onboarding.md) | OpenRouter key gate + conversational onboarding → UserProfile |
 | [05-llm-service.md](phase-01-desktop-mvp/05-llm-service.md) | OpenRouter: LLMProvider, streaming, model router, budget |
 | [06-study-mode.md](phase-01-desktop-mvp/06-study-mode.md) | Study session with personalization and streaming |
