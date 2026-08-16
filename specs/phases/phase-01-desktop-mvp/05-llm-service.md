@@ -16,11 +16,11 @@ type LLMProvider interface {
 
 ## Tasks
 
-- [ ] `internal/infrastructure/openrouter/` — HTTP client implementing `LLMProvider`
-- [ ] Streaming via SSE (OpenRouter Server-Sent Events)
-- [ ] Model router: maps task type → model tier (`cheap | medium | premium`)
-- [ ] Budget tracker: records tokens and cost per session
-- [ ] OpenRouter API key config: `~/.athena/config.yaml`
+- [x] `internal/infrastructure/openrouter/` — HTTP client implementing `LLMProvider`
+- [x] Streaming via SSE (OpenRouter Server-Sent Events)
+- [x] Model router: maps task type → model tier (`cheap | medium | premium`)
+- [x] Budget tracker: records tokens and cost per session
+- [x] OpenRouter API key config: `~/.athena/config.yaml`
 
 ## Model Tiers (initial)
 

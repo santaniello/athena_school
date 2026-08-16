@@ -26,6 +26,24 @@ func TestOpen_createsAccountsTable(t *testing.T) {
 	assert.Equal(t, "accounts", tableName)
 }
 
+func TestOpen_createsUsageTable(t *testing.T) {
+	// Given a path to a database file that does not exist yet
+	path := filepath.Join(t.TempDir(), "athena.db")
+
+	// When opening the database
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Then the usage table exists
+	var tableName string
+	queryErr := db.QueryRow(
+		`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'usage'`,
+	).Scan(&tableName)
+	require.NoError(t, queryErr)
+	assert.Equal(t, "usage", tableName)
+}
+
 func TestOpen_isNoOpOnSecondOpenAndKeepsExistingData(t *testing.T) {
 	// Given a database that was already opened once and has a row in it
 	path := filepath.Join(t.TempDir(), "athena.db")
