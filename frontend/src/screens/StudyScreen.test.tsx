@@ -249,8 +249,9 @@ describe('StudyScreen', () => {
 
     // Then the full message is still shown as a settled assistant message,
     // rendered with the assistant's own styling (not the user's)
-    const bubble = await screen.findByText('Hello there!')
-    expect(bubble).toBeInTheDocument()
+    const text = await screen.findByText('Hello there!')
+    const bubble = text.closest('[data-slot="message-bubble"]')
+    expect(bubble).toHaveAttribute('data-role', 'assistant')
     expect(bubble).toHaveClass('self-start')
     expect(bubble).not.toHaveClass('self-end')
   })
@@ -300,7 +301,11 @@ describe('StudyScreen', () => {
     await user.type(screen.getByLabelText(/study today/i), 'Distributed systems')
     await user.click(screen.getByRole('button', { name: 'Start session' }))
     await act(async () => {
-      resolveStart({ id: 'session-1', topic: 'Distributed systems', startedAt: '2026-08-16T10:00:00Z' })
+      resolveStart({
+        id: 'session-1',
+        topic: 'Distributed systems',
+        startedAt: '2026-08-16T10:00:00Z',
+      })
     })
     await screen.findByRole('button', { name: 'End session' })
 
@@ -337,10 +342,16 @@ describe('StudyScreen', () => {
 
     // Then the user message appears immediately, styled as the user's own
     // bubble, and sendStudyMessage was called
-    const bubble = await screen.findByText('What is CAP theorem?')
+    const text = await screen.findByText('What is CAP theorem?')
+    const bubble = text.closest('[data-slot="message-bubble"]')
+    expect(bubble).toHaveAttribute('data-role', 'user')
     expect(bubble).toHaveClass('self-end')
     expect(bubble).not.toHaveClass('self-start')
-    expect(sendStudyMessage).toHaveBeenCalledWith('session-1', 'Distributed systems', 'What is CAP theorem?')
+    expect(sendStudyMessage).toHaveBeenCalledWith(
+      'session-1',
+      'Distributed systems',
+      'What is CAP theorem?',
+    )
   })
 
   it('trims leading and trailing whitespace from the draft before sending', async () => {
@@ -368,7 +379,11 @@ describe('StudyScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Send' }))
 
     // Then the surrounding whitespace was trimmed before the call
-    expect(sendStudyMessage).toHaveBeenCalledWith('session-1', 'Distributed systems', 'What is CAP theorem?')
+    expect(sendStudyMessage).toHaveBeenCalledWith(
+      'session-1',
+      'Distributed systems',
+      'What is CAP theorem?',
+    )
   })
 
   it('keeps the send button disabled while its own reply is streaming', async () => {

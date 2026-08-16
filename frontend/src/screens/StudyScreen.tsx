@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { MessageBubble } from '@/components/message-bubble'
 import {
   endStudySession,
   onStudyChunk,
@@ -142,14 +143,9 @@ function StudyScreen({ onEndSession }: StudyScreenProps) {
     <div className="flex h-full w-full flex-col gap-4">
       <div className="flex flex-1 flex-col gap-3 overflow-y-auto">
         {messages.map((message, index) => (
-          <div
-            key={index}
-            className={message.role === 'user' ? 'self-end text-right' : 'self-start'}
-          >
-            {message.content}
-          </div>
+          <MessageBubble key={index} role={message.role} content={message.content} />
         ))}
-        {isStreaming && streamingText && <div className="self-start">{streamingText}</div>}
+        {isStreaming && streamingText && <MessageBubble role="assistant" content={streamingText} />}
       </div>
       {error && (
         <Alert variant="destructive">
