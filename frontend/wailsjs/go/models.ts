@@ -14,6 +14,22 @@ export namespace desktop {
 	        this.email = source["email"];
 	    }
 	}
+	export class StudySessionResult {
+	    id: string;
+	    topic: string;
+	    startedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new StudySessionResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.topic = source["topic"];
+	        this.startedAt = source["startedAt"];
+	    }
+	}
 	export class UserProfileInput {
 	    name: string;
 	    assistantName: string;
