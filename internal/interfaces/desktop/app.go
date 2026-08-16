@@ -5,6 +5,8 @@ package desktop
 import (
 	"context"
 
+	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
+
 	"github.com/santaniello/athena/internal/application/auth"
 	"github.com/santaniello/athena/internal/application/onboarding"
 	"github.com/santaniello/athena/internal/application/study"
@@ -22,6 +24,11 @@ type App struct {
 	profiles   domainprofile.Store
 	config     domainconfig.Store
 	study      *study.Service
+	// emit defaults to wailsruntime.EventsEmit, which calls log.Fatal (i.e.
+	// os.Exit) when a.ctx was never produced by the real Wails runtime —
+	// exactly the case in tests, which use context.Background(). Tests
+	// override this field with a fake to observe emitted events safely.
+	emit func(ctx context.Context, eventName string, data ...interface{})
 }
 
 // NewApp creates a new App instance backed by the given auth service,
@@ -42,6 +49,7 @@ func NewApp(
 		profiles:   profiles,
 		config:     config,
 		study:      studyService,
+		emit:       wailsruntime.EventsEmit,
 	}
 }
 
