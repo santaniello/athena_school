@@ -48,14 +48,60 @@ func newTestStudyApp(t *testing.T, sessions domainstudy.SessionRepository, messa
 	return app, captured
 }
 
-func TestApp_StartStudySession_streamsChunksAndReturnsSession(t *testing.T) {
+func TestApp_StartStudySession_createsAndReturnsSession(t *testing.T) {
+	// Given an App backed by a study service that accepts a new session.
+	// StartStudySession no longer calls the LLM at all — that happens in a
+	// separate RequestOpeningTurn call the frontend makes once the chat view
+	// is already showing, so the opening turn's streaming is actually
+	// visible instead of the whole response appearing after a long wait.
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	profiles := profilemocks.NewMockStore(t)
+	sessions.EXPECT().Create(mock.Anything, mock.AnythingOfType("study.Session")).Return(nil).Once()
+	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles)
+
+	// When starting a study session
+	result, err := app.StartStudySession("Distributed systems")
+
+	// Then it returns the created session without emitting any event (no
+	// streaming happened) and without touching the LLM/profile/messages
+	// ports (no .EXPECT() set on those mocks)
+	require.NoError(t, err)
+	assert.NotEmpty(t, result.ID)
+	assert.Equal(t, "Distributed systems", result.Topic)
+	assert.NotEmpty(t, result.StartedAt)
+	assert.Empty(t, captured.chunks)
+	assert.False(t, captured.done)
+	assert.Empty(t, captured.errors)
+}
+
+func TestApp_StartStudySession_propagatesTopicRequiredError(t *testing.T) {
+	// Given an App backed by a study service whose topic validation fails
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	profiles := profilemocks.NewMockStore(t)
+	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles)
+
+	// When starting a session with a blank topic
+	_, err := app.StartStudySession("   ")
+
+	// Then the error propagates directly (the frontend catches the rejected
+	// promise for this call, not an event), with no event emitted at all
+	require.ErrorIs(t, err, study.ErrTopicRequired)
+	assert.Empty(t, captured.chunks)
+	assert.False(t, captured.done)
+	assert.Empty(t, captured.errors)
+}
+
+func TestApp_RequestOpeningTurn_streamsChunksAndSignalsDone(t *testing.T) {
 	// Given an App backed by a study service that streams two chunks
 	sessions := studymocks.NewMockSessionRepository(t)
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}, nil)
-	sessions.EXPECT().Create(mock.Anything, mock.AnythingOfType("study.Session")).Return(nil).Once()
 	llm.EXPECT().
 		ChatStream(mock.Anything, mock.AnythingOfType("llm.ChatRequest"), mock.AnythingOfType("func(string) error")).
 		Run(func(_ context.Context, _ domainllm.ChatRequest, handler func(string) error) {
@@ -67,34 +113,31 @@ func TestApp_StartStudySession_streamsChunksAndReturnsSession(t *testing.T) {
 	messages.EXPECT().Append(mock.Anything, mock.AnythingOfType("study.Message")).Return(nil).Once()
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles)
 
-	// When starting a study session
-	result, err := app.StartStudySession("Distributed systems")
+	// When requesting the opening turn for an already-created session
+	err := app.RequestOpeningTurn("session-1", "Distributed systems")
 
-	// Then it returns the created session and streamed both chunks, ending
-	// with a "done" event
+	// Then it streamed both chunks, ending with a "done" event
 	require.NoError(t, err)
-	assert.NotEmpty(t, result.ID)
-	assert.Equal(t, "Distributed systems", result.Topic)
-	assert.NotEmpty(t, result.StartedAt)
 	assert.Equal(t, []string{"Hello ", "there!"}, captured.chunks)
 	assert.True(t, captured.done)
 	assert.Empty(t, captured.errors)
 }
 
-func TestApp_StartStudySession_emitsErrorEvent_onFailure(t *testing.T) {
-	// Given an App backed by a study service whose topic validation fails
+func TestApp_RequestOpeningTurn_emitsErrorEvent_onFailure(t *testing.T) {
+	// Given an App backed by a study service whose profile load fails
 	sessions := studymocks.NewMockSessionRepository(t)
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
+	profiles.EXPECT().Load().Return(domainprofile.UserProfile{}, errors.New("profile not found"))
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles)
 
-	// When starting a session with a blank topic
-	_, err := app.StartStudySession("   ")
+	// When requesting the opening turn
+	err := app.RequestOpeningTurn("session-1", "Distributed systems")
 
 	// Then the error propagates and an error event was emitted, with no
 	// chunk or done event
-	require.ErrorIs(t, err, study.ErrTopicRequired)
+	require.Error(t, err)
 	require.Len(t, captured.errors, 1)
 	assert.Empty(t, captured.chunks)
 	assert.False(t, captured.done)
