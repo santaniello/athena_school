@@ -18,13 +18,14 @@ const (
 // Tier is a cost/capability class of model.
 type Tier string
 
+// Tiers recognized by ModelFor, from cheapest to most capable.
 const (
 	TierCheap   Tier = "cheap"
 	TierMedium  Tier = "medium"
 	TierPremium Tier = "premium"
 )
 
-// EmbeddingModel is the fixed model used for LLMProvider.Embeddings.
+// EmbeddingModel is the fixed model used for Provider.Embeddings.
 // Embeddings do not go through the tier system.
 const EmbeddingModel = "openai/text-embedding-3-small"
 

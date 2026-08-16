@@ -1,4 +1,4 @@
-// Package llm holds the LLMProvider port backed by OpenRouter — chat,
+// Package llm holds the Provider port backed by OpenRouter — chat,
 // streaming and embeddings — plus the model routing and usage tracking
 // rules that sit in front of it. See
 // specs/phases/phase-01-desktop-mvp/05-llm-service.md.
@@ -9,7 +9,7 @@ import (
 	"errors"
 )
 
-// Sentinel errors returned by LLMProvider implementations.
+// Sentinel errors returned by Provider implementations.
 var (
 	// ErrAPIKeyMissing is returned when no OpenRouter API key is configured.
 	ErrAPIKeyMissing = errors.New("openrouter api key is missing")
@@ -33,14 +33,14 @@ type Usage struct {
 	Cost         float64
 }
 
-// ChatRequest is a request to LLMProvider.Chat or LLMProvider.ChatStream.
+// ChatRequest is a request to Provider.Chat or Provider.ChatStream.
 type ChatRequest struct {
 	SessionID string
 	Task      TaskType
 	Messages  []Message
 }
 
-// ChatResponse is the result of a successful LLMProvider.Chat call.
+// ChatResponse is the result of a successful Provider.Chat call.
 type ChatResponse struct {
 	Content string
 	Model   string
@@ -50,13 +50,13 @@ type ChatResponse struct {
 	UsedFreeFallback bool
 }
 
-// EmbeddingRequest is a request to LLMProvider.Embeddings.
+// EmbeddingRequest is a request to Provider.Embeddings.
 type EmbeddingRequest struct {
 	SessionID string
 	Input     string
 }
 
-// EmbeddingResponse is the result of a successful LLMProvider.Embeddings
+// EmbeddingResponse is the result of a successful Provider.Embeddings
 // call.
 type EmbeddingResponse struct {
 	Embedding []float64
@@ -64,8 +64,8 @@ type EmbeddingResponse struct {
 	Usage     Usage
 }
 
-// LLMProvider is the port every LLM backend adapter implements.
-type LLMProvider interface {
+// Provider is the port every LLM backend adapter implements.
+type Provider interface {
 	Chat(ctx context.Context, req ChatRequest) (ChatResponse, error)
 	ChatStream(ctx context.Context, req ChatRequest, handler func(chunk string) error) error
 	Embeddings(ctx context.Context, req EmbeddingRequest) (EmbeddingResponse, error)

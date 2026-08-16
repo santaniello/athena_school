@@ -16,7 +16,7 @@ import (
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
 )
 
-// Client implements domainllm.LLMProvider against the OpenRouter API. Every
+// Client implements domainllm.Provider against the OpenRouter API. Every
 // successful call records its token usage and cost via recorder.
 type Client struct {
 	baseURL    string

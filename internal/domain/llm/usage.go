@@ -16,7 +16,7 @@ type UsageEntry struct {
 	CreatedAt    time.Time
 }
 
-// UsageRecorder persists a UsageEntry after each LLMProvider call.
+// UsageRecorder persists a UsageEntry after each Provider call.
 type UsageRecorder interface {
 	Record(ctx context.Context, entry UsageEntry) error
 }
