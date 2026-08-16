@@ -42,3 +42,31 @@ func TestBuildSystemPrompt_neverMentionsSpecialty(t *testing.T) {
 	// Then it never references a {Specialty} placeholder
 	assert.NotContains(t, prompt, "Specialty")
 }
+
+func TestBuildSystemPrompt_instructsAShortSocraticOpening(t *testing.T) {
+	// Given any profile and topic
+	profile := domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}
+
+	// When building the system prompt
+	prompt := buildSystemPrompt(profile, "Distributed systems")
+
+	// Then it explicitly tells the model to open with one short question,
+	// not a lecture — without this instruction, an unguided model tends to
+	// dump a long unsolicited explanation instead of starting a dialogue
+	assert.Contains(t, prompt, "a single focused question")
+	assert.Contains(t, prompt, "Do not explain or teach anything yet")
+}
+
+func TestBuildSystemPrompt_instructsConciseFollowUps(t *testing.T) {
+	// Given any profile and topic
+	profile := domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}
+
+	// When building the system prompt
+	prompt := buildSystemPrompt(profile, "Distributed systems")
+
+	// Then it tells the model to keep every message short unless the user
+	// explicitly asks for more depth
+	assert.Contains(t, prompt, "Keep every message short")
+	assert.Contains(t, prompt, "Only go deeper")
+	assert.Contains(t, prompt, "explicitly asks")
+}
