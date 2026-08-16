@@ -5,6 +5,7 @@ import { AthenaLogo } from '@/components/athena-logo'
 import { NavItem } from '@/components/nav-item'
 import { ComingSoonPanel } from '@/components/coming-soon-panel'
 import HomeScreen from '@/screens/HomeScreen'
+import StudyScreen from '@/screens/StudyScreen'
 import { NAVIGATION, type AppSection } from '@/lib/navigation'
 import { getUserProfile, type ProfileDraft } from '@/lib/profile'
 
@@ -89,6 +90,8 @@ function AppShell({ onLogout }: AppShellProps) {
               studyLocked={studyItem.status === 'locked'}
               onStartStudy={() => setSection('study')}
             />
+          ) : section === 'study' ? (
+            <StudyScreen onEndSession={() => setSection('home')} />
           ) : (
             <ComingSoonPanel item={activeItem} />
           )}

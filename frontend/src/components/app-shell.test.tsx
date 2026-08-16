@@ -70,7 +70,7 @@ describe('AppShell', () => {
     expect(screen.getByText('Planned for Phase 2')).toBeInTheDocument()
   })
 
-  it('routes the Home CTA to the same coming-soon panel as the Study nav row', async () => {
+  it('routes the Home CTA to the Study screen, same as the Study nav row', async () => {
     // Given the app shell mounts on Home
     const user = userEvent.setup()
     renderShell()
@@ -79,8 +79,9 @@ describe('AppShell', () => {
     // When starting a study session from the CTA
     await user.click(screen.getByRole('button', { name: 'Start a study session' }))
 
-    // Then it lands on the same locked Study panel the sidebar would show
-    expect(screen.getByText('Planned for Phase 1')).toBeInTheDocument()
+    // Then it lands on the real Study screen (topic selection), not a
+    // locked coming-soon panel
+    expect(screen.getByLabelText(/study today/i)).toBeInTheDocument()
   })
 
   it("shows the account's name in the sidebar footer", async () => {

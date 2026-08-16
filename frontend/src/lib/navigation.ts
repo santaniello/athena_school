@@ -52,7 +52,7 @@ export const NAVIGATION: NavItem[] = [
     label: 'Study',
     icon: BookOpen,
     phase: 1,
-    status: 'locked',
+    status: 'unlocked',
     group: 'primary',
     description: 'Guided, personalized study sessions with streaming AI responses and feedback.',
   },
