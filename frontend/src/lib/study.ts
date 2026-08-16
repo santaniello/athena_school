@@ -1,4 +1,9 @@
-import { EndStudySession, SendStudyMessage, StartStudySession } from '../../wailsjs/go/desktop/App'
+import {
+  EndStudySession,
+  RequestOpeningTurn,
+  SendStudyMessage,
+  StartStudySession,
+} from '../../wailsjs/go/desktop/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 
 export interface StudySession {
@@ -10,6 +15,14 @@ export interface StudySession {
 export async function startStudySession(topic: string): Promise<StudySession> {
   const result = await StartStudySession(topic)
   return { id: result.id, topic: result.topic, startedAt: result.startedAt }
+}
+
+// requestOpeningTurn streams the assistant's opening turn for a session
+// already created via startStudySession. Kept as a separate call so the
+// chat view can switch in immediately after startStudySession resolves,
+// instead of waiting for the whole opening response before showing anything.
+export async function requestOpeningTurn(sessionId: string, topic: string): Promise<void> {
+  await RequestOpeningTurn(sessionId, topic)
 }
 
 export async function sendStudyMessage(sessionId: string, topic: string, content: string): Promise<void> {

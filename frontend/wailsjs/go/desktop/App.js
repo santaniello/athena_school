@@ -34,6 +34,10 @@ export function Register(arg1, arg2) {
   return window['go']['desktop']['App']['Register'](arg1, arg2);
 }
 
+export function RequestOpeningTurn(arg1, arg2) {
+  return window['go']['desktop']['App']['RequestOpeningTurn'](arg1, arg2);
+}
+
 export function ResetLocalAccount(arg1) {
   return window['go']['desktop']['App']['ResetLocalAccount'](arg1);
 }

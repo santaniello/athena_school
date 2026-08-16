@@ -9,6 +9,7 @@ import {
   onStudyChunk,
   onStudyDone,
   onStudyError,
+  requestOpeningTurn,
   sendStudyMessage,
   startStudySession,
 } from '@/lib/study'
@@ -80,8 +81,13 @@ function StudyScreen({ onEndSession }: StudyScreenProps) {
     setIsStreaming(true)
     try {
       const session = await startStudySession(trimmedTopic)
+      // Switch to the chat view as soon as the (fast, non-streaming)
+      // session is created — before requesting the opening turn — so the
+      // streaming reply is actually visible instead of the whole response
+      // appearing at once after a long wait.
       setSessionId(session.id)
       setSessionTopic(session.topic)
+      await requestOpeningTurn(session.id, session.topic)
     } catch (err) {
       setIsStreaming(false)
       setError(err instanceof Error ? err.message : 'Failed to start the session.')

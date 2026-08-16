@@ -15,6 +15,7 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
 // runtime.
 vi.mock('@/lib/study', () => ({
   startStudySession: vi.fn(),
+  requestOpeningTurn: vi.fn(),
   sendStudyMessage: vi.fn(),
   endStudySession: vi.fn(),
   onStudyChunk: vi.fn(() => vi.fn()),

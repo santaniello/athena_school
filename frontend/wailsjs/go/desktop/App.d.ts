@@ -19,6 +19,8 @@ export function Logout():Promise<void>;
 
 export function Register(arg1:string,arg2:string):Promise<void>;
 
+export function RequestOpeningTurn(arg1:string,arg2:string):Promise<void>;
+
 export function ResetLocalAccount(arg1:string):Promise<void>;
 
 export function SaveOpenRouterKey(arg1:string):Promise<void>;

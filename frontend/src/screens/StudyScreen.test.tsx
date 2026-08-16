@@ -6,6 +6,7 @@ import {
   onStudyChunk,
   onStudyDone,
   onStudyError,
+  requestOpeningTurn,
   sendStudyMessage,
   startStudySession,
 } from '@/lib/study'
@@ -13,6 +14,7 @@ import StudyScreen from './StudyScreen'
 
 vi.mock('@/lib/study', () => ({
   startStudySession: vi.fn(),
+  requestOpeningTurn: vi.fn(),
   sendStudyMessage: vi.fn(),
   endStudySession: vi.fn(),
   onStudyChunk: vi.fn(),
@@ -60,20 +62,49 @@ describe('StudyScreen', () => {
     expect(screen.getByRole('button', { name: 'Start session' })).toBeEnabled()
   })
 
+  it('switches to the chat view before the opening turn resolves', async () => {
+    // Given a RequestOpeningTurn call that never resolves during this test —
+    // like the real Wails binding, it can take several seconds (a full LLM
+    // response). The chat view must not wait for it: StartStudySession
+    // (session creation) is a separate, fast call that resolves first.
+    setupSubscriptions()
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      startedAt: '2026-08-16T10:00:00Z',
+    })
+    vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
+    const user = userEvent.setup()
+    render(<StudyScreen />)
+    await user.type(screen.getByLabelText(/study today/i), 'Distributed systems')
+
+    // When starting the session
+    await user.click(screen.getByRole('button', { name: 'Start session' }))
+
+    // Then the chat view is already showing, even though requestOpeningTurn
+    // is still pending
+    expect(await screen.findByRole('button', { name: 'End session' })).toBeInTheDocument()
+    expect(requestOpeningTurn).toHaveBeenCalledWith('session-1', 'Distributed systems')
+  })
+
   it('does not lose the opening turn or get stuck disabled when events fire before the call resolves', async () => {
-    // Given a StartStudySession call that — like the real Wails binding —
+    // Given a RequestOpeningTurn call that — like the real Wails binding —
     // emits "study:chunk"/"study:done" synchronously from inside the call,
     // before its own promise resolves (the binding blocks until the whole
     // stream finishes and only then returns). If the screen subscribed to
-    // events only after sessionId were set (i.e. only after this call
-    // resolves), it would miss both events and get stuck with isStreaming
-    // stuck true forever, which is exactly the bug being regression-tested.
+    // events only after mount-time subscription were skipped, it would miss
+    // both events and get stuck with isStreaming true forever, which is
+    // exactly the bug being regression-tested.
     const handlers = setupSubscriptions()
-    vi.mocked(startStudySession).mockImplementationOnce(async (topic) => {
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      startedAt: '2026-08-16T10:00:00Z',
+    })
+    vi.mocked(requestOpeningTurn).mockImplementationOnce(async () => {
       handlers.chunk?.('Welcome! ')
       handlers.chunk?.('Ask me anything.')
       handlers.done?.()
-      return { id: 'session-1', topic, startedAt: '2026-08-16T10:00:00Z' }
     })
     const user = userEvent.setup()
     render(<StudyScreen />)

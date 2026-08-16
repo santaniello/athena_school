@@ -1,10 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
-import { EndStudySession, SendStudyMessage, StartStudySession } from '../../wailsjs/go/desktop/App'
+import { EndStudySession, RequestOpeningTurn, SendStudyMessage, StartStudySession } from '../../wailsjs/go/desktop/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
-import { endStudySession, onStudyChunk, onStudyDone, onStudyError, sendStudyMessage, startStudySession } from './study'
+import {
+  endStudySession,
+  onStudyChunk,
+  onStudyDone,
+  onStudyError,
+  requestOpeningTurn,
+  sendStudyMessage,
+  startStudySession,
+} from './study'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
   StartStudySession: vi.fn(),
+  RequestOpeningTurn: vi.fn(),
   SendStudyMessage: vi.fn(),
   EndStudySession: vi.fn(),
 }))
@@ -28,6 +37,19 @@ describe('startStudySession', () => {
     // Then it returns the session and forwarded the topic
     expect(StartStudySession).toHaveBeenCalledWith('Distributed systems')
     expect(session).toEqual({ id: 'session-1', topic: 'Distributed systems', startedAt: '2026-08-16T10:00:00Z' })
+  })
+})
+
+describe('requestOpeningTurn', () => {
+  it('forwards sessionId and topic', async () => {
+    // Given a RequestOpeningTurn call that succeeds
+    vi.mocked(RequestOpeningTurn).mockResolvedValueOnce()
+
+    // When requesting the opening turn
+    await requestOpeningTurn('session-1', 'Distributed systems')
+
+    // Then it forwarded both arguments
+    expect(RequestOpeningTurn).toHaveBeenCalledWith('session-1', 'Distributed systems')
   })
 })
 
