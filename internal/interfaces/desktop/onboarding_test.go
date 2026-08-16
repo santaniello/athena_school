@@ -22,7 +22,7 @@ func newTestOnboardingApp(
 	validator domainconfig.KeyValidator,
 ) *App {
 	t.Helper()
-	app := NewApp(nil, nil, onboarding.NewService(profiles, config, validator), profiles, config)
+	app := NewApp(nil, nil, onboarding.NewService(profiles, config, validator), profiles, config, nil)
 	app.Startup(context.Background())
 	return app
 }

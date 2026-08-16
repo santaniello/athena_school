@@ -16,6 +16,7 @@ import (
 
 	"github.com/santaniello/athena/internal/application/auth"
 	"github.com/santaniello/athena/internal/application/onboarding"
+	"github.com/santaniello/athena/internal/application/study"
 	"github.com/santaniello/athena/internal/infrastructure/athenahome"
 	"github.com/santaniello/athena/internal/infrastructure/configfile"
 	"github.com/santaniello/athena/internal/infrastructure/openrouter"
@@ -69,7 +70,17 @@ func main() {
 	keyValidator := openrouter.NewValidator("")
 	onboardingService := onboarding.NewService(profiles, configStore, keyValidator)
 
-	app := desktop.NewApp(authService, sessions, onboardingService, profiles, configStore)
+	cfg, cfgErr := configStore.Load()
+	if cfgErr != nil {
+		log.Printf("loading config: %v", cfgErr)
+	}
+	usageRepo := sqlite.NewUsageRepository(db)
+	llmClient := openrouter.NewClient("", cfg.OpenRouterKey, usageRepo)
+	studySessions := sqlite.NewSessionRepository(db)
+	studyMessages := sqlite.NewMessageRepository(db)
+	studyService := study.NewService(studySessions, studyMessages, llmClient, profiles)
+
+	app := desktop.NewApp(authService, sessions, onboardingService, profiles, configStore, studyService)
 
 	err = wails.Run(&options.App{
 		Title:            "Athena",
