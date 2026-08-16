@@ -19,4 +19,18 @@ var migrations = []string{
 		cost          REAL,
 		created_at    DATETIME
 	)`,
+	`CREATE TABLE IF NOT EXISTS sessions (
+		id         TEXT PRIMARY KEY,
+		topic      TEXT,
+		mode       TEXT,
+		started_at DATETIME,
+		ended_at   DATETIME
+	)`,
+	`CREATE TABLE IF NOT EXISTS messages (
+		id         TEXT PRIMARY KEY,
+		session_id TEXT REFERENCES sessions(id),
+		role       TEXT,
+		content    TEXT,
+		created_at DATETIME
+	)`,
 }
