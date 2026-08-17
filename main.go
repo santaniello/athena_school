@@ -15,6 +15,7 @@ import (
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/santaniello/athena/internal/application/auth"
+	"github.com/santaniello/athena/internal/application/folder"
 	"github.com/santaniello/athena/internal/application/onboarding"
 	"github.com/santaniello/athena/internal/application/study"
 	"github.com/santaniello/athena/internal/infrastructure/athenahome"
@@ -80,8 +81,9 @@ func main() {
 	studyMessages := sqlite.NewMessageRepository(db)
 	folders := sqlite.NewFolderRepository(db)
 	studyService := study.NewService(studySessions, studyMessages, llmClient, profiles, folders)
+	folderService := folder.NewService(folders, studySessions)
 
-	app := desktop.NewApp(authService, sessions, onboardingService, profiles, configStore, studyService, llmClient)
+	app := desktop.NewApp(authService, sessions, onboardingService, profiles, configStore, studyService, folderService, llmClient)
 
 	err = wails.Run(&options.App{
 		Title:            "Athena",

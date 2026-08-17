@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/santaniello/athena/internal/application/folder"
 	"github.com/santaniello/athena/internal/application/study"
 	domainfolder "github.com/santaniello/athena/internal/domain/folder"
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
@@ -33,7 +35,8 @@ type capturedEvents struct {
 func newTestStudyApp(t *testing.T, sessions domainstudy.SessionRepository, messages domainstudy.MessageRepository, llm domainllm.Provider, profiles domainprofile.Store, folders domainfolder.Repository) (*App, *capturedEvents) {
 	t.Helper()
 	studyService := study.NewService(sessions, messages, llm, profiles, folders)
-	app := NewApp(nil, nil, nil, nil, nil, studyService, nil)
+	folderService := folder.NewService(folders, sessions)
+	app := NewApp(nil, nil, nil, nil, nil, studyService, folderService, nil)
 	app.Startup(context.Background())
 
 	captured := &capturedEvents{}
@@ -66,7 +69,7 @@ func TestApp_StartStudySession_createsAndReturnsSession(t *testing.T) {
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
 	// When starting a study session
-	result, err := app.StartStudySession("Distributed systems")
+	result, err := app.StartStudySession("Distributed systems", "")
 
 	// Then it returns the created session without emitting any event (no
 	// streaming happened) and without touching the LLM/profile/messages
@@ -90,7 +93,7 @@ func TestApp_StartStudySession_propagatesTopicRequiredError(t *testing.T) {
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
 	// When starting a session with a blank topic
-	_, err := app.StartStudySession("   ")
+	_, err := app.StartStudySession("   ", "")
 
 	// Then the error propagates directly (the frontend catches the rejected
 	// promise for this call, not an event), with no event emitted at all
@@ -219,4 +222,71 @@ func TestApp_EndStudySession_endsTheSession(t *testing.T) {
 
 	// Then it succeeds
 	require.NoError(t, err)
+}
+
+func TestApp_ResumeStudySession_reopensAndReturnsHistory(t *testing.T) {
+	// Given an App backed by a study service with an ended session that has
+	// one prior message
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
+	ended := domainstudy.Session{ID: "session-1", Topic: "Distributed systems", FolderID: "default", EndedAt: time.Now().UTC()}
+	sessions.EXPECT().GetByID(mock.Anything, "session-1").Return(ended, nil).Once()
+	sessions.EXPECT().Reopen(mock.Anything, "session-1").Return(nil).Once()
+	messages.EXPECT().
+		ListBySession(mock.Anything, "session-1").
+		Return([]domainstudy.Message{{Role: domainstudy.RoleUser, Content: "Hi"}}, nil).
+		Once()
+	app, _ := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
+
+	// When resuming the session
+	result, err := app.ResumeStudySession("session-1")
+
+	// Then it is reopened (no EndedAt) and its history is returned
+	require.NoError(t, err)
+	assert.Equal(t, "session-1", result.Session.ID)
+	assert.Empty(t, result.Session.EndedAt)
+	require.Len(t, result.Messages, 1)
+	assert.Equal(t, "Hi", result.Messages[0].Content)
+}
+
+func TestApp_MoveStudySession_movesTheSession(t *testing.T) {
+	// Given an App backed by a study service that accepts the move
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
+	sessions.EXPECT().MoveToFolder(mock.Anything, "session-1", "folder-b").Return(nil).Once()
+	app, _ := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
+
+	// When moving the session to another folder
+	err := app.MoveStudySession("session-1", "folder-b")
+
+	// Then it succeeds
+	require.NoError(t, err)
+}
+
+func TestApp_ListStudySessionsByFolder_returnsEverySessionInThatFolder(t *testing.T) {
+	// Given an App backed by a study service with two sessions in folder-a
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
+	sessions.EXPECT().ListByFolder(mock.Anything, "folder-a").Return([]domainstudy.Session{
+		{ID: "s-1", Topic: "Cache invalidation", FolderID: "folder-a"},
+		{ID: "s-2", Topic: "Concurrency patterns", FolderID: "folder-a"},
+	}, nil).Once()
+	app, _ := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
+
+	// When listing sessions in folder-a
+	results, err := app.ListStudySessionsByFolder("folder-a")
+
+	// Then both sessions are returned as DTOs
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+	assert.Equal(t, "Cache invalidation", results[0].Topic)
 }
