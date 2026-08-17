@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
@@ -15,41 +14,35 @@ import (
 	studymocks "github.com/santaniello/athena/internal/domain/study/mocks"
 )
 
-func TestEnd_setsEndedAtOnTheSession(t *testing.T) {
-	// Given a service backed by a repository that accepts ending a session
+func TestMoveToFolder_movesTheSession(t *testing.T) {
+	// Given a service whose repository accepts the move
 	sessions := studymocks.NewMockSessionRepository(t)
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
-	sessions.EXPECT().
-		End(context.Background(), "session-1", mock.AnythingOfType("time.Time")).
-		Return(nil).
-		Once()
+	sessions.EXPECT().MoveToFolder(context.Background(), "session-1", "folder-b").Return(nil).Once()
 	service := NewService(sessions, messages, llm, profiles, folders)
 
-	// When ending the session
-	err := service.End(context.Background(), "session-1")
+	// When moving the session to another folder
+	err := service.MoveToFolder(context.Background(), "session-1", "folder-b")
 
 	// Then it succeeds
 	require.NoError(t, err)
 }
 
-func TestEnd_propagatesSessionNotFound(t *testing.T) {
+func TestMoveToFolder_propagatesSessionNotFound(t *testing.T) {
 	// Given a service backed by a repository with no such session
 	sessions := studymocks.NewMockSessionRepository(t)
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
-	sessions.EXPECT().
-		End(context.Background(), "missing", mock.AnythingOfType("time.Time")).
-		Return(domainstudy.ErrSessionNotFound).
-		Once()
+	sessions.EXPECT().MoveToFolder(context.Background(), "missing", "folder-b").Return(domainstudy.ErrSessionNotFound).Once()
 	service := NewService(sessions, messages, llm, profiles, folders)
 
-	// When ending a session that does not exist
-	err := service.End(context.Background(), "missing")
+	// When moving a session that does not exist
+	err := service.MoveToFolder(context.Background(), "missing", "folder-b")
 
 	// Then the error propagates
 	require.ErrorIs(t, err, domainstudy.ErrSessionNotFound)

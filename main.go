@@ -78,7 +78,8 @@ func main() {
 	llmClient := openrouter.NewClient("", cfg.OpenRouterKey, usageRepo)
 	studySessions := sqlite.NewSessionRepository(db)
 	studyMessages := sqlite.NewMessageRepository(db)
-	studyService := study.NewService(studySessions, studyMessages, llmClient, profiles)
+	folders := sqlite.NewFolderRepository(db)
+	studyService := study.NewService(studySessions, studyMessages, llmClient, profiles, folders)
 
 	app := desktop.NewApp(authService, sessions, onboardingService, profiles, configStore, studyService, llmClient)
 

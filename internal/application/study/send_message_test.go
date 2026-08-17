@@ -12,6 +12,7 @@ import (
 	domainprofile "github.com/santaniello/athena/internal/domain/profile"
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 
+	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 	profilemocks "github.com/santaniello/athena/internal/domain/profile/mocks"
 	studymocks "github.com/santaniello/athena/internal/domain/study/mocks"
@@ -23,7 +24,8 @@ func TestSendMessage_returnsMessageRequired_whenContentIsBlank(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	service := NewService(sessions, messages, llm, profiles)
+	folders := foldermocks.NewMockRepository(t)
+	service := NewService(sessions, messages, llm, profiles, folders)
 
 	// When sending a whitespace-only message
 	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "   ", noopChunkHandler)
@@ -38,6 +40,7 @@ func TestSendMessage_persistsUserMessageBeforeCallingLLM(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
 
 	var callOrder []string
 	messages.EXPECT().
@@ -68,7 +71,7 @@ func TestSendMessage_persistsUserMessageBeforeCallingLLM(t *testing.T) {
 		Return(nil).
 		Once()
 
-	service := NewService(sessions, messages, llm, profiles)
+	service := NewService(sessions, messages, llm, profiles, folders)
 
 	// When sending a message
 	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", noopChunkHandler)
@@ -85,6 +88,7 @@ func TestSendMessage_sendsHistoryAndFreshSystemPromptToLLM(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
 
 	messages.EXPECT().Append(context.Background(), mock.AnythingOfType("study.Message")).Return(nil).Once()
 	messages.EXPECT().
@@ -118,7 +122,7 @@ func TestSendMessage_sendsHistoryAndFreshSystemPromptToLLM(t *testing.T) {
 		Once()
 
 	var received []string
-	service := NewService(sessions, messages, llm, profiles)
+	service := NewService(sessions, messages, llm, profiles, folders)
 
 	// When sending a message
 	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", func(chunk string) error {
@@ -138,6 +142,7 @@ func TestSendMessage_propagatesStreamError_withoutPersistingAssistantMessage(t *
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
 
 	messages.EXPECT().Append(context.Background(), mock.MatchedBy(func(m domainstudy.Message) bool {
 		return m.Role == domainstudy.RoleUser
@@ -150,7 +155,7 @@ func TestSendMessage_propagatesStreamError_withoutPersistingAssistantMessage(t *
 		Return(streamErr).
 		Once()
 
-	service := NewService(sessions, messages, llm, profiles)
+	service := NewService(sessions, messages, llm, profiles, folders)
 
 	// When sending a message
 	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", noopChunkHandler)

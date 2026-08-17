@@ -10,10 +10,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/santaniello/athena/internal/application/study"
+	domainfolder "github.com/santaniello/athena/internal/domain/folder"
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
 	domainprofile "github.com/santaniello/athena/internal/domain/profile"
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 
+	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 	profilemocks "github.com/santaniello/athena/internal/domain/profile/mocks"
 	studymocks "github.com/santaniello/athena/internal/domain/study/mocks"
@@ -28,9 +30,9 @@ type capturedEvents struct {
 	errors []string
 }
 
-func newTestStudyApp(t *testing.T, sessions domainstudy.SessionRepository, messages domainstudy.MessageRepository, llm domainllm.Provider, profiles domainprofile.Store) (*App, *capturedEvents) {
+func newTestStudyApp(t *testing.T, sessions domainstudy.SessionRepository, messages domainstudy.MessageRepository, llm domainllm.Provider, profiles domainprofile.Store, folders domainfolder.Repository) (*App, *capturedEvents) {
 	t.Helper()
-	studyService := study.NewService(sessions, messages, llm, profiles)
+	studyService := study.NewService(sessions, messages, llm, profiles, folders)
 	app := NewApp(nil, nil, nil, nil, nil, studyService, nil)
 	app.Startup(context.Background())
 
@@ -58,8 +60,10 @@ func TestApp_StartStudySession_createsAndReturnsSession(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
+	folders.EXPECT().GetByID(mock.Anything, "default").Return(domainfolder.Folder{ID: "default", IsDefault: true}, nil).Once()
 	sessions.EXPECT().Create(mock.Anything, mock.AnythingOfType("study.Session")).Return(nil).Once()
-	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles)
+	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
 	// When starting a study session
 	result, err := app.StartStudySession("Distributed systems")
@@ -82,7 +86,8 @@ func TestApp_StartStudySession_propagatesTopicRequiredError(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles)
+	folders := foldermocks.NewMockRepository(t)
+	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
 	// When starting a session with a blank topic
 	_, err := app.StartStudySession("   ")
@@ -101,6 +106,7 @@ func TestApp_RequestOpeningTurn_streamsChunksAndSignalsDone(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}, nil)
 	llm.EXPECT().
 		ChatStream(mock.Anything, mock.AnythingOfType("llm.ChatRequest"), mock.AnythingOfType("func(string) error")).
@@ -111,7 +117,7 @@ func TestApp_RequestOpeningTurn_streamsChunksAndSignalsDone(t *testing.T) {
 		Return(nil).
 		Once()
 	messages.EXPECT().Append(mock.Anything, mock.AnythingOfType("study.Message")).Return(nil).Once()
-	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles)
+	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
 	// When requesting the opening turn for an already-created session
 	err := app.RequestOpeningTurn("session-1", "Distributed systems")
@@ -129,8 +135,9 @@ func TestApp_RequestOpeningTurn_emitsErrorEvent_onFailure(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{}, errors.New("profile not found"))
-	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles)
+	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
 	// When requesting the opening turn
 	err := app.RequestOpeningTurn("session-1", "Distributed systems")
@@ -149,6 +156,7 @@ func TestApp_SendStudyMessage_streamsReplyAndSignalsDone(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
 	messages.EXPECT().Append(mock.Anything, mock.AnythingOfType("study.Message")).Return(nil).Twice()
 	messages.EXPECT().ListBySession(mock.Anything, "session-1").Return(nil, nil).Once()
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}, nil)
@@ -159,7 +167,7 @@ func TestApp_SendStudyMessage_streamsReplyAndSignalsDone(t *testing.T) {
 		}).
 		Return(nil).
 		Once()
-	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles)
+	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
 	// When sending a message
 	err := app.SendStudyMessage("session-1", "Distributed systems", "What is CAP theorem?")
@@ -176,6 +184,7 @@ func TestApp_SendStudyMessage_emitsErrorEvent_onFailure(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
 	messages.EXPECT().Append(mock.Anything, mock.AnythingOfType("study.Message")).Return(nil).Once()
 	messages.EXPECT().ListBySession(mock.Anything, "session-1").Return(nil, nil).Once()
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}, nil)
@@ -183,7 +192,7 @@ func TestApp_SendStudyMessage_emitsErrorEvent_onFailure(t *testing.T) {
 		ChatStream(mock.Anything, mock.AnythingOfType("llm.ChatRequest"), mock.AnythingOfType("func(string) error")).
 		Return(errors.New("upstream failure")).
 		Once()
-	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles)
+	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
 	// When sending a message and the LLM call fails
 	err := app.SendStudyMessage("session-1", "Distributed systems", "What is CAP theorem?")
@@ -201,8 +210,9 @@ func TestApp_EndStudySession_endsTheSession(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
 	sessions.EXPECT().End(mock.Anything, "session-1", mock.AnythingOfType("time.Time")).Return(nil).Once()
-	app, _ := newTestStudyApp(t, sessions, messages, llm, profiles)
+	app, _ := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
 	// When ending the session
 	err := app.EndStudySession("session-1")

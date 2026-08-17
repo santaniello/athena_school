@@ -24,7 +24,7 @@ type StudySessionResult struct {
 // afterwards to stream the assistant's opening turn once the chat view is
 // already showing.
 func (a *App) StartStudySession(topic string) (StudySessionResult, error) {
-	session, err := a.study.Start(a.ctx, topic)
+	session, err := a.study.Start(a.ctx, topic, "")
 	if err != nil {
 		return StudySessionResult{}, err
 	}

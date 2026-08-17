@@ -12,6 +12,7 @@ import (
 	domainprofile "github.com/santaniello/athena/internal/domain/profile"
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 
+	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 	profilemocks "github.com/santaniello/athena/internal/domain/profile/mocks"
 	studymocks "github.com/santaniello/athena/internal/domain/study/mocks"
@@ -23,6 +24,7 @@ func TestRequestOpeningTurn_streamsAndPersistsAssistantReply(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
 
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}, nil)
 	llm.EXPECT().
@@ -43,7 +45,7 @@ func TestRequestOpeningTurn_streamsAndPersistsAssistantReply(t *testing.T) {
 		Once()
 
 	var received []string
-	service := NewService(sessions, messages, llm, profiles)
+	service := NewService(sessions, messages, llm, profiles, folders)
 
 	// When requesting the opening turn for an already-created session
 	err := service.RequestOpeningTurn(context.Background(), "session-1", "Distributed systems", func(chunk string) error {
@@ -62,10 +64,11 @@ func TestRequestOpeningTurn_propagatesProfileLoadError(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
 	loadErr := errors.New("profile not found")
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{}, loadErr)
 
-	service := NewService(sessions, messages, llm, profiles)
+	service := NewService(sessions, messages, llm, profiles, folders)
 
 	// When requesting the opening turn
 	err := service.RequestOpeningTurn(context.Background(), "session-1", "Distributed systems", noopChunkHandler)
@@ -80,6 +83,7 @@ func TestRequestOpeningTurn_propagatesStreamError_withoutPersistingAssistantMess
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
 
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}, nil)
 	streamErr := errors.New("upstream failure")
@@ -88,7 +92,7 @@ func TestRequestOpeningTurn_propagatesStreamError_withoutPersistingAssistantMess
 		Return(streamErr).
 		Once()
 
-	service := NewService(sessions, messages, llm, profiles)
+	service := NewService(sessions, messages, llm, profiles, folders)
 
 	// When requesting the opening turn
 	err := service.RequestOpeningTurn(context.Background(), "session-1", "Distributed systems", noopChunkHandler)
