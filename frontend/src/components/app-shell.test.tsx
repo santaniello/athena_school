@@ -9,6 +9,7 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   Logout: vi.fn(),
   UpdateProfile: vi.fn(),
   SaveOpenRouterKey: vi.fn(),
+  HasOpenRouterKey: vi.fn().mockResolvedValue(true),
 }))
 
 // StudyScreen subscribes to study events as soon as it mounts (see

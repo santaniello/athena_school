@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { OpenRouterKeyForm } from '@/components/openrouter-key-form'
+import { hasOpenRouterKey } from '@/lib/openrouterKey'
 import { updateUserProfile, type ProfileDraft } from '@/lib/profile'
 import { profileErrorMessage } from '@/lib/onboardingErrors'
 import { ASSISTANT_LANGUAGES, EXPERIENCE_LEVELS, STUDY_STYLES } from '@/lib/profileOptions'
@@ -30,6 +31,11 @@ function SettingsScreen({ profile, onProfileUpdated }: SettingsScreenProps) {
   const [draft, setDraft] = useState(profile)
   const [error, setError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const [hasKey, setHasKey] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    void hasOpenRouterKey().then(setHasKey)
+  }, [])
 
   function updateField<K extends keyof ProfileDraft>(field: K, value: ProfileDraft[K]) {
     setDraft((prev) => ({ ...prev, [field]: value }))
@@ -173,7 +179,14 @@ function SettingsScreen({ profile, onProfileUpdated }: SettingsScreenProps) {
         <h2 className="font-heading text-sm font-bold tracking-[0.14em] text-foreground uppercase">
           OpenRouter key
         </h2>
-        <OpenRouterKeyForm onSaved={() => {}} />
+        {hasKey !== null && (
+          <p className="text-sm text-muted-foreground">
+            {hasKey
+              ? 'A key is already configured. For security, it is never shown again — enter a new one below to replace it.'
+              : 'No key configured yet.'}
+          </p>
+        )}
+        <OpenRouterKeyForm onSaved={() => setHasKey(true)} />
       </div>
     </div>
   )

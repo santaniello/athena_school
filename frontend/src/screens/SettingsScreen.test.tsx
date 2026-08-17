@@ -1,13 +1,14 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { UpdateProfile } from '../../wailsjs/go/desktop/App'
+import { HasOpenRouterKey, UpdateProfile } from '../../wailsjs/go/desktop/App'
 import SettingsScreen from './SettingsScreen'
 import type { ProfileDraft } from '@/lib/profile'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
   UpdateProfile: vi.fn(),
   SaveOpenRouterKey: vi.fn(),
+  HasOpenRouterKey: vi.fn(),
 }))
 
 function currentProfile(): ProfileDraft {
@@ -23,6 +24,29 @@ function currentProfile(): ProfileDraft {
 }
 
 describe('SettingsScreen', () => {
+  beforeEach(() => {
+    vi.mocked(HasOpenRouterKey).mockResolvedValue(false)
+  })
+
+  it('shows that a key is already configured, without ever showing it', async () => {
+    // Given a key is already saved
+    vi.mocked(HasOpenRouterKey).mockResolvedValue(true)
+    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
+
+    // Then a status message says so, and the masked field itself stays blank
+    expect(await screen.findByText(/key is already configured/i)).toBeInTheDocument()
+    expect(screen.getByLabelText('OpenRouter key')).toHaveValue('')
+  })
+
+  it('shows that no key is configured yet', async () => {
+    // Given no key is saved
+    vi.mocked(HasOpenRouterKey).mockResolvedValue(false)
+    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
+
+    // Then a status message says so
+    expect(await screen.findByText(/no key configured yet/i)).toBeInTheDocument()
+  })
+
   it('pre-fills the form with the current profile', () => {
     // Given the currently saved profile
     render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
