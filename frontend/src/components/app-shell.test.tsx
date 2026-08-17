@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { GetProfile, Logout } from '../../wailsjs/go/desktop/App'
+import { GetProfile, Logout, UpdateProfile } from '../../wailsjs/go/desktop/App'
 import { AppShell } from './app-shell'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
   GetProfile: vi.fn(),
   Logout: vi.fn(),
+  UpdateProfile: vi.fn(),
+  SaveOpenRouterKey: vi.fn(),
 }))
 
 // StudyScreen subscribes to study events as soon as it mounts (see
@@ -105,6 +107,41 @@ describe('AppShell', () => {
     // Then the profile name appears, with no plan/trial tag (not commercialized)
     expect(await screen.findByText('Felipe')).toBeInTheDocument()
     expect(screen.queryByText('Free trial')).not.toBeInTheDocument()
+  })
+
+  it('opens the real Settings screen, not the coming-soon panel, when Settings is selected', async () => {
+    // Given the app shell mounts
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+
+    // When selecting Settings
+    await user.click(screen.getByRole('button', { name: 'Settings' }))
+
+    // Then the real profile form appears, not the locked-section panel
+    expect(screen.getByLabelText('Assistant name')).toBeInTheDocument()
+    expect(screen.queryByText('Planned for Phase 1')).not.toBeInTheDocument()
+  })
+
+  it('updates the sidebar name immediately after a Settings profile save, with no refetch', async () => {
+    // Given the app shell mounts and the user opens Settings
+    const saved = { ...profileResult, name: 'Felipe Santaniello' }
+    vi.mocked(UpdateProfile).mockResolvedValueOnce(saved)
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+    await user.click(screen.getByRole('button', { name: 'Settings' }))
+
+    // When editing the name and saving
+    const nameInput = screen.getByLabelText('Name')
+    await user.clear(nameInput)
+    await user.type(nameInput, 'Felipe Santaniello')
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    // Then the sidebar footer reflects the new name immediately, with no
+    // second GetProfile call — the saved response is trusted directly
+    await waitFor(() => expect(screen.getByText('Felipe Santaniello')).toBeInTheDocument())
+    expect(GetProfile).toHaveBeenCalledOnce()
   })
 
   it('clears the session and calls onLogout when logging out', async () => {

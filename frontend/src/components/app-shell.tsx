@@ -6,6 +6,7 @@ import { NavItem } from '@/components/nav-item'
 import { ComingSoonPanel } from '@/components/coming-soon-panel'
 import HomeScreen from '@/screens/HomeScreen'
 import StudyScreen from '@/screens/StudyScreen'
+import SettingsScreen from '@/screens/SettingsScreen'
 import { NAVIGATION, type AppSection } from '@/lib/navigation'
 import { getUserProfile, type ProfileDraft } from '@/lib/profile'
 
@@ -92,6 +93,8 @@ function AppShell({ onLogout }: AppShellProps) {
             />
           ) : section === 'study' ? (
             <StudyScreen onEndSession={() => setSection('home')} />
+          ) : section === 'settings' && profile ? (
+            <SettingsScreen profile={profile} onProfileUpdated={setProfile} />
           ) : (
             <ComingSoonPanel item={activeItem} />
           )}
