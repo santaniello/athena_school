@@ -1,10 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
+import { ArrowUp, X } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { MessageBubble } from '@/components/message-bubble'
 import {
   endStudySession,
@@ -162,21 +175,58 @@ function StudyScreen({ onEndSession }: StudyScreenProps) {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-      <div className="flex gap-2">
+      <div className="relative">
         <Textarea
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={handleDraftKeyDown}
           placeholder="Type your answer..."
-          className="flex-1"
+          className="min-h-24 resize-none pb-11"
         />
-        <Button disabled={!draft.trim() || isStreaming} onClick={() => void handleSend()}>
-          Send
-        </Button>
+        <div className="absolute bottom-2 left-2">
+          <AlertDialog>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" aria-label="End session">
+                    <X className="size-4" aria-hidden="true" />
+                  </Button>
+                </AlertDialogTrigger>
+              </TooltipTrigger>
+              <TooltipContent>End session</TooltipContent>
+            </Tooltip>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>End this session?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Your conversation will be cleared from the screen. This can&apos;t be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => void handleEnd()}>
+                  Yes, end session
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+        <div className="absolute right-2 bottom-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="icon-sm"
+                aria-label="Send"
+                disabled={!draft.trim() || isStreaming}
+                onClick={() => void handleSend()}
+              >
+                <ArrowUp className="size-4" aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Send message</TooltipContent>
+          </Tooltip>
+        </div>
       </div>
-      <Button variant="outline" onClick={() => void handleEnd()}>
-        End session
-      </Button>
     </div>
   )
 }

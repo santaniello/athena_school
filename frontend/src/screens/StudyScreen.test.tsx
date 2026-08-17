@@ -627,12 +627,37 @@ describe('StudyScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Start session' }))
     await screen.findByRole('button', { name: 'End session' })
 
-    // When ending the session
+    // When ending the session and confirming the dialog
     await user.click(screen.getByRole('button', { name: 'End session' }))
+    await user.click(await screen.findByRole('button', { name: 'Yes, end session' }))
 
     // Then it closed the session and notified the caller
     expect(endStudySession).toHaveBeenCalledWith('session-1')
     expect(onEndSession).toHaveBeenCalledOnce()
+  })
+
+  it('does not end the session when the confirmation is cancelled', async () => {
+    // Given a started session
+    setupSubscriptions()
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      startedAt: '2026-08-16T10:00:00Z',
+    })
+    const onEndSession = vi.fn()
+    const user = userEvent.setup()
+    render(<StudyScreen onEndSession={onEndSession} />)
+    await user.type(screen.getByLabelText(/study today/i), 'Distributed systems')
+    await user.click(screen.getByRole('button', { name: 'Start session' }))
+    await screen.findByRole('button', { name: 'End session' })
+
+    // When opening the confirmation and cancelling it
+    await user.click(screen.getByRole('button', { name: 'End session' }))
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
+
+    // Then the session was never ended
+    expect(endStudySession).not.toHaveBeenCalled()
+    expect(onEndSession).not.toHaveBeenCalled()
   })
 
   it('ends the session without a callback prop, without crashing', async () => {
@@ -650,10 +675,43 @@ describe('StudyScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Start session' }))
     await screen.findByRole('button', { name: 'End session' })
 
-    // When ending the session
+    // When ending the session and confirming the dialog
     await user.click(screen.getByRole('button', { name: 'End session' }))
+    await user.click(await screen.findByRole('button', { name: 'Yes, end session' }))
 
     // Then it closes the session without throwing
     expect(endStudySession).toHaveBeenCalledWith('session-1')
+  })
+
+  it('shows tooltips explaining the send and end-session icon buttons', async () => {
+    // Given a started session with a settled opening turn
+    const handlers = setupSubscriptions()
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      startedAt: '2026-08-16T10:00:00Z',
+    })
+    const user = userEvent.setup()
+    render(<StudyScreen />)
+    await user.type(screen.getByLabelText(/study today/i), 'Distributed systems')
+    await user.click(screen.getByRole('button', { name: 'Start session' }))
+    await screen.findByRole('button', { name: 'End session' })
+    act(() => {
+      handlers.chunk?.('Welcome!')
+      handlers.done?.()
+    })
+    await screen.findByText('Welcome!')
+
+    // When hovering the send button
+    await user.hover(screen.getByRole('button', { name: 'Send' }))
+
+    // Then its tooltip explains what it does
+    expect(await screen.findByText('Send message')).toBeInTheDocument()
+
+    // When hovering the end-session button
+    await user.hover(screen.getByRole('button', { name: 'End session' }))
+
+    // Then its tooltip explains what it does
+    expect(await screen.findByText('End session')).toBeInTheDocument()
   })
 })
