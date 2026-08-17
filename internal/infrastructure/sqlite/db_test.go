@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"database/sql"
 	"path/filepath"
 	"testing"
 
@@ -135,6 +136,59 @@ func TestOpen_doesNotDuplicateDefaultFolderOnSecondOpen(t *testing.T) {
 	queryErr := second.QueryRow(`SELECT COUNT(*) FROM folders WHERE id = 'default'`).Scan(&count)
 	require.NoError(t, queryErr)
 	assert.Equal(t, 1, count)
+}
+
+func TestOpen_addsFolderIDColumnToSessions(t *testing.T) {
+	// Given a path to a database file that does not exist yet
+	path := filepath.Join(t.TempDir(), "athena.db")
+
+	// When opening the database
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Then the sessions table has a folder_id column
+	rows, queryErr := db.Query(`PRAGMA table_info(sessions)`)
+	require.NoError(t, queryErr)
+	defer func() { _ = rows.Close() }()
+
+	hasFolderID := false
+	for rows.Next() {
+		var cid, notNull, pk int
+		var name, colType string
+		var dfltValue sql.NullString
+		require.NoError(t, rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk))
+		if name == "folder_id" {
+			hasFolderID = true
+		}
+	}
+	require.NoError(t, rows.Err())
+	assert.True(t, hasFolderID)
+}
+
+func TestOpen_backfillsExistingSessionsToDefaultFolder(t *testing.T) {
+	// Given a session row inserted with no folder_id, as if it predated
+	// this migration
+	path := filepath.Join(t.TempDir(), "athena.db")
+	db, err := Open(path)
+	require.NoError(t, err)
+	_, execErr := db.Exec(
+		`INSERT INTO sessions (id, topic, mode, started_at) VALUES (?, ?, ?, ?)`,
+		"session-1", "Topic", "study", "2024-01-01",
+	)
+	require.NoError(t, execErr)
+	require.NoError(t, db.Close())
+
+	// When reopening the database (re-running migrations)
+	second, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = second.Close() }()
+
+	// Then the pre-existing session is backfilled to the default folder
+	var folderID string
+	queryErr := second.QueryRow(`SELECT folder_id FROM sessions WHERE id = ?`, "session-1").Scan(&folderID)
+	require.NoError(t, queryErr)
+	assert.Equal(t, "default", folderID)
 }
 
 func TestOpen_isNoOpOnSecondOpenAndKeepsExistingData(t *testing.T) {

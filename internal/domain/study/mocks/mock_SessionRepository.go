@@ -118,6 +118,265 @@ func (_c *MockSessionRepository_End_Call) RunAndReturn(run func(context.Context,
 	return _c
 }
 
+// GetByID provides a mock function with given fields: ctx, id
+func (_m *MockSessionRepository) GetByID(ctx context.Context, id string) (study.Session, error) {
+	ret := _m.Called(ctx, id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetByID")
+	}
+
+	var r0 study.Session
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) (study.Session, error)); ok {
+		return rf(ctx, id)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) study.Session); ok {
+		r0 = rf(ctx, id)
+	} else {
+		r0 = ret.Get(0).(study.Session)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, id)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockSessionRepository_GetByID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetByID'
+type MockSessionRepository_GetByID_Call struct {
+	*mock.Call
+}
+
+// GetByID is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id string
+func (_e *MockSessionRepository_Expecter) GetByID(ctx interface{}, id interface{}) *MockSessionRepository_GetByID_Call {
+	return &MockSessionRepository_GetByID_Call{Call: _e.mock.On("GetByID", ctx, id)}
+}
+
+func (_c *MockSessionRepository_GetByID_Call) Run(run func(ctx context.Context, id string)) *MockSessionRepository_GetByID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockSessionRepository_GetByID_Call) Return(_a0 study.Session, _a1 error) *MockSessionRepository_GetByID_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockSessionRepository_GetByID_Call) RunAndReturn(run func(context.Context, string) (study.Session, error)) *MockSessionRepository_GetByID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListByFolder provides a mock function with given fields: ctx, folderID
+func (_m *MockSessionRepository) ListByFolder(ctx context.Context, folderID string) ([]study.Session, error) {
+	ret := _m.Called(ctx, folderID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListByFolder")
+	}
+
+	var r0 []study.Session
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) ([]study.Session, error)); ok {
+		return rf(ctx, folderID)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) []study.Session); ok {
+		r0 = rf(ctx, folderID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]study.Session)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, folderID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockSessionRepository_ListByFolder_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListByFolder'
+type MockSessionRepository_ListByFolder_Call struct {
+	*mock.Call
+}
+
+// ListByFolder is a helper method to define mock.On call
+//   - ctx context.Context
+//   - folderID string
+func (_e *MockSessionRepository_Expecter) ListByFolder(ctx interface{}, folderID interface{}) *MockSessionRepository_ListByFolder_Call {
+	return &MockSessionRepository_ListByFolder_Call{Call: _e.mock.On("ListByFolder", ctx, folderID)}
+}
+
+func (_c *MockSessionRepository_ListByFolder_Call) Run(run func(ctx context.Context, folderID string)) *MockSessionRepository_ListByFolder_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockSessionRepository_ListByFolder_Call) Return(_a0 []study.Session, _a1 error) *MockSessionRepository_ListByFolder_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockSessionRepository_ListByFolder_Call) RunAndReturn(run func(context.Context, string) ([]study.Session, error)) *MockSessionRepository_ListByFolder_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// MoveToFolder provides a mock function with given fields: ctx, id, folderID
+func (_m *MockSessionRepository) MoveToFolder(ctx context.Context, id string, folderID string) error {
+	ret := _m.Called(ctx, id, folderID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for MoveToFolder")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = rf(ctx, id, folderID)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockSessionRepository_MoveToFolder_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'MoveToFolder'
+type MockSessionRepository_MoveToFolder_Call struct {
+	*mock.Call
+}
+
+// MoveToFolder is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id string
+//   - folderID string
+func (_e *MockSessionRepository_Expecter) MoveToFolder(ctx interface{}, id interface{}, folderID interface{}) *MockSessionRepository_MoveToFolder_Call {
+	return &MockSessionRepository_MoveToFolder_Call{Call: _e.mock.On("MoveToFolder", ctx, id, folderID)}
+}
+
+func (_c *MockSessionRepository_MoveToFolder_Call) Run(run func(ctx context.Context, id string, folderID string)) *MockSessionRepository_MoveToFolder_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *MockSessionRepository_MoveToFolder_Call) Return(_a0 error) *MockSessionRepository_MoveToFolder_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockSessionRepository_MoveToFolder_Call) RunAndReturn(run func(context.Context, string, string) error) *MockSessionRepository_MoveToFolder_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ReassignFolder provides a mock function with given fields: ctx, fromFolderID, toFolderID
+func (_m *MockSessionRepository) ReassignFolder(ctx context.Context, fromFolderID string, toFolderID string) error {
+	ret := _m.Called(ctx, fromFolderID, toFolderID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ReassignFolder")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = rf(ctx, fromFolderID, toFolderID)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockSessionRepository_ReassignFolder_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ReassignFolder'
+type MockSessionRepository_ReassignFolder_Call struct {
+	*mock.Call
+}
+
+// ReassignFolder is a helper method to define mock.On call
+//   - ctx context.Context
+//   - fromFolderID string
+//   - toFolderID string
+func (_e *MockSessionRepository_Expecter) ReassignFolder(ctx interface{}, fromFolderID interface{}, toFolderID interface{}) *MockSessionRepository_ReassignFolder_Call {
+	return &MockSessionRepository_ReassignFolder_Call{Call: _e.mock.On("ReassignFolder", ctx, fromFolderID, toFolderID)}
+}
+
+func (_c *MockSessionRepository_ReassignFolder_Call) Run(run func(ctx context.Context, fromFolderID string, toFolderID string)) *MockSessionRepository_ReassignFolder_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *MockSessionRepository_ReassignFolder_Call) Return(_a0 error) *MockSessionRepository_ReassignFolder_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockSessionRepository_ReassignFolder_Call) RunAndReturn(run func(context.Context, string, string) error) *MockSessionRepository_ReassignFolder_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// Reopen provides a mock function with given fields: ctx, id
+func (_m *MockSessionRepository) Reopen(ctx context.Context, id string) error {
+	ret := _m.Called(ctx, id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Reopen")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
+		r0 = rf(ctx, id)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockSessionRepository_Reopen_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Reopen'
+type MockSessionRepository_Reopen_Call struct {
+	*mock.Call
+}
+
+// Reopen is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id string
+func (_e *MockSessionRepository_Expecter) Reopen(ctx interface{}, id interface{}) *MockSessionRepository_Reopen_Call {
+	return &MockSessionRepository_Reopen_Call{Call: _e.mock.On("Reopen", ctx, id)}
+}
+
+func (_c *MockSessionRepository_Reopen_Call) Run(run func(ctx context.Context, id string)) *MockSessionRepository_Reopen_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockSessionRepository_Reopen_Call) Return(_a0 error) *MockSessionRepository_Reopen_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockSessionRepository_Reopen_Call) RunAndReturn(run func(context.Context, string) error) *MockSessionRepository_Reopen_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockSessionRepository creates a new instance of MockSessionRepository. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockSessionRepository(t interface {

@@ -14,6 +14,7 @@ type Session struct {
 	ID        string
 	Topic     string
 	Mode      string
+	FolderID  string // always populated; falls back to folder.DefaultFolderID
 	StartedAt time.Time
 	EndedAt   time.Time
 }

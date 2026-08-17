@@ -47,6 +47,50 @@ var migrations = []func(*sql.DB) error{
 	)`),
 	execSQL(`INSERT OR IGNORE INTO folders (id, name, is_default, created_at)
 		VALUES ('default', 'General', 1, CURRENT_TIMESTAMP)`),
+	addSessionsFolderIDColumn,
+}
+
+// addSessionsFolderIDColumn adds sessions.folder_id if it does not already
+// exist (SQLite has no "ADD COLUMN IF NOT EXISTS") and backfills any
+// existing rows to the default folder, so folder_id is always populated
+// even though it cannot be declared NOT NULL on an ALTER TABLE.
+func addSessionsFolderIDColumn(db *sql.DB) error {
+	hasFolderID, err := sessionsHasFolderIDColumn(db)
+	if err != nil {
+		return err
+	}
+
+	if !hasFolderID {
+		if _, err := db.Exec(`ALTER TABLE sessions ADD COLUMN folder_id TEXT REFERENCES folders(id)`); err != nil {
+			return err
+		}
+	}
+
+	_, err = db.Exec(`UPDATE sessions SET folder_id = 'default' WHERE folder_id IS NULL`)
+	return err
+}
+
+// sessionsHasFolderIDColumn reports whether the sessions table already has
+// a folder_id column.
+func sessionsHasFolderIDColumn(db *sql.DB) (bool, error) {
+	rows, err := db.Query(`PRAGMA table_info(sessions)`)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var cid, notNull, pk int
+		var name, colType string
+		var dfltValue sql.NullString
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
+			return false, err
+		}
+		if name == "folder_id" {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }
 
 // execSQL adapts a plain DDL/DML statement, unconditionally safe to
