@@ -3,6 +3,8 @@
 import {desktop} from '../models';
 import {context} from '../models';
 
+export function EndStudySession(arg1:string):Promise<void>;
+
 export function GetProfile():Promise<desktop.UserProfileInput>;
 
 export function HasLocalSession():Promise<boolean>;
@@ -17,10 +19,16 @@ export function Logout():Promise<void>;
 
 export function Register(arg1:string,arg2:string):Promise<void>;
 
+export function RequestOpeningTurn(arg1:string,arg2:string):Promise<void>;
+
 export function ResetLocalAccount(arg1:string):Promise<void>;
 
 export function SaveOpenRouterKey(arg1:string):Promise<void>;
 
 export function SaveProfile(arg1:desktop.UserProfileInput):Promise<void>;
+
+export function SendStudyMessage(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function StartStudySession(arg1:string):Promise<desktop.StudySessionResult>;
 
 export function Startup(arg1:context.Context):Promise<void>;

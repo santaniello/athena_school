@@ -251,17 +251,20 @@ type LLMProvider interface {
 ### 1.6 — Study Mode (Desktop)
 
 **Tarefas:**
-- [ ] `internal/domain/study/` — `StudySession`, regras de sessão
-- [ ] `internal/application/study/` — `StudyService.Start()`
-- [ ] Personalization: `UserProfile` injetado em todo prompt
-- [ ] UI: chat interface com streaming de resposta
-- [ ] Tópico selecionável via interface (sem CLI)
-- [ ] Perguntas geradas pelo LLM, resposta do usuário, feedback
+- [x] `internal/domain/study/` — `Session`, `Message`, regras de sessão
+- [x] `internal/application/study/` — `Service.Start()`/`SendMessage()`/`End()`
+- [x] Personalization: `UserProfile` injetado em todo prompt
+- [x] UI: chat interface com streaming de resposta
+- [x] Tópico selecionável via interface (sem CLI)
+- [x] Perguntas geradas pelo LLM, resposta do usuário, feedback
 
 **Prompts base:**
+
+`{Specialty}` foi removido: `UserProfile` não tem esse campo (removido em 1.4).
+
 ```text
 System: Você é {AssistantName}, assistente de aprendizado de {Name}.
-        Área: {Area}. Foco: {Specialty}. Nível: {ExperienceLevel}.
+        Área: {Area}. Nível: {ExperienceLevel}.
         Estilo: {StudyStyle}. Objetivo: {Goals}.
         Adapte todas as explicações ao contexto do usuário.
 ```
