@@ -13,7 +13,12 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AuthLayout } from '@/components/auth-layout'
 import { saveUserProfile, type ProfileDraft } from '@/lib/profile'
 import { profileErrorMessage } from '@/lib/onboardingErrors'
-import { ASSISTANT_LANGUAGES, EXPERIENCE_LEVELS, STUDY_STYLES, labelFor } from '@/lib/profileOptions'
+import {
+  ASSISTANT_LANGUAGES,
+  EXPERIENCE_LEVELS,
+  STUDY_STYLES,
+  labelFor,
+} from '@/lib/profileOptions'
 
 interface OnboardingConfirmScreenProps {
   draft: ProfileDraft

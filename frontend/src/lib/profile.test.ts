@@ -51,7 +51,9 @@ describe('updateUserProfile', () => {
 
     // Then the binding is called with the equivalent UserProfileInput and
     // its response is returned as the new ProfileDraft
-    expect(UpdateProfile).toHaveBeenCalledWith(expect.objectContaining({ assistantName: 'Nova Atena' }))
+    expect(UpdateProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ assistantName: 'Nova Atena' }),
+    )
     expect(result).toEqual(saved)
   })
 
