@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { EndStudySession, RequestOpeningTurn, SendStudyMessage, StartStudySession } from '../../wailsjs/go/desktop/App'
+import {
+  EndStudySession,
+  RequestOpeningTurn,
+  SendStudyMessage,
+  StartStudySession,
+} from '../../wailsjs/go/desktop/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import {
   endStudySession,
@@ -36,7 +41,11 @@ describe('startStudySession', () => {
 
     // Then it returns the session and forwarded the topic
     expect(StartStudySession).toHaveBeenCalledWith('Distributed systems')
-    expect(session).toEqual({ id: 'session-1', topic: 'Distributed systems', startedAt: '2026-08-16T10:00:00Z' })
+    expect(session).toEqual({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      startedAt: '2026-08-16T10:00:00Z',
+    })
   })
 })
 
@@ -62,7 +71,11 @@ describe('sendStudyMessage', () => {
     await sendStudyMessage('session-1', 'Distributed systems', 'What is CAP theorem?')
 
     // Then it forwarded every argument
-    expect(SendStudyMessage).toHaveBeenCalledWith('session-1', 'Distributed systems', 'What is CAP theorem?')
+    expect(SendStudyMessage).toHaveBeenCalledWith(
+      'session-1',
+      'Distributed systems',
+      'What is CAP theorem?',
+    )
   })
 })
 

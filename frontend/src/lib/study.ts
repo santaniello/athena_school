@@ -25,7 +25,11 @@ export async function requestOpeningTurn(sessionId: string, topic: string): Prom
   await RequestOpeningTurn(sessionId, topic)
 }
 
-export async function sendStudyMessage(sessionId: string, topic: string, content: string): Promise<void> {
+export async function sendStudyMessage(
+  sessionId: string,
+  topic: string,
+  content: string,
+): Promise<void> {
   await SendStudyMessage(sessionId, topic, content)
 }
 
