@@ -31,7 +31,7 @@ type capturedEvents struct {
 func newTestStudyApp(t *testing.T, sessions domainstudy.SessionRepository, messages domainstudy.MessageRepository, llm domainllm.Provider, profiles domainprofile.Store) (*App, *capturedEvents) {
 	t.Helper()
 	studyService := study.NewService(sessions, messages, llm, profiles)
-	app := NewApp(nil, nil, nil, nil, nil, studyService)
+	app := NewApp(nil, nil, nil, nil, nil, studyService, nil)
 	app.Startup(context.Background())
 
 	captured := &capturedEvents{}

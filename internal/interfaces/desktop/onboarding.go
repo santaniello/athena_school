@@ -24,9 +24,16 @@ func (a *App) HasOpenRouterKey() bool {
 }
 
 // SaveOpenRouterKey validates key against OpenRouter and, on success,
-// persists it locally. See specs/phases/phase-01-desktop-mvp/04-onboarding.md.
+// persists it locally and updates the live LLM client so already-running
+// study sessions pick it up without an app restart. See
+// specs/phases/phase-01-desktop-mvp/04-onboarding.md and
+// specs/phases/phase-01-desktop-mvp/08-settings.md.
 func (a *App) SaveOpenRouterKey(key string) error {
-	return a.onboarding.SaveOpenRouterKey(a.ctx, key)
+	if err := a.onboarding.SaveOpenRouterKey(a.ctx, key); err != nil {
+		return err
+	}
+	a.apiKeyUpdater.SetAPIKey(key)
+	return nil
 }
 
 // HasUserProfile reports whether onboarding has already been completed, so
