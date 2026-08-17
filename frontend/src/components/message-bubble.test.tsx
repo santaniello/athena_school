@@ -1,8 +1,66 @@
-import { describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MessageBubble } from './message-bubble'
 
 describe('MessageBubble', () => {
+  it('shows a copy button for a settled assistant message', () => {
+    // Given a settled (non-streaming) assistant message
+    render(<MessageBubble role="assistant" content="Hi there" />)
+
+    // Then a copy button is offered, same as ChatGPT-style chat UIs
+    expect(screen.getByRole('button', { name: 'Copy message' })).toBeInTheDocument()
+  })
+
+  it('does not show a copy button for a user message', () => {
+    // Given a user message
+    render(<MessageBubble role="user" content="What is CAP theorem?" />)
+
+    // Then no copy button is offered
+    expect(screen.queryByRole('button', { name: 'Copy message' })).not.toBeInTheDocument()
+  })
+
+  it('does not show a copy button while the message is still streaming in', () => {
+    // Given an assistant message that is still being streamed
+    render(<MessageBubble role="assistant" content="partial rep" isStreaming />)
+
+    // Then no copy button is offered yet
+    expect(screen.queryByRole('button', { name: 'Copy message' })).not.toBeInTheDocument()
+  })
+
+  it('copies the raw message content to the clipboard and confirms it', async () => {
+    // Given a settled assistant message with Markdown content
+    const user = userEvent.setup()
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
+    render(<MessageBubble role="assistant" content="**bold** answer" />)
+
+    // When clicking the copy button
+    await user.click(screen.getByRole('button', { name: 'Copy message' }))
+
+    // Then the raw (unrendered) content is copied and the button confirms it
+    expect(writeText).toHaveBeenCalledWith('**bold** answer')
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument()
+  })
+
+  it('reverts the confirmation back to the copy button after a moment', async () => {
+    // Given a settled assistant message that was just copied
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime })
+    vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
+    render(<MessageBubble role="assistant" content="answer" />)
+    await user.click(screen.getByRole('button', { name: 'Copy message' }))
+    await screen.findByRole('button', { name: 'Copied' })
+
+    // When enough time passes
+    vi.advanceTimersByTime(2000)
+
+    // Then the button reverts to its normal copy state
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Copy message' })).toBeInTheDocument(),
+    )
+    vi.useRealTimers()
+  })
+
   it('renders plain-text content for a user message', () => {
     // Given a plain-text user message
     render(<MessageBubble role="user" content="What is CAP theorem?" />)

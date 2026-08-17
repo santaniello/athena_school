@@ -153,7 +153,9 @@ function StudyScreen({ onEndSession }: StudyScreenProps) {
         {messages.map((message, index) => (
           <MessageBubble key={index} role={message.role} content={message.content} />
         ))}
-        {isStreaming && streamingText && <MessageBubble role="assistant" content={streamingText} />}
+        {isStreaming && streamingText && (
+          <MessageBubble role="assistant" content={streamingText} isStreaming />
+        )}
       </div>
       {error && (
         <Alert variant="destructive">
