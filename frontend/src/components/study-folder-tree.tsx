@@ -63,8 +63,8 @@ interface FolderNode extends Folder {
 
 interface StudyFolderTreeProps {
   selectedSessionId: string | null
-  onSelectSession: (session: StudySession) => void
-  onSessionStarted: (session: StudySession) => void
+  onSelectSession: (session: StudySession, folderName: string) => void
+  onSessionStarted: (session: StudySession, folderName: string) => void
   onSessionDeleted: (sessionId: string) => void
 }
 
@@ -208,7 +208,8 @@ function StudyFolderTree({
           : folder,
       ),
     )
-    onSessionStarted(session)
+    const folder = folders.find((f) => f.id === folderId)
+    onSessionStarted(session, folder?.name ?? '')
   }
 
   async function handleMoveSession(session: StudySession, targetFolderId: string) {
@@ -255,7 +256,7 @@ function StudyFolderTree({
           'group flex cursor-pointer items-center gap-1.5 rounded-md py-1 pr-3 pl-10 text-xs hover:bg-accent',
           selected && 'bg-secondary',
         )}
-        onClick={() => onSelectSession(session)}
+        onClick={() => onSelectSession(session, folder.name)}
       >
         <span
           className={cn(

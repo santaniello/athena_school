@@ -19,6 +19,7 @@ import {
 interface StudyChatScreenProps {
   sessionId: string
   initialTopic: string
+  folderName: string
   // 'new' sessions request the opening turn immediately; 'resume' sessions
   // (picked from the sidebar tree) load their prior history instead.
   mode: 'new' | 'resume'
@@ -37,7 +38,13 @@ interface ChatMessage {
 // session already exists, either freshly started or resumed from history.
 // See specs/phases/phase-01-desktop-mvp/06-study-mode.md and
 // specs/phases/phase-01-desktop-mvp/10-study-folders.md.
-function StudyChatScreen({ sessionId, initialTopic, mode, onBack }: StudyChatScreenProps) {
+function StudyChatScreen({
+  sessionId,
+  initialTopic,
+  folderName,
+  mode,
+  onBack,
+}: StudyChatScreenProps) {
   const [sessionTopic, setSessionTopic] = useState(initialTopic)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streamingText, setStreamingText] = useState('')
@@ -158,7 +165,10 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onBack }: StudyChatScr
           </TooltipTrigger>
           <TooltipContent>Back to folders</TooltipContent>
         </Tooltip>
-        <h2 className="truncate text-sm font-semibold text-foreground">{sessionTopic}</h2>
+        <div className="min-w-0">
+          <p className="truncate text-[11px] text-muted-foreground">Study / {folderName}</p>
+          <h2 className="truncate text-sm font-semibold text-foreground">{sessionTopic}</h2>
+        </div>
       </div>
       <div className="flex flex-1 flex-col gap-3 overflow-y-auto">
         {messages.map((message, index) => (

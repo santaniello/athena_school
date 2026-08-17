@@ -44,8 +44,8 @@ const LOAD_BALANCING_SESSION: StudySession = {
 
 function renderTree(props?: {
   selectedSessionId?: string | null
-  onSelectSession?: (session: StudySession) => void
-  onSessionStarted?: (session: StudySession) => void
+  onSelectSession?: (session: StudySession, folderName: string) => void
+  onSessionStarted?: (session: StudySession, folderName: string) => void
   onSessionDeleted?: (sessionId: string) => void
 }) {
   const onSelectSession = props?.onSelectSession ?? vi.fn()
@@ -122,8 +122,8 @@ describe('StudyFolderTree', () => {
     // When clicking the session
     await user.click(screen.getByText('Cache invalidation'))
 
-    // Then it is reported to the parent
-    expect(onSelectSession).toHaveBeenCalledWith(CACHE_SESSION)
+    // Then it is reported to the parent, along with its folder's name
+    expect(onSelectSession).toHaveBeenCalledWith(CACHE_SESSION, 'System Design')
   })
 
   it('lights up the dot only for the currently selected active session', async () => {
@@ -244,9 +244,12 @@ describe('StudyFolderTree', () => {
       'Cache invalidation{Enter}',
     )
 
-    // Then it was started in this folder and reported to the parent
+    // Then it was started in this folder and reported to the parent, along
+    // with its folder's name
     expect(startStudySession).toHaveBeenCalledWith('Cache invalidation', 'folder-1')
-    await waitFor(() => expect(onSessionStarted).toHaveBeenCalledWith(CACHE_SESSION))
+    await waitFor(() =>
+      expect(onSessionStarted).toHaveBeenCalledWith(CACHE_SESSION, 'System Design'),
+    )
     expect(await screen.findByText('Cache invalidation')).toBeInTheDocument()
   })
 

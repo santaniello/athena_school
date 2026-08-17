@@ -19,6 +19,7 @@ interface AppShellProps {
 interface ActiveStudySession {
   id: string
   topic: string
+  folderName: string
   // 'new' sessions request the opening turn; 'resume' sessions (picked from
   // the sidebar tree) load their prior history instead.
   mode: 'new' | 'resume'
@@ -55,18 +56,20 @@ function AppShell({ onLogout }: AppShellProps) {
     onLogout()
   }
 
-  function handleSelectSession(session: StudySession) {
+  function handleSelectSession(session: StudySession, folderName: string) {
     setActiveSession({
       id: session.id,
       topic: session.topic,
+      folderName,
       mode: 'resume',
     })
   }
 
-  function handleSessionStarted(session: StudySession) {
+  function handleSessionStarted(session: StudySession, folderName: string) {
     setActiveSession({
       id: session.id,
       topic: session.topic,
+      folderName,
       mode: 'new',
     })
   }
@@ -147,6 +150,7 @@ function AppShell({ onLogout }: AppShellProps) {
                 key={activeSession.id}
                 sessionId={activeSession.id}
                 initialTopic={activeSession.topic}
+                folderName={activeSession.folderName}
                 mode={activeSession.mode}
                 onBack={() => setActiveSession(null)}
               />
