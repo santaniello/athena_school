@@ -12,7 +12,7 @@ var migrations = []string{
 	)`,
 	`CREATE TABLE IF NOT EXISTS usage (
 		id            TEXT PRIMARY KEY,
-		session_id    TEXT,
+		session_id    TEXT REFERENCES sessions(id),
 		model         TEXT,
 		input_tokens  INTEGER,
 		output_tokens INTEGER,
