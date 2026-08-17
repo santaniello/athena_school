@@ -24,4 +24,8 @@ export default {
   jsonReporter: { fileName: 'reports/mutation/mutation.json' },
   thresholds: { high: 90, low: 80, break: 80 },
   tempDirName: '.stryker-tmp',
+  // Skip mutants unaffected by changes since the last run. CI restores/saves
+  // reports/stryker-incremental.json across `push` runs on main/develop (see
+  // ci.yml); locally it just makes repeated `npm run mutation` runs faster.
+  incremental: true,
 }

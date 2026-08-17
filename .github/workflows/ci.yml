@@ -113,6 +113,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v7
@@ -126,10 +128,44 @@ jobs:
           cd frontend
           npm ci
 
-      - name: Run mutation testing (Stryker)
+      # Full runs (push to main/develop) reuse the previous run's mutant
+      # results via Stryker's incremental mode, so only mutants affected by
+      # the diff since the cached run are re-executed. Keyed per branch so
+      # main/develop each keep their own history; restore-keys falls back to
+      # the latest cache for the branch when the exact run-id key misses.
+      - name: Restore incremental mutation report
+        if: github.event_name == 'push'
+        uses: actions/cache@v4
+        with:
+          path: frontend/reports/stryker-incremental.json
+          key: stryker-incremental-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            stryker-incremental-${{ github.ref_name }}-
+
+      - name: Run full mutation testing (Stryker, incremental)
+        if: github.event_name == 'push'
         run: |
           cd frontend
-          npx stryker run
+          npx stryker run --incremental
+
+      # PRs only mutate files actually changed vs. the base branch, instead
+      # of the whole frontend/src tree, so feedback stays fast regardless of
+      # whether an incremental cache exists for this branch yet.
+      - name: Run mutation testing on changed files (Stryker)
+        if: github.event_name == 'pull_request'
+        run: |
+          CHANGED=$(git diff --name-only --diff-filter=ACMR "origin/${{ github.base_ref }}...HEAD" \
+            | grep -E '^frontend/src/.*\.(ts|tsx)$' \
+            | grep -Ev '\.test\.(ts|tsx)$|/components/ui/|^frontend/src/lib/utils\.ts$|^frontend/src/main\.tsx$|^frontend/src/vite-env\.d\.ts$' \
+            | sed 's#^frontend/##' || true)
+          if [ -z "$CHANGED" ]; then
+            echo "No mutation-relevant frontend files changed — skipping Stryker."
+            exit 0
+          fi
+          echo "Mutating changed files:"
+          echo "$CHANGED"
+          cd frontend
+          npx stryker run --mutate "$(echo "$CHANGED" | paste -sd, -)"
 
   secret-scan:
     runs-on: ubuntu-latest
