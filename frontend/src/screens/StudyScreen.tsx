@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { KeyboardEvent } from 'react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -110,6 +111,13 @@ function StudyScreen({ onEndSession }: StudyScreenProps) {
     }
   }
 
+  function handleDraftKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== 'Enter' || event.shiftKey) return
+    event.preventDefault()
+    if (!draft.trim() || isStreaming) return
+    void handleSend()
+  }
+
   async function handleEnd() {
     if (sessionId) await endStudySession(sessionId)
     onEndSession?.()
@@ -156,6 +164,7 @@ function StudyScreen({ onEndSession }: StudyScreenProps) {
         <Textarea
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={handleDraftKeyDown}
           placeholder="Type your answer..."
           className="flex-1"
         />

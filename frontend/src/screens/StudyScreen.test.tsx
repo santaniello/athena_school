@@ -354,6 +354,69 @@ describe('StudyScreen', () => {
     )
   })
 
+  it('sends the message on Enter, without inserting a newline', async () => {
+    // Given a started session with a settled opening turn
+    const handlers = setupSubscriptions()
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      startedAt: '2026-08-16T10:00:00Z',
+    })
+    vi.mocked(sendStudyMessage).mockResolvedValueOnce()
+    const user = userEvent.setup()
+    render(<StudyScreen />)
+    await user.type(screen.getByLabelText(/study today/i), 'Distributed systems')
+    await user.click(screen.getByRole('button', { name: 'Start session' }))
+    await screen.findByRole('button', { name: 'End session' })
+    act(() => {
+      handlers.chunk?.('Welcome!')
+      handlers.done?.()
+    })
+    await screen.findByText('Welcome!')
+
+    // When typing a reply and pressing Enter
+    await user.type(screen.getByPlaceholderText(/type your answer/i), 'What is CAP theorem?{Enter}')
+
+    // Then the message was sent and the draft cleared, instead of a newline
+    // being inserted
+    await screen.findByText('What is CAP theorem?')
+    expect(sendStudyMessage).toHaveBeenCalledWith(
+      'session-1',
+      'Distributed systems',
+      'What is CAP theorem?',
+    )
+    expect(screen.getByPlaceholderText(/type your answer/i)).toHaveValue('')
+  })
+
+  it('inserts a newline on Shift+Enter, without sending', async () => {
+    // Given a started session with a settled opening turn
+    const handlers = setupSubscriptions()
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      startedAt: '2026-08-16T10:00:00Z',
+    })
+    const user = userEvent.setup()
+    render(<StudyScreen />)
+    await user.type(screen.getByLabelText(/study today/i), 'Distributed systems')
+    await user.click(screen.getByRole('button', { name: 'Start session' }))
+    await screen.findByRole('button', { name: 'End session' })
+    act(() => {
+      handlers.chunk?.('Welcome!')
+      handlers.done?.()
+    })
+    await screen.findByText('Welcome!')
+
+    // When typing a line, pressing Shift+Enter, then typing a second line
+    const textarea = screen.getByPlaceholderText(/type your answer/i)
+    await user.type(textarea, 'First line{Shift>}{Enter}{/Shift}Second line')
+
+    // Then both lines stay in the draft, on separate lines, and nothing was
+    // sent
+    expect(textarea).toHaveValue('First line\nSecond line')
+    expect(sendStudyMessage).not.toHaveBeenCalled()
+  })
+
   it('trims leading and trailing whitespace from the draft before sending', async () => {
     // Given a started session with a settled opening turn
     const handlers = setupSubscriptions()
