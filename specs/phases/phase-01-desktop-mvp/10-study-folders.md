@@ -63,22 +63,22 @@ type Session struct {
 
 ## Tasks
 
-- [ ] `internal/domain/folder/` — `Folder`, `Repository` port, sentinel errors
-- [ ] `internal/infrastructure/sqlite/` — `folders` table + default-folder seed, `FolderRepository`
-- [ ] `internal/domain/study/` — `Session.FolderID`; `SessionRepository` gains `GetByID`, `ListByFolder`,
+- [x] `internal/domain/folder/` — `Folder`, `Repository` port, sentinel errors
+- [x] `internal/infrastructure/sqlite/` — `folders` table + default-folder seed, `FolderRepository`
+- [x] `internal/domain/study/` — `Session.FolderID`; `SessionRepository` gains `GetByID`, `ListByFolder`,
       `Reopen`, `MoveToFolder`, `ReassignFolder`
-- [ ] `internal/infrastructure/sqlite/` — `sessions.folder_id` column (conditional `ALTER TABLE` + backfill to
+- [x] `internal/infrastructure/sqlite/` — `sessions.folder_id` column (conditional `ALTER TABLE` + backfill to
       `default`), `SessionRepository` method implementations
-- [ ] `internal/application/folder/` — `CreateFolder`, `RenameFolder`, `DeleteFolder` (reassigns sessions first),
+- [x] `internal/application/folder/` — `CreateFolder`, `RenameFolder`, `DeleteFolder` (reassigns sessions first),
       `ListFolders`
-- [ ] `internal/application/study/` — `Start` accepts `folderID` (falls back to `folder.DefaultFolderID`),
+- [x] `internal/application/study/` — `Start` accepts `folderID` (falls back to `folder.DefaultFolderID`),
       `Resume` (reopens if needed + loads history), `MoveToFolder`, `ListSessionsByFolder`
-- [ ] `internal/interfaces/desktop/` — `CreateFolder`/`RenameFolder`/`DeleteFolder`/`ListFolders` bindings;
+- [x] `internal/interfaces/desktop/` — `CreateFolder`/`RenameFolder`/`DeleteFolder`/`ListFolders` bindings;
       `StartStudySession(topic, folderID)`, `ResumeStudySession`, `MoveStudySession`, `ListStudySessionsByFolder`
-- [ ] UI: `study-folder-tree.tsx` sidebar component (expand/collapse folders and sessions, create/rename/delete
+- [x] UI: `study-folder-tree.tsx` sidebar component (expand/collapse folders and sessions, create/rename/delete
       folder, move session, start a new session inline)
-- [ ] UI: `StudyChatScreen.tsx` (renamed from `StudyScreen.tsx`) supports resuming a session, loading its history
-- [ ] UI: `app-shell.tsx` owns the selected-session state, renders the tree in the rail and the chat/empty state
+- [x] UI: `StudyChatScreen.tsx` (renamed from `StudyScreen.tsx`) supports resuming a session, loading its history
+- [x] UI: `app-shell.tsx` owns the selected-session state, renders the tree in the rail and the chat/empty state
       in the main pane
 
 ## Acceptance Criteria

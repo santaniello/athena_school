@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, KeyboardEvent } from 'react'
-import { ArrowUp, X } from 'lucide-react'
+import { ArrowLeft, ArrowUp, X } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   AlertDialog,
@@ -14,8 +14,6 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { MessageBubble } from '@/components/message-bubble'
@@ -26,12 +24,20 @@ import {
   onStudyDone,
   onStudyError,
   requestOpeningTurn,
+  resumeStudySession,
   sendStudyMessage,
-  startStudySession,
 } from '@/lib/study'
 
-interface StudyScreenProps {
-  onEndSession?: () => void
+interface StudyChatScreenProps {
+  sessionId: string
+  folderId: string
+  initialTopic: string
+  // 'new' sessions request the opening turn immediately; 'resume' sessions
+  // (picked from the sidebar tree) load their prior history instead, and
+  // are reopened by the backend if they had been ended.
+  mode: 'new' | 'resume'
+  onBack: () => void
+  onSessionEnded: (sessionId: string, folderId: string) => void
 }
 
 interface ChatMessage {
@@ -39,17 +45,25 @@ interface ChatMessage {
   content: string
 }
 
-// The chat-style Study Mode screen: pick a topic, then exchange messages
-// with the LLM, whose reply streams in over Wails events (see lib/study.ts)
-// rather than arriving all at once. See
-// specs/phases/phase-01-desktop-mvp/06-study-mode.md.
-function StudyScreen({ onEndSession }: StudyScreenProps) {
-  const [topic, setTopic] = useState('')
-  const [sessionId, setSessionId] = useState<string | null>(null)
-  const [sessionTopic, setSessionTopic] = useState('')
+// The chat-style Study Mode screen: exchange messages with the LLM, whose
+// reply streams in over Wails events (see lib/study.ts) rather than
+// arriving all at once. Session creation itself now happens in the sidebar
+// tree (see study-folder-tree.tsx) — this screen only ever renders once a
+// session already exists, either freshly started or resumed from history.
+// See specs/phases/phase-01-desktop-mvp/06-study-mode.md and
+// specs/phases/phase-01-desktop-mvp/10-study-folders.md.
+function StudyChatScreen({
+  sessionId,
+  folderId,
+  initialTopic,
+  mode,
+  onBack,
+  onSessionEnded,
+}: StudyChatScreenProps) {
+  const [sessionTopic, setSessionTopic] = useState(initialTopic)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streamingText, setStreamingText] = useState('')
-  const [isStreaming, setIsStreaming] = useState(false)
+  const [isStreaming, setIsStreaming] = useState(mode === 'new')
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
   const streamingTextRef = useRef('')
@@ -58,16 +72,37 @@ function StudyScreen({ onEndSession }: StudyScreenProps) {
   // Focuses the reply textarea as soon as the chat view mounts, so the user
   // can start typing immediately instead of clicking into it first.
   useEffect(() => {
-    if (sessionId) textareaRef.current?.focus()
+    textareaRef.current?.focus()
+  }, [])
+
+  useEffect(() => {
+    if (mode === 'new') {
+      requestOpeningTurn(sessionId, initialTopic).catch((err: unknown) => {
+        setIsStreaming(false)
+        setError(err instanceof Error ? err.message : 'Failed to start the session.')
+      })
+      return
+    }
+    resumeStudySession(sessionId)
+      .then((history) => {
+        setSessionTopic(history.session.topic)
+        setMessages(
+          history.messages.map((message) => ({
+            role: message.role as ChatMessage['role'],
+            content: message.content,
+          })),
+        )
+      })
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : 'Failed to load the session.')
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId])
 
-  // Subscribed once on mount, not gated on sessionId: the "study:chunk"/
-  // "study:done" events for a session's opening turn are emitted by the Go
-  // binding *before* StartStudySession's own promise resolves (it blocks
-  // until the whole stream finishes, then returns). Subscribing only after
-  // sessionId is set — which happens only once that promise resolves —
-  // would always miss the opening turn's events entirely, leaving
-  // isStreaming stuck true and the send button permanently disabled.
+  // Subscribed on mount, not gated on any streaming flag: the
+  // "study:chunk"/"study:done" events for a session's opening turn are
+  // emitted by the Go binding *before* requestOpeningTurn's own promise
+  // resolves (it blocks until the whole stream finishes, then returns).
   useEffect(() => {
     const offChunk = onStudyChunk((chunk) => {
       streamingTextRef.current += chunk
@@ -97,29 +132,9 @@ function StudyScreen({ onEndSession }: StudyScreenProps) {
     }
   }, [])
 
-  async function handleStart() {
-    const trimmedTopic = topic.trim()
-    if (!trimmedTopic) return
-    setError(null)
-    setIsStreaming(true)
-    try {
-      const session = await startStudySession(trimmedTopic)
-      // Switch to the chat view as soon as the (fast, non-streaming)
-      // session is created — before requesting the opening turn — so the
-      // streaming reply is actually visible instead of the whole response
-      // appearing at once after a long wait.
-      setSessionId(session.id)
-      setSessionTopic(session.topic)
-      await requestOpeningTurn(session.id, session.topic)
-    } catch (err) {
-      setIsStreaming(false)
-      setError(err instanceof Error ? err.message : 'Failed to start the session.')
-    }
-  }
-
   async function handleSend() {
     const content = draft.trim()
-    if (!sessionId || !content) return
+    if (!content) return
     setMessages((previous) => [...previous, { role: 'user', content }])
     setDraft('')
     setError(null)
@@ -155,36 +170,23 @@ function StudyScreen({ onEndSession }: StudyScreenProps) {
   }
 
   async function handleEnd() {
-    if (sessionId) await endStudySession(sessionId)
-    onEndSession?.()
-  }
-
-  if (!sessionId) {
-    return (
-      <div className="m-auto flex w-full max-w-md flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="study-topic">What do you want to study today?</Label>
-          <Input
-            id="study-topic"
-            value={topic}
-            onChange={(event) => setTopic(event.target.value)}
-            placeholder="e.g. Distributed systems"
-          />
-        </div>
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-        <Button disabled={!topic.trim() || isStreaming} onClick={() => void handleStart()}>
-          Start session
-        </Button>
-      </div>
-    )
+    await endStudySession(sessionId)
+    onSessionEnded(sessionId, folderId)
   }
 
   return (
-    <div className="flex h-full w-full flex-col gap-4">
+    <div className="flex h-full w-full flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon-sm" aria-label="Back to folders" onClick={onBack}>
+              <ArrowLeft className="size-4" aria-hidden="true" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Back to folders</TooltipContent>
+        </Tooltip>
+        <h2 className="truncate text-sm font-semibold text-foreground">{sessionTopic}</h2>
+      </div>
       <div className="flex flex-1 flex-col gap-3 overflow-y-auto">
         {messages.map((message, index) => (
           <MessageBubble key={index} role={message.role} content={message.content} />
@@ -229,7 +231,8 @@ function StudyScreen({ onEndSession }: StudyScreenProps) {
               <AlertDialogHeader>
                 <AlertDialogTitle>End this session?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Your conversation will be cleared from the screen. This can&apos;t be undone.
+                  It&apos;ll be saved to its folder. You can reopen it from the sidebar anytime and
+                  keep chatting.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -261,4 +264,4 @@ function StudyScreen({ onEndSession }: StudyScreenProps) {
   )
 }
 
-export default StudyScreen
+export default StudyChatScreen

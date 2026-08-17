@@ -12,18 +12,28 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   HasOpenRouterKey: vi.fn().mockResolvedValue(true),
 }))
 
-// StudyScreen subscribes to study events as soon as it mounts (see
-// StudyScreen.tsx), so rendering it here — even without starting a session —
-// needs this mocked, or it reaches the real (unavailable in jsdom) Wails
-// runtime.
+// The Study section's sidebar tree (StudyFolderTree) fetches folders as
+// soon as it mounts, and StudyChatScreen subscribes to study events as soon
+// as it mounts — both need mocking here, or they reach the real
+// (unavailable in jsdom) Wails runtime.
 vi.mock('@/lib/study', () => ({
   startStudySession: vi.fn(),
   requestOpeningTurn: vi.fn(),
   sendStudyMessage: vi.fn(),
   endStudySession: vi.fn(),
+  resumeStudySession: vi.fn(),
+  moveStudySession: vi.fn(),
+  listStudySessionsByFolder: vi.fn(),
   onStudyChunk: vi.fn(() => vi.fn()),
   onStudyDone: vi.fn(() => vi.fn()),
   onStudyError: vi.fn(() => vi.fn()),
+}))
+
+vi.mock('@/lib/folder', () => ({
+  listFolders: vi.fn().mockResolvedValue([{ id: 'default', name: 'General', isDefault: true }]),
+  createFolder: vi.fn(),
+  renameFolder: vi.fn(),
+  deleteFolder: vi.fn(),
 }))
 
 const profileResult = {
@@ -96,9 +106,27 @@ describe('AppShell', () => {
     // When starting a study session from the CTA
     await user.click(screen.getByRole('button', { name: 'Start a study session' }))
 
-    // Then it lands on the real Study screen (topic selection), not a
-    // locked coming-soon panel
-    expect(screen.getByLabelText(/study today/i)).toBeInTheDocument()
+    // Then it lands on the real Study screen (the empty state, since no
+    // session is open yet — creating one now happens from the sidebar tree),
+    // not a locked coming-soon panel
+    expect(screen.getByText('No session open')).toBeInTheDocument()
+  })
+
+  it('shows the folder tree in the sidebar only while on the Study section', async () => {
+    // Given the app shell mounts on Home, with one folder available
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+
+    // Then the tree is not shown yet
+    expect(screen.queryByText('New folder')).not.toBeInTheDocument()
+
+    // When selecting Study
+    await user.click(screen.getByRole('button', { name: 'Study' }))
+
+    // Then the tree appears, listing the fetched folder
+    expect(await screen.findByText('General')).toBeInTheDocument()
+    expect(screen.getByText('New folder')).toBeInTheDocument()
   })
 
   it("shows the account's name in the sidebar footer", async () => {

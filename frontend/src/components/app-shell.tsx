@@ -1,17 +1,28 @@
-import { useEffect, useState } from 'react'
-import { LogOut } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { BookOpen, LogOut } from 'lucide-react'
 import { Logout } from '../../wailsjs/go/desktop/App'
 import { AthenaLogo } from '@/components/athena-logo'
 import { NavItem } from '@/components/nav-item'
 import { ComingSoonPanel } from '@/components/coming-soon-panel'
+import { StudyFolderTree, type StudyFolderTreeHandle } from '@/components/study-folder-tree'
 import HomeScreen from '@/screens/HomeScreen'
-import StudyScreen from '@/screens/StudyScreen'
+import StudyChatScreen from '@/screens/StudyChatScreen'
 import SettingsScreen from '@/screens/SettingsScreen'
 import { NAVIGATION, type AppSection } from '@/lib/navigation'
 import { getUserProfile, type ProfileDraft } from '@/lib/profile'
+import type { StudySession } from '@/lib/study'
 
 interface AppShellProps {
   onLogout: () => void
+}
+
+interface ActiveStudySession {
+  id: string
+  folderId: string
+  topic: string
+  // 'new' sessions request the opening turn; 'resume' sessions (picked from
+  // the sidebar tree) load their prior history instead.
+  mode: 'new' | 'resume'
 }
 
 const PRIMARY_ITEMS = NAVIGATION.filter((item) => item.group === 'primary')
@@ -22,9 +33,17 @@ const FOOTER_ITEMS = NAVIGATION.filter((item) => item.group === 'footer')
 // one — most locked — so later phases only flip a status flag in
 // lib/navigation.ts instead of redesigning navigation. See
 // specs/phases/phase-01-desktop-mvp/03-home-screen.md.
+//
+// The Study section's folders/sessions live in the sidebar as an
+// explorer-style tree (StudyFolderTree) rather than a separate list screen —
+// this component owns which session is open so the tree (rail) and the chat
+// view (main pane) can stay in sync. See
+// specs/phases/phase-01-desktop-mvp/10-study-folders.md.
 function AppShell({ onLogout }: AppShellProps) {
   const [section, setSection] = useState<AppSection>('home')
   const [profile, setProfile] = useState<ProfileDraft | null>(null)
+  const [activeSession, setActiveSession] = useState<ActiveStudySession | null>(null)
+  const studyTreeRef = useRef<StudyFolderTreeHandle>(null)
 
   useEffect(() => {
     void getUserProfile().then(setProfile)
@@ -38,6 +57,29 @@ function AppShell({ onLogout }: AppShellProps) {
     onLogout()
   }
 
+  function handleSelectSession(session: StudySession) {
+    setActiveSession({
+      id: session.id,
+      folderId: session.folderId,
+      topic: session.topic,
+      mode: 'resume',
+    })
+  }
+
+  function handleSessionStarted(session: StudySession) {
+    setActiveSession({
+      id: session.id,
+      folderId: session.folderId,
+      topic: session.topic,
+      mode: 'new',
+    })
+  }
+
+  function handleSessionEnded(_sessionId: string, folderId: string) {
+    studyTreeRef.current?.refreshFolder(folderId)
+    setActiveSession(null)
+  }
+
   return (
     <div className="flex h-screen">
       <nav className="flex w-56 flex-col border-r border-border bg-card p-3">
@@ -48,9 +90,19 @@ function AppShell({ onLogout }: AppShellProps) {
           </span>
         </div>
 
-        <div className="mt-2 flex flex-1 flex-col gap-0.5">
+        <div className="mt-2 flex flex-1 flex-col gap-0.5 overflow-y-auto">
           {PRIMARY_ITEMS.map((item) => (
-            <NavItem key={item.id} item={item} active={item.id === section} onSelect={setSection} />
+            <div key={item.id}>
+              <NavItem item={item} active={item.id === section} onSelect={setSection} />
+              {item.id === 'study' && section === 'study' && (
+                <StudyFolderTree
+                  ref={studyTreeRef}
+                  selectedSessionId={activeSession?.id ?? null}
+                  onSelectSession={handleSelectSession}
+                  onSessionStarted={handleSessionStarted}
+                />
+              )}
+            </div>
           ))}
         </div>
 
@@ -92,7 +144,25 @@ function AppShell({ onLogout }: AppShellProps) {
               onStartStudy={() => setSection('study')}
             />
           ) : section === 'study' ? (
-            <StudyScreen onEndSession={() => setSection('home')} />
+            activeSession ? (
+              <StudyChatScreen
+                key={activeSession.id}
+                sessionId={activeSession.id}
+                folderId={activeSession.folderId}
+                initialTopic={activeSession.topic}
+                mode={activeSession.mode}
+                onBack={() => setActiveSession(null)}
+                onSessionEnded={handleSessionEnded}
+              />
+            ) : (
+              <div className="m-auto flex flex-col items-center gap-2 text-center">
+                <BookOpen className="size-8 text-muted-foreground" aria-hidden="true" />
+                <p className="text-sm font-semibold text-foreground">No session open</p>
+                <p className="max-w-64 text-sm text-muted-foreground">
+                  Pick one from the tree on the left, or start a new one inside a folder.
+                </p>
+              </div>
+            )
           ) : section === 'settings' && profile ? (
             <SettingsScreen profile={profile} onProfileUpdated={setProfile} />
           ) : (
