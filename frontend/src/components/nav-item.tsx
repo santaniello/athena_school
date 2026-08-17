@@ -22,7 +22,7 @@ function NavItem({ item, active, onSelect }: NavItemProps) {
       aria-current={active ? 'page' : undefined}
       onClick={() => onSelect(item.id)}
       className={cn(
-        'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors',
+        'flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors',
         locked ? 'opacity-60 hover:bg-accent/40' : 'hover:bg-accent hover:text-accent-foreground',
         active && 'bg-primary/10 text-foreground',
       )}

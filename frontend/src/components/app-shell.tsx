@@ -71,7 +71,7 @@ function AppShell({ onLogout }: AppShellProps) {
             type="button"
             aria-label="Log out"
             onClick={() => void handleLogout()}
-            className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+            className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
           >
             <LogOut className="size-4" aria-hidden="true" />
           </button>
