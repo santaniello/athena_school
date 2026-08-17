@@ -80,6 +80,63 @@ func TestOpen_createsMessagesTable(t *testing.T) {
 	assert.Equal(t, "messages", tableName)
 }
 
+func TestOpen_createsFoldersTable(t *testing.T) {
+	// Given a path to a database file that does not exist yet
+	path := filepath.Join(t.TempDir(), "athena.db")
+
+	// When opening the database
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Then the folders table exists
+	var tableName string
+	queryErr := db.QueryRow(
+		`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'folders'`,
+	).Scan(&tableName)
+	require.NoError(t, queryErr)
+	assert.Equal(t, "folders", tableName)
+}
+
+func TestOpen_seedsDefaultFolder(t *testing.T) {
+	// Given a path to a database file that does not exist yet
+	path := filepath.Join(t.TempDir(), "athena.db")
+
+	// When opening the database
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Then a default folder named "General" is seeded
+	var name string
+	var isDefault bool
+	queryErr := db.QueryRow(
+		`SELECT name, is_default FROM folders WHERE id = 'default'`,
+	).Scan(&name, &isDefault)
+	require.NoError(t, queryErr)
+	assert.Equal(t, "General", name)
+	assert.True(t, isDefault)
+}
+
+func TestOpen_doesNotDuplicateDefaultFolderOnSecondOpen(t *testing.T) {
+	// Given a database that was already opened once
+	path := filepath.Join(t.TempDir(), "athena.db")
+	first, err := Open(path)
+	require.NoError(t, err)
+	require.NoError(t, first.Close())
+
+	// When opening the same database file again
+	second, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = second.Close() }()
+
+	// Then the default folder still exists exactly once
+	var count int
+	queryErr := second.QueryRow(`SELECT COUNT(*) FROM folders WHERE id = 'default'`).Scan(&count)
+	require.NoError(t, queryErr)
+	assert.Equal(t, 1, count)
+}
+
 func TestOpen_isNoOpOnSecondOpenAndKeepsExistingData(t *testing.T) {
 	// Given a database that was already opened once and has a row in it
 	path := filepath.Join(t.TempDir(), "athena.db")

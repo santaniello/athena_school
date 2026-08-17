@@ -20,7 +20,7 @@ func Open(path string) (*sql.DB, error) {
 		return nil, fmt.Errorf("sqlite: opening database: %w", err)
 	}
 	for _, migration := range migrations {
-		if _, err := db.Exec(migration); err != nil {
+		if err := migration(db); err != nil {
 			return nil, errors.Join(
 				fmt.Errorf("sqlite: applying migration: %w", err),
 				db.Close(),
