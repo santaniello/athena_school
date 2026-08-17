@@ -43,15 +43,9 @@ function setupSubscriptions() {
   return handlers
 }
 
-function renderNewSession(props?: { onBack?: () => void }) {
+function renderNewSession() {
   return render(
-    <StudyChatScreen
-      sessionId="session-1"
-      initialTopic="Distributed systems"
-      folderName="System Design"
-      mode="new"
-      onBack={props?.onBack ?? vi.fn()}
-    />,
+    <StudyChatScreen sessionId="session-1" initialTopic="Distributed systems" mode="new" />,
   )
 }
 
@@ -173,21 +167,21 @@ describe('StudyChatScreen — resuming a session', () => {
     })
 
     // When the chat screen mounts in "resume" mode
+    const onTopicResolved = vi.fn()
     render(
       <StudyChatScreen
         sessionId="session-1"
         initialTopic=""
-        folderName="System Design"
         mode="resume"
-        onBack={vi.fn()}
+        onTopicResolved={onTopicResolved}
       />,
     )
 
-    // Then its history is loaded and shown, the real topic is hydrated, and
-    // no opening turn is requested
+    // Then its history is loaded and shown, the real topic is reported to
+    // the caller, and no opening turn is requested
     expect(await screen.findByText('Hi')).toBeInTheDocument()
     expect(screen.getByText('Hello!')).toBeInTheDocument()
-    expect(screen.getByText('Cache invalidation')).toBeInTheDocument()
+    expect(onTopicResolved).toHaveBeenCalledWith('Cache invalidation')
     expect(requestOpeningTurn).not.toHaveBeenCalled()
   })
 
@@ -197,15 +191,7 @@ describe('StudyChatScreen — resuming a session', () => {
     vi.mocked(resumeStudySession).mockRejectedValueOnce(new Error('session not found'))
 
     // When the chat screen mounts in "resume" mode
-    render(
-      <StudyChatScreen
-        sessionId="session-1"
-        initialTopic=""
-        folderName="System Design"
-        mode="resume"
-        onBack={vi.fn()}
-      />,
-    )
+    render(<StudyChatScreen sessionId="session-1" initialTopic="" mode="resume" />)
 
     // Then the error is shown
     expect(await screen.findByText('session not found')).toBeInTheDocument()
@@ -369,26 +355,6 @@ describe('StudyChatScreen — composing and sending', () => {
 })
 
 describe('StudyChatScreen — navigation', () => {
-  it('calls onBack when the back button is clicked', async () => {
-    setupSubscriptions()
-    vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
-    const onBack = vi.fn()
-    const user = userEvent.setup()
-    renderNewSession({ onBack })
-    await screen.findByRole('status', { name: /thinking/i })
-
-    await user.click(screen.getByRole('button', { name: 'Back to folders' }))
-
-    expect(onBack).toHaveBeenCalledOnce()
-  })
-
-  it('shows a "Study / <folder>" breadcrumb above the session title', async () => {
-    await renderStartedSession()
-
-    expect(screen.getByText('Study / System Design')).toBeInTheDocument()
-    expect(screen.getByText('Distributed systems')).toBeInTheDocument()
-  })
-
   it('shows a tooltip explaining the send icon button', async () => {
     await renderSettledSession()
     const user = userEvent.setup()

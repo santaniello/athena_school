@@ -78,6 +78,10 @@ function AppShell({ onLogout }: AppShellProps) {
     setActiveSession((current) => (current?.id === sessionId ? null : current))
   }
 
+  function handleTopicResolved(topic: string) {
+    setActiveSession((current) => (current ? { ...current, topic } : current))
+  }
+
   return (
     <div className="flex h-screen">
       <nav className="flex w-56 flex-col border-r border-border bg-card p-3">
@@ -132,10 +136,21 @@ function AppShell({ onLogout }: AppShellProps) {
       </nav>
 
       <div className="flex flex-1 flex-col">
-        <header className="flex h-11 shrink-0 items-center border-b border-border px-6">
-          <h1 className="font-heading text-xs font-bold tracking-[0.14em] text-foreground uppercase">
-            {activeItem.label}
-          </h1>
+        <header className="flex min-h-11 shrink-0 items-center border-b border-border px-6 py-2">
+          {section === 'study' && activeSession ? (
+            <div className="min-w-0">
+              <p className="truncate text-[11px] text-muted-foreground">
+                Study / {activeSession.folderName}
+              </p>
+              <h1 className="font-heading truncate text-base font-bold text-foreground">
+                {activeSession.topic}
+              </h1>
+            </div>
+          ) : (
+            <h1 className="font-heading text-xs font-bold tracking-[0.14em] text-foreground uppercase">
+              {activeItem.label}
+            </h1>
+          )}
         </header>
         <main className="flex flex-1 p-10">
           {section === 'home' ? (
@@ -150,9 +165,8 @@ function AppShell({ onLogout }: AppShellProps) {
                 key={activeSession.id}
                 sessionId={activeSession.id}
                 initialTopic={activeSession.topic}
-                folderName={activeSession.folderName}
                 mode={activeSession.mode}
-                onBack={() => setActiveSession(null)}
+                onTopicResolved={handleTopicResolved}
               />
             ) : (
               <div className="m-auto flex flex-col items-center gap-2 text-center">

@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { GetProfile, Logout, UpdateProfile } from '../../wailsjs/go/desktop/App'
+import { listStudySessionsByFolder, requestOpeningTurn, startStudySession } from '@/lib/study'
+import type { StudySession } from '@/lib/study'
 import { AppShell } from './app-shell'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
@@ -127,6 +129,46 @@ describe('AppShell', () => {
     // Then the tree appears, listing the fetched folder
     expect(await screen.findByText('General')).toBeInTheDocument()
     expect(screen.getByText('New folder')).toBeInTheDocument()
+  })
+
+  it('shows the session title and folder breadcrumb in the topbar, in place of the section label, once a session is open', async () => {
+    // Given the app shell mounts on Study, with a folder ready to hold a
+    // new session
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+    await user.click(screen.getByRole('button', { name: 'Study' }))
+    await screen.findByText('General')
+
+    // Then the topbar still shows the "Study" section label — no session
+    // is open yet
+    expect(screen.getByRole('heading', { name: 'Study', level: 1 })).toBeInTheDocument()
+
+    // When starting a new session inside that folder
+    vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([])
+    const startedSession: StudySession = {
+      id: 'session-1',
+      topic: 'Distributed systems',
+      folderId: 'default',
+      startedAt: '2026-08-17T10:00:00Z',
+    }
+    vi.mocked(startStudySession).mockResolvedValueOnce(startedSession)
+    vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
+    await user.click(screen.getByText('General'))
+    await user.click(await screen.findByText('New session'))
+    await user.type(
+      screen.getByPlaceholderText('What do you want to study?'),
+      'Distributed systems{Enter}',
+    )
+
+    // Then the topbar swaps the section label for the session's breadcrumb
+    // and title — no back arrow, since the sidebar tree is the only way
+    // back to another session
+    expect(await screen.findByText('Study / General')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Distributed systems', level: 1 }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Back to folders' })).not.toBeInTheDocument()
   })
 
   it("shows the account's name in the sidebar footer", async () => {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, KeyboardEvent } from 'react'
-import { ArrowLeft, ArrowUp } from 'lucide-react'
+import { ArrowUp } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -19,11 +19,13 @@ import {
 interface StudyChatScreenProps {
   sessionId: string
   initialTopic: string
-  folderName: string
   // 'new' sessions request the opening turn immediately; 'resume' sessions
   // (picked from the sidebar tree) load their prior history instead.
   mode: 'new' | 'resume'
-  onBack: () => void
+  // Resumed sessions hydrate their real topic from the backend, which may
+  // differ from the sidebar's cached copy — this reports it up so the
+  // AppShell topbar (which owns the title) can stay in sync.
+  onTopicResolved?: (topic: string) => void
 }
 
 interface ChatMessage {
@@ -41,9 +43,8 @@ interface ChatMessage {
 function StudyChatScreen({
   sessionId,
   initialTopic,
-  folderName,
   mode,
-  onBack,
+  onTopicResolved,
 }: StudyChatScreenProps) {
   const [sessionTopic, setSessionTopic] = useState(initialTopic)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -71,6 +72,7 @@ function StudyChatScreen({
     resumeStudySession(sessionId)
       .then((history) => {
         setSessionTopic(history.session.topic)
+        onTopicResolved?.(history.session.topic)
         setMessages(
           history.messages.map((message) => ({
             role: message.role as ChatMessage['role'],
@@ -156,20 +158,6 @@ function StudyChatScreen({
 
   return (
     <div className="flex h-full w-full flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label="Back to folders" onClick={onBack}>
-              <ArrowLeft className="size-4" aria-hidden="true" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Back to folders</TooltipContent>
-        </Tooltip>
-        <div className="min-w-0">
-          <p className="truncate text-[11px] text-muted-foreground">Study / {folderName}</p>
-          <h2 className="truncate text-sm font-semibold text-foreground">{sessionTopic}</h2>
-        </div>
-      </div>
       <div className="flex flex-1 flex-col gap-3 overflow-y-auto">
         {messages.map((message, index) => (
           <MessageBubble key={index} role={message.role} content={message.content} />
