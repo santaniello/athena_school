@@ -47,10 +47,12 @@ CREATE TABLE usage (
 
 ## Tasks
 
-- [ ] `internal/infrastructure/sqlite/` — repository implementations
-- [ ] Migration runner: applies schema on first run, no-op on subsequent runs
-- [ ] Database file: `~/.athena/athena.db`
-- [ ] Repository interfaces defined in `internal/domain/` (not in infrastructure)
+- [x] `internal/infrastructure/sqlite/` — repository implementations
+- [x] Migration runner: applies schema on first run, no-op on subsequent runs
+- [x] Database file: `~/.athena/athena.db`
+- [x] Repository interfaces defined in `internal/domain/` (not in infrastructure)
+
+Delivered as a side effect of phases 1.1 (auth backend) and 1.6 (study mode) — see `internal/infrastructure/sqlite/`, `internal/domain/auth/repository.go`, and `internal/domain/study/repository.go`.
 
 ## Acceptance Criteria
 
