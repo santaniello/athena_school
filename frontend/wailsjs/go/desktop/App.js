@@ -14,10 +14,6 @@ export function DeleteStudySession(arg1) {
   return window['go']['desktop']['App']['DeleteStudySession'](arg1);
 }
 
-export function EndStudySession(arg1) {
-  return window['go']['desktop']['App']['EndStudySession'](arg1);
-}
-
 export function GetProfile() {
   return window['go']['desktop']['App']['GetProfile']();
 }

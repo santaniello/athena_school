@@ -51,7 +51,6 @@ export namespace desktop {
 	    topic: string;
 	    folderId: string;
 	    startedAt: string;
-	    endedAt: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new StudySessionResult(source);
@@ -63,7 +62,6 @@ export namespace desktop {
 	        this.topic = source["topic"];
 	        this.folderId = source["folderId"];
 	        this.startedAt = source["startedAt"];
-	        this.endedAt = source["endedAt"];
 	    }
 	}
 	export class StudySessionHistoryResult {

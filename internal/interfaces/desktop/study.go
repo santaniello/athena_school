@@ -21,7 +21,6 @@ type StudySessionResult struct {
 	Topic     string `json:"topic"`
 	FolderID  string `json:"folderId"`
 	StartedAt string `json:"startedAt"`
-	EndedAt   string `json:"endedAt"` // empty when the session is still open
 }
 
 // StudyMessageResult is the desktop-facing DTO for a single message in a
@@ -40,16 +39,12 @@ type StudySessionHistoryResult struct {
 }
 
 func toStudySessionResult(s domainstudy.Session) StudySessionResult {
-	result := StudySessionResult{
+	return StudySessionResult{
 		ID:        s.ID,
 		Topic:     s.Topic,
 		FolderID:  s.FolderID,
 		StartedAt: s.StartedAt.Format(time.RFC3339),
 	}
-	if !s.EndedAt.IsZero() {
-		result.EndedAt = s.EndedAt.Format(time.RFC3339)
-	}
-	return result
 }
 
 // StartStudySession starts a new study session for topic inside folderID
@@ -65,8 +60,8 @@ func (a *App) StartStudySession(topic, folderID string) (StudySessionResult, err
 	return toStudySessionResult(session), nil
 }
 
-// ResumeStudySession returns sessionID's full message history, reopening
-// it first if it had been ended, so the user can keep chatting in it.
+// ResumeStudySession returns sessionID's full message history, so the user
+// can keep chatting in it.
 func (a *App) ResumeStudySession(sessionID string) (StudySessionHistoryResult, error) {
 	session, history, err := a.study.Resume(a.ctx, sessionID)
 	if err != nil {
@@ -134,13 +129,8 @@ func (a *App) SendStudyMessage(sessionID, topic, content string) error {
 	return nil
 }
 
-// EndStudySession closes sessionID gracefully.
-func (a *App) EndStudySession(sessionID string) error {
-	return a.study.End(a.ctx, sessionID)
-}
-
 // DeleteStudySession permanently deletes sessionID and every message in it.
-// Unlike EndStudySession, this cannot be undone.
+// This cannot be undone.
 func (a *App) DeleteStudySession(sessionID string) error {
 	return a.study.DeleteSession(a.ctx, sessionID)
 }

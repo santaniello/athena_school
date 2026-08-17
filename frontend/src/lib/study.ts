@@ -1,6 +1,5 @@
 import {
   DeleteStudySession,
-  EndStudySession,
   ListStudySessionsByFolder,
   MoveStudySession,
   RequestOpeningTurn,
@@ -15,7 +14,6 @@ export interface StudySession {
   topic: string
   folderId: string
   startedAt: string
-  endedAt: string // empty when the session is still open
 }
 
 export interface StudyMessage {
@@ -34,14 +32,12 @@ function toStudySession(result: {
   topic: string
   folderId: string
   startedAt: string
-  endedAt: string
 }): StudySession {
   return {
     id: result.id,
     topic: result.topic,
     folderId: result.folderId,
     startedAt: result.startedAt,
-    endedAt: result.endedAt,
   }
 }
 
@@ -68,19 +64,14 @@ export async function sendStudyMessage(
   await SendStudyMessage(sessionId, topic, content)
 }
 
-export async function endStudySession(sessionId: string): Promise<void> {
-  await EndStudySession(sessionId)
-}
-
-// deleteStudySession permanently deletes sessionId and every message in
-// it. Unlike endStudySession, this cannot be undone.
+// deleteStudySession permanently deletes sessionId and every message in it.
+// This cannot be undone.
 export async function deleteStudySession(sessionId: string): Promise<void> {
   await DeleteStudySession(sessionId)
 }
 
-// resumeStudySession reopens sessionId if it had been ended and returns its
-// full message history, so the chat view can hydrate from it and let the
-// user keep chatting.
+// resumeStudySession returns sessionId's full message history, so the chat
+// view can hydrate from it and let the user keep chatting.
 export async function resumeStudySession(sessionId: string): Promise<StudySessionHistory> {
   const result = await ResumeStudySession(sessionId)
   return {

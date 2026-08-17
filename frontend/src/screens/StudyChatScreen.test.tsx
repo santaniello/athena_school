@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
-  endStudySession,
   onStudyChunk,
   onStudyDone,
   onStudyError,
@@ -16,7 +15,6 @@ vi.mock('@/lib/study', () => ({
   requestOpeningTurn: vi.fn(),
   resumeStudySession: vi.fn(),
   sendStudyMessage: vi.fn(),
-  endStudySession: vi.fn(),
   onStudyChunk: vi.fn(),
   onStudyDone: vi.fn(),
   onStudyError: vi.fn(),
@@ -45,18 +43,13 @@ function setupSubscriptions() {
   return handlers
 }
 
-function renderNewSession(props?: {
-  onBack?: () => void
-  onSessionEnded?: (sessionId: string, folderId: string) => void
-}) {
+function renderNewSession(props?: { onBack?: () => void }) {
   return render(
     <StudyChatScreen
       sessionId="session-1"
-      folderId="folder-1"
       initialTopic="Distributed systems"
       mode="new"
       onBack={props?.onBack ?? vi.fn()}
-      onSessionEnded={props?.onSessionEnded ?? vi.fn()}
     />,
   )
 }
@@ -171,7 +164,6 @@ describe('StudyChatScreen — resuming a session', () => {
         topic: 'Cache invalidation',
         folderId: 'folder-1',
         startedAt: '2026-08-16T10:00:00Z',
-        endedAt: '',
       },
       messages: [
         { role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z' },
@@ -180,16 +172,7 @@ describe('StudyChatScreen — resuming a session', () => {
     })
 
     // When the chat screen mounts in "resume" mode
-    render(
-      <StudyChatScreen
-        sessionId="session-1"
-        folderId="folder-1"
-        initialTopic=""
-        mode="resume"
-        onBack={vi.fn()}
-        onSessionEnded={vi.fn()}
-      />,
-    )
+    render(<StudyChatScreen sessionId="session-1" initialTopic="" mode="resume" onBack={vi.fn()} />)
 
     // Then its history is loaded and shown, the real topic is hydrated, and
     // no opening turn is requested
@@ -205,16 +188,7 @@ describe('StudyChatScreen — resuming a session', () => {
     vi.mocked(resumeStudySession).mockRejectedValueOnce(new Error('session not found'))
 
     // When the chat screen mounts in "resume" mode
-    render(
-      <StudyChatScreen
-        sessionId="session-1"
-        folderId="folder-1"
-        initialTopic=""
-        mode="resume"
-        onBack={vi.fn()}
-        onSessionEnded={vi.fn()}
-      />,
-    )
+    render(<StudyChatScreen sessionId="session-1" initialTopic="" mode="resume" onBack={vi.fn()} />)
 
     // Then the error is shown
     expect(await screen.findByText('session not found')).toBeInTheDocument()
@@ -391,69 +365,11 @@ describe('StudyChatScreen — navigation', () => {
     expect(onBack).toHaveBeenCalledOnce()
   })
 
-  it('renders the end-session button as a solid red circle with a white icon', async () => {
-    await renderStartedSession()
-
-    const endButton = screen.getByRole('button', { name: 'End session' })
-    expect(endButton).toHaveClass('rounded-full')
-    expect(endButton).toHaveClass('bg-destructive')
-    expect(endButton).toHaveClass('text-white')
-  })
-
-  it('ends the session and notifies the caller with the sessionId and folderId', async () => {
-    setupSubscriptions()
-    vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
-    vi.mocked(endStudySession).mockResolvedValueOnce()
-    const onSessionEnded = vi.fn()
-    const user = userEvent.setup()
-    renderNewSession({ onSessionEnded })
-    await screen.findByRole('status', { name: /thinking/i })
-
-    // When ending the session and confirming the dialog
-    await user.click(screen.getByRole('button', { name: 'End session' }))
-    await user.click(await screen.findByRole('button', { name: 'Yes, end session' }))
-
-    // Then it closed the session and notified the caller — the confirm
-    // dialog no longer claims this is irreversible, since reopening a
-    // session from the sidebar tree is exactly that
-    expect(endStudySession).toHaveBeenCalledWith('session-1')
-    expect(onSessionEnded).toHaveBeenCalledWith('session-1', 'folder-1')
-  })
-
-  it('shows non-destructive copy in the end-session confirmation', async () => {
-    await renderStartedSession()
-    const user = userEvent.setup()
-
-    await user.click(screen.getByRole('button', { name: 'End session' }))
-
-    expect(
-      await screen.findByText(/you can reopen it from the sidebar anytime/i),
-    ).toBeInTheDocument()
-  })
-
-  it('does not end the session when the confirmation is cancelled', async () => {
-    setupSubscriptions()
-    vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
-    const onSessionEnded = vi.fn()
-    const user = userEvent.setup()
-    renderNewSession({ onSessionEnded })
-    await screen.findByRole('status', { name: /thinking/i })
-
-    await user.click(screen.getByRole('button', { name: 'End session' }))
-    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
-
-    expect(endStudySession).not.toHaveBeenCalled()
-    expect(onSessionEnded).not.toHaveBeenCalled()
-  })
-
-  it('shows tooltips explaining the send and end-session icon buttons', async () => {
+  it('shows a tooltip explaining the send icon button', async () => {
     await renderSettledSession()
     const user = userEvent.setup()
 
     await user.hover(screen.getByRole('button', { name: 'Send' }))
     expect(await screen.findByText('Send message')).toBeInTheDocument()
-
-    await user.hover(screen.getByRole('button', { name: 'End session' }))
-    expect(await screen.findByText('End session')).toBeInTheDocument()
   })
 })

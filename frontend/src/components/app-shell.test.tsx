@@ -20,7 +20,6 @@ vi.mock('@/lib/study', () => ({
   startStudySession: vi.fn(),
   requestOpeningTurn: vi.fn(),
   sendStudyMessage: vi.fn(),
-  endStudySession: vi.fn(),
   deleteStudySession: vi.fn(),
   resumeStudySession: vi.fn(),
   moveStudySession: vi.fn(),

@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   DeleteStudySession,
-  EndStudySession,
   ListStudySessionsByFolder,
   MoveStudySession,
   RequestOpeningTurn,
@@ -12,7 +11,6 @@ import {
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import {
   deleteStudySession,
-  endStudySession,
   listStudySessionsByFolder,
   moveStudySession,
   onStudyChunk,
@@ -28,7 +26,6 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   StartStudySession: vi.fn(),
   RequestOpeningTurn: vi.fn(),
   SendStudyMessage: vi.fn(),
-  EndStudySession: vi.fn(),
   DeleteStudySession: vi.fn(),
   ResumeStudySession: vi.fn(),
   MoveStudySession: vi.fn(),
@@ -47,7 +44,6 @@ describe('startStudySession', () => {
       topic: 'Distributed systems',
       folderId: 'folder-1',
       startedAt: '2026-08-16T10:00:00Z',
-      endedAt: '',
     } as never)
 
     // When starting a study session in a folder
@@ -60,7 +56,6 @@ describe('startStudySession', () => {
       topic: 'Distributed systems',
       folderId: 'folder-1',
       startedAt: '2026-08-16T10:00:00Z',
-      endedAt: '',
     })
   })
 
@@ -71,7 +66,6 @@ describe('startStudySession', () => {
       topic: 'Distributed systems',
       folderId: 'default',
       startedAt: '2026-08-16T10:00:00Z',
-      endedAt: '',
     } as never)
 
     // When starting a session without specifying a folder
@@ -84,7 +78,7 @@ describe('startStudySession', () => {
 })
 
 describe('resumeStudySession', () => {
-  it('returns the reopened session and its full history', async () => {
+  it('returns the session and its full history', async () => {
     // Given a ResumeStudySession call that succeeds
     vi.mocked(ResumeStudySession).mockResolvedValueOnce({
       session: {
@@ -92,7 +86,6 @@ describe('resumeStudySession', () => {
         topic: 'Distributed systems',
         folderId: 'folder-1',
         startedAt: '2026-08-16T10:00:00Z',
-        endedAt: '',
       },
       messages: [{ role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z' }],
     } as never)
@@ -131,14 +124,12 @@ describe('listStudySessionsByFolder', () => {
         topic: 'Cache invalidation',
         folderId: 'folder-1',
         startedAt: '2026-08-16T10:00:00Z',
-        endedAt: '',
       },
       {
         id: 's-2',
         topic: 'Concurrency patterns',
         folderId: 'folder-1',
         startedAt: '2026-08-15T10:00:00Z',
-        endedAt: '2026-08-15T11:00:00Z',
       },
     ] as never)
 
@@ -148,7 +139,6 @@ describe('listStudySessionsByFolder', () => {
     // Then it forwarded the folderId and returned every session
     expect(ListStudySessionsByFolder).toHaveBeenCalledWith('folder-1')
     expect(sessions).toHaveLength(2)
-    expect(sessions[1].endedAt).toBe('2026-08-15T11:00:00Z')
   })
 })
 
@@ -179,19 +169,6 @@ describe('sendStudyMessage', () => {
       'Distributed systems',
       'What is CAP theorem?',
     )
-  })
-})
-
-describe('endStudySession', () => {
-  it('forwards the sessionId', async () => {
-    // Given an EndStudySession call that succeeds
-    vi.mocked(EndStudySession).mockResolvedValueOnce()
-
-    // When ending a session
-    await endStudySession('session-1')
-
-    // Then it forwarded the sessionId
-    expect(EndStudySession).toHaveBeenCalledWith('session-1')
   })
 })
 

@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BookOpen, LogOut } from 'lucide-react'
 import { Logout } from '../../wailsjs/go/desktop/App'
 import { AthenaLogo } from '@/components/athena-logo'
 import { NavItem } from '@/components/nav-item'
 import { ComingSoonPanel } from '@/components/coming-soon-panel'
-import { StudyFolderTree, type StudyFolderTreeHandle } from '@/components/study-folder-tree'
+import { StudyFolderTree } from '@/components/study-folder-tree'
 import HomeScreen from '@/screens/HomeScreen'
 import StudyChatScreen from '@/screens/StudyChatScreen'
 import SettingsScreen from '@/screens/SettingsScreen'
@@ -18,7 +18,6 @@ interface AppShellProps {
 
 interface ActiveStudySession {
   id: string
-  folderId: string
   topic: string
   // 'new' sessions request the opening turn; 'resume' sessions (picked from
   // the sidebar tree) load their prior history instead.
@@ -43,7 +42,6 @@ function AppShell({ onLogout }: AppShellProps) {
   const [section, setSection] = useState<AppSection>('home')
   const [profile, setProfile] = useState<ProfileDraft | null>(null)
   const [activeSession, setActiveSession] = useState<ActiveStudySession | null>(null)
-  const studyTreeRef = useRef<StudyFolderTreeHandle>(null)
 
   useEffect(() => {
     void getUserProfile().then(setProfile)
@@ -60,7 +58,6 @@ function AppShell({ onLogout }: AppShellProps) {
   function handleSelectSession(session: StudySession) {
     setActiveSession({
       id: session.id,
-      folderId: session.folderId,
       topic: session.topic,
       mode: 'resume',
     })
@@ -69,15 +66,9 @@ function AppShell({ onLogout }: AppShellProps) {
   function handleSessionStarted(session: StudySession) {
     setActiveSession({
       id: session.id,
-      folderId: session.folderId,
       topic: session.topic,
       mode: 'new',
     })
-  }
-
-  function handleSessionEnded(_sessionId: string, folderId: string) {
-    studyTreeRef.current?.refreshFolder(folderId)
-    setActiveSession(null)
   }
 
   function handleSessionDeleted(sessionId: string) {
@@ -103,7 +94,6 @@ function AppShell({ onLogout }: AppShellProps) {
               <NavItem item={item} active={item.id === section} onSelect={setSection} />
               {item.id === 'study' && section === 'study' && (
                 <StudyFolderTree
-                  ref={studyTreeRef}
                   selectedSessionId={activeSession?.id ?? null}
                   onSelectSession={handleSelectSession}
                   onSessionStarted={handleSessionStarted}
@@ -156,11 +146,9 @@ function AppShell({ onLogout }: AppShellProps) {
               <StudyChatScreen
                 key={activeSession.id}
                 sessionId={activeSession.id}
-                folderId={activeSession.folderId}
                 initialTopic={activeSession.topic}
                 mode={activeSession.mode}
                 onBack={() => setActiveSession(null)}
-                onSessionEnded={handleSessionEnded}
               />
             ) : (
               <div className="m-auto flex flex-col items-center gap-2 text-center">

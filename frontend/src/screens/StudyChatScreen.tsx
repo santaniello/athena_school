@@ -1,25 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, KeyboardEvent } from 'react'
-import { ArrowLeft, ArrowUp, X } from 'lucide-react'
+import { ArrowLeft, ArrowUp } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { MessageBubble } from '@/components/message-bubble'
 import { ThinkingIndicator } from '@/components/thinking-indicator'
 import {
-  endStudySession,
   onStudyChunk,
   onStudyDone,
   onStudyError,
@@ -30,14 +18,11 @@ import {
 
 interface StudyChatScreenProps {
   sessionId: string
-  folderId: string
   initialTopic: string
   // 'new' sessions request the opening turn immediately; 'resume' sessions
-  // (picked from the sidebar tree) load their prior history instead, and
-  // are reopened by the backend if they had been ended.
+  // (picked from the sidebar tree) load their prior history instead.
   mode: 'new' | 'resume'
   onBack: () => void
-  onSessionEnded: (sessionId: string, folderId: string) => void
 }
 
 interface ChatMessage {
@@ -52,14 +37,7 @@ interface ChatMessage {
 // session already exists, either freshly started or resumed from history.
 // See specs/phases/phase-01-desktop-mvp/06-study-mode.md and
 // specs/phases/phase-01-desktop-mvp/10-study-folders.md.
-function StudyChatScreen({
-  sessionId,
-  folderId,
-  initialTopic,
-  mode,
-  onBack,
-  onSessionEnded,
-}: StudyChatScreenProps) {
+function StudyChatScreen({ sessionId, initialTopic, mode, onBack }: StudyChatScreenProps) {
   const [sessionTopic, setSessionTopic] = useState(initialTopic)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streamingText, setStreamingText] = useState('')
@@ -169,11 +147,6 @@ function StudyChatScreen({
     void handleSend()
   }
 
-  async function handleEnd() {
-    await endStudySession(sessionId)
-    onSessionEnded(sessionId, folderId)
-  }
-
   return (
     <div className="flex h-full w-full flex-col gap-3">
       <div className="flex items-center gap-2">
@@ -210,40 +183,6 @@ function StudyChatScreen({
           placeholder="Type your answer..."
           className="min-h-24 max-h-[200px] resize-none overflow-y-auto pb-11"
         />
-        <div className="absolute bottom-2 left-2">
-          <AlertDialog>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="End session"
-                    className="rounded-full bg-destructive text-white hover:bg-destructive/90 hover:text-white"
-                  >
-                    <X className="size-4" aria-hidden="true" />
-                  </Button>
-                </AlertDialogTrigger>
-              </TooltipTrigger>
-              <TooltipContent>End session</TooltipContent>
-            </Tooltip>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>End this session?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  It&apos;ll be saved to its folder. You can reopen it from the sidebar anytime and
-                  keep chatting.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => void handleEnd()}>
-                  Yes, end session
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
         <div className="absolute right-2 bottom-2">
           <Tooltip>
             <TooltipTrigger asChild>

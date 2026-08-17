@@ -3,8 +3,8 @@
 ## Goal
 
 Group study sessions into folders (like ChatGPT Projects), persist every session so the user can browse and
-reopen it any time, and navigate that history from an explorer-style tree in the sidebar instead of losing the
-transcript once a session ends.
+resume it any time, and navigate that history from an explorer-style tree in the sidebar instead of losing the
+transcript.
 
 ## Domain
 
@@ -30,7 +30,6 @@ type Session struct {
     Mode      string
     FolderID  string // always populated; falls back to folder.DefaultFolderID
     StartedAt time.Time
-    EndedAt   time.Time
 }
 ```
 
@@ -46,9 +45,6 @@ type Session struct {
   has a real `FolderID`, never null or a virtual "no folder" bucket. `NOT NULL` is enforced at the application
   layer (`Start` always populates `FolderID` before persisting), not the SQLite schema, because SQLite cannot add
   a `NOT NULL` column with a table rebuild to an existing table without one.
-- **Reopening an ended session** clears `EndedAt` and lets the user keep chatting — not read-only. `SendMessage`
-  already never checked `IsOpen()`, so this is purely a `Reopen` repository method plus UI/state changes, no new
-  enforcement.
 - **Folder CRUD is complete in this delivery**: create, rename (including the default folder), delete. Deleting a
   folder reassigns its sessions to the default folder first — sessions are never deleted.
 - **The default folder cannot be deleted** (`ErrCannotDeleteDefaultFolder`), since it must always exist as the
@@ -66,13 +62,13 @@ type Session struct {
 - [x] `internal/domain/folder/` — `Folder`, `Repository` port, sentinel errors
 - [x] `internal/infrastructure/sqlite/` — `folders` table + default-folder seed, `FolderRepository`
 - [x] `internal/domain/study/` — `Session.FolderID`; `SessionRepository` gains `GetByID`, `ListByFolder`,
-      `Reopen`, `MoveToFolder`, `ReassignFolder`
+      `MoveToFolder`, `ReassignFolder`
 - [x] `internal/infrastructure/sqlite/` — `sessions.folder_id` column (conditional `ALTER TABLE` + backfill to
       `default`), `SessionRepository` method implementations
 - [x] `internal/application/folder/` — `CreateFolder`, `RenameFolder`, `DeleteFolder` (reassigns sessions first),
       `ListFolders`
 - [x] `internal/application/study/` — `Start` accepts `folderID` (falls back to `folder.DefaultFolderID`),
-      `Resume` (reopens if needed + loads history), `MoveToFolder`, `ListSessionsByFolder`
+      `Resume` (loads history), `MoveToFolder`, `ListSessionsByFolder`
 - [x] `internal/interfaces/desktop/` — `CreateFolder`/`RenameFolder`/`DeleteFolder`/`ListFolders` bindings;
       `StartStudySession(topic, folderID)`, `ResumeStudySession`, `MoveStudySession`, `ListStudySessionsByFolder`
 - [x] UI: `study-folder-tree.tsx` sidebar component (expand/collapse folders and sessions, create/rename/delete
@@ -89,7 +85,5 @@ type Session struct {
   "General" without deleting them; "General" itself cannot be deleted
 - User can start a new session inside a specific folder from the tree
 - User can move an existing session to a different folder
-- Ended sessions remain visible in the tree and can be reopened — reopening clears `EndedAt` and lets the user
-  keep chatting, loading the full prior transcript first
 - Session history survives an app restart (already true at the SQLite layer; this phase makes it reachable from
   the UI for the first time)

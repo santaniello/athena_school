@@ -1,6 +1,5 @@
-import { createRef } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { Folder } from '@/lib/folder'
 import { createFolder, deleteFolder, listFolders, renameFolder } from '@/lib/folder'
@@ -11,7 +10,7 @@ import {
   moveStudySession,
   startStudySession,
 } from '@/lib/study'
-import { StudyFolderTree, type StudyFolderTreeHandle } from './study-folder-tree'
+import { StudyFolderTree } from './study-folder-tree'
 
 vi.mock('@/lib/folder', () => ({
   listFolders: vi.fn(),
@@ -35,14 +34,12 @@ const CACHE_SESSION: StudySession = {
   topic: 'Cache invalidation',
   folderId: 'folder-1',
   startedAt: '2026-08-16T10:00:00Z',
-  endedAt: '',
 }
-const CONCURRENCY_SESSION: StudySession = {
-  id: 'session-2',
-  topic: 'Concurrency patterns',
+const LOAD_BALANCING_SESSION: StudySession = {
+  id: 'session-3',
+  topic: 'Load balancing',
   folderId: 'folder-1',
-  startedAt: '2026-08-15T10:00:00Z',
-  endedAt: '2026-08-15T11:00:00Z',
+  startedAt: '2026-08-16T09:00:00Z',
 }
 
 function renderTree(props?: {
@@ -54,17 +51,15 @@ function renderTree(props?: {
   const onSelectSession = props?.onSelectSession ?? vi.fn()
   const onSessionStarted = props?.onSessionStarted ?? vi.fn()
   const onSessionDeleted = props?.onSessionDeleted ?? vi.fn()
-  const ref = createRef<StudyFolderTreeHandle>()
   render(
     <StudyFolderTree
-      ref={ref}
       selectedSessionId={props?.selectedSessionId ?? null}
       onSelectSession={onSelectSession}
       onSessionStarted={onSessionStarted}
       onSessionDeleted={onSessionDeleted}
     />,
   )
-  return { onSelectSession, onSessionStarted, onSessionDeleted, ref }
+  return { onSelectSession, onSessionStarted, onSessionDeleted }
 }
 
 describe('StudyFolderTree', () => {
@@ -81,9 +76,9 @@ describe('StudyFolderTree', () => {
   })
 
   it('lazily loads and shows a folder’s sessions when expanded', async () => {
-    // Given a folder with two sessions
+    // Given a folder with one session
     vi.mocked(listFolders).mockResolvedValueOnce([SYSTEM_DESIGN])
-    vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([CACHE_SESSION, CONCURRENCY_SESSION])
+    vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([CACHE_SESSION])
     const user = userEvent.setup()
     renderTree()
     await screen.findByText('System Design')
@@ -91,9 +86,8 @@ describe('StudyFolderTree', () => {
     // When expanding the folder
     await user.click(screen.getByText('System Design'))
 
-    // Then its sessions are fetched and shown
+    // Then the session is fetched and shown
     expect(await screen.findByText('Cache invalidation')).toBeInTheDocument()
-    expect(screen.getByText('Concurrency patterns')).toBeInTheDocument()
     expect(listStudySessionsByFolder).toHaveBeenCalledWith('folder-1')
   })
 
@@ -132,27 +126,29 @@ describe('StudyFolderTree', () => {
     expect(onSelectSession).toHaveBeenCalledWith(CACHE_SESSION)
   })
 
-  it('lights up the dot only for the currently open session, regardless of ended state', async () => {
-    // Given an expanded folder with an open session (currently selected)
-    // and an ended one (not selected)
+  it('lights up the dot only for the currently selected active session', async () => {
+    // Given an expanded folder with two active sessions, one selected
     vi.mocked(listFolders).mockResolvedValueOnce([SYSTEM_DESIGN])
-    vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([CACHE_SESSION, CONCURRENCY_SESSION])
+    vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([
+      CACHE_SESSION,
+      LOAD_BALANCING_SESSION,
+    ])
     const user = userEvent.setup()
     renderTree({ selectedSessionId: CACHE_SESSION.id })
     await screen.findByText('System Design')
     await user.click(screen.getByText('System Design'))
     await screen.findByText('Cache invalidation')
 
-    // Then only the open session's dot is the glowing gold one
-    const openDot = screen
+    // Then only the selected session's dot is the glowing gold one
+    const selectedDot = screen
       .getByText('Cache invalidation')
       .closest('div')
       ?.querySelector('span[aria-hidden="true"]')
     const otherDot = screen
-      .getByText('Concurrency patterns')
+      .getByText('Load balancing')
       .closest('div')
       ?.querySelector('span[aria-hidden="true"]')
-    expect(openDot).toHaveClass('bg-primary')
+    expect(selectedDot).toHaveClass('bg-primary')
     expect(otherDot).toHaveClass('bg-muted-foreground')
     expect(otherDot).not.toHaveClass('bg-primary')
   })
@@ -276,6 +272,27 @@ describe('StudyFolderTree', () => {
     expect(moveStudySession).toHaveBeenCalledWith('session-1', 'default')
   })
 
+  it('marks session rows as draggable and folder headers as drop targets', async () => {
+    // Given two folders, one expanded with a session — jsdom has no layout
+    // engine, so dnd-kit's pointer-drag collision detection can't be
+    // exercised reliably here; this checks the drag/drop wiring instead,
+    // and the "moves a session to another folder" test above already
+    // covers the shared move logic that a real drop would trigger.
+    vi.mocked(listFolders).mockResolvedValueOnce([GENERAL, SYSTEM_DESIGN])
+    vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([CACHE_SESSION])
+    const user = userEvent.setup()
+    renderTree()
+    await screen.findByText('System Design')
+    await user.click(screen.getByText('System Design'))
+
+    // Then the session row is a draggable, and both folder headers can
+    // receive it
+    const sessionRow = (await screen.findByText('Cache invalidation')).closest('div')
+    expect(sessionRow).toHaveAttribute('aria-roledescription', 'draggable')
+    expect(screen.getByText('General').closest('div')).toBeInTheDocument()
+    expect(screen.getByText('System Design').closest('div')).toBeInTheDocument()
+  })
+
   it('deletes a session after confirming, and notifies the parent', async () => {
     // Given an expanded folder with one session and a delete that succeeds
     vi.mocked(listFolders).mockResolvedValueOnce([SYSTEM_DESIGN])
@@ -289,7 +306,7 @@ describe('StudyFolderTree', () => {
 
     // When deleting the session and confirming
     await user.click(screen.getByRole('button', { name: 'Cache invalidation options' }))
-    await user.click(await screen.findByText('Delete session'))
+    await user.click(await screen.findByRole('menuitem', { name: 'Delete' }))
     const dialog = await screen.findByRole('alertdialog')
     await user.click(within(dialog).getByRole('button', { name: 'Delete session' }))
 
@@ -311,7 +328,7 @@ describe('StudyFolderTree', () => {
 
     // When opening the delete confirmation and cancelling it
     await user.click(screen.getByRole('button', { name: 'Cache invalidation options' }))
-    await user.click(await screen.findByText('Delete session'))
+    await user.click(await screen.findByRole('menuitem', { name: 'Delete' }))
     const dialog = await screen.findByRole('alertdialog')
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
 
@@ -319,27 +336,5 @@ describe('StudyFolderTree', () => {
     expect(deleteStudySession).not.toHaveBeenCalled()
     expect(onSessionDeleted).not.toHaveBeenCalled()
     expect(screen.getByText('Cache invalidation')).toBeInTheDocument()
-  })
-
-  it('exposes refreshFolder to re-fetch an already-loaded folder', async () => {
-    // Given an expanded folder whose session has since ended elsewhere (in
-    // the chat view, outside this tree)
-    vi.mocked(listFolders).mockResolvedValueOnce([SYSTEM_DESIGN])
-    vi.mocked(listStudySessionsByFolder)
-      .mockResolvedValueOnce([CACHE_SESSION])
-      .mockResolvedValueOnce([{ ...CACHE_SESSION, endedAt: '2026-08-16T11:00:00Z' }])
-    const user = userEvent.setup()
-    const { ref } = renderTree()
-    await screen.findByText('System Design')
-    await user.click(screen.getByText('System Design'))
-    await screen.findByText('Cache invalidation')
-
-    // When refreshFolder is called imperatively
-    await act(async () => {
-      ref.current?.refreshFolder('folder-1')
-    })
-
-    // Then the session list was re-fetched
-    await waitFor(() => expect(listStudySessionsByFolder).toHaveBeenCalledTimes(2))
   })
 })

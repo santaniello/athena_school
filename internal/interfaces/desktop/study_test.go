@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -207,23 +206,6 @@ func TestApp_SendStudyMessage_emitsErrorEvent_onFailure(t *testing.T) {
 	assert.False(t, captured.done)
 }
 
-func TestApp_EndStudySession_endsTheSession(t *testing.T) {
-	// Given an App backed by a study service that accepts ending the session
-	sessions := studymocks.NewMockSessionRepository(t)
-	messages := studymocks.NewMockMessageRepository(t)
-	llm := llmmocks.NewMockProvider(t)
-	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
-	sessions.EXPECT().End(mock.Anything, "session-1", mock.AnythingOfType("time.Time")).Return(nil).Once()
-	app, _ := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
-
-	// When ending the session
-	err := app.EndStudySession("session-1")
-
-	// Then it succeeds
-	require.NoError(t, err)
-}
-
 func TestApp_DeleteStudySession_deletesTheSession(t *testing.T) {
 	// Given an App backed by a study service that accepts deleting the session
 	sessions := studymocks.NewMockSessionRepository(t)
@@ -242,17 +224,16 @@ func TestApp_DeleteStudySession_deletesTheSession(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestApp_ResumeStudySession_reopensAndReturnsHistory(t *testing.T) {
-	// Given an App backed by a study service with an ended session that has
-	// one prior message
+func TestApp_ResumeStudySession_returnsSessionAndHistory(t *testing.T) {
+	// Given an App backed by a study service with a session that has one
+	// prior message
 	sessions := studymocks.NewMockSessionRepository(t)
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
-	ended := domainstudy.Session{ID: "session-1", Topic: "Distributed systems", FolderID: "default", EndedAt: time.Now().UTC()}
-	sessions.EXPECT().GetByID(mock.Anything, "session-1").Return(ended, nil).Once()
-	sessions.EXPECT().Reopen(mock.Anything, "session-1").Return(nil).Once()
+	session := domainstudy.Session{ID: "session-1", Topic: "Distributed systems", FolderID: "default"}
+	sessions.EXPECT().GetByID(mock.Anything, "session-1").Return(session, nil).Once()
 	messages.EXPECT().
 		ListBySession(mock.Anything, "session-1").
 		Return([]domainstudy.Message{{Role: domainstudy.RoleUser, Content: "Hi"}}, nil).
@@ -262,10 +243,9 @@ func TestApp_ResumeStudySession_reopensAndReturnsHistory(t *testing.T) {
 	// When resuming the session
 	result, err := app.ResumeStudySession("session-1")
 
-	// Then it is reopened (no EndedAt) and its history is returned
+	// Then its session and history are returned
 	require.NoError(t, err)
 	assert.Equal(t, "session-1", result.Session.ID)
-	assert.Empty(t, result.Session.EndedAt)
 	require.Len(t, result.Messages, 1)
 	assert.Equal(t, "Hi", result.Messages[0].Content)
 }

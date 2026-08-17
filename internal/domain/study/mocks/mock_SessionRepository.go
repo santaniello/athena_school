@@ -4,7 +4,6 @@ package mocks
 
 import (
 	context "context"
-	time "time"
 
 	study "github.com/santaniello/athena/internal/domain/study"
 	mock "github.com/stretchr/testify/mock"
@@ -113,54 +112,6 @@ func (_c *MockSessionRepository_Delete_Call) Return(_a0 error) *MockSessionRepos
 }
 
 func (_c *MockSessionRepository_Delete_Call) RunAndReturn(run func(context.Context, string) error) *MockSessionRepository_Delete_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// End provides a mock function with given fields: ctx, id, endedAt
-func (_m *MockSessionRepository) End(ctx context.Context, id string, endedAt time.Time) error {
-	ret := _m.Called(ctx, id, endedAt)
-
-	if len(ret) == 0 {
-		panic("no return value specified for End")
-	}
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, time.Time) error); ok {
-		r0 = rf(ctx, id, endedAt)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// MockSessionRepository_End_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'End'
-type MockSessionRepository_End_Call struct {
-	*mock.Call
-}
-
-// End is a helper method to define mock.On call
-//   - ctx context.Context
-//   - id string
-//   - endedAt time.Time
-func (_e *MockSessionRepository_Expecter) End(ctx interface{}, id interface{}, endedAt interface{}) *MockSessionRepository_End_Call {
-	return &MockSessionRepository_End_Call{Call: _e.mock.On("End", ctx, id, endedAt)}
-}
-
-func (_c *MockSessionRepository_End_Call) Run(run func(ctx context.Context, id string, endedAt time.Time)) *MockSessionRepository_End_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(string), args[2].(time.Time))
-	})
-	return _c
-}
-
-func (_c *MockSessionRepository_End_Call) Return(_a0 error) *MockSessionRepository_End_Call {
-	_c.Call.Return(_a0)
-	return _c
-}
-
-func (_c *MockSessionRepository_End_Call) RunAndReturn(run func(context.Context, string, time.Time) error) *MockSessionRepository_End_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -373,53 +324,6 @@ func (_c *MockSessionRepository_ReassignFolder_Call) Return(_a0 error) *MockSess
 }
 
 func (_c *MockSessionRepository_ReassignFolder_Call) RunAndReturn(run func(context.Context, string, string) error) *MockSessionRepository_ReassignFolder_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// Reopen provides a mock function with given fields: ctx, id
-func (_m *MockSessionRepository) Reopen(ctx context.Context, id string) error {
-	ret := _m.Called(ctx, id)
-
-	if len(ret) == 0 {
-		panic("no return value specified for Reopen")
-	}
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
-		r0 = rf(ctx, id)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// MockSessionRepository_Reopen_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Reopen'
-type MockSessionRepository_Reopen_Call struct {
-	*mock.Call
-}
-
-// Reopen is a helper method to define mock.On call
-//   - ctx context.Context
-//   - id string
-func (_e *MockSessionRepository_Expecter) Reopen(ctx interface{}, id interface{}) *MockSessionRepository_Reopen_Call {
-	return &MockSessionRepository_Reopen_Call{Call: _e.mock.On("Reopen", ctx, id)}
-}
-
-func (_c *MockSessionRepository_Reopen_Call) Run(run func(ctx context.Context, id string)) *MockSessionRepository_Reopen_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(string))
-	})
-	return _c
-}
-
-func (_c *MockSessionRepository_Reopen_Call) Return(_a0 error) *MockSessionRepository_Reopen_Call {
-	_c.Call.Return(_a0)
-	return _c
-}
-
-func (_c *MockSessionRepository_Reopen_Call) RunAndReturn(run func(context.Context, string) error) *MockSessionRepository_Reopen_Call {
 	_c.Call.Return(run)
 	return _c
 }

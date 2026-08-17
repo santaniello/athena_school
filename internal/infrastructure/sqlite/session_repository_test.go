@@ -47,39 +47,6 @@ func TestSessionRepository_Create_storesSession(t *testing.T) {
 	assert.Equal(t, session.FolderID, folderID)
 }
 
-func TestSessionRepository_End_setsEndedAt(t *testing.T) {
-	// Given a repository with an open session
-	repo := newTestSessionRepository(t)
-	ctx := context.Background()
-	session := study.Session{ID: "session-1", Topic: "Topic", Mode: study.ModeStudy, StartedAt: time.Now().UTC()}
-	require.NoError(t, repo.Create(ctx, session))
-	endedAt := time.Now().UTC().Truncate(time.Second)
-
-	// When ending it
-	err := repo.End(ctx, session.ID, endedAt)
-
-	// Then it succeeds and ended_at is stored
-	require.NoError(t, err)
-	var storedEndedAt time.Time
-	queryErr := repo.db.QueryRowContext(ctx,
-		`SELECT ended_at FROM sessions WHERE id = ?`, session.ID,
-	).Scan(&storedEndedAt)
-	require.NoError(t, queryErr)
-	assert.True(t, endedAt.Equal(storedEndedAt))
-}
-
-func TestSessionRepository_End_returnsNotFound_whenSessionDoesNotExist(t *testing.T) {
-	// Given a repository with no sessions
-	repo := newTestSessionRepository(t)
-	ctx := context.Background()
-
-	// When ending a session that does not exist
-	err := repo.End(ctx, "missing-session", time.Now().UTC())
-
-	// Then it fails with ErrSessionNotFound
-	assert.ErrorIs(t, err, study.ErrSessionNotFound)
-}
-
 func TestSessionRepository_GetByID_returnsStoredSession(t *testing.T) {
 	// Given a repository with an existing session
 	repo := newTestSessionRepository(t)
@@ -125,36 +92,6 @@ func TestSessionRepository_ListByFolder_returnsOnlySessionsInThatFolder(t *testi
 	// Then only its two sessions are returned
 	require.NoError(t, err)
 	assert.Len(t, sessions, 2)
-}
-
-func TestSessionRepository_Reopen_clearsEndedAt(t *testing.T) {
-	// Given a repository with an ended session
-	repo := newTestSessionRepository(t)
-	ctx := context.Background()
-	session := study.Session{ID: "session-1", Mode: study.ModeStudy, FolderID: "default", StartedAt: time.Now().UTC()}
-	require.NoError(t, repo.Create(ctx, session))
-	require.NoError(t, repo.End(ctx, session.ID, time.Now().UTC()))
-
-	// When reopening it
-	err := repo.Reopen(ctx, session.ID)
-
-	// Then it is open again
-	require.NoError(t, err)
-	stored, getErr := repo.GetByID(ctx, session.ID)
-	require.NoError(t, getErr)
-	assert.True(t, stored.IsOpen())
-}
-
-func TestSessionRepository_Reopen_returnsNotFound_whenSessionDoesNotExist(t *testing.T) {
-	// Given a repository with no sessions
-	repo := newTestSessionRepository(t)
-	ctx := context.Background()
-
-	// When reopening a session that does not exist
-	err := repo.Reopen(ctx, "missing-session")
-
-	// Then it fails with ErrSessionNotFound
-	assert.ErrorIs(t, err, study.ErrSessionNotFound)
 }
 
 func TestSessionRepository_MoveToFolder_updatesFolderID(t *testing.T) {

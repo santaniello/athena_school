@@ -29,8 +29,7 @@ var migrations = []func(*sql.DB) error{
 		id         TEXT PRIMARY KEY,
 		topic      TEXT,
 		mode       TEXT,
-		started_at DATETIME,
-		ended_at   DATETIME
+		started_at DATETIME
 	)`),
 	execSQL(`CREATE TABLE IF NOT EXISTS messages (
 		id         TEXT PRIMARY KEY,

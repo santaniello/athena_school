@@ -9,8 +9,6 @@ export function DeleteFolder(arg1:string):Promise<void>;
 
 export function DeleteStudySession(arg1:string):Promise<void>;
 
-export function EndStudySession(arg1:string):Promise<void>;
-
 export function GetProfile():Promise<desktop.UserProfileInput>;
 
 export function HasLocalSession():Promise<boolean>;
