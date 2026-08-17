@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
   endStudySession,
@@ -85,6 +85,46 @@ describe('StudyScreen', () => {
     // is still pending
     expect(await screen.findByRole('button', { name: 'End session' })).toBeInTheDocument()
     expect(requestOpeningTurn).toHaveBeenCalledWith('session-1', 'Distributed systems')
+  })
+
+  it('focuses the reply textarea as soon as the chat view opens', async () => {
+    // Given a session about to start
+    setupSubscriptions()
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      startedAt: '2026-08-16T10:00:00Z',
+    })
+    vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
+    const user = userEvent.setup()
+    render(<StudyScreen />)
+    await user.type(screen.getByLabelText(/study today/i), 'Distributed systems')
+
+    // When starting the session
+    await user.click(screen.getByRole('button', { name: 'Start session' }))
+
+    // Then the reply textarea has focus, ready for typing right away
+    await waitFor(() => expect(screen.getByPlaceholderText(/type your answer/i)).toHaveFocus())
+  })
+
+  it('renders the end-session button as a solid red circle with a white icon', async () => {
+    // Given a started session
+    setupSubscriptions()
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      startedAt: '2026-08-16T10:00:00Z',
+    })
+    const user = userEvent.setup()
+    render(<StudyScreen />)
+    await user.type(screen.getByLabelText(/study today/i), 'Distributed systems')
+    await user.click(screen.getByRole('button', { name: 'Start session' }))
+
+    // Then the end-session button carries the solid red circle styling
+    const endButton = await screen.findByRole('button', { name: 'End session' })
+    expect(endButton).toHaveClass('rounded-full')
+    expect(endButton).toHaveClass('bg-destructive')
+    expect(endButton).toHaveClass('text-white')
   })
 
   it('does not lose the opening turn or get stuck disabled when events fire before the call resolves', async () => {

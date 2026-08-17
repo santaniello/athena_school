@@ -52,6 +52,13 @@ function StudyScreen({ onEndSession }: StudyScreenProps) {
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
   const streamingTextRef = useRef('')
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Focuses the reply textarea as soon as the chat view mounts, so the user
+  // can start typing immediately instead of clicking into it first.
+  useEffect(() => {
+    if (sessionId) textareaRef.current?.focus()
+  }, [sessionId])
 
   // Subscribed once on mount, not gated on sessionId: the "study:chunk"/
   // "study:done" events for a session's opening turn are emitted by the Go
@@ -177,6 +184,7 @@ function StudyScreen({ onEndSession }: StudyScreenProps) {
       )}
       <div className="relative">
         <Textarea
+          ref={textareaRef}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={handleDraftKeyDown}
@@ -188,7 +196,12 @@ function StudyScreen({ onEndSession }: StudyScreenProps) {
             <Tooltip>
               <TooltipTrigger asChild>
                 <AlertDialogTrigger asChild>
-                  <Button variant="ghost" size="icon-sm" aria-label="End session">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="End session"
+                    className="rounded-full bg-destructive text-white hover:bg-destructive/90 hover:text-white"
+                  >
                     <X className="size-4" aria-hidden="true" />
                   </Button>
                 </AlertDialogTrigger>
