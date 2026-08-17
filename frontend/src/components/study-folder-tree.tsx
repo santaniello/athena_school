@@ -159,7 +159,7 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
         {folders.map((folder) => (
           <div key={folder.id}>
             <div
-              className="group flex cursor-pointer items-center gap-1.5 rounded-md py-1 pr-1 pl-6 text-xs hover:bg-accent"
+              className="group flex cursor-pointer items-center gap-1.5 rounded-md py-1 pr-3 pl-6 text-xs hover:bg-accent"
               onClick={() => toggleFolder(folder)}
             >
               <ChevronRight
@@ -236,7 +236,7 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
                   <div
                     key={session.id}
                     className={cn(
-                      'group flex cursor-pointer items-center gap-1.5 rounded-md py-1 pr-1 pl-10 text-xs hover:bg-accent',
+                      'group flex cursor-pointer items-center gap-1.5 rounded-md py-1 pr-3 pl-10 text-xs hover:bg-accent',
                       session.id === selectedSessionId && 'bg-secondary',
                     )}
                     onClick={() => onSelectSession(session)}

@@ -90,7 +90,10 @@ function AppShell({ onLogout }: AppShellProps) {
           </span>
         </div>
 
-        <div className="mt-2 flex flex-1 flex-col gap-0.5 overflow-y-auto">
+        <div
+          className="mt-2 flex flex-1 flex-col gap-0.5 overflow-y-auto"
+          style={{ scrollbarGutter: 'stable' }}
+        >
           {PRIMARY_ITEMS.map((item) => (
             <div key={item.id}>
               <NavItem item={item} active={item.id === section} onSelect={setSection} />
