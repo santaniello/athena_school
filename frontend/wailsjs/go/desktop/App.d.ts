@@ -32,3 +32,5 @@ export function SendStudyMessage(arg1:string,arg2:string,arg3:string):Promise<vo
 export function StartStudySession(arg1:string):Promise<desktop.StudySessionResult>;
 
 export function Startup(arg1:context.Context):Promise<void>;
+
+export function UpdateProfile(arg1:desktop.UserProfileInput):Promise<desktop.UserProfileInput>;

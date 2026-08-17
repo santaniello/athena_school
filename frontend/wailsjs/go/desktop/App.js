@@ -61,3 +61,7 @@ export function StartStudySession(arg1) {
 export function Startup(arg1) {
   return window['go']['desktop']['App']['Startup'](arg1);
 }
+
+export function UpdateProfile(arg1) {
+  return window['go']['desktop']['App']['UpdateProfile'](arg1);
+}
