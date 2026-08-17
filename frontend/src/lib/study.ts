@@ -1,6 +1,9 @@
 import {
   EndStudySession,
+  ListStudySessionsByFolder,
+  MoveStudySession,
   RequestOpeningTurn,
+  ResumeStudySession,
   SendStudyMessage,
   StartStudySession,
 } from '../../wailsjs/go/desktop/App'
@@ -9,12 +12,43 @@ import { EventsOn } from '../../wailsjs/runtime/runtime'
 export interface StudySession {
   id: string
   topic: string
+  folderId: string
   startedAt: string
+  endedAt: string // empty when the session is still open
 }
 
-export async function startStudySession(topic: string): Promise<StudySession> {
-  const result = await StartStudySession(topic)
-  return { id: result.id, topic: result.topic, startedAt: result.startedAt }
+export interface StudyMessage {
+  role: string
+  content: string
+  createdAt: string
+}
+
+export interface StudySessionHistory {
+  session: StudySession
+  messages: StudyMessage[]
+}
+
+function toStudySession(result: {
+  id: string
+  topic: string
+  folderId: string
+  startedAt: string
+  endedAt: string
+}): StudySession {
+  return {
+    id: result.id,
+    topic: result.topic,
+    folderId: result.folderId,
+    startedAt: result.startedAt,
+    endedAt: result.endedAt,
+  }
+}
+
+// folderId defaults to an empty string, which the backend falls back to
+// the default folder for.
+export async function startStudySession(topic: string, folderId = ''): Promise<StudySession> {
+  const result = await StartStudySession(topic, folderId)
+  return toStudySession(result)
 }
 
 // requestOpeningTurn streams the assistant's opening turn for a session
@@ -35,6 +69,30 @@ export async function sendStudyMessage(
 
 export async function endStudySession(sessionId: string): Promise<void> {
   await EndStudySession(sessionId)
+}
+
+// resumeStudySession reopens sessionId if it had been ended and returns its
+// full message history, so the chat view can hydrate from it and let the
+// user keep chatting.
+export async function resumeStudySession(sessionId: string): Promise<StudySessionHistory> {
+  const result = await ResumeStudySession(sessionId)
+  return {
+    session: toStudySession(result.session),
+    messages: result.messages.map((message) => ({
+      role: message.role,
+      content: message.content,
+      createdAt: message.createdAt,
+    })),
+  }
+}
+
+export async function moveStudySession(sessionId: string, folderId: string): Promise<void> {
+  await MoveStudySession(sessionId, folderId)
+}
+
+export async function listStudySessionsByFolder(folderId: string): Promise<StudySession[]> {
+  const results = await ListStudySessionsByFolder(folderId)
+  return results.map(toStudySession)
 }
 
 // EventsOn returns its own unsubscribe function. Callers must invoke it on

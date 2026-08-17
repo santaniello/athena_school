@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { StudySession } from '@/lib/study'
 import {
   endStudySession,
   onStudyChunk,
@@ -72,6 +73,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
     const user = userEvent.setup()
@@ -94,6 +97,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
     const user = userEvent.setup()
@@ -114,6 +119,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     const user = userEvent.setup()
     render(<StudyScreen />)
@@ -139,6 +146,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
     const user = userEvent.setup()
@@ -159,6 +168,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     const user = userEvent.setup()
     render(<StudyScreen />)
@@ -179,6 +190,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     const user = userEvent.setup()
     render(<StudyScreen />)
@@ -207,6 +220,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     vi.mocked(sendStudyMessage).mockResolvedValueOnce()
     const user = userEvent.setup()
@@ -244,6 +259,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     vi.mocked(requestOpeningTurn).mockImplementationOnce(async () => {
       handlers.chunk?.('Welcome! ')
@@ -295,6 +312,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     const user = userEvent.setup()
     render(<StudyScreen />)
@@ -320,6 +339,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     const user = userEvent.setup()
     render(<StudyScreen />)
@@ -372,6 +393,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     const user = userEvent.setup()
     render(<StudyScreen />)
@@ -411,6 +434,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     const user = userEvent.setup()
     render(<StudyScreen />)
@@ -435,7 +460,7 @@ describe('StudyScreen', () => {
 
   it('keeps the send button disabled while a reply is still streaming', async () => {
     // Given a started session, whose opening turn is still streaming
-    let resolveStart!: (value: { id: string; topic: string; startedAt: string }) => void
+    let resolveStart!: (value: StudySession) => void
     setupSubscriptions()
     vi.mocked(startStudySession).mockReturnValueOnce(
       new Promise((resolve) => {
@@ -451,6 +476,8 @@ describe('StudyScreen', () => {
         id: 'session-1',
         topic: 'Distributed systems',
         startedAt: '2026-08-16T10:00:00Z',
+        folderId: 'default',
+        endedAt: '',
       })
     })
     await screen.findByRole('button', { name: 'End session' })
@@ -469,6 +496,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     vi.mocked(sendStudyMessage).mockResolvedValueOnce()
     const user = userEvent.setup()
@@ -507,6 +536,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     vi.mocked(sendStudyMessage).mockResolvedValueOnce()
     const user = userEvent.setup()
@@ -541,6 +572,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     const user = userEvent.setup()
     render(<StudyScreen />)
@@ -570,6 +603,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     vi.mocked(sendStudyMessage).mockResolvedValueOnce()
     const user = userEvent.setup()
@@ -602,6 +637,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     let resolveSend!: () => void
     vi.mocked(sendStudyMessage).mockReturnValueOnce(
@@ -654,6 +691,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     vi.mocked(sendStudyMessage).mockRejectedValueOnce(new Error('upstream failure'))
     const user = userEvent.setup()
@@ -686,6 +725,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     vi.mocked(sendStudyMessage).mockRejectedValueOnce('not an Error instance')
     const user = userEvent.setup()
@@ -714,6 +755,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     const user = userEvent.setup()
     render(<StudyScreen />)
@@ -741,6 +784,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     const user = userEvent.setup()
     const { unmount } = render(<StudyScreen />)
@@ -764,6 +809,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     vi.mocked(endStudySession).mockResolvedValueOnce()
     const onEndSession = vi.fn()
@@ -789,6 +836,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     const onEndSession = vi.fn()
     const user = userEvent.setup()
@@ -813,6 +862,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     vi.mocked(endStudySession).mockResolvedValueOnce()
     const user = userEvent.setup()
@@ -836,6 +887,8 @@ describe('StudyScreen', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       startedAt: '2026-08-16T10:00:00Z',
+      folderId: 'default',
+      endedAt: '',
     })
     const user = userEvent.setup()
     render(<StudyScreen />)
