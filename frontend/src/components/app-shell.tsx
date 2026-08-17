@@ -91,7 +91,7 @@ function AppShell({ onLogout }: AppShellProps) {
         </div>
 
         <div
-          className="mt-2 flex flex-1 flex-col gap-0.5 overflow-y-auto"
+          className="sidebar-scroll mt-2 flex flex-1 flex-col gap-0.5 overflow-y-auto"
           style={{ scrollbarGutter: 'stable' }}
         >
           {PRIMARY_ITEMS.map((item) => (
