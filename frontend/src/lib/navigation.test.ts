@@ -19,9 +19,9 @@ describe('NAVIGATION', () => {
     expect(NAVIGATION.map((item) => item.id)).toEqual(EXPECTED_IDS)
   })
 
-  it('unlocks home and study at Phase 1 ship time', () => {
+  it('unlocks home, study and settings at Phase 1 ship time', () => {
     const unlocked = NAVIGATION.filter((item) => item.status === 'unlocked').map((item) => item.id)
-    expect(unlocked).toEqual(['home', 'study'])
+    expect(unlocked).toEqual(['home', 'study', 'settings'])
   })
 
   it('pins settings to the sidebar footer group', () => {
