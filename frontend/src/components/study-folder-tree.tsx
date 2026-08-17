@@ -244,7 +244,9 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
                     <span
                       className={cn(
                         'size-1.5 shrink-0 rounded-full',
-                        session.endedAt ? 'bg-muted-foreground' : 'bg-primary',
+                        session.id === selectedSessionId
+                          ? 'bg-primary shadow-[0_0_6px_1px_var(--primary)]'
+                          : 'bg-muted-foreground',
                       )}
                       aria-hidden="true"
                     />

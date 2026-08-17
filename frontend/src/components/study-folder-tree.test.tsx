@@ -123,6 +123,31 @@ describe('StudyFolderTree', () => {
     expect(onSelectSession).toHaveBeenCalledWith(CACHE_SESSION)
   })
 
+  it('lights up the dot only for the currently open session, regardless of ended state', async () => {
+    // Given an expanded folder with an open session (currently selected)
+    // and an ended one (not selected)
+    vi.mocked(listFolders).mockResolvedValueOnce([SYSTEM_DESIGN])
+    vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([CACHE_SESSION, CONCURRENCY_SESSION])
+    const user = userEvent.setup()
+    renderTree({ selectedSessionId: CACHE_SESSION.id })
+    await screen.findByText('System Design')
+    await user.click(screen.getByText('System Design'))
+    await screen.findByText('Cache invalidation')
+
+    // Then only the open session's dot is the glowing gold one
+    const openDot = screen
+      .getByText('Cache invalidation')
+      .closest('div')
+      ?.querySelector('span[aria-hidden="true"]')
+    const otherDot = screen
+      .getByText('Concurrency patterns')
+      .closest('div')
+      ?.querySelector('span[aria-hidden="true"]')
+    expect(openDot).toHaveClass('bg-primary')
+    expect(otherDot).toHaveClass('bg-muted-foreground')
+    expect(otherDot).not.toHaveClass('bg-primary')
+  })
+
   it('creates a new folder via the dialog', async () => {
     // Given the default folder and a folder creation that succeeds
     vi.mocked(listFolders).mockResolvedValueOnce([GENERAL])
