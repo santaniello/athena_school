@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `mutation-frontend` CI job: PRs now run Stryker only against files changed vs. the base branch (`git diff` + `--mutate`); pushes to `main`/`develop` run the full suite in incremental mode (`incremental: true` in `frontend/stryker.config.mjs`), with `reports/stryker-incremental.json` cached per branch across runs — cuts the ~30min full-repo mutation run on every PR down to just the touched code
+
 ### Added
 - Repository scaffold: go.mod, Makefile, directory structure, .gitignore
 - Wails v2 + React + TypeScript desktop shell (`wails dev`/`wails build`)
