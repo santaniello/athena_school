@@ -1,4 +1,5 @@
 import {
+  DeleteStudySession,
   EndStudySession,
   ListStudySessionsByFolder,
   MoveStudySession,
@@ -69,6 +70,12 @@ export async function sendStudyMessage(
 
 export async function endStudySession(sessionId: string): Promise<void> {
   await EndStudySession(sessionId)
+}
+
+// deleteStudySession permanently deletes sessionId and every message in
+// it. Unlike endStudySession, this cannot be undone.
+export async function deleteStudySession(sessionId: string): Promise<void> {
+  await DeleteStudySession(sessionId)
 }
 
 // resumeStudySession reopens sessionId if it had been ended and returns its

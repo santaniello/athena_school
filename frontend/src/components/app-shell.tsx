@@ -80,6 +80,10 @@ function AppShell({ onLogout }: AppShellProps) {
     setActiveSession(null)
   }
 
+  function handleSessionDeleted(sessionId: string) {
+    setActiveSession((current) => (current?.id === sessionId ? null : current))
+  }
+
   return (
     <div className="flex h-screen">
       <nav className="flex w-56 flex-col border-r border-border bg-card p-3">
@@ -103,6 +107,7 @@ function AppShell({ onLogout }: AppShellProps) {
                   selectedSessionId={activeSession?.id ?? null}
                   onSelectSession={handleSelectSession}
                   onSessionStarted={handleSessionStarted}
+                  onSessionDeleted={handleSessionDeleted}
                 />
               )}
             </div>

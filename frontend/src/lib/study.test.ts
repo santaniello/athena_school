@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  DeleteStudySession,
   EndStudySession,
   ListStudySessionsByFolder,
   MoveStudySession,
@@ -10,6 +11,7 @@ import {
 } from '../../wailsjs/go/desktop/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import {
+  deleteStudySession,
   endStudySession,
   listStudySessionsByFolder,
   moveStudySession,
@@ -27,6 +29,7 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   RequestOpeningTurn: vi.fn(),
   SendStudyMessage: vi.fn(),
   EndStudySession: vi.fn(),
+  DeleteStudySession: vi.fn(),
   ResumeStudySession: vi.fn(),
   MoveStudySession: vi.fn(),
   ListStudySessionsByFolder: vi.fn(),
@@ -189,6 +192,19 @@ describe('endStudySession', () => {
 
     // Then it forwarded the sessionId
     expect(EndStudySession).toHaveBeenCalledWith('session-1')
+  })
+})
+
+describe('deleteStudySession', () => {
+  it('forwards the sessionId', async () => {
+    // Given a DeleteStudySession call that succeeds
+    vi.mocked(DeleteStudySession).mockResolvedValueOnce()
+
+    // When deleting a session
+    await deleteStudySession('session-1')
+
+    // Then it forwarded the sessionId
+    expect(DeleteStudySession).toHaveBeenCalledWith('session-1')
   })
 })
 

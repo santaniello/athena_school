@@ -5,7 +5,12 @@ import userEvent from '@testing-library/user-event'
 import type { Folder } from '@/lib/folder'
 import { createFolder, deleteFolder, listFolders, renameFolder } from '@/lib/folder'
 import type { StudySession } from '@/lib/study'
-import { listStudySessionsByFolder, moveStudySession, startStudySession } from '@/lib/study'
+import {
+  deleteStudySession,
+  listStudySessionsByFolder,
+  moveStudySession,
+  startStudySession,
+} from '@/lib/study'
 import { StudyFolderTree, type StudyFolderTreeHandle } from './study-folder-tree'
 
 vi.mock('@/lib/folder', () => ({
@@ -19,6 +24,7 @@ vi.mock('@/lib/study', () => ({
   listStudySessionsByFolder: vi.fn(),
   startStudySession: vi.fn(),
   moveStudySession: vi.fn(),
+  deleteStudySession: vi.fn(),
 }))
 
 const GENERAL: Folder = { id: 'default', name: 'General', isDefault: true }
@@ -43,9 +49,11 @@ function renderTree(props?: {
   selectedSessionId?: string | null
   onSelectSession?: (session: StudySession) => void
   onSessionStarted?: (session: StudySession) => void
+  onSessionDeleted?: (sessionId: string) => void
 }) {
   const onSelectSession = props?.onSelectSession ?? vi.fn()
   const onSessionStarted = props?.onSessionStarted ?? vi.fn()
+  const onSessionDeleted = props?.onSessionDeleted ?? vi.fn()
   const ref = createRef<StudyFolderTreeHandle>()
   render(
     <StudyFolderTree
@@ -53,9 +61,10 @@ function renderTree(props?: {
       selectedSessionId={props?.selectedSessionId ?? null}
       onSelectSession={onSelectSession}
       onSessionStarted={onSessionStarted}
+      onSessionDeleted={onSessionDeleted}
     />,
   )
-  return { onSelectSession, onSessionStarted, ref }
+  return { onSelectSession, onSessionStarted, onSessionDeleted, ref }
 }
 
 describe('StudyFolderTree', () => {
@@ -265,6 +274,51 @@ describe('StudyFolderTree', () => {
 
     // Then it was moved
     expect(moveStudySession).toHaveBeenCalledWith('session-1', 'default')
+  })
+
+  it('deletes a session after confirming, and notifies the parent', async () => {
+    // Given an expanded folder with one session and a delete that succeeds
+    vi.mocked(listFolders).mockResolvedValueOnce([SYSTEM_DESIGN])
+    vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([CACHE_SESSION])
+    vi.mocked(deleteStudySession).mockResolvedValueOnce()
+    const user = userEvent.setup()
+    const { onSessionDeleted } = renderTree()
+    await screen.findByText('System Design')
+    await user.click(screen.getByText('System Design'))
+    await screen.findByText('Cache invalidation')
+
+    // When deleting the session and confirming
+    await user.click(screen.getByRole('button', { name: 'Cache invalidation options' }))
+    await user.click(await screen.findByText('Delete session'))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Delete session' }))
+
+    // Then it was deleted, no longer appears, and the parent was notified
+    expect(deleteStudySession).toHaveBeenCalledWith('session-1')
+    expect(onSessionDeleted).toHaveBeenCalledWith('session-1')
+    await waitFor(() => expect(screen.queryByText('Cache invalidation')).not.toBeInTheDocument())
+  })
+
+  it('does not delete a session when the confirmation is cancelled', async () => {
+    // Given an expanded folder with one session
+    vi.mocked(listFolders).mockResolvedValueOnce([SYSTEM_DESIGN])
+    vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([CACHE_SESSION])
+    const user = userEvent.setup()
+    const { onSessionDeleted } = renderTree()
+    await screen.findByText('System Design')
+    await user.click(screen.getByText('System Design'))
+    await screen.findByText('Cache invalidation')
+
+    // When opening the delete confirmation and cancelling it
+    await user.click(screen.getByRole('button', { name: 'Cache invalidation options' }))
+    await user.click(await screen.findByText('Delete session'))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+
+    // Then it was never deleted
+    expect(deleteStudySession).not.toHaveBeenCalled()
+    expect(onSessionDeleted).not.toHaveBeenCalled()
+    expect(screen.getByText('Cache invalidation')).toBeInTheDocument()
   })
 
   it('exposes refreshFolder to re-fetch an already-loaded folder', async () => {

@@ -38,6 +38,7 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { createFolder, deleteFolder, listFolders, renameFolder, type Folder } from '@/lib/folder'
 import {
+  deleteStudySession,
   listStudySessionsByFolder,
   moveStudySession,
   startStudySession,
@@ -60,19 +61,24 @@ interface StudyFolderTreeProps {
   selectedSessionId: string | null
   onSelectSession: (session: StudySession) => void
   onSessionStarted: (session: StudySession) => void
+  onSessionDeleted: (sessionId: string) => void
 }
 
 // The Study section's sidebar navigation: folders and sessions as an
 // explorer-style tree, mirroring a code editor's file tree rather than a
 // separate list screen. See specs/phases/phase-01-desktop-mvp/10-study-folders.md.
 const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
-  function StudyFolderTree({ selectedSessionId, onSelectSession, onSessionStarted }, ref) {
+  function StudyFolderTree(
+    { selectedSessionId, onSelectSession, onSessionStarted, onSessionDeleted },
+    ref,
+  ) {
     const [folders, setFolders] = useState<FolderNode[]>([])
     const [newSessionFolderId, setNewSessionFolderId] = useState<string | null>(null)
     const [newSessionTopic, setNewSessionTopic] = useState('')
     const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null)
     const [renameValue, setRenameValue] = useState('')
     const [deletingFolder, setDeletingFolder] = useState<Folder | null>(null)
+    const [deletingSession, setDeletingSession] = useState<StudySession | null>(null)
     const [isNewFolderDialogOpen, setIsNewFolderDialogOpen] = useState(false)
     const [newFolderName, setNewFolderName] = useState('')
 
@@ -152,6 +158,21 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
       await moveStudySession(session.id, targetFolderId)
       void loadSessions(session.folderId)
       void loadSessions(targetFolderId)
+    }
+
+    async function handleDeleteSession() {
+      if (!deletingSession) return
+      const { id, folderId } = deletingSession
+      setDeletingSession(null)
+      await deleteStudySession(id)
+      setFolders((previous) =>
+        previous.map((folder) =>
+          folder.id === folderId
+            ? { ...folder, sessions: (folder.sessions ?? []).filter((s) => s.id !== id) }
+            : folder,
+        ),
+      )
+      onSessionDeleted(id)
     }
 
     return (
@@ -278,6 +299,14 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
                               {target.name}
                             </DropdownMenuItem>
                           ))}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onClick={() => setDeletingSession(session)}
+                        >
+                          <Trash2 aria-hidden="true" />
+                          Delete session
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -375,6 +404,26 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction onClick={() => void handleDeleteFolder()}>
                 Delete folder
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog
+          open={deletingSession !== null}
+          onOpenChange={(open) => !open && setDeletingSession(null)}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete &quot;{deletingSession?.topic}&quot;?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Its messages will be permanently deleted. This can&apos;t be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={() => void handleDeleteSession()}>
+                Delete session
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
