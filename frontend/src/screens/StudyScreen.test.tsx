@@ -87,6 +87,51 @@ describe('StudyScreen', () => {
     expect(requestOpeningTurn).toHaveBeenCalledWith('session-1', 'Distributed systems')
   })
 
+  it('shows the thinking indicator while waiting for the opening turn to start streaming', async () => {
+    // Given a RequestOpeningTurn call that has not emitted any chunk yet
+    setupSubscriptions()
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      startedAt: '2026-08-16T10:00:00Z',
+    })
+    vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
+    const user = userEvent.setup()
+    render(<StudyScreen />)
+    await user.type(screen.getByLabelText(/study today/i), 'Distributed systems')
+
+    // When starting the session
+    await user.click(screen.getByRole('button', { name: 'Start session' }))
+
+    // Then the thinking indicator is shown in the message list
+    expect(await screen.findByRole('status', { name: /thinking/i })).toBeInTheDocument()
+  })
+
+  it('replaces the thinking indicator with the streamed reply once the first chunk arrives', async () => {
+    // Given a started session showing the thinking indicator
+    const handlers = setupSubscriptions()
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      startedAt: '2026-08-16T10:00:00Z',
+    })
+    const user = userEvent.setup()
+    render(<StudyScreen />)
+    await user.type(screen.getByLabelText(/study today/i), 'Distributed systems')
+    await user.click(screen.getByRole('button', { name: 'Start session' }))
+    await screen.findByRole('status', { name: /thinking/i })
+
+    // When the first chunk of the reply arrives
+    act(() => {
+      handlers.chunk?.('Welcome!')
+    })
+
+    // Then the thinking indicator is gone and the streamed text is shown
+    // instead
+    expect(screen.queryByRole('status', { name: /thinking/i })).not.toBeInTheDocument()
+    expect(await screen.findByText('Welcome!')).toBeInTheDocument()
+  })
+
   it('focuses the reply textarea as soon as the chat view opens', async () => {
     // Given a session about to start
     setupSubscriptions()
@@ -200,11 +245,13 @@ describe('StudyScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Start session' }))
 
     // Then it called startStudySession with the topic and moved to the chat
-    // view, with no leftover message bubbles or error alert
+    // view, with no leftover message bubbles or error alert — only the
+    // thinking indicator, while the opening turn hasn't replied yet
     expect(startStudySession).toHaveBeenCalledWith('Distributed systems')
     expect(await screen.findByRole('button', { name: 'End session' })).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    expect(document.querySelectorAll('.self-start, .self-end')).toHaveLength(0)
+    expect(document.querySelectorAll('[data-slot="message-bubble"]')).toHaveLength(0)
+    expect(screen.getByRole('status', { name: /thinking/i })).toBeInTheDocument()
   })
 
   it('trims leading and trailing whitespace from the topic before starting', async () => {

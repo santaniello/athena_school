@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { MessageBubble } from '@/components/message-bubble'
+import { ThinkingIndicator } from '@/components/thinking-indicator'
 import {
   endStudySession,
   onStudyChunk,
@@ -173,6 +174,7 @@ function StudyScreen({ onEndSession }: StudyScreenProps) {
         {messages.map((message, index) => (
           <MessageBubble key={index} role={message.role} content={message.content} />
         ))}
+        {isStreaming && !streamingText && <ThinkingIndicator />}
         {isStreaming && streamingText && (
           <MessageBubble role="assistant" content={streamingText} isStreaming />
         )}
