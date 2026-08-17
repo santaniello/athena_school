@@ -28,10 +28,15 @@ type SessionRepository interface {
 	MoveToFolder(ctx context.Context, id, folderID string) error
 	// ReassignFolder moves every session in fromFolderID to toFolderID.
 	ReassignFolder(ctx context.Context, fromFolderID, toFolderID string) error
+	// Delete permanently removes the session with the given id, or returns
+	// ErrSessionNotFound if it does not exist.
+	Delete(ctx context.Context, id string) error
 }
 
 // MessageRepository persists the Messages exchanged within a study Session.
 type MessageRepository interface {
 	Append(ctx context.Context, message Message) error
 	ListBySession(ctx context.Context, sessionID string) ([]Message, error)
+	// DeleteBySession permanently removes every message for sessionID.
+	DeleteBySession(ctx context.Context, sessionID string) error
 }

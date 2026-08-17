@@ -186,6 +186,34 @@ func TestSessionRepository_MoveToFolder_returnsNotFound_whenSessionDoesNotExist(
 	assert.ErrorIs(t, err, study.ErrSessionNotFound)
 }
 
+func TestSessionRepository_Delete_removesSession(t *testing.T) {
+	// Given a repository with an existing session
+	repo := newTestSessionRepository(t)
+	ctx := context.Background()
+	session := study.Session{ID: "session-1", Mode: study.ModeStudy, FolderID: "default", StartedAt: time.Now().UTC()}
+	require.NoError(t, repo.Create(ctx, session))
+
+	// When deleting it
+	err := repo.Delete(ctx, session.ID)
+
+	// Then it no longer exists
+	require.NoError(t, err)
+	_, getErr := repo.GetByID(ctx, session.ID)
+	assert.ErrorIs(t, getErr, study.ErrSessionNotFound)
+}
+
+func TestSessionRepository_Delete_returnsNotFound_whenSessionDoesNotExist(t *testing.T) {
+	// Given a repository with no sessions
+	repo := newTestSessionRepository(t)
+	ctx := context.Background()
+
+	// When deleting a session that does not exist
+	err := repo.Delete(ctx, "missing-session")
+
+	// Then it fails with ErrSessionNotFound
+	assert.ErrorIs(t, err, study.ErrSessionNotFound)
+}
+
 func TestSessionRepository_ReassignFolder_movesEverySessionFromOneFolderToAnother(t *testing.T) {
 	// Given two sessions in folder-a and one in folder-b
 	repo := newTestSessionRepository(t)

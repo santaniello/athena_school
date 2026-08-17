@@ -113,6 +113,16 @@ func (r *SessionRepository) ReassignFolder(ctx context.Context, fromFolderID, to
 	return nil
 }
 
+// Delete permanently removes the session with the given id, or returns
+// study.ErrSessionNotFound if it does not exist.
+func (r *SessionRepository) Delete(ctx context.Context, id string) error {
+	result, err := r.db.ExecContext(ctx, `DELETE FROM sessions WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("sqlite: deleting session: %w", err)
+	}
+	return requireRowAffected(result, study.ErrSessionNotFound)
+}
+
 // End sets endedAt on the session with the given id, or returns
 // study.ErrSessionNotFound if it does not exist.
 func (r *SessionRepository) End(ctx context.Context, id string, endedAt time.Time) error {

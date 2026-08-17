@@ -138,3 +138,9 @@ func (a *App) SendStudyMessage(sessionID, topic, content string) error {
 func (a *App) EndStudySession(sessionID string) error {
 	return a.study.End(a.ctx, sessionID)
 }
+
+// DeleteStudySession permanently deletes sessionID and every message in it.
+// Unlike EndStudySession, this cannot be undone.
+func (a *App) DeleteStudySession(sessionID string) error {
+	return a.study.DeleteSession(a.ctx, sessionID)
+}

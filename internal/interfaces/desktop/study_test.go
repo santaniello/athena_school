@@ -224,6 +224,24 @@ func TestApp_EndStudySession_endsTheSession(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestApp_DeleteStudySession_deletesTheSession(t *testing.T) {
+	// Given an App backed by a study service that accepts deleting the session
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
+	messages.EXPECT().DeleteBySession(mock.Anything, "session-1").Return(nil).Once()
+	sessions.EXPECT().Delete(mock.Anything, "session-1").Return(nil).Once()
+	app, _ := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
+
+	// When deleting the session
+	err := app.DeleteStudySession("session-1")
+
+	// Then it succeeds
+	require.NoError(t, err)
+}
+
 func TestApp_ResumeStudySession_reopensAndReturnsHistory(t *testing.T) {
 	// Given an App backed by a study service with an ended session that has
 	// one prior message
