@@ -3,6 +3,10 @@
 import {desktop} from '../models';
 import {context} from '../models';
 
+export function CreateFolder(arg1:string):Promise<desktop.FolderResult>;
+
+export function DeleteFolder(arg1:string):Promise<void>;
+
 export function EndStudySession(arg1:string):Promise<void>;
 
 export function GetProfile():Promise<desktop.UserProfileInput>;
@@ -13,15 +17,25 @@ export function HasOpenRouterKey():Promise<boolean>;
 
 export function HasUserProfile():Promise<boolean>;
 
+export function ListFolders():Promise<Array<desktop.FolderResult>>;
+
+export function ListStudySessionsByFolder(arg1:string):Promise<Array<desktop.StudySessionResult>>;
+
 export function Login(arg1:string,arg2:string):Promise<desktop.LoginResult>;
 
 export function Logout():Promise<void>;
 
+export function MoveStudySession(arg1:string,arg2:string):Promise<void>;
+
 export function Register(arg1:string,arg2:string):Promise<void>;
+
+export function RenameFolder(arg1:string,arg2:string):Promise<void>;
 
 export function RequestOpeningTurn(arg1:string,arg2:string):Promise<void>;
 
 export function ResetLocalAccount(arg1:string):Promise<void>;
+
+export function ResumeStudySession(arg1:string):Promise<desktop.StudySessionHistoryResult>;
 
 export function SaveOpenRouterKey(arg1:string):Promise<void>;
 
@@ -29,7 +43,7 @@ export function SaveProfile(arg1:desktop.UserProfileInput):Promise<void>;
 
 export function SendStudyMessage(arg1:string,arg2:string,arg3:string):Promise<void>;
 
-export function StartStudySession(arg1:string):Promise<desktop.StudySessionResult>;
+export function StartStudySession(arg1:string,arg2:string):Promise<desktop.StudySessionResult>;
 
 export function Startup(arg1:context.Context):Promise<void>;
 
