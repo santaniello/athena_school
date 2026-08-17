@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,6 +22,7 @@ import (
 type Client struct {
 	baseURL    string
 	apiKey     string
+	apiKeyMu   sync.RWMutex
 	httpClient *http.Client
 	recorder   domainllm.UsageRecorder
 }
@@ -38,6 +40,22 @@ func NewClient(baseURL, apiKey string, recorder domainllm.UsageRecorder) *Client
 		httpClient: &http.Client{Timeout: 60 * time.Second},
 		recorder:   recorder,
 	}
+}
+
+// SetAPIKey updates the key used by subsequent Chat, ChatStream and
+// Embeddings calls. Safe to call concurrently with those methods — e.g.
+// from a Settings save while a study session is streaming a response. See
+// specs/phases/phase-01-desktop-mvp/08-settings.md.
+func (c *Client) SetAPIKey(key string) {
+	c.apiKeyMu.Lock()
+	defer c.apiKeyMu.Unlock()
+	c.apiKey = key
+}
+
+func (c *Client) key() string {
+	c.apiKeyMu.RLock()
+	defer c.apiKeyMu.RUnlock()
+	return c.apiKey
 }
 
 type openRouterUsage struct {
@@ -89,7 +107,7 @@ type embeddingsResponse struct {
 // Chat sends a single chat completion request. If the account has run out
 // of credits, it retries once against domainllm.FreeFallbackModel.
 func (c *Client) Chat(ctx context.Context, req domainllm.ChatRequest) (domainllm.ChatResponse, error) {
-	if c.apiKey == "" {
+	if c.key() == "" {
 		return domainllm.ChatResponse{}, domainllm.ErrAPIKeyMissing
 	}
 
@@ -144,7 +162,7 @@ func (c *Client) chatCompletion(ctx context.Context, model string, messages []do
 // has run out of credits, it retries once against
 // domainllm.FreeFallbackModel before delivering any chunk to handler.
 func (c *Client) ChatStream(ctx context.Context, req domainllm.ChatRequest, handler func(chunk string) error) error {
-	if c.apiKey == "" {
+	if c.key() == "" {
 		return domainllm.ErrAPIKeyMissing
 	}
 
@@ -208,7 +226,7 @@ func (c *Client) streamChatCompletion(ctx context.Context, model string, message
 // no free-model fallback for embeddings: insufficient credits fails
 // directly with domainllm.ErrInsufficientCredits.
 func (c *Client) Embeddings(ctx context.Context, req domainllm.EmbeddingRequest) (domainllm.EmbeddingResponse, error) {
-	if c.apiKey == "" {
+	if c.key() == "" {
 		return domainllm.EmbeddingResponse{}, domainllm.ErrAPIKeyMissing
 	}
 
@@ -254,7 +272,7 @@ func (c *Client) post(ctx context.Context, path string, body any) (*http.Respons
 	if err != nil {
 		return nil, fmt.Errorf("openrouter: building request: %w", err)
 	}
-	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	httpReq.Header.Set("Authorization", "Bearer "+c.key())
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(httpReq)

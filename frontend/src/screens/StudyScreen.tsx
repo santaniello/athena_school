@@ -1,10 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
+import type { ChangeEvent, KeyboardEvent } from 'react'
+import { ArrowUp, X } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { MessageBubble } from '@/components/message-bubble'
+import { ThinkingIndicator } from '@/components/thinking-indicator'
 import {
   endStudySession,
   onStudyChunk,
@@ -38,6 +53,13 @@ function StudyScreen({ onEndSession }: StudyScreenProps) {
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
   const streamingTextRef = useRef('')
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Focuses the reply textarea as soon as the chat view mounts, so the user
+  // can start typing immediately instead of clicking into it first.
+  useEffect(() => {
+    if (sessionId) textareaRef.current?.focus()
+  }, [sessionId])
 
   // Subscribed once on mount, not gated on sessionId: the "study:chunk"/
   // "study:done" events for a session's opening turn are emitted by the Go
@@ -102,12 +124,34 @@ function StudyScreen({ onEndSession }: StudyScreenProps) {
     setDraft('')
     setError(null)
     setIsStreaming(true)
+    // The textarea's grown height is set directly on the DOM node (see
+    // handleDraftChange), so clearing the draft alone wouldn't shrink it
+    // back — 'auto' lets the CSS min-height take back over.
+    if (textareaRef.current) textareaRef.current.style.height = 'auto'
     try {
       await sendStudyMessage(sessionId, sessionTopic, content)
     } catch (err) {
       setIsStreaming(false)
       setError(err instanceof Error ? err.message : 'Failed to send the message.')
     }
+  }
+
+  // Grows the textarea to fit its content, ChatGPT/Claude-style, instead of
+  // staying a fixed height with an internal scrollbar — the icon buttons
+  // docked at its bottom corners (see the JSX below) track along for free,
+  // since they're positioned relative to this same element's box.
+  function handleDraftChange(event: ChangeEvent<HTMLTextAreaElement>) {
+    setDraft(event.target.value)
+    const el = event.target
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }
+
+  function handleDraftKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== 'Enter' || event.shiftKey) return
+    event.preventDefault()
+    if (!draft.trim() || isStreaming) return
+    void handleSend()
   }
 
   async function handleEnd() {
@@ -145,27 +189,74 @@ function StudyScreen({ onEndSession }: StudyScreenProps) {
         {messages.map((message, index) => (
           <MessageBubble key={index} role={message.role} content={message.content} />
         ))}
-        {isStreaming && streamingText && <MessageBubble role="assistant" content={streamingText} />}
+        {isStreaming && !streamingText && <ThinkingIndicator />}
+        {isStreaming && streamingText && (
+          <MessageBubble role="assistant" content={streamingText} isStreaming />
+        )}
       </div>
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-      <div className="flex gap-2">
+      <div className="relative">
         <Textarea
+          ref={textareaRef}
           value={draft}
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={handleDraftChange}
+          onKeyDown={handleDraftKeyDown}
           placeholder="Type your answer..."
-          className="flex-1"
+          className="min-h-24 max-h-[200px] resize-none overflow-y-auto pb-11"
         />
-        <Button disabled={!draft.trim() || isStreaming} onClick={() => void handleSend()}>
-          Send
-        </Button>
+        <div className="absolute bottom-2 left-2">
+          <AlertDialog>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="End session"
+                    className="rounded-full bg-destructive text-white hover:bg-destructive/90 hover:text-white"
+                  >
+                    <X className="size-4" aria-hidden="true" />
+                  </Button>
+                </AlertDialogTrigger>
+              </TooltipTrigger>
+              <TooltipContent>End session</TooltipContent>
+            </Tooltip>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>End this session?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Your conversation will be cleared from the screen. This can&apos;t be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => void handleEnd()}>
+                  Yes, end session
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+        <div className="absolute right-2 bottom-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="icon-sm"
+                aria-label="Send"
+                disabled={!draft.trim() || isStreaming}
+                onClick={() => void handleSend()}
+              >
+                <ArrowUp className="size-4" aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Send message</TooltipContent>
+          </Tooltip>
+        </div>
       </div>
-      <Button variant="outline" onClick={() => void handleEnd()}>
-        End session
-      </Button>
     </div>
   )
 }

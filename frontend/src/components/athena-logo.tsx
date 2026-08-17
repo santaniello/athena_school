@@ -43,7 +43,9 @@ const LEAVES = [...branchLeaves(false), ...branchLeaves(true)]
 // translate/rotate/scale onto the wreath arc. Deliberately short and wide —
 // at the small sizes this renders at (e.g. h-12), a thin leaf anti-aliases
 // away into an unreadable spike, while a fat one still reads as a leaf.
-const LEAF_PATH = 'M0,0 C7,-2.88 7,-7.92 0,-12 C-7,-7.92 -7,-2.88 0,0 Z'
+// Exported so other laurel-motif UI (e.g. ThinkingIndicator) reuses the same
+// shape instead of hand-tracing a new one.
+export const LEAF_PATH = 'M0,0 C7,-2.88 7,-7.92 0,-12 C-7,-7.92 -7,-2.88 0,0 Z'
 
 // Hand-authored monogram (geometric "A" pediment inside a laurel wreath) — a
 // nod to Athena's namesake, in the same spirit as GreekKeyDivider: no image

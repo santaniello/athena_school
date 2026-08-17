@@ -12,29 +12,13 @@ import {
 } from '@/components/ui/select'
 import { AuthLayout } from '@/components/auth-layout'
 import type { ProfileDraft } from '@/lib/profile'
+import { ASSISTANT_LANGUAGES, EXPERIENCE_LEVELS, STUDY_STYLES } from '@/lib/profileOptions'
 
 interface OnboardingFormScreenProps {
   draft: ProfileDraft
   onChange: (draft: ProfileDraft) => void
   onNext: () => void
 }
-
-const EXPERIENCE_LEVELS: Array<{ value: string; label: string }> = [
-  { value: 'beginner', label: 'Beginner' },
-  { value: 'intermediate', label: 'Intermediate' },
-  { value: 'advanced', label: 'Advanced' },
-]
-
-const ASSISTANT_LANGUAGES: Array<{ value: string; label: string }> = [
-  { value: 'pt', label: 'Portuguese' },
-  { value: 'en', label: 'English' },
-]
-
-const STUDY_STYLES: Array<{ value: string; label: string }> = [
-  { value: 'direct', label: 'Direct and to the point' },
-  { value: 'practical_examples', label: 'Lots of practical examples' },
-  { value: 'step_by_step', label: 'Detailed step by step' },
-]
 
 function isDraftComplete(draft: ProfileDraft): boolean {
   return (

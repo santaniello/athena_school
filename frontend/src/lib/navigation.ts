@@ -106,8 +106,9 @@ export const NAVIGATION: NavItem[] = [
     label: 'Settings',
     icon: Settings,
     phase: 1,
-    status: 'locked',
+    status: 'unlocked',
     group: 'footer',
-    description: 'OpenRouter key, assistant name, focus area and experience level.',
+    description:
+      'OpenRouter key, name, assistant name, focus area, experience level, goals, study style and assistant language.',
   },
 ]

@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import type { ComponentProps } from 'react'
+import { Check, Copy } from 'lucide-react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -40,7 +42,10 @@ SyntaxHighlighter.registerLanguage('yaml', yaml)
 interface MessageBubbleProps {
   role: 'user' | 'assistant'
   content: string
+  isStreaming?: boolean
 }
+
+const COPIED_RESET_DELAY_MS = 2000
 
 const messageBubbleVariants = cva(
   'max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed break-words',
@@ -133,7 +138,15 @@ const markdownComponents: Components = {
   code: CodeRenderer,
 }
 
-function MessageBubble({ role, content }: MessageBubbleProps) {
+function MessageBubble({ role, content, isStreaming = false }: MessageBubbleProps) {
+  const [copied, setCopied] = useState(false)
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(content)
+    setCopied(true)
+    setTimeout(() => setCopied(false), COPIED_RESET_DELAY_MS)
+  }
+
   return (
     <div
       data-slot="message-bubble"
@@ -143,6 +156,20 @@ function MessageBubble({ role, content }: MessageBubbleProps) {
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
         {content}
       </ReactMarkdown>
+      {role === 'assistant' && !isStreaming && (
+        <button
+          type="button"
+          onClick={() => void handleCopy()}
+          aria-label={copied ? 'Copied' : 'Copy message'}
+          className="mt-1.5 flex cursor-pointer items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        >
+          {copied ? (
+            <Check className="size-3.5" aria-hidden="true" />
+          ) : (
+            <Copy className="size-3.5" aria-hidden="true" />
+          )}
+        </button>
+      )}
     </div>
   )
 }

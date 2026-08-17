@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { SaveOpenRouterKey } from '../../wailsjs/go/desktop/App'
-import { saveOpenRouterKey } from './openrouterKey'
+import { HasOpenRouterKey, SaveOpenRouterKey } from '../../wailsjs/go/desktop/App'
+import { hasOpenRouterKey, saveOpenRouterKey } from './openrouterKey'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
   SaveOpenRouterKey: vi.fn(),
+  HasOpenRouterKey: vi.fn(),
 }))
 
 describe('saveOpenRouterKey', () => {
@@ -26,5 +27,18 @@ describe('saveOpenRouterKey', () => {
     // When saving the key
     // Then the same error propagates, unmapped
     await expect(saveOpenRouterKey('sk-or-invalid')).rejects.toThrow(err)
+  })
+})
+
+describe('hasOpenRouterKey', () => {
+  it('delegates to the HasOpenRouterKey binding', async () => {
+    // Given a binding that reports a key is configured
+    vi.mocked(HasOpenRouterKey).mockResolvedValueOnce(true)
+
+    // When checking whether a key is configured
+    const result = await hasOpenRouterKey()
+
+    // Then the binding's result is returned unchanged
+    expect(result).toBe(true)
   })
 })

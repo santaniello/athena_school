@@ -1,4 +1,4 @@
-import { GetProfile, SaveProfile } from '../../wailsjs/go/desktop/App'
+import { GetProfile, SaveProfile, UpdateProfile } from '../../wailsjs/go/desktop/App'
 import { desktop } from '../../wailsjs/go/models'
 
 // Plain-string mirror of UserProfileInput, used to hold the onboarding draft
@@ -32,5 +32,22 @@ export async function getUserProfile(): Promise<ProfileDraft> {
     goals: profile.goals,
     studyStyle: profile.studyStyle,
     assistantLanguage: profile.assistantLanguage,
+  }
+}
+
+// Updates the already-saved profile from the settings screen, preserving
+// its original creation date on the backend. Returns the saved (trimmed)
+// draft so callers can sync local state without a second GetProfile call.
+// See specs/phases/phase-01-desktop-mvp/08-settings.md.
+export async function updateUserProfile(draft: ProfileDraft): Promise<ProfileDraft> {
+  const saved = await UpdateProfile(desktop.UserProfileInput.createFrom(draft))
+  return {
+    name: saved.name,
+    assistantName: saved.assistantName,
+    area: saved.area,
+    experienceLevel: saved.experienceLevel,
+    goals: saved.goals,
+    studyStyle: saved.studyStyle,
+    assistantLanguage: saved.assistantLanguage,
   }
 }

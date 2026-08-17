@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
   endStudySession,
@@ -87,6 +87,150 @@ describe('StudyScreen', () => {
     expect(requestOpeningTurn).toHaveBeenCalledWith('session-1', 'Distributed systems')
   })
 
+  it('shows the thinking indicator while waiting for the opening turn to start streaming', async () => {
+    // Given a RequestOpeningTurn call that has not emitted any chunk yet
+    setupSubscriptions()
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      startedAt: '2026-08-16T10:00:00Z',
+    })
+    vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
+    const user = userEvent.setup()
+    render(<StudyScreen />)
+    await user.type(screen.getByLabelText(/study today/i), 'Distributed systems')
+
+    // When starting the session
+    await user.click(screen.getByRole('button', { name: 'Start session' }))
+
+    // Then the thinking indicator is shown in the message list
+    expect(await screen.findByRole('status', { name: /thinking/i })).toBeInTheDocument()
+  })
+
+  it('replaces the thinking indicator with the streamed reply once the first chunk arrives', async () => {
+    // Given a started session showing the thinking indicator
+    const handlers = setupSubscriptions()
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      startedAt: '2026-08-16T10:00:00Z',
+    })
+    const user = userEvent.setup()
+    render(<StudyScreen />)
+    await user.type(screen.getByLabelText(/study today/i), 'Distributed systems')
+    await user.click(screen.getByRole('button', { name: 'Start session' }))
+    await screen.findByRole('status', { name: /thinking/i })
+
+    // When the first chunk of the reply arrives
+    act(() => {
+      handlers.chunk?.('Welcome!')
+    })
+
+    // Then the thinking indicator is gone and the streamed text is shown
+    // instead
+    expect(screen.queryByRole('status', { name: /thinking/i })).not.toBeInTheDocument()
+    expect(await screen.findByText('Welcome!')).toBeInTheDocument()
+  })
+
+  it('focuses the reply textarea as soon as the chat view opens', async () => {
+    // Given a session about to start
+    setupSubscriptions()
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      startedAt: '2026-08-16T10:00:00Z',
+    })
+    vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
+    const user = userEvent.setup()
+    render(<StudyScreen />)
+    await user.type(screen.getByLabelText(/study today/i), 'Distributed systems')
+
+    // When starting the session
+    await user.click(screen.getByRole('button', { name: 'Start session' }))
+
+    // Then the reply textarea has focus, ready for typing right away
+    await waitFor(() => expect(screen.getByPlaceholderText(/type your answer/i)).toHaveFocus())
+  })
+
+  it('renders the end-session button as a solid red circle with a white icon', async () => {
+    // Given a started session
+    setupSubscriptions()
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      startedAt: '2026-08-16T10:00:00Z',
+    })
+    const user = userEvent.setup()
+    render(<StudyScreen />)
+    await user.type(screen.getByLabelText(/study today/i), 'Distributed systems')
+    await user.click(screen.getByRole('button', { name: 'Start session' }))
+
+    // Then the end-session button carries the solid red circle styling
+    const endButton = await screen.findByRole('button', { name: 'End session' })
+    expect(endButton).toHaveClass('rounded-full')
+    expect(endButton).toHaveClass('bg-destructive')
+    expect(endButton).toHaveClass('text-white')
+  })
+
+  it('grows the textarea to fit multi-line content, same as ChatGPT/Claude', async () => {
+    // Given a started session
+    setupSubscriptions()
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      startedAt: '2026-08-16T10:00:00Z',
+    })
+    const user = userEvent.setup()
+    render(<StudyScreen />)
+    await user.type(screen.getByLabelText(/study today/i), 'Distributed systems')
+    await user.click(screen.getByRole('button', { name: 'Start session' }))
+    const textarea = (await screen.findByPlaceholderText(
+      /type your answer/i,
+    )) as HTMLTextAreaElement
+    // jsdom never computes real layout, so scrollHeight is always 0 — stub
+    // it to the "content wrapped onto more lines" case being tested.
+    Object.defineProperty(textarea, 'scrollHeight', { value: 140, configurable: true })
+
+    // When typing a reply that spans multiple lines
+    await user.type(textarea, 'First line{Shift>}{Enter}{/Shift}Second line')
+
+    // Then the textarea grows to fit it, instead of staying a fixed height
+    // with an internal scrollbar
+    expect(textarea.style.height).toBe('140px')
+  })
+
+  it('resets the textarea height back to its minimum after sending a reply', async () => {
+    // Given a started session with a settled opening turn and a grown,
+    // multi-line draft
+    const handlers = setupSubscriptions()
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      startedAt: '2026-08-16T10:00:00Z',
+    })
+    vi.mocked(sendStudyMessage).mockResolvedValueOnce()
+    const user = userEvent.setup()
+    render(<StudyScreen />)
+    await user.type(screen.getByLabelText(/study today/i), 'Distributed systems')
+    await user.click(screen.getByRole('button', { name: 'Start session' }))
+    await screen.findByRole('button', { name: 'End session' })
+    act(() => {
+      handlers.chunk?.('Welcome!')
+      handlers.done?.()
+    })
+    await screen.findByText('Welcome!')
+    const textarea = screen.getByPlaceholderText(/type your answer/i) as HTMLTextAreaElement
+    Object.defineProperty(textarea, 'scrollHeight', { value: 140, configurable: true })
+    await user.type(textarea, 'First line{Shift>}{Enter}{/Shift}Second line')
+    expect(textarea.style.height).toBe('140px')
+
+    // When sending the reply
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+
+    // Then the textarea collapses back to its default (CSS-driven) height
+    expect(textarea.style.height).toBe('auto')
+  })
+
   it('does not lose the opening turn or get stuck disabled when events fire before the call resolves', async () => {
     // Given a RequestOpeningTurn call that — like the real Wails binding —
     // emits "study:chunk"/"study:done" synchronously from inside the call,
@@ -160,11 +304,13 @@ describe('StudyScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Start session' }))
 
     // Then it called startStudySession with the topic and moved to the chat
-    // view, with no leftover message bubbles or error alert
+    // view, with no leftover message bubbles or error alert — only the
+    // thinking indicator, while the opening turn hasn't replied yet
     expect(startStudySession).toHaveBeenCalledWith('Distributed systems')
     expect(await screen.findByRole('button', { name: 'End session' })).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    expect(document.querySelectorAll('.self-start, .self-end')).toHaveLength(0)
+    expect(document.querySelectorAll('[data-slot="message-bubble"]')).toHaveLength(0)
+    expect(screen.getByRole('status', { name: /thinking/i })).toBeInTheDocument()
   })
 
   it('trims leading and trailing whitespace from the topic before starting', async () => {
@@ -352,6 +498,69 @@ describe('StudyScreen', () => {
       'Distributed systems',
       'What is CAP theorem?',
     )
+  })
+
+  it('sends the message on Enter, without inserting a newline', async () => {
+    // Given a started session with a settled opening turn
+    const handlers = setupSubscriptions()
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      startedAt: '2026-08-16T10:00:00Z',
+    })
+    vi.mocked(sendStudyMessage).mockResolvedValueOnce()
+    const user = userEvent.setup()
+    render(<StudyScreen />)
+    await user.type(screen.getByLabelText(/study today/i), 'Distributed systems')
+    await user.click(screen.getByRole('button', { name: 'Start session' }))
+    await screen.findByRole('button', { name: 'End session' })
+    act(() => {
+      handlers.chunk?.('Welcome!')
+      handlers.done?.()
+    })
+    await screen.findByText('Welcome!')
+
+    // When typing a reply and pressing Enter
+    await user.type(screen.getByPlaceholderText(/type your answer/i), 'What is CAP theorem?{Enter}')
+
+    // Then the message was sent and the draft cleared, instead of a newline
+    // being inserted
+    await screen.findByText('What is CAP theorem?')
+    expect(sendStudyMessage).toHaveBeenCalledWith(
+      'session-1',
+      'Distributed systems',
+      'What is CAP theorem?',
+    )
+    expect(screen.getByPlaceholderText(/type your answer/i)).toHaveValue('')
+  })
+
+  it('inserts a newline on Shift+Enter, without sending', async () => {
+    // Given a started session with a settled opening turn
+    const handlers = setupSubscriptions()
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      startedAt: '2026-08-16T10:00:00Z',
+    })
+    const user = userEvent.setup()
+    render(<StudyScreen />)
+    await user.type(screen.getByLabelText(/study today/i), 'Distributed systems')
+    await user.click(screen.getByRole('button', { name: 'Start session' }))
+    await screen.findByRole('button', { name: 'End session' })
+    act(() => {
+      handlers.chunk?.('Welcome!')
+      handlers.done?.()
+    })
+    await screen.findByText('Welcome!')
+
+    // When typing a line, pressing Shift+Enter, then typing a second line
+    const textarea = screen.getByPlaceholderText(/type your answer/i)
+    await user.type(textarea, 'First line{Shift>}{Enter}{/Shift}Second line')
+
+    // Then both lines stay in the draft, on separate lines, and nothing was
+    // sent
+    expect(textarea).toHaveValue('First line\nSecond line')
+    expect(sendStudyMessage).not.toHaveBeenCalled()
   })
 
   it('trims leading and trailing whitespace from the draft before sending', async () => {
@@ -564,12 +773,37 @@ describe('StudyScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Start session' }))
     await screen.findByRole('button', { name: 'End session' })
 
-    // When ending the session
+    // When ending the session and confirming the dialog
     await user.click(screen.getByRole('button', { name: 'End session' }))
+    await user.click(await screen.findByRole('button', { name: 'Yes, end session' }))
 
     // Then it closed the session and notified the caller
     expect(endStudySession).toHaveBeenCalledWith('session-1')
     expect(onEndSession).toHaveBeenCalledOnce()
+  })
+
+  it('does not end the session when the confirmation is cancelled', async () => {
+    // Given a started session
+    setupSubscriptions()
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      startedAt: '2026-08-16T10:00:00Z',
+    })
+    const onEndSession = vi.fn()
+    const user = userEvent.setup()
+    render(<StudyScreen onEndSession={onEndSession} />)
+    await user.type(screen.getByLabelText(/study today/i), 'Distributed systems')
+    await user.click(screen.getByRole('button', { name: 'Start session' }))
+    await screen.findByRole('button', { name: 'End session' })
+
+    // When opening the confirmation and cancelling it
+    await user.click(screen.getByRole('button', { name: 'End session' }))
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
+
+    // Then the session was never ended
+    expect(endStudySession).not.toHaveBeenCalled()
+    expect(onEndSession).not.toHaveBeenCalled()
   })
 
   it('ends the session without a callback prop, without crashing', async () => {
@@ -587,10 +821,43 @@ describe('StudyScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Start session' }))
     await screen.findByRole('button', { name: 'End session' })
 
-    // When ending the session
+    // When ending the session and confirming the dialog
     await user.click(screen.getByRole('button', { name: 'End session' }))
+    await user.click(await screen.findByRole('button', { name: 'Yes, end session' }))
 
     // Then it closes the session without throwing
     expect(endStudySession).toHaveBeenCalledWith('session-1')
+  })
+
+  it('shows tooltips explaining the send and end-session icon buttons', async () => {
+    // Given a started session with a settled opening turn
+    const handlers = setupSubscriptions()
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      startedAt: '2026-08-16T10:00:00Z',
+    })
+    const user = userEvent.setup()
+    render(<StudyScreen />)
+    await user.type(screen.getByLabelText(/study today/i), 'Distributed systems')
+    await user.click(screen.getByRole('button', { name: 'Start session' }))
+    await screen.findByRole('button', { name: 'End session' })
+    act(() => {
+      handlers.chunk?.('Welcome!')
+      handlers.done?.()
+    })
+    await screen.findByText('Welcome!')
+
+    // When hovering the send button
+    await user.hover(screen.getByRole('button', { name: 'Send' }))
+
+    // Then its tooltip explains what it does
+    expect(await screen.findByText('Send message')).toBeInTheDocument()
+
+    // When hovering the end-session button
+    await user.hover(screen.getByRole('button', { name: 'End session' }))
+
+    // Then its tooltip explains what it does
+    expect(await screen.findByText('End session')).toBeInTheDocument()
   })
 })

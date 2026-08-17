@@ -64,7 +64,7 @@ function TagInput({
             type="button"
             aria-label={`Remover ${tag}`}
             onClick={() => removeTag(tag)}
-            className="text-secondary-foreground/70 hover:text-secondary-foreground"
+            className="cursor-pointer text-secondary-foreground/70 hover:text-secondary-foreground"
           >
             <XIcon className="size-3" />
           </button>

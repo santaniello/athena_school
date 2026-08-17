@@ -10,22 +10,40 @@ User can configure the OpenRouter API key and update their profile fields withou
 
 ```yaml
 openrouter_key: "sk-or-..."
-default_model_tier: medium
 ```
+
+`default_model_tier` was dropped from this file: model routing (see
+[05-llm-service.md](05-llm-service.md)) is driven entirely by `TaskType` via
+`TierFor`, with no user-facing override, so the field had no consumer.
 
 ## UI Fields
 
+Every `UserProfile` field, not just the four originally listed here, since
+they're all part of the same profile the user edited during onboarding:
+
 - OpenRouter API key (masked input)
+- Name
 - Assistant name
 - Area / focus
 - Experience level (dropdown: beginner / intermediate / advanced)
+- Goals
+- Preferred study style
+- Assistant language
 
 ## Tasks
 
-- [ ] Settings screen reachable from the main navigation
-- [ ] Saves to `~/.athena/config.yaml` and `~/.athena/profile.json` on confirm
-- [ ] API key validated by making a test call; error shown inline if invalid
-- [ ] Changes take effect immediately (no restart required)
+- [x] Settings screen reachable from the main navigation
+- [x] Saves to `~/.athena/config.yaml` and `~/.athena/profile.json` on confirm
+- [x] API key validated by making a test call; error shown inline if invalid
+- [x] Changes take effect immediately (no restart required)
+
+Editing the profile preserves its original `CreatedAt` (a new
+`onboarding.Service.UpdateProfile` use case, distinct from onboarding's
+`SaveProfile` which always stamps a fresh one). The OpenRouter key's "no
+restart required" requirement needed a backend fix beyond the UI: the running
+`openrouter.Client` now exposes a concurrency-safe `SetAPIKey`, called right
+after a successful key save, instead of only picking up a new key at the next
+app launch.
 
 ## Acceptance Criteria
 

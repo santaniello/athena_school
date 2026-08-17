@@ -6,6 +6,7 @@ import { NavItem } from '@/components/nav-item'
 import { ComingSoonPanel } from '@/components/coming-soon-panel'
 import HomeScreen from '@/screens/HomeScreen'
 import StudyScreen from '@/screens/StudyScreen'
+import SettingsScreen from '@/screens/SettingsScreen'
 import { NAVIGATION, type AppSection } from '@/lib/navigation'
 import { getUserProfile, type ProfileDraft } from '@/lib/profile'
 
@@ -70,7 +71,7 @@ function AppShell({ onLogout }: AppShellProps) {
             type="button"
             aria-label="Log out"
             onClick={() => void handleLogout()}
-            className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+            className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
           >
             <LogOut className="size-4" aria-hidden="true" />
           </button>
@@ -92,6 +93,8 @@ function AppShell({ onLogout }: AppShellProps) {
             />
           ) : section === 'study' ? (
             <StudyScreen onEndSession={() => setSection('home')} />
+          ) : section === 'settings' && profile ? (
+            <SettingsScreen profile={profile} onProfileUpdated={setProfile} />
           ) : (
             <ComingSoonPanel item={activeItem} />
           )}

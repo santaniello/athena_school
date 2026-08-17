@@ -13,6 +13,12 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AuthLayout } from '@/components/auth-layout'
 import { saveUserProfile, type ProfileDraft } from '@/lib/profile'
 import { profileErrorMessage } from '@/lib/onboardingErrors'
+import {
+  ASSISTANT_LANGUAGES,
+  EXPERIENCE_LEVELS,
+  STUDY_STYLES,
+  labelFor,
+} from '@/lib/profileOptions'
 
 interface OnboardingConfirmScreenProps {
   draft: ProfileDraft
@@ -30,33 +36,16 @@ const FIELD_LABELS: Record<keyof ProfileDraft, string> = {
   assistantLanguage: 'Assistant language',
 }
 
-const EXPERIENCE_LEVEL_LABELS: Record<string, string> = {
-  beginner: 'Beginner',
-  intermediate: 'Intermediate',
-  advanced: 'Advanced',
-}
-
-const ASSISTANT_LANGUAGE_LABELS: Record<string, string> = {
-  pt: 'Portuguese',
-  en: 'English',
-}
-
-const STUDY_STYLE_LABELS: Record<string, string> = {
-  direct: 'Direct and to the point',
-  practical_examples: 'Lots of practical examples',
-  step_by_step: 'Detailed step by step',
-}
-
 function displayValue(field: keyof ProfileDraft, draft: ProfileDraft): string {
   if (field === 'goals') return draft.goals.join(', ')
   if (field === 'experienceLevel') {
-    return EXPERIENCE_LEVEL_LABELS[draft.experienceLevel] ?? draft.experienceLevel
+    return labelFor(EXPERIENCE_LEVELS, draft.experienceLevel)
   }
   if (field === 'assistantLanguage') {
-    return ASSISTANT_LANGUAGE_LABELS[draft.assistantLanguage] ?? draft.assistantLanguage
+    return labelFor(ASSISTANT_LANGUAGES, draft.assistantLanguage)
   }
   if (field === 'studyStyle') {
-    return STUDY_STYLE_LABELS[draft.studyStyle] ?? draft.studyStyle
+    return labelFor(STUDY_STYLES, draft.studyStyle)
   }
   return draft[field] as string
 }
@@ -107,9 +96,9 @@ function OnboardingConfirmScreen({ draft, onChange, onConfirmed }: OnboardingCon
             <SelectValue placeholder="Select a level" />
           </SelectTrigger>
           <SelectContent>
-            {Object.entries(EXPERIENCE_LEVEL_LABELS).map(([value, label]) => (
-              <SelectItem key={value} value={value}>
-                {label}
+            {EXPERIENCE_LEVELS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
               </SelectItem>
             ))}
           </SelectContent>
@@ -126,9 +115,9 @@ function OnboardingConfirmScreen({ draft, onChange, onConfirmed }: OnboardingCon
             <SelectValue placeholder="Select a language" />
           </SelectTrigger>
           <SelectContent>
-            {Object.entries(ASSISTANT_LANGUAGE_LABELS).map(([value, label]) => (
-              <SelectItem key={value} value={value}>
-                {label}
+            {ASSISTANT_LANGUAGES.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
               </SelectItem>
             ))}
           </SelectContent>
@@ -145,9 +134,9 @@ function OnboardingConfirmScreen({ draft, onChange, onConfirmed }: OnboardingCon
             <SelectValue placeholder="Select a style" />
           </SelectTrigger>
           <SelectContent>
-            {Object.entries(STUDY_STYLE_LABELS).map(([value, label]) => (
-              <SelectItem key={value} value={value}>
-                {label}
+            {STUDY_STYLES.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
               </SelectItem>
             ))}
           </SelectContent>

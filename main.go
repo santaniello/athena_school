@@ -80,7 +80,7 @@ func main() {
 	studyMessages := sqlite.NewMessageRepository(db)
 	studyService := study.NewService(studySessions, studyMessages, llmClient, profiles)
 
-	app := desktop.NewApp(authService, sessions, onboardingService, profiles, configStore, studyService)
+	app := desktop.NewApp(authService, sessions, onboardingService, profiles, configStore, studyService, llmClient)
 
 	err = wails.Run(&options.App{
 		Title:            "Athena",

@@ -11,6 +11,8 @@ import (
 	"github.com/santaniello/athena/internal/application/onboarding"
 	domainconfig "github.com/santaniello/athena/internal/domain/config"
 	configmocks "github.com/santaniello/athena/internal/domain/config/mocks"
+	domainllm "github.com/santaniello/athena/internal/domain/llm"
+	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 	domainprofile "github.com/santaniello/athena/internal/domain/profile"
 	profilemocks "github.com/santaniello/athena/internal/domain/profile/mocks"
 )
@@ -22,7 +24,18 @@ func newTestOnboardingApp(
 	validator domainconfig.KeyValidator,
 ) *App {
 	t.Helper()
-	app := NewApp(nil, nil, onboarding.NewService(profiles, config, validator), profiles, config, nil)
+	return newTestOnboardingAppWithKeyUpdater(t, profiles, config, validator, llmmocks.NewMockAPIKeyUpdater(t))
+}
+
+func newTestOnboardingAppWithKeyUpdater(
+	t *testing.T,
+	profiles domainprofile.Store,
+	config domainconfig.Store,
+	validator domainconfig.KeyValidator,
+	apiKeyUpdater domainllm.APIKeyUpdater,
+) *App {
+	t.Helper()
+	app := NewApp(nil, nil, onboarding.NewService(profiles, config, validator), profiles, config, nil, apiKeyUpdater)
 	app.Startup(context.Background())
 	return app
 }
@@ -57,29 +70,34 @@ func TestApp_SaveOpenRouterKey_savesKey_whenValid(t *testing.T) {
 	// Given an App backed by a validator that accepts the key
 	config := configmocks.NewMockStore(t)
 	validator := configmocks.NewMockKeyValidator(t)
+	apiKeyUpdater := llmmocks.NewMockAPIKeyUpdater(t)
 	const key = "sk-or-valid"
 	validator.EXPECT().ValidateKey(context.Background(), key).Return(nil).Once()
 	config.EXPECT().Save(domainconfig.Config{OpenRouterKey: key}).Return(nil).Once()
-	app := newTestOnboardingApp(t, profilemocks.NewMockStore(t), config, validator)
+	apiKeyUpdater.EXPECT().SetAPIKey(key).Once()
+	app := newTestOnboardingAppWithKeyUpdater(t, profilemocks.NewMockStore(t), config, validator, apiKeyUpdater)
 
 	// When saving the key
 	err := app.SaveOpenRouterKey(key)
 
-	// Then it succeeds
+	// Then it succeeds and the live client picks up the new key immediately
 	require.NoError(t, err)
 }
 
 func TestApp_SaveOpenRouterKey_propagatesInvalidKeyError(t *testing.T) {
-	// Given an App backed by a validator that rejects the key
+	// Given an App backed by a validator that rejects the key, and an
+	// APIKeyUpdater that must never be called
 	validator := configmocks.NewMockKeyValidator(t)
+	apiKeyUpdater := llmmocks.NewMockAPIKeyUpdater(t)
 	const key = "sk-or-invalid"
 	validator.EXPECT().ValidateKey(context.Background(), key).Return(domainconfig.ErrKeyInvalid).Once()
-	app := newTestOnboardingApp(t, profilemocks.NewMockStore(t), configmocks.NewMockStore(t), validator)
+	app := newTestOnboardingAppWithKeyUpdater(t, profilemocks.NewMockStore(t), configmocks.NewMockStore(t), validator, apiKeyUpdater)
 
 	// When saving the key
 	err := app.SaveOpenRouterKey(key)
 
-	// Then the invalid-key sentinel is surfaced unchanged
+	// Then the invalid-key sentinel is surfaced unchanged, and the live
+	// client is left untouched
 	assert.ErrorIs(t, err, domainconfig.ErrKeyInvalid)
 }
 
