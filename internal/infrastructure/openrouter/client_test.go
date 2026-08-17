@@ -596,3 +596,48 @@ func TestClient_Embeddings_returnsError_whenRecordingUsageFails(t *testing.T) {
 	// Then the whole call fails even though the embedding was generated
 	assert.Error(t, err)
 }
+
+// ---- SetAPIKey ----
+
+func TestClient_SetAPIKey_changesKeyUsedByLaterCalls(t *testing.T) {
+	// Given a client constructed with an initial key
+	var receivedAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedAuth = r.Header.Get("Authorization")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{{"message": map[string]any{"role": "assistant", "content": "hi"}}},
+			"usage":   map[string]any{"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+		})
+	}))
+	defer server.Close()
+	recorder := mocks.NewMockUsageRecorder(t)
+	recorder.EXPECT().Record(mock.Anything, mock.AnythingOfType("llm.UsageEntry")).Return(nil).Once()
+	client := NewClient(server.URL, "sk-or-old", recorder)
+
+	// When the key is rotated and a call is made afterwards
+	client.SetAPIKey("sk-or-new")
+	_, err := client.Chat(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy})
+
+	// Then the call authenticates with the new key
+	require.NoError(t, err)
+	assert.Equal(t, "Bearer sk-or-new", receivedAuth)
+}
+
+func TestClient_Chat_returnsErrAPIKeyMissing_afterSetAPIKeyClearsKey(t *testing.T) {
+	// Given a client constructed with a valid key
+	requestReachedServer := false
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		requestReachedServer = true
+	}))
+	defer server.Close()
+	recorder := mocks.NewMockUsageRecorder(t)
+	client := NewClient(server.URL, "sk-or-valid", recorder)
+
+	// When the key is cleared and a call is made afterwards
+	client.SetAPIKey("")
+	_, err := client.Chat(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy})
+
+	// Then it fails with the missing-key sentinel without reaching OpenRouter
+	assert.ErrorIs(t, err, domainllm.ErrAPIKeyMissing)
+	assert.False(t, requestReachedServer)
+}
