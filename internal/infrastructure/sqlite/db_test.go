@@ -2,8 +2,11 @@ package sqlite
 
 import (
 	"database/sql"
+	"fmt"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -214,4 +217,40 @@ func TestOpen_isNoOpOnSecondOpenAndKeepsExistingData(t *testing.T) {
 	queryErr := second.QueryRow(`SELECT email FROM accounts WHERE id = ?`, "acc-1").Scan(&email)
 	require.NoError(t, queryErr)
 	assert.Equal(t, "user@example.com", email)
+}
+
+func TestOpen_serializesConcurrentWrites_withoutDatabaseLockedErrors(t *testing.T) {
+	// Given an open database and many goroutines about to write to it at
+	// once — database/sql pools connections by default, and modernc.org/
+	// sqlite has no busy_timeout unless configured, so competing writers on
+	// separate pooled connections previously failed immediately with
+	// "database is locked (5) (SQLITE_BUSY)" instead of queuing.
+	path := filepath.Join(t.TempDir(), "athena.db")
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	const workers = 20
+	errs := make(chan error, workers)
+	var wg sync.WaitGroup
+	for i := range workers {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, execErr := db.Exec(
+				`INSERT INTO accounts (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)`,
+				fmt.Sprintf("acc-%d", i), fmt.Sprintf("user%d@example.com", i), "hash", time.Now().UTC(),
+			)
+			errs <- execErr
+		}(i)
+	}
+
+	// When they all write concurrently
+	wg.Wait()
+	close(errs)
+
+	// Then every write succeeds — none see a locked database
+	for execErr := range errs {
+		assert.NoError(t, execErr)
+	}
 }
