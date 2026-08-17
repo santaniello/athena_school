@@ -172,6 +172,65 @@ describe('StudyScreen', () => {
     expect(endButton).toHaveClass('text-white')
   })
 
+  it('grows the textarea to fit multi-line content, same as ChatGPT/Claude', async () => {
+    // Given a started session
+    setupSubscriptions()
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      startedAt: '2026-08-16T10:00:00Z',
+    })
+    const user = userEvent.setup()
+    render(<StudyScreen />)
+    await user.type(screen.getByLabelText(/study today/i), 'Distributed systems')
+    await user.click(screen.getByRole('button', { name: 'Start session' }))
+    const textarea = (await screen.findByPlaceholderText(
+      /type your answer/i,
+    )) as HTMLTextAreaElement
+    // jsdom never computes real layout, so scrollHeight is always 0 — stub
+    // it to the "content wrapped onto more lines" case being tested.
+    Object.defineProperty(textarea, 'scrollHeight', { value: 140, configurable: true })
+
+    // When typing a reply that spans multiple lines
+    await user.type(textarea, 'First line{Shift>}{Enter}{/Shift}Second line')
+
+    // Then the textarea grows to fit it, instead of staying a fixed height
+    // with an internal scrollbar
+    expect(textarea.style.height).toBe('140px')
+  })
+
+  it('resets the textarea height back to its minimum after sending a reply', async () => {
+    // Given a started session with a settled opening turn and a grown,
+    // multi-line draft
+    const handlers = setupSubscriptions()
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      startedAt: '2026-08-16T10:00:00Z',
+    })
+    vi.mocked(sendStudyMessage).mockResolvedValueOnce()
+    const user = userEvent.setup()
+    render(<StudyScreen />)
+    await user.type(screen.getByLabelText(/study today/i), 'Distributed systems')
+    await user.click(screen.getByRole('button', { name: 'Start session' }))
+    await screen.findByRole('button', { name: 'End session' })
+    act(() => {
+      handlers.chunk?.('Welcome!')
+      handlers.done?.()
+    })
+    await screen.findByText('Welcome!')
+    const textarea = screen.getByPlaceholderText(/type your answer/i) as HTMLTextAreaElement
+    Object.defineProperty(textarea, 'scrollHeight', { value: 140, configurable: true })
+    await user.type(textarea, 'First line{Shift>}{Enter}{/Shift}Second line')
+    expect(textarea.style.height).toBe('140px')
+
+    // When sending the reply
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+
+    // Then the textarea collapses back to its default (CSS-driven) height
+    expect(textarea.style.height).toBe('auto')
+  })
+
   it('does not lose the opening turn or get stuck disabled when events fire before the call resolves', async () => {
     // Given a RequestOpeningTurn call that — like the real Wails binding —
     // emits "study:chunk"/"study:done" synchronously from inside the call,

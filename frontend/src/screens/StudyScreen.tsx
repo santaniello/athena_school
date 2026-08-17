@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { KeyboardEvent } from 'react'
+import type { ChangeEvent, KeyboardEvent } from 'react'
 import { ArrowUp, X } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
@@ -124,12 +124,27 @@ function StudyScreen({ onEndSession }: StudyScreenProps) {
     setDraft('')
     setError(null)
     setIsStreaming(true)
+    // The textarea's grown height is set directly on the DOM node (see
+    // handleDraftChange), so clearing the draft alone wouldn't shrink it
+    // back — 'auto' lets the CSS min-height take back over.
+    if (textareaRef.current) textareaRef.current.style.height = 'auto'
     try {
       await sendStudyMessage(sessionId, sessionTopic, content)
     } catch (err) {
       setIsStreaming(false)
       setError(err instanceof Error ? err.message : 'Failed to send the message.')
     }
+  }
+
+  // Grows the textarea to fit its content, ChatGPT/Claude-style, instead of
+  // staying a fixed height with an internal scrollbar — the icon buttons
+  // docked at its bottom corners (see the JSX below) track along for free,
+  // since they're positioned relative to this same element's box.
+  function handleDraftChange(event: ChangeEvent<HTMLTextAreaElement>) {
+    setDraft(event.target.value)
+    const el = event.target
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
   }
 
   function handleDraftKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -188,10 +203,10 @@ function StudyScreen({ onEndSession }: StudyScreenProps) {
         <Textarea
           ref={textareaRef}
           value={draft}
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={handleDraftChange}
           onKeyDown={handleDraftKeyDown}
           placeholder="Type your answer..."
-          className="min-h-24 resize-none pb-11"
+          className="min-h-24 max-h-[200px] resize-none overflow-y-auto pb-11"
         />
         <div className="absolute bottom-2 left-2">
           <AlertDialog>
