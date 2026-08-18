@@ -23,6 +23,12 @@ The project has no Context, no store, and no router — state is lifted to the n
 
 **Do not introduce Context or a store for one integer.** If prop-drilling ever exceeds three levels, the escape hatch consistent with this codebase is a Wails `knowledge:changed` event subscribed in `AppShell` — the same mechanism as `study:chunk` — not a client-side store.
 
+Spec 2.11 extends Review with pending reconciliation proposals. They render in a
+separate group and never count as draft Knowledge Items. At that point the navigation
+badge becomes `reviewCount = draftCount + pendingProposalCount`, while the two counts
+remain separately labelled in the screen. Draft bulk actions never apply or reject a
+reconciliation proposal.
+
 ## Tasks
 
 - [ ] `internal/application/knowledge/review.go` — `CountDrafts(ctx)`, `ApproveAllDrafts(ctx)`, `RejectAllDrafts(ctx)`, each returning the affected count
@@ -40,3 +46,5 @@ The project has no Context, no store, and no router — state is lifted to the n
 - The badge updates immediately after each action without navigating away
 - Bulk actions ask for confirmation, report the affected count, and leave non-draft items untouched
 - Saving drafts from the extraction modal in the study screen updates the badge without a reload
+- After 2.11, pending reconciliation proposals appear separately and contribute to the total review badge without changing the draft count
+- Draft bulk actions leave reconciliation proposals untouched

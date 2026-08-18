@@ -337,10 +337,11 @@ CREATE TABLE usage (
 
 **Dependência:** Fase 1 completa.
 
-**Entrega em duas fatias**, cada uma demonstrável sozinha:
+**Entrega em três incrementos**, cada um demonstrável sozinho:
 
 1. **2.1 → 2.2 → 2.6 → 2.7** — modelo, extração, explorer, fila de revisão
-2. **2.3 → 2.4 → 2.5 → 2.8** — import de notas, vector search, RAG, indexação dos aprovados
+2. **2.3 → 2.4 → 2.5 → 2.8** — import de notas, vector search, RAG, indexação de todos os estados
+3. **2.9 → 2.10 → 2.11 → 2.12** — proveniência, duplicidade, reconciliação e histórico de revisões
 
 > As specs detalhadas estão em `specs/phases/phase-02-knowledge-engine/`. Esta seção é o resumo; em caso de divergência, a spec da fase é a mais específica.
 
@@ -432,15 +433,18 @@ CREATE TABLE knowledge_chunks (
     heading TEXT,
     content TEXT,
     embedding BLOB, -- float32 empacotado, little-endian
+    embedding_model TEXT NOT NULL,
+    item_updated_at DATETIME, -- preenchido somente para chunks de Knowledge Items
     created_at DATETIME
 );
 
 -- onde vive o mtime da deduplicação; registra também arquivos com zero chunks
 CREATE TABLE ingested_files (
-    file_path   TEXT PRIMARY KEY,
-    mtime       INTEGER NOT NULL,
-    chunk_count INTEGER NOT NULL,
-    ingested_at DATETIME
+    file_path       TEXT PRIMARY KEY,
+    mtime           INTEGER NOT NULL,
+    embedding_model TEXT NOT NULL,
+    chunk_count     INTEGER NOT NULL,
+    ingested_at     DATETIME
 );
 ```
 
@@ -453,6 +457,7 @@ CREATE TABLE ingested_files (
 - [ ] Normalização dos vetores no insert **e da query no `Search`** — produto escalar só é cosseno com os dois lados unitários; filtra antes de pontuar
 - [ ] Reimportar arquivo alterado remove os vetores antigos da memória, não só do SQLite
 - [ ] Carga em memória no startup, a partir de `knowledge_chunks`
+- [ ] Startup carrega somente chunks do modelo atual e, para Knowledge Items, com status/`item_updated_at` iguais ao registro fonte; índice obsoleto nunca responde
 - [ ] `ADR-004` registrando a escolha do vector store e do modelo de embedding (trocar o modelo exige re-ingest)
 - [ ] `internal/infrastructure/vectorstore` entra no escopo do `make mutation-go` (emenda à ADR-002)
 
@@ -497,20 +502,55 @@ Conhecimento suficiente?
 - [ ] Usuário aprova ou rejeita; `ApproveAllDrafts` itera por `TransitionTo`, `RejectAllDrafts` itera `Delete` — rejeitar não é mudança de status
 - [ ] Badge com contador de itens pendentes, com estado no `AppShell` + callback — sem Context nem store
 
-### 2.8 — Approved Item Indexing
+### 2.8 — Knowledge Item Indexing
 
-Items aprovados entram no vector store e passam a ser recuperáveis pelo RAG (`source = athena`), tornando a base curada útil de volta nas sessões.
+Todos os Knowledge Items entram no vector store para permitir detecção de duplicidade em qualquer estado. Somente items aprovados são recuperáveis pelo RAG (`source = athena`, `status = approved`).
 
-- [ ] Hook em `Approve` (indexa), `Deprecate`/`DeleteItem` (removem), `UpdateItem` (reindexa)
-- [ ] Falha de indexação **nunca** reverte a aprovação — `Approve` devolve o item aprovado embrulhando `ErrIndexingFailed`, o binding loga e trata como sucesso, e o backfill recolhe depois
-- [ ] Backfill consentido dos items aprovados na fatia 1: alerta no Explorer com [Indexar agora], nunca silencioso no startup
+- [ ] Hook em `SaveDrafts` (indexa), `Approve`/`Deprecate`/`UpdateItem` (substituem status/conteúdo), `DeleteItem` (remove)
+- [ ] Aprovar/deprecar atualiza só o status do chunk, sem novo embedding; editar conteúdo re-embeda
+- [ ] Editar persiste o item e remove imediatamente o chunk antigo da memória; falha ao re-embeddar deixa o item temporariamente fora da busca, nunca servindo conteúdo obsoleto
+- [ ] Falha de indexação **nunca** reverte uma escrita bem-sucedida — devolve o item persistido com `ErrIndexingFailed`, o binding loga e trata como sucesso, e o backfill recolhe depois
+- [ ] Backfill consentido de todos os items criados antes da 2.8: alerta no Explorer com [Indexar agora], nunca silencioso no startup
+- [ ] Backfill compara `item_updated_at`, status e modelo de embedding para encontrar chunks obsoletos, não apenas ausentes
+
+### 2.9 — Persistent Provenance
+
+- [ ] Extração marca mensagens por ID e exige ao menos uma citação literal `{message_id, quote}` válida por candidato (máximo 5 × 1000 caracteres)
+- [ ] `knowledge_evidence` + `knowledge_item_evidence` guardam snapshots imutáveis; `Source` continua sendo apenas a categoria
+- [ ] `message_sources` persiste, em ordem, exatamente os chunks que sobreviveram ao threshold e ao teto de contexto
+- [ ] Mensagem final do assistente e fontes são gravadas atomicamente; sessão retomada restaura as fontes
+- [ ] Explorer mostra evidências do item
+
+### 2.10 — Knowledge Duplicate Detection
+
+- [ ] Match exato por conceito normalizado dentro do tópico, sem embedding
+- [ ] Sem match exato, busca semântica top-5 em items de todos os estados, threshold injetável default `0.90`
+- [ ] Match exato bloqueia criação direta; match semântico alerta e permite criação separada somente por escolha explícita
+- [ ] Backend repete a checagem no save para impedir bypass por chamada forjada ou UI stale
+
+### 2.11 — Knowledge Reconciliation
+
+- [ ] Propostas `create | update | relate | conflict | no_change`; LLM propõe, Go valida e usuário decide
+- [ ] Sem candidatos duplicados, `create` é determinístico e não faz uma segunda chamada LLM
+- [ ] Propostas salvas para revisão são persistidas separadamente de drafts e usam `TargetUpdatedAt` como controle otimista
+- [ ] `knowledge_item_relations` liga IDs; `related` é simétrico e idempotente
+- [ ] Target removido ou alterado torna a proposta `stale`; nenhuma alteração existente é automática
+
+### 2.12 — Knowledge Revision History
+
+- [ ] Snapshot imutável por criação, edição, aprovação, depreciação e reconciliação aplicada
+- [ ] Revisão e mutação do item ficam na mesma transação; falha de indexação posterior não apaga a revisão
+- [ ] Backfill `baseline` idempotente para items preexistentes
+- [ ] Histórico read-only no Explorer com diff por campo e evidências; restore fica fora da Fase 2
 
 ### Done when (Fase 2)
 
 - Usuário importa uma pasta de notas Markdown
 - Faz uma sessão de estudo que usa as notas como contexto
-- Extrai, revisa e aprova Knowledge Items a partir dessa sessão
-- Knowledge Explorer mostra os itens organizados por tópico
+- Extrai, reconcilia, revisa e aprova Knowledge Items com evidência persistente
+- Respostas retomadas preservam as fontes originalmente usadas
+- Duplicatas exatas não são criadas silenciosamente; conflitos sempre exigem decisão humana
+- Knowledge Explorer mostra os itens por tópico, suas evidências e o histórico de revisões
 - Items aprovados voltam como contexto em sessões seguintes
 
 ---
@@ -844,17 +884,7 @@ type AudioProvider interface {
 ### 7.1 — Knowledge Graph
 
 - [ ] `internal/domain/knowledge/graph.go` — relacionamentos entre conceitos
-- [ ] Schema:
-
-```sql
-CREATE TABLE concept_relations (
-    from_concept TEXT,
-    to_concept TEXT,
-    relation_type TEXT, -- related | prerequisite | extends
-    weight REAL
-);
-```
-
+- [ ] Reutilizar `knowledge_item_relations` da 2.11 sem nova tabela: `related` é simétrica; `prerequisite` e `extends` usam direção `from_item_id → to_item_id`; nomes não são chaves
 - [ ] UI: visualização de grafo com biblioteca (React Flow ou similar)
 - [ ] Navegação: clicar em conceito abre Knowledge Item
 

@@ -40,6 +40,13 @@ func (s *Service) ExtractFromSession(ctx context.Context, sessionID string) ([]K
 func (s *Service) SaveDrafts(ctx context.Context, items []KnowledgeItem) (int, error)
 ```
 
+This is the base 2.2 contract. After 2.9, the effective return type becomes
+`[]ExtractionCandidate`, pairing each item with validated `EvidenceRefs`, and
+`SaveDrafts` accepts those candidates so the item and its evidence are written
+atomically. After 2.10/2.11, the same wrapper also carries duplicate matches and a
+reconciliation proposal. Keeping those additions in their own specs preserves the
+one-behavior-at-a-time TDD order without leaving the final integration ambiguous.
+
 `ExtractFromSession` steps:
 
 1. `sessions.GetByID` → the session `Topic` becomes every item's `Topic`. The LLM's own `topic` field is ignored: deterministic grouping in the explorer, one less field to trust.
@@ -50,7 +57,7 @@ func (s *Service) SaveDrafts(ctx context.Context, items []KnowledgeItem) (int, e
 
 ## Prompt
 
-A single system message that: states the role; inlines the exact JSON schema; requires the envelope `{"items":[...]}` rather than a bare array (models wrap bare arrays in prose far more often, and an envelope leaves room for future fields); forbids markdown fences and commentary; caps the response at 8 items; and requires each definition to be self-contained rather than a restatement of the question.
+A single system message that: states the role; inlines the exact JSON schema; requires the envelope `{"items":[...]}` rather than a bare array (models wrap bare arrays in prose far more often, and an envelope leaves room for future fields); forbids markdown fences and commentary; caps the response at 8 items; and requires each definition to be self-contained rather than a restatement of the question. Spec 2.9 extends each item with literal `{message_id, quote}` evidence references after transcript turns gain stable message markers.
 
 ## Validation — do not trust the LLM
 
@@ -63,6 +70,11 @@ A single system message that: states the role; inlines the exact JSON schema; re
 7. Whole payload unparseable → `nil, ErrMalformedExtraction`
 
 `SaveDrafts` re-runs steps 3–6 on whatever the frontend sends back **and regenerates the ID**. This is the security-relevant part: accepting a client-supplied ID would let a crafted call overwrite or collide with an existing item.
+
+Specs 2.9–2.11 progressively harden this save boundary: evidence ownership is
+revalidated, exact duplicates cannot bypass reconciliation, and updates to an
+existing item require an explicit user-approved proposal. The frontend never gains
+a generic write path around those checks.
 
 Malformed-JSON handling is split by layer: the application returns `ErrMalformedExtraction`; the **desktop binding logs it and returns an empty list**. This keeps `internal/application` free of logging (it has none today, and log lines are mutation-testing noise) while satisfying "caught and logged, no crash".
 
@@ -94,3 +106,5 @@ Malformed-JSON handling is split by layer: the application returns `ErrMalformed
 - A definition exactly at the size cap is kept intact; one over the cap is truncated
 - A payload with more than `maxItems` items is truncated to `maxItems`, regardless of what the prompt asked for
 - `SaveDrafts` regenerates IDs, ignoring any ID supplied by the caller
+- After 2.9, every saved candidate includes at least one validated evidence snapshot from the source session
+- After 2.10/2.11, duplicate candidates are reconciled rather than silently inserted as independent items

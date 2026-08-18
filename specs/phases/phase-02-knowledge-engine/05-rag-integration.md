@@ -53,7 +53,7 @@ type RetrievalResult struct {
     Chunks     []ScoredChunk
     Sufficient bool
     Context    string   // rendered block, already capped
-    Sources    []Source // {FilePath, Heading, Concept, Score}
+    Sources    []Source // {ChunkID, ItemID, FilePath, Heading, Concept, Score, Excerpt}
 }
 
 func (s *Service) Retrieve(ctx context.Context, query, mode string) (RetrievalResult, error)
@@ -83,7 +83,10 @@ The context is injected as a **second `system` message**, immediately after the 
 
 A new `study:sources` event is emitted **before** the stream starts, payload `[{filePath, heading, concept, score}]`, rendered as a collapsible "Sources" strip under the assistant bubble. Deterministic and testable, unlike depending on the model to format inline citation markers.
 
-Sources are transient: `messages` has no sources column, so they do not reappear on resume. A `message_sources` table is Phase 3 scope.
+In this spec the event is transient. Spec 2.9 adds `message_sources` and atomically
+persists the exact post-cap source list with the completed assistant message, so
+sources reappear on resume. Persistent response provenance is therefore Phase 2
+scope, not Phase 3.
 
 ## Tasks
 
@@ -105,5 +108,6 @@ Sources are transient: `messages` has no sources column, so they do not reappear
 - With an empty vector store, no embedding is requested regardless of mode; in `notes` and `web` this falls through to a plain LLM call, in `strict-notes` it does not
 - The injected context never exceeds `maxContextChars`, and over-budget chunks are dropped whole, lowest score first
 - Cited sources are exactly the chunks that survived the cap
+- After 2.9, those exact sources reappear in the same order after resuming the session
 - Thresholds are injected, and a raised `minScore` demonstrably filters low-similarity chunks out
 - The existing `buildSystemPrompt` tests still pass unchanged

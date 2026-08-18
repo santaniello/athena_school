@@ -34,6 +34,10 @@ type KnowledgeItem struct {
 }
 ```
 
+`Source` is a category, not provenance. Spec 2.9 deliberately keeps concrete
+supporting messages/chunks in evidence tables instead of overloading this field with
+polymorphic identifiers.
+
 ## Lifecycle
 
 Only two transitions are legal. `draft → deprecated` is **not** allowed: the explorer offers Deprecate on approved items only, and the review queue rejects drafts by deletion.

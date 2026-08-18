@@ -52,6 +52,8 @@ type Chunk struct {
     Heading   string
     Content   string
     Embedding []float32
+    EmbeddingModel string
+    ItemUpdatedAt time.Time // zero for imported files; detects stale Knowledge Item chunks
     CreatedAt time.Time
 }
 
@@ -63,8 +65,15 @@ type ChunkRepository interface {
 }
 
 type IngestedFileRepository interface {
-    ListAll(ctx context.Context) (map[string]int64, error) // path -> mtime, one query per import
-    Upsert(ctx context.Context, path string, mtime int64, chunkCount int) error
+    ListAll(ctx context.Context) (map[string]IngestedFile, error) // keyed by path, one query per import
+    Upsert(ctx context.Context, file IngestedFile) error
+}
+
+type IngestedFile struct {
+    Path           string
+    MTime          int64
+    EmbeddingModel string
+    ChunkCount     int
 }
 ```
 
@@ -83,6 +92,8 @@ CREATE TABLE IF NOT EXISTS knowledge_chunks (
     heading    TEXT,
     content    TEXT,
     embedding  BLOB, -- tightly-packed little-endian float32
+    embedding_model TEXT NOT NULL,
+    item_updated_at DATETIME, -- only for SourceAthena
     created_at DATETIME
 );
 CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_file_path ON knowledge_chunks(file_path);
@@ -100,6 +111,7 @@ CREATE TABLE IF NOT EXISTS ingested_files (
 Two documented extensions over the original schema:
 
 - **`topic` / `status` / `item_id` on `knowledge_chunks`** — without them, 2.4's `SearchFilters` is unimplementable, and `item_id` is what lets 2.8 re-index or evict a chunk when its Knowledge Item is edited, deprecated, or deleted.
+- **`embedding_model` / `item_updated_at` on `knowledge_chunks`** — vectors from different models must never be mixed even when their dimensions happen to match; 2.8 also needs to distinguish a present-but-stale item chunk from a current one after an indexing failure. Imported-file chunks leave `item_updated_at` NULL and continue using `ingested_files` for mtime deduplication.
 - **`ingested_files`** answers where the dedup mtime lives. A separate table rather than a column on `knowledge_chunks`: one indexed lookup instead of a scan, no mtime denormalized across N rows, and it records files that produced **zero** chunks (otherwise an empty file is re-read on every import).
 
   `embedding_model` is part of the dedup key: a file is skipped only when **both** its mtime and the current `llm.EmbeddingModel` match what is recorded. Vectors are only comparable to others from the same model, so changing the model must re-embed rather than leave a silently mixed store — this turns the "changing the model requires a re-ingest" consequence below from a README footnote into automatic behavior.
@@ -136,7 +148,7 @@ type Summary struct {
 ```
 
 1. Pre-walk collecting `.md`/`.txt` candidates (case-insensitive extension) to get a real `FilesTotal`
-2. `ingestedFiles.ListAll` once → path→mtime map
+2. `ingestedFiles.ListAll` once → path→`IngestedFile` map
 3. Per file: unchanged mtime **and** unchanged embedding model → count as skipped and continue. Otherwise read → chunk → embed → replace.
 
    Embedding happens **before** anything is deleted, so a failed or interrupted API call leaves the previous chunks intact. The replace itself — `chunks.DeleteByFilePath` (a changed file must **replace**, not duplicate) → `chunks.SaveAll` → `ingestedFiles.Upsert` → `store.Remove` the old IDs → `store.Add` the new ones — runs inside a **single SQLite transaction**, so a failure cannot leave the file with its old chunks deleted and no new ones written. `MaxOpenConns(1)` makes this free.
@@ -175,3 +187,4 @@ Embedding calls stay **sequential** in this spec (100 files × ~5 chunks ≈ 500
 - A section under `minChunkChars` is merged into a neighbour rather than stored alone, and a short **final** section is merged backwards instead of dropped
 - A markdown file with no H1–H3 heading is still ingested via the paragraph-splitting fallback; text before the first heading becomes a chunk with an empty heading
 - Changing `llm.EmbeddingModel` makes a previously ingested file re-embed instead of being skipped
+- Every stored chunk records the embedding model that created its vector

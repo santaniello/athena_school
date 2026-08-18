@@ -61,6 +61,11 @@ Delete is irreversible and sits behind an `AlertDialog`, mirroring the folder-de
 - [ ] Inline editor reusing `frontend/src/components/tag-input.tsx` for `Properties` / `TradeOffs` / `RelatedConcepts`, `Input` for concept, `Textarea` for definition
 - [ ] `frontend/src/components/knowledge-extraction-dialog.tsx` — add the third button **[Save & approve]**, completing the flow of `specs/Athena.md` §12
 
+Specs 2.9 and 2.12 extend the detail pane with **Evidence** and **History** tabs.
+Spec 2.11 replaces name-only links created by reconciliation with ID-backed
+`knowledge_item_relations`; the existing `RelatedConcepts` list remains editable
+display metadata until Phase 7 renders the graph.
+
 > Pushing logic (`groupByTopic`, `definitionPreview`, filter predicates) into `lib/knowledge.ts` as pure functions is what keeps the frontend 80% coverage and Stryker 80 thresholds reachable on two large screens — far better than letting Stryker chew on deep JSX branches.
 
 ## Acceptance Criteria
@@ -72,3 +77,5 @@ Delete is irreversible and sits behind an `AlertDialog`, mirroring the folder-de
 - Editing a field and saving persists the change to SQLite and leaves `Status`, `Source`, and `CreatedAt` untouched
 - Delete asks for confirmation and removes the item permanently
 - The Knowledge nav section is unlocked and no longer renders `ComingSoonPanel`
+- After 2.9, the detail view exposes the immutable evidence supporting the item
+- After 2.12, the detail view exposes its read-only revision timeline and field diffs

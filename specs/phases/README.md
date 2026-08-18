@@ -83,9 +83,9 @@ Payments         Paddle
 
 ## Phase 2 — Knowledge Engine
 
-**Done when:** User imports a Markdown folder, runs a study session that uses the notes as context, extracts and approves Knowledge Items from that session, sees the Knowledge Explorer organized by topic, and finds approved items retrieved as context in later sessions.
+**Done when:** User imports a Markdown folder, runs a study session that uses the notes as context, extracts and approves evidence-backed Knowledge Items, reconciles duplicates against existing knowledge, sees revision history in the Knowledge Explorer, resumes answers with their original sources, and finds approved items retrieved as context in later sessions.
 
-Delivered in two slices, each demonstrable on its own: **2.1 → 2.2 → 2.6 → 2.7** (model, extraction, explorer, review queue), then **2.3 → 2.4 → 2.5 → 2.8** (notes import, vector search, RAG, approved-item indexing).
+Delivered in three increments, each demonstrable on its own: **2.1 → 2.2 → 2.6 → 2.7** (model, extraction, explorer, review queue), then **2.3 → 2.4 → 2.5 → 2.8** (notes import, vector search, RAG, item indexing), then **2.9 → 2.10 → 2.11 → 2.12** (provenance, duplicate detection, reconciliation, revision history).
 
 | Spec | Description |
 |---|---|
@@ -96,7 +96,11 @@ Delivered in two slices, each demonstrable on its own: **2.1 → 2.2 → 2.6 →
 | [05-rag-integration.md](phase-02-knowledge-engine/05-rag-integration.md) | Knowledge-first retrieval flow + source modes |
 | [06-knowledge-explorer.md](phase-02-knowledge-engine/06-knowledge-explorer.md) | Sidebar tree UI + detail screen + actions |
 | [07-knowledge-review.md](phase-02-knowledge-engine/07-knowledge-review.md) | Draft review queue + pending badge |
-| [08-approved-item-indexing.md](phase-02-knowledge-engine/08-approved-item-indexing.md) | Approved items into the vector store + backfill |
+| [08-knowledge-item-indexing.md](phase-02-knowledge-engine/08-knowledge-item-indexing.md) | All item statuses indexed; approved-only RAG + backfill |
+| [09-persistent-provenance.md](phase-02-knowledge-engine/09-persistent-provenance.md) | Evidence-backed items + persisted sources for historical answers |
+| [10-duplicate-detection.md](phase-02-knowledge-engine/10-duplicate-detection.md) | Exact normalized and semantic duplicate detection |
+| [11-knowledge-reconciliation.md](phase-02-knowledge-engine/11-knowledge-reconciliation.md) | Human-approved create/update/relate/conflict/no-change proposals |
+| [12-knowledge-revision-history.md](phase-02-knowledge-engine/12-knowledge-revision-history.md) | Immutable evidence-backed item revision history |
 
 ---
 
