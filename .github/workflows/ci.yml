@@ -135,7 +135,7 @@ jobs:
       # the latest cache for the branch when the exact run-id key misses.
       - name: Restore incremental mutation report
         if: github.event_name == 'push'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: frontend/reports/stryker-incremental.json
           key: stryker-incremental-${{ github.ref_name }}-${{ github.run_id }}
