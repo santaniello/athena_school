@@ -145,7 +145,9 @@ Commit messages must follow `<type>(<scope>): <description>` (scope optional), w
 
 CI enforces the *mechanical* gate (coverage, linters, mutants, secrets). The rules in [`AGENTS.md`](AGENTS.md) that no linter can check — business logic leaking out of `internal/domain/`, tests that skip GivenWhenThen, mocks declared in-package, a missing `CHANGELOG.md` entry — are covered by two review layers:
 
-**[CodeRabbit](https://coderabbit.ai) — automatic, on every PR.** A GitHub App, not a workflow, so it consumes no Actions minutes. Free forever on this repository under CodeRabbit's open-source plan, with no limit on PRs. It posts a change walkthrough plus inline comments, and re-reviews incrementally on each new push.
+**[CodeRabbit](https://coderabbit.ai) — automatic, on every PR.** A GitHub App (install and authorize it for the repository once; the config alone does nothing), not a workflow, so it consumes no Actions minutes. Free on this repository under CodeRabbit's open-source plan. It posts a change walkthrough plus inline comments, and re-reviews incrementally on each new push.
+
+The OSS plan is rate-limited rather than unlimited: reviews per hour and files per review both scale with the repository's star count. On a low-star repo, expect to trigger some reviews manually with `@coderabbitai review` when the automatic one doesn't fire.
 
 Configured in [`.coderabbit.yaml`](.coderabbit.yaml). CodeRabbit reads `AGENTS.md` as review criteria automatically, so the config only adds what prose can't express: per-layer instructions for the hexagonal boundaries, exclusion of generated code (`**/mocks/**`, `frontend/wailsjs/**`), and non-blocking pre-merge checks for the Conventional Commits title, the `[Unreleased]` CHANGELOG entry, and the TDD "test ships with implementation" rule.
 
@@ -158,7 +160,7 @@ Chat commands on any PR:
 | `@coderabbitai configuration` | Print the config it actually loaded — use this to verify `.coderabbit.yaml` parsed |
 | `@coderabbitai pause` / `resume` | Stop / restart automatic reviews on that PR |
 
-**`/pr-review` — on demand, before pushing.** A [Claude Code](https://claude.com/claude-code) project command ([`.claude/commands/pr-review.md`](.claude/commands/pr-review.md)) that runs the local gate (`make test`, `make lint`, `make mutation-go` when the domain or application layer changed) and then reviews the branch diff against the `AGENTS.md` rules, catching violations before they ever reach a PR.
+**`/pr-review` — on demand, before pushing.** A [Claude Code](https://claude.com/claude-code) project command ([`.claude/commands/pr-review.md`](.claude/commands/pr-review.md)) that runs the local gate (`make test`, `make lint`, plus `make mutation-go` / `make mutation-frontend` when the corresponding layer changed) and then reviews the branch diff against the `AGENTS.md` rules, catching violations before they ever reach a PR. It resolves the base branch from the open PR (or asks) instead of assuming `main`.
 
 ### Releases (`.github/workflows/release.yml`)
 

@@ -17,6 +17,11 @@ reviews:
     enabled: true
     auto_incremental_review: true
     drafts: false
+    # CodeRabbit auto-reviews only the default branch (main) unless other base
+    # branches are listed here. CI accepts PRs against develop too, so most work
+    # would otherwise open without a review. Entries are regex patterns.
+    base_branches:
+      - develop
 
   # Exclusions only — everything not listed here is still reviewed.
   path_filters:
