@@ -135,11 +135,30 @@ Three more jobs run alongside `quality-gate`:
 
 Dependency updates (Go modules, npm packages, GitHub Actions) are proposed weekly by Dependabot (`.github/dependabot.yml`).
 
-> **Checks are visible, not merge-blocking (for now).** This repository is private on the GitHub Free plan, which does not support branch protection rules or repository rulesets for private repos (`gh api repos/.../branches/main/protection` and `.../rulesets` both return `403 Upgrade to GitHub Pro or make this repository public`). This means none of the jobs above — including the pre-existing `quality-gate` — are wired as *required status checks*: a red CI run shows clearly on the PR, but the "Merge pull request" button is not disabled by GitHub. Until the repo goes public or upgrades to a paid plan, avoiding a bad merge relies on checking the PR status before merging, not on GitHub enforcement.
+> **Checks are merge-blocking.** The repository is public, so branch protection is available on the GitHub Free plan. All five jobs above — `quality-gate`, `mutation-go`, `mutation-frontend`, `secret-scan`, `commit-lint` — are wired as *required status checks* on `main`, with `strict: true` (the branch must be up to date with `main` before merging). A red run disables the "Merge pull request" button. Force pushes and branch deletion on `main` are blocked; `enforce_admins` is off, so an admin can still override in an emergency.
 
 ### Conventional Commits
 
 Commit messages must follow `<type>(<scope>): <description>` (scope optional), with `type` one of `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`. `make install-hooks` installs a local `commit-msg` hook that rejects non-conforming messages before they're committed; the `commit-lint` CI job is the backstop for anyone who skips the hook or commits with `--no-verify`.
+
+### Automated Code Review
+
+CI enforces the *mechanical* gate (coverage, linters, mutants, secrets). The rules in [`AGENTS.md`](AGENTS.md) that no linter can check — business logic leaking out of `internal/domain/`, tests that skip GivenWhenThen, mocks declared in-package, a missing `CHANGELOG.md` entry — are covered by two review layers:
+
+**[CodeRabbit](https://coderabbit.ai) — automatic, on every PR.** A GitHub App, not a workflow, so it consumes no Actions minutes. Free forever on this repository under CodeRabbit's open-source plan, with no limit on PRs. It posts a change walkthrough plus inline comments, and re-reviews incrementally on each new push.
+
+Configured in [`.coderabbit.yaml`](.coderabbit.yaml). CodeRabbit reads `AGENTS.md` as review criteria automatically, so the config only adds what prose can't express: per-layer instructions for the hexagonal boundaries, exclusion of generated code (`**/mocks/**`, `frontend/wailsjs/**`), and non-blocking pre-merge checks for the Conventional Commits title, the `[Unreleased]` CHANGELOG entry, and the TDD "test ships with implementation" rule.
+
+Chat commands on any PR:
+
+| Command | Effect |
+| --- | --- |
+| `@coderabbitai review` | Review the incremental changes since the last review |
+| `@coderabbitai full review` | Re-review the whole PR from scratch |
+| `@coderabbitai configuration` | Print the config it actually loaded — use this to verify `.coderabbit.yaml` parsed |
+| `@coderabbitai pause` / `resume` | Stop / restart automatic reviews on that PR |
+
+**`/pr-review` — on demand, before pushing.** A [Claude Code](https://claude.com/claude-code) project command ([`.claude/commands/pr-review.md`](.claude/commands/pr-review.md)) that runs the local gate (`make test`, `make lint`, `make mutation-go` when the domain or application layer changed) and then reviews the branch diff against the `AGENTS.md` rules, catching violations before they ever reach a PR.
 
 ### Releases (`.github/workflows/release.yml`)
 

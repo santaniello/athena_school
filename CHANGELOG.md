@@ -8,9 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- `README.md` CI/CD section: the note claiming the repository is private and that no job is a required status check is obsolete — the repo is public and all five CI jobs are wired as required status checks on `main` with `strict: true`
 - `mutation-frontend` CI job: PRs now run Stryker only against files changed vs. the base branch (`git diff` + `--mutate`); pushes to `main`/`develop` run the full suite in incremental mode (`incremental: true` in `frontend/stryker.config.mjs`), with `reports/stryker-incremental.json` cached per branch across runs — cuts the ~30min full-repo mutation run on every PR down to just the touched code
 
 ### Added
+- Automated PR code review: [CodeRabbit](https://coderabbit.ai) as a GitHub App (free open-source plan, no Actions minutes consumed), configured via `.coderabbit.yaml` with per-layer `path_instructions` for the hexagonal boundaries, exclusion of generated code (`**/mocks/**`, `frontend/wailsjs/**`), and non-blocking `pre_merge_checks` for the Conventional Commits title, the `[Unreleased]` CHANGELOG entry and the TDD "test ships with implementation" rule — `AGENTS.md` is picked up as review criteria automatically
+- `.claude/commands/pr-review.md`: Claude Code project command that runs the local quality gate (`make test`, `make lint`, `make mutation-go` when `internal/domain`/`internal/application` changed) and reviews the branch diff against the `AGENTS.md` rules before a PR is opened
 - Repository scaffold: go.mod, Makefile, directory structure, .gitignore
 - Wails v2 + React + TypeScript desktop shell (`wails dev`/`wails build`)
 - CI workflow (`.github/workflows/ci.yml`): tests with coverage, 80% coverage gate, security-suppression check, `golangci-lint`, `govulncheck` on every push and PR to `main`/`develop`
