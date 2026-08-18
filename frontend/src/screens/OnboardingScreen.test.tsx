@@ -8,12 +8,19 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   SaveProfile: vi.fn(),
 }))
 
+// Free-text fields are filled by pasting rather than typing: per-character
+// typing spends a macrotask and a React render on every keystroke for no
+// added coverage, since the controlled inputs see the same change events
+// either way. Goals keeps type(), since its TagInput commits on {Enter}.
 async function fillForm(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByLabelText('Name'), 'Ana')
-  await user.type(screen.getByLabelText('What would you like to call the assistant?'), 'Atena')
+  await user.click(screen.getByLabelText('Name'))
+  await user.paste('Ana')
+  await user.click(screen.getByLabelText('What would you like to call the assistant?'))
+  await user.paste('Atena')
   await user.click(screen.getByRole('combobox', { name: 'Assistant language' }))
   await user.click(await screen.findByRole('option', { name: 'English' }))
-  await user.type(screen.getByLabelText('Area of study or work'), 'Software Engineering')
+  await user.click(screen.getByLabelText('Area of study or work'))
+  await user.paste('Software Engineering')
   await user.click(screen.getByRole('combobox', { name: 'Experience level' }))
   await user.click(await screen.findByRole('option', { name: 'Intermediate' }))
   await user.type(screen.getByLabelText('Goals'), 'SQL{Enter}')

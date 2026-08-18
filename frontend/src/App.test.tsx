@@ -219,14 +219,23 @@ describe('App', () => {
     await screen.findByRole('heading', { name: 'Connect your OpenRouter key' })
 
     // When connecting the key and filling out onboarding
-    await user.type(screen.getByLabelText('OpenRouter key'), 'sk-or-valid')
+    // Free-text fields are filled by pasting rather than typing: this is
+    // the longest test in the suite, and per-character typing spends a
+    // macrotask and a React render on every keystroke for no added
+    // coverage — the controlled inputs see the same change events either
+    // way. Goals keeps type(), since its TagInput commits on {Enter}.
+    await user.click(screen.getByLabelText('OpenRouter key'))
+    await user.paste('sk-or-valid')
     await user.click(screen.getByRole('button', { name: 'Connect' }))
     await screen.findByRole('heading', { name: 'Tell us about yourself' })
-    await user.type(screen.getByLabelText('Name'), 'Ana')
-    await user.type(screen.getByLabelText('What would you like to call the assistant?'), 'Atena')
+    await user.click(screen.getByLabelText('Name'))
+    await user.paste('Ana')
+    await user.click(screen.getByLabelText('What would you like to call the assistant?'))
+    await user.paste('Atena')
     await user.click(screen.getByRole('combobox', { name: 'Assistant language' }))
     await user.click(await screen.findByRole('option', { name: 'English' }))
-    await user.type(screen.getByLabelText('Area of study or work'), 'Software Engineering')
+    await user.click(screen.getByLabelText('Area of study or work'))
+    await user.paste('Software Engineering')
     await user.click(screen.getByRole('combobox', { name: 'Experience level' }))
     await user.click(await screen.findByRole('option', { name: 'Intermediate' }))
     await user.type(screen.getByLabelText('Goals'), 'SQL{Enter}')
