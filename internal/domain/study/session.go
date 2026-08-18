@@ -14,11 +14,6 @@ type Session struct {
 	ID        string
 	Topic     string
 	Mode      string
+	FolderID  string // always populated; falls back to folder.DefaultFolderID
 	StartedAt time.Time
-	EndedAt   time.Time
-}
-
-// IsOpen reports whether the session has not been ended yet.
-func (s Session) IsOpen() bool {
-	return s.EndedAt.IsZero()
 }

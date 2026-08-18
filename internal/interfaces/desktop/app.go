@@ -8,6 +8,7 @@ import (
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/santaniello/athena/internal/application/auth"
+	"github.com/santaniello/athena/internal/application/folder"
 	"github.com/santaniello/athena/internal/application/onboarding"
 	"github.com/santaniello/athena/internal/application/study"
 	domainauth "github.com/santaniello/athena/internal/domain/auth"
@@ -25,6 +26,7 @@ type App struct {
 	profiles      domainprofile.Store
 	config        domainconfig.Store
 	study         *study.Service
+	folder        *folder.Service
 	apiKeyUpdater domainllm.APIKeyUpdater
 	// emit defaults to wailsruntime.EventsEmit, which calls log.Fatal (i.e.
 	// os.Exit) when a.ctx was never produced by the real Wails runtime —
@@ -35,7 +37,7 @@ type App struct {
 
 // NewApp creates a new App instance backed by the given auth service,
 // session store, onboarding service, profile store, config store, study
-// service and the live LLM client's key updater.
+// service, folder service and the live LLM client's key updater.
 func NewApp(
 	authService *auth.Service,
 	sessions domainauth.SessionStore,
@@ -43,6 +45,7 @@ func NewApp(
 	profiles domainprofile.Store,
 	config domainconfig.Store,
 	studyService *study.Service,
+	folderService *folder.Service,
 	apiKeyUpdater domainllm.APIKeyUpdater,
 ) *App {
 	return &App{
@@ -52,6 +55,7 @@ func NewApp(
 		profiles:      profiles,
 		config:        config,
 		study:         studyService,
+		folder:        folderService,
 		apiKeyUpdater: apiKeyUpdater,
 		emit:          wailsruntime.EventsEmit,
 	}

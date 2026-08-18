@@ -59,3 +59,33 @@ func TestMessageRepository_ListBySession_returnsEmptyForUnknownSession(t *testin
 	require.NoError(t, err)
 	assert.Empty(t, messages)
 }
+
+func TestMessageRepository_DeleteBySession_removesEveryMessageForThatSession(t *testing.T) {
+	// Given two messages in session-1 and one in session-2
+	repo := newTestMessageRepository(t)
+	ctx := context.Background()
+	require.NoError(t, repo.Append(ctx, study.Message{
+		ID: "msg-1", SessionID: "session-1", Role: study.RoleUser,
+		Content: "Hi", CreatedAt: time.Now().UTC(),
+	}))
+	require.NoError(t, repo.Append(ctx, study.Message{
+		ID: "msg-2", SessionID: "session-1", Role: study.RoleAssistant,
+		Content: "Hello!", CreatedAt: time.Now().UTC(),
+	}))
+	require.NoError(t, repo.Append(ctx, study.Message{
+		ID: "msg-3", SessionID: "session-2", Role: study.RoleUser,
+		Content: "Still here", CreatedAt: time.Now().UTC(),
+	}))
+
+	// When deleting session-1's messages
+	err := repo.DeleteBySession(ctx, "session-1")
+
+	// Then only session-2's message remains
+	require.NoError(t, err)
+	remaining, listErr := repo.ListBySession(ctx, "session-1")
+	require.NoError(t, listErr)
+	assert.Empty(t, remaining)
+	other, listErr := repo.ListBySession(ctx, "session-2")
+	require.NoError(t, listErr)
+	assert.Len(t, other, 1)
+}

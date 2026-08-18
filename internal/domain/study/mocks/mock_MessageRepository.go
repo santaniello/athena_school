@@ -69,6 +69,53 @@ func (_c *MockMessageRepository_Append_Call) RunAndReturn(run func(context.Conte
 	return _c
 }
 
+// DeleteBySession provides a mock function with given fields: ctx, sessionID
+func (_m *MockMessageRepository) DeleteBySession(ctx context.Context, sessionID string) error {
+	ret := _m.Called(ctx, sessionID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteBySession")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
+		r0 = rf(ctx, sessionID)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockMessageRepository_DeleteBySession_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteBySession'
+type MockMessageRepository_DeleteBySession_Call struct {
+	*mock.Call
+}
+
+// DeleteBySession is a helper method to define mock.On call
+//   - ctx context.Context
+//   - sessionID string
+func (_e *MockMessageRepository_Expecter) DeleteBySession(ctx interface{}, sessionID interface{}) *MockMessageRepository_DeleteBySession_Call {
+	return &MockMessageRepository_DeleteBySession_Call{Call: _e.mock.On("DeleteBySession", ctx, sessionID)}
+}
+
+func (_c *MockMessageRepository_DeleteBySession_Call) Run(run func(ctx context.Context, sessionID string)) *MockMessageRepository_DeleteBySession_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockMessageRepository_DeleteBySession_Call) Return(_a0 error) *MockMessageRepository_DeleteBySession_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockMessageRepository_DeleteBySession_Call) RunAndReturn(run func(context.Context, string) error) *MockMessageRepository_DeleteBySession_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListBySession provides a mock function with given fields: ctx, sessionID
 func (_m *MockMessageRepository) ListBySession(ctx context.Context, sessionID string) ([]study.Message, error) {
 	ret := _m.Called(ctx, sessionID)

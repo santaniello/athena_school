@@ -22,8 +22,7 @@ CREATE TABLE sessions (
     id         TEXT PRIMARY KEY,
     topic      TEXT,
     mode       TEXT, -- study | challenge | interview
-    started_at DATETIME,
-    ended_at   DATETIME
+    started_at DATETIME
 );
 
 CREATE TABLE messages (
