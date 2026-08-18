@@ -70,3 +70,46 @@ func TestBuildSystemPrompt_instructsConciseFollowUps(t *testing.T) {
 	assert.Contains(t, prompt, "Only go deeper")
 	assert.Contains(t, prompt, "explicitly asks")
 }
+
+func TestBuildSystemPrompt_instructsPortugueseWhenProfileWantsPortuguese(t *testing.T) {
+	// Given a profile with AssistantLanguage set to Portuguese
+	profile := domainprofile.UserProfile{
+		Name:              "Ana",
+		AssistantName:     "Atena",
+		AssistantLanguage: domainprofile.AssistantLanguagePortuguese,
+	}
+
+	// When building the system prompt
+	prompt := buildSystemPrompt(profile, "Distributed systems")
+
+	// Then it explicitly instructs the model to reply in Portuguese,
+	// including the opening message
+	assert.Contains(t, prompt, "Respond in Brazilian Portuguese")
+	assert.Contains(t, prompt, "opening message")
+}
+
+func TestBuildSystemPrompt_instructsEnglishWhenProfileWantsEnglish(t *testing.T) {
+	// Given a profile with AssistantLanguage set to English
+	profile := domainprofile.UserProfile{
+		Name:              "Ana",
+		AssistantName:     "Atena",
+		AssistantLanguage: domainprofile.AssistantLanguageEnglish,
+	}
+
+	// When building the system prompt
+	prompt := buildSystemPrompt(profile, "Distributed systems")
+
+	// Then it explicitly instructs the model to reply in English
+	assert.Contains(t, prompt, "Respond in English")
+}
+
+func TestBuildSystemPrompt_omitsLanguageInstructionWhenUnset(t *testing.T) {
+	// Given a profile without AssistantLanguage set (e.g. partial profile)
+	profile := domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}
+
+	// When building the system prompt
+	prompt := buildSystemPrompt(profile, "Distributed systems")
+
+	// Then it adds no language instruction, preserving prior behavior
+	assert.NotContains(t, prompt, "Respond in")
+}
