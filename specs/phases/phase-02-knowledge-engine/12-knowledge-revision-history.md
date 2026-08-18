@@ -27,7 +27,7 @@ type Revision struct {
     ID             string
     ItemID         string
     Number         int
-    Snapshot       KnowledgeItem
+    Snapshot       Item
     ChangeType     string
     ChangedBy      string
     Reason         string

@@ -45,7 +45,7 @@ type DuplicateMatch struct {
 
 func (s *Service) FindDuplicates(
     ctx context.Context,
-    candidate KnowledgeItem,
+    candidate Item,
     topK int,
     minScore float64,
 ) ([]DuplicateMatch, error)

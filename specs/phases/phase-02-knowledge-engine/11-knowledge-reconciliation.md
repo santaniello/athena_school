@@ -28,7 +28,7 @@ type ReconciliationProposal struct {
     ID              string
     Action          string
     Status          string
-    Candidate       KnowledgeItem
+    Candidate       Item
     TargetItemID    string
     TargetUpdatedAt time.Time
     Reason          string
@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS knowledge_reconciliation_proposals (
     id                TEXT PRIMARY KEY,
     action            TEXT NOT NULL,
     status            TEXT NOT NULL,
-    candidate_snapshot TEXT NOT NULL, -- validated JSON KnowledgeItem snapshot
+    candidate_snapshot TEXT NOT NULL, -- validated JSON Item snapshot
     target_item_id    TEXT,
     target_updated_at DATETIME,
     reason            TEXT NOT NULL,

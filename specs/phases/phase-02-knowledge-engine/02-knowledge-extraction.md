@@ -33,11 +33,11 @@ Returning candidates instead of persisting-then-deleting is what makes "Ignore s
 ```go
 // ExtractFromSession reads sessionID's transcript, asks the LLM for
 // concepts, and returns validated *unpersisted* draft candidates.
-func (s *Service) ExtractFromSession(ctx context.Context, sessionID string) ([]KnowledgeItem, error)
+func (s *Service) ExtractFromSession(ctx context.Context, sessionID string) ([]Item, error)
 
 // SaveDrafts persists the items the user confirmed, re-validating every
 // field and re-stamping ID/Source/Status/timestamps server-side.
-func (s *Service) SaveDrafts(ctx context.Context, items []KnowledgeItem) (int, error)
+func (s *Service) SaveDrafts(ctx context.Context, items []Item) (int, error)
 ```
 
 This is the base 2.2 contract. After 2.9, the effective return type becomes
