@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
   HasLocalSession,
@@ -12,6 +12,27 @@ import {
   SaveProfile,
 } from '../wailsjs/go/desktop/App'
 import App from './App'
+
+// Opening a Radix Select makes it pull focus into its listbox. When a text
+// input currently holds focus, that blur/focus pair lands outside React's
+// act scope under jsdom, and React reports an un-acted update on SelectItem
+// (its onFocus sets isFocused). Dropping focus first means Radix's move
+// starts from a settled state — a real browser's click does this on its own,
+// so this only compensates for jsdom, not for a product bug.
+//
+// Waiting for the trigger to show the label additionally asserts the pick
+// actually took, which clicking an option alone does not.
+async function pickOption(
+  user: ReturnType<typeof userEvent.setup>,
+  comboboxName: string,
+  optionName: string,
+) {
+  ;(document.activeElement as HTMLElement | null)?.blur()
+  const combobox = screen.getByRole('combobox', { name: comboboxName })
+  await user.click(combobox)
+  await user.click(await screen.findByRole('option', { name: optionName }))
+  await waitFor(() => expect(combobox).toHaveTextContent(optionName))
+}
 
 vi.mock('../wailsjs/go/desktop/App', () => ({
   HasLocalSession: vi.fn(),
@@ -232,15 +253,12 @@ describe('App', () => {
     await user.paste('Ana')
     await user.click(screen.getByLabelText('What would you like to call the assistant?'))
     await user.paste('Atena')
-    await user.click(screen.getByRole('combobox', { name: 'Assistant language' }))
-    await user.click(await screen.findByRole('option', { name: 'English' }))
+    await pickOption(user, 'Assistant language', 'English')
     await user.click(screen.getByLabelText('Area of study or work'))
     await user.paste('Software Engineering')
-    await user.click(screen.getByRole('combobox', { name: 'Experience level' }))
-    await user.click(await screen.findByRole('option', { name: 'Intermediate' }))
+    await pickOption(user, 'Experience level', 'Intermediate')
     await user.type(screen.getByLabelText('Goals'), 'SQL{Enter}')
-    await user.click(screen.getByRole('combobox', { name: 'Preferred study style' }))
-    await user.click(await screen.findByRole('option', { name: 'Lots of practical examples' }))
+    await pickOption(user, 'Preferred study style', 'Lots of practical examples')
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     await screen.findByRole('heading', { name: 'Confirm your profile' })
     await user.click(screen.getByRole('button', { name: 'Confirm and save' }))
