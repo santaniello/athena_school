@@ -14,13 +14,28 @@ import (
 // Open opens the SQLite database at path and applies all migrations. It is
 // safe to call on every launch: migrations are idempotent and a no-op once
 // already applied.
+//
+// database/sql pools connections for drivers built around concurrent
+// access (Postgres, MySQL, ...), but SQLite allows only one writer at a
+// time and modernc.org/sqlite has no busy_timeout by default — two pooled
+// connections both trying to write fail immediately with "database is
+// locked (5) (SQLITE_BUSY)" instead of one just waiting its turn. Capping
+// the pool at a single connection routes every query through it, so
+// database/sql itself serializes access instead of opening a second,
+// colliding connection; the busy_timeout PRAGMA is an extra safety net for
+// any lock briefly held by something outside this pool (e.g. a read while
+// a migration is still applying elsewhere).
 func Open(path string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: opening database: %w", err)
 	}
+	db.SetMaxOpenConns(1)
+	if _, err := db.Exec(`PRAGMA busy_timeout = 5000`); err != nil {
+		return nil, errors.Join(fmt.Errorf("sqlite: setting busy_timeout: %w", err), db.Close())
+	}
 	for _, migration := range migrations {
-		if _, err := db.Exec(migration); err != nil {
+		if err := migration(db); err != nil {
 			return nil, errors.Join(
 				fmt.Errorf("sqlite: applying migration: %w", err),
 				db.Close(),

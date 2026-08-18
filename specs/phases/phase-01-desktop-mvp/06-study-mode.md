@@ -13,7 +13,6 @@ type Session struct {
     Topic     string
     Mode      string // "study"; other modes (challenge, interview) land in later phases
     StartedAt time.Time
-    EndedAt   time.Time
 }
 
 type Message struct {
@@ -41,7 +40,7 @@ System: You are {AssistantName}, the learning assistant of {Name}.
 ## Tasks
 
 - [x] `internal/domain/study/` — `Session`, `Message`, session rules
-- [x] `internal/application/study/` — `Service.Start`/`SendMessage`/`End`
+- [x] `internal/application/study/` — `Service.Start`/`SendMessage`
 - [x] `UserProfile` injected into every prompt (rebuilt fresh each turn, since the system prompt itself is never persisted)
 - [x] UI: chat interface with streaming response display (`StudyScreen`, via Wails `study:chunk`/`study:done`/`study:error` events)
 - [x] Topic selectable via UI (free text input — no topic list exists until the Knowledge Base ships in Phase 2)
@@ -53,4 +52,3 @@ System: You are {AssistantName}, the learning assistant of {Name}.
 - Response streams in real time (text appears incrementally)
 - System prompt includes all fields from `UserProfile`
 - Session and messages are persisted to SQLite incrementally — the user's message is written before the LLM call, and the assistant's reply only once its stream completes, so a mid-stream failure never loses the user's side of the conversation (a stricter guarantee than "on completion")
-- "End session" button closes the session gracefully
