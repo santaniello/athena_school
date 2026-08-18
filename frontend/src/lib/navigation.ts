@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   BookOpen,
+  FileText,
   FolderTree,
   Home,
   Layers,
@@ -22,6 +23,7 @@ export type AppSection =
   | 'progress'
   | 'flashcards'
   | 'interview'
+  | 'documentation'
   | 'settings'
 
 export type NavStatus = 'unlocked' | 'locked'
@@ -100,6 +102,15 @@ export const NAVIGATION: NavItem[] = [
     status: 'locked',
     group: 'primary',
     description: 'Progressive mock interview with a timer and a final evaluation report.',
+  },
+  {
+    id: 'documentation',
+    label: 'Documentation',
+    icon: FileText,
+    phase: 1,
+    status: 'unlocked',
+    group: 'footer',
+    description: 'What Athena is for, how study sessions work, and what the Knowledge Engine adds.',
   },
   {
     id: 'settings',

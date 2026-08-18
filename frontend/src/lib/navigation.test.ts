@@ -11,6 +11,7 @@ const EXPECTED_IDS: AppSection[] = [
   'progress',
   'flashcards',
   'interview',
+  'documentation',
   'settings',
 ]
 
@@ -19,14 +20,14 @@ describe('NAVIGATION', () => {
     expect(NAVIGATION.map((item) => item.id)).toEqual(EXPECTED_IDS)
   })
 
-  it('unlocks home, study and settings at Phase 1 ship time', () => {
+  it('unlocks home, study, documentation and settings', () => {
     const unlocked = NAVIGATION.filter((item) => item.status === 'unlocked').map((item) => item.id)
-    expect(unlocked).toEqual(['home', 'study', 'settings'])
+    expect(unlocked).toEqual(['home', 'study', 'documentation', 'settings'])
   })
 
-  it('pins settings to the sidebar footer group', () => {
+  it('pins documentation and settings to the sidebar footer group', () => {
     const footer = NAVIGATION.filter((item) => item.group === 'footer').map((item) => item.id)
-    expect(footer).toEqual(['settings'])
+    expect(footer).toEqual(['documentation', 'settings'])
   })
 
   it('gives every locked item a non-empty description for the coming-soon panel', () => {

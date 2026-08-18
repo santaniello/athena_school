@@ -76,6 +76,8 @@ Payments         Paddle
 | [07-sqlite.md](phase-01-desktop-mvp/07-sqlite.md) | Local SQLite schema: sessions, messages, usage |
 | [08-settings.md](phase-01-desktop-mvp/08-settings.md) | Settings screen: OpenRouter key, profile fields |
 | [09-auto-update.md](phase-01-desktop-mvp/09-auto-update.md) | GitHub Releases check + silent update notification |
+| [10-study-folders.md](phase-01-desktop-mvp/10-study-folders.md) | Folder tree for study sessions in the sidebar |
+| [11-documentation.md](phase-01-desktop-mvp/11-documentation.md) | In-app manual: purpose, study sessions, Knowledge Engine |
 
 ---
 
