@@ -141,6 +141,39 @@ func TestOpen_doesNotDuplicateDefaultFolderOnSecondOpen(t *testing.T) {
 	assert.Equal(t, 1, count)
 }
 
+func TestOpen_createsKnowledgeItemsTable(t *testing.T) {
+	// Given a path to a database file that does not exist yet
+	path := filepath.Join(t.TempDir(), "athena.db")
+
+	// When opening the database
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Then the knowledge_items table exists
+	var tableName string
+	queryErr := db.QueryRow(
+		`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'knowledge_items'`,
+	).Scan(&tableName)
+	require.NoError(t, queryErr)
+	assert.Equal(t, "knowledge_items", tableName)
+}
+
+func TestOpen_isIdempotentOnSecondOpen_forKnowledgeItems(t *testing.T) {
+	// Given a database that was already opened once
+	path := filepath.Join(t.TempDir(), "athena.db")
+	first, err := Open(path)
+	require.NoError(t, err)
+	require.NoError(t, first.Close())
+
+	// When opening the same database file again
+	second, err := Open(path)
+
+	// Then it succeeds without error on the repeated CREATE TABLE/INDEX
+	require.NoError(t, err)
+	defer func() { _ = second.Close() }()
+}
+
 func TestOpen_addsFolderIDColumnToSessions(t *testing.T) {
 	// Given a path to a database file that does not exist yet
 	path := filepath.Join(t.TempDir(), "athena.db")

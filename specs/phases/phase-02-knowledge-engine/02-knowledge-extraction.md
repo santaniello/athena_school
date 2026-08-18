@@ -30,14 +30,19 @@ Returning candidates instead of persisting-then-deleting is what makes "Ignore s
 
 ## Use cases — `internal/application/knowledge/`
 
+This package is also named `knowledge`, same as `internal/domain/knowledge` — the
+same collision `internal/application/folder` already has with `internal/domain/folder`.
+Follow that precedent: import the domain package aliased as `domainknowledge` and
+qualify the type, e.g. `domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"`.
+
 ```go
 // ExtractFromSession reads sessionID's transcript, asks the LLM for
 // concepts, and returns validated *unpersisted* draft candidates.
-func (s *Service) ExtractFromSession(ctx context.Context, sessionID string) ([]KnowledgeItem, error)
+func (s *Service) ExtractFromSession(ctx context.Context, sessionID string) ([]domainknowledge.Item, error)
 
 // SaveDrafts persists the items the user confirmed, re-validating every
 // field and re-stamping ID/Source/Status/timestamps server-side.
-func (s *Service) SaveDrafts(ctx context.Context, items []KnowledgeItem) (int, error)
+func (s *Service) SaveDrafts(ctx context.Context, items []domainknowledge.Item) (int, error)
 ```
 
 This is the base 2.2 contract. After 2.9, the effective return type becomes

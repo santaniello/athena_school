@@ -47,6 +47,23 @@ var migrations = []func(*sql.DB) error{
 	execSQL(`INSERT OR IGNORE INTO folders (id, name, is_default, created_at)
 		VALUES ('default', 'General', 1, CURRENT_TIMESTAMP)`),
 	addSessionsFolderIDColumn,
+	execSQL(`CREATE TABLE IF NOT EXISTS knowledge_items (
+		id               TEXT PRIMARY KEY,
+		topic            TEXT,
+		concept          TEXT,
+		definition       TEXT,
+		properties       TEXT, -- JSON array
+		trade_offs       TEXT, -- JSON array
+		related_concepts TEXT, -- JSON array
+		source           TEXT,
+		status           TEXT DEFAULT 'draft',
+		created_at       DATETIME,
+		updated_at       DATETIME
+	)`),
+	execSQL(`CREATE INDEX IF NOT EXISTS idx_knowledge_items_status_created_at
+		ON knowledge_items(status, created_at)`),
+	execSQL(`CREATE INDEX IF NOT EXISTS idx_knowledge_items_topic
+		ON knowledge_items(topic)`),
 }
 
 // addSessionsFolderIDColumn adds sessions.folder_id if it does not already
