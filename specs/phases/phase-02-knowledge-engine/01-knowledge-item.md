@@ -43,8 +43,11 @@ check flags any exported name that repeats its own package name as a prefix
 (`knowledge.KnowledgeItem` says "knowledge" twice; `folder.Folder` doesn't
 trigger it because the name is *identical* to the package, the same idiom as
 `time.Time`). This name is referenced by every later spec in this phase —
-02, 06, 07, 08, 09, 10, 11, 12 — so read `KnowledgeItem` there as `Item`
-(qualified as `knowledge.Item` outside the package) unless the context is a
+02, 06, 07, 08, 09, 10, 11, 12 — so read `KnowledgeItem` there as `Item`,
+qualified as `knowledge.Item` outside the package (or `domainknowledge.Item`
+in `internal/application/knowledge`, which collides on package name with
+`internal/domain/knowledge` the same way `internal/application/folder`
+already does with `internal/domain/folder` — see 2.2), unless the context is a
 method/DTO name (`ApproveKnowledgeItem`, `KnowledgeItemResult`, ...), which
 lives in a different package and doesn't stutter.
 

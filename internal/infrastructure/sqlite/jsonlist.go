@@ -7,12 +7,15 @@ import (
 
 // marshalStringList encodes values as a JSON array for storage in a TEXT
 // column. A nil or empty slice encodes as "[]", never NULL.
-func marshalStringList(values []string) string {
+func marshalStringList(values []string) (string, error) {
 	if len(values) == 0 {
-		return "[]"
+		return "[]", nil
 	}
-	encoded, _ := json.Marshal(values)
-	return string(encoded)
+	encoded, err := json.Marshal(values)
+	if err != nil {
+		return "", fmt.Errorf("sqlite: encoding string list: %w", err)
+	}
+	return string(encoded), nil
 }
 
 // unmarshalStringList decodes a TEXT column previously written by

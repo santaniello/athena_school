@@ -11,9 +11,10 @@ func TestMarshalStringList_encodesNilAsEmptyJSONArray(t *testing.T) {
 	// Given a nil slice
 
 	// When marshaling it
-	encoded := marshalStringList(nil)
+	encoded, err := marshalStringList(nil)
 
 	// Then it encodes as an empty JSON array, never NULL
+	require.NoError(t, err)
 	assert.Equal(t, "[]", encoded)
 }
 
@@ -22,9 +23,10 @@ func TestMarshalStringList_encodesEmptySliceAsEmptyJSONArray(t *testing.T) {
 	empty := []string{}
 
 	// When marshaling it
-	encoded := marshalStringList(empty)
+	encoded, err := marshalStringList(empty)
 
 	// Then it encodes as an empty JSON array
+	require.NoError(t, err)
 	assert.Equal(t, "[]", encoded)
 }
 
@@ -33,7 +35,8 @@ func TestMarshalStringList_roundTripsThreeElements(t *testing.T) {
 	values := []string{"one", "two", "three"}
 
 	// When marshaling and unmarshaling it back
-	encoded := marshalStringList(values)
+	encoded, marshalErr := marshalStringList(values)
+	require.NoError(t, marshalErr)
 	decoded, err := unmarshalStringList(encoded)
 
 	// Then it round-trips exactly

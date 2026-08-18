@@ -45,11 +45,15 @@ type DuplicateMatch struct {
 
 func (s *Service) FindDuplicates(
     ctx context.Context,
-    candidate Item,
+    candidate domainknowledge.Item,
     topK int,
     minScore float64,
 ) ([]DuplicateMatch, error)
 ```
+
+`FindDuplicates` lives in `internal/application/knowledge`, which collides with
+`internal/domain/knowledge` on package name — see 2.2 for the `domainknowledge`
+import-alias convention this follows.
 
 The semantic threshold is constructor-injected and defaults to `0.90`. Results are ordered by score descending, then item ID ascending. Multiple chunks must never return the same item twice.
 

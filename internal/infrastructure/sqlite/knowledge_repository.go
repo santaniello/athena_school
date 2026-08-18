@@ -32,16 +32,38 @@ const knowledgeItemSelectColumns = `id, topic, concept, definition, COALESCE(pro
 
 // Save inserts a new knowledge item.
 func (r *KnowledgeRepository) Save(ctx context.Context, item knowledge.Item) error {
-	_, err := r.db.ExecContext(ctx,
+	properties, tradeOffs, relatedConcepts, err := marshalItemLists(item)
+	if err != nil {
+		return err
+	}
+	_, err = r.db.ExecContext(ctx,
 		`INSERT INTO knowledge_items (`+knowledgeItemColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		item.ID, item.Topic, item.Concept, item.Definition,
-		marshalStringList(item.Properties), marshalStringList(item.TradeOffs), marshalStringList(item.RelatedConcepts),
+		properties, tradeOffs, relatedConcepts,
 		item.Source, item.Status, item.CreatedAt, item.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("sqlite: saving knowledge item: %w", err)
 	}
 	return nil
+}
+
+// marshalItemLists encodes item's three JSON-array-as-TEXT columns
+// together so Save and Update share one error-handling path.
+func marshalItemLists(item knowledge.Item) (properties, tradeOffs, relatedConcepts string, err error) {
+	properties, err = marshalStringList(item.Properties)
+	if err != nil {
+		return "", "", "", fmt.Errorf("sqlite: encoding properties for item %s: %w", item.ID, err)
+	}
+	tradeOffs, err = marshalStringList(item.TradeOffs)
+	if err != nil {
+		return "", "", "", fmt.Errorf("sqlite: encoding trade_offs for item %s: %w", item.ID, err)
+	}
+	relatedConcepts, err = marshalStringList(item.RelatedConcepts)
+	if err != nil {
+		return "", "", "", fmt.Errorf("sqlite: encoding related_concepts for item %s: %w", item.ID, err)
+	}
+	return properties, tradeOffs, relatedConcepts, nil
 }
 
 // GetByID returns the item with the given id, or knowledge.ErrItemNotFound
@@ -138,10 +160,14 @@ func (r *KnowledgeRepository) CountByStatus(ctx context.Context, status string) 
 // Update persists every field of item, or returns knowledge.ErrItemNotFound
 // if it does not exist.
 func (r *KnowledgeRepository) Update(ctx context.Context, item knowledge.Item) error {
+	properties, tradeOffs, relatedConcepts, err := marshalItemLists(item)
+	if err != nil {
+		return err
+	}
 	result, err := r.db.ExecContext(ctx,
 		`UPDATE knowledge_items SET topic = ?, concept = ?, definition = ?, properties = ?, trade_offs = ?, related_concepts = ?, source = ?, status = ?, created_at = ?, updated_at = ? WHERE id = ?`,
 		item.Topic, item.Concept, item.Definition,
-		marshalStringList(item.Properties), marshalStringList(item.TradeOffs), marshalStringList(item.RelatedConcepts),
+		properties, tradeOffs, relatedConcepts,
 		item.Source, item.Status, item.CreatedAt, item.UpdatedAt, item.ID,
 	)
 	if err != nil {
