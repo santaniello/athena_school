@@ -22,6 +22,7 @@ func buildSystemPrompt(profile domainprofile.UserProfile, topic string) string {
 			"Area: %s. Level: %s.\n"+
 			"Style: %s. Goal: %s.\n"+
 			"Topic for this session: %s.\n"+
+			"%s"+
 			"Adapt all explanations to the user's context.\n\n"+
 			"Run this as a real, back-and-forth study session, not a lecture:\n"+
 			"- Open with a brief one-sentence greeting and a single focused question about the topic to gauge where the user is starting from. Do not explain or teach anything yet.\n"+
@@ -32,5 +33,21 @@ func buildSystemPrompt(profile domainprofile.UserProfile, topic string) string {
 		profile.Area, profile.ExperienceLevel,
 		profile.StudyStyle, strings.Join(profile.Goals, ", "),
 		topic,
+		languageInstruction(profile.AssistantLanguage),
 	)
+}
+
+// languageInstruction returns a system-prompt line telling the model which
+// language to reply in, including the opening message. It's blank for an
+// empty/unrecognized AssistantLanguage so callers with a partial profile
+// (e.g. existing tests) get the prior no-instruction behavior.
+func languageInstruction(assistantLanguage string) string {
+	switch assistantLanguage {
+	case domainprofile.AssistantLanguagePortuguese:
+		return "Respond in Brazilian Portuguese for this entire session, including your opening message.\n"
+	case domainprofile.AssistantLanguageEnglish:
+		return "Respond in English for this entire session, including your opening message.\n"
+	default:
+		return ""
+	}
 }

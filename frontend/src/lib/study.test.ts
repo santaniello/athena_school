@@ -1,17 +1,23 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  EndStudySession,
+  DeleteStudySession,
+  ListStudySessionsByFolder,
+  MoveStudySession,
   RequestOpeningTurn,
+  ResumeStudySession,
   SendStudyMessage,
   StartStudySession,
 } from '../../wailsjs/go/desktop/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import {
-  endStudySession,
+  deleteStudySession,
+  listStudySessionsByFolder,
+  moveStudySession,
   onStudyChunk,
   onStudyDone,
   onStudyError,
   requestOpeningTurn,
+  resumeStudySession,
   sendStudyMessage,
   startStudySession,
 } from './study'
@@ -20,7 +26,10 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   StartStudySession: vi.fn(),
   RequestOpeningTurn: vi.fn(),
   SendStudyMessage: vi.fn(),
-  EndStudySession: vi.fn(),
+  DeleteStudySession: vi.fn(),
+  ResumeStudySession: vi.fn(),
+  MoveStudySession: vi.fn(),
+  ListStudySessionsByFolder: vi.fn(),
 }))
 
 vi.mock('../../wailsjs/runtime/runtime', () => ({
@@ -33,19 +42,103 @@ describe('startStudySession', () => {
     vi.mocked(StartStudySession).mockResolvedValueOnce({
       id: 'session-1',
       topic: 'Distributed systems',
+      folderId: 'folder-1',
       startedAt: '2026-08-16T10:00:00Z',
     } as never)
 
-    // When starting a study session
-    const session = await startStudySession('Distributed systems')
+    // When starting a study session in a folder
+    const session = await startStudySession('Distributed systems', 'folder-1')
 
-    // Then it returns the session and forwarded the topic
-    expect(StartStudySession).toHaveBeenCalledWith('Distributed systems')
+    // Then it forwarded the topic and folder id, and returned the session
+    expect(StartStudySession).toHaveBeenCalledWith('Distributed systems', 'folder-1')
     expect(session).toEqual({
       id: 'session-1',
       topic: 'Distributed systems',
+      folderId: 'folder-1',
       startedAt: '2026-08-16T10:00:00Z',
     })
+  })
+
+  it('defaults folderId to an empty string when omitted', async () => {
+    // Given a StartStudySession call that succeeds
+    vi.mocked(StartStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      folderId: 'default',
+      startedAt: '2026-08-16T10:00:00Z',
+    } as never)
+
+    // When starting a session without specifying a folder
+    await startStudySession('Distributed systems')
+
+    // Then it forwarded an empty folder id, letting the backend fall back
+    // to the default folder
+    expect(StartStudySession).toHaveBeenCalledWith('Distributed systems', '')
+  })
+})
+
+describe('resumeStudySession', () => {
+  it('returns the session and its full history', async () => {
+    // Given a ResumeStudySession call that succeeds
+    vi.mocked(ResumeStudySession).mockResolvedValueOnce({
+      session: {
+        id: 'session-1',
+        topic: 'Distributed systems',
+        folderId: 'folder-1',
+        startedAt: '2026-08-16T10:00:00Z',
+      },
+      messages: [{ role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z' }],
+    } as never)
+
+    // When resuming a session
+    const result = await resumeStudySession('session-1')
+
+    // Then it forwarded the sessionId and returned the session and history
+    expect(ResumeStudySession).toHaveBeenCalledWith('session-1')
+    expect(result.session.id).toBe('session-1')
+    expect(result.messages).toEqual([
+      { role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z' },
+    ])
+  })
+})
+
+describe('moveStudySession', () => {
+  it('forwards the sessionId and folderId', async () => {
+    // Given a MoveStudySession call that succeeds
+    vi.mocked(MoveStudySession).mockResolvedValueOnce()
+
+    // When moving a session to another folder
+    await moveStudySession('session-1', 'folder-2')
+
+    // Then it forwarded both arguments
+    expect(MoveStudySession).toHaveBeenCalledWith('session-1', 'folder-2')
+  })
+})
+
+describe('listStudySessionsByFolder', () => {
+  it('returns every session in the folder', async () => {
+    // Given a ListStudySessionsByFolder call that returns two sessions
+    vi.mocked(ListStudySessionsByFolder).mockResolvedValueOnce([
+      {
+        id: 's-1',
+        topic: 'Cache invalidation',
+        folderId: 'folder-1',
+        startedAt: '2026-08-16T10:00:00Z',
+      },
+      {
+        id: 's-2',
+        topic: 'Concurrency patterns',
+        folderId: 'folder-1',
+        startedAt: '2026-08-15T10:00:00Z',
+      },
+    ] as never)
+
+    // When listing sessions in a folder
+    const sessions = await listStudySessionsByFolder('folder-1')
+
+    // Then it forwarded the folderId and returned every session
+    expect(ListStudySessionsByFolder).toHaveBeenCalledWith('folder-1')
+    expect(sessions).toHaveLength(2)
   })
 })
 
@@ -79,16 +172,16 @@ describe('sendStudyMessage', () => {
   })
 })
 
-describe('endStudySession', () => {
+describe('deleteStudySession', () => {
   it('forwards the sessionId', async () => {
-    // Given an EndStudySession call that succeeds
-    vi.mocked(EndStudySession).mockResolvedValueOnce()
+    // Given a DeleteStudySession call that succeeds
+    vi.mocked(DeleteStudySession).mockResolvedValueOnce()
 
-    // When ending a session
-    await endStudySession('session-1')
+    // When deleting a session
+    await deleteStudySession('session-1')
 
     // Then it forwarded the sessionId
-    expect(EndStudySession).toHaveBeenCalledWith('session-1')
+    expect(DeleteStudySession).toHaveBeenCalledWith('session-1')
   })
 })
 

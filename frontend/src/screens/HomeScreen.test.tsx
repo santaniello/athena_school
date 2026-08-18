@@ -38,6 +38,51 @@ describe('HomeScreen', () => {
     expect(screen.getByRole('heading', { name: 'Good morning, Felipe.' })).toBeInTheDocument()
   })
 
+  it('greets the user with an afternoon greeting at exactly noon', () => {
+    // Given a profile and a time at the morning/afternoon boundary
+    render(
+      <HomeScreen
+        profile={profile}
+        studyLocked
+        onStartStudy={vi.fn()}
+        now={new Date('2026-08-15T12:00:00')}
+      />,
+    )
+
+    // Then the afternoon greeting is shown, not the morning one
+    expect(screen.getByRole('heading', { name: 'Good afternoon, Felipe.' })).toBeInTheDocument()
+  })
+
+  it('greets the user with an afternoon greeting mid-afternoon', () => {
+    // Given a profile and a time between noon and 6pm
+    render(
+      <HomeScreen
+        profile={profile}
+        studyLocked
+        onStartStudy={vi.fn()}
+        now={new Date('2026-08-15T14:00:00')}
+      />,
+    )
+
+    // Then the afternoon greeting is shown
+    expect(screen.getByRole('heading', { name: 'Good afternoon, Felipe.' })).toBeInTheDocument()
+  })
+
+  it('greets the user with an evening greeting at exactly 6pm', () => {
+    // Given a profile and a time at the afternoon/evening boundary
+    render(
+      <HomeScreen
+        profile={profile}
+        studyLocked
+        onStartStudy={vi.fn()}
+        now={new Date('2026-08-15T18:00:00')}
+      />,
+    )
+
+    // Then the evening greeting is shown, not the afternoon one
+    expect(screen.getByRole('heading', { name: 'Good evening, Felipe.' })).toBeInTheDocument()
+  })
+
   it('greets the user with an evening greeting after 6pm', () => {
     // Given a profile and a time after 6pm
     render(
