@@ -41,7 +41,18 @@ Delete is irreversible and sits behind an `AlertDialog`, mirroring the folder-de
 - [ ] `internal/application/knowledge/deprecate.go` — `Deprecate(ctx, id)`
 - [ ] `internal/application/knowledge/update.go` — `UpdateItem(ctx, id, fields)`: validates, restamps `UpdatedAt`, never touches `Status` / `Source` / `CreatedAt`
 - [ ] `internal/application/knowledge/delete.go` — `DeleteItem(ctx, id)`
-- [ ] `internal/interfaces/desktop/knowledge.go` — `ListKnowledgeItems`, `ListKnowledgeTopics`, `ApproveKnowledgeItem`, `DeprecateKnowledgeItem`, `UpdateKnowledgeItem`, `DeleteKnowledgeItem`; the three mutating ones return the updated item so React can patch local state without a refetch (precedent: `UpdateProfile` in `settings.go`)
+- [ ] `internal/interfaces/desktop/knowledge.go` — bindings with these exact returns:
+
+  | Binding | Returns |
+  |---|---|
+  | `ListKnowledgeItems(topic, status)` | `([]KnowledgeItemResult, error)` |
+  | `ListKnowledgeTopics()` | `([]string, error)` |
+  | `ApproveKnowledgeItem(id)` | `(KnowledgeItemResult, error)` |
+  | `DeprecateKnowledgeItem(id)` | `(KnowledgeItemResult, error)` |
+  | `UpdateKnowledgeItem(id, input)` | `(KnowledgeItemResult, error)` |
+  | `DeleteKnowledgeItem(id)` | `error` |
+
+  Approve, Deprecate, and Update return the updated item so React can patch local state without a refetch (precedent: `UpdateProfile` in `settings.go`). Delete returns only an error — there is no item left to return.
 - [ ] `frontend/src/lib/navigation.ts` — flip `knowledge` to `status: 'unlocked'` (updates one assertion in `navigation.test.ts`)
 - [ ] `frontend/src/lib/knowledge.ts` — add the new wrappers plus pure helpers `groupByTopic(items)` and `definitionPreview(text, max)`
 - [ ] `frontend/src/components/knowledge-section.tsx` — Explorer/Review tab state

@@ -417,7 +417,8 @@ knowledge_chunks (embedding como BLOB float32 little-endian)
 ```
 
 - [ ] Suporte inicial: `.md` e `.txt`
-- [ ] Deduplicação por `file_path` + `mtime`; arquivo alterado **substitui** seus chunks, não duplica
+- [ ] Deduplicação por `file_path` + `mtime` + modelo de embedding; arquivo alterado **substitui** seus chunks numa transação, não duplica — e trocar o modelo re-embeda automaticamente
+- [ ] Conteúdo sem heading (texto corrido, front matter, só H4+) cai no split por parágrafo; nada é descartado por falta de heading
 - [ ] Schema:
 
 ```sql
@@ -449,7 +450,8 @@ CREATE TABLE ingested_files (
 - [ ] Pure Go, sem dependência externa de vector DB
 - [ ] Retorna top-K `ScoredChunk` por similaridade + filtros (topic, source, status)
 - [ ] `Remove` e `Len` além de `Add`/`Search`: sem `Remove`, item deletado continua respondendo até reiniciar; `Len` evita gastar embedding com base vazia
-- [ ] Normalização no insert (cosseno vira produto escalar); filtra antes de pontuar
+- [ ] Normalização dos vetores no insert **e da query no `Search`** — produto escalar só é cosseno com os dois lados unitários; filtra antes de pontuar
+- [ ] Reimportar arquivo alterado remove os vetores antigos da memória, não só do SQLite
 - [ ] Carga em memória no startup, a partir de `knowledge_chunks`
 - [ ] `ADR-004` registrando a escolha do vector store e do modelo de embedding (trocar o modelo exige re-ingest)
 - [ ] `internal/infrastructure/vectorstore` entra no escopo do `make mutation-go` (emenda à ADR-002)
@@ -472,7 +474,8 @@ Conhecimento suficiente?
 ```
 
 - [ ] Source modes: `notes` / `strict-notes` / `web` — transiente, passado por chamada em `SendStudyMessage`, sem migração
-- [ ] Em `strict-notes` sem chunks: responde "sem conhecimento local" **sem chamar o LLM**
+- [ ] Em `strict-notes` sem chunks: responde `NoLocalKnowledgeMessage` **sem chamar o LLM** — inclusive com o store vazio, que é só a forma mais barata de não achar chunk e não pode curto-circuitar a checagem de modo
+- [ ] `DefaultTopK` explícito, junto com os thresholds
 - [ ] Thresholds de similaridade injetados no construtor (defaults 0.35 / 0.55, calibrados para `text-embedding-3-small`)
 - [ ] Contexto injetado como **segunda mensagem `system`**, preservando `buildSystemPrompt` e seus testes
 - [ ] Teto de contexto descartando chunks inteiros do menor score para cima — nunca truncar no meio, para que as fontes citadas batam com o que o modelo viu
@@ -491,7 +494,7 @@ Conhecimento suficiente?
 ### 2.7 — Knowledge Review
 
 - [ ] Lista de itens em `draft` aguardando revisão, mais antigos primeiro
-- [ ] Usuário aprova ou rejeita; ações em lote iteram por `TransitionTo`, não `UPDATE` em massa
+- [ ] Usuário aprova ou rejeita; `ApproveAllDrafts` itera por `TransitionTo`, `RejectAllDrafts` itera `Delete` — rejeitar não é mudança de status
 - [ ] Badge com contador de itens pendentes, com estado no `AppShell` + callback — sem Context nem store
 
 ### 2.8 — Approved Item Indexing
@@ -499,7 +502,7 @@ Conhecimento suficiente?
 Items aprovados entram no vector store e passam a ser recuperáveis pelo RAG (`source = athena`), tornando a base curada útil de volta nas sessões.
 
 - [ ] Hook em `Approve` (indexa), `Deprecate`/`DeleteItem` (removem), `UpdateItem` (reindexa)
-- [ ] Falha de indexação **nunca** reverte a aprovação — o item fica aprovado e o backfill o recolhe
+- [ ] Falha de indexação **nunca** reverte a aprovação — `Approve` devolve o item aprovado embrulhando `ErrIndexingFailed`, o binding loga e trata como sucesso, e o backfill recolhe depois
 - [ ] Backfill consentido dos items aprovados na fatia 1: alerta no Explorer com [Indexar agora], nunca silencioso no startup
 
 ### Done when (Fase 2)

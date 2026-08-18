@@ -11,14 +11,20 @@ User question
     ↓
 Source mode = web?  → plain LLM call, no retrieval
     ↓ no
-Vector store empty? → plain LLM call, no embedding spent
-    ↓ no
-Embed the question → vector search → top-K chunks above minScore
+Vector store empty? → no chunks, and no embedding spent   ─┐
+    ↓ no                                                    │
+Embed the question → vector search → chunks above minScore ─┤
+    ↓                                                       │
+    ├── no chunks ←──────────────────────────────────────────┘
+    │      ↓
+    │   mode = strict-notes → NO_LOCAL_KNOWLEDGE, NO LLM call
+    │      ↓ mode = notes
+    │   plain LLM call
     ↓
-No chunks and mode = strict-notes → "No local knowledge found", NO LLM call
-    ↓
-Otherwise → LLM call with the chunks injected as context
+chunks found → LLM call with the chunks injected as context
 ```
+
+An empty vector store is just the cheapest way of finding no chunks — it **must not** short-circuit past the mode check. Testing it first would make `strict-notes` on a fresh install call the LLM, contradicting the table and the acceptance criteria below.
 
 ## Source Modes
 
@@ -27,7 +33,7 @@ Otherwise → LLM call with the chunks injected as context
 | `web` | — | No embedding, no search, plain LLM call (today's behavior) |
 | `notes` | none | Plain LLM call |
 | `notes` | yes | LLM call + context block, instructed to prefer it |
-| `strict-notes` | none | **No LLM call.** Fixed response: "No local knowledge found for this question." |
+| `strict-notes` | none | **No LLM call.** Fixed response `NoLocalKnowledgeMessage` (see below) |
 | `strict-notes` | yes | LLM call + context, instructed to answer *exclusively* from it and to say so if it is insufficient |
 
 Interpretive call to record: "answer using local knowledge only" means *the LLM answers constrained to the retrieved context*, not that raw chunk text is returned as the assistant turn — a Socratic tutor that pastes note fragments is unusable. The only explicit no-LLM criterion is `strict-notes` with no matches. `Sufficient` selects the instruction wording; it does not skip the model.
@@ -53,6 +59,14 @@ type RetrievalResult struct {
 func (s *Service) Retrieve(ctx context.Context, query, mode string) (RetrievalResult, error)
 ```
 
+The fixed no-knowledge reply is a single exported constant, so the flow, the implementation, and the tests cannot drift apart:
+
+```go
+const NoLocalKnowledgeMessage = "No local knowledge found for this question."
+```
+
+**`topK` is `DefaultTopK = 8`**, exported from the domain alongside the thresholds and passed to `VectorStore.Search`. It is deliberately a little larger than what the context budget will fit: the cap below drops the weakest chunks afterwards, so retrieval over-fetches slightly and then trims by score rather than truncating the search itself.
+
 **Thresholds are constructor-injected, not hardcoded** — the requirement is a configurable minimum similarity score. `NewService(..., minScore, sufficiencyScore float64)` with defaults exported from the domain: `DefaultMinSimilarity = 0.35`, `DefaultSufficiency = 0.55`, wired in `main.go`. These are calibrated for `text-embedding-3-small`, whose question↔passage cosines typically land in 0.35–0.65; a 0.75-style threshold would silently disable retrieval. Surfacing them in Settings is a follow-up, not this phase.
 
 **Context-window cap:** `maxContextChars = 8000` (~2k tokens). When over budget, **drop whole chunks lowest-score-first** — never truncate mid-chunk, so the cited sources always match what the model actually saw.
@@ -73,7 +87,7 @@ Sources are transient: `messages` has no sources column, so they do not reappear
 
 ## Tasks
 
-- [ ] `internal/domain/knowledge/retrieval.go` — `RetrievalResult`, `Source`, `Retriever` port, source-mode constants, `DefaultMinSimilarity` / `DefaultSufficiency`
+- [ ] `internal/domain/knowledge/retrieval.go` — `RetrievalResult`, `Source`, `Retriever` port, source-mode constants, `NoLocalKnowledgeMessage`, `DefaultTopK`, `DefaultMinSimilarity` / `DefaultSufficiency`
 - [ ] `internal/application/knowledge/retrieval.go` — `Retrieve`, threshold handling, context rendering with the char cap
 - [ ] `internal/application/study/prompt_context.go` — `buildKnowledgeContext`
 - [ ] `internal/application/study/send_message.go` — accept `sourceMode`, call the retriever, inject the second system message, short-circuit the `strict-notes`-with-no-matches case
@@ -84,10 +98,11 @@ Sources are transient: `messages` has no sources column, so they do not reappear
 
 ## Acceptance Criteria
 
-- With `strict-notes` and no matching chunks, the app responds "No local knowledge found for this question" and makes **no LLM call** (no new row in `usage`)
+- With `strict-notes` and no matching chunks, the app responds with `NoLocalKnowledgeMessage` and makes **no LLM call** (no new row in `usage`)
+- With `strict-notes` and an **empty** vector store, the same holds: no embedding is requested *and* no LLM call is made — an empty store must not be mistaken for permission to fall back
 - With `notes` mode and matching chunks, the response references the imported content and the Sources strip lists the files
 - With `web` mode, no embedding is requested and no retrieval happens
-- With an empty vector store, no embedding is requested regardless of mode
+- With an empty vector store, no embedding is requested regardless of mode; in `notes` and `web` this falls through to a plain LLM call, in `strict-notes` it does not
 - The injected context never exceeds `maxContextChars`, and over-budget chunks are dropped whole, lowest score first
 - Cited sources are exactly the chunks that survived the cap
 - Thresholds are injected, and a raised `minScore` demonstrably filters low-similarity chunks out

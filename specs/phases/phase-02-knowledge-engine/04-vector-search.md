@@ -31,10 +31,11 @@ Three deliberate departures from the original sketch, each earning its place:
 ## Implementation
 
 - Memory shape: `struct { mu sync.RWMutex; chunks []knowledge.Chunk }` — a flat, contiguous, cache-friendly slice. No per-topic index; brute force is fast enough by two orders of magnitude.
-- **`Add` normalizes each vector to unit length in memory.** Persistence keeps the provider's raw output, so reloading always re-normalizes and nothing drifts. Cosine then reduces to a plain dot product.
+- **`Add` normalizes each stored vector to unit length in memory, and `Search` normalizes the query once before scoring.** Persistence keeps the provider's raw output, so reloading always re-normalizes and nothing drifts. Cosine reduces to a plain dot product **only when both sides are unit length** — normalizing just the stored side would scale every score by the query's norm, which is not cosine. A zero-norm vector on either side is rejected rather than divided by.
 - **`Search` pre-filters, then scores**: skip a chunk on any set-and-mismatched filter before touching its vector, so filters make queries cheaper rather than more expensive. Skip dimension mismatches defensively, so a mixed-dimension database degrades instead of returning garbage. Then `sort.SliceStable` descending and truncate to `topK`. `topK <= 0` → `ErrInvalidTopK`.
 - **Loaded at startup, synchronously, in `main.go`** right after `sqlite.Open`: `chunks.ListAll` → `store.Add`. The app already shows a splash screen, and realistic corpora are 1–3k chunks (6–18 MB).
-- The ingest use case calls `store.Add` after persisting, so newly imported notes are searchable without a restart. That one-line wiring is why the 2.3 → 2.4 order produces **no throwaway code**: 2.3 ships persistence only, 2.4 layers memory on top.
+- The ingest use case calls `store.Add` after persisting, so newly imported notes are searchable without a restart. That wiring is why the 2.3 → 2.4 order produces **no throwaway code**: 2.3 ships persistence only, 2.4 layers memory on top.
+- **Re-importing a changed file must `store.Remove` its old chunk IDs before adding the new ones.** 2.3's `chunks.DeleteByFilePath` only clears SQLite; without the matching in-memory eviction the previous version of the file keeps answering queries until the next restart, and `Len` grows on every import. This is the same class of bug `Remove` exists for in 2.8 — it applies to re-ingestion just as much as to item deletion.
 
 Budget check: 10k × 1536 float32 multiply-adds ≈ 15.4 MFLOP ≈ 5–15 ms single-threaded in Go, plus a 10k-element sort. Comfortably inside the 500 ms criterion.
 
@@ -66,5 +67,7 @@ This spec ships with `specs/decisions/ADR-004-local-vector-store.md`:
 - A chunk whose embedding dimension differs from the query is skipped, not scored
 - `Remove` makes a chunk unreachable from subsequent searches without a restart
 - `Len` reports the number of loaded chunks
+- Scores match cosine similarity computed independently on the raw (un-normalized) vectors — the query is normalized, not just the stored side
+- Re-importing a changed file leaves `Len` unchanged rather than growing, and searches return only the new version's chunks
 - Adding 10,000 chunks and searching completes in under 500 ms on a modern machine
 - The store is usable from unit tests without a real database

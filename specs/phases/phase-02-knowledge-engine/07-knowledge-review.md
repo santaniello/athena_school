@@ -6,7 +6,12 @@ Drafts accumulated from extractions surface in a dedicated review queue so the u
 
 ## Bulk actions
 
-`ApproveAllDrafts` and `RejectAllDrafts` iterate per item **through `TransitionTo`**, not a single bulk `UPDATE`. The lifecycle rule must not be bypassable, and N is small on a local database with one connection.
+The two bulk actions are **not** symmetric, because rejection is not a status change:
+
+- `ApproveAllDrafts` iterates per item **through `TransitionTo`**, not a single bulk `UPDATE` — approval must take the same path as the single-item action, and N is small on a local database with one connection
+- `RejectAllDrafts` iterates `Delete` per item. There is no `draft → deleted` transition, so `TransitionTo` has nothing to say here
+
+Both skip anything that is not a draft.
 
 ## Badge freshness without a global store
 

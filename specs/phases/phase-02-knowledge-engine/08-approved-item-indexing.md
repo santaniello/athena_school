@@ -18,7 +18,15 @@ Approved Knowledge Items become retrievable by RAG alongside imported notes, so 
 
 ## Failure policy
 
-**An indexing failure must never roll back the approval.** The OpenRouter key may be missing or the machine offline. The item stays approved, the error surfaces as a non-fatal warning logged at the desktop layer, and the backfill below picks it up later.
+**An indexing failure must never roll back the approval.** The OpenRouter key may be missing or the machine offline.
+
+The contract has to be explicit, because `Approve` returns `(KnowledgeItem, error)` and the binding must be able to tell "approved but not indexed" from "approval failed":
+
+- `Approve` returns the **approved item** plus an error wrapping a new sentinel `ErrIndexingFailed`
+- The desktop binding checks `errors.Is(err, ErrIndexingFailed)`: it logs a warning and returns the item **successfully** to the frontend. Any other error is a real failure and propagates
+- The item is already persisted as approved before indexing is attempted, so the frontend's optimistic state is correct either way
+
+**SQLite and the in-memory store can drift within a session** — a crash between `chunks.SaveAll` and `store.Add` leaves a persisted chunk that is not searchable. No compensation protocol is needed: the store is rebuilt from `knowledge_chunks` at every startup (2.4), so any drift self-heals on the next launch, and the backfill covers the case where nothing was persisted at all.
 
 ## Backfill
 
@@ -53,6 +61,7 @@ The trigger is **not** silent-at-startup — that would spend the user's money w
 - Asking about that concept in `strict-notes` mode retrieves it, and the Sources strip identifies it as a knowledge item rather than a file
 - Deprecating or deleting an item removes its chunk from both SQLite and the in-memory store, with no restart
 - Editing an approved item's definition changes what retrieval returns
-- An indexing failure leaves the item approved and reports a non-fatal warning
+- An indexing failure leaves the item approved, wraps `ErrIndexingFailed`, and reaches the frontend as a success with a logged warning — not as a failed approval
+- A chunk persisted without reaching the in-memory store becomes searchable after a restart, without manual intervention
 - With items approved before this spec, the explorer shows the backfill alert with the correct count; "Index now" processes them and the alert disappears
 - `CountUnindexedItems` returns zero once every approved item has a chunk

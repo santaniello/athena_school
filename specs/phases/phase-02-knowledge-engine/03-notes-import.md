@@ -32,7 +32,8 @@ Heading-first with a character budget, not fixed-size: the mandated schema has a
 - Parse with goldmark, walk `*ast.Heading` levels 1–3, read line offsets via `node.Lines()`, and **slice the raw markdown between headings**. Do not render to HTML — markdown reads better to the LLM and the implementation is ~40 lines instead of a renderer.
 - `maxChunkChars = 2000`, `minChunkChars = 200`. **Token approximation without a tokenizer: 4 characters ≈ 1 token**, so ~500 tokens ≈ 2000 chars. Portuguese runs closer to 3.5 chars/token, which this budget absorbs conservatively.
 - A section over budget is re-split on blank-line (paragraph) boundaries, inheriting its parent heading.
-- A section under the minimum (a lone heading, a one-line stub) merges forward into the next, so the store does not fill with junk vectors.
+- A section under the minimum (a lone heading, a one-line stub) merges forward into the next, so the store does not fill with junk vectors. **The last section has no next**: it is merged backwards into its predecessor instead, and kept as-is if it is the only section. Content is never dropped for being short.
+- **No content is lost for lacking a heading.** Text before the first H1–H3 (front matter, an intro paragraph) becomes its own leading chunk with `Heading = ""`. A document with no H1–H3 at all — plain prose, or one using only H4+ — falls back wholesale to the `.txt` path below: paragraph splitting under the same budget. A notes folder written as running text must ingest, not silently produce zero chunks.
 - **No overlap.** Heading-scoped chunks are self-contained and overlap doubles embedding cost. Revisit only if retrieval quality proves poor.
 - `.txt` skips goldmark: paragraph-split under the same budget, `Heading = ""`.
 
@@ -88,10 +89,11 @@ CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_file_path ON knowledge_chunks(fi
 CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_item_id  ON knowledge_chunks(item_id);
 
 CREATE TABLE IF NOT EXISTS ingested_files (
-    file_path   TEXT PRIMARY KEY,
-    mtime       INTEGER NOT NULL,   -- Unix seconds
-    chunk_count INTEGER NOT NULL,
-    ingested_at DATETIME
+    file_path       TEXT PRIMARY KEY,
+    mtime           INTEGER NOT NULL,   -- Unix seconds
+    embedding_model TEXT NOT NULL,      -- vectors are only reusable for the model that produced them
+    chunk_count     INTEGER NOT NULL,
+    ingested_at     DATETIME
 );
 ```
 
@@ -99,6 +101,10 @@ Two documented extensions over the original schema:
 
 - **`topic` / `status` / `item_id` on `knowledge_chunks`** — without them, 2.4's `SearchFilters` is unimplementable, and `item_id` is what lets 2.8 re-index or evict a chunk when its Knowledge Item is edited, deprecated, or deleted.
 - **`ingested_files`** answers where the dedup mtime lives. A separate table rather than a column on `knowledge_chunks`: one indexed lookup instead of a scan, no mtime denormalized across N rows, and it records files that produced **zero** chunks (otherwise an empty file is re-read on every import).
+
+  `embedding_model` is part of the dedup key: a file is skipped only when **both** its mtime and the current `llm.EmbeddingModel` match what is recorded. Vectors are only comparable to others from the same model, so changing the model must re-embed rather than leave a silently mixed store — this turns the "changing the model requires a re-ingest" consequence below from a README footnote into automatic behavior.
+
+  Dedup remains **mtime-based, not content-hash-based**: hashing would mean reading and digesting every file on every import, which is exactly the cost mtime dedup exists to avoid. The gap this leaves — content changed while mtime was preserved, as `git checkout` and `rsync -t` can do — is accepted, with a full re-import as the manual escape hatch.
 
 ## Embedding encoding
 
@@ -131,7 +137,9 @@ type Summary struct {
 
 1. Pre-walk collecting `.md`/`.txt` candidates (case-insensitive extension) to get a real `FilesTotal`
 2. `ingestedFiles.ListAll` once → path→mtime map
-3. Per file: unchanged mtime → count as skipped and continue. Otherwise read → chunk → embed → `chunks.DeleteByFilePath` (a changed file must **replace**, not duplicate) → `chunks.SaveAll` → `ingestedFiles.Upsert`
+3. Per file: unchanged mtime **and** unchanged embedding model → count as skipped and continue. Otherwise read → chunk → embed → replace.
+
+   Embedding happens **before** anything is deleted, so a failed or interrupted API call leaves the previous chunks intact. The replace itself — `chunks.DeleteByFilePath` (a changed file must **replace**, not duplicate) → `chunks.SaveAll` → `ingestedFiles.Upsert` → `store.Remove` the old IDs → `store.Add` the new ones — runs inside a **single SQLite transaction**, so a failure cannot leave the file with its old chunks deleted and no new ones written. `MaxOpenConns(1)` makes this free.
 4. Any per-file error is recorded in the summary and the walk continues
 5. `onProgress` after each file
 
@@ -161,6 +169,9 @@ Embedding calls stay **sequential** in this spec (100 files × ~5 chunks ≈ 500
 - Editing one file and re-importing reprocesses only that file and does not duplicate its chunks
 - A file that fails is reported in the summary and does not abort the import
 - A folder with 100 markdown files completes without crashing, with progress reported per file
-- `encodeEmbedding` / `decodeEmbedding` round-trip; an odd-length blob returns an error; byte order matches a hand-written expected `[]byte`
+- `encodeEmbedding` / `decodeEmbedding` round-trip; byte order matches a hand-written expected `[]byte`
+- A blob whose length is not a multiple of four returns an error — asserted for both an odd length and an **even** invalid one (6 bytes), since the rule is `len%4`, not parity
 - A section exactly at `maxChunkChars` is kept whole; one over it is split on a paragraph boundary
-- A section under `minChunkChars` is merged into the next rather than stored alone
+- A section under `minChunkChars` is merged into a neighbour rather than stored alone, and a short **final** section is merged backwards instead of dropped
+- A markdown file with no H1–H3 heading is still ingested via the paragraph-splitting fallback; text before the first heading becomes a chunk with an empty heading
+- Changing `llm.EmbeddingModel` makes a previously ingested file re-embed instead of being skipped

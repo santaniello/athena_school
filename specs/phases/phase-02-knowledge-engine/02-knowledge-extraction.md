@@ -56,12 +56,13 @@ A single system message that: states the role; inlines the exact JSON schema; re
 
 1. `extractJSONObject(raw)` — slice from the first `{` to the last `}`, which unwraps ```json fences emitted despite instructions
 2. `json.Unmarshal` into a private envelope struct. **Not** `DisallowUnknownFields` — extra fields are common and harmless
-3. Per item: trim every string; drop blank list entries; cap sizes (lists 10 entries, `concept` 120 chars, `definition` 2000, each list entry 200) so a hallucinated or hostile payload cannot bloat SQLite
-4. Stamp the **server-owned** fields: `ID = uuid.NewString()`, `Topic` from the session, `Source = SourceAthena`, `Status = StatusDraft`, `CreatedAt = UpdatedAt = now`
-5. `item.Validate()` — an invalid item is **skipped and the batch continues**; one bad item must not discard the good ones
-6. Whole payload unparseable → `nil, ErrMalformedExtraction`
+3. Truncate the envelope to `maxItems = 8` **in Go**. The prompt asks for at most 8, but a prompt is a request, not a constraint — a model returning 50 items must not produce a 50-row modal
+4. Per item: trim every string; drop blank list entries; cap sizes (lists 10 entries, `concept` 120 chars, `definition` 2000, each list entry 200) so a hallucinated or hostile payload cannot bloat SQLite
+5. Stamp the **server-owned** fields: `ID = uuid.NewString()`, `Topic` from the session, `Source = SourceAthena`, `Status = StatusDraft`, `CreatedAt = UpdatedAt = now`
+6. `item.Validate()` — an invalid item is **skipped and the batch continues**; one bad item must not discard the good ones
+7. Whole payload unparseable → `nil, ErrMalformedExtraction`
 
-`SaveDrafts` re-runs steps 3–5 on whatever the frontend sends back **and regenerates the ID**. This is the security-relevant part: accepting a client-supplied ID would let a crafted call overwrite or collide with an existing item.
+`SaveDrafts` re-runs steps 3–6 on whatever the frontend sends back **and regenerates the ID**. This is the security-relevant part: accepting a client-supplied ID would let a crafted call overwrite or collide with an existing item.
 
 Malformed-JSON handling is split by layer: the application returns `ErrMalformedExtraction`; the **desktop binding logs it and returns an empty list**. This keeps `internal/application` free of logging (it has none today, and log lines are mutation-testing noise) while satisfying "caught and logged, no crash".
 
@@ -91,4 +92,5 @@ Malformed-JSON handling is split by layer: the application returns `ErrMalformed
 - Malformed JSON produces no crash: the binding logs it and the UI shows an empty result
 - An item missing its definition is skipped while its valid siblings are still saved
 - A definition exactly at the size cap is kept intact; one over the cap is truncated
+- A payload with more than `maxItems` items is truncated to `maxItems`, regardless of what the prompt asked for
 - `SaveDrafts` regenerates IDs, ignoring any ID supplied by the caller

@@ -80,7 +80,9 @@ Every query orders by `created_at ASC, id ASC` — 2.7 requires oldest-first, an
 
 Deliberate design choices:
 
-- **No `UpdateStatus`.** A status-only write path would let callers bypass `TransitionTo`. Approve/Deprecate are always load → transition → `Update`, which makes the lifecycle rule structurally non-bypassable.
+- **No `UpdateStatus`.** A status-only write path would invite callers to set a status directly. Approve/Deprecate are always load → transition → `Update`, so the lifecycle rule has exactly one entry point in the application layer.
+
+  `Update` still takes a whole `KnowledgeItem`, so it *can* physically persist a hand-set `Status` — the repository is a dumb persistence port and validating transitions there would put a business rule in infrastructure, against ADR-001. The guarantee is therefore "one orchestration path", not "physically impossible": `UpdateItem` (2.6) never touches `Status`, and any future write path must go through `TransitionTo` too.
 - **`Save` returns only `error`**, not the ID. This deviates from an earlier draft of this spec but matches every existing repository (`FolderRepository.Create`, `MessageRepository.Append`); returning an ID the caller just supplied is noise. The use case returns the populated item. Note the deviation in the commit body and `CHANGELOG.md`.
 
 ## Schema
@@ -127,6 +129,8 @@ All three statements are idempotent, so they are plain `execSQL(...)` entries ap
 - `List` honours each `Filter` combination and returns items oldest-first
 - `ListTopics` returns distinct topics; `CountByStatus` returns the right count per status
 - `Update` and `Delete` return `ErrItemNotFound` for an unknown ID
-- `TransitionTo(StatusApproved)` succeeds from `draft`; from `deprecated` it returns `ErrInvalidStatusTransition`; an unknown status returns `ErrUnknownStatus`
+- `TransitionTo(StatusApproved)` succeeds from `draft`; `TransitionTo(StatusDeprecated)` succeeds from `approved`
+- `TransitionTo(StatusDeprecated)` from `draft` returns `ErrInvalidStatusTransition` — the transition the spec calls out as disallowed is asserted, not merely described
+- `TransitionTo(StatusApproved)` from `deprecated` returns `ErrInvalidStatusTransition`; an unknown status returns `ErrUnknownStatus`
 - `TransitionTo` stamps `UpdatedAt` from the injected `now` and leaves the receiver unmodified
 - `Open` creates `knowledge_items` and is idempotent on a second call
