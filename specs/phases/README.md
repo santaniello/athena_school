@@ -76,22 +76,31 @@ Payments         Paddle
 | [07-sqlite.md](phase-01-desktop-mvp/07-sqlite.md) | Local SQLite schema: sessions, messages, usage |
 | [08-settings.md](phase-01-desktop-mvp/08-settings.md) | Settings screen: OpenRouter key, profile fields |
 | [09-auto-update.md](phase-01-desktop-mvp/09-auto-update.md) | GitHub Releases check + silent update notification |
+| [10-study-folders.md](phase-01-desktop-mvp/10-study-folders.md) | Folder tree for study sessions in the sidebar |
+| [11-documentation.md](phase-01-desktop-mvp/11-documentation.md) | In-app manual: purpose, study sessions, Knowledge Engine |
 
 ---
 
 ## Phase 2 — Knowledge Engine
 
-**Done when:** User imports a Markdown folder, runs a study session that uses the notes as context, reviews and approves Knowledge Items at session end, and sees the Knowledge Explorer organized by topic.
+**Done when:** User imports a Markdown folder, runs a study session that uses the notes as context, extracts and approves evidence-backed Knowledge Items, reconciles duplicates against existing knowledge, sees revision history in the Knowledge Explorer, resumes answers with their original sources, and finds approved items retrieved as context in later sessions.
+
+Delivered in three increments, each demonstrable on its own: **2.1 → 2.2 → 2.6 → 2.7** (model, extraction, explorer, review queue), then **2.3 → 2.4 → 2.5 → 2.8** (notes import, vector search, RAG, item indexing), then **2.9 → 2.10 → 2.11 → 2.12** (provenance, duplicate detection, reconciliation, revision history).
 
 | Spec | Description |
 |---|---|
-| [01-knowledge-item.md](phase-02-knowledge-engine/01-knowledge-item.md) | KnowledgeItem domain model + SQLite schema |
-| [02-knowledge-extraction.md](phase-02-knowledge-engine/02-knowledge-extraction.md) | Post-session LLM extraction → draft items |
+| [01-knowledge-item.md](phase-02-knowledge-engine/01-knowledge-item.md) | KnowledgeItem domain model, lifecycle rule + SQLite schema |
+| [02-knowledge-extraction.md](phase-02-knowledge-engine/02-knowledge-extraction.md) | On-demand LLM extraction → unpersisted draft candidates |
 | [03-notes-import.md](phase-02-knowledge-engine/03-notes-import.md) | Markdown ingest pipeline: parse → chunk → embed |
-| [04-vector-search.md](phase-02-knowledge-engine/04-vector-search.md) | Pure-Go cosine similarity vector store |
-| [05-rag-integration.md](phase-02-knowledge-engine/05-rag-integration.md) | Knowledge-first retrieval flow |
+| [04-vector-search.md](phase-02-knowledge-engine/04-vector-search.md) | Pure-Go cosine similarity vector store (ADR-004) |
+| [05-rag-integration.md](phase-02-knowledge-engine/05-rag-integration.md) | Knowledge-first retrieval flow + source modes |
 | [06-knowledge-explorer.md](phase-02-knowledge-engine/06-knowledge-explorer.md) | Sidebar tree UI + detail screen + actions |
 | [07-knowledge-review.md](phase-02-knowledge-engine/07-knowledge-review.md) | Draft review queue + pending badge |
+| [08-knowledge-item-indexing.md](phase-02-knowledge-engine/08-knowledge-item-indexing.md) | All item statuses indexed; approved-only RAG + backfill |
+| [09-persistent-provenance.md](phase-02-knowledge-engine/09-persistent-provenance.md) | Evidence-backed items + persisted sources for historical answers |
+| [10-duplicate-detection.md](phase-02-knowledge-engine/10-duplicate-detection.md) | Exact normalized and semantic duplicate detection |
+| [11-knowledge-reconciliation.md](phase-02-knowledge-engine/11-knowledge-reconciliation.md) | Human-approved create/update/relate/conflict/no-change proposals |
+| [12-knowledge-revision-history.md](phase-02-knowledge-engine/12-knowledge-revision-history.md) | Immutable evidence-backed item revision history |
 
 ---
 

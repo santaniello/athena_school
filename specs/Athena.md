@@ -356,6 +356,50 @@ Approved
 
 O usuário poderá revisar, aprovar ou rejeitar conhecimento pela interface do desktop.
 
+## 11.1 Proveniência Persistente
+
+`source` identifica somente a categoria do conhecimento. Cada Knowledge Item também
+deve apontar para evidências concretas — mensagens da sessão ou chunks importados —
+com um snapshot imutável do trecho que o sustentou.
+
+```text
+Knowledge Item
+      ↓
+Item Evidence
+      ↓
+Session Message / Imported Chunk + immutable excerpt
+```
+
+Respostas assistidas por RAG preservam a lista exata de fontes que entrou no
+contexto. Ao retomar uma sessão, as fontes reaparecem mesmo que a nota ou o item
+original tenha mudado depois.
+
+## 11.2 Detecção de Duplicidade e Reconciliação
+
+Novo conhecimento não deve ser acumulado cegamente. Antes de criar um item, Athena
+compara o conceito dentro do tópico por normalização determinística e similaridade
+semântica.
+
+```text
+Extracted candidate
+       ↓
+Exact / semantic matches
+       ↓
+create | update | relate | conflict | no_change
+       ↓
+Human review
+```
+
+O LLM apenas propõe a classificação e um diff limitado. O backend valida o alvo, a
+evidência e os campos alteráveis; somente o usuário pode aplicar a proposta. Um alvo
+alterado depois da análise torna a proposta obsoleta e exige nova reconciliação.
+
+## 11.3 Histórico de Revisões
+
+Criação, edição, aprovação, depreciação e reconciliação aplicada geram snapshots
+imutáveis, numerados e ligados às evidências da mudança. O histórico mostra o diff
+entre revisões, mas a Fase 2 não restaura versões antigas automaticamente.
+
 ---
 
 # 12. Knowledge Promotion
@@ -1243,6 +1287,10 @@ Knowledge
 
 Funcionalidade futura.
 
+As relações começam na reconciliação da Fase 2 e usam IDs de Knowledge Items. O
+grafo futuro reutiliza essas relações e acrescenta semânticas direcionais; nomes de
+conceitos não são chaves de integridade.
+
 Relacionamentos:
 
 ```text
@@ -1296,7 +1344,12 @@ Possíveis entidades:
 topics
 knowledge_items
 knowledge_chunks
-sources
+knowledge_evidence
+knowledge_item_evidence
+knowledge_reconciliation_proposals
+knowledge_item_relations
+knowledge_item_revisions
+message_sources
 notes
 sessions
 questions

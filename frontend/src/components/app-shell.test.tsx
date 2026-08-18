@@ -85,10 +85,25 @@ describe('AppShell', () => {
       'Progress',
       'Flashcards',
       'Interview',
+      'Documentation',
       'Settings',
     ]) {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
     }
+  })
+
+  it('opens the real Documentation screen, not the coming-soon panel', async () => {
+    // Given the app shell mounts
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+
+    // When selecting Documentation
+    await user.click(screen.getByRole('button', { name: 'Documentation' }))
+
+    // Then the manual renders, with its contents list
+    expect(screen.getByRole('navigation', { name: 'Contents' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Why Athena exists' })).toBeInTheDocument()
   })
 
   it('opens the coming-soon panel when a locked section is selected', async () => {

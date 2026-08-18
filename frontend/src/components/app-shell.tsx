@@ -9,6 +9,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/componen
 import HomeScreen from '@/screens/HomeScreen'
 import StudyChatScreen from '@/screens/StudyChatScreen'
 import SettingsScreen from '@/screens/SettingsScreen'
+import DocumentationScreen from '@/screens/DocumentationScreen'
 import { NAVIGATION, type AppSection } from '@/lib/navigation'
 import { getUserProfile, type ProfileDraft } from '@/lib/profile'
 import type { StudySession } from '@/lib/study'
@@ -207,6 +208,8 @@ function AppShell({ onLogout }: AppShellProps) {
                 </p>
               </div>
             )
+          ) : section === 'documentation' ? (
+            <DocumentationScreen />
           ) : section === 'settings' && profile ? (
             <SettingsScreen profile={profile} onProfileUpdated={setProfile} />
           ) : (

@@ -337,6 +337,14 @@ CREATE TABLE usage (
 
 **Dependência:** Fase 1 completa.
 
+**Entrega em três incrementos**, cada um demonstrável sozinho:
+
+1. **2.1 → 2.2 → 2.6 → 2.7** — modelo, extração, explorer, fila de revisão
+2. **2.3 → 2.4 → 2.5 → 2.8** — import de notas, vector search, RAG, indexação de todos os estados
+3. **2.9 → 2.10 → 2.11 → 2.12** — proveniência, duplicidade, reconciliação e histórico de revisões
+
+> As specs detalhadas estão em `specs/phases/phase-02-knowledge-engine/`. Esta seção é o resumo; em caso de divergência, a spec da fase é a mais específica.
+
 ### 2.1 — Knowledge Item Model
 
 ```go
@@ -356,8 +364,10 @@ type KnowledgeItem struct {
 ```
 
 **Tarefas:**
-- [ ] `internal/domain/knowledge/` — `KnowledgeItem`, lifecycle
-- [ ] Schema SQLite:
+- [ ] `internal/domain/knowledge/` — `KnowledgeItem` + `TransitionTo`: só `draft → approved` e `approved → deprecated` são válidas
+- [ ] `Repository` sem `UpdateStatus` — aprovar/deprecar é sempre load → transição → `Update`, para que a regra não seja contornável
+- [ ] `internal/infrastructure/sqlite/jsonlist.go` — codificação JSON-array-como-TEXT (padrão inédito no projeto)
+- [ ] Schema SQLite (+ índices por `status, created_at` e por `topic`):
 
 ```sql
 CREATE TABLE knowledge_items (
@@ -377,16 +387,20 @@ CREATE TABLE knowledge_items (
 
 ### 2.2 — Knowledge Extraction
 
-Após cada sessão de estudo, o LLM extrai conceitos e gera Knowledge Items em estado `draft`.
+Sob demanda, o LLM extrai conceitos da sessão e os **propõe** como Knowledge Items. Nada é gravado até o usuário confirmar.
 
-- [ ] `internal/application/knowledge/extraction.go`
-- [ ] Prompt de extração estruturado → retorna JSON tipado
-- [ ] UI: modal "Novo conhecimento encontrado" com opções [Salvar / Rascunho / Ignorar]
+O domínio `study` não tem conceito de fim de sessão (`Session` não tem `EndedAt`, não existe caso de uso `End`), e reintroduzi-lo mexeria numa área já estável. O gatilho é portanto uma **ação explícita**: botão "Extract knowledge" no composer do chat.
+
+- [ ] `internal/application/knowledge/extraction.go` — `ExtractFromSession` devolve candidatos **não persistidos**; `SaveDrafts` grava
+- [ ] Prompt de extração estruturado → envelope `{"items":[...]}`, não array nu
+- [ ] Validação em Go antes de persistir: tetos de tamanho, item inválido é pulado sem descartar os válidos, `SaveDrafts` regenera o ID
+- [ ] JSON malformado → `ErrMalformedExtraction`; quem loga é o binding desktop, mantendo `internal/application` sem logging
+- [ ] UI: modal "Novo conhecimento encontrado" com [Salvar como rascunhos / Ignorar] — o terceiro botão [Salvar e aprovar] entra na 2.6, quando `Approve` passa a existir
 
 ### 2.3 — Notes Import (Markdown)
 
-- [ ] `internal/application/ingest/` — pipeline de ingestão
-- [ ] UI: botão "Importar notas" + seletor de pasta
+- [ ] `internal/application/ingest/` — pipeline de ingestão sobre `fs.FS` (`os.OpenRoot` dá confinamento contra symlink escape; testes usam `fstest.MapFS`)
+- [ ] UI: botão "Importar notas" + seletor de pasta (`PickNotesFolder` e `ImportNotes` como bindings separados; o diálogo Wails precisa ser injetável, como o `emit`)
 - [ ] Pipeline:
 
 ```text
@@ -394,27 +408,43 @@ Arquivos Markdown
     ↓
 Parser (goldmark)
     ↓
-Chunking (por heading ou tamanho fixo ~500 tokens)
+Chunking por heading, com orçamento de ~2000 chars (4 chars ≈ 1 token)
     ↓
-Metadata (source, file, heading, created_at)
+Metadata (source, file_path, heading, topic, status, created_at)
     ↓
-Embeddings (OpenRouter embedding model)
+Embeddings (llm.Provider.Embeddings — já implementado, sem chamadores hoje)
     ↓
-Vector Store local
+knowledge_chunks (embedding como BLOB float32 little-endian)
 ```
 
 - [ ] Suporte inicial: `.md` e `.txt`
+- [ ] Deduplicação por `file_path` + `mtime` + modelo de embedding; arquivo alterado **substitui** seus chunks numa transação, não duplica — e trocar o modelo re-embeda automaticamente
+- [ ] Conteúdo sem heading (texto corrido, front matter, só H4+) cai no split por parágrafo; nada é descartado por falta de heading
 - [ ] Schema:
 
 ```sql
 CREATE TABLE knowledge_chunks (
     id TEXT PRIMARY KEY,
     source TEXT,
+    topic TEXT,      -- necessário para os filtros da 2.4
+    status TEXT,     -- idem
+    item_id TEXT,    -- permite reindexar/remover o chunk de um Knowledge Item
     file_path TEXT,
     heading TEXT,
     content TEXT,
-    embedding BLOB, -- vector serializado
+    embedding BLOB, -- float32 empacotado, little-endian
+    embedding_model TEXT NOT NULL,
+    item_updated_at DATETIME, -- preenchido somente para chunks de Knowledge Items
     created_at DATETIME
+);
+
+-- onde vive o mtime da deduplicação; registra também arquivos com zero chunks
+CREATE TABLE ingested_files (
+    file_path       TEXT PRIMARY KEY,
+    mtime           INTEGER NOT NULL,
+    embedding_model TEXT NOT NULL,
+    chunk_count     INTEGER NOT NULL,
+    ingested_at     DATETIME
 );
 ```
 
@@ -422,7 +452,14 @@ CREATE TABLE knowledge_chunks (
 
 - [ ] `internal/infrastructure/vectorstore/` — busca por similaridade cosseno
 - [ ] Pure Go, sem dependência externa de vector DB
-- [ ] Retorna top-K chunks por similaridade + filtros (topic, source, status)
+- [ ] Retorna top-K `ScoredChunk` por similaridade + filtros (topic, source, status)
+- [ ] `Remove` e `Len` além de `Add`/`Search`: sem `Remove`, item deletado continua respondendo até reiniciar; `Len` evita gastar embedding com base vazia
+- [ ] Normalização dos vetores no insert **e da query no `Search`** — produto escalar só é cosseno com os dois lados unitários; filtra antes de pontuar
+- [ ] Reimportar arquivo alterado remove os vetores antigos da memória, não só do SQLite
+- [ ] Carga em memória no startup, a partir de `knowledge_chunks`
+- [ ] Startup carrega somente chunks do modelo atual e, para Knowledge Items, com status/`item_updated_at` iguais ao registro fonte; índice obsoleto nunca responde
+- [ ] `ADR-004` registrando a escolha do vector store e do modelo de embedding (trocar o modelo exige re-ingest)
+- [ ] `internal/infrastructure/vectorstore` entra no escopo do `make mutation-go` (emenda à ADR-002)
 
 ### 2.5 — RAG Integration
 
@@ -441,27 +478,80 @@ Conhecimento suficiente?
     NO  → chamar OpenRouter com chunks como contexto
 ```
 
-- [ ] Source modes: `notes` / `strict-notes` / `web` (selecionável na UI)
+- [ ] Source modes: `notes` / `strict-notes` / `web` — transiente, passado por chamada em `SendStudyMessage`, sem migração
+- [ ] Em `strict-notes` sem chunks: responde `NoLocalKnowledgeMessage` **sem chamar o LLM** — inclusive com o store vazio, que é só a forma mais barata de não achar chunk e não pode curto-circuitar a checagem de modo
+- [ ] `DefaultTopK` explícito, junto com os thresholds
+- [ ] Thresholds de similaridade injetados no construtor (defaults 0.35 / 0.55, calibrados para `text-embedding-3-small`)
+- [ ] Contexto injetado como **segunda mensagem `system`**, preservando `buildSystemPrompt` e seus testes
+- [ ] Teto de contexto descartando chunks inteiros do menor score para cima — nunca truncar no meio, para que as fontes citadas batam com o que o modelo viu
+- [ ] `study.Service` recebe uma **porta** `knowledge.Retriever` definida no domínio; orquestrar isso no binding violaria a ADR-001
+- [ ] Evento `study:sources` com as fontes usadas (determinístico, em vez de pedir citação inline ao modelo)
 
 ### 2.6 — Knowledge Explorer (UI)
 
+- [ ] Desbloquear a seção `knowledge` em `frontend/src/lib/navigation.ts`
 - [ ] Sidebar esquerda com árvore de tópicos e conceitos
 - [ ] Filtros por status (draft / approved / deprecated)
 - [ ] Tela de detalhes do Knowledge Item
-- [ ] Ações: aprovar, editar, deprecar, deletar
+- [ ] Ações gated pelo ciclo de vida: aprovar (só draft), editar, deprecar (só approved), deletar
+- [ ] Reusar `components/tag-input.tsx` no editor inline das três listas
 
 ### 2.7 — Knowledge Review
 
-- [ ] Lista de itens em `draft` aguardando revisão
-- [ ] Usuário aprova ou rejeita
-- [ ] Badge com contador de itens pendentes
+- [ ] Lista de itens em `draft` aguardando revisão, mais antigos primeiro
+- [ ] Usuário aprova ou rejeita; `ApproveAllDrafts` itera por `TransitionTo`, `RejectAllDrafts` itera `Delete` — rejeitar não é mudança de status
+- [ ] Badge com contador de itens pendentes, com estado no `AppShell` + callback — sem Context nem store
+
+### 2.8 — Knowledge Item Indexing
+
+Todos os Knowledge Items entram no vector store para permitir detecção de duplicidade em qualquer estado. Somente items aprovados são recuperáveis pelo RAG (`source = athena`, `status = approved`).
+
+- [ ] Hook em `SaveDrafts` (indexa), `Approve`/`Deprecate`/`UpdateItem` (substituem status/conteúdo), `DeleteItem` (remove)
+- [ ] Aprovar/deprecar atualiza só o status do chunk, sem novo embedding; editar conteúdo re-embeda
+- [ ] Editar persiste o item e remove imediatamente o chunk antigo da memória; falha ao re-embeddar deixa o item temporariamente fora da busca, nunca servindo conteúdo obsoleto
+- [ ] Falha de indexação **nunca** reverte uma escrita bem-sucedida — devolve o item persistido com `ErrIndexingFailed`, o binding loga e trata como sucesso, e o backfill recolhe depois
+- [ ] Backfill consentido de todos os items criados antes da 2.8: alerta no Explorer com [Indexar agora], nunca silencioso no startup
+- [ ] Backfill compara `item_updated_at`, status e modelo de embedding para encontrar chunks obsoletos, não apenas ausentes
+
+### 2.9 — Persistent Provenance
+
+- [ ] Extração marca mensagens por ID e exige ao menos uma citação literal `{message_id, quote}` válida por candidato (máximo 5 × 1000 caracteres)
+- [ ] `knowledge_evidence` + `knowledge_item_evidence` guardam snapshots imutáveis; `Source` continua sendo apenas a categoria
+- [ ] `message_sources` persiste, em ordem, exatamente os chunks que sobreviveram ao threshold e ao teto de contexto
+- [ ] Mensagem final do assistente e fontes são gravadas atomicamente; sessão retomada restaura as fontes
+- [ ] Explorer mostra evidências do item
+
+### 2.10 — Knowledge Duplicate Detection
+
+- [ ] Match exato por conceito normalizado dentro do tópico, sem embedding
+- [ ] Sem match exato, busca semântica top-5 em items de todos os estados, threshold injetável default `0.90`
+- [ ] Match exato bloqueia criação direta; match semântico alerta e permite criação separada somente por escolha explícita
+- [ ] Backend repete a checagem no save para impedir bypass por chamada forjada ou UI stale
+
+### 2.11 — Knowledge Reconciliation
+
+- [ ] Propostas `create | update | relate | conflict | no_change`; LLM propõe, Go valida e usuário decide
+- [ ] Sem candidatos duplicados, `create` é determinístico e não faz uma segunda chamada LLM
+- [ ] Propostas salvas para revisão são persistidas separadamente de drafts e usam `TargetUpdatedAt` como controle otimista
+- [ ] `knowledge_item_relations` liga IDs; `related` é simétrico e idempotente
+- [ ] Target removido ou alterado torna a proposta `stale`; nenhuma alteração existente é automática
+
+### 2.12 — Knowledge Revision History
+
+- [ ] Snapshot imutável por criação, edição, aprovação, depreciação e reconciliação aplicada
+- [ ] Revisão e mutação do item ficam na mesma transação; falha de indexação posterior não apaga a revisão
+- [ ] Backfill `baseline` idempotente para items preexistentes
+- [ ] Histórico read-only no Explorer com diff por campo e evidências; restore fica fora da Fase 2
 
 ### Done when (Fase 2)
 
 - Usuário importa uma pasta de notas Markdown
 - Faz uma sessão de estudo que usa as notas como contexto
-- Ao final da sessão, revisa e aprova Knowledge Items gerados
-- Knowledge Explorer mostra os itens organizados por tópico
+- Extrai, reconcilia, revisa e aprova Knowledge Items com evidência persistente
+- Respostas retomadas preservam as fontes originalmente usadas
+- Duplicatas exatas não são criadas silenciosamente; conflitos sempre exigem decisão humana
+- Knowledge Explorer mostra os itens por tópico, suas evidências e o histórico de revisões
+- Items aprovados voltam como contexto em sessões seguintes
 
 ---
 
@@ -794,17 +884,7 @@ type AudioProvider interface {
 ### 7.1 — Knowledge Graph
 
 - [ ] `internal/domain/knowledge/graph.go` — relacionamentos entre conceitos
-- [ ] Schema:
-
-```sql
-CREATE TABLE concept_relations (
-    from_concept TEXT,
-    to_concept TEXT,
-    relation_type TEXT, -- related | prerequisite | extends
-    weight REAL
-);
-```
-
+- [ ] Reutilizar `knowledge_item_relations` da 2.11 sem nova tabela: `related` é simétrica; `prerequisite` e `extends` usam direção `from_item_id → to_item_id`; nomes não são chaves
 - [ ] UI: visualização de grafo com biblioteca (React Flow ou similar)
 - [ ] Navegação: clicar em conceito abre Knowledge Item
 
