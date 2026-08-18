@@ -63,5 +63,10 @@ Print the findings in the terminal, most severe first.
 
 Then check whether a PR already exists for this branch (`gh pr view --json number,url`).
 If one does, ask whether to post the findings as inline PR comments — only re-run the
-skill with `--comment` if the answer is yes. If no PR exists yet, just report locally
-and note that CodeRabbit will review automatically once the PR is opened.
+skill with `--comment` if the answer is yes. If no PR exists yet, just report locally.
+
+Do not promise that CodeRabbit will review the PR automatically. That only holds if the
+GitHub App is installed for the repository and the PR targets a branch covered by
+`auto_review.base_branches` in `.coderabbit.yaml` — and even then, the open-source plan
+is rate limited by star count, so the review may not fire. Say instead that
+`@coderabbitai review` triggers one manually if none appears.
