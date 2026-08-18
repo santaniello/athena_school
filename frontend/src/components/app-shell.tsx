@@ -5,6 +5,7 @@ import { AthenaLogo } from '@/components/athena-logo'
 import { NavItem } from '@/components/nav-item'
 import { ComingSoonPanel } from '@/components/coming-soon-panel'
 import { StudyFolderTree } from '@/components/study-folder-tree'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import HomeScreen from '@/screens/HomeScreen'
 import StudyChatScreen from '@/screens/StudyChatScreen'
 import SettingsScreen from '@/screens/SettingsScreen'
@@ -82,60 +83,86 @@ function AppShell({ onLogout }: AppShellProps) {
     setActiveSession((current) => (current ? { ...current, topic } : current))
   }
 
+  // ResizablePanelGroup/ResizablePanel hard-code `height: 100%` and
+  // `overflow: auto` as inline styles, which beat any h-*/overflow-* class.
+  // #root has no height of its own, so a class alone would collapse the shell
+  // to its content height, and the panel's own scrollbar would double up with
+  // the sidebar's. The library merges the style prop over its defaults, so
+  // these two have to stay inline.
   return (
-    <div className="flex h-screen">
-      <nav className="flex w-56 flex-col border-r border-border bg-card p-3">
-        <div className="flex items-center gap-2 px-1.5 py-2">
-          <AthenaLogo className="size-6 shrink-0" />
-          <span className="font-heading text-sm font-bold tracking-[0.2em] text-foreground">
-            ATHENA
-          </span>
-        </div>
-
-        <div
-          className="sidebar-scroll mt-2 flex flex-1 flex-col gap-0.5 overflow-y-auto"
-          style={{ scrollbarGutter: 'stable' }}
-        >
-          {PRIMARY_ITEMS.map((item) => (
-            <div key={item.id}>
-              <NavItem item={item} active={item.id === section} onSelect={setSection} />
-              {item.id === 'study' && section === 'study' && (
-                <StudyFolderTree
-                  selectedSessionId={activeSession?.id ?? null}
-                  onSelectSession={handleSelectSession}
-                  onSessionStarted={handleSessionStarted}
-                  onSessionDeleted={handleSessionDeleted}
-                />
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div className="flex flex-col gap-0.5 border-t border-border pt-2">
-          {FOOTER_ITEMS.map((item) => (
-            <NavItem key={item.id} item={item} active={item.id === section} onSelect={setSection} />
-          ))}
-        </div>
-
-        <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary font-heading text-xs font-bold text-primary-foreground">
-            {profile?.name.charAt(0).toUpperCase()}
+    <ResizablePanelGroup orientation="horizontal" style={{ height: '100vh' }}>
+      <ResizablePanel
+        defaultSize={224}
+        minSize={200}
+        maxSize={420}
+        groupResizeBehavior="preserve-pixel-size"
+        className="flex h-full flex-col"
+        style={{ overflow: 'hidden' }}
+      >
+        <nav className="flex h-full w-full flex-col bg-card p-3">
+          <div className="flex items-center gap-2 px-1.5 py-2">
+            <AthenaLogo className="size-6 shrink-0" />
+            <span className="font-heading text-sm font-bold tracking-[0.2em] text-foreground">
+              ATHENA
+            </span>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-foreground">{profile?.name}</p>
-          </div>
-          <button
-            type="button"
-            aria-label="Log out"
-            onClick={() => void handleLogout()}
-            className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+
+          <div
+            className="sidebar-scroll mt-2 flex flex-1 flex-col gap-0.5 overflow-y-auto"
+            style={{ scrollbarGutter: 'stable' }}
           >
-            <LogOut className="size-4" aria-hidden="true" />
-          </button>
-        </div>
-      </nav>
+            {PRIMARY_ITEMS.map((item) => (
+              <div key={item.id}>
+                <NavItem item={item} active={item.id === section} onSelect={setSection} />
+                {item.id === 'study' && section === 'study' && (
+                  <StudyFolderTree
+                    selectedSessionId={activeSession?.id ?? null}
+                    onSelectSession={handleSelectSession}
+                    onSessionStarted={handleSessionStarted}
+                    onSessionDeleted={handleSessionDeleted}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
 
-      <div className="flex flex-1 flex-col">
+          <div className="flex flex-col gap-0.5 border-t border-border pt-2">
+            {FOOTER_ITEMS.map((item) => (
+              <NavItem
+                key={item.id}
+                item={item}
+                active={item.id === section}
+                onSelect={setSection}
+              />
+            ))}
+          </div>
+
+          <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
+            <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary font-heading text-xs font-bold text-primary-foreground">
+              {profile?.name.charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-foreground">{profile?.name}</p>
+            </div>
+            <button
+              type="button"
+              aria-label="Log out"
+              onClick={() => void handleLogout()}
+              className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+            >
+              <LogOut className="size-4" aria-hidden="true" />
+            </button>
+          </div>
+        </nav>
+      </ResizablePanel>
+
+      <ResizableHandle className="transition-colors hover:bg-primary/60 active:bg-primary" />
+
+      <ResizablePanel
+        minSize={360}
+        className="flex h-full w-full flex-col"
+        style={{ overflow: 'hidden' }}
+      >
         <header className="flex min-h-11 shrink-0 items-center border-b border-border px-6 py-2">
           {section === 'study' && activeSession ? (
             <div className="min-w-0">
@@ -183,8 +210,8 @@ function AppShell({ onLogout }: AppShellProps) {
             <ComingSoonPanel item={activeItem} />
           )}
         </main>
-      </div>
-    </div>
+      </ResizablePanel>
+    </ResizablePanelGroup>
   )
 }
 
