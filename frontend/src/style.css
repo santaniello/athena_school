@@ -144,6 +144,50 @@ body {
   animation: leaf-bounce 1.2s ease-in-out infinite;
 }
 
+/* HomeScreen greeting: a slow golden glow on the heading text, echoing the
+   splash screen's athena-logo-pulse so the two "breathing" moments in the
+   app share the same accent color and cadence. */
+@keyframes greeting-glow {
+  0%,
+  100% {
+    text-shadow: 0 0 0 transparent;
+  }
+  50% {
+    text-shadow: 0 0 16px oklch(0.8 0.14 86 / 55%);
+  }
+}
+
+.animate-greeting-glow {
+  animation: greeting-glow 2400ms ease-in-out infinite;
+}
+
+/* HomeScreen avatar: same golden pulse as greeting-glow, as a blurred
+   radial-gradient halo sitting behind the image rather than an animated
+   `filter` on the <img> itself — webkit2gtk (Wails' engine on Linux) can
+   leave an <img> blank after it's unmounted and remounted (e.g. navigating
+   away from Home and back) if its `filter` is what's animating. Animating
+   this halo's opacity instead sidesteps that. Same 2400ms cadence as
+   greeting-glow so the avatar and greeting breathe in sync. */
+@keyframes avatar-glow {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.animate-avatar-glow {
+  position: absolute;
+  inset: -14%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, oklch(0.8 0.14 86 / 85%), transparent 65%);
+  filter: blur(20px);
+  opacity: 0;
+  animation: avatar-glow 2400ms ease-in-out infinite;
+}
+
 /* Opt-in scrollbar for the app's own scroll areas (sidebar nav, chat
    transcript). Without any ::-webkit-scrollbar rule, WebKit/Chromium defer to
    the OS scrollbar style — on Linux (webkit2gtk) that's GTK's overlay
