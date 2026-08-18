@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
   onStudyChunk,
@@ -351,6 +351,57 @@ describe('StudyChatScreen — composing and sending', () => {
     expect(handlers.unsubscribe.chunk).toHaveBeenCalledOnce()
     expect(handlers.unsubscribe.done).toHaveBeenCalledOnce()
     expect(handlers.unsubscribe.error).toHaveBeenCalledOnce()
+  })
+})
+
+// jsdom has no layout engine: scrollHeight/clientHeight are always 0 and
+// scrollTop is a read-only 0. Backing all three with plain values is what
+// makes the "is the user at the bottom?" arithmetic observable in a test.
+function stubScrollMetrics(element: HTMLElement, scrollHeight: number, clientHeight: number) {
+  let scrollTop = 0
+  Object.defineProperty(element, 'scrollHeight', { value: scrollHeight, configurable: true })
+  Object.defineProperty(element, 'clientHeight', { value: clientHeight, configurable: true })
+  Object.defineProperty(element, 'scrollTop', {
+    configurable: true,
+    get: () => scrollTop,
+    set: (value: number) => {
+      scrollTop = value
+    },
+  })
+}
+
+describe('StudyChatScreen — transcript scrolling', () => {
+  it('follows the streaming answer while the user is parked at the bottom', async () => {
+    // Given a transcript taller than its viewport, scrolled to the bottom
+    const handlers = await renderStartedSession()
+    const transcript = screen.getByRole('log', { name: 'Conversation' })
+    stubScrollMetrics(transcript, 1000, 400)
+
+    // When the next chunk of the answer streams in
+    act(() => {
+      handlers.chunk?.('More of the answer')
+    })
+
+    // Then the transcript scrolls to keep it in view
+    await waitFor(() => expect(transcript.scrollTop).toBe(1000))
+  })
+
+  it('leaves the scroll position alone once the user scrolls up to re-read', async () => {
+    // Given a user who scrolled back up to an earlier explanation
+    const handlers = await renderStartedSession()
+    const transcript = screen.getByRole('log', { name: 'Conversation' })
+    stubScrollMetrics(transcript, 1000, 400)
+    transcript.scrollTop = 0
+    fireEvent.scroll(transcript)
+
+    // When the next chunk of the answer streams in
+    act(() => {
+      handlers.chunk?.('More of the answer')
+    })
+
+    // Then the transcript stays where they left it
+    await screen.findByText('More of the answer')
+    expect(transcript.scrollTop).toBe(0)
   })
 })
 

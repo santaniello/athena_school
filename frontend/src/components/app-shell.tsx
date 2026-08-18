@@ -108,7 +108,7 @@ function AppShell({ onLogout }: AppShellProps) {
           </div>
 
           <div
-            className="sidebar-scroll mt-2 flex flex-1 flex-col gap-0.5 overflow-y-auto"
+            className="thin-scroll mt-2 flex flex-1 flex-col gap-0.5 overflow-y-auto"
             style={{ scrollbarGutter: 'stable' }}
           >
             {PRIMARY_ITEMS.map((item) => (
@@ -179,7 +179,10 @@ function AppShell({ onLogout }: AppShellProps) {
             </h1>
           )}
         </header>
-        <main className="flex flex-1 p-10">
+        {/* min-h-0 lets this flex item shrink below its content's height —
+            without it a long chat transcript stretches <main> past the
+            viewport instead of scrolling inside its own scroll area. */}
+        <main className="flex min-h-0 flex-1 p-10">
           {section === 'home' ? (
             <HomeScreen
               profile={profile}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ChangeEvent, KeyboardEvent } from 'react'
+import type { ChangeEvent, KeyboardEvent, UIEvent } from 'react'
 import { ArrowUp } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -33,6 +33,10 @@ interface ChatMessage {
   content: string
 }
 
+// How close to the bottom of the transcript the user has to be for it to
+// count as "following along", and keep auto-scrolling with the stream.
+const STICKY_BOTTOM_THRESHOLD_PX = 80
+
 // The chat-style Study Mode screen: exchange messages with the LLM, whose
 // reply streams in over Wails events (see lib/study.ts) rather than
 // arriving all at once. Session creation itself now happens in the sidebar
@@ -40,12 +44,7 @@ interface ChatMessage {
 // session already exists, either freshly started or resumed from history.
 // See specs/phases/phase-01-desktop-mvp/06-study-mode.md and
 // specs/phases/phase-01-desktop-mvp/10-study-folders.md.
-function StudyChatScreen({
-  sessionId,
-  initialTopic,
-  mode,
-  onTopicResolved,
-}: StudyChatScreenProps) {
+function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: StudyChatScreenProps) {
   const [sessionTopic, setSessionTopic] = useState(initialTopic)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streamingText, setStreamingText] = useState('')
@@ -54,6 +53,19 @@ function StudyChatScreen({
   const [error, setError] = useState<string | null>(null)
   const streamingTextRef = useRef('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const transcriptRef = useRef<HTMLDivElement>(null)
+  // Starts pinned so a resumed session opens on its most recent message.
+  const followTranscriptRef = useRef(true)
+
+  // Keeps the newest content in view as messages arrive and the answer
+  // streams in — but only while the user is still parked at the bottom, so
+  // scrolling up to re-read an earlier explanation isn't yanked back down by
+  // the next chunk.
+  useEffect(() => {
+    const el = transcriptRef.current
+    if (!el || !followTranscriptRef.current) return
+    el.scrollTop = el.scrollHeight
+  }, [messages, streamingText])
 
   // Focuses the reply textarea as soon as the chat view mounts, so the user
   // can start typing immediately instead of clicking into it first.
@@ -149,6 +161,15 @@ function StudyChatScreen({
     el.style.height = `${el.scrollHeight}px`
   }
 
+  // Re-arms (or releases) the auto-scroll above whenever the user moves the
+  // transcript by hand. Programmatic scrollTop writes fire this too, which is
+  // harmless: they land at the bottom, so the flag just stays on.
+  function handleTranscriptScroll(event: UIEvent<HTMLDivElement>) {
+    const el = event.currentTarget
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    followTranscriptRef.current = distanceFromBottom <= STICKY_BOTTOM_THRESHOLD_PX
+  }
+
   function handleDraftKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key !== 'Enter' || event.shiftKey) return
     event.preventDefault()
@@ -158,7 +179,13 @@ function StudyChatScreen({
 
   return (
     <div className="flex h-full w-full flex-col gap-3">
-      <div className="flex flex-1 flex-col gap-3 overflow-y-auto">
+      <div
+        ref={transcriptRef}
+        onScroll={handleTranscriptScroll}
+        role="log"
+        aria-label="Conversation"
+        className="thin-scroll flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-2"
+      >
         {messages.map((message, index) => (
           <MessageBubble key={index} role={message.role} content={message.content} />
         ))}

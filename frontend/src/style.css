@@ -144,27 +144,30 @@ body {
   animation: leaf-bounce 1.2s ease-in-out infinite;
 }
 
-/* Sidebar nav scroll: without any ::-webkit-scrollbar rule, WebKit/Chromium
-   defer to the OS scrollbar style — on Linux (webkit2gtk) that's GTK's
-   overlay scrollbar, which floats on a compositor layer above everything,
-   including portaled Radix popovers, rather than reserving its own space.
-   Styling it here switches WebKit/Chromium to a classic, space-reserving
-   scrollbar instead, so it can never sit on top of a row's hover-revealed
-   kebab button or an open dropdown menu again. */
-.sidebar-scroll::-webkit-scrollbar {
+/* Opt-in scrollbar for the app's own scroll areas (sidebar nav, chat
+   transcript). Without any ::-webkit-scrollbar rule, WebKit/Chromium defer to
+   the OS scrollbar style — on Linux (webkit2gtk) that's GTK's overlay
+   scrollbar, which stays invisible until you are already scrolling and floats
+   on a compositor layer above everything, including portaled Radix popovers,
+   rather than reserving its own space. Styling it here switches
+   WebKit/Chromium to a classic, always-visible, space-reserving scrollbar
+   instead: it shows the user there is more content to scroll, and it can never
+   sit on top of a row's hover-revealed kebab button or an open dropdown
+   menu. */
+.thin-scroll::-webkit-scrollbar {
   width: 6px;
 }
 
-.sidebar-scroll::-webkit-scrollbar-track {
+.thin-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.sidebar-scroll::-webkit-scrollbar-thumb {
+.thin-scroll::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 9999px;
 }
 
-.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+.thin-scroll::-webkit-scrollbar-thumb:hover {
   background: var(--muted-foreground);
 }
 
