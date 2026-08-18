@@ -149,6 +149,8 @@ CI enforces the *mechanical* gate (coverage, linters, mutants, secrets). The rul
 
 The OSS plan is rate-limited rather than unlimited: reviews per hour and files per review both scale with the repository's star count. On a low-star repo, expect to trigger some reviews manually with `@coderabbitai review` when the automatic one doesn't fire.
 
+One gap worth knowing about: **CodeRabbit's ESLint pass never runs on this repository.** `frontend/eslint.config.js` uses `eslint-plugin-react-refresh`, which is not on CodeRabbit's plugin allow-list, and an unsupported plugin makes it skip ESLint for the entire run. This is deliberate — `npm run lint` in the `quality-gate` job is a required status check, so the frontend is already linted where it blocks a merge. Do not read a clean CodeRabbit review as evidence that the frontend lints.
+
 Configured in [`.coderabbit.yaml`](.coderabbit.yaml). CodeRabbit reads `AGENTS.md` as review criteria automatically, so the config only adds what prose can't express: per-layer instructions for the hexagonal boundaries, exclusion of generated code (`**/mocks/**`, `frontend/wailsjs/**`), and non-blocking pre-merge checks for the Conventional Commits title, the `[Unreleased]` CHANGELOG entry, and the TDD "test ships with implementation" rule.
 
 Chat commands on any PR:

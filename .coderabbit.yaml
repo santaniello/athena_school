@@ -105,13 +105,19 @@ reviews:
           Aprove se o PR for exclusivamente refactor sem mudança de
           comportamento, ou se tocar apenas docs, config ou mocks gerados.
 
-  # All CodeRabbit linters are enabled by default; these entries only point
-  # at config files that are not where CodeRabbit would look by default.
-  tools:
-    golangci-lint:
-      config_file: .golangci.yml
-    eslint:
-      config_file: frontend/eslint.config.js
+  # No `tools` block on purpose. Every CodeRabbit linter is enabled by default,
+  # and config discovery is recursive — `.golangci.yml` and
+  # `frontend/eslint.config.js` are both found on their own. Setting
+  # `config_file` would not just be redundant: it pins that one file for every
+  # path in the repository and disables recursive discovery.
+  #
+  # Note that CodeRabbit's ESLint pass never actually runs here.
+  # `frontend/eslint.config.js` uses `eslint-plugin-react-refresh`, which is not
+  # on CodeRabbit's plugin allow-list, and an unsupported plugin makes it skip
+  # ESLint for the whole run. That is acceptable: `npm run lint` in the
+  # `quality-gate` CI job is a required status check, so the frontend is already
+  # covered where it counts. Dropping the plugin to satisfy CodeRabbit would
+  # trade a working HMR-correctness rule for a redundant lint pass.
 
 knowledge_base:
   code_guidelines:
