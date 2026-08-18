@@ -109,6 +109,7 @@ func TestApp_RequestOpeningTurn_streamsChunksAndSignalsDone(t *testing.T) {
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
+	messages.EXPECT().ListBySession(mock.Anything, "session-1").Return(nil, nil).Once()
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}, nil)
 	llm.EXPECT().
 		ChatStream(mock.Anything, mock.AnythingOfType("llm.ChatRequest"), mock.AnythingOfType("func(string) error")).
@@ -138,6 +139,7 @@ func TestApp_RequestOpeningTurn_emitsErrorEvent_onFailure(t *testing.T) {
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
+	messages.EXPECT().ListBySession(mock.Anything, "session-1").Return(nil, nil).Once()
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{}, errors.New("profile not found"))
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 

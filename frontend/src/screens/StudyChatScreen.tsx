@@ -56,6 +56,10 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
   const transcriptRef = useRef<HTMLDivElement>(null)
   // Starts pinned so a resumed session opens on its most recent message.
   const followTranscriptRef = useRef(true)
+  // Tracks the sessionId already sent to requestOpeningTurn, so React 18
+  // StrictMode's dev-only double-invoke of this effect (mount → cleanup →
+  // mount) doesn't fire two independent LLM generations for one session.
+  const openingTurnRequestedRef = useRef<string | null>(null)
 
   // Keeps the newest content in view as messages arrive and the answer
   // streams in — but only while the user is still parked at the bottom, so
@@ -75,6 +79,8 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
 
   useEffect(() => {
     if (mode === 'new') {
+      if (openingTurnRequestedRef.current === sessionId) return
+      openingTurnRequestedRef.current = sessionId
       requestOpeningTurn(sessionId, initialTopic).catch((err: unknown) => {
         setIsStreaming(false)
         setError(err instanceof Error ? err.message : 'Failed to start the session.')
