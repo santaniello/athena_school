@@ -474,7 +474,9 @@ describe('StudyFolderTree', () => {
     fireEvent.blur(input)
 
     // Then it was renamed anyway
-    await waitFor(() => expect(renameFolder).toHaveBeenCalledWith('folder-1', 'Distributed Systems'))
+    await waitFor(() =>
+      expect(renameFolder).toHaveBeenCalledWith('folder-1', 'Distributed Systems'),
+    )
     expect(await screen.findByText('Distributed Systems')).toBeInTheDocument()
   })
 
@@ -580,8 +582,9 @@ describe('StudyFolderTree', () => {
 
     // Then the default folder's sessions are reloaded — fetched twice
     await waitFor(() =>
-      expect(vi.mocked(listStudySessionsByFolder).mock.calls.filter(([id]) => id === 'default'))
-        .toHaveLength(2),
+      expect(
+        vi.mocked(listStudySessionsByFolder).mock.calls.filter(([id]) => id === 'default'),
+      ).toHaveLength(2),
     )
   })
 
@@ -709,7 +712,9 @@ describe('StudyFolderTree', () => {
     await user.click(screen.getByText('General'))
     await waitFor(() => expect(listStudySessionsByFolder).toHaveBeenCalledWith('default'))
     const generalSection = screen.getByText('General').closest('div')?.parentElement
-    expect(generalSection ? within(generalSection).queryByText('Cache invalidation') : null).toBeNull()
+    expect(
+      generalSection ? within(generalSection).queryByText('Cache invalidation') : null,
+    ).toBeNull()
   })
 
   it('shows a session started while its folder’s sessions were still loading', async () => {

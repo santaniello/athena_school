@@ -263,9 +263,7 @@ describe('AppShell', () => {
     // resume path (resumeStudySession), not the "new session" opening-turn
     // path, and the tree highlights it as the selected row
     expect(await screen.findByText('Study / General')).toBeInTheDocument()
-    expect(
-      screen.getByRole('heading', { name: 'Existing topic', level: 1 }),
-    ).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Existing topic', level: 1 })).toBeInTheDocument()
     expect(resumeStudySession).toHaveBeenCalledWith('session-existing')
     expect(requestOpeningTurn).not.toHaveBeenCalled()
     const sessionRow = screen
@@ -369,10 +367,10 @@ describe('AppShell', () => {
     // (resumeStudySession may resolve before this assertion even runs, so
     // this only checks the eventual, settled state rather than racing an
     // intermediate render)
+    expect(await screen.findByRole('heading', { name: 'Real topic', level: 1 })).toBeInTheDocument()
     expect(
-      await screen.findByRole('heading', { name: 'Real topic', level: 1 }),
-    ).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Cached topic', level: 1 })).not.toBeInTheDocument()
+      screen.queryByRole('heading', { name: 'Cached topic', level: 1 }),
+    ).not.toBeInTheDocument()
   })
 
   it('reverts the topbar to the section label when navigating away from an open study session', async () => {
@@ -452,10 +450,7 @@ describe('AppShell', () => {
     await user.click(screen.getByRole('button', { name: 'Settings' }))
 
     // Then Settings gains aria-current and Home loses it
-    expect(screen.getByRole('button', { name: 'Settings' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    )
+    expect(screen.getByRole('button', { name: 'Settings' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('button', { name: 'Home' })).not.toHaveAttribute('aria-current')
   })
 
