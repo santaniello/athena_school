@@ -99,10 +99,10 @@ function AppShell({ onLogout }: AppShellProps) {
         className="flex h-full flex-col"
         style={{ overflow: 'hidden' }}
       >
-        <nav className="flex h-full w-full flex-col bg-card p-3">
+        <nav className="flex h-full w-full flex-col bg-[oklch(0.115_0.014_50)] p-3">
           <div className="flex items-center gap-2 px-1.5 py-2">
             <AthenaLogo className="size-6 shrink-0" />
-            <span className="font-heading text-sm font-bold tracking-[0.2em] text-foreground">
+            <span className="font-heading text-sm font-bold tracking-[0.2em] text-primary">
               ATHENA
             </span>
           </div>
