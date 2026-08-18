@@ -1,3 +1,4 @@
+import React from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -119,8 +120,47 @@ describe('StudyChatScreen — starting a new session', () => {
     // When the chat screen mounts
     renderNewSession()
 
-    // Then the error is shown
+    // Then the error is shown, and streaming stops (the thinking indicator goes away)
     expect(await screen.findByText('invalid OpenRouter key')).toBeInTheDocument()
+    expect(screen.queryByRole('status', { name: /thinking/i })).not.toBeInTheDocument()
+  })
+
+  it('falls back to a generic message when the opening turn fails with a non-Error value', async () => {
+    // Given a request that rejects with something other than an Error
+    setupSubscriptions()
+    vi.mocked(requestOpeningTurn).mockRejectedValueOnce('network down')
+
+    // When the chat screen mounts
+    renderNewSession()
+
+    // Then the generic fallback message is shown
+    expect(await screen.findByText('Failed to start the session.')).toBeInTheDocument()
+  })
+
+  it('shows nothing but the thinking indicator before the first chunk arrives — no empty streamed bubble', async () => {
+    // Given a new session that hasn't streamed anything yet
+    await renderStartedSession()
+
+    // Then only the thinking indicator is shown, no message bubble at all
+    expect(screen.getByRole('status', { name: /thinking/i })).toBeInTheDocument()
+    expect(document.querySelector('[data-slot="message-bubble"]')).not.toBeInTheDocument()
+  })
+
+  it('requests the opening turn only once even if effects run twice, like under StrictMode', async () => {
+    // Given a session that was just created elsewhere
+    setupSubscriptions()
+    vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
+
+    // When the chat screen mounts under StrictMode, which double-invokes
+    // effects in dev (mount → cleanup → mount) to surface missing cleanup
+    render(
+      <React.StrictMode>
+        <StudyChatScreen sessionId="session-1" initialTopic="Distributed systems" mode="new" />
+      </React.StrictMode>,
+    )
+
+    // Then the opening turn is only requested once for this session
+    await waitFor(() => expect(requestOpeningTurn).toHaveBeenCalledTimes(1))
   })
 
   it('accumulates streamed chunks and appends the assistant message once done', async () => {
@@ -195,6 +235,89 @@ describe('StudyChatScreen — resuming a session', () => {
 
     // Then the error is shown
     expect(await screen.findByText('session not found')).toBeInTheDocument()
+  })
+
+  it('falls back to a generic message when resuming fails with a non-Error value', async () => {
+    // Given a resume call that rejects with something other than an Error
+    setupSubscriptions()
+    vi.mocked(resumeStudySession).mockRejectedValueOnce('network down')
+
+    // When the chat screen mounts in "resume" mode
+    render(<StudyChatScreen sessionId="session-1" initialTopic="" mode="resume" />)
+
+    // Then the generic fallback message is shown
+    expect(await screen.findByText('Failed to load the session.')).toBeInTheDocument()
+  })
+
+  it('does not show the thinking indicator while resuming, unlike starting a new session', async () => {
+    // Given a resume call that hasn't settled yet
+    setupSubscriptions()
+    vi.mocked(resumeStudySession).mockReturnValueOnce(new Promise(() => {}))
+
+    // When the chat screen mounts in "resume" mode
+    render(<StudyChatScreen sessionId="session-1" initialTopic="" mode="resume" />)
+
+    // Then no thinking indicator shows — resuming isn't "streaming a new turn"
+    // — and no message is rendered yet either, since the history hasn't
+    // arrived
+    expect(screen.queryByRole('status', { name: /thinking/i })).not.toBeInTheDocument()
+    expect(document.querySelector('[data-slot="message-bubble"]')).not.toBeInTheDocument()
+  })
+
+  it('does not crash when resuming without an onTopicResolved callback', async () => {
+    // Given a resume call that succeeds, and no onTopicResolved prop passed
+    setupSubscriptions()
+    vi.mocked(resumeStudySession).mockResolvedValueOnce({
+      session: {
+        id: 'session-1',
+        topic: 'Cache invalidation',
+        folderId: 'folder-1',
+        startedAt: '2026-08-16T10:00:00Z',
+      },
+      messages: [{ role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z' }],
+    })
+
+    // When the chat screen mounts in "resume" mode
+    render(<StudyChatScreen sessionId="session-1" initialTopic="" mode="resume" />)
+
+    // Then it resolves normally instead of throwing
+    expect(await screen.findByText('Hi')).toBeInTheDocument()
+  })
+
+  it('refetches the session history when the sessionId changes', async () => {
+    // Given a resumed session already loaded
+    setupSubscriptions()
+    vi.mocked(resumeStudySession).mockResolvedValueOnce({
+      session: {
+        id: 'session-1',
+        topic: 'Cache invalidation',
+        folderId: 'folder-1',
+        startedAt: '2026-08-16T10:00:00Z',
+      },
+      messages: [{ role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z' }],
+    })
+    const { rerender } = render(
+      <StudyChatScreen sessionId="session-1" initialTopic="" mode="resume" />,
+    )
+    await screen.findByText('Hi')
+
+    // When a different session is resumed in its place (a fresh mounted
+    // instance would be the normal case via AppShell's `key`, but the
+    // effect's own sessionId dependency must still cover an in-place swap)
+    vi.mocked(resumeStudySession).mockResolvedValueOnce({
+      session: {
+        id: 'session-2',
+        topic: 'Load balancing',
+        folderId: 'folder-1',
+        startedAt: '2026-08-16T11:00:00Z',
+      },
+      messages: [{ role: 'user', content: 'Hello again', createdAt: '2026-08-16T11:00:00Z' }],
+    })
+    rerender(<StudyChatScreen sessionId="session-2" initialTopic="" mode="resume" />)
+
+    // Then the new session's history is fetched and shown
+    expect(await screen.findByText('Hello again')).toBeInTheDocument()
+    expect(resumeStudySession).toHaveBeenCalledWith('session-2')
   })
 })
 
@@ -327,6 +450,111 @@ describe('StudyChatScreen — composing and sending', () => {
     expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled()
   })
 
+  it('shows the thinking indicator immediately after sending a message', async () => {
+    // Given a settled session and a reply that hasn't resolved yet
+    await renderSettledSession()
+    vi.mocked(sendStudyMessage).mockReturnValueOnce(new Promise(() => {}))
+    const user = userEvent.setup()
+
+    // When sending a message
+    await user.type(screen.getByPlaceholderText(/type your answer/i), 'What is CAP theorem?')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+
+    // Then the thinking indicator shows while waiting for the reply
+    expect(await screen.findByRole('status', { name: /thinking/i })).toBeInTheDocument()
+  })
+
+  it('does not send on Enter when the draft is empty', async () => {
+    // Given a settled session with an empty draft
+    await renderSettledSession()
+    const user = userEvent.setup()
+
+    // When pressing Enter with nothing typed
+    await user.click(screen.getByPlaceholderText(/type your answer/i))
+    await user.keyboard('{Enter}')
+
+    // Then nothing is sent
+    expect(sendStudyMessage).not.toHaveBeenCalled()
+  })
+
+  it('does not send on Enter when the draft is only whitespace', async () => {
+    // Given a settled session
+    await renderSettledSession()
+    const user = userEvent.setup()
+
+    // When pressing Enter after typing only spaces
+    await user.type(screen.getByPlaceholderText(/type your answer/i), '   {Enter}')
+
+    // Then nothing is sent
+    expect(sendStudyMessage).not.toHaveBeenCalled()
+  })
+
+  it('does not send on Enter while a reply is already streaming', async () => {
+    // Given a new session still streaming its opening turn
+    await renderStartedSession()
+    const user = userEvent.setup()
+
+    // When typing a reply and pressing Enter before the stream settles
+    await user.type(screen.getByPlaceholderText(/type your answer/i), 'What is CAP theorem?')
+    await user.keyboard('{Enter}')
+
+    // Then nothing is sent
+    expect(sendStudyMessage).not.toHaveBeenCalled()
+  })
+
+  it('starts the next streamed reply from empty text, not leftover from a completed one', async () => {
+    // Given a completed exchange
+    const handlers = await renderSettledSession()
+    vi.mocked(sendStudyMessage).mockResolvedValueOnce()
+    const user = userEvent.setup()
+
+    // When sending a follow-up, before any new chunk has arrived
+    await user.type(screen.getByPlaceholderText(/type your answer/i), 'Another question')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+
+    // Then no stale streamed content leaks in — just the thinking indicator
+    // (if streamingText hadn't been reset to empty, it would render as a
+    // stray message bubble instead of the thinking indicator)
+    expect(screen.getByRole('status', { name: /thinking/i })).toBeInTheDocument()
+
+    // And the new reply starts clean once chunks arrive
+    act(() => {
+      handlers.chunk?.('Fresh reply')
+    })
+    expect(await screen.findByText('Fresh reply')).toBeInTheDocument()
+  })
+
+  it('starts the next streamed reply from empty text, not leftover from a failed one', async () => {
+    // Given a stream that partially arrived, then failed
+    const handlers = await renderStartedSession()
+    act(() => {
+      handlers.chunk?.('Partial before failure')
+      handlers.error?.('upstream failure')
+    })
+    await screen.findByText('upstream failure')
+    vi.mocked(sendStudyMessage).mockResolvedValueOnce()
+    const user = userEvent.setup()
+
+    // When retrying with a new message
+    await user.type(screen.getByPlaceholderText(/type your answer/i), 'Retry question')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+    act(() => {
+      handlers.chunk?.('Fresh reply')
+    })
+
+    // Then the new reply doesn't carry over the earlier partial text
+    expect(await screen.findByText('Fresh reply')).toBeInTheDocument()
+    expect(screen.queryByText(/Partial before failure/)).not.toBeInTheDocument()
+  })
+
+  it('does not show an error alert when there is no error', async () => {
+    // Given a normal, settled session with no failures
+    await renderSettledSession()
+
+    // Then no error alert is rendered
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it('shows an inline error when the stream fails', async () => {
     const handlers = await renderStartedSession()
 
@@ -384,6 +612,40 @@ describe('StudyChatScreen — transcript scrolling', () => {
 
     // Then the transcript scrolls to keep it in view
     await waitFor(() => expect(transcript.scrollTop).toBe(1000))
+  })
+
+  it('keeps following the stream when scrolled within the sticky-bottom threshold', async () => {
+    // Given a transcript scrolled to 50px from the bottom (under the 80px threshold)
+    const handlers = await renderStartedSession()
+    const transcript = screen.getByRole('log', { name: 'Conversation' })
+    stubScrollMetrics(transcript, 1000, 400)
+    transcript.scrollTop = 550
+    fireEvent.scroll(transcript)
+
+    // When the next chunk of the answer streams in
+    act(() => {
+      handlers.chunk?.('More of the answer')
+    })
+
+    // Then the transcript still auto-scrolls to keep it in view
+    await waitFor(() => expect(transcript.scrollTop).toBe(1000))
+  })
+
+  it('follows the stream when scrolled exactly at the sticky-bottom threshold', async () => {
+    // Given a transcript scrolled to exactly 80px from the bottom
+    const handlers = await renderStartedSession()
+    const transcript = screen.getByRole('log', { name: 'Conversation' })
+    stubScrollMetrics(transcript, 1080, 400)
+    transcript.scrollTop = 600
+    fireEvent.scroll(transcript)
+
+    // When the next chunk of the answer streams in
+    act(() => {
+      handlers.chunk?.('More of the answer')
+    })
+
+    // Then the boundary counts as "still following" and it auto-scrolls
+    await waitFor(() => expect(transcript.scrollTop).toBe(1080))
   })
 
   it('leaves the scroll position alone once the user scrolls up to re-read', async () => {

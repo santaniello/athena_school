@@ -295,10 +295,7 @@ function StudyFolderTree({
             <DropdownMenuSeparator />
             <DropdownMenuItem
               variant="destructive"
-              onClick={() => {
-                console.log('DEBUG delete click', session.id)
-                setDeletingSession(session)
-              }}
+              onClick={() => setDeletingSession(session)}
             >
               <Trash2 aria-hidden="true" />
               Delete
