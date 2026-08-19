@@ -64,6 +64,30 @@ var migrations = []func(*sql.DB) error{
 		ON knowledge_items(status, created_at)`),
 	execSQL(`CREATE INDEX IF NOT EXISTS idx_knowledge_items_topic
 		ON knowledge_items(topic)`),
+	execSQL(`CREATE TABLE IF NOT EXISTS knowledge_chunks (
+		id         TEXT PRIMARY KEY,
+		source     TEXT,
+		topic      TEXT,
+		status     TEXT,
+		item_id    TEXT,
+		file_path  TEXT,
+		heading    TEXT,
+		content    TEXT,
+		embedding  BLOB, -- tightly-packed little-endian float32
+		embedding_model TEXT NOT NULL,
+		item_updated_at DATETIME, -- NULL for imported_doc
+		created_at DATETIME
+	)`),
+	execSQL(`CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_file_path ON knowledge_chunks(file_path)`),
+	execSQL(`CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_item_id ON knowledge_chunks(item_id)`),
+	execSQL(`CREATE TABLE IF NOT EXISTS ingested_files (
+		file_path       TEXT PRIMARY KEY,
+		mtime           INTEGER NOT NULL,
+		embedding_model TEXT NOT NULL,
+		chunk_count     INTEGER NOT NULL,
+		item_id         TEXT NOT NULL,
+		ingested_at     DATETIME
+	)`),
 }
 
 // addSessionsFolderIDColumn adds sessions.folder_id if it does not already
