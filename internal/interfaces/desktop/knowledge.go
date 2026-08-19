@@ -87,6 +87,68 @@ func (a *App) SaveExtractedKnowledge(inputs []KnowledgeItemInput) KnowledgeSaveR
 	return result
 }
 
+// ListKnowledgeItems returns every Item matching topic/status. An empty
+// topic or status means no constraint on that field.
+func (a *App) ListKnowledgeItems(topic, status string) ([]KnowledgeItemResult, error) {
+	items, err := a.knowledge.ListItems(a.ctx, topic, status)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]KnowledgeItemResult, len(items))
+	for index, item := range items {
+		results[index] = toKnowledgeItemResult(item)
+	}
+	return results, nil
+}
+
+// ListKnowledgeTopics returns every distinct topic, alphabetically.
+func (a *App) ListKnowledgeTopics() ([]string, error) {
+	return a.knowledge.ListTopics(a.ctx)
+}
+
+// ApproveKnowledgeItem transitions id from draft to approved and returns
+// the updated item.
+func (a *App) ApproveKnowledgeItem(id string) (KnowledgeItemResult, error) {
+	item, err := a.knowledge.Approve(a.ctx, id)
+	if err != nil {
+		return KnowledgeItemResult{}, err
+	}
+	return toKnowledgeItemResult(item), nil
+}
+
+// DeprecateKnowledgeItem transitions id from approved to deprecated and
+// returns the updated item.
+func (a *App) DeprecateKnowledgeItem(id string) (KnowledgeItemResult, error) {
+	item, err := a.knowledge.Deprecate(a.ctx, id)
+	if err != nil {
+		return KnowledgeItemResult{}, err
+	}
+	return toKnowledgeItemResult(item), nil
+}
+
+// UpdateKnowledgeItem overwrites id's editable fields and returns the
+// updated item. Status, Source and CreatedAt are never touched.
+func (a *App) UpdateKnowledgeItem(id string, input KnowledgeItemInput) (KnowledgeItemResult, error) {
+	item, err := a.knowledge.UpdateItem(a.ctx, id, applicationknowledge.ItemFields{
+		Topic:           input.Topic,
+		Concept:         input.Concept,
+		Definition:      input.Definition,
+		Properties:      input.Properties,
+		TradeOffs:       input.TradeOffs,
+		RelatedConcepts: input.RelatedConcepts,
+	})
+	if err != nil {
+		return KnowledgeItemResult{}, err
+	}
+	return toKnowledgeItemResult(item), nil
+}
+
+// DeleteKnowledgeItem permanently removes id and every chunk it owns. This
+// cannot be undone.
+func (a *App) DeleteKnowledgeItem(id string) error {
+	return a.knowledge.DeleteItem(a.ctx, id)
+}
+
 func toKnowledgeItemResult(item domainknowledge.Item) KnowledgeItemResult {
 	return KnowledgeItemResult{
 		ID: item.ID, Topic: item.Topic, Concept: item.Concept, Definition: item.Definition,
