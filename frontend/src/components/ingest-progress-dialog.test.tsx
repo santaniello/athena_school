@@ -1,0 +1,266 @@
+import { describe, expect, it, vi } from 'vitest'
+import { act, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import {
+  importNotes,
+  onIngestDone,
+  onIngestError,
+  onIngestProgress,
+  type IngestProgress,
+  type IngestSummary,
+} from '@/lib/ingest'
+import { IngestProgressDialog } from './ingest-progress-dialog'
+
+vi.mock('@/lib/ingest', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/ingest')>()
+  return {
+    ...original,
+    importNotes: vi.fn(),
+    onIngestProgress: vi.fn(),
+    onIngestDone: vi.fn(),
+    onIngestError: vi.fn(),
+  }
+})
+
+function setupSubscriptions() {
+  let progressHandler: (progress: IngestProgress) => void = () => {}
+  let doneHandler: (summary: IngestSummary) => void = () => {}
+  let errorHandler: (message: string) => void = () => {}
+  const unsubscribeProgress = vi.fn()
+  const unsubscribeDone = vi.fn()
+  const unsubscribeError = vi.fn()
+
+  vi.mocked(onIngestProgress).mockImplementation((handler) => {
+    progressHandler = handler
+    return unsubscribeProgress
+  })
+  vi.mocked(onIngestDone).mockImplementation((handler) => {
+    doneHandler = handler
+    return unsubscribeDone
+  })
+  vi.mocked(onIngestError).mockImplementation((handler) => {
+    errorHandler = handler
+    return unsubscribeError
+  })
+
+  return {
+    emitProgress: (progress: IngestProgress) => act(() => progressHandler(progress)),
+    emitDone: (summary: IngestSummary) => act(() => doneHandler(summary)),
+    emitError: (message: string) => act(() => errorHandler(message)),
+    unsubscribeProgress,
+    unsubscribeDone,
+    unsubscribeError,
+  }
+}
+
+const emptySummary: IngestSummary = {
+  filesScanned: 10,
+  filesIngested: 8,
+  filesSkipped: 2,
+  filesFailed: 0,
+  chunksCreated: 24,
+  failures: [],
+}
+
+describe('IngestProgressDialog', () => {
+  it('starts the import for the given folder as soon as it opens', () => {
+    // Given a dialog opened for a chosen folder
+    const events = setupSubscriptions()
+    vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
+
+    // When rendering it open
+    render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />)
+
+    // Then the import starts immediately for that folder, and the dialog
+    // explains that it is still processing
+    expect(importNotes).toHaveBeenCalledWith('/home/user/notes')
+    expect(
+      screen.getByText('Processando os arquivos da pasta selecionada.'),
+    ).toBeInTheDocument()
+    void events
+  })
+
+  it('does not start an import while closed', () => {
+    // Given a dialog that is not open
+    setupSubscriptions()
+
+    // When rendering it closed
+    render(<IngestProgressDialog open={false} folderPath="/home/user/notes" onClose={vi.fn()} />)
+
+    // Then no import is started
+    expect(importNotes).not.toHaveBeenCalled()
+  })
+
+  it('shows live progress as ingest:progress events arrive', () => {
+    // Given a dialog mid-import
+    const events = setupSubscriptions()
+    vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
+    render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />)
+
+    // When a progress event arrives
+    events.emitProgress({
+      filesProcessed: 3,
+      filesTotal: 10,
+      chunksCreated: 9,
+      currentFile: 'go/channels.md',
+    })
+
+    // Then the current progress and file are shown, no error alert, and
+    // the progress bar reflects the exact 30% completion (3 of 10)
+    expect(screen.getByText('3 de 10 arquivos')).toBeInTheDocument()
+    expect(screen.getByText('go/channels.md')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    const indicator = document.querySelector('[data-slot="progress-indicator"]')
+    expect(indicator).toHaveStyle({ transform: 'translateX(-70%)' })
+  })
+
+  it('transitions to the result summary when ingest:done fires', async () => {
+    // Given a dialog mid-import
+    const events = setupSubscriptions()
+    vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
+    render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />)
+
+    // When the import finishes
+    events.emitDone(emptySummary)
+
+    // Then the summary counts replace the progress bar, a manual close
+    // action becomes available, and with zero failures no failures list
+    // renders at all
+    expect(screen.getByText('Importação concluída.')).toBeInTheDocument()
+    expect(screen.getByText('8')).toBeInTheDocument()
+    expect(screen.queryByText('Iniciando...')).not.toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Fechar' })).toBeInTheDocument()
+    expect(document.querySelector('.thin-scroll')).not.toBeInTheDocument()
+  })
+
+  it('lists per-file failures with their reason', () => {
+    // Given a dialog mid-import
+    const events = setupSubscriptions()
+    vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
+    render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />)
+
+    // When the import finishes with one failure
+    events.emitDone({
+      ...emptySummary,
+      filesFailed: 1,
+      failures: [{ path: 'notes/broken.md', reason: 'invalid utf-8' }],
+    })
+
+    // Then the failing path and its reason are both shown
+    expect(screen.getByText('notes/broken.md')).toBeInTheDocument()
+    expect(screen.getByText(/invalid utf-8/)).toBeInTheDocument()
+  })
+
+  it('shows the error state when ingest:error fires instead of ingest:done', async () => {
+    // Given a dialog mid-import
+    const events = setupSubscriptions()
+    vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
+    render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />)
+
+    // When the whole import fails outright
+    events.emitError('a pasta não existe')
+
+    // Then the error is shown and closing becomes available
+    expect(screen.getByText('a pasta não existe')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Fechar' })).toBeInTheDocument()
+  })
+
+  it('has no way to dismiss it while the import is still running', () => {
+    // Given a dialog mid-import
+    setupSubscriptions()
+    vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
+    render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />)
+
+    // Then neither the dialog's own close (X) control nor the Fechar
+    // action exists yet
+    expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Fechar' })).not.toBeInTheDocument()
+  })
+
+  it('calls onClose when Fechar is clicked after finishing', async () => {
+    // Given a finished import
+    const events = setupSubscriptions()
+    vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
+    const onClose = vi.fn()
+    const user = userEvent.setup()
+    render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={onClose} />)
+    events.emitDone(emptySummary)
+
+    // When clicking Fechar
+    await user.click(await screen.findByRole('button', { name: 'Fechar' }))
+
+    // Then the owner is notified
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('calls onClose when dismissed via Escape after finishing', async () => {
+    // Given a finished import
+    const events = setupSubscriptions()
+    vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
+    const onClose = vi.fn()
+    const user = userEvent.setup()
+    render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={onClose} />)
+    events.emitDone(emptySummary)
+    await screen.findByRole('button', { name: 'Fechar' })
+
+    // When dismissing it with Escape instead of the Fechar button
+    await user.keyboard('{Escape}')
+
+    // Then the owner is still notified
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('never calls onClose from Escape while the import is still running', async () => {
+    // Given a dialog mid-import
+    setupSubscriptions()
+    vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
+    const onClose = vi.fn()
+    const user = userEvent.setup()
+    render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={onClose} />)
+
+    // When pressing Escape before it has finished
+    await user.keyboard('{Escape}')
+
+    // Then it is ignored
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('unsubscribes every event listener when it closes', () => {
+    // Given an open dialog
+    const events = setupSubscriptions()
+    vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
+    const { rerender } = render(
+      <IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />,
+    )
+
+    // When it closes
+    rerender(<IngestProgressDialog open={false} folderPath="/home/user/notes" onClose={vi.fn()} />)
+
+    // Then every subscription is torn down
+    expect(events.unsubscribeProgress).toHaveBeenCalled()
+    expect(events.unsubscribeDone).toHaveBeenCalled()
+    expect(events.unsubscribeError).toHaveBeenCalled()
+  })
+
+  it('resets to a fresh progress state when reopened for another folder', async () => {
+    // Given a dialog that already finished one import
+    const events = setupSubscriptions()
+    vi.mocked(importNotes).mockReturnValue(new Promise<void>(() => {}))
+    const { rerender } = render(
+      <IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />,
+    )
+    events.emitDone(emptySummary)
+    expect(await screen.findByRole('button', { name: 'Fechar' })).toBeInTheDocument()
+
+    // When it is closed then reopened for a new folder
+    rerender(
+      <IngestProgressDialog open={false} folderPath="/home/user/notes" onClose={vi.fn()} />,
+    )
+    rerender(<IngestProgressDialog open folderPath="/home/user/other" onClose={vi.fn()} />)
+
+    // Then it starts a fresh import instead of showing the stale summary
+    await waitFor(() => expect(importNotes).toHaveBeenCalledWith('/home/user/other'))
+    expect(screen.queryByRole('button', { name: 'Fechar' })).not.toBeInTheDocument()
+    expect(screen.getByText('Iniciando...')).toBeInTheDocument()
+  })
+})
