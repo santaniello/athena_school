@@ -9,6 +9,7 @@ import (
 
 	"github.com/santaniello/athena/internal/application/auth"
 	"github.com/santaniello/athena/internal/application/folder"
+	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
 	"github.com/santaniello/athena/internal/application/onboarding"
 	"github.com/santaniello/athena/internal/application/study"
 	domainauth "github.com/santaniello/athena/internal/domain/auth"
@@ -27,6 +28,7 @@ type App struct {
 	config        domainconfig.Store
 	study         *study.Service
 	folder        *folder.Service
+	knowledge     *applicationknowledge.Service
 	apiKeyUpdater domainllm.APIKeyUpdater
 	// emit defaults to wailsruntime.EventsEmit, which calls log.Fatal (i.e.
 	// os.Exit) when a.ctx was never produced by the real Wails runtime —
@@ -46,6 +48,7 @@ func NewApp(
 	config domainconfig.Store,
 	studyService *study.Service,
 	folderService *folder.Service,
+	knowledgeService *applicationknowledge.Service,
 	apiKeyUpdater domainllm.APIKeyUpdater,
 ) *App {
 	return &App{
@@ -56,6 +59,7 @@ func NewApp(
 		config:        config,
 		study:         studyService,
 		folder:        folderService,
+		knowledge:     knowledgeService,
 		apiKeyUpdater: apiKeyUpdater,
 		emit:          wailsruntime.EventsEmit,
 	}

@@ -4,7 +4,20 @@
 // specs/phases/phase-02-knowledge-engine/01-knowledge-item.md.
 package knowledge
 
-import "time"
+import (
+	"errors"
+	"strings"
+	"time"
+)
+
+var (
+	// ErrTopicRequired is returned when an Item has no topic.
+	ErrTopicRequired = errors.New("knowledge item topic is required")
+	// ErrConceptRequired is returned when an Item has no concept.
+	ErrConceptRequired = errors.New("knowledge item concept is required")
+	// ErrDefinitionRequired is returned when an Item has no definition.
+	ErrDefinitionRequired = errors.New("knowledge item definition is required")
+)
 
 // Source values categorize where an Item came from. This is a category,
 // not provenance — see specs/phases/phase-02-knowledge-engine/09-persistent-provenance.md
@@ -37,6 +50,20 @@ type Item struct {
 	Status          string // draft | approved | deprecated
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+}
+
+// Validate checks the fields required for a useful knowledge item.
+func (i Item) Validate() error {
+	if strings.TrimSpace(i.Topic) == "" {
+		return ErrTopicRequired
+	}
+	if strings.TrimSpace(i.Concept) == "" {
+		return ErrConceptRequired
+	}
+	if strings.TrimSpace(i.Definition) == "" {
+		return ErrDefinitionRequired
+	}
+	return nil
 }
 
 // TransitionTo returns a copy of i with its status moved to next, or an

@@ -7,6 +7,19 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { MessageBubble } from '@/components/message-bubble'
 import { ThinkingIndicator } from '@/components/thinking-indicator'
+import { KnowledgeExtractionDialog } from '@/components/knowledge-extraction-dialog'
+import { TranscriptTruncationDialog } from '@/components/transcript-truncation-dialog'
+
+const TRANSCRIPT_TOO_LARGE_ERROR = 'no complete transcript message fits within the extraction limit'
+
+function extractionErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) return 'Falha ao extrair conhecimento.'
+  if (error.message.includes(TRANSCRIPT_TOO_LARGE_ERROR)) {
+    return 'A mensagem mais recente é grande demais para ser processada integralmente.'
+  }
+  return error.message
+}
+import { extractKnowledge, type KnowledgeItem } from '@/lib/knowledge'
 import {
   onStudyChunk,
   onStudyDone,
@@ -51,6 +64,11 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
   const [isStreaming, setIsStreaming] = useState(mode === 'new')
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [extractionError, setExtractionError] = useState<string | null>(null)
+  const [isExtracting, setIsExtracting] = useState(false)
+  const [extractedItems, setExtractedItems] = useState<KnowledgeItem[]>([])
+  const [showExtractionDialog, setShowExtractionDialog] = useState(false)
+  const [showTruncationDialog, setShowTruncationDialog] = useState(false)
   const streamingTextRef = useRef('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const transcriptRef = useRef<HTMLDivElement>(null)
@@ -156,6 +174,25 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
     }
   }
 
+  async function handleExtractKnowledge(confirmedTruncation: boolean) {
+    if (isExtracting || messages.length === 0 || isStreaming) return
+    setIsExtracting(true)
+    setExtractionError(null)
+    try {
+      const result = await extractKnowledge(sessionId, confirmedTruncation)
+      if (result.truncated && !confirmedTruncation) {
+        setShowTruncationDialog(true)
+        return
+      }
+      setExtractedItems(result.items)
+      setShowExtractionDialog(true)
+    } catch (err) {
+      setExtractionError(extractionErrorMessage(err))
+    } finally {
+      setIsExtracting(false)
+    }
+  }
+
   // Grows the textarea to fit its content, ChatGPT/Claude-style, instead of
   // staying a fixed height with an internal scrollbar — the icon buttons
   // docked at its bottom corners (see the JSX below) track along for free,
@@ -205,6 +242,11 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
+      {extractionError && (
+        <Alert variant="destructive">
+          <AlertDescription>{extractionError}</AlertDescription>
+        </Alert>
+      )}
       <div className="relative">
         <Textarea
           ref={textareaRef}
@@ -214,7 +256,16 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
           placeholder="Type your answer..."
           className="min-h-24 max-h-[200px] resize-none overflow-y-auto pb-11"
         />
-        <div className="absolute right-2 bottom-2">
+        <div className="absolute right-2 bottom-2 flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            aria-label={isExtracting ? 'Extraindo conhecimento' : 'Extrair conhecimento'}
+            disabled={messages.length === 0 || isStreaming || isExtracting}
+            onClick={() => void handleExtractKnowledge(false)}
+          >
+            {isExtracting ? 'Extraindo...' : 'Extrair conhecimento'}
+          </Button>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -230,6 +281,21 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
           </Tooltip>
         </div>
       </div>
+      <TranscriptTruncationDialog
+        open={showTruncationDialog}
+        onDecline={() => setShowTruncationDialog(false)}
+        onConfirm={() => {
+          setShowTruncationDialog(false)
+          void handleExtractKnowledge(true)
+        }}
+      />
+      {showExtractionDialog && (
+        <KnowledgeExtractionDialog
+          open
+          items={extractedItems}
+          onClose={() => setShowExtractionDialog(false)}
+        />
+      )}
     </div>
   )
 }

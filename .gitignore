@@ -28,6 +28,7 @@ Thumbs.db
 
 # IDE / tools
 .idea/
+.codex/
 .mcp.json
 
 # Test artifacts

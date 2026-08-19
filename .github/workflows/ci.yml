@@ -55,11 +55,6 @@ jobs:
           cd frontend
           npm run test:coverage
 
-      - name: Install Linux cgo dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
-
       - name: Run tests with coverage
         run: |
           MODULE="$(go list -m)"
@@ -82,11 +77,14 @@ jobs:
             exit 1
           fi
 
+      # install-mode is left at the action's default (binary): the v2.12.2
+      # release binary is built with go1.26.2, so it no longer trips the
+      # "built with an older Go than go.mod targets" refusal that forced
+      # goinstall back on v1.64.8. Building it from source cost ~45s a run.
       - name: Lint
         uses: golangci/golangci-lint-action@v9
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
-          install-mode: goinstall
 
       - name: Check for known vulnerabilities
         run: |

@@ -24,13 +24,21 @@ func NewStore(path string) *Store {
 }
 
 type configFile struct {
-	OpenRouterKey string `yaml:"openrouter_key"`
+	OpenRouterKey               string `yaml:"openrouter_key"`
+	MaxKnowledgeExtractionItems int    `yaml:"max_knowledge_extraction_items"`
 }
 
 // Save writes the config to disk with owner-only permissions, creating the
 // parent directory if it does not exist.
 func (s *Store) Save(cfg config.Config) error {
-	data, err := yaml.Marshal(configFile{OpenRouterKey: cfg.OpenRouterKey})
+	cfg = cfg.WithDefaults()
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
+	data, err := yaml.Marshal(configFile{
+		OpenRouterKey:               cfg.OpenRouterKey,
+		MaxKnowledgeExtractionItems: cfg.MaxKnowledgeExtractionItems,
+	})
 	if err != nil {
 		return fmt.Errorf("configfile: encoding config: %w", err)
 	}
@@ -53,5 +61,8 @@ func (s *Store) Load() (config.Config, error) {
 	if err := yaml.Unmarshal(data, &file); err != nil {
 		return config.Config{}, fmt.Errorf("configfile: decoding config file: %w", err)
 	}
-	return config.Config{OpenRouterKey: file.OpenRouterKey}, nil
+	return config.Config{
+		OpenRouterKey:               file.OpenRouterKey,
+		MaxKnowledgeExtractionItems: file.MaxKnowledgeExtractionItems,
+	}.WithDefaults(), nil
 }

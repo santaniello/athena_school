@@ -35,7 +35,7 @@ func newTestStudyApp(t *testing.T, sessions domainstudy.SessionRepository, messa
 	t.Helper()
 	studyService := study.NewService(sessions, messages, llm, profiles, folders)
 	folderService := folder.NewService(folders, sessions)
-	app := NewApp(nil, nil, nil, nil, nil, studyService, folderService, nil)
+	app := NewApp(nil, nil, nil, nil, nil, studyService, folderService, nil, nil)
 	app.Startup(context.Background())
 
 	captured := &capturedEvents{}

@@ -3,6 +3,7 @@ package onboarding
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -20,7 +21,8 @@ func TestSaveOpenRouterKey_savesConfig_whenKeyIsValid(t *testing.T) {
 	const key = "sk-or-valid"
 
 	validator.EXPECT().ValidateKey(ctx, key).Return(nil).Once()
-	store.EXPECT().Save(domainconfig.Config{OpenRouterKey: key}).Return(nil).Once()
+	store.EXPECT().Load().Return(domainconfig.Config{OpenRouterKey: "old", MaxKnowledgeExtractionItems: 12}, nil).Once()
+	store.EXPECT().Save(domainconfig.Config{OpenRouterKey: key, MaxKnowledgeExtractionItems: 12}).Return(nil).Once()
 
 	service := NewService(nil, store, validator)
 
@@ -29,6 +31,45 @@ func TestSaveOpenRouterKey_savesConfig_whenKeyIsValid(t *testing.T) {
 
 	// Then it succeeds
 	require.NoError(t, err)
+}
+
+func TestSaveOpenRouterKey_createsConfigWhenItDoesNotExist(t *testing.T) {
+	// Given a valid key and no existing config file
+	validator := mocks.NewMockKeyValidator(t)
+	store := mocks.NewMockStore(t)
+	ctx := context.Background()
+	const key = "sk-or-first"
+	validator.EXPECT().ValidateKey(ctx, key).Return(nil).Once()
+	store.EXPECT().Load().Return(domainconfig.Config{}, fs.ErrNotExist).Once()
+	store.EXPECT().Save(domainconfig.Config{
+		OpenRouterKey:               key,
+		MaxKnowledgeExtractionItems: domainconfig.DefaultMaxKnowledgeExtractionItems,
+	}).Return(nil).Once()
+	service := NewService(nil, store, validator)
+
+	// When saving the first key
+	err := service.SaveOpenRouterKey(ctx, key)
+
+	// Then a defaulted config is created
+	require.NoError(t, err)
+}
+
+func TestSaveOpenRouterKey_returnsLoadErrorWithoutOverwritingExistingConfig(t *testing.T) {
+	// Given a valid key but an existing config that cannot be decoded
+	validator := mocks.NewMockKeyValidator(t)
+	store := mocks.NewMockStore(t)
+	ctx := context.Background()
+	const key = "sk-or-valid"
+	loadErr := errors.New("invalid config yaml")
+	validator.EXPECT().ValidateKey(ctx, key).Return(nil).Once()
+	store.EXPECT().Load().Return(domainconfig.Config{}, loadErr).Once()
+	service := NewService(nil, store, validator)
+
+	// When saving the key
+	err := service.SaveOpenRouterKey(ctx, key)
+
+	// Then the load failure is returned and Save is never called
+	assert.ErrorIs(t, err, loadErr)
 }
 
 func TestSaveOpenRouterKey_returnsErrOpenRouterKeyRequired_whenKeyIsBlank(t *testing.T) {

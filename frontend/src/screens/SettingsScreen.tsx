@@ -17,10 +17,21 @@ import { hasOpenRouterKey } from '@/lib/openrouterKey'
 import { updateUserProfile, type ProfileDraft } from '@/lib/profile'
 import { profileErrorMessage } from '@/lib/onboardingErrors'
 import { ASSISTANT_LANGUAGES, EXPERIENCE_LEVELS, STUDY_STYLES } from '@/lib/profileOptions'
+import { getKnowledgeExtractionSettings, updateKnowledgeExtractionSettings } from '@/lib/knowledge'
 
 interface SettingsScreenProps {
   profile: ProfileDraft
   onProfileUpdated: (profile: ProfileDraft) => void
+}
+
+const EXTRACTION_LIMIT_ERROR =
+  'maximum knowledge extraction items must be an integer between 1 and 20'
+
+function extractionSettingsErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.includes(EXTRACTION_LIMIT_ERROR)) {
+    return 'Informe um valor inteiro entre 1 e 20.'
+  }
+  return 'Não foi possível salvar a configuração.'
 }
 
 // Lets the user edit the OpenRouter key and every profile field without
@@ -32,9 +43,16 @@ function SettingsScreen({ profile, onProfileUpdated }: SettingsScreenProps) {
   const [error, setError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [hasKey, setHasKey] = useState<boolean | null>(null)
+  const [maxExtractionItems, setMaxExtractionItems] = useState(8)
+  const [extractionSettingsError, setExtractionSettingsError] = useState('')
+  const [extractionSettingsSaved, setExtractionSettingsSaved] = useState(false)
+  const [isSavingExtractionSettings, setIsSavingExtractionSettings] = useState(false)
 
   useEffect(() => {
     void hasOpenRouterKey().then(setHasKey)
+    void getKnowledgeExtractionSettings()
+      .then((settings) => setMaxExtractionItems(settings.maxKnowledgeExtractionItems))
+      .catch(() => setExtractionSettingsError('Não foi possível carregar a configuração.'))
   }, [])
 
   function updateField<K extends keyof ProfileDraft>(field: K, value: ProfileDraft[K]) {
@@ -53,6 +71,21 @@ function SettingsScreen({ profile, onProfileUpdated }: SettingsScreenProps) {
       setError(profileErrorMessage(err))
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  async function handleExtractionSettingsSubmit(event: FormEvent) {
+    event.preventDefault()
+    setExtractionSettingsSaved(false)
+    setExtractionSettingsError('')
+    setIsSavingExtractionSettings(true)
+    try {
+      await updateKnowledgeExtractionSettings(maxExtractionItems)
+      setExtractionSettingsSaved(true)
+    } catch (err) {
+      setExtractionSettingsError(extractionSettingsErrorMessage(err))
+    } finally {
+      setIsSavingExtractionSettings(false)
     }
   }
 
@@ -171,6 +204,43 @@ function SettingsScreen({ profile, onProfileUpdated }: SettingsScreenProps) {
 
           <Button type="submit" disabled={isSaving}>
             {isSaving ? 'Saving...' : 'Save changes'}
+          </Button>
+        </form>
+      </div>
+
+      <div className="flex flex-col gap-4 border-t border-border pt-8">
+        <h2 className="font-heading text-sm font-bold tracking-[0.14em] text-foreground uppercase">
+          Extração de conhecimento
+        </h2>
+        <form
+          className="flex flex-col gap-4"
+          noValidate
+          onSubmit={(event) => void handleExtractionSettingsSubmit(event)}
+        >
+          <div className="flex flex-col gap-1.5 text-left">
+            <Label htmlFor="settings-max-extraction-items">Máximo de itens por extração</Label>
+            <Input
+              id="settings-max-extraction-items"
+              type="number"
+              min={1}
+              max={20}
+              value={maxExtractionItems}
+              onChange={(event) => setMaxExtractionItems(Number(event.target.value))}
+            />
+            <p className="text-xs text-muted-foreground">Escolha um valor entre 1 e 20.</p>
+          </div>
+          {extractionSettingsError && (
+            <Alert variant="destructive">
+              <AlertDescription>{extractionSettingsError}</AlertDescription>
+            </Alert>
+          )}
+          {extractionSettingsSaved && (
+            <Alert>
+              <AlertDescription>Configuração salva.</AlertDescription>
+            </Alert>
+          )}
+          <Button type="submit" disabled={isSavingExtractionSettings}>
+            {isSavingExtractionSettings ? 'Salvando...' : 'Salvar configuração de extração'}
           </Button>
         </form>
       </div>

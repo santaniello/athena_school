@@ -28,7 +28,7 @@ Payments         Paddle
 |---|---|
 | 0 | Repo setup, Wails scaffold, pre-commit quality gates, GitHub Actions CI/CD |
 | 1 | Conversational onboarding, personalized study sessions, streaming LLM responses |
-| 2 | Personal knowledge base, Markdown notes import, RAG retrieval |
+| 2 | On-demand knowledge extraction with draft review (session transcript sent to OpenRouter only when requested), personal knowledge base, Markdown notes import, RAG retrieval |
 | 3 | Challenge mode, gap detection, spaced repetition flashcards (SM-2) |
 | 4 | Interview simulation with timer, per-answer evaluation, domain-aware feedback |
 | 5 | Plan management, Paddle payments, macOS + Linux + Windows distribution |
@@ -124,7 +124,9 @@ Runs on pull requests targeting `main` or `develop`, and on direct pushes to `ma
 4. `golangci-lint run`
 5. `govulncheck ./...`
 
-A failing step makes the job report a failing status on the PR. The workflow also builds the frontend (`npm ci && npm run build`), lints and format-checks it (`npm run lint`, `npm run format:check`), runs its tests with an 80% coverage gate (`npm run test:coverage`), and installs the Linux `libgtk-3-dev`/`libwebkit2gtk-4.1-dev` headers first, since the `main` package embeds `frontend/dist` and requires cgo to compile.
+A failing step makes the job report a failing status on the PR. The workflow also builds the frontend (`npm ci && npm run build`), lints and format-checks it (`npm run lint`, `npm run format:check`), runs its tests with an 80% coverage gate (`npm run test:coverage`).
+
+The job does *not* install the GTK/WebKit development headers: the only cgo file in the dependency tree is `wails/v2/pkg/runtime/signal_linux.go`, which includes libc headers only, and Wails' GTK-backed `internal/frontend/desktop/linux` sits behind the `desktop` build tag that `wails build` sets and `go build`/`go test` do not. Those headers are installed in `release.yml`, where `wails build` genuinely needs them.
 
 Three more jobs run alongside `quality-gate`:
 
@@ -209,11 +211,11 @@ athena/
 
 ## Local Data
 
-All user data is stored on-device:
+All user data is stored on-device at rest:
 
 ```text
 ~/.athena/
-├── config.yaml        # OpenRouter key, model preferences
+├── config.yaml        # OpenRouter key and knowledge-extraction limit
 ├── profile.json       # User profile (name, area, level, goals)
 ├── session.json       # Auth token cache
 ├── athena.db          # SQLite (sessions, knowledge, flashcards, progress)
@@ -221,7 +223,7 @@ All user data is stored on-device:
 └── logs/              # Structured execution logs
 ```
 
-The auth server only manages accounts and licenses. Your notes and knowledge base never leave your machine.
+The auth server only manages accounts and licenses. Your notes and knowledge base never leave your machine. When you explicitly click **Extract knowledge**, Athena sends the relevant session transcript to OpenRouter so its configured language model can propose draft knowledge items. Nothing is sent for extraction automatically, and candidates are stored locally only after you choose which drafts to save.
 
 ---
 
