@@ -84,6 +84,34 @@ describe('KnowledgeExplorerScreen', () => {
     await waitFor(() => expect(listKnowledgeItems).toHaveBeenCalledWith('Kubernetes', ''))
   })
 
+  it('ignores a stale response from a previous filter after the topic changes', async () => {
+    // Given a slow request for the initial topic that has not resolved yet
+    stubIngestDone()
+    let resolveGo: (items: KnowledgeItem[]) => void = () => {}
+    const goPromise = new Promise<KnowledgeItem[]>((resolve) => {
+      resolveGo = resolve
+    })
+    vi.mocked(listKnowledgeItems).mockReturnValueOnce(goPromise)
+    vi.mocked(listKnowledgeItems).mockResolvedValueOnce([
+      testItem({ id: 'k', concept: 'Pods', topic: 'Kubernetes' }),
+    ])
+    const { rerender } = render(<KnowledgeExplorerScreen selectedTopic="Go" mode="explorer" />)
+    await waitFor(() => expect(listKnowledgeItems).toHaveBeenCalledWith('Go', ''))
+
+    // When the topic changes before that first request resolves, and the
+    // new request settles first
+    rerender(<KnowledgeExplorerScreen selectedTopic="Kubernetes" mode="explorer" />)
+    await screen.findByText('Pods')
+
+    // Then the stale "Go" response arriving afterward is ignored instead
+    // of overwriting the current "Kubernetes" filter's items
+    await act(async () => {
+      resolveGo([testItem({ id: 'g', concept: 'Channels', topic: 'Go' })])
+    })
+    expect(screen.queryByText('Channels')).not.toBeInTheDocument()
+    expect(screen.getByText('Pods')).toBeInTheDocument()
+  })
+
   it('forces the status filter to draft and hides the picker in review mode', async () => {
     // Given the review-mode Explorer
     stubIngestDone()
@@ -138,6 +166,25 @@ describe('KnowledgeExplorerScreen', () => {
     expect(listKnowledgeItems).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Deprecate' })).toBeInTheDocument()
+  })
+
+  it('removes an item from the Review queue once approved, since it no longer matches the draft filter', async () => {
+    // Given a draft item selected in Review mode (status filter fixed to draft)
+    stubIngestDone()
+    const draftItem = testItem({ status: 'draft' })
+    vi.mocked(listKnowledgeItems).mockResolvedValueOnce([draftItem])
+    vi.mocked(approveKnowledgeItem).mockResolvedValueOnce({ ...draftItem, status: 'approved' })
+    const user = userEvent.setup()
+    render(<KnowledgeExplorerScreen selectedTopic={null} mode="review" />)
+    await user.click(await screen.findByText('Channels'))
+
+    // When approving it
+    await user.click(screen.getByRole('button', { name: 'Approve' }))
+
+    // Then it disappears from the queue instead of lingering there with an
+    // approved badge, and its detail pane clears since it was selected
+    await waitFor(() => expect(screen.queryByText('Channels')).not.toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
   })
 
   it('offers Deprecate only on an approved item, including an imported note', async () => {

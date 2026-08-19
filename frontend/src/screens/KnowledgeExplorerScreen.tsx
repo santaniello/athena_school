@@ -97,13 +97,26 @@ function KnowledgeExplorerScreen({ selectedTopic, mode }: KnowledgeExplorerScree
   const effectiveStatus = mode === 'review' ? 'draft' : statusFilter
 
   useEffect(() => {
+    // A topic/status change (or an ingest:done firing mid-flight) can
+    // start a new request before an older one resolves; ignore lets a
+    // stale response arriving after that lose the race instead of
+    // overwriting the current filter's items with the previous one's.
+    let ignore = false
     function load() {
       listKnowledgeItems(selectedTopic ?? '', effectiveStatus)
-        .then(setItems)
-        .catch(() => setError('Failed to load knowledge items.'))
+        .then((result) => {
+          if (!ignore) setItems(result)
+        })
+        .catch(() => {
+          if (!ignore) setError('Failed to load knowledge items.')
+        })
     }
     load()
-    return onIngestDone(load)
+    const unsubscribe = onIngestDone(load)
+    return () => {
+      ignore = true
+      unsubscribe()
+    }
   }, [selectedTopic, effectiveStatus])
 
   const selectedItem = items.find((item) => item.id === selectedId) ?? null
@@ -115,8 +128,20 @@ function KnowledgeExplorerScreen({ selectedTopic, mode }: KnowledgeExplorerScree
     setError('')
   }
 
+  // A status transition (approve/deprecate) can move updated out of the
+  // active status filter — e.g. approving a draft while the Review tab's
+  // filter is fixed to draft. Drop it from the list instead of patching it
+  // in place so it does not linger under a filter it no longer matches.
   function patchItem(updated: KnowledgeItem) {
-    setItems((previous) => previous.map((item) => (item.id === updated.id ? updated : item)))
+    const noLongerMatches = effectiveStatus !== '' && updated.status !== effectiveStatus
+    setItems((previous) =>
+      noLongerMatches
+        ? previous.filter((item) => item.id !== updated.id)
+        : previous.map((item) => (item.id === updated.id ? updated : item)),
+    )
+    if (noLongerMatches) {
+      setSelectedId((current) => (current === updated.id ? null : current))
+    }
   }
 
   async function handleApprove(item: KnowledgeItem) {
