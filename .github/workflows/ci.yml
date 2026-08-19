@@ -55,52 +55,6 @@ jobs:
           cd frontend
           npm run test:coverage
 
-      # libwebkit2gtk-4.1-dev pulls a 167-package / 58.5 MB dependency
-      # closure that apt re-downloaded on every run. The Azure mirror serves
-      # it at wildly varying speeds — measured between 19s and 6min52s (at
-      # 142 kB/s) for the identical package set — which made this single step
-      # the dominant, and most unpredictable, cost of the whole gate. The set
-      # never changes between runs, so cache the .deb archives and install
-      # them offline with dpkg.
-      #
-      # The key is deliberately static. Keying it on the runner image version
-      # (ImageVersion) was tried and reverted: the image rolled from
-      # 20260810.271.1 to 20260816.277.1 between two runs six minutes apart,
-      # and the pool serves several versions concurrently, so the cache
-      # essentially never hit. The closure is resolved against the image, so
-      # a stale archive is possible in principle — that is what the apt
-      # fallback below is for. Bump the -vN suffix to force a refresh; the
-      # fallback's warning in the log is the signal that it is time to.
-      - name: Cache cgo dependency packages
-        id: apt-cache
-        uses: actions/cache@v6
-        with:
-          path: ~/apt-archives
-          key: apt-cgo-${{ runner.os }}-webkit2gtk41-v1
-
-      - name: Download cgo dependency packages
-        if: steps.apt-cache.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p ~/apt-archives/partial
-          sudo apt-get update
-          sudo apt-get install -y --download-only \
-            -o Dir::Cache::archives="$HOME/apt-archives" \
-            libgtk-3-dev libwebkit2gtk-4.1-dev
-          sudo chown -R "$USER" ~/apt-archives
-
-      # A restored .deb set was resolved against whichever runner image built
-      # it, and the static key does not track that. This is the safety net:
-      # if the archive is stale or partial, dpkg fails and a plain apt
-      # install takes over, so the gate stays green (just slow) instead of
-      # going red on an infrastructure detail.
-      - name: Install Linux cgo dependencies
-        run: |
-          if ! sudo dpkg --install --skip-same-version ~/apt-archives/*.deb; then
-            echo "::warning::Cached .deb set did not install cleanly — falling back to apt."
-            sudo apt-get update
-            sudo apt-get install -y --fix-broken libgtk-3-dev libwebkit2gtk-4.1-dev
-          fi
-
       - name: Run tests with coverage
         run: |
           MODULE="$(go list -m)"
