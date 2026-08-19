@@ -381,8 +381,9 @@ describe('definitionPreview', () => {
     const result = definitionPreview(text, 5)
 
     // Then a space at position 0 is not treated as a usable word boundary
-    // (there is no word before it to keep) — the hard cut is kept instead
-    expect(result).toBe(' abcd…')
+    // (there is no word before it to keep) — the hard cut is kept instead,
+    // one character short of the budget to leave room for the ellipsis
+    expect(result).toBe(' abc…')
   })
 
   it('falls back to a hard cut when the budget has no whitespace to break on', () => {
@@ -392,7 +393,33 @@ describe('definitionPreview', () => {
     // When previewing it under budget
     const result = definitionPreview(text, 10)
 
-    // Then it cuts hard at the budget rather than growing past it
-    expect(result).toBe('aaaaaaaaaa…')
+    // Then it cuts one character short of the budget — nine characters,
+    // not ten — so the appended ellipsis never pushes the result past max
+    expect(result).toBe('aaaaaaaaa…')
+  })
+
+  it('returns just an ellipsis when max is 1', () => {
+    // Given text well over budget and a budget too small to fit any
+    // character alongside the ellipsis
+    const result = definitionPreview('abcdef', 1)
+
+    // Then only the ellipsis is returned
+    expect(result).toBe('…')
+  })
+
+  it('returns an empty string when max is 0 or negative', () => {
+    expect(definitionPreview('abcdef', 0)).toBe('')
+    expect(definitionPreview('abcdef', -1)).toBe('')
+  })
+
+  it('never returns more than max characters total when truncating', () => {
+    // Given text well over budget
+    const text = 'a'.repeat(20)
+
+    // When previewing it at a budget of 10
+    const result = definitionPreview(text, 10)
+
+    // Then the truncated result (including the ellipsis) fits the budget
+    expect(result.length).toBeLessThanOrEqual(10)
   })
 })

@@ -197,6 +197,24 @@ describe('KnowledgeExtractionDialog', () => {
     expect(screen.getByRole('button', { name: 'Try again' })).toBeEnabled()
   })
 
+  it('shows a mode-appropriate safe message when "Save as knowledge" rejects with a non-error value', async () => {
+    // Given an unexpected binding rejection from the approve-directly path
+    vi.mocked(saveAndApproveExtractedKnowledge).mockRejectedValueOnce('unavailable')
+    const user = userEvent.setup()
+    render(
+      <KnowledgeExtractionDialog open items={[candidate('1', 'Channels')]} onClose={vi.fn()} />,
+    )
+
+    // When saving via "Save as knowledge"
+    await user.click(screen.getByRole('button', { name: 'Save as knowledge' }))
+
+    // Then the fallback names the operation that actually failed, not the
+    // other save mode's message
+    expect(await screen.findByText('Failed to save as knowledge.')).toBeInTheDocument()
+    expect(screen.queryByText('Failed to save drafts.')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeEnabled()
+  })
+
   it('saves and approves via "Save as knowledge", directly closing on success', async () => {
     // Given a complete candidate
     const items = [candidate('1', 'Channels'), candidate('2', 'Goroutines')]

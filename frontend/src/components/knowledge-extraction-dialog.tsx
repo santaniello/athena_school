@@ -75,7 +75,9 @@ export function KnowledgeExtractionDialog({
       }
       onClose()
     } catch (caught) {
-      const error = caught instanceof Error ? caught : new Error('Failed to save drafts.')
+      const fallbackMessage =
+        mode === 'approve' ? 'Failed to save as knowledge.' : 'Failed to save drafts.'
+      const error = caught instanceof Error ? caught : new Error(fallbackMessage)
       setSaveError(error.message)
     } finally {
       setIsSaving(false)

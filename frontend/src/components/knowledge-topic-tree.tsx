@@ -18,10 +18,16 @@ interface KnowledgeTopicTreeProps {
 // completes, since importing can introduce topics that did not exist yet.
 function KnowledgeTopicTree({ selectedTopic, onSelectTopic }: KnowledgeTopicTreeProps) {
   const [topics, setTopics] = useState<string[]>([])
+  const [error, setError] = useState('')
 
   useEffect(() => {
     function loadTopics() {
-      void listKnowledgeTopics().then(setTopics)
+      listKnowledgeTopics()
+        .then((result) => {
+          setError('')
+          setTopics(result)
+        })
+        .catch(() => setError('Failed to load topics.'))
     }
     loadTopics()
     return onIngestDone(loadTopics)
@@ -54,6 +60,7 @@ function KnowledgeTopicTree({ selectedTopic, onSelectTopic }: KnowledgeTopicTree
           <span className="truncate">{topic}</span>
         </button>
       ))}
+      {error && <p className="px-3 py-1 text-xs text-destructive">{error}</p>}
     </div>
   )
 }

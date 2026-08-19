@@ -145,7 +145,15 @@ export function definitionPreview(text: string, max: number): string {
   if (text.length <= max) {
     return text
   }
-  const cut = text.slice(0, max)
+  if (max <= 0) {
+    return ''
+  }
+  if (max === 1) {
+    return '…'
+  }
+  // Reserve one character for the ellipsis so a truncated result never
+  // exceeds max characters total.
+  const cut = text.slice(0, max - 1)
   const lastSpace = cut.lastIndexOf(' ')
   const trimmed = lastSpace > 0 ? cut.slice(0, lastSpace) : cut
   return `${trimmed.trimEnd()}…`

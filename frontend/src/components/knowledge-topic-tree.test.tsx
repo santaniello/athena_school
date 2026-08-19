@@ -139,6 +139,18 @@ describe('KnowledgeTopicTree', () => {
     expect(await screen.findByRole('button', { name: 'Kubernetes' })).toBeInTheDocument()
   })
 
+  it('shows an error state when loading topics fails', async () => {
+    // Given a binding that rejects
+    vi.mocked(listKnowledgeTopics).mockRejectedValueOnce(new Error('offline'))
+    stubOnIngestDone()
+
+    // When rendering the tree
+    render(<KnowledgeTopicTree selectedTopic={null} onSelectTopic={vi.fn()} />)
+
+    // Then an error message is shown instead of leaving the rejection unhandled
+    expect(await screen.findByText('Failed to load topics.')).toBeInTheDocument()
+  })
+
   it('unsubscribes from ingest:done on unmount', () => {
     // Given a mounted tree
     vi.mocked(listKnowledgeTopics).mockResolvedValueOnce([])
