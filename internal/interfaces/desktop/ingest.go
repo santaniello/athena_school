@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"log"
 	"os"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -84,7 +85,11 @@ func (a *App) ImportNotes(path string) error {
 		a.emit(a.ctx, eventIngestError, err.Error())
 		return err
 	}
-	defer func() { _ = root.Close() }()
+	defer func() {
+		if closeErr := root.Close(); closeErr != nil {
+			log.Printf("closing notes import root %q: %v", path, closeErr)
+		}
+	}()
 
 	summary, err := a.ingest.ImportFolder(a.ctx, root.FS(), func(p ingest.Progress) error {
 		a.emit(a.ctx, eventIngestProgress, toIngestProgressResult(p))

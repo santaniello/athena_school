@@ -114,7 +114,7 @@ func firstHeadingText(source string, level int) (string, bool) {
 
 	var title string
 	var found bool
-	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+	walkErr := ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if found || !entering {
 			return ast.WalkContinue, nil
 		}
@@ -134,5 +134,11 @@ func firstHeadingText(source string, level int) (string, bool) {
 		found = true
 		return ast.WalkStop, nil
 	})
+	// The callback above never returns an error, so walkErr is always nil
+	// in practice; treated the same as "no heading found" rather than
+	// ignored, in case that ever changes.
+	if walkErr != nil {
+		return "", false
+	}
 	return title, found
 }

@@ -76,7 +76,7 @@ func findHeadingSections(source string) []ChunkCandidate {
 		title string
 	}
 	var boundaries []boundary
-	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+	walkErr := ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
 			return ast.WalkContinue, nil
 		}
@@ -103,7 +103,10 @@ func findHeadingSections(source string) []ChunkCandidate {
 		return ast.WalkSkipChildren, nil
 	})
 
-	if len(boundaries) == 0 {
+	// The callback above never returns an error, so walkErr is always nil
+	// in practice; treated the same as "no heading found" rather than
+	// ignored, in case that ever changes.
+	if walkErr != nil || len(boundaries) == 0 {
 		return nil
 	}
 

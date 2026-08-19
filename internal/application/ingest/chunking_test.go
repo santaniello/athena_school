@@ -71,7 +71,7 @@ func TestChunkMarkdown_levelFourHeading_doesNotStartNewSection(t *testing.T) {
 
 func TestChunkMarkdown_sectionExactlyAtMaxChunkChars_isKeptWhole(t *testing.T) {
 	// Given a section whose content is exactly maxChunkChars long
-	body := exactlyNChars(maxChunkChars - len("Heading\n"))
+	body := exactlyNChars(maxChunkChars - len("# Heading\n"))
 	source := "# Heading\n" + body
 
 	// When chunking it

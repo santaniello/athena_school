@@ -73,13 +73,18 @@ func TestApp_ImportNotes_emitsProgressThenDone_onSuccess(t *testing.T) {
 	items := knowledgemocks.NewMockRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 
-	ingestedFiles.EXPECT().ListAll(mock.Anything).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
-	llm.EXPECT().Embeddings(mock.Anything, domainllm.EmbeddingRequest{Input: "# Go\nBasics of Go."}).
+	// App.Startup(context.Background()) stashes that exact context on
+	// a.ctx, and ImportNotes forwards it unchanged into every dependency
+	// call below — matching it precisely (instead of mock.Anything) means
+	// this test would fail if ImportNotes ever stopped propagating it.
+	ctx := context.Background()
+	ingestedFiles.EXPECT().ListAll(ctx).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nBasics of Go."}).
 		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}, Model: domainllm.EmbeddingModel}, nil).Once()
-	chunks.EXPECT().DeleteByFilePath(mock.Anything, "go.md").Return(nil).Once()
-	chunks.EXPECT().SaveAll(mock.Anything, mock.Anything).Return(nil).Once()
-	items.EXPECT().Save(mock.Anything, mock.Anything).Return(nil).Once()
-	ingestedFiles.EXPECT().Upsert(mock.Anything, mock.Anything).Return(nil).Once()
+	chunks.EXPECT().DeleteByFilePath(ctx, "go.md").Return(nil).Once()
+	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()
+	items.EXPECT().Save(ctx, mock.Anything).Return(nil).Once()
+	ingestedFiles.EXPECT().Upsert(ctx, mock.Anything).Return(nil).Once()
 
 	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, llm)
 

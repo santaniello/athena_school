@@ -28,6 +28,7 @@ func TestIngestedFileRepository_ListAll_returnsEmptyMap_whenNothingIngestedYet(t
 
 	// Then it returns an empty, non-nil map
 	require.NoError(t, err)
+	assert.NotNil(t, files)
 	assert.Empty(t, files)
 }
 
