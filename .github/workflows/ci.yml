@@ -55,10 +55,34 @@ jobs:
           cd frontend
           npm run test:coverage
 
-      - name: Install Linux cgo dependencies
+      # libwebkit2gtk-4.1-dev pulls a 167-package / 58.5 MB dependency
+      # closure that apt re-downloaded on every run. The Azure mirror serves
+      # it at wildly varying speeds — measured between 19s and 6min52s (at
+      # 142 kB/s) for the identical package set — which made this single step
+      # the dominant, and most unpredictable, cost of the whole gate. The set
+      # never changes between runs, so cache the .deb archives and install
+      # them offline with dpkg. The key carries the runner image version
+      # because apt resolves the closure against what the image already has;
+      # bump the -vN suffix to force a refresh for any other reason.
+      - name: Cache cgo dependency packages
+        id: apt-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/apt-archives
+          key: apt-cgo-${{ env.ImageOS }}-${{ env.ImageVersion }}-webkit2gtk41-v1
+
+      - name: Download cgo dependency packages
+        if: steps.apt-cache.outputs.cache-hit != 'true'
         run: |
+          mkdir -p ~/apt-archives/partial
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+          sudo apt-get install -y --download-only \
+            -o Dir::Cache::archives="$HOME/apt-archives" \
+            libgtk-3-dev libwebkit2gtk-4.1-dev
+          sudo chown -R "$USER" ~/apt-archives
+
+      - name: Install Linux cgo dependencies
+        run: sudo dpkg --install --skip-same-version ~/apt-archives/*.deb
 
       - name: Run tests with coverage
         run: |
@@ -82,11 +106,14 @@ jobs:
             exit 1
           fi
 
+      # install-mode is left at the action's default (binary): the v2.12.2
+      # release binary is built with go1.26.2, so it no longer trips the
+      # "built with an older Go than go.mod targets" refusal that forced
+      # goinstall back on v1.64.8. Building it from source cost ~45s a run.
       - name: Lint
         uses: golangci/golangci-lint-action@v9
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
-          install-mode: goinstall
 
       - name: Check for known vulnerabilities
         run: |
