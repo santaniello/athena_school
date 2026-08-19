@@ -118,7 +118,10 @@ function KnowledgeExplorerScreen({ selectedTopic, mode }: KnowledgeExplorerScree
       const version = ++requestVersion
       listKnowledgeItems(selectedTopic ?? '', effectiveStatus)
         .then((result) => {
-          if (!ignore && version === requestVersion) setItems(result)
+          if (!ignore && version === requestVersion) {
+            setError('')
+            setItems(result)
+          }
         })
         .catch(() => {
           if (!ignore && version === requestVersion) setError('Failed to load knowledge items.')

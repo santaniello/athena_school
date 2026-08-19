@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { listKnowledgeTopics } from '@/lib/knowledge'
 import { onIngestDone, type IngestSummary } from '@/lib/ingest'
@@ -133,6 +133,36 @@ describe('KnowledgeTopicTree', () => {
 
     // Then the newly-imported topic appears without a remount
     expect(await screen.findByRole('button', { name: 'Kubernetes' })).toBeInTheDocument()
+  })
+
+  it('ignores a stale response from the initial load when ingest:done triggers a second load first', async () => {
+    // Given the initial load still pending
+    let doneHandler: () => void = () => {}
+    vi.mocked(onIngestDone).mockImplementation((handler) => {
+      doneHandler = handler as () => void
+      return vi.fn()
+    })
+    let resolveInitial: (topics: string[]) => void = () => {}
+    const initialLoad = new Promise<string[]>((resolve) => {
+      resolveInitial = resolve
+    })
+    vi.mocked(listKnowledgeTopics).mockReturnValueOnce(initialLoad)
+    vi.mocked(listKnowledgeTopics).mockResolvedValueOnce(['Kubernetes'])
+    render(<KnowledgeTopicTree selectedTopic={null} onSelectTopic={vi.fn()} />)
+    await waitFor(() => expect(listKnowledgeTopics).toHaveBeenCalledTimes(1))
+
+    // When a notes import completes before the initial load resolves,
+    // starting a second load that settles first
+    await act(() => doneHandler())
+    await screen.findByRole('button', { name: 'Kubernetes' })
+
+    // Then the stale initial response arriving afterward is ignored,
+    // instead of overwriting the newer refetched topics
+    await act(async () => {
+      resolveInitial(['Go'])
+    })
+    expect(screen.queryByRole('button', { name: 'Go' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Kubernetes' })).toBeInTheDocument()
   })
 
   it('shows an error state when loading topics fails', async () => {

@@ -189,6 +189,29 @@ describe('KnowledgeExplorerScreen', () => {
     expect(screen.queryByText('Status:')).not.toBeInTheDocument()
   })
 
+  it('clears the loading error once a later reload succeeds', async () => {
+    // Given an Explorer whose initial load failed
+    let doneHandler: () => void = () => {}
+    vi.mocked(onIngestDone).mockImplementation((handler) => {
+      doneHandler = handler as () => void
+      return vi.fn()
+    })
+    vi.mocked(listKnowledgeItems).mockRejectedValueOnce(new Error('offline'))
+    vi.mocked(listKnowledgeItems).mockResolvedValueOnce([testItem()])
+    render(<KnowledgeExplorerScreen selectedTopic={null} mode="explorer" />)
+    expect(await screen.findByText('Failed to load knowledge items.')).toBeInTheDocument()
+
+    // When a notes import completes and the reload succeeds
+    await act(() => doneHandler())
+
+    // Then the stale loading error is cleared instead of lingering next
+    // to the now-current items
+    await waitFor(() =>
+      expect(screen.queryByText('Failed to load knowledge items.')).not.toBeInTheDocument(),
+    )
+    expect(screen.getByText('Channels')).toBeInTheDocument()
+  })
+
   it('refetches items when a notes import finishes', async () => {
     // Given a mounted Explorer
     let doneHandler: () => void = () => {}

@@ -21,16 +21,31 @@ function KnowledgeTopicTree({ selectedTopic, onSelectTopic }: KnowledgeTopicTree
   const [error, setError] = useState('')
 
   useEffect(() => {
+    // onIngestDone(loadTopics) can start a second call while the initial
+    // one is still pending; requestVersion ensures only the most
+    // recently started call's response (or rejection) is applied, and
+    // ignore (set on cleanup) drops any response arriving after unmount.
+    let ignore = false
+    let requestVersion = 0
     function loadTopics() {
+      const version = ++requestVersion
       listKnowledgeTopics()
         .then((result) => {
-          setError('')
-          setTopics(result)
+          if (!ignore && version === requestVersion) {
+            setError('')
+            setTopics(result)
+          }
         })
-        .catch(() => setError('Failed to load topics.'))
+        .catch(() => {
+          if (!ignore && version === requestVersion) setError('Failed to load topics.')
+        })
     }
     loadTopics()
-    return onIngestDone(loadTopics)
+    const unsubscribe = onIngestDone(loadTopics)
+    return () => {
+      ignore = true
+      unsubscribe()
+    }
   }, [])
 
   function rowClassName(active: boolean) {
