@@ -58,6 +58,54 @@ describe('KnowledgeExtractionDialog', () => {
     expect(onClose).toHaveBeenCalled()
   })
 
+  it('restores a candidate and preserves the original order when it is selected again', async () => {
+    // Given three candidates with the first temporarily unchecked
+    const items = [candidate('1', 'One'), candidate('2', 'Two'), candidate('3', 'Three')]
+    vi.mocked(saveExtractedKnowledge).mockResolvedValueOnce(3)
+    const user = userEvent.setup()
+    render(<KnowledgeExtractionDialog open items={items} onClose={vi.fn()} />)
+    await user.click(screen.getByLabelText('Selecionar One'))
+
+    // When selecting the first candidate again and saving
+    await user.click(screen.getByLabelText('Selecionar One'))
+    await user.click(screen.getByRole('button', { name: 'Salvar como rascunhos' }))
+
+    // Then all candidates retain their displayed order
+    await waitFor(() => expect(saveExtractedKnowledge).toHaveBeenCalledWith(items))
+  })
+
+  it('locks every action and reports progress while saving', async () => {
+    // Given a save request that remains in flight
+    vi.mocked(saveExtractedKnowledge).mockReturnValueOnce(new Promise(() => {}))
+    const user = userEvent.setup()
+    render(
+      <KnowledgeExtractionDialog open items={[candidate('1', 'Channels')]} onClose={vi.fn()} />,
+    )
+
+    // When saving drafts
+    await user.click(screen.getByRole('button', { name: 'Salvar como rascunhos' }))
+
+    // Then candidate selection and both dialog actions are locked
+    expect(screen.getByLabelText('Selecionar Channels')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Ignorar' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Salvando...' })).toBeDisabled()
+  })
+
+  it('closes when the dialog close control is used', async () => {
+    // Given an open extraction dialog
+    const onClose = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <KnowledgeExtractionDialog open items={[candidate('1', 'Channels')]} onClose={onClose} />,
+    )
+
+    // When dismissing it through the dialog close control
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+
+    // Then the owner is notified exactly once
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
   it('disables saving when no candidate is checked', async () => {
     // Given one candidate that the user unchecks
     const user = userEvent.setup()
@@ -91,9 +139,47 @@ describe('KnowledgeExtractionDialog', () => {
     // When saving and then retrying
     await user.click(screen.getByRole('button', { name: 'Salvar como rascunhos' }))
     expect(await screen.findByText(/database locked/i)).toBeInTheDocument()
+    expect(screen.getByText('Salvo')).toBeInTheDocument()
+    expect(screen.getByLabelText('Selecionar One')).toBeDisabled()
     await user.click(screen.getByRole('button', { name: 'Tentar novamente' }))
 
-    // Then the retry excludes the already-saved prefix
+    // Then the retry excludes the already-saved prefix and closes on success
     await waitFor(() => expect(saveExtractedKnowledge).toHaveBeenNthCalledWith(2, items.slice(1)))
+    await waitFor(() => expect(screen.queryByText(/database locked/i)).not.toBeInTheDocument())
+  })
+
+  it('retries every candidate after a failure that saved none', async () => {
+    // Given a save failure without a partial count
+    const items = [candidate('1', 'One'), candidate('2', 'Two')]
+    vi.mocked(saveExtractedKnowledge)
+      .mockRejectedValueOnce(new Error('database unavailable'))
+      .mockResolvedValueOnce(2)
+    const user = userEvent.setup()
+    render(<KnowledgeExtractionDialog open items={items} onClose={vi.fn()} />)
+
+    // When saving and retrying
+    await user.click(screen.getByRole('button', { name: 'Salvar como rascunhos' }))
+    expect(await screen.findByText('database unavailable')).toBeInTheDocument()
+    expect(screen.queryByText('Salvo')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Tentar novamente' }))
+
+    // Then the complete selection is retried
+    await waitFor(() => expect(saveExtractedKnowledge).toHaveBeenNthCalledWith(2, items))
+  })
+
+  it('shows a safe message when saving rejects with a non-error value', async () => {
+    // Given an unexpected binding rejection
+    vi.mocked(saveExtractedKnowledge).mockRejectedValueOnce('unavailable')
+    const user = userEvent.setup()
+    render(
+      <KnowledgeExtractionDialog open items={[candidate('1', 'Channels')]} onClose={vi.fn()} />,
+    )
+
+    // When saving
+    await user.click(screen.getByRole('button', { name: 'Salvar como rascunhos' }))
+
+    // Then a user-safe fallback is shown and retry remains available
+    expect(await screen.findByText('Falha ao salvar os rascunhos.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tentar novamente' })).toBeEnabled()
   })
 })

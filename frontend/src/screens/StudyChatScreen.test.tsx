@@ -594,7 +594,10 @@ describe('StudyChatScreen — knowledge extraction', () => {
     const handlers = await renderStartedSession()
 
     // Then extraction is disabled during streaming
-    expect(screen.getByRole('button', { name: 'Extrair conhecimento' })).toBeDisabled()
+    const extractionButton = screen.getByRole('button', { name: 'Extrair conhecimento' })
+    expect(extractionButton).toBeDisabled()
+    expect(extractionButton).toHaveAttribute('aria-label', 'Extrair conhecimento')
+    expect(extractionButton).toHaveTextContent('Extrair conhecimento')
 
     // When the first assistant message settles
     act(() => {
@@ -621,7 +624,10 @@ describe('StudyChatScreen — knowledge extraction', () => {
     await user.click(screen.getByRole('button', { name: 'Extrair conhecimento' }))
 
     // Then the local loading state prevents another call
-    expect(screen.getByRole('button', { name: 'Extraindo conhecimento' })).toBeDisabled()
+    const extractionButton = screen.getByRole('button', { name: 'Extraindo conhecimento' })
+    expect(extractionButton).toBeDisabled()
+    expect(extractionButton).toHaveAttribute('aria-label', 'Extraindo conhecimento')
+    expect(extractionButton).toHaveTextContent('Extraindo...')
     expect(extractKnowledge).toHaveBeenCalledTimes(1)
 
     // When the candidates arrive
@@ -667,9 +673,43 @@ describe('StudyChatScreen — knowledge extraction', () => {
     // When confirming
     await user.click(screen.getByRole('button', { name: 'Sim' }))
 
-    // Then extraction is re-invoked with confirmation and the empty-result dialog opens
+    // Then the warning closes, extraction is re-invoked with confirmation, and review opens
+    await waitFor(() => expect(screen.queryByText(/esta sessão é longa/i)).not.toBeInTheDocument())
     await waitFor(() => expect(extractKnowledge).toHaveBeenLastCalledWith('session-1', true))
     expect(await screen.findByText('Nenhum conhecimento novo encontrado')).toBeInTheDocument()
+  })
+
+  it('stops after the user declines truncated transcript processing', async () => {
+    // Given a settled long session whose extraction needs confirmation
+    await renderSettledSession()
+    vi.mocked(extractKnowledge).mockResolvedValueOnce({ items: [], truncated: true })
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'Extrair conhecimento' }))
+    expect(await screen.findByText(/esta sessão é longa/i)).toBeInTheDocument()
+
+    // When declining truncated processing
+    await user.click(screen.getByRole('button', { name: 'Não' }))
+
+    // Then the warning closes and no confirmed extraction is sent
+    await waitFor(() => expect(screen.queryByText(/esta sessão é longa/i)).not.toBeInTheDocument())
+    expect(extractKnowledge).toHaveBeenCalledOnce()
+  })
+
+  it('closes extracted candidate review when ignored', async () => {
+    // Given an extraction review with no new candidates
+    await renderSettledSession()
+    vi.mocked(extractKnowledge).mockResolvedValueOnce({ items: [], truncated: false })
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'Extrair conhecimento' }))
+    expect(await screen.findByText('Nenhum conhecimento novo encontrado')).toBeInTheDocument()
+
+    // When ignoring the result
+    await user.click(screen.getByRole('button', { name: 'Ignorar' }))
+
+    // Then review closes
+    await waitFor(() =>
+      expect(screen.queryByText('Nenhum conhecimento novo encontrado')).not.toBeInTheDocument(),
+    )
   })
 
   it('shows a genuine extraction failure as an inline error', async () => {
@@ -684,6 +724,37 @@ describe('StudyChatScreen — knowledge extraction', () => {
     // Then the failure is shown outside the empty-result modal
     expect(await screen.findByText('openrouter api key is missing')).toBeInTheDocument()
     expect(screen.queryByText('Nenhum conhecimento novo encontrado')).not.toBeInTheDocument()
+  })
+
+  it('clears an extraction failure when retrying successfully', async () => {
+    // Given an extraction that fails once and then succeeds
+    await renderSettledSession()
+    vi.mocked(extractKnowledge)
+      .mockRejectedValueOnce(new Error('temporary failure'))
+      .mockResolvedValueOnce({ items: [], truncated: false })
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'Extrair conhecimento' }))
+    expect(await screen.findByText('temporary failure')).toBeInTheDocument()
+
+    // When retrying extraction
+    await user.click(screen.getByRole('button', { name: 'Extrair conhecimento' }))
+
+    // Then the stale failure is cleared and review opens
+    expect(await screen.findByText('Nenhum conhecimento novo encontrado')).toBeInTheDocument()
+    expect(screen.queryByText('temporary failure')).not.toBeInTheDocument()
+  })
+
+  it('shows a safe extraction error for an unexpected rejection value', async () => {
+    // Given an extraction binding that rejects without an Error
+    await renderSettledSession()
+    vi.mocked(extractKnowledge).mockRejectedValueOnce('unavailable')
+    const user = userEvent.setup()
+
+    // When extracting knowledge
+    await user.click(screen.getByRole('button', { name: 'Extrair conhecimento' }))
+
+    // Then a user-safe fallback is shown
+    expect(await screen.findByText('Falha ao extrair conhecimento.')).toBeInTheDocument()
   })
 })
 
