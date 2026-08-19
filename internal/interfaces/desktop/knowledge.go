@@ -149,6 +149,27 @@ func (a *App) DeleteKnowledgeItem(id string) error {
 	return a.knowledge.DeleteItem(a.ctx, id)
 }
 
+// SaveAndApproveExtractedKnowledge persists only the confirmed candidates,
+// directly as approved — the "Salvar como conhecimento" option from
+// specs/Athena.md §12, skipping the draft review stage SaveExtractedKnowledge
+// (SaveDrafts) leaves candidates in.
+func (a *App) SaveAndApproveExtractedKnowledge(inputs []KnowledgeItemInput) KnowledgeSaveResult {
+	items := make([]domainknowledge.Item, len(inputs))
+	for index, input := range inputs {
+		items[index] = domainknowledge.Item{
+			ID: input.ID, Topic: input.Topic, Concept: input.Concept, Definition: input.Definition,
+			Properties: input.Properties, TradeOffs: input.TradeOffs, RelatedConcepts: input.RelatedConcepts,
+			Source: input.Source, Status: input.Status,
+		}
+	}
+	savedIndices, err := a.knowledge.SaveAndApprove(a.ctx, items)
+	result := KnowledgeSaveResult{SavedIndices: savedIndices}
+	if err != nil {
+		result.Error = fmt.Sprintf("knowledge save failed: %v", err)
+	}
+	return result
+}
+
 func toKnowledgeItemResult(item domainknowledge.Item) KnowledgeItemResult {
 	return KnowledgeItemResult{
 		ID: item.ID, Topic: item.Topic, Concept: item.Concept, Definition: item.Definition,

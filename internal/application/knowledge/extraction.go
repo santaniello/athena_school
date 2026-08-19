@@ -51,8 +51,23 @@ func (s *Service) ExtractFromSession(ctx context.Context, sessionID string, conf
 	return items, truncated, err
 }
 
-// SaveDrafts revalidates and persists confirmed candidates sequentially.
+// SaveDrafts revalidates and persists confirmed candidates sequentially, as drafts.
 func (s *Service) SaveDrafts(ctx context.Context, items []domainknowledge.Item) ([]int, error) {
+	return s.saveCandidates(ctx, items, domainknowledge.StatusDraft)
+}
+
+// SaveAndApprove revalidates and persists confirmed candidates sequentially,
+// directly as approved — skipping the draft review stage. See
+// specs/Athena.md §12 ("Salvar como conhecimento"), the third option
+// alongside SaveDrafts ("Salvar como rascunho") and discarding the
+// candidates entirely ("Ignorar").
+func (s *Service) SaveAndApprove(ctx context.Context, items []domainknowledge.Item) ([]int, error) {
+	return s.saveCandidates(ctx, items, domainknowledge.StatusApproved)
+}
+
+// saveCandidates revalidates and persists confirmed candidates sequentially,
+// regenerating every server-owned field and stamping status.
+func (s *Service) saveCandidates(ctx context.Context, items []domainknowledge.Item, status string) ([]int, error) {
 	savedIndices := make([]int, 0, len(items))
 	for index, input := range items {
 		now := time.Now().UTC()
@@ -65,7 +80,7 @@ func (s *Service) SaveDrafts(ctx context.Context, items []domainknowledge.Item) 
 			TradeOffs:       normalizeList(input.TradeOffs),
 			RelatedConcepts: normalizeList(input.RelatedConcepts),
 			Source:          domainknowledge.SourceAthena,
-			Status:          domainknowledge.StatusDraft,
+			Status:          status,
 			CreatedAt:       now,
 			UpdatedAt:       now,
 		}

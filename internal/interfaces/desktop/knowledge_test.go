@@ -131,6 +131,27 @@ func TestApp_SaveExtractedKnowledge_returnsExactIndicesAlongsidePartialFailure(t
 	assert.Contains(t, result.Error, assert.AnError.Error())
 }
 
+func TestApp_SaveAndApproveExtractedKnowledge_persistsDirectlyAsApproved(t *testing.T) {
+	// Given a knowledge service backed by a repository
+	ctx := context.Background()
+	repository := knowledgemocks.NewMockRepository(t)
+	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
+		return item.Concept == "Channels" && item.Status == domainknowledge.StatusApproved
+	})).Return(nil).Once()
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t))
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
+	app.Startup(ctx)
+
+	// When saving and approving a full desktop candidate
+	result := app.SaveAndApproveExtractedKnowledge([]KnowledgeItemInput{{
+		Topic: "Go", Concept: "Channels", Definition: "Typed conduits.",
+	}})
+
+	// Then it is persisted directly as approved and its exact input index is returned
+	assert.Equal(t, []int{0}, result.SavedIndices)
+	assert.Empty(t, result.Error)
+}
+
 func TestApp_ListKnowledgeItems_returnsItemsForTopicAndStatus(t *testing.T) {
 	// Given a repository with one matching item
 	ctx := context.Background()
