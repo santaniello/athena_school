@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -351,4 +352,26 @@ func TestKnowledgeRepository_Delete_returnsErrItemNotFound_whenMissing(t *testin
 
 	// Then it fails with ErrItemNotFound
 	assert.ErrorIs(t, err, knowledge.ErrItemNotFound)
+}
+
+func TestKnowledgeRepository_Save_participatesInCallerTransaction(t *testing.T) {
+	// Given a repository and a transactor sharing the same database
+	db := newTestDB(t)
+	repo := NewKnowledgeRepository(db)
+	transactor := NewSQLTransactor(db)
+	item := testItem("item-1", "Go", knowledge.StatusDraft)
+	boom := errors.New("boom")
+
+	// When Save runs inside a transaction that is then rolled back
+	txErr := transactor.WithinTx(context.Background(), func(ctx context.Context) error {
+		if err := repo.Save(ctx, item); err != nil {
+			return err
+		}
+		return boom
+	})
+
+	// Then Save's write never became visible
+	require.ErrorIs(t, txErr, boom)
+	_, getErr := repo.GetByID(context.Background(), "item-1")
+	assert.ErrorIs(t, getErr, knowledge.ErrItemNotFound)
 }
