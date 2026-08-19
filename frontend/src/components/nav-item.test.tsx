@@ -5,7 +5,10 @@ import { NavItem } from './nav-item'
 import { NAVIGATION } from '@/lib/navigation'
 
 const homeItem = NAVIGATION.find((item) => item.id === 'home')!
-const knowledgeItem = NAVIGATION.find((item) => item.id === 'knowledge')!
+// challenge stays locked for the whole of Phase 2, unlike knowledge — a
+// stable fixture for "locked item" behavior regardless of which section
+// unlocks next.
+const lockedItem = NAVIGATION.find((item) => item.id === 'challenge')!
 
 describe('NavItem', () => {
   it('calls onSelect with the item id when an unlocked item is clicked', async () => {
@@ -33,24 +36,24 @@ describe('NavItem', () => {
     // Given a locked nav item
     const onSelect = vi.fn()
     const user = userEvent.setup()
-    render(<NavItem item={knowledgeItem} active={false} onSelect={onSelect} />)
+    render(<NavItem item={lockedItem} active={false} onSelect={onSelect} />)
 
     // When it is clicked
-    await user.click(screen.getByRole('button', { name: 'Knowledge' }))
+    await user.click(screen.getByRole('button', { name: lockedItem.label }))
 
     // Then onSelect still fires, so it can route to the coming-soon panel
-    expect(onSelect).toHaveBeenCalledWith('knowledge')
+    expect(onSelect).toHaveBeenCalledWith(lockedItem.id)
   })
 
   it('shows a "planned for phase" tooltip on a locked item', async () => {
     // Given a locked nav item
     const user = userEvent.setup()
-    render(<NavItem item={knowledgeItem} active={false} onSelect={vi.fn()} />)
+    render(<NavItem item={lockedItem} active={false} onSelect={vi.fn()} />)
 
     // When hovering it
-    await user.hover(screen.getByRole('button', { name: 'Knowledge' }))
+    await user.hover(screen.getByRole('button', { name: lockedItem.label }))
 
     // Then a tooltip explains when it ships
-    expect(await screen.findByText('Planned for Phase 2')).toBeInTheDocument()
+    expect(await screen.findByText(`Planned for Phase ${lockedItem.phase}`)).toBeInTheDocument()
   })
 })

@@ -63,7 +63,7 @@ export const NAVIGATION: NavItem[] = [
     label: 'Knowledge',
     icon: FolderTree,
     phase: 2,
-    status: 'locked',
+    status: 'unlocked',
     group: 'primary',
     description: 'Your knowledge base: notes, approved concepts and the review queue.',
   },
