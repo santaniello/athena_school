@@ -16,6 +16,7 @@ import (
 
 	"github.com/santaniello/athena/internal/application/auth"
 	"github.com/santaniello/athena/internal/application/folder"
+	applicationingest "github.com/santaniello/athena/internal/application/ingest"
 	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
 	"github.com/santaniello/athena/internal/application/onboarding"
 	"github.com/santaniello/athena/internal/application/study"
@@ -86,7 +87,12 @@ func main() {
 	knowledgeItems := sqlite.NewKnowledgeRepository(db)
 	knowledgeService := applicationknowledge.NewService(knowledgeItems, studySessions, studyMessages, llmClient, configStore)
 
-	app := desktop.NewApp(authService, sessions, onboardingService, profiles, configStore, studyService, folderService, knowledgeService, llmClient)
+	knowledgeChunks := sqlite.NewChunkRepository(db)
+	ingestedFiles := sqlite.NewIngestedFileRepository(db)
+	transactor := sqlite.NewSQLTransactor(db)
+	ingestService := applicationingest.NewService(knowledgeChunks, ingestedFiles, knowledgeItems, llmClient, transactor)
+
+	app := desktop.NewApp(authService, sessions, onboardingService, profiles, configStore, studyService, folderService, knowledgeService, ingestService, llmClient)
 
 	err = wails.Run(&options.App{
 		Title:            "Athena",

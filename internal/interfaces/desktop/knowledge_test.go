@@ -38,7 +38,7 @@ func TestApp_ExtractKnowledge_returnsFullCandidateAndTruncationState(t *testing.
 			strings.Contains(req.Messages[0].Content, "User: Explain channels")
 	})).Return(domainllm.ChatResponse{Content: `{"items":[{"concept":"Channels","definition":"Typed conduits.","properties":["typed"],"trade_offs":["coordination"],"related_concepts":["goroutines"]}]}`}, nil).Once()
 	service := applicationknowledge.NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
 	app.Startup(ctx)
 
 	// When extracting through the desktop adapter
@@ -72,7 +72,7 @@ func TestApp_ExtractKnowledge_returnsEmptyResultForMalformedLLMResponse(t *testi
 			strings.Contains(req.Messages[0].Content, "User: Explain channels")
 	})).Return(domainllm.ChatResponse{Content: "not json"}, nil).Once()
 	service := applicationknowledge.NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
 	app.Startup(ctx)
 
 	// When extracting through the desktop adapter
@@ -92,7 +92,7 @@ func TestApp_SaveExtractedKnowledge_preservesFullInputAndReturnsSavedIndices(t *
 		return item.Concept == "Channels" && assert.ObjectsAreEqual([]string{"typed"}, item.Properties)
 	})).Return(nil).Once()
 	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t))
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
 	app.Startup(ctx)
 
 	// When saving a full desktop candidate
@@ -116,7 +116,7 @@ func TestApp_SaveExtractedKnowledge_returnsExactIndicesAlongsidePartialFailure(t
 		return item.Concept == "failed"
 	})).Return(assert.AnError).Once()
 	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t))
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
 	app.Startup(ctx)
 
 	// When saving through the desktop adapter

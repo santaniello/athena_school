@@ -35,7 +35,7 @@ func newTestOnboardingAppWithKeyUpdater(
 	apiKeyUpdater domainllm.APIKeyUpdater,
 ) *App {
 	t.Helper()
-	app := NewApp(nil, nil, onboarding.NewService(profiles, config, validator), profiles, config, nil, nil, nil, apiKeyUpdater)
+	app := NewApp(nil, nil, onboarding.NewService(profiles, config, validator), profiles, config, nil, nil, nil, nil, apiKeyUpdater)
 	app.Startup(context.Background())
 	return app
 }
