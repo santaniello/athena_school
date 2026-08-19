@@ -200,7 +200,7 @@ func TestApp_ApproveKnowledgeItem_returnsTheUpdatedItem(t *testing.T) {
 		return item.Status == domainknowledge.StatusApproved
 	})).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
-	tx.EXPECT().WithinTx(mock.Anything, mock.Anything).
+	tx.EXPECT().WithinTx(ctx, mock.Anything).
 		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
 	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), tx)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
@@ -225,7 +225,7 @@ func TestApp_DeprecateKnowledgeItem_returnsTheUpdatedItem(t *testing.T) {
 		return item.Status == domainknowledge.StatusDeprecated
 	})).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
-	tx.EXPECT().WithinTx(mock.Anything, mock.Anything).
+	tx.EXPECT().WithinTx(ctx, mock.Anything).
 		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
 	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), tx)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
@@ -250,7 +250,7 @@ func TestApp_UpdateKnowledgeItem_persistsEditableFields_andReturnsTheUpdatedItem
 		return item.Concept == "New" && item.Status == domainknowledge.StatusApproved
 	})).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
-	tx.EXPECT().WithinTx(mock.Anything, mock.Anything).
+	tx.EXPECT().WithinTx(ctx, mock.Anything).
 		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
 	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), tx)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
@@ -274,7 +274,7 @@ func TestApp_DeleteKnowledgeItem_deletesTheItemAndItsChunks(t *testing.T) {
 	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return(nil).Once()
 	repository.EXPECT().Delete(ctx, "item-1").Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
-	tx.EXPECT().WithinTx(mock.Anything, mock.Anything).
+	tx.EXPECT().WithinTx(ctx, mock.Anything).
 		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
 	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
