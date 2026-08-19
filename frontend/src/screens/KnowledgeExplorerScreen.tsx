@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -95,20 +95,33 @@ function KnowledgeExplorerScreen({ selectedTopic, mode }: KnowledgeExplorerScree
   const [error, setError] = useState('')
 
   const effectiveStatus = mode === 'review' ? 'draft' : statusFilter
+  // handleApprove/handleDeprecate are async closures: the render active
+  // when the button was clicked is not necessarily the render active when
+  // the mutation resolves. A ref, synced after every render, lets
+  // patchItem check the filter that is current *now* rather than the one
+  // captured back when the closure was created.
+  const effectiveStatusRef = useRef(effectiveStatus)
+  useEffect(() => {
+    effectiveStatusRef.current = effectiveStatus
+  })
 
   useEffect(() => {
-    // A topic/status change (or an ingest:done firing mid-flight) can
-    // start a new request before an older one resolves; ignore lets a
-    // stale response arriving after that lose the race instead of
-    // overwriting the current filter's items with the previous one's.
+    // A topic/status change (or an ingest:done firing mid-flight, which
+    // can itself start a second load before the first settles) can leave
+    // multiple requests in flight for this effect at once; requestVersion
+    // ensures only the most recently *started* request's response is
+    // applied, and ignore (set on cleanup) drops any response arriving
+    // after a topic/status change moved on entirely.
     let ignore = false
+    let requestVersion = 0
     function load() {
+      const version = ++requestVersion
       listKnowledgeItems(selectedTopic ?? '', effectiveStatus)
         .then((result) => {
-          if (!ignore) setItems(result)
+          if (!ignore && version === requestVersion) setItems(result)
         })
         .catch(() => {
-          if (!ignore) setError('Failed to load knowledge items.')
+          if (!ignore && version === requestVersion) setError('Failed to load knowledge items.')
         })
     }
     load()
@@ -132,8 +145,12 @@ function KnowledgeExplorerScreen({ selectedTopic, mode }: KnowledgeExplorerScree
   // active status filter — e.g. approving a draft while the Review tab's
   // filter is fixed to draft. Drop it from the list instead of patching it
   // in place so it does not linger under a filter it no longer matches.
+  // Reads the filter via effectiveStatusRef (see above) rather than the
+  // effectiveStatus captured when the calling closure started, so a
+  // filter change made while the mutation was in flight is respected.
   function patchItem(updated: KnowledgeItem) {
-    const noLongerMatches = effectiveStatus !== '' && updated.status !== effectiveStatus
+    const currentStatus = effectiveStatusRef.current
+    const noLongerMatches = currentStatus !== '' && updated.status !== currentStatus
     setItems((previous) =>
       noLongerMatches
         ? previous.filter((item) => item.id !== updated.id)

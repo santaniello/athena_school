@@ -37,6 +37,11 @@ export function IngestProgressDialog({ open, folderPath, onClose }: IngestProgre
 
   useEffect(() => {
     if (!open) return
+    // Guards the catch below against a stale rejection: if the dialog is
+    // closed and reopened for another folder before the old importNotes
+    // call settles, that old rejection must not set errorMessage on the
+    // new import's state.
+    let active = true
 
     const unsubscribeProgress = onIngestProgress(setProgress)
     const unsubscribeDone = onIngestDone(setSummary)
@@ -49,10 +54,12 @@ export function IngestProgressDialog({ open, folderPath, onClose }: IngestProgre
     // no ingest:error ever fires; fall back to a generic message so the
     // dialog still becomes closable rather than staying stuck forever.
     void importNotes(folderPath).catch(() => {
+      if (!active) return
       setErrorMessage((current) => current || 'Failed to import notes. Please try again.')
     })
 
     return () => {
+      active = false
       unsubscribeProgress()
       unsubscribeDone()
       unsubscribeError()

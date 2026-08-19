@@ -190,6 +190,37 @@ describe('IngestProgressDialog', () => {
     void events
   })
 
+  it('ignores a stale rejection from a closed-and-reopened import for another folder', async () => {
+    // Given an import for one folder that has not settled yet
+    const events = setupSubscriptions()
+    let rejectFirst: (error: Error) => void = () => {}
+    const firstImport = new Promise<void>((_resolve, reject) => {
+      rejectFirst = reject
+    })
+    firstImport.catch(() => {}) // avoid an unhandled-rejection warning from this local reference
+    vi.mocked(importNotes).mockReturnValueOnce(firstImport)
+    const { rerender } = render(
+      <IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />,
+    )
+
+    // When the dialog is closed, then reopened for a different folder
+    // whose import is still pending, and only then does the first
+    // folder's import reject
+    rerender(<IngestProgressDialog open={false} folderPath="/home/user/notes" onClose={vi.fn()} />)
+    vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
+    rerender(<IngestProgressDialog open folderPath="/home/user/other" onClose={vi.fn()} />)
+    await waitFor(() => expect(importNotes).toHaveBeenCalledWith('/home/user/other'))
+    await act(async () => {
+      rejectFirst(new Error('stale IPC failure'))
+      await Promise.resolve()
+    })
+
+    // Then the new import's state is unaffected by the stale rejection
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByText('Starting...')).toBeInTheDocument()
+    void events
+  })
+
   it('has no way to dismiss it while the import is still running', () => {
     // Given a dialog mid-import
     setupSubscriptions()

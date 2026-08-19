@@ -112,6 +112,70 @@ describe('KnowledgeExplorerScreen', () => {
     expect(screen.getByText('Pods')).toBeInTheDocument()
   })
 
+  it('ignores a stale response from the initial load when ingest:done triggers a second load first', async () => {
+    // Given the initial load still pending
+    let doneHandler: () => void = () => {}
+    vi.mocked(onIngestDone).mockImplementation((handler) => {
+      doneHandler = handler as () => void
+      return vi.fn()
+    })
+    let resolveInitial: (items: KnowledgeItem[]) => void = () => {}
+    const initialLoad = new Promise<KnowledgeItem[]>((resolve) => {
+      resolveInitial = resolve
+    })
+    vi.mocked(listKnowledgeItems).mockReturnValueOnce(initialLoad)
+    vi.mocked(listKnowledgeItems).mockResolvedValueOnce([
+      testItem({ id: 'r', concept: 'Refetched' }),
+    ])
+    render(<KnowledgeExplorerScreen selectedTopic={null} mode="explorer" />)
+    await waitFor(() => expect(listKnowledgeItems).toHaveBeenCalledTimes(1))
+
+    // When a notes import completes before the initial load resolves,
+    // starting a second load that settles first
+    await act(() => doneHandler())
+    await screen.findByText('Refetched')
+
+    // Then the stale initial response arriving afterward is ignored,
+    // instead of overwriting the newer refetched items
+    await act(async () => {
+      resolveInitial([testItem({ id: 'i', concept: 'Initial' })])
+    })
+    expect(screen.queryByText('Initial')).not.toBeInTheDocument()
+    expect(screen.getByText('Refetched')).toBeInTheDocument()
+  })
+
+  it('checks the filter current when a mutation resolves, not the one captured when it started', async () => {
+    // Given a draft item, with the status filter set to Draft
+    stubIngestDone()
+    const draftItem = testItem({ status: 'draft' })
+    vi.mocked(listKnowledgeItems).mockResolvedValue([draftItem])
+    let resolveApprove: (item: KnowledgeItem) => void = () => {}
+    vi.mocked(approveKnowledgeItem).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveApprove = resolve
+      }),
+    )
+    const user = userEvent.setup()
+    render(<KnowledgeExplorerScreen selectedTopic={null} mode="explorer" />)
+    await user.click(await screen.findByRole('combobox', { name: 'Status:' }))
+    await user.click(await screen.findByRole('option', { name: 'Draft' }))
+    await user.click(await screen.findByText('Channels'))
+
+    // When approving it (left pending), then the filter is switched to
+    // "All" before that approval resolves
+    await user.click(screen.getByRole('button', { name: 'Approve' }))
+    await user.click(screen.getByRole('combobox', { name: 'Status:' }))
+    await user.click(await screen.findByRole('option', { name: 'All' }))
+    await act(async () => {
+      resolveApprove({ ...draftItem, status: 'approved' })
+    })
+
+    // Then the item stays visible under the current "All" filter instead
+    // of being dropped for no longer matching the "Draft" filter that was
+    // active only when the approval started
+    expect(screen.getAllByText('Channels').length).toBeGreaterThan(0)
+  })
+
   it('forces the status filter to draft and hides the picker in review mode', async () => {
     // Given the review-mode Explorer
     stubIngestDone()
