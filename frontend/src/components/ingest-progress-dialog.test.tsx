@@ -175,6 +175,21 @@ describe('IngestProgressDialog', () => {
     expect(await findFooterCloseButton()).toBeInTheDocument()
   })
 
+  it('falls back to a closable error state when importNotes rejects without an ingest:error event', async () => {
+    // Given an import whose binding call itself fails before ever
+    // emitting ingest:error (e.g. an IPC-level failure)
+    const events = setupSubscriptions()
+    vi.mocked(importNotes).mockReturnValueOnce(Promise.reject(new Error('IPC failure')))
+    render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />)
+
+    // Then a generic error is shown and the dialog still becomes closable
+    expect(
+      await screen.findByText('Failed to import notes. Please try again.'),
+    ).toBeInTheDocument()
+    expect(await findFooterCloseButton()).toBeInTheDocument()
+    void events
+  })
+
   it('has no way to dismiss it while the import is still running', () => {
     // Given a dialog mid-import
     setupSubscriptions()

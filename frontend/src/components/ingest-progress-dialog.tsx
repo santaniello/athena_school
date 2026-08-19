@@ -42,9 +42,15 @@ export function IngestProgressDialog({ open, folderPath, onClose }: IngestProgre
     const unsubscribeDone = onIngestDone(setSummary)
     const unsubscribeError = onIngestError(setErrorMessage)
 
-    // ingest:error has already been emitted with the details by the time
-    // this rejects; the catch only prevents an unhandled promise rejection.
-    void importNotes(folderPath).catch(() => {})
+    // ingest:error is normally emitted with the details before this
+    // rejects (see App.ImportNotes), so the catch is usually just
+    // preventing an unhandled promise rejection. But if the binding call
+    // itself fails before ever reaching that emit — e.g. an IPC error —
+    // no ingest:error ever fires; fall back to a generic message so the
+    // dialog still becomes closable rather than staying stuck forever.
+    void importNotes(folderPath).catch(() => {
+      setErrorMessage((current) => current || 'Failed to import notes. Please try again.')
+    })
 
     return () => {
       unsubscribeProgress()
