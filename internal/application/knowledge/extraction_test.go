@@ -137,6 +137,40 @@ func TestExtractFromSession_requiresConfirmationBeforeCallingLLMForTruncatedTran
 	assert.Len(t, []rune(exactTranscript), maxTranscriptChars)
 }
 
+func TestExtractFromSession_returnsErrorWithoutCallingLLMWhenNoCompleteMessageFits(t *testing.T) {
+	// Given a non-empty session whose newest message alone exceeds the transcript limit
+	ctx := context.Background()
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	configs := configmocks.NewMockStore(t)
+	sessions.EXPECT().GetByID(ctx, "session-1").Return(domainstudy.Session{ID: "session-1", Topic: "Go"}, nil).Twice()
+	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{{
+		Role:    domainstudy.RoleUser,
+		Content: strings.Repeat("x", maxTranscriptChars),
+	}}, nil).Twice()
+	configs.EXPECT().Load().Return(domainconfig.Config{MaxKnowledgeExtractionItems: 8}, nil).Twice()
+	service := NewService(
+		knowledgemocks.NewMockRepository(t),
+		sessions,
+		messages,
+		llmmocks.NewMockProvider(t),
+		configs,
+	)
+
+	// When extraction is invoked before and after truncation is confirmed
+	firstItems, firstTruncated, firstErr := service.ExtractFromSession(ctx, "session-1", false)
+	items, truncated, err := service.ExtractFromSession(ctx, "session-1", true)
+
+	// Then confirmation is requested first, followed by an explicit error without an LLM call
+	require.NoError(t, firstErr)
+	assert.Nil(t, firstItems)
+	assert.True(t, firstTruncated)
+	assert.ErrorIs(t, err, ErrTranscriptTooLarge)
+	assert.EqualError(t, err, "no complete transcript message fits within the extraction limit")
+	assert.Nil(t, items)
+	assert.True(t, truncated)
+}
+
 func TestExtractFromSession_returnsMalformedExtractionForUnparseablePayload(t *testing.T) {
 	// Given a non-empty session and an unparseable LLM response
 	ctx := context.Background()

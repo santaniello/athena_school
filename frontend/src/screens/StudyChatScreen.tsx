@@ -9,6 +9,16 @@ import { MessageBubble } from '@/components/message-bubble'
 import { ThinkingIndicator } from '@/components/thinking-indicator'
 import { KnowledgeExtractionDialog } from '@/components/knowledge-extraction-dialog'
 import { TranscriptTruncationDialog } from '@/components/transcript-truncation-dialog'
+
+const TRANSCRIPT_TOO_LARGE_ERROR = 'no complete transcript message fits within the extraction limit'
+
+function extractionErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) return 'Falha ao extrair conhecimento.'
+  if (error.message.includes(TRANSCRIPT_TOO_LARGE_ERROR)) {
+    return 'A mensagem mais recente é grande demais para ser processada integralmente.'
+  }
+  return error.message
+}
 import { extractKnowledge, type KnowledgeItem } from '@/lib/knowledge'
 import {
   onStudyChunk,
@@ -177,7 +187,7 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
       setExtractedItems(result.items)
       setShowExtractionDialog(true)
     } catch (err) {
-      setExtractionError(err instanceof Error ? err.message : 'Falha ao extrair conhecimento.')
+      setExtractionError(extractionErrorMessage(err))
     } finally {
       setIsExtracting(false)
     }

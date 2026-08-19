@@ -756,6 +756,25 @@ describe('StudyChatScreen — knowledge extraction', () => {
     // Then a user-safe fallback is shown
     expect(await screen.findByText('Falha ao extrair conhecimento.')).toBeInTheDocument()
   })
+
+  it('explains when no complete transcript message fits the extraction limit', async () => {
+    // Given a session whose newest complete message is too large for extraction
+    await renderSettledSession()
+    vi.mocked(extractKnowledge).mockRejectedValueOnce(
+      new Error('no complete transcript message fits within the extraction limit'),
+    )
+    const user = userEvent.setup()
+
+    // When extracting knowledge
+    await user.click(screen.getByRole('button', { name: 'Extrair conhecimento' }))
+
+    // Then the internal error is translated into actionable Portuguese UI text
+    expect(
+      await screen.findByText(
+        'A mensagem mais recente é grande demais para ser processada integralmente.',
+      ),
+    ).toBeInTheDocument()
+  })
 })
 
 // jsdom has no layout engine: scrollHeight/clientHeight are always 0 and

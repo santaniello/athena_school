@@ -65,6 +65,7 @@ This is the safety ceiling on how many candidates a single extraction call will 
 - Default: `8`, matching this spec's original behavior for anyone who never touches the setting.
 - User-editable in a new "Knowledge Extraction" section of `SettingsScreen.tsx`, alongside the existing "Profile" and "OpenRouter key" sections.
 - Validated range 1–20 (both in the settings form and defensively in Go) so the field can't be set to something nonsensical (0, or a value large enough to blow the prompt/modal back up).
+- Saving a new OpenRouter key preserves this setting. Only a missing `config.yaml` is treated as a new configuration; read or YAML-decoding failures abort without overwriting the existing file.
 - `knowledge.Service` takes `configs domainconfig.Store` as a constructor dependency and calls `configs.Load()` at the start of `ExtractFromSession` to read the current value, used both to tell the LLM how many items to return at most (in the prompt) and to truncate an oversized envelope in Go (validation step 3).
 
 ## Use cases — `internal/application/knowledge/`
@@ -109,16 +110,14 @@ func (s *Service) ExtractFromSession(ctx context.Context, sessionID string, conf
 // SaveDrafts persists the items the user confirmed, re-validating every
 // field and re-stamping ID/Source/Status/timestamps server-side.
 //
-// Items are saved sequentially, in the given order. If Repository.Save
-// fails for one item, SaveDrafts stops immediately and returns how many
-// items were successfully persisted *before* the failure — since
-// processing is strictly sequential, this count doubles as an index: the
-// first partialCount items in the input were saved, the one at that index
-// caused the error, and everything after it was never attempted. The
-// frontend uses this to mark saved items and, on retry, must resend only
-// the unsaved remainder — resending already-saved items would duplicate
-// them, since SaveDrafts always regenerates IDs.
-func (s *Service) SaveDrafts(ctx context.Context, items []domainknowledge.Item) (partialCount int, err error)
+// Items are saved sequentially, in the given order. Invalid items are
+// skipped, so a count cannot identify which inputs were persisted. The
+// returned indices identify every successfully saved input exactly. If
+// Repository.Save fails, SaveDrafts stops immediately and returns the
+// indices accumulated before the failure alongside the error. The
+// frontend uses those indices to retry only unsaved inputs — resending an
+// already-saved item would duplicate it because SaveDrafts regenerates IDs.
+func (s *Service) SaveDrafts(ctx context.Context, items []domainknowledge.Item) (savedIndices []int, err error)
 ```
 
 This is the base 2.2 contract. After 2.9, the effective return type becomes
@@ -152,6 +151,8 @@ User: <message content>
 
 Truncation to `maxTranscriptChars = 24000` keeps **whole messages only**: walk the session's messages from most recent to oldest, accumulating rendered length, and stop *before* adding a message that would push the total over the limit — that message and everything older is dropped entirely. A message is never sliced mid-content; wasting a fraction of the budget is preferable to feeding the model a truncated sentence, which risks it extracting a concept from a corrupted fragment.
 
+If the history is non-empty but no complete message fits — for example, when the newest message alone exceeds the limit — the first call still returns the truncation confirmation signal. After confirmation, extraction returns `ErrTranscriptTooLarge` **without calling the LLM**. The UI explains that the newest message is too large to process in full; sending an instruction-only prompt would spend tokens and could produce candidates unrelated to the session.
+
 `ExtractFromSession` reports whether this truncation happened via its `truncated` return value, so the caller can gate on user confirmation before spending an LLM call (see "Flow" and "Use cases" above). The confirmation modal is a plain yes/no prompt — no message count or date range is shown:
 
 > "This session is long — only the most recent messages will be considered for extraction. Continue?" — **Yes** / **No**
@@ -183,23 +184,23 @@ Malformed-JSON handling is split by layer: the application returns `ErrMalformed
 
 `SaveDrafts` persists items **sequentially**, in the order given, calling `Repository.Save` once per item — there is no batch-save method and no cross-item transaction (no other write path in this codebase uses one today, and introducing one would be new infrastructure for a rare failure mode: a mid-batch SQLite error across at most `MaxKnowledgeExtractionItems` items).
 
-If `Repository.Save` fails for one item, `SaveDrafts` **aborts immediately** and returns the error, along with `partialCount` — how many items were actually persisted before the failure. This is a deliberate choice among three options:
+If `Repository.Save` fails for one item, `SaveDrafts` **aborts immediately** and returns the error, along with `savedIndices` — the input positions actually persisted before the failure. This is a deliberate choice among three options:
 - aborting and propagating the error (chosen) surfaces genuine infrastructure faults (disk full, DB locked) instead of hiding them;
 - swallowing the error and treating it like a validation skip was rejected — a repository failure is not an expected outcome the way an invalid LLM field is, and hiding it would leave a real problem invisible;
 - wrapping every `Save` in one transaction (true all-or-nothing atomicity) was rejected as unproven infrastructure for a corner case, given no other write path needs it today.
 
-Because processing is strictly sequential, `partialCount` is enough for the frontend to know **exactly which** items succeeded (the first `partialCount` in the array it sent) without any extra bookkeeping from the backend. The frontend uses this to mark those items as saved in the dialog and, if the user retries, resends **only the unsaved remainder** — resending the full original list would re-insert the already-saved items under new (regenerated) IDs, duplicating them.
+Indices are required because validation skips invalid items and continues. For input `[invalid, saved, failed]`, a count of one would incorrectly identify the invalid first input as persisted; `savedIndices = [1]` identifies the real success. The desktop binding always resolves a structured `KnowledgeSaveResult{SavedIndices, Error}` so Wails does not discard partial-success metadata when a Go error becomes a rejected promise. The frontend marks exactly those indices and, on retry, resends only the unsaved inputs.
 
 ## Tasks
 
 - [ ] `internal/domain/config/config.go` — add `MaxKnowledgeExtractionItems int` to `Config`, defaulting to 8; validate range 1–20
 - [ ] `internal/domain/knowledge/item.go` — add `Validate()` with `ErrTopicRequired` / `ErrConceptRequired` / `ErrDefinitionRequired`, mirroring `profile.UserProfile.Validate`
 - [ ] `internal/application/knowledge/service.go` — `Service{items, sessions, messages, llm, configs}` + `NewService`
-- [ ] `internal/application/knowledge/extraction.go` — `ExtractFromSession` (with `confirmedTruncation`/`truncated`), `SaveDrafts` (with `partialCount`)
+- [ ] `internal/application/knowledge/extraction.go` — `ExtractFromSession` (with `confirmedTruncation`/`truncated`), `SaveDrafts` (with exact `savedIndices`)
 - [ ] `internal/application/knowledge/prompt.go` — extraction prompt builder; flattened transcript rendering with whole-message truncation; item count interpolated from config
 - [ ] `internal/application/knowledge/parse.go` — `extractJSONObject`, envelope decoding, caps (using the configured max), per-item validation
-- [ ] `internal/application/knowledge/errors.go` — `ErrMalformedExtraction`
-- [ ] `internal/interfaces/desktop/knowledge.go` — `ExtractKnowledge(sessionID string, confirmedTruncation bool) (ExtractionResult, error)` returning a wrapper `{Items []KnowledgeItemResult, Truncated bool}` (same pattern as `ResumeStudySession`'s wrapper result), `SaveExtractedKnowledge([]KnowledgeItemInput) (int, error)`; both `KnowledgeItemResult` and `KnowledgeItemInput` mirror `domainknowledge.Item` in full (including `Properties`/`TradeOffs`/`RelatedConcepts`), so those fields survive the round trip even though the dialog never renders them; `App` gains a `knowledge` field and `NewApp` a parameter (mechanical `nil` updates across the desktop test files)
+- [ ] `internal/application/knowledge/errors.go` — `ErrMalformedExtraction`, `ErrTranscriptTooLarge`
+- [ ] `internal/interfaces/desktop/knowledge.go` — `ExtractKnowledge(sessionID string, confirmedTruncation bool) (ExtractionResult, error)` returning a wrapper `{Items []KnowledgeItemResult, Truncated bool}` (same pattern as `ResumeStudySession`'s wrapper result), `SaveExtractedKnowledge([]KnowledgeItemInput) KnowledgeSaveResult` returning `{SavedIndices []int, Error string}` so partial successes survive the Wails boundary; both `KnowledgeItemResult` and `KnowledgeItemInput` mirror `domainknowledge.Item` in full (including `Properties`/`TradeOffs`/`RelatedConcepts`), so those fields survive the round trip even though the dialog never renders them; `App` gains a `knowledge` field and `NewApp` a parameter (mechanical `nil` updates across the desktop test files)
 - [ ] `internal/interfaces/desktop/settings.go` — read/update `MaxKnowledgeExtractionItems` alongside the existing config fields
 - [ ] `frontend/src/lib/knowledge.ts` — binding wrappers
 - [ ] `frontend/src/components/knowledge-extraction-dialog.tsx` — shadcn `Dialog`, one checkbox per item (all checked), buttons **[Save as drafts]** (disabled when zero items are checked) and **[Ignore]**; empty result shows "No new knowledge found"; on a partial-save error, marks the already-saved items and retries only the remainder. The dialog **displays only `concept` and `definition`** per candidate, but keeps the full candidate object (including `properties`/`tradeOffs`/`relatedConcepts`) in component state and resends it unmodified on "Save as drafts" — those fields are never shown in this modal, but must not be dropped, or every saved draft would silently lose them
@@ -225,7 +226,7 @@ Because processing is strictly sequential, `partialCount` is enough for the fron
 - A payload with more items than `MaxKnowledgeExtractionItems` is truncated to that many, keeping the first N in returned order, regardless of what the prompt asked for
 - `MaxKnowledgeExtractionItems` is configurable in Settings, defaults to 8, and is rejected outside the 1–20 range
 - `SaveDrafts` regenerates IDs, ignoring any ID supplied by the caller
-- A `SaveDrafts` call that fails partway persists every item before the failure, returns that count, and a retry that resends only the unsaved remainder does not duplicate the already-saved items
+- A `SaveDrafts` call that fails partway returns the exact persisted input indices, including when invalid entries were skipped, and a retry that resends only unsaved inputs does not duplicate already-saved items
 - A genuine extraction failure (e.g. missing API key) surfaces as an inline error, distinct from the "No new knowledge found" empty-result modal
 - After 2.9, every saved candidate includes at least one validated evidence snapshot from the source session
 - After 2.10/2.11, duplicate candidates are reconciled rather than silently inserted as independent items

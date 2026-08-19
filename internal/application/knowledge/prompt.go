@@ -9,8 +9,11 @@ import (
 
 const maxTranscriptChars = 24000
 
-func buildExtractionPrompt(history []domainstudy.Message, maxItems int) (string, bool) {
+func buildExtractionPrompt(history []domainstudy.Message, maxItems int) (string, bool, error) {
 	transcript, truncated := renderTranscript(history, maxTranscriptChars)
+	if transcript == "" {
+		return "", truncated, ErrTranscriptTooLarge
+	}
 	prompt := fmt.Sprintf(`You extract durable study concepts from a transcript.
 Return only valid JSON, with no markdown fences or commentary, using exactly this envelope schema:
 {"items":[{"concept":"string","definition":"string","properties":["string"],"trade_offs":["string"],"related_concepts":["string"]}]}
@@ -18,7 +21,7 @@ Return at most %d items. Each definition must be self-contained and must not mer
 
 Transcript:
 %s`, maxItems, transcript)
-	return prompt, truncated
+	return prompt, truncated, nil
 }
 
 func renderTranscript(history []domainstudy.Message, maxChars int) (string, bool) {

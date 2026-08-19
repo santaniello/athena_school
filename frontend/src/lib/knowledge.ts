@@ -28,6 +28,11 @@ export interface KnowledgeExtractionSettings {
   maxKnowledgeExtractionItems: number
 }
 
+export interface KnowledgeSaveResult {
+  savedIndices: number[]
+  error: string
+}
+
 export async function extractKnowledge(
   sessionId: string,
   confirmedTruncation: boolean,
@@ -35,16 +40,8 @@ export async function extractKnowledge(
   return ExtractKnowledge(sessionId, confirmedTruncation)
 }
 
-export async function saveExtractedKnowledge(items: KnowledgeItem[]): Promise<number> {
-  try {
-    return await SaveExtractedKnowledge(items)
-  } catch (caught) {
-    if (caught instanceof Error) {
-      const match = caught.message.match(/knowledge save failed after (\d+) items:/)
-      if (match) Object.assign(caught, { partialCount: Number(match[1]) })
-    }
-    throw caught
-  }
+export async function saveExtractedKnowledge(items: KnowledgeItem[]): Promise<KnowledgeSaveResult> {
+  return SaveExtractedKnowledge(items)
 }
 
 export async function getKnowledgeExtractionSettings(): Promise<KnowledgeExtractionSettings> {

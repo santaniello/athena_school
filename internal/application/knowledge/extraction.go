@@ -32,9 +32,12 @@ func (s *Service) ExtractFromSession(ctx context.Context, sessionID string, conf
 	if err := cfg.Validate(); err != nil {
 		return nil, false, err
 	}
-	prompt, truncated := buildExtractionPrompt(history, cfg.MaxKnowledgeExtractionItems)
+	prompt, truncated, err := buildExtractionPrompt(history, cfg.MaxKnowledgeExtractionItems)
 	if truncated && !confirmedTruncation {
 		return nil, true, nil
+	}
+	if err != nil {
+		return nil, truncated, err
 	}
 	response, err := s.llm.Chat(ctx, domainllm.ChatRequest{
 		SessionID: sessionID,
@@ -49,9 +52,9 @@ func (s *Service) ExtractFromSession(ctx context.Context, sessionID string, conf
 }
 
 // SaveDrafts revalidates and persists confirmed candidates sequentially.
-func (s *Service) SaveDrafts(ctx context.Context, items []domainknowledge.Item) (int, error) {
-	saved := 0
-	for _, input := range items {
+func (s *Service) SaveDrafts(ctx context.Context, items []domainknowledge.Item) ([]int, error) {
+	savedIndices := make([]int, 0, len(items))
+	for index, input := range items {
 		now := time.Now().UTC()
 		item := domainknowledge.Item{
 			ID:              uuid.NewString(),
@@ -70,9 +73,9 @@ func (s *Service) SaveDrafts(ctx context.Context, items []domainknowledge.Item) 
 			continue
 		}
 		if err := s.items.Save(ctx, item); err != nil {
-			return saved, err
+			return savedIndices, err
 		}
-		saved++
+		savedIndices = append(savedIndices, index)
 	}
-	return saved, nil
+	return savedIndices, nil
 }

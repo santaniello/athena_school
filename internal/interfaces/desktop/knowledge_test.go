@@ -71,7 +71,7 @@ func TestApp_ExtractKnowledge_returnsEmptyResultForMalformedLLMResponse(t *testi
 	assert.False(t, result.Truncated)
 }
 
-func TestApp_SaveExtractedKnowledge_preservesFullInputAndReturnsCount(t *testing.T) {
+func TestApp_SaveExtractedKnowledge_preservesFullInputAndReturnsSavedIndices(t *testing.T) {
 	// Given a knowledge service backed by a repository
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
@@ -83,11 +83,37 @@ func TestApp_SaveExtractedKnowledge_preservesFullInputAndReturnsCount(t *testing
 	app.Startup(ctx)
 
 	// When saving a full desktop candidate
-	count, err := app.SaveExtractedKnowledge([]KnowledgeItemInput{{
+	result := app.SaveExtractedKnowledge([]KnowledgeItemInput{{
 		Topic: "Go", Concept: "Channels", Definition: "Typed conduits.", Properties: []string{"typed"},
 	}})
 
-	// Then it is persisted and the count is returned
-	require.NoError(t, err)
-	assert.Equal(t, 1, count)
+	// Then it is persisted and its exact input index is returned
+	assert.Equal(t, []int{0}, result.SavedIndices)
+	assert.Empty(t, result.Error)
+}
+
+func TestApp_SaveExtractedKnowledge_returnsExactIndicesAlongsidePartialFailure(t *testing.T) {
+	// Given an invalid input followed by one save and one repository failure
+	ctx := context.Background()
+	repository := knowledgemocks.NewMockRepository(t)
+	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
+		return item.Concept == "saved"
+	})).Return(nil).Once()
+	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
+		return item.Concept == "failed"
+	})).Return(assert.AnError).Once()
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t))
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil)
+	app.Startup(ctx)
+
+	// When saving through the desktop adapter
+	result := app.SaveExtractedKnowledge([]KnowledgeItemInput{
+		{Topic: "Go", Concept: "invalid", Definition: ""},
+		{Topic: "Go", Concept: "saved", Definition: "persisted"},
+		{Topic: "Go", Concept: "failed", Definition: "not persisted"},
+	})
+
+	// Then the resolved result carries both the precise success and the failure
+	assert.Equal(t, []int{1}, result.SavedIndices)
+	assert.Contains(t, result.Error, assert.AnError.Error())
 }

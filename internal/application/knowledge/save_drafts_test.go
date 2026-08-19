@@ -33,14 +33,14 @@ func TestSaveDrafts_revalidatesAndRegeneratesServerOwnedFields(t *testing.T) {
 	}
 
 	// When saving the candidates
-	count, err := service.SaveDrafts(ctx, input)
+	savedIndices, err := service.SaveDrafts(ctx, input)
 
 	// Then only the valid item is persisted and every server-owned field is replaced
 	require.NoError(t, err)
-	assert.Equal(t, 1, count)
+	assert.Equal(t, []int{0}, savedIndices)
 }
 
-func TestSaveDrafts_stopsAtRepositoryFailureAndReturnsPartialCount(t *testing.T) {
+func TestSaveDrafts_stopsAtRepositoryFailureAndReturnsSavedIndices(t *testing.T) {
 	// Given three valid candidates and a repository that fails on the second
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
@@ -55,9 +55,35 @@ func TestSaveDrafts_stopsAtRepositoryFailureAndReturnsPartialCount(t *testing.T)
 	}
 
 	// When saving the candidates
-	count, err := service.SaveDrafts(ctx, input)
+	savedIndices, err := service.SaveDrafts(ctx, input)
 
 	// Then processing aborts at the failed item and reports only the saved prefix
 	assert.ErrorIs(t, err, saveErr)
-	assert.Equal(t, 1, count)
+	assert.Equal(t, []int{0}, savedIndices)
+}
+
+func TestSaveDrafts_returnsExactSavedIndicesWhenInvalidItemsPrecedeFailure(t *testing.T) {
+	// Given an invalid item followed by one successful save and one repository failure
+	ctx := context.Background()
+	repository := knowledgemocks.NewMockRepository(t)
+	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
+		return item.Concept == "saved"
+	})).Return(nil).Once()
+	saveErr := errors.New("database locked")
+	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
+		return item.Concept == "failed"
+	})).Return(saveErr).Once()
+	service := NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t))
+	input := []domainknowledge.Item{
+		{Topic: "Go", Concept: "invalid", Definition: ""},
+		{Topic: "Go", Concept: "saved", Definition: "persisted"},
+		{Topic: "Go", Concept: "failed", Definition: "not persisted"},
+	}
+
+	// When saving the candidates
+	savedIndices, err := service.SaveDrafts(ctx, input)
+
+	// Then the result identifies the actual persisted input rather than a prefix count
+	assert.ErrorIs(t, err, saveErr)
+	assert.Equal(t, []int{1}, savedIndices)
 }

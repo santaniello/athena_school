@@ -51,14 +51,14 @@ describe('knowledge bindings', () => {
         updatedAt: '2026-08-18T10:00:00Z',
       },
     ]
-    vi.mocked(SaveExtractedKnowledge).mockResolvedValueOnce(1)
+    vi.mocked(SaveExtractedKnowledge).mockResolvedValueOnce({ savedIndices: [0], error: '' })
 
     // When saving it
-    const count = await saveExtractedKnowledge(items)
+    const result = await saveExtractedKnowledge(items)
 
     // Then no fields are dropped
     expect(SaveExtractedKnowledge).toHaveBeenCalledWith(items)
-    expect(count).toBe(1)
+    expect(result).toEqual({ savedIndices: [0], error: '' })
   })
 
   it('reads and updates extraction settings', async () => {
@@ -77,20 +77,24 @@ describe('knowledge bindings', () => {
     expect(UpdateKnowledgeExtractionSettings).toHaveBeenCalledWith(12)
   })
 
-  it('exposes the partial count from a failed save for safe retry', async () => {
-    // Given the desktop binding reports one saved item before failure
-    vi.mocked(SaveExtractedKnowledge).mockRejectedValueOnce(
-      new Error('knowledge save failed after 1 items: database locked'),
-    )
+  it('returns exact saved indices alongside a partial failure', async () => {
+    // Given the desktop binding reports a non-prefix save before failure
+    vi.mocked(SaveExtractedKnowledge).mockResolvedValueOnce({
+      savedIndices: [1],
+      error: 'knowledge save failed: database locked',
+    })
 
     // When saving candidates
-    const promise = saveExtractedKnowledge([])
+    const result = await saveExtractedKnowledge([])
 
-    // Then the rejection carries a typed partialCount for the dialog
-    await expect(promise).rejects.toMatchObject({ partialCount: 1 })
+    // Then the typed result is forwarded without parsing error text
+    expect(result).toEqual({
+      savedIndices: [1],
+      error: 'knowledge save failed: database locked',
+    })
   })
 
-  it('preserves an ordinary save error without inventing a partial count', async () => {
+  it('preserves an ordinary binding rejection without inventing save metadata', async () => {
     // Given an unrelated backend failure
     const failure = new Error('database unavailable')
     vi.mocked(SaveExtractedKnowledge).mockRejectedValueOnce(failure)
@@ -112,18 +116,5 @@ describe('knowledge bindings', () => {
 
     // Then the original rejection is propagated unchanged
     await expect(promise).rejects.toBe('unavailable')
-  })
-
-  it('parses the full multi-digit partial save count', async () => {
-    // Given a backend failure after more than nine persisted items
-    vi.mocked(SaveExtractedKnowledge).mockRejectedValueOnce(
-      new Error('knowledge save failed after 12 items: database locked'),
-    )
-
-    // When saving candidates
-    const promise = saveExtractedKnowledge([])
-
-    // Then every digit contributes to the partial count
-    await expect(promise).rejects.toMatchObject({ partialCount: 12 })
   })
 })

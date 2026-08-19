@@ -17,8 +17,6 @@ interface KnowledgeExtractionDialogProps {
   onClose: () => void
 }
 
-type PartialSaveError = Error & { partialCount?: number }
-
 export function KnowledgeExtractionDialog({
   open,
   items,
@@ -50,17 +48,20 @@ export function KnowledgeExtractionDialog({
     setIsSaving(true)
     setSaveError('')
     try {
-      await saveExtractedKnowledge(pendingIndices.map((index) => items[index]))
+      const result = await saveExtractedKnowledge(pendingIndices.map((index) => items[index]))
+      const persistedIndices = result.savedIndices
+        .map((index) => pendingIndices[index])
+        .filter((index): index is number => index !== undefined)
+      if (persistedIndices.length > 0) {
+        setSaved((previous) => new Set([...previous, ...persistedIndices]))
+      }
+      if (result.error) {
+        setSaveError(result.error)
+        return
+      }
       onClose()
     } catch (caught) {
-      const error: PartialSaveError =
-        caught instanceof Error
-          ? (caught as PartialSaveError)
-          : (new Error('Falha ao salvar os rascunhos.') as PartialSaveError)
-      const partialCount = Math.max(0, Math.min(error.partialCount ?? 0, pendingIndices.length))
-      if (partialCount > 0) {
-        setSaved((previous) => new Set([...previous, ...pendingIndices.slice(0, partialCount)]))
-      }
+      const error = caught instanceof Error ? caught : new Error('Falha ao salvar os rascunhos.')
       setSaveError(error.message)
     } finally {
       setIsSaving(false)

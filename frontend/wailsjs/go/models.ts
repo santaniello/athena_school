@@ -124,6 +124,20 @@ export namespace desktop {
 	        this.updatedAt = source["updatedAt"];
 	    }
 	}
+	export class KnowledgeSaveResult {
+	    savedIndices: number[];
+	    error: string;
+
+	    static createFrom(source: any = {}) {
+	        return new KnowledgeSaveResult(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.savedIndices = source["savedIndices"];
+	        this.error = source["error"];
+	    }
+	}
 	
 	export class LoginResult {
 	    accountId: string;
@@ -232,4 +246,3 @@ export namespace desktop {
 	}
 
 }
-

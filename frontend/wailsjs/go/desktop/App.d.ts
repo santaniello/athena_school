@@ -41,7 +41,7 @@ export function ResetLocalAccount(arg1:string):Promise<void>;
 
 export function ResumeStudySession(arg1:string):Promise<desktop.StudySessionHistoryResult>;
 
-export function SaveExtractedKnowledge(arg1:Array<desktop.KnowledgeItemInput>):Promise<number>;
+export function SaveExtractedKnowledge(arg1:Array<desktop.KnowledgeItemInput>):Promise<desktop.KnowledgeSaveResult>;
 
 export function SaveOpenRouterKey(arg1:string):Promise<void>;
 

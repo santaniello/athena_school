@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"strings"
 
 	domainconfig "github.com/santaniello/athena/internal/domain/config"
@@ -25,6 +26,9 @@ func (s *Service) SaveOpenRouterKey(ctx context.Context, key string) error {
 
 	cfg, loadErr := s.config.Load()
 	if loadErr != nil {
+		if !errors.Is(loadErr, fs.ErrNotExist) {
+			return fmt.Errorf("onboarding: loading config: %w", loadErr)
+		}
 		cfg = domainconfig.Config{}
 	}
 	cfg = cfg.WithDefaults()

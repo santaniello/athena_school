@@ -393,7 +393,7 @@ O domínio `study` não tem conceito de fim de sessão (`Session` não tem `Ende
 
 - [ ] `internal/application/knowledge/extraction.go` — `ExtractFromSession` devolve candidatos **não persistidos**; `SaveDrafts` grava
 - [ ] Prompt de extração estruturado → envelope `{"items":[...]}`, não array nu
-- [ ] Validação em Go antes de persistir: tetos de tamanho, item inválido é pulado sem descartar os válidos, `SaveDrafts` regenera o ID
+- [ ] Validação em Go antes de persistir: tetos de tamanho, item inválido é pulado sem descartar os válidos, `SaveDrafts` regenera o ID e retorna os índices exatos persistidos para um retry sem duplicação
 - [ ] JSON malformado → `ErrMalformedExtraction`; quem loga é o binding desktop, mantendo `internal/application` sem logging
 - [ ] UI: modal "Novo conhecimento encontrado" com [Salvar como rascunhos / Ignorar] — o terceiro botão [Salvar e aprovar] entra na 2.6, quando `Approve` passa a existir
 

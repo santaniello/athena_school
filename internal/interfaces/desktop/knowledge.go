@@ -46,6 +46,12 @@ type ExtractionResult struct {
 	Truncated bool                  `json:"truncated"`
 }
 
+// KnowledgeSaveResult identifies persisted inputs even when a later save fails.
+type KnowledgeSaveResult struct {
+	SavedIndices []int  `json:"savedIndices"`
+	Error        string `json:"error"`
+}
+
 // ExtractKnowledge extracts unpersisted knowledge candidates for review.
 func (a *App) ExtractKnowledge(sessionID string, confirmedTruncation bool) (ExtractionResult, error) {
 	items, truncated, err := a.knowledge.ExtractFromSession(a.ctx, sessionID, confirmedTruncation)
@@ -64,7 +70,7 @@ func (a *App) ExtractKnowledge(sessionID string, confirmedTruncation bool) (Extr
 }
 
 // SaveExtractedKnowledge persists only the candidates confirmed by the user.
-func (a *App) SaveExtractedKnowledge(inputs []KnowledgeItemInput) (int, error) {
+func (a *App) SaveExtractedKnowledge(inputs []KnowledgeItemInput) KnowledgeSaveResult {
 	items := make([]domainknowledge.Item, len(inputs))
 	for index, input := range inputs {
 		items[index] = domainknowledge.Item{
@@ -73,11 +79,12 @@ func (a *App) SaveExtractedKnowledge(inputs []KnowledgeItemInput) (int, error) {
 			Source: input.Source, Status: input.Status,
 		}
 	}
-	count, err := a.knowledge.SaveDrafts(a.ctx, items)
+	savedIndices, err := a.knowledge.SaveDrafts(a.ctx, items)
+	result := KnowledgeSaveResult{SavedIndices: savedIndices}
 	if err != nil {
-		return count, fmt.Errorf("knowledge save failed after %d items: %w", count, err)
+		result.Error = fmt.Sprintf("knowledge save failed: %v", err)
 	}
-	return count, nil
+	return result
 }
 
 func toKnowledgeItemResult(item domainknowledge.Item) KnowledgeItemResult {
