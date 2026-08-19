@@ -1,22 +1,46 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  ApproveKnowledgeItem,
+  DeleteKnowledgeItem,
+  DeprecateKnowledgeItem,
   ExtractKnowledge,
   GetKnowledgeExtractionSettings,
+  ListKnowledgeItems,
+  ListKnowledgeTopics,
+  SaveAndApproveExtractedKnowledge,
   SaveExtractedKnowledge,
   UpdateKnowledgeExtractionSettings,
+  UpdateKnowledgeItem,
 } from '../../wailsjs/go/desktop/App'
 import {
+  approveKnowledgeItem,
+  definitionPreview,
+  deleteKnowledgeItem,
+  deprecateKnowledgeItem,
   extractKnowledge,
   getKnowledgeExtractionSettings,
+  groupByTopic,
+  listKnowledgeItems,
+  listKnowledgeTopics,
+  saveAndApproveExtractedKnowledge,
   saveExtractedKnowledge,
   updateKnowledgeExtractionSettings,
+  updateKnowledgeItem,
+  type KnowledgeItem,
 } from './knowledge'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
   ExtractKnowledge: vi.fn(),
   SaveExtractedKnowledge: vi.fn(),
+  SaveAndApproveExtractedKnowledge: vi.fn(),
   GetKnowledgeExtractionSettings: vi.fn(),
   UpdateKnowledgeExtractionSettings: vi.fn(),
+  ListKnowledgeItems: vi.fn(),
+  ListKnowledgeTopics: vi.fn(),
+  ApproveKnowledgeItem: vi.fn(),
+  DeprecateKnowledgeItem: vi.fn(),
+  UpdateKnowledgeItem: vi.fn(),
+  DeleteKnowledgeItem: vi.fn(),
 }))
 
 describe('knowledge bindings', () => {
@@ -58,6 +82,36 @@ describe('knowledge bindings', () => {
 
     // Then no fields are dropped
     expect(SaveExtractedKnowledge).toHaveBeenCalledWith(items)
+    expect(result).toEqual({ savedIndices: [0], error: '' })
+  })
+
+  it('saves and approves the selected full candidates', async () => {
+    // Given a complete candidate
+    const items = [
+      {
+        id: 'candidate-1',
+        topic: 'Go',
+        concept: 'Channels',
+        definition: 'Typed conduits.',
+        properties: ['typed'],
+        tradeOffs: ['coordination'],
+        relatedConcepts: ['goroutines'],
+        source: 'athena',
+        status: 'draft',
+        createdAt: '2026-08-18T10:00:00Z',
+        updatedAt: '2026-08-18T10:00:00Z',
+      },
+    ]
+    vi.mocked(SaveAndApproveExtractedKnowledge).mockResolvedValueOnce({
+      savedIndices: [0],
+      error: '',
+    })
+
+    // When saving and approving it
+    const result = await saveAndApproveExtractedKnowledge(items)
+
+    // Then no fields are dropped
+    expect(SaveAndApproveExtractedKnowledge).toHaveBeenCalledWith(items)
     expect(result).toEqual({ savedIndices: [0], error: '' })
   })
 
@@ -116,5 +170,256 @@ describe('knowledge bindings', () => {
 
     // Then the original rejection is propagated unchanged
     await expect(promise).rejects.toBe('unavailable')
+  })
+})
+
+function testItem(overrides: Partial<KnowledgeItem> = {}): KnowledgeItem {
+  return {
+    id: 'item-1',
+    topic: 'Go',
+    concept: 'Channels',
+    definition: 'Typed conduits.',
+    properties: [],
+    tradeOffs: [],
+    relatedConcepts: [],
+    source: 'athena',
+    status: 'approved',
+    createdAt: '2026-08-18T10:00:00Z',
+    updatedAt: '2026-08-18T10:00:00Z',
+    ...overrides,
+  }
+}
+
+describe('listKnowledgeItems', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('forwards the topic and status filter and returns the items', async () => {
+    // Given a backend list result
+    const items = [testItem()]
+    vi.mocked(ListKnowledgeItems).mockResolvedValueOnce(items as never)
+
+    // When listing items
+    const result = await listKnowledgeItems('Go', 'approved')
+
+    // Then the filter is forwarded and the result returned as-is
+    expect(ListKnowledgeItems).toHaveBeenCalledWith('Go', 'approved')
+    expect(result).toEqual(items)
+  })
+})
+
+describe('listKnowledgeTopics', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('returns every topic', async () => {
+    // Given a backend topic list
+    vi.mocked(ListKnowledgeTopics).mockResolvedValueOnce(['Go', 'Kubernetes'])
+
+    // When listing topics
+    const topics = await listKnowledgeTopics()
+
+    // Then they are returned as-is
+    expect(topics).toEqual(['Go', 'Kubernetes'])
+  })
+})
+
+describe('approveKnowledgeItem', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('forwards the id and returns the updated item', async () => {
+    // Given a backend approval result
+    const item = testItem({ status: 'approved' })
+    vi.mocked(ApproveKnowledgeItem).mockResolvedValueOnce(item as never)
+
+    // When approving an item
+    const result = await approveKnowledgeItem('item-1')
+
+    // Then the id is forwarded and the updated item returned
+    expect(ApproveKnowledgeItem).toHaveBeenCalledWith('item-1')
+    expect(result).toEqual(item)
+  })
+})
+
+describe('deprecateKnowledgeItem', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('forwards the id and returns the updated item', async () => {
+    // Given a backend deprecation result
+    const item = testItem({ status: 'deprecated' })
+    vi.mocked(DeprecateKnowledgeItem).mockResolvedValueOnce(item as never)
+
+    // When deprecating an item
+    const result = await deprecateKnowledgeItem('item-1')
+
+    // Then the id is forwarded and the updated item returned
+    expect(DeprecateKnowledgeItem).toHaveBeenCalledWith('item-1')
+    expect(result).toEqual(item)
+  })
+})
+
+describe('updateKnowledgeItem', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('forwards only the editable fields, with placeholders for server-owned ones', async () => {
+    // Given a backend update result
+    const item = testItem({ concept: 'New concept' })
+    vi.mocked(UpdateKnowledgeItem).mockResolvedValueOnce(item as never)
+
+    // When updating an item's editable fields
+    const result = await updateKnowledgeItem('item-1', {
+      topic: 'Go',
+      concept: 'New concept',
+      definition: 'New definition.',
+      properties: ['p1'],
+      tradeOffs: ['t1'],
+      relatedConcepts: ['r1'],
+    })
+
+    // Then the call carries exactly the editable fields, and the updated
+    // item is returned
+    expect(UpdateKnowledgeItem).toHaveBeenCalledWith('item-1', {
+      id: '',
+      topic: 'Go',
+      concept: 'New concept',
+      definition: 'New definition.',
+      properties: ['p1'],
+      tradeOffs: ['t1'],
+      relatedConcepts: ['r1'],
+      source: '',
+      status: '',
+      createdAt: '',
+      updatedAt: '',
+    })
+    expect(result).toEqual(item)
+  })
+})
+
+describe('deleteKnowledgeItem', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('forwards the id', async () => {
+    // Given a delete call that succeeds
+    vi.mocked(DeleteKnowledgeItem).mockResolvedValueOnce()
+
+    // When deleting an item
+    await deleteKnowledgeItem('item-1')
+
+    // Then the id was forwarded
+    expect(DeleteKnowledgeItem).toHaveBeenCalledWith('item-1')
+  })
+})
+
+describe('groupByTopic', () => {
+  it('buckets items by topic, preserving first-seen topic order and item order within each bucket', () => {
+    // Given items across two topics, interleaved
+    const goA = testItem({ id: 'go-a', topic: 'Go' })
+    const k8sA = testItem({ id: 'k8s-a', topic: 'Kubernetes' })
+    const goB = testItem({ id: 'go-b', topic: 'Go' })
+
+    // When grouping by topic
+    const groups = groupByTopic([goA, k8sA, goB])
+
+    // Then topics appear in first-seen order, each with its items in
+    // original order
+    expect(Array.from(groups.keys())).toEqual(['Go', 'Kubernetes'])
+    expect(groups.get('Go')).toEqual([goA, goB])
+    expect(groups.get('Kubernetes')).toEqual([k8sA])
+  })
+
+  it('returns an empty map for an empty item list', () => {
+    // Given no items
+    // When grouping by topic
+    const groups = groupByTopic([])
+
+    // Then the result is an empty map
+    expect(groups.size).toBe(0)
+  })
+})
+
+describe('definitionPreview', () => {
+  it('returns text unchanged when at or under the budget', () => {
+    // Given text exactly at the budget
+    const text = 'a'.repeat(10)
+
+    // When previewing it at that same budget
+    const result = definitionPreview(text, 10)
+
+    // Then it is returned unchanged, with no ellipsis
+    expect(result).toBe(text)
+  })
+
+  it('truncates on a word boundary and appends an ellipsis when over budget', () => {
+    // Given text over budget where the cut point lands mid-word, one word
+    // after the only space — "Hello wo" out of "Hello wonderful world"
+    const text = 'Hello wonderful world'
+
+    // When previewing it at a budget of 8
+    const result = definitionPreview(text, 8)
+
+    // Then it backs up to the space and drops the partial word entirely,
+    // rather than keeping the mid-word fragment "wo"
+    expect(result).toBe('Hello…')
+  })
+
+  it('drops every trailing space left by the cut, not just the last one', () => {
+    // Given text with two consecutive spaces exactly at the cut point
+    const text = 'AB  CD'
+
+    // When previewing it at a budget of 4 (cutting right after both spaces)
+    const result = definitionPreview(text, 4)
+
+    // Then all trailing whitespace is trimmed before the ellipsis, not
+    // just the one space the word-boundary search itself landed on
+    expect(result).toBe('AB…')
+  })
+
+  it('keeps the hard cut when the only space in range sits at the very start', () => {
+    // Given text that starts with a space, with no other space within the
+    // cut region
+    const text = ' abcdefgh'
+
+    // When previewing it at a budget of 5
+    const result = definitionPreview(text, 5)
+
+    // Then a space at position 0 is not treated as a usable word boundary
+    // (there is no word before it to keep) — the hard cut is kept instead,
+    // one character short of the budget to leave room for the ellipsis
+    expect(result).toBe(' abc…')
+  })
+
+  it('falls back to a hard cut when the budget has no whitespace to break on', () => {
+    // Given a single long word with no spaces
+    const text = 'a'.repeat(20)
+
+    // When previewing it under budget
+    const result = definitionPreview(text, 10)
+
+    // Then it cuts one character short of the budget — nine characters,
+    // not ten — so the appended ellipsis never pushes the result past max
+    expect(result).toBe('aaaaaaaaa…')
+  })
+
+  it('returns just an ellipsis when max is 1', () => {
+    // Given text well over budget and a budget too small to fit any
+    // character alongside the ellipsis
+    const result = definitionPreview('abcdef', 1)
+
+    // Then only the ellipsis is returned
+    expect(result).toBe('…')
+  })
+
+  it('returns an empty string when max is 0 or negative', () => {
+    expect(definitionPreview('abcdef', 0)).toBe('')
+    expect(definitionPreview('abcdef', -1)).toBe('')
+  })
+
+  it('never returns more than max characters total when truncating', () => {
+    // Given text well over budget
+    const text = 'a'.repeat(20)
+
+    // When previewing it at a budget of 10
+    const result = definitionPreview(text, 10)
+
+    // Then the truncated result (including the ellipsis) fits the budget
+    expect(result.length).toBeLessThanOrEqual(10)
   })
 })

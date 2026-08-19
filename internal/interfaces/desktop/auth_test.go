@@ -16,7 +16,7 @@ import (
 
 func newTestApp(t *testing.T, accounts domainauth.AccountRepository, sessions domainauth.SessionStore) *App {
 	t.Helper()
-	app := NewApp(auth.NewService(accounts, sessions), sessions, nil, nil, nil, nil, nil, nil, nil)
+	app := NewApp(auth.NewService(accounts, sessions), sessions, nil, nil, nil, nil, nil, nil, nil, nil)
 	app.Startup(context.Background())
 	return app
 }

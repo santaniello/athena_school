@@ -33,6 +33,8 @@ func TestExtractFromSession_returnsNoCandidatesWithoutCallingLLMWhenHistoryIsEmp
 		messages,
 		llmmocks.NewMockProvider(t),
 		configmocks.NewMockStore(t),
+		knowledgemocks.NewMockChunkRepository(t),
+		nil,
 	)
 
 	// When extracting knowledge
@@ -69,7 +71,7 @@ func TestExtractFromSession_returnsValidatedServerStampedCandidates(t *testing.T
 			strings.Contains(prompt.Content, "User: Explain CAP.") &&
 			strings.Contains(prompt.Content, "Assistant: CAP describes trade-offs.")
 	})).Return(domainllm.ChatResponse{Content: "```json\n" + `{"items":[{"topic":"hostile","concept":" CAP theorem ","definition":" A self-contained definition. ","properties":[" partition tolerance "," "],"trade_offs":[" consistency vs availability "],"related_concepts":[" PACELC "]},{"concept":"invalid"}]}` + "\n```"}, nil).Once()
-	service := NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs)
+	service := NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil)
 
 	// When extracting knowledge
 	items, truncated, err := service.ExtractFromSession(ctx, "session-1", false)
@@ -112,7 +114,7 @@ func TestExtractFromSession_requiresConfirmationBeforeCallingLLMForTruncatedTran
 		return !strings.Contains(prompt, strings.Repeat("o", 100)) &&
 			strings.Contains(prompt, strings.Repeat("n", 100))
 	})).Return(domainllm.ChatResponse{Content: `{"items":[]}`}, nil).Once()
-	service := NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs)
+	service := NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil)
 
 	// When extracting before and after the user confirms truncation
 	firstItems, firstTruncated, firstErr := service.ExtractFromSession(ctx, "session-1", false)
@@ -155,6 +157,8 @@ func TestExtractFromSession_returnsErrorWithoutCallingLLMWhenNoCompleteMessageFi
 		messages,
 		llmmocks.NewMockProvider(t),
 		configs,
+		knowledgemocks.NewMockChunkRepository(t),
+		nil,
 	)
 
 	// When extraction is invoked before and after truncation is confirmed
@@ -188,7 +192,7 @@ func TestExtractFromSession_returnsMalformedExtractionForUnparseablePayload(t *t
 			req.Messages[0].Role == "system" &&
 			strings.Contains(req.Messages[0].Content, "User: Explain channels")
 	})).Return(domainllm.ChatResponse{Content: "not json"}, nil).Once()
-	service := NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs)
+	service := NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil)
 
 	// When extracting knowledge
 	items, truncated, err := service.ExtractFromSession(ctx, "session-1", false)

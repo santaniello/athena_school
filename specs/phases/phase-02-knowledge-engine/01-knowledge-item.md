@@ -93,13 +93,13 @@ type Repository interface {
 }
 ```
 
-Every query returning `Item` orders by `created_at ASC, id ASC` — 2.7 requires oldest-first, and the `id` tiebreak keeps tests deterministic when timestamps collide. `ListTopics` returns `[]string`, not items, so that tiebreak doesn't apply to it — it orders `ORDER BY topic ASC` instead, so callers (2.6's topic tree) get a deterministic, alphabetical list without sorting client-side.
+Every query returning `Item` orders by `created_at ASC, id ASC` — 2.7 requires oldest-first, and the `id` tiebreak keeps tests deterministic when timestamps collide. `ListTopics` returns `[]string`, not items, so that tiebreak doesn't apply to it — it orders `ORDER BY topic ASC` instead, so callers (2.3's topic tree) get a deterministic, alphabetical list without sorting client-side.
 
 Deliberate design choices:
 
 - **No `UpdateStatus`.** A status-only write path would invite callers to set a status directly. Approve/Deprecate are always load → transition → `Update`, so the lifecycle rule has exactly one entry point in the application layer.
 
-  `Update` still takes a whole `Item`, so it *can* physically persist a hand-set `Status` — the repository is a dumb persistence port and validating transitions there would put a business rule in infrastructure, against ADR-001. The guarantee is therefore "one orchestration path", not "physically impossible": `UpdateItem` (2.6) never touches `Status`, and any future write path must go through `TransitionTo` too.
+  `Update` still takes a whole `Item`, so it *can* physically persist a hand-set `Status` — the repository is a dumb persistence port and validating transitions there would put a business rule in infrastructure, against ADR-001. The guarantee is therefore "one orchestration path", not "physically impossible": `UpdateItem` (2.3) never touches `Status`, and any future write path must go through `TransitionTo` too.
 - **`Save` returns only `error`**, not the ID. This deviates from an earlier draft of this spec but matches every existing repository (`FolderRepository.Create`, `MessageRepository.Append`); returning an ID the caller just supplied is noise. The use case returns the populated item. Note the deviation in the commit body and `CHANGELOG.md`.
 - **Malformed JSON in a list column is a read failure, not an empty list.** `unmarshalStringList` returns `([]string, error)`; `GetByID`, `FindByTopic`, and `List` wrap and propagate that error instead of silently degrading to `[]string{}`. Treating corrupt data as "just empty" would hide a real integrity problem behind a value that looks like a legitimate answer.
 - **NULL tolerance lives in the SQL, not in the decoder.** Every `SELECT` reads the three list columns through `COALESCE(column, '')`, so the value handed to `unmarshalStringList` is always a plain `string`, never `sql.NullString`. This keeps `unmarshalStringList`'s signature `string -> ([]string, error)`, trivial to unit-test without a database.

@@ -1,12 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { saveExtractedKnowledge, type KnowledgeItem } from '@/lib/knowledge'
+import {
+  saveAndApproveExtractedKnowledge,
+  saveExtractedKnowledge,
+  type KnowledgeItem,
+} from '@/lib/knowledge'
 import { KnowledgeExtractionDialog } from './knowledge-extraction-dialog'
 
 vi.mock('@/lib/knowledge', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/knowledge')>()
-  return { ...original, saveExtractedKnowledge: vi.fn() }
+  return {
+    ...original,
+    saveExtractedKnowledge: vi.fn(),
+    saveAndApproveExtractedKnowledge: vi.fn(),
+  }
 })
 
 function candidate(id: string, concept: string): KnowledgeItem {
@@ -36,8 +44,8 @@ describe('KnowledgeExtractionDialog', () => {
     // Then concepts and definitions are visible and all candidates are selected
     expect(screen.getByText('Channels')).toBeInTheDocument()
     expect(screen.getByText('Channels definition')).toBeInTheDocument()
-    expect(screen.getByLabelText('Selecionar Channels')).toBeChecked()
-    expect(screen.getByLabelText('Selecionar Goroutines')).toBeChecked()
+    expect(screen.getByLabelText('Select Channels')).toBeChecked()
+    expect(screen.getByLabelText('Select Goroutines')).toBeChecked()
     expect(screen.queryByText('Channels property')).not.toBeInTheDocument()
   })
 
@@ -48,10 +56,10 @@ describe('KnowledgeExtractionDialog', () => {
     const onClose = vi.fn()
     const user = userEvent.setup()
     render(<KnowledgeExtractionDialog open items={items} onClose={onClose} />)
-    await user.click(screen.getByLabelText('Selecionar Goroutines'))
+    await user.click(screen.getByLabelText('Select Goroutines'))
 
     // When saving drafts
-    await user.click(screen.getByRole('button', { name: 'Salvar como rascunhos' }))
+    await user.click(screen.getByRole('button', { name: 'Save as drafts' }))
 
     // Then only the complete first candidate is sent and the dialog closes
     await waitFor(() => expect(saveExtractedKnowledge).toHaveBeenCalledWith([items[0]]))
@@ -67,11 +75,11 @@ describe('KnowledgeExtractionDialog', () => {
     })
     const user = userEvent.setup()
     render(<KnowledgeExtractionDialog open items={items} onClose={vi.fn()} />)
-    await user.click(screen.getByLabelText('Selecionar One'))
+    await user.click(screen.getByLabelText('Select One'))
 
     // When selecting the first candidate again and saving
-    await user.click(screen.getByLabelText('Selecionar One'))
-    await user.click(screen.getByRole('button', { name: 'Salvar como rascunhos' }))
+    await user.click(screen.getByLabelText('Select One'))
+    await user.click(screen.getByRole('button', { name: 'Save as drafts' }))
 
     // Then all candidates retain their displayed order
     await waitFor(() => expect(saveExtractedKnowledge).toHaveBeenCalledWith(items))
@@ -86,12 +94,12 @@ describe('KnowledgeExtractionDialog', () => {
     )
 
     // When saving drafts
-    await user.click(screen.getByRole('button', { name: 'Salvar como rascunhos' }))
+    await user.click(screen.getByRole('button', { name: 'Save as drafts' }))
 
     // Then candidate selection and both dialog actions are locked
-    expect(screen.getByLabelText('Selecionar Channels')).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Ignorar' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Salvando...' })).toBeDisabled()
+    expect(screen.getByLabelText('Select Channels')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Dismiss' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled()
   })
 
   it('closes when the dialog close control is used', async () => {
@@ -115,10 +123,10 @@ describe('KnowledgeExtractionDialog', () => {
     render(
       <KnowledgeExtractionDialog open items={[candidate('1', 'Channels')]} onClose={vi.fn()} />,
     )
-    await user.click(screen.getByLabelText('Selecionar Channels'))
+    await user.click(screen.getByLabelText('Select Channels'))
 
     // Then saving is disabled
-    expect(screen.getByRole('button', { name: 'Salvar como rascunhos' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Save as drafts' })).toBeDisabled()
   })
 
   it('shows an empty result without attempting to save', () => {
@@ -126,8 +134,8 @@ describe('KnowledgeExtractionDialog', () => {
     render(<KnowledgeExtractionDialog open items={[]} onClose={vi.fn()} />)
 
     // Then the empty state is shown and no save action exists
-    expect(screen.getByText('Nenhum conhecimento novo encontrado')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Salvar como rascunhos' })).not.toBeInTheDocument()
+    expect(screen.getByText('No new knowledge found')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Save as drafts' })).not.toBeInTheDocument()
   })
 
   it('retries only exact unsaved candidates after a non-prefix partial failure', async () => {
@@ -140,12 +148,12 @@ describe('KnowledgeExtractionDialog', () => {
     render(<KnowledgeExtractionDialog open items={items} onClose={vi.fn()} />)
 
     // When saving and then retrying
-    await user.click(screen.getByRole('button', { name: 'Salvar como rascunhos' }))
+    await user.click(screen.getByRole('button', { name: 'Save as drafts' }))
     expect(await screen.findByText(/database locked/i)).toBeInTheDocument()
-    expect(screen.getByText('Salvo')).toBeInTheDocument()
-    expect(screen.getByLabelText('Selecionar One')).toBeEnabled()
-    expect(screen.getByLabelText('Selecionar Two')).toBeDisabled()
-    await user.click(screen.getByRole('button', { name: 'Tentar novamente' }))
+    expect(screen.getByText('Saved')).toBeInTheDocument()
+    expect(screen.getByLabelText('Select One')).toBeEnabled()
+    expect(screen.getByLabelText('Select Two')).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
 
     // Then the retry excludes exactly the already-saved middle candidate
     await waitFor(() =>
@@ -164,10 +172,10 @@ describe('KnowledgeExtractionDialog', () => {
     render(<KnowledgeExtractionDialog open items={items} onClose={vi.fn()} />)
 
     // When saving and retrying
-    await user.click(screen.getByRole('button', { name: 'Salvar como rascunhos' }))
+    await user.click(screen.getByRole('button', { name: 'Save as drafts' }))
     expect(await screen.findByText('database unavailable')).toBeInTheDocument()
-    expect(screen.queryByText('Salvo')).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Tentar novamente' }))
+    expect(screen.queryByText('Saved')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
 
     // Then the complete selection is retried
     await waitFor(() => expect(saveExtractedKnowledge).toHaveBeenNthCalledWith(2, items))
@@ -182,10 +190,86 @@ describe('KnowledgeExtractionDialog', () => {
     )
 
     // When saving
-    await user.click(screen.getByRole('button', { name: 'Salvar como rascunhos' }))
+    await user.click(screen.getByRole('button', { name: 'Save as drafts' }))
 
     // Then a user-safe fallback is shown and retry remains available
-    expect(await screen.findByText('Falha ao salvar os rascunhos.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Tentar novamente' })).toBeEnabled()
+    expect(await screen.findByText('Failed to save drafts.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeEnabled()
+  })
+
+  it('shows a mode-appropriate safe message when "Save as knowledge" rejects with a non-error value', async () => {
+    // Given an unexpected binding rejection from the approve-directly path
+    vi.mocked(saveAndApproveExtractedKnowledge).mockRejectedValueOnce('unavailable')
+    const user = userEvent.setup()
+    render(
+      <KnowledgeExtractionDialog open items={[candidate('1', 'Channels')]} onClose={vi.fn()} />,
+    )
+
+    // When saving via "Save as knowledge"
+    await user.click(screen.getByRole('button', { name: 'Save as knowledge' }))
+
+    // Then the fallback names the operation that actually failed, not the
+    // other save mode's message
+    expect(await screen.findByText('Failed to save as knowledge.')).toBeInTheDocument()
+    expect(screen.queryByText('Failed to save drafts.')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeEnabled()
+  })
+
+  it('saves and approves via "Save as knowledge", directly closing on success', async () => {
+    // Given a complete candidate
+    const items = [candidate('1', 'Channels'), candidate('2', 'Goroutines')]
+    vi.mocked(saveAndApproveExtractedKnowledge).mockResolvedValueOnce({
+      savedIndices: [0, 1],
+      error: '',
+    })
+    const onClose = vi.fn()
+    const user = userEvent.setup()
+    render(<KnowledgeExtractionDialog open items={items} onClose={onClose} />)
+
+    // When saving via "Save as knowledge"
+    await user.click(screen.getByRole('button', { name: 'Save as knowledge' }))
+
+    // Then it calls the approve-directly binding (never the draft one) with
+    // every selected candidate, and closes the dialog
+    await waitFor(() => expect(saveAndApproveExtractedKnowledge).toHaveBeenCalledWith(items))
+    expect(saveExtractedKnowledge).not.toHaveBeenCalled()
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('keeps "Save as drafts" at its idle label while "Save as knowledge" is saving', async () => {
+    // Given a save-and-approve request that remains in flight
+    vi.mocked(saveAndApproveExtractedKnowledge).mockReturnValueOnce(new Promise<never>(() => {}))
+    const user = userEvent.setup()
+    render(
+      <KnowledgeExtractionDialog open items={[candidate('1', 'Channels')]} onClose={vi.fn()} />,
+    )
+
+    // When saving via "Save as knowledge"
+    await user.click(screen.getByRole('button', { name: 'Save as knowledge' }))
+
+    // Then only that button shows the in-flight label; the draft button
+    // keeps its idle label (just disabled, not relabeled) and selection locks
+    expect(screen.getByRole('button', { name: 'Saving...' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save as drafts' })).toBeDisabled()
+    expect(screen.getByLabelText('Select Channels')).toBeDisabled()
+  })
+
+  it('retries the same "Save as knowledge" mode after its own failure', async () => {
+    // Given a save-and-approve call that fails once, then succeeds
+    const items = [candidate('1', 'Channels')]
+    vi.mocked(saveAndApproveExtractedKnowledge)
+      .mockResolvedValueOnce({ savedIndices: [], error: 'database unavailable' })
+      .mockResolvedValueOnce({ savedIndices: [0], error: '' })
+    const user = userEvent.setup()
+    render(<KnowledgeExtractionDialog open items={items} onClose={vi.fn()} />)
+    await user.click(screen.getByRole('button', { name: 'Save as knowledge' }))
+    expect(await screen.findByText('database unavailable')).toBeInTheDocument()
+
+    // When retrying
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+
+    // Then the retry goes through the same approve-directly binding, not the draft one
+    await waitFor(() => expect(saveAndApproveExtractedKnowledge).toHaveBeenNthCalledWith(2, items))
+    expect(saveExtractedKnowledge).not.toHaveBeenCalled()
   })
 })

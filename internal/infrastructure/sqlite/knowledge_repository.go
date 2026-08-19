@@ -36,7 +36,7 @@ func (r *KnowledgeRepository) Save(ctx context.Context, item knowledge.Item) err
 	if err != nil {
 		return err
 	}
-	_, err = r.db.ExecContext(ctx,
+	_, err = execer(ctx, r.db).ExecContext(ctx,
 		`INSERT INTO knowledge_items (`+knowledgeItemColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		item.ID, item.Topic, item.Concept, item.Definition,
 		properties, tradeOffs, relatedConcepts,
@@ -69,7 +69,7 @@ func marshalItemLists(item knowledge.Item) (properties, tradeOffs, relatedConcep
 // GetByID returns the item with the given id, or knowledge.ErrItemNotFound
 // if it does not exist.
 func (r *KnowledgeRepository) GetByID(ctx context.Context, id string) (knowledge.Item, error) {
-	row := r.db.QueryRowContext(ctx,
+	row := execer(ctx, r.db).QueryRowContext(ctx,
 		`SELECT `+knowledgeItemSelectColumns+` FROM knowledge_items WHERE id = ?`, id,
 	)
 	item, err := scanItem(row)
@@ -84,7 +84,7 @@ func (r *KnowledgeRepository) GetByID(ctx context.Context, id string) (knowledge
 
 // FindByTopic returns every item for topic, oldest first.
 func (r *KnowledgeRepository) FindByTopic(ctx context.Context, topic string) ([]knowledge.Item, error) {
-	rows, err := r.db.QueryContext(ctx,
+	rows, err := execer(ctx, r.db).QueryContext(ctx,
 		`SELECT `+knowledgeItemSelectColumns+` FROM knowledge_items WHERE topic = ? ORDER BY created_at ASC, id ASC`,
 		topic,
 	)
@@ -114,7 +114,7 @@ func (r *KnowledgeRepository) List(ctx context.Context, filter knowledge.Filter)
 	queryParts = append(queryParts, "ORDER BY created_at ASC, id ASC")
 	query := strings.Join(queryParts, " ")
 
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	rows, err := execer(ctx, r.db).QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: listing knowledge items: %w", err)
 	}
@@ -123,7 +123,7 @@ func (r *KnowledgeRepository) List(ctx context.Context, filter knowledge.Filter)
 
 // ListTopics returns every distinct topic, alphabetically.
 func (r *KnowledgeRepository) ListTopics(ctx context.Context) ([]string, error) {
-	rows, err := r.db.QueryContext(ctx,
+	rows, err := execer(ctx, r.db).QueryContext(ctx,
 		`SELECT DISTINCT topic FROM knowledge_items ORDER BY topic ASC`,
 	)
 	if err != nil {
@@ -148,7 +148,7 @@ func (r *KnowledgeRepository) ListTopics(ctx context.Context) ([]string, error) 
 // CountByStatus returns how many items currently have the given status.
 func (r *KnowledgeRepository) CountByStatus(ctx context.Context, status string) (int, error) {
 	var count int
-	err := r.db.QueryRowContext(ctx,
+	err := execer(ctx, r.db).QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM knowledge_items WHERE status = ?`, status,
 	).Scan(&count)
 	if err != nil {
@@ -164,7 +164,7 @@ func (r *KnowledgeRepository) Update(ctx context.Context, item knowledge.Item) e
 	if err != nil {
 		return err
 	}
-	result, err := r.db.ExecContext(ctx,
+	result, err := execer(ctx, r.db).ExecContext(ctx,
 		`UPDATE knowledge_items SET topic = ?, concept = ?, definition = ?, properties = ?, trade_offs = ?, related_concepts = ?, source = ?, status = ?, created_at = ?, updated_at = ? WHERE id = ?`,
 		item.Topic, item.Concept, item.Definition,
 		properties, tradeOffs, relatedConcepts,
@@ -179,7 +179,7 @@ func (r *KnowledgeRepository) Update(ctx context.Context, item knowledge.Item) e
 // Delete permanently removes the item with the given id, or returns
 // knowledge.ErrItemNotFound if it does not exist.
 func (r *KnowledgeRepository) Delete(ctx context.Context, id string) error {
-	result, err := r.db.ExecContext(ctx, `DELETE FROM knowledge_items WHERE id = ?`, id)
+	result, err := execer(ctx, r.db).ExecContext(ctx, `DELETE FROM knowledge_items WHERE id = ?`, id)
 	if err != nil {
 		return fmt.Errorf("sqlite: deleting knowledge item: %w", err)
 	}

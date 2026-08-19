@@ -9,6 +9,7 @@ import (
 
 	"github.com/santaniello/athena/internal/application/auth"
 	"github.com/santaniello/athena/internal/application/folder"
+	applicationingest "github.com/santaniello/athena/internal/application/ingest"
 	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
 	"github.com/santaniello/athena/internal/application/onboarding"
 	"github.com/santaniello/athena/internal/application/study"
@@ -29,17 +30,23 @@ type App struct {
 	study         *study.Service
 	folder        *folder.Service
 	knowledge     *applicationknowledge.Service
+	ingest        *applicationingest.Service
 	apiKeyUpdater domainllm.APIKeyUpdater
 	// emit defaults to wailsruntime.EventsEmit, which calls log.Fatal (i.e.
 	// os.Exit) when a.ctx was never produced by the real Wails runtime —
 	// exactly the case in tests, which use context.Background(). Tests
 	// override this field with a fake to observe emitted events safely.
 	emit func(ctx context.Context, eventName string, data ...interface{})
+	// openDirectory defaults to wailsruntime.OpenDirectoryDialog, which
+	// has the same real-runtime requirement as emit above. Tests override
+	// it with a fake to drive PickNotesFolder without a real OS dialog.
+	openDirectory func(ctx context.Context, options wailsruntime.OpenDialogOptions) (string, error)
 }
 
 // NewApp creates a new App instance backed by the given auth service,
 // session store, onboarding service, profile store, config store, study
-// service, folder service and the live LLM client's key updater.
+// service, folder service, knowledge service, notes-import service and the
+// live LLM client's key updater.
 func NewApp(
 	authService *auth.Service,
 	sessions domainauth.SessionStore,
@@ -49,6 +56,7 @@ func NewApp(
 	studyService *study.Service,
 	folderService *folder.Service,
 	knowledgeService *applicationknowledge.Service,
+	ingestService *applicationingest.Service,
 	apiKeyUpdater domainllm.APIKeyUpdater,
 ) *App {
 	return &App{
@@ -60,8 +68,10 @@ func NewApp(
 		study:         studyService,
 		folder:        folderService,
 		knowledge:     knowledgeService,
+		ingest:        ingestService,
 		apiKeyUpdater: apiKeyUpdater,
 		emit:          wailsruntime.EventsEmit,
+		openDirectory: wailsruntime.OpenDirectoryDialog,
 	}
 }
 

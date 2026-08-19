@@ -52,7 +52,7 @@ func TestApp_GetKnowledgeExtractionSettings_returnsConfiguredMaximum(t *testing.
 	// Given an App with a configured extraction maximum
 	configs := configmocks.NewMockStore(t)
 	configs.EXPECT().Load().Return(domainconfig.Config{MaxKnowledgeExtractionItems: 12}, nil).Once()
-	app := NewApp(nil, nil, nil, nil, configs, nil, nil, nil, nil)
+	app := NewApp(nil, nil, nil, nil, configs, nil, nil, nil, nil, nil)
 
 	// When reading knowledge extraction settings
 	result, err := app.GetKnowledgeExtractionSettings()
@@ -67,7 +67,7 @@ func TestApp_UpdateKnowledgeExtractionSettings_validatesAndPreservesOpenRouterKe
 	configs := configmocks.NewMockStore(t)
 	configs.EXPECT().Load().Return(domainconfig.Config{OpenRouterKey: "sk-or-existing", MaxKnowledgeExtractionItems: 8}, nil).Once()
 	configs.EXPECT().Save(domainconfig.Config{OpenRouterKey: "sk-or-existing", MaxKnowledgeExtractionItems: 12}).Return(nil).Once()
-	app := NewApp(nil, nil, nil, nil, configs, nil, nil, nil, nil)
+	app := NewApp(nil, nil, nil, nil, configs, nil, nil, nil, nil, nil)
 
 	// When changing the extraction maximum
 	err := app.UpdateKnowledgeExtractionSettings(12)
@@ -80,7 +80,7 @@ func TestApp_UpdateKnowledgeExtractionSettings_rejectsOutOfRangeMaximum(t *testi
 	// Given an App and an out-of-range maximum
 	configs := configmocks.NewMockStore(t)
 	configs.EXPECT().Load().Return(domainconfig.Config{OpenRouterKey: "sk-or-existing", MaxKnowledgeExtractionItems: 8}, nil).Once()
-	app := NewApp(nil, nil, nil, nil, configs, nil, nil, nil, nil)
+	app := NewApp(nil, nil, nil, nil, configs, nil, nil, nil, nil, nil)
 
 	// When changing the setting to an invalid value
 	err := app.UpdateKnowledgeExtractionSettings(21)
@@ -92,7 +92,7 @@ func TestApp_UpdateKnowledgeExtractionSettings_rejectsOutOfRangeMaximum(t *testi
 func TestApp_UpdateKnowledgeExtractionSettings_rejectsFractionalMaximum(t *testing.T) {
 	// Given an App and a fractional extraction maximum
 	configs := configmocks.NewMockStore(t)
-	app := NewApp(nil, nil, nil, nil, configs, nil, nil, nil, nil)
+	app := NewApp(nil, nil, nil, nil, configs, nil, nil, nil, nil, nil)
 
 	// When changing the setting to a fractional value
 	err := app.UpdateKnowledgeExtractionSettings(1.5)

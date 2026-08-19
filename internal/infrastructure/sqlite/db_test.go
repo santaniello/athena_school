@@ -174,6 +174,77 @@ func TestOpen_isIdempotentOnSecondOpen_forKnowledgeItems(t *testing.T) {
 	defer func() { _ = second.Close() }()
 }
 
+func TestOpen_createsKnowledgeChunksTable(t *testing.T) {
+	// Given a path to a database file that does not exist yet
+	path := filepath.Join(t.TempDir(), "athena.db")
+
+	// When opening the database
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Then the knowledge_chunks table exists
+	var tableName string
+	queryErr := db.QueryRow(
+		`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'knowledge_chunks'`,
+	).Scan(&tableName)
+	require.NoError(t, queryErr)
+	assert.Equal(t, "knowledge_chunks", tableName)
+}
+
+func TestOpen_createsKnowledgeChunksIndexes(t *testing.T) {
+	// Given a path to a database file that does not exist yet
+	path := filepath.Join(t.TempDir(), "athena.db")
+
+	// When opening the database
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Then both knowledge_chunks indexes exist
+	for _, indexName := range []string{"idx_knowledge_chunks_file_path", "idx_knowledge_chunks_item_id"} {
+		var name string
+		queryErr := db.QueryRow(
+			`SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?`, indexName,
+		).Scan(&name)
+		require.NoError(t, queryErr)
+		assert.Equal(t, indexName, name)
+	}
+}
+
+func TestOpen_isIdempotentOnSecondOpen_forKnowledgeChunks(t *testing.T) {
+	// Given a database that was already opened once
+	path := filepath.Join(t.TempDir(), "athena.db")
+	first, err := Open(path)
+	require.NoError(t, err)
+	require.NoError(t, first.Close())
+
+	// When opening the same database file again
+	second, err := Open(path)
+
+	// Then it succeeds without error on the repeated CREATE TABLE/INDEX
+	require.NoError(t, err)
+	defer func() { _ = second.Close() }()
+}
+
+func TestOpen_createsIngestedFilesTable(t *testing.T) {
+	// Given a path to a database file that does not exist yet
+	path := filepath.Join(t.TempDir(), "athena.db")
+
+	// When opening the database
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Then the ingested_files table exists
+	var tableName string
+	queryErr := db.QueryRow(
+		`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'ingested_files'`,
+	).Scan(&tableName)
+	require.NoError(t, queryErr)
+	assert.Equal(t, "ingested_files", tableName)
+}
+
 func TestOpen_addsFolderIDColumnToSessions(t *testing.T) {
 	// Given a path to a database file that does not exist yet
 	path := filepath.Join(t.TempDir(), "athena.db")

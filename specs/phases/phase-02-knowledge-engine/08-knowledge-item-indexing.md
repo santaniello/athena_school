@@ -8,7 +8,7 @@ knowledge.
 
 ## Why this is a separate spec
 
-`specs/Athena.md` §9 makes "Athena Knowledge" a first-class source next to User Notes, and 2.4's `SearchFilters.Status` only makes sense if items reach the vector store. But the store does not exist until 2.4, while item creation and approval ship in 2.2/2.6 — so the hooks cannot live there, and items created before this spec need a backfill.
+`specs/Athena.md` §9 makes "Athena Knowledge" a first-class source next to User Notes, and 2.4's `SearchFilters.Status` only makes sense if items reach the vector store. But the store does not exist until 2.4, while item creation and approval ship in 2.2/2.3 — so the hooks cannot live there, and items created before this spec need a backfill.
 
 ## Indexing hook
 
@@ -42,18 +42,31 @@ chunks whose `item_updated_at`, status, or embedding model no longer matches.
 SELECT i...
   FROM knowledge_items i
   LEFT JOIN knowledge_chunks c ON c.item_id = i.id
- WHERE c.id IS NULL
-    OR c.item_updated_at IS NULL
-    OR c.item_updated_at <> i.updated_at
-    OR c.status <> i.status
-    OR c.embedding_model IS NULL
-    OR c.embedding_model <> :current_embedding_model
+ WHERE i.source = 'athena'
+   AND (
+        c.id IS NULL
+     OR c.item_updated_at IS NULL
+     OR c.item_updated_at <> i.updated_at
+     OR c.status IS NULL
+     OR c.status <> i.status
+     OR c.embedding_model IS NULL
+     OR c.embedding_model <> :current_embedding_model
+   )
 ```
 
 This detects missing **and stale** chunks. An update may commit successfully and then
 fail while embedding; checking only `item_id NOT IN (...)` would leave the old content
 searchable forever. `CountUnindexedItems` and `ReindexKnowledgeItems` receive the
 current embedding model and use this same predicate.
+
+**`i.source = 'athena'` excludes imported-note shadow Items (2.3) from this
+query on purpose.** Their chunks always have `item_updated_at IS NULL` by
+design — imported files use `ingested_files.mtime` for staleness, not
+`item_updated_at` — so without this guard every imported note would show up as
+permanently "unindexed" and get needlessly re-embedded on every "Index now"
+run. Their `item_id` is populated (linking chunk to shadow Item) but their
+freshness is governed entirely by 2.3's own re-import mechanism, independent of
+this backfill.
 
 The trigger is **not** silent-at-startup — that would spend the user's money without asking. On mount, the Knowledge Explorer calls `CountUnindexedKnowledgeItems`; if the count is `> 0` it renders an inline `Alert`:
 

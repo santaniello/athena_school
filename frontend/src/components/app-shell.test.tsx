@@ -18,6 +18,8 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   UpdateProfile: vi.fn(),
   SaveOpenRouterKey: vi.fn(),
   HasOpenRouterKey: vi.fn().mockResolvedValue(true),
+  GetKnowledgeExtractionSettings: vi.fn().mockResolvedValue({ maxKnowledgeExtractionItems: 8 }),
+  UpdateKnowledgeExtractionSettings: vi.fn(),
 }))
 
 // The Study section's sidebar tree (StudyFolderTree) fetches folders as
@@ -42,6 +44,31 @@ vi.mock('@/lib/folder', () => ({
   createFolder: vi.fn(),
   renameFolder: vi.fn(),
   deleteFolder: vi.fn(),
+}))
+
+// The Knowledge section's sidebar tree and Explorer screen both fetch as
+// soon as they mount, same reasoning as the Study mocks above. SettingsScreen
+// also imports from this module (getKnowledgeExtractionSettings), so this
+// keeps the rest of the module real rather than replacing it wholesale.
+vi.mock('@/lib/knowledge', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/knowledge')>()
+  return {
+    ...original,
+    listKnowledgeItems: vi.fn().mockResolvedValue([]),
+    listKnowledgeTopics: vi.fn().mockResolvedValue([]),
+    approveKnowledgeItem: vi.fn(),
+    deprecateKnowledgeItem: vi.fn(),
+    updateKnowledgeItem: vi.fn(),
+    deleteKnowledgeItem: vi.fn(),
+  }
+})
+
+vi.mock('@/lib/ingest', () => ({
+  pickNotesFolder: vi.fn(),
+  importNotes: vi.fn(),
+  onIngestProgress: vi.fn(() => vi.fn()),
+  onIngestDone: vi.fn(() => vi.fn()),
+  onIngestError: vi.fn(() => vi.fn()),
 }))
 
 const profileResult = {
@@ -112,12 +139,28 @@ describe('AppShell', () => {
     renderShell()
     await screen.findByText(/Felipe\./)
 
-    // When selecting a locked section
-    await user.click(screen.getByRole('button', { name: 'Knowledge' }))
+    // When selecting a locked section (challenge stays locked for the
+    // whole of Phase 2, unlike knowledge)
+    await user.click(screen.getByRole('button', { name: 'Challenge' }))
 
     // Then the topbar and content reflect that section, still locked
+    expect(screen.getByRole('heading', { name: 'Challenge', level: 1 })).toBeInTheDocument()
+    expect(screen.getByText('Planned for Phase 3')).toBeInTheDocument()
+  })
+
+  it('opens the real Knowledge Explorer, not the coming-soon panel', async () => {
+    // Given the app shell mounts
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+
+    // When selecting Knowledge
+    await user.click(screen.getByRole('button', { name: 'Knowledge' }))
+
+    // Then the Explorer/Review tabs render instead of the coming-soon panel
     expect(screen.getByRole('heading', { name: 'Knowledge', level: 1 })).toBeInTheDocument()
-    expect(screen.getByText('Planned for Phase 2')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Explorer' })).toBeInTheDocument()
+    expect(screen.queryByText('Planned for Phase 2')).not.toBeInTheDocument()
   })
 
   it('routes the Home CTA to the Study screen, same as the Study nav row', async () => {

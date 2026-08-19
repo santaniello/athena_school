@@ -5,6 +5,8 @@ import { AthenaLogo } from '@/components/athena-logo'
 import { NavItem } from '@/components/nav-item'
 import { ComingSoonPanel } from '@/components/coming-soon-panel'
 import { StudyFolderTree } from '@/components/study-folder-tree'
+import { KnowledgeTopicTree } from '@/components/knowledge-topic-tree'
+import { KnowledgeSection } from '@/components/knowledge-section'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import HomeScreen from '@/screens/HomeScreen'
 import StudyChatScreen from '@/screens/StudyChatScreen'
@@ -45,6 +47,7 @@ function AppShell({ onLogout }: AppShellProps) {
   const [section, setSection] = useState<AppSection>('home')
   const [profile, setProfile] = useState<ProfileDraft | null>(null)
   const [activeSession, setActiveSession] = useState<ActiveStudySession | null>(null)
+  const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
 
   useEffect(() => {
     void getUserProfile().then(setProfile)
@@ -121,6 +124,12 @@ function AppShell({ onLogout }: AppShellProps) {
                     onSelectSession={handleSelectSession}
                     onSessionStarted={handleSessionStarted}
                     onSessionDeleted={handleSessionDeleted}
+                  />
+                )}
+                {item.id === 'knowledge' && section === 'knowledge' && (
+                  <KnowledgeTopicTree
+                    selectedTopic={selectedTopic}
+                    onSelectTopic={setSelectedTopic}
                   />
                 )}
               </div>
@@ -208,6 +217,8 @@ function AppShell({ onLogout }: AppShellProps) {
                 </p>
               </div>
             )
+          ) : section === 'knowledge' ? (
+            <KnowledgeSection selectedTopic={selectedTopic} />
           ) : section === 'documentation' ? (
             <DocumentationScreen />
           ) : section === 'settings' && profile ? (

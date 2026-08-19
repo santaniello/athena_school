@@ -31,7 +31,7 @@ For each spec, the cycle MUST be followed in this exact order:
 ## Language
 
 - All code must be written in **English**: variable names, functions, types, constants, comments, internal error messages, and file names
-- User-facing UI text is in **Portuguese (BR)**
+- User-facing UI text is in **English**
 
 ## Architecture rules
 

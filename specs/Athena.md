@@ -412,13 +412,13 @@ Athena:
 
         ↓
 
-💡 Novo conhecimento encontrado
+💡 New knowledge found
 
 Cache Aside
 
-[1] Salvar como conhecimento
-[2] Salvar como rascunho
-[3] Ignorar
+[1] Save as knowledge
+[2] Save as drafts
+[3] Dismiss
 ```
 
 O modo automático poderá existir futuramente:
