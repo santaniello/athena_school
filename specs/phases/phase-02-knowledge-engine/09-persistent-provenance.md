@@ -60,7 +60,7 @@ snapshots, and persists the item plus its evidence links in one SQLite transacti
 A later edit or deletion of the original session cannot silently change what
 supported the item at approval time.
 
-`OriginKnowledgeChunk` is available for later flows that promote imported material into Knowledge Items. Importing notes in 2.3 still creates chunks, not Knowledge Items automatically.
+`OriginKnowledgeChunk` is available for a future flow that promotes a chunk into a **richer, LLM-structured** Knowledge Item — distinct from the lightweight shadow Item every imported file already gets automatically, heuristically, with no LLM call (2.3). That shadow Item has no evidence trail of its own; `OriginKnowledgeChunk` is reserved for the day a chunk (imported or otherwise) is deliberately promoted through real extraction.
 
 ## Persisted answer sources
 

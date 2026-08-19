@@ -219,7 +219,7 @@ describe('OnboardingConfirmScreen', () => {
       />,
     )
 
-    // When clicking "Confirmar e salvar"
+    // When clicking "Confirm and save"
     await user.click(screen.getByRole('button', { name: 'Confirm and save' }))
 
     // Then SaveProfile is called with the equivalent input and onConfirmed fires
@@ -275,7 +275,7 @@ describe('OnboardingConfirmScreen', () => {
       />,
     )
 
-    // When clicking "Confirmar e salvar"
+    // When clicking "Confirm and save"
     await user.click(screen.getByRole('button', { name: 'Confirm and save' }))
 
     // Then an inline error is shown and onConfirmed never fires

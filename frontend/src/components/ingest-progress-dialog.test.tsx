@@ -53,6 +53,16 @@ function setupSubscriptions() {
   }
 }
 
+// Once finished, the footer's explicit "Close" button and the dialog's
+// built-in X icon control (see ui/dialog.tsx's sr-only "Close" label) both
+// carry the accessible name "Close" — findByRole/getByRole would be
+// ambiguous, so tests that need the footer button specifically go through
+// this helper instead. It always renders first (see DialogContent: children
+// before the X button), so index 0 is stable.
+function findFooterCloseButton() {
+  return screen.findAllByRole('button', { name: 'Close' }).then((buttons) => buttons[0])
+}
+
 const emptySummary: IngestSummary = {
   filesScanned: 10,
   filesIngested: 8,
@@ -75,7 +85,7 @@ describe('IngestProgressDialog', () => {
     // explains that it is still processing
     expect(importNotes).toHaveBeenCalledWith('/home/user/notes')
     expect(
-      screen.getByText('Processando os arquivos da pasta selecionada.'),
+      screen.getByText('Processing files in the selected folder.'),
     ).toBeInTheDocument()
     void events
   })
@@ -107,7 +117,7 @@ describe('IngestProgressDialog', () => {
 
     // Then the current progress and file are shown, no error alert, and
     // the progress bar reflects the exact 30% completion (3 of 10)
-    expect(screen.getByText('3 de 10 arquivos')).toBeInTheDocument()
+    expect(screen.getByText('3 of 10 files')).toBeInTheDocument()
     expect(screen.getByText('go/channels.md')).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     const indicator = document.querySelector('[data-slot="progress-indicator"]')
@@ -126,10 +136,10 @@ describe('IngestProgressDialog', () => {
     // Then the summary counts replace the progress bar, a manual close
     // action becomes available, and with zero failures no failures list
     // renders at all
-    expect(screen.getByText('Importação concluída.')).toBeInTheDocument()
+    expect(screen.getByText('Import complete.')).toBeInTheDocument()
     expect(screen.getByText('8')).toBeInTheDocument()
-    expect(screen.queryByText('Iniciando...')).not.toBeInTheDocument()
-    expect(await screen.findByRole('button', { name: 'Fechar' })).toBeInTheDocument()
+    expect(screen.queryByText('Starting...')).not.toBeInTheDocument()
+    expect(await findFooterCloseButton()).toBeInTheDocument()
     expect(document.querySelector('.thin-scroll')).not.toBeInTheDocument()
   })
 
@@ -158,11 +168,11 @@ describe('IngestProgressDialog', () => {
     render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />)
 
     // When the whole import fails outright
-    events.emitError('a pasta não existe')
+    events.emitError('the folder does not exist')
 
     // Then the error is shown and closing becomes available
-    expect(screen.getByText('a pasta não existe')).toBeInTheDocument()
-    expect(await screen.findByRole('button', { name: 'Fechar' })).toBeInTheDocument()
+    expect(screen.getByText('the folder does not exist')).toBeInTheDocument()
+    expect(await findFooterCloseButton()).toBeInTheDocument()
   })
 
   it('has no way to dismiss it while the import is still running', () => {
@@ -171,13 +181,12 @@ describe('IngestProgressDialog', () => {
     vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
     render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />)
 
-    // Then neither the dialog's own close (X) control nor the Fechar
+    // Then neither the dialog's own close (X) control nor the Close
     // action exists yet
     expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Fechar' })).not.toBeInTheDocument()
   })
 
-  it('calls onClose when Fechar is clicked after finishing', async () => {
+  it('calls onClose when Close is clicked after finishing', async () => {
     // Given a finished import
     const events = setupSubscriptions()
     vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
@@ -186,8 +195,8 @@ describe('IngestProgressDialog', () => {
     render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={onClose} />)
     events.emitDone(emptySummary)
 
-    // When clicking Fechar
-    await user.click(await screen.findByRole('button', { name: 'Fechar' }))
+    // When clicking Close
+    await user.click(await findFooterCloseButton())
 
     // Then the owner is notified
     expect(onClose).toHaveBeenCalledOnce()
@@ -201,9 +210,9 @@ describe('IngestProgressDialog', () => {
     const user = userEvent.setup()
     render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={onClose} />)
     events.emitDone(emptySummary)
-    await screen.findByRole('button', { name: 'Fechar' })
+    await findFooterCloseButton()
 
-    // When dismissing it with Escape instead of the Fechar button
+    // When dismissing it with Escape instead of the Close button
     await user.keyboard('{Escape}')
 
     // Then the owner is still notified
@@ -250,7 +259,7 @@ describe('IngestProgressDialog', () => {
       <IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />,
     )
     events.emitDone(emptySummary)
-    expect(await screen.findByRole('button', { name: 'Fechar' })).toBeInTheDocument()
+    expect(await findFooterCloseButton()).toBeInTheDocument()
 
     // When it is closed then reopened for a new folder
     rerender(
@@ -260,7 +269,7 @@ describe('IngestProgressDialog', () => {
 
     // Then it starts a fresh import instead of showing the stale summary
     await waitFor(() => expect(importNotes).toHaveBeenCalledWith('/home/user/other'))
-    expect(screen.queryByRole('button', { name: 'Fechar' })).not.toBeInTheDocument()
-    expect(screen.getByText('Iniciando...')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument()
+    expect(screen.getByText('Starting...')).toBeInTheDocument()
   })
 })

@@ -37,8 +37,8 @@ describe('KnowledgeDeleteDialog', () => {
     )
 
     // Then the title names the concept and there is no extra file-related copy
-    expect(screen.getByText('Excluir "Channels"?')).toBeInTheDocument()
-    expect(screen.queryByText(/arquivo original/)).not.toBeInTheDocument()
+    expect(screen.getByText('Delete "Channels"?')).toBeInTheDocument()
+    expect(screen.queryByText(/original file/)).not.toBeInTheDocument()
   })
 
   it('adds the imported-note caveat when the item came from a file', () => {
@@ -52,7 +52,7 @@ describe('KnowledgeDeleteDialog', () => {
     )
 
     // Then the extra sentence about the untouched source file appears
-    expect(screen.getByText(/arquivo original não é excluído/)).toBeInTheDocument()
+    expect(screen.getByText(/original file is not deleted/)).toBeInTheDocument()
   })
 
   it('calls onConfirm when the destructive action is clicked', async () => {
@@ -62,20 +62,20 @@ describe('KnowledgeDeleteDialog', () => {
     render(<KnowledgeDeleteDialog item={testItem()} onCancel={vi.fn()} onConfirm={onConfirm} />)
 
     // When confirming the deletion
-    await user.click(screen.getByRole('button', { name: 'Excluir' }))
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
 
     // Then the owner is notified
     expect(onConfirm).toHaveBeenCalledOnce()
   })
 
-  it('calls onCancel when Cancelar is clicked', async () => {
+  it('calls onCancel when Cancel is clicked', async () => {
     // Given an open dialog
     const onCancel = vi.fn()
     const user = userEvent.setup()
     render(<KnowledgeDeleteDialog item={testItem()} onCancel={onCancel} onConfirm={vi.fn()} />)
 
     // When cancelling
-    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
 
     // Then the owner is notified without confirming
     expect(onCancel).toHaveBeenCalledOnce()

@@ -37,18 +37,18 @@ interface KnowledgeExplorerScreenProps {
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  draft: 'Rascunho',
-  approved: 'Aprovado',
-  deprecated: 'Descontinuado',
+  draft: 'Draft',
+  approved: 'Approved',
+  deprecated: 'Deprecated',
 }
 
 const SOURCE_LABELS: Record<string, string> = {
   athena: 'Athena',
-  user_note: 'Nota do usuário',
-  imported_doc: 'Nota importada',
+  user_note: 'User note',
+  imported_doc: 'Imported note',
 }
 
-const GENERIC_ERROR = 'Não foi possível concluir a ação. Tente novamente.'
+const GENERIC_ERROR = 'An error occurred. Please try again.'
 
 function statusLabel(status: string): string {
   return STATUS_LABELS[status] ?? status
@@ -100,7 +100,7 @@ function KnowledgeExplorerScreen({ selectedTopic, mode }: KnowledgeExplorerScree
     function load() {
       listKnowledgeItems(selectedTopic ?? '', effectiveStatus)
         .then(setItems)
-        .catch(() => setError('Não foi possível carregar os itens de conhecimento.'))
+        .catch(() => setError('Failed to load knowledge items.'))
     }
     load()
     return onIngestDone(load)
@@ -178,10 +178,10 @@ function KnowledgeExplorerScreen({ selectedTopic, mode }: KnowledgeExplorerScree
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="draft">Rascunho</SelectItem>
-              <SelectItem value="approved">Aprovado</SelectItem>
-              <SelectItem value="deprecated">Descontinuado</SelectItem>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="draft">Draft</SelectItem>
+              <SelectItem value="approved">Approved</SelectItem>
+              <SelectItem value="deprecated">Deprecated</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -196,7 +196,7 @@ function KnowledgeExplorerScreen({ selectedTopic, mode }: KnowledgeExplorerScree
       <div className="flex min-h-0 flex-1">
         <div className="thin-scroll w-80 shrink-0 space-y-4 overflow-y-auto border-r pr-4">
           {items.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhum item encontrado.</p>
+            <p className="text-sm text-muted-foreground">No items found.</p>
           ) : (
             Array.from(groups.entries()).map(([topic, topicItems]) => (
               <div key={topic}>
@@ -236,11 +236,11 @@ function KnowledgeExplorerScreen({ selectedTopic, mode }: KnowledgeExplorerScree
 
         <div className="thin-scroll flex-1 overflow-y-auto pl-4">
           {!selectedItem ? (
-            <p className="text-sm text-muted-foreground">Selecione um item para ver os detalhes.</p>
+            <p className="text-sm text-muted-foreground">Select an item to see the details.</p>
           ) : isEditing && draft ? (
             <div className="flex max-w-lg flex-col gap-3">
               <div>
-                <Label htmlFor="knowledge-edit-topic">Tópico</Label>
+                <Label htmlFor="knowledge-edit-topic">Topic</Label>
                 <Input
                   id="knowledge-edit-topic"
                   value={draft.topic}
@@ -248,7 +248,7 @@ function KnowledgeExplorerScreen({ selectedTopic, mode }: KnowledgeExplorerScree
                 />
               </div>
               <div>
-                <Label htmlFor="knowledge-edit-concept">Conceito</Label>
+                <Label htmlFor="knowledge-edit-concept">Concept</Label>
                 <Input
                   id="knowledge-edit-concept"
                   value={draft.concept}
@@ -256,7 +256,7 @@ function KnowledgeExplorerScreen({ selectedTopic, mode }: KnowledgeExplorerScree
                 />
               </div>
               <div>
-                <Label htmlFor="knowledge-edit-definition">Definição</Label>
+                <Label htmlFor="knowledge-edit-definition">Definition</Label>
                 <Textarea
                   id="knowledge-edit-definition"
                   value={draft.definition}
@@ -264,7 +264,7 @@ function KnowledgeExplorerScreen({ selectedTopic, mode }: KnowledgeExplorerScree
                 />
               </div>
               <div>
-                <Label htmlFor="knowledge-edit-properties">Propriedades</Label>
+                <Label htmlFor="knowledge-edit-properties">Properties</Label>
                 <TagInput
                   id="knowledge-edit-properties"
                   value={draft.properties}
@@ -280,7 +280,7 @@ function KnowledgeExplorerScreen({ selectedTopic, mode }: KnowledgeExplorerScree
                 />
               </div>
               <div>
-                <Label htmlFor="knowledge-edit-related">Conceitos relacionados</Label>
+                <Label htmlFor="knowledge-edit-related">Related concepts</Label>
                 <TagInput
                   id="knowledge-edit-related"
                   value={draft.relatedConcepts}
@@ -288,9 +288,9 @@ function KnowledgeExplorerScreen({ selectedTopic, mode }: KnowledgeExplorerScree
                 />
               </div>
               <div className="flex gap-2 pt-2">
-                <Button onClick={() => void handleSaveEdit()}>Salvar</Button>
+                <Button onClick={() => void handleSaveEdit()}>Save</Button>
                 <Button variant="outline" onClick={() => setIsEditing(false)}>
-                  Cancelar
+                  Cancel
                 </Button>
               </div>
             </div>
@@ -309,24 +309,24 @@ function KnowledgeExplorerScreen({ selectedTopic, mode }: KnowledgeExplorerScree
               <p className="text-sm whitespace-pre-wrap text-foreground">
                 {selectedItem.definition}
               </p>
-              <FieldList label="Propriedades" values={selectedItem.properties} />
+              <FieldList label="Properties" values={selectedItem.properties} />
               <FieldList label="Trade-offs" values={selectedItem.tradeOffs} />
-              <FieldList label="Conceitos relacionados" values={selectedItem.relatedConcepts} />
+              <FieldList label="Related concepts" values={selectedItem.relatedConcepts} />
 
               <div className="flex flex-wrap gap-2 pt-2">
                 {selectedItem.status === 'draft' && (
-                  <Button onClick={() => void handleApprove(selectedItem)}>Aprovar</Button>
+                  <Button onClick={() => void handleApprove(selectedItem)}>Approve</Button>
                 )}
                 {selectedItem.status === 'approved' && (
                   <Button variant="outline" onClick={() => void handleDeprecate(selectedItem)}>
-                    Descontinuar
+                    Deprecate
                   </Button>
                 )}
                 <Button variant="outline" onClick={() => startEditing(selectedItem)}>
-                  Editar
+                  Edit
                 </Button>
                 <Button variant="destructive" onClick={() => setDeletingItem(selectedItem)}>
-                  Excluir
+                  Delete
                 </Button>
               </div>
             </div>

@@ -126,7 +126,7 @@ describe('SettingsScreen', () => {
     render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
 
     // Then the Knowledge Extraction section displays it
-    expect(await screen.findByLabelText('Máximo de itens por extração')).toHaveValue(12)
+    expect(await screen.findByLabelText('Maximum items per extraction')).toHaveValue(12)
   })
 
   it('shows an inline error when loading knowledge extraction settings fails', async () => {
@@ -137,7 +137,7 @@ describe('SettingsScreen', () => {
     render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
 
     // Then the load failure is reported without crashing the profile form
-    expect(await screen.findByText('Não foi possível carregar a configuração.')).toBeInTheDocument()
+    expect(await screen.findByText('Failed to load the setting.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
   })
 
@@ -148,15 +148,15 @@ describe('SettingsScreen', () => {
     )
     const user = userEvent.setup()
     render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
-    const input = await screen.findByLabelText('Máximo de itens por extração')
+    const input = await screen.findByLabelText('Maximum items per extraction')
 
     // When entering an out-of-range value and saving
     await user.clear(input)
     await user.type(input, '21')
-    await user.click(screen.getByRole('button', { name: 'Salvar configuração de extração' }))
+    await user.click(screen.getByRole('button', { name: 'Save extraction setting' }))
 
     // Then the backend receives the value and its validation error is translated
-    expect(await screen.findByText('Informe um valor inteiro entre 1 e 20.')).toBeInTheDocument()
+    expect(await screen.findByText('Enter an integer between 1 and 20.')).toBeInTheDocument()
     expect(updateKnowledgeExtractionSettings).toHaveBeenCalledWith(21)
   })
 
@@ -167,15 +167,15 @@ describe('SettingsScreen', () => {
     )
     const user = userEvent.setup()
     render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
-    const input = await screen.findByLabelText('Máximo de itens por extração')
+    const input = await screen.findByLabelText('Maximum items per extraction')
 
     // When entering a value below the allowed range and saving
     await user.clear(input)
     await user.type(input, '0')
-    await user.click(screen.getByRole('button', { name: 'Salvar configuração de extração' }))
+    await user.click(screen.getByRole('button', { name: 'Save extraction setting' }))
 
     // Then the backend receives the value and its validation error is translated
-    expect(await screen.findByText('Informe um valor inteiro entre 1 e 20.')).toBeInTheDocument()
+    expect(await screen.findByText('Enter an integer between 1 and 20.')).toBeInTheDocument()
     expect(updateKnowledgeExtractionSettings).toHaveBeenCalledWith(0)
   })
 
@@ -186,14 +186,14 @@ describe('SettingsScreen', () => {
     )
     const user = userEvent.setup()
     render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
-    const input = await screen.findByLabelText('Máximo de itens por extração')
+    const input = await screen.findByLabelText('Maximum items per extraction')
 
     // When entering a fractional value and saving
     fireEvent.change(input, { target: { value: '1.5' } })
-    await user.click(screen.getByRole('button', { name: 'Salvar configuração de extração' }))
+    await user.click(screen.getByRole('button', { name: 'Save extraction setting' }))
 
     // Then the backend receives the fraction and its validation error is translated
-    expect(await screen.findByText('Informe um valor inteiro entre 1 e 20.')).toBeInTheDocument()
+    expect(await screen.findByText('Enter an integer between 1 and 20.')).toBeInTheDocument()
     expect(updateKnowledgeExtractionSettings).toHaveBeenCalledWith(1.5)
   })
 
@@ -202,16 +202,16 @@ describe('SettingsScreen', () => {
     vi.mocked(updateKnowledgeExtractionSettings).mockResolvedValueOnce()
     const user = userEvent.setup()
     render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
-    const input = await screen.findByLabelText('Máximo de itens por extração')
+    const input = await screen.findByLabelText('Maximum items per extraction')
 
     // When entering a valid value and saving
     await user.clear(input)
     await user.type(input, '12')
-    await user.click(screen.getByRole('button', { name: 'Salvar configuração de extração' }))
+    await user.click(screen.getByRole('button', { name: 'Save extraction setting' }))
 
     // Then the backend receives it and success is shown
     await waitFor(() => expect(updateKnowledgeExtractionSettings).toHaveBeenCalledWith(12))
-    expect(await screen.findByText('Configuração salva.')).toBeInTheDocument()
+    expect(await screen.findByText('Setting saved.')).toBeInTheDocument()
   })
 
   it.each([1, 20])('accepts the boundary knowledge extraction maximum %i', async (maximum) => {
@@ -219,12 +219,12 @@ describe('SettingsScreen', () => {
     vi.mocked(updateKnowledgeExtractionSettings).mockResolvedValueOnce()
     const user = userEvent.setup()
     render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
-    const input = await screen.findByLabelText('Máximo de itens por extração')
+    const input = await screen.findByLabelText('Maximum items per extraction')
 
     // When saving an inclusive boundary value
     await user.clear(input)
     await user.type(input, String(maximum))
-    await user.click(screen.getByRole('button', { name: 'Salvar configuração de extração' }))
+    await user.click(screen.getByRole('button', { name: 'Save extraction setting' }))
 
     // Then the boundary is persisted
     await waitFor(() => expect(updateKnowledgeExtractionSettings).toHaveBeenCalledWith(maximum))
@@ -235,15 +235,15 @@ describe('SettingsScreen', () => {
     vi.mocked(updateKnowledgeExtractionSettings).mockReturnValueOnce(new Promise(() => {}))
     const user = userEvent.setup()
     render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
-    const input = await screen.findByLabelText('Máximo de itens por extração')
+    const input = await screen.findByLabelText('Maximum items per extraction')
     await user.clear(input)
     await user.type(input, '12')
 
     // When saving the extraction setting
-    await user.click(screen.getByRole('button', { name: 'Salvar configuração de extração' }))
+    await user.click(screen.getByRole('button', { name: 'Save extraction setting' }))
 
     // Then the button exposes and locks its pending state
-    expect(screen.getByRole('button', { name: 'Salvando...' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled()
   })
 
   it('shows an inline error when saving knowledge extraction settings fails', async () => {
@@ -251,16 +251,16 @@ describe('SettingsScreen', () => {
     vi.mocked(updateKnowledgeExtractionSettings).mockRejectedValueOnce(new Error('unavailable'))
     const user = userEvent.setup()
     render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
-    const input = await screen.findByLabelText('Máximo de itens por extração')
+    const input = await screen.findByLabelText('Maximum items per extraction')
     await user.clear(input)
     await user.type(input, '12')
 
     // When saving the extraction setting
-    await user.click(screen.getByRole('button', { name: 'Salvar configuração de extração' }))
+    await user.click(screen.getByRole('button', { name: 'Save extraction setting' }))
 
     // Then the save failure is reported and the action is available again
-    expect(await screen.findByText('Não foi possível salvar a configuração.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Salvar configuração de extração' })).toBeEnabled()
+    expect(await screen.findByText('Failed to save the setting.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save extraction setting' })).toBeEnabled()
   })
 
   it('clears stale validation and success messages before a new valid save', async () => {
@@ -277,21 +277,21 @@ describe('SettingsScreen', () => {
       )
     const user = userEvent.setup()
     render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
-    const input = await screen.findByLabelText('Máximo de itens por extração')
+    const input = await screen.findByLabelText('Maximum items per extraction')
     await user.clear(input)
     await user.type(input, '21')
-    await user.click(screen.getByRole('button', { name: 'Salvar configuração de extração' }))
-    expect(await screen.findByText('Informe um valor inteiro entre 1 e 20.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Save extraction setting' }))
+    expect(await screen.findByText('Enter an integer between 1 and 20.')).toBeInTheDocument()
 
     // When starting a valid save
     await user.clear(input)
     await user.type(input, '12')
-    await user.click(screen.getByRole('button', { name: 'Salvar configuração de extração' }))
+    await user.click(screen.getByRole('button', { name: 'Save extraction setting' }))
 
     // Then stale feedback is cleared before the request resolves
-    expect(screen.queryByText('Informe um valor inteiro entre 1 e 20.')).not.toBeInTheDocument()
-    expect(screen.queryByText('Configuração salva.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Enter an integer between 1 and 20.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Setting saved.')).not.toBeInTheDocument()
     resolveSave()
-    expect(await screen.findByText('Configuração salva.')).toBeInTheDocument()
+    expect(await screen.findByText('Setting saved.')).toBeInTheDocument()
   })
 })

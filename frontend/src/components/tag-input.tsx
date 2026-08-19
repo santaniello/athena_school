@@ -62,7 +62,7 @@ function TagInput({
           {tag}
           <button
             type="button"
-            aria-label={`Remover ${tag}`}
+            aria-label={`Remove ${tag}`}
             onClick={() => removeTag(tag)}
             className="cursor-pointer text-secondary-foreground/70 hover:text-secondary-foreground"
           >

@@ -69,7 +69,7 @@ describe('KnowledgeExplorerScreen', () => {
     expect(screen.getByText('Generics')).toBeInTheDocument()
     expect(screen.getByText('Go')).toBeInTheDocument()
     expect(screen.getByText('Athena')).toBeInTheDocument()
-    expect(screen.getByText('Nota importada')).toBeInTheDocument()
+    expect(screen.getByText('Imported note')).toBeInTheDocument()
   })
 
   it('requests the current topic and status filter from the backend', async () => {
@@ -126,18 +126,18 @@ describe('KnowledgeExplorerScreen', () => {
     await user.click(await screen.findByText('Channels'))
 
     // Then Approve is offered, Deprecate is not
-    expect(screen.getByRole('button', { name: 'Aprovar' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Descontinuar' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Deprecate' })).not.toBeInTheDocument()
 
     // When approving
-    await user.click(screen.getByRole('button', { name: 'Aprovar' }))
+    await user.click(screen.getByRole('button', { name: 'Approve' }))
 
     // Then the badge flips to approved without a second list fetch, and
     // Approve is no longer offered on the now-approved item
-    await waitFor(() => expect(screen.getAllByText('Aprovado').length).toBeGreaterThan(0))
+    await waitFor(() => expect(screen.getAllByText('Approved').length).toBeGreaterThan(0))
     expect(listKnowledgeItems).toHaveBeenCalledTimes(1)
-    expect(screen.queryByRole('button', { name: 'Aprovar' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Descontinuar' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Deprecate' })).toBeInTheDocument()
   })
 
   it('offers Deprecate only on an approved item, including an imported note', async () => {
@@ -154,13 +154,13 @@ describe('KnowledgeExplorerScreen', () => {
     await user.click(await screen.findByText('Channels'))
 
     // When deprecating it
-    await user.click(screen.getByRole('button', { name: 'Descontinuar' }))
+    await user.click(screen.getByRole('button', { name: 'Deprecate' }))
 
     // Then it becomes deprecated, and neither Approve nor Deprecate remain offered
-    await waitFor(() => expect(screen.getAllByText('Descontinuado').length).toBeGreaterThan(0))
-    expect(screen.queryByRole('button', { name: 'Aprovar' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Descontinuar' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Editar' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.getAllByText('Deprecated').length).toBeGreaterThan(0))
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Deprecate' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument()
   })
 
   it('edits a field and saves without touching status, source or createdAt', async () => {
@@ -174,11 +174,11 @@ describe('KnowledgeExplorerScreen', () => {
     await user.click(await screen.findByText('Channels'))
 
     // When editing the concept and saving
-    await user.click(screen.getByRole('button', { name: 'Editar' }))
-    const conceptInput = screen.getByLabelText('Conceito')
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    const conceptInput = screen.getByLabelText('Concept')
     await user.clear(conceptInput)
     await user.type(conceptInput, 'Buffered channels')
-    await user.click(screen.getByRole('button', { name: 'Salvar' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
 
     // Then only the editable fields are sent — id/status/source/createdAt
     // are never part of the update call's payload
@@ -206,16 +206,16 @@ describe('KnowledgeExplorerScreen', () => {
     render(<KnowledgeExplorerScreen selectedTopic={null} mode="explorer" />)
     await user.click(await screen.findByText('Channels'))
 
-    // When clicking Excluir
-    await user.click(screen.getByRole('button', { name: 'Excluir' }))
+    // When clicking Delete
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
 
     // Then a confirmation dialog appears before anything is deleted
-    expect(screen.getByText('Excluir "Channels"?')).toBeInTheDocument()
+    expect(screen.getByText('Delete "Channels"?')).toBeInTheDocument()
     expect(deleteKnowledgeItem).not.toHaveBeenCalled()
 
     // When confirming
     const dialog = screen.getByRole('alertdialog')
-    await user.click(within(dialog).getByRole('button', { name: 'Excluir' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
 
     // Then the item is deleted and removed from the list
     await waitFor(() => expect(deleteKnowledgeItem).toHaveBeenCalledWith('item-1'))
@@ -243,6 +243,6 @@ describe('KnowledgeExplorerScreen', () => {
     render(<KnowledgeExplorerScreen selectedTopic={null} mode="explorer" />)
 
     // Then the empty state is shown
-    expect(await screen.findByText('Nenhum item encontrado.')).toBeInTheDocument()
+    expect(await screen.findByText('No items found.')).toBeInTheDocument()
   })
 })

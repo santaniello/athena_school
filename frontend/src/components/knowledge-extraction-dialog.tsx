@@ -22,8 +22,8 @@ interface KnowledgeExtractionDialogProps {
 }
 
 // The three options from specs/Athena.md §12 ("Knowledge Promotion"):
-// "Salvar como conhecimento" (save directly as approved), "Salvar como
-// rascunho" (save as draft, the default review flow), "Ignorar" (discard).
+// "Save as knowledge" (save directly as approved), "Save as drafts" (save
+// as draft, the default review flow), "Dismiss" (discard).
 type SaveMode = 'draft' | 'approve'
 
 export function KnowledgeExtractionDialog({
@@ -75,7 +75,7 @@ export function KnowledgeExtractionDialog({
       }
       onClose()
     } catch (caught) {
-      const error = caught instanceof Error ? caught : new Error('Falha ao salvar os rascunhos.')
+      const error = caught instanceof Error ? caught : new Error('Failed to save drafts.')
       setSaveError(error.message)
     } finally {
       setIsSaving(false)
@@ -84,8 +84,8 @@ export function KnowledgeExtractionDialog({
 
   function saveButtonLabel(mode: SaveMode, idleLabel: string) {
     if (lastMode !== mode) return idleLabel
-    if (isSaving) return 'Salvando...'
-    if (saveError) return 'Tentar novamente'
+    if (isSaving) return 'Saving...'
+    if (saveError) return 'Try again'
     return idleLabel
   }
 
@@ -93,21 +93,21 @@ export function KnowledgeExtractionDialog({
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Novo conhecimento encontrado</DialogTitle>
+          <DialogTitle>New knowledge found</DialogTitle>
           <DialogDescription>
-            Revise os conceitos e escolha quais devem ser salvos como rascunho.
+            Review the concepts and choose which ones to save as drafts.
           </DialogDescription>
         </DialogHeader>
 
         {items.length === 0 ? (
-          <p className="py-4 text-sm text-muted-foreground">Nenhum conhecimento novo encontrado</p>
+          <p className="py-4 text-sm text-muted-foreground">No new knowledge found</p>
         ) : (
           <div className="thin-scroll max-h-[50vh] space-y-3 overflow-y-auto">
             {items.map((item, index) => (
               <label key={item.id || index} className="flex gap-3 rounded-lg border p-3">
                 <input
                   type="checkbox"
-                  aria-label={`Selecionar ${item.concept}`}
+                  aria-label={`Select ${item.concept}`}
                   checked={selected.has(index)}
                   disabled={saved.has(index) || isSaving}
                   onChange={() => toggle(index)}
@@ -119,7 +119,7 @@ export function KnowledgeExtractionDialog({
                     {item.definition}
                   </span>
                   {saved.has(index) && (
-                    <span className="mt-1 block text-xs text-primary">Salvo</span>
+                    <span className="mt-1 block text-xs text-primary">Saved</span>
                   )}
                 </span>
               </label>
@@ -135,7 +135,7 @@ export function KnowledgeExtractionDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isSaving}>
-            Ignorar
+            Dismiss
           </Button>
           {items.length > 0 && (
             <>
@@ -144,13 +144,13 @@ export function KnowledgeExtractionDialog({
                 onClick={() => void handleSave('draft')}
                 disabled={pendingIndices.length === 0 || isSaving}
               >
-                {saveButtonLabel('draft', 'Salvar como rascunhos')}
+                {saveButtonLabel('draft', 'Save as drafts')}
               </Button>
               <Button
                 onClick={() => void handleSave('approve')}
                 disabled={pendingIndices.length === 0 || isSaving}
               >
-                {saveButtonLabel('approve', 'Salvar como conhecimento')}
+                {saveButtonLabel('approve', 'Save as knowledge')}
               </Button>
             </>
           )}

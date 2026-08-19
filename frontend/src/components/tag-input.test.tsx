@@ -61,7 +61,7 @@ describe('TagInput', () => {
     render(<TagInput value={['SQL']} onChange={onChange} />)
 
     // When clicking the remove control for that tag
-    await user.click(screen.getByRole('button', { name: 'Remover SQL' }))
+    await user.click(screen.getByRole('button', { name: 'Remove SQL' }))
 
     // Then onChange is called with the tag removed
     expect(onChange).toHaveBeenCalledWith([])

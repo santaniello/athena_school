@@ -23,16 +23,16 @@ export function TranscriptTruncationDialog({
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onDecline()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Esta sessão é longa</DialogTitle>
+          <DialogTitle>This session is long</DialogTitle>
           <DialogDescription>
-            Apenas as mensagens completas mais recentes serão consideradas na extração. Continuar?
+            Only the most recent complete messages will be considered for extraction. Continue?
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button variant="outline" onClick={onDecline}>
-            Não
+            No
           </Button>
-          <Button onClick={onConfirm}>Sim</Button>
+          <Button onClick={onConfirm}>Yes</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

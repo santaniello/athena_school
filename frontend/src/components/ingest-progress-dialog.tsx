@@ -74,11 +74,9 @@ export function IngestProgressDialog({ open, folderPath, onClose }: IngestProgre
         onInteractOutside={(event) => !finished && event.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle>Importando notas</DialogTitle>
+          <DialogTitle>Importing notes</DialogTitle>
           <DialogDescription>
-            {finished
-              ? 'Importação concluída.'
-              : 'Processando os arquivos da pasta selecionada.'}
+            {finished ? 'Import complete.' : 'Processing files in the selected folder.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -87,8 +85,8 @@ export function IngestProgressDialog({ open, folderPath, onClose }: IngestProgre
             <Progress value={percent} />
             <p className="text-sm text-muted-foreground">
               {progress
-                ? `${progress.filesProcessed} de ${progress.filesTotal} arquivos`
-                : 'Iniciando...'}
+                ? `${progress.filesProcessed} of ${progress.filesTotal} files`
+                : 'Starting...'}
             </p>
             {progress?.currentFile && (
               <p className="truncate text-xs text-muted-foreground">{progress.currentFile}</p>
@@ -106,19 +104,19 @@ export function IngestProgressDialog({ open, folderPath, onClose }: IngestProgre
           <div className="space-y-3">
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
               <div>
-                <dt className="text-muted-foreground">Escaneados</dt>
+                <dt className="text-muted-foreground">Scanned</dt>
                 <dd className="font-medium text-foreground">{summary.filesScanned}</dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">Importados</dt>
+                <dt className="text-muted-foreground">Imported</dt>
                 <dd className="font-medium text-foreground">{summary.filesIngested}</dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">Ignorados</dt>
+                <dt className="text-muted-foreground">Skipped</dt>
                 <dd className="font-medium text-foreground">{summary.filesSkipped}</dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">Falhas</dt>
+                <dt className="text-muted-foreground">Failed</dt>
                 <dd className="font-medium text-foreground">{summary.filesFailed}</dd>
               </div>
             </dl>
@@ -136,7 +134,7 @@ export function IngestProgressDialog({ open, folderPath, onClose }: IngestProgre
 
         {finished && (
           <DialogFooter>
-            <Button onClick={onClose}>Fechar</Button>
+            <Button onClick={onClose}>Close</Button>
           </DialogFooter>
         )}
       </DialogContent>

@@ -13,9 +13,9 @@ import { TranscriptTruncationDialog } from '@/components/transcript-truncation-d
 const TRANSCRIPT_TOO_LARGE_ERROR = 'no complete transcript message fits within the extraction limit'
 
 function extractionErrorMessage(error: unknown): string {
-  if (!(error instanceof Error)) return 'Falha ao extrair conhecimento.'
+  if (!(error instanceof Error)) return 'Failed to extract knowledge.'
   if (error.message.includes(TRANSCRIPT_TOO_LARGE_ERROR)) {
-    return 'A mensagem mais recente é grande demais para ser processada integralmente.'
+    return 'The most recent message is too large to process in full.'
   }
   return error.message
 }
@@ -260,11 +260,11 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
           <Button
             size="sm"
             variant="outline"
-            aria-label={isExtracting ? 'Extraindo conhecimento' : 'Extrair conhecimento'}
+            aria-label={isExtracting ? 'Extracting knowledge' : 'Extract knowledge'}
             disabled={messages.length === 0 || isStreaming || isExtracting}
             onClick={() => void handleExtractKnowledge(false)}
           >
-            {isExtracting ? 'Extraindo...' : 'Extrair conhecimento'}
+            {isExtracting ? 'Extracting...' : 'Extract knowledge'}
           </Button>
           <Tooltip>
             <TooltipTrigger asChild>

@@ -339,9 +339,16 @@ CREATE TABLE usage (
 
 **Entrega em três incrementos**, cada um demonstrável sozinho:
 
-1. **2.1 → 2.2 → 2.6 → 2.7** — modelo, extração, explorer, fila de revisão
-2. **2.3 → 2.4 → 2.5 → 2.8** — import de notas, vector search, RAG, indexação de todos os estados
+1. **2.1 → 2.2 → 2.3 → 2.7** — modelo, extração, import de notas + explorer, fila de revisão
+2. **2.4 → 2.5 → 2.8** — vector search, RAG, indexação de todos os estados
 3. **2.9 → 2.10 → 2.11 → 2.12** — proveniência, duplicidade, reconciliação e histórico de revisões
+
+> A antiga 2.6 (Knowledge Explorer) foi absorvida pela 2.3: toda nota importada
+> também vira um `knowledge.Item` "sombra" (sem LLM), então a tela que
+> lista/gerencia Items precisa existir para a importação ser utilizável. Isso
+> quebra a independência original das duas trilhas — a 2.3 agora depende da 2.1
+> (o modelo `Item`) — mas evita que o Explorer mantenha duas listagens
+> paralelas. Ver a spec da fase para a justificativa completa.
 
 > As specs detalhadas estão em `specs/phases/phase-02-knowledge-engine/`. Esta seção é o resumo; em caso de divergência, a spec da fase é a mais específica.
 
@@ -395,12 +402,16 @@ O domínio `study` não tem conceito de fim de sessão (`Session` não tem `Ende
 - [ ] Prompt de extração estruturado → envelope `{"items":[...]}`, não array nu
 - [ ] Validação em Go antes de persistir: tetos de tamanho, item inválido é pulado sem descartar os válidos, `SaveDrafts` regenera o ID e retorna os índices exatos persistidos para um retry sem duplicação
 - [ ] JSON malformado → `ErrMalformedExtraction`; quem loga é o binding desktop, mantendo `internal/application` sem logging
-- [ ] UI: modal "Novo conhecimento encontrado" com [Salvar como rascunhos / Ignorar] — o terceiro botão [Salvar e aprovar] entra na 2.6, quando `Approve` passa a existir
+- [ ] UI: modal "New knowledge found" com [Save as drafts / Dismiss] — o terceiro botão [Save and approve] entra na 2.3, quando `Approve` passa a existir
 
-### 2.3 — Notes Import (Markdown)
+### 2.3 — Notes Import & Knowledge Explorer
+
+> Substitui as antigas 2.3 (Notes Import) e 2.6 (Knowledge Explorer), tratadas
+> como uma entrega conjunta — ver a nota de trilhas acima e a spec da fase para
+> a justificativa completa.
 
 - [ ] `internal/application/ingest/` — pipeline de ingestão sobre `fs.FS` (`os.OpenRoot` dá confinamento contra symlink escape; testes usam `fstest.MapFS`)
-- [ ] UI: botão "Importar notas" + seletor de pasta (`PickNotesFolder` e `ImportNotes` como bindings separados; o diálogo Wails precisa ser injetável, como o `emit`)
+- [ ] UI: botão "Importar notas" no toolbar do Knowledge Explorer + seletor de pasta (`PickNotesFolder` e `ImportNotes` como bindings separados; o diálogo Wails precisa ser injetável, como o `emit`) + `Dialog` de progresso (shadcn `progress`), terminando num resumo com falhas por arquivo
 - [ ] Pipeline:
 
 ```text
@@ -415,11 +426,18 @@ Metadata (source, file_path, heading, topic, status, created_at)
 Embeddings (llm.Provider.Embeddings — já implementado, sem chamadores hoje)
     ↓
 knowledge_chunks (embedding como BLOB float32 little-endian)
+    +
+knowledge_items: um Item "sombra" por arquivo (Concept = H1/nome do arquivo,
+Definition = preview de 300 chars, Status = approved direto, sem LLM)
 ```
 
-- [ ] Suporte inicial: `.md` e `.txt`
-- [ ] Deduplicação por `file_path` + `mtime` + modelo de embedding; arquivo alterado **substitui** seus chunks numa transação, não duplica — e trocar o modelo re-embeda automaticamente
+- [ ] Suporte inicial: `.md` e `.txt`; diretórios ocultos (`.git`, `.obsidian`) são pulados na varredura
+- [ ] Deduplicação por `file_path` + `mtime` + modelo de embedding; arquivo alterado **substitui** seus chunks numa transação, não duplica — e trocar o modelo re-embeda automaticamente. A mesma transação grava/atualiza o Item-sombra
 - [ ] Conteúdo sem heading (texto corrido, front matter, só H4+) cai no split por parágrafo; nada é descartado por falta de heading
+- [ ] Apagar uma nota pela tela do Explorer remove o Item e seus chunks, mas preserva o registro em `ingested_files` — reimportar a mesma pasta sem editar o arquivo não traz o conteúdo de volta; editar o arquivo e reimportar traz
+- [ ] Sidebar esquerda com árvore de tópicos e conceitos, filtros por status (draft / approved / deprecated); a lista de Items mostra um selo de proveniência (Athena / Imported note) — sem listagem paralela, é o mesmo `ListItems`/`ListTopics` de sempre
+- [ ] Ações gated pelo ciclo de vida: aprovar (só draft — nunca oferecido a nota importada, que já nasce approved), editar, deprecar (só approved), deletar (com aviso extra no `AlertDialog` para itens de origem `imported_doc`)
+- [ ] Reusar `components/tag-input.tsx` no editor inline das três listas
 - [ ] Schema:
 
 ```sql
@@ -428,13 +446,13 @@ CREATE TABLE knowledge_chunks (
     source TEXT,
     topic TEXT,      -- necessário para os filtros da 2.4
     status TEXT,     -- idem
-    item_id TEXT,    -- permite reindexar/remover o chunk de um Knowledge Item
+    item_id TEXT,    -- sempre preenchido: Item extraído (athena) ou Item-sombra (imported_doc)
     file_path TEXT,
     heading TEXT,
     content TEXT,
     embedding BLOB, -- float32 empacotado, little-endian
     embedding_model TEXT NOT NULL,
-    item_updated_at DATETIME, -- preenchido somente para chunks de Knowledge Items
+    item_updated_at DATETIME, -- NULL para imported_doc; usa ingested_files.mtime, não este campo
     created_at DATETIME
 );
 
@@ -444,6 +462,7 @@ CREATE TABLE ingested_files (
     mtime           INTEGER NOT NULL,
     embedding_model TEXT NOT NULL,
     chunk_count     INTEGER NOT NULL,
+    item_id         TEXT NOT NULL, -- ID estável do Item-sombra entre reimportações
     ingested_at     DATETIME
 );
 ```
@@ -486,15 +505,6 @@ Conhecimento suficiente?
 - [ ] Teto de contexto descartando chunks inteiros do menor score para cima — nunca truncar no meio, para que as fontes citadas batam com o que o modelo viu
 - [ ] `study.Service` recebe uma **porta** `knowledge.Retriever` definida no domínio; orquestrar isso no binding violaria a ADR-001
 - [ ] Evento `study:sources` com as fontes usadas (determinístico, em vez de pedir citação inline ao modelo)
-
-### 2.6 — Knowledge Explorer (UI)
-
-- [ ] Desbloquear a seção `knowledge` em `frontend/src/lib/navigation.ts`
-- [ ] Sidebar esquerda com árvore de tópicos e conceitos
-- [ ] Filtros por status (draft / approved / deprecated)
-- [ ] Tela de detalhes do Knowledge Item
-- [ ] Ações gated pelo ciclo de vida: aprovar (só draft), editar, deprecar (só approved), deletar
-- [ ] Reusar `components/tag-input.tsx` no editor inline das três listas
 
 ### 2.7 — Knowledge Review
 

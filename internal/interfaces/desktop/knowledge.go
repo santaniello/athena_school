@@ -150,7 +150,7 @@ func (a *App) DeleteKnowledgeItem(id string) error {
 }
 
 // SaveAndApproveExtractedKnowledge persists only the confirmed candidates,
-// directly as approved — the "Salvar como conhecimento" option from
+// directly as approved — the "Save as knowledge" option from
 // specs/Athena.md §12, skipping the draft review stage SaveExtractedKnowledge
 // (SaveDrafts) leaves candidates in.
 func (a *App) SaveAndApproveExtractedKnowledge(inputs []KnowledgeItemInput) KnowledgeSaveResult {

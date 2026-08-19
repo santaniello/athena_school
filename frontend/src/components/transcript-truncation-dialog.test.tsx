@@ -12,7 +12,7 @@ describe('TranscriptTruncationDialog', () => {
     render(<TranscriptTruncationDialog open onConfirm={onConfirm} onDecline={onDecline} />)
 
     // When accepting it
-    await user.click(screen.getByRole('button', { name: 'Sim' }))
+    await user.click(screen.getByRole('button', { name: 'Yes' }))
 
     // Then extraction is confirmed without declining
     expect(onConfirm).toHaveBeenCalledOnce()
@@ -27,7 +27,7 @@ describe('TranscriptTruncationDialog', () => {
     render(<TranscriptTruncationDialog open onConfirm={onConfirm} onDecline={onDecline} />)
 
     // When declining it
-    await user.click(screen.getByRole('button', { name: 'Não' }))
+    await user.click(screen.getByRole('button', { name: 'No' }))
 
     // Then extraction is declined without confirmation
     expect(onDecline).toHaveBeenCalledOnce()

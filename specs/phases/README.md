@@ -85,16 +85,15 @@ Payments         Paddle
 
 **Done when:** User imports a Markdown folder, runs a study session that uses the notes as context, extracts and approves evidence-backed Knowledge Items, reconciles duplicates against existing knowledge, sees revision history in the Knowledge Explorer, resumes answers with their original sources, and finds approved items retrieved as context in later sessions.
 
-Delivered in three increments, each demonstrable on its own: **2.1 → 2.2 → 2.6 → 2.7** (model, extraction, explorer, review queue), then **2.3 → 2.4 → 2.5 → 2.8** (notes import, vector search, RAG, item indexing), then **2.9 → 2.10 → 2.11 → 2.12** (provenance, duplicate detection, reconciliation, revision history).
+Delivered in three increments, each demonstrable on its own: **2.1 → 2.2 → 2.3 → 2.7** (model, extraction, notes import + explorer, review queue), then **2.4 → 2.5 → 2.8** (vector search, RAG, item indexing), then **2.9 → 2.10 → 2.11 → 2.12** (provenance, duplicate detection, reconciliation, revision history).
 
 | Spec | Description |
 |---|---|
 | [01-knowledge-item.md](phase-02-knowledge-engine/01-knowledge-item.md) | KnowledgeItem domain model, lifecycle rule + SQLite schema |
 | [02-knowledge-extraction.md](phase-02-knowledge-engine/02-knowledge-extraction.md) | On-demand LLM extraction → unpersisted draft candidates |
-| [03-notes-import.md](phase-02-knowledge-engine/03-notes-import.md) | Markdown ingest pipeline: parse → chunk → embed |
+| [03-notes-import-and-knowledge-explorer.md](phase-02-knowledge-engine/03-notes-import-and-knowledge-explorer.md) | Markdown ingest pipeline (parse → chunk → embed → shadow Item) + sidebar tree UI, detail screen and actions |
 | [04-vector-search.md](phase-02-knowledge-engine/04-vector-search.md) | Pure-Go cosine similarity vector store (ADR-004) |
 | [05-rag-integration.md](phase-02-knowledge-engine/05-rag-integration.md) | Knowledge-first retrieval flow + source modes |
-| [06-knowledge-explorer.md](phase-02-knowledge-engine/06-knowledge-explorer.md) | Sidebar tree UI + detail screen + actions |
 | [07-knowledge-review.md](phase-02-knowledge-engine/07-knowledge-review.md) | Draft review queue + pending badge |
 | [08-knowledge-item-indexing.md](phase-02-knowledge-engine/08-knowledge-item-indexing.md) | All item statuses indexed; approved-only RAG + backfill |
 | [09-persistent-provenance.md](phase-02-knowledge-engine/09-persistent-provenance.md) | Evidence-backed items + persisted sources for historical answers |

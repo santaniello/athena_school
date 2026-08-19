@@ -104,7 +104,7 @@ describe('KnowledgeSection', () => {
     await user.click(screen.getByRole('button', { name: 'Import notes' }))
 
     // Then the progress dialog opens and the import starts for that path
-    expect(await screen.findByText('Importando notas')).toBeInTheDocument()
+    expect(await screen.findByText('Importing notes')).toBeInTheDocument()
     await waitFor(() => expect(importNotes).toHaveBeenCalledWith('/home/user/notes'))
   })
 
@@ -120,7 +120,7 @@ describe('KnowledgeSection', () => {
 
     // Then no progress dialog opens and no import starts
     await waitFor(() => expect(pickNotesFolder).toHaveBeenCalled())
-    expect(screen.queryByText('Importando notas')).not.toBeInTheDocument()
+    expect(screen.queryByText('Importing notes')).not.toBeInTheDocument()
     expect(importNotes).not.toHaveBeenCalled()
   })
 })

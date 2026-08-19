@@ -49,9 +49,9 @@ export async function saveExtractedKnowledge(items: KnowledgeItem[]): Promise<Kn
 }
 
 // saveAndApproveExtractedKnowledge persists items directly as approved,
-// skipping the draft review stage — the "Salvar como conhecimento" option
-// from specs/Athena.md §12, alongside saveExtractedKnowledge ("Salvar como
-// rascunho") and discarding the candidates entirely ("Ignorar").
+// skipping the draft review stage — the "Save as knowledge" option from
+// specs/Athena.md §12, alongside saveExtractedKnowledge ("Save as drafts")
+// and discarding the candidates entirely ("Dismiss").
 export async function saveAndApproveExtractedKnowledge(
   items: KnowledgeItem[],
 ): Promise<KnowledgeSaveResult> {

@@ -71,7 +71,7 @@ func toIngestSummaryResult(s ingest.Summary) IngestSummaryResult {
 // or "" if the user cancelled.
 func (a *App) PickNotesFolder() (string, error) {
 	return a.openDirectory(a.ctx, wailsruntime.OpenDialogOptions{
-		Title: "Selecionar pasta de notas",
+		Title: "Select notes folder",
 	})
 }
 

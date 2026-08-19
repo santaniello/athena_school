@@ -29,9 +29,9 @@ const EXTRACTION_LIMIT_ERROR =
 
 function extractionSettingsErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message.includes(EXTRACTION_LIMIT_ERROR)) {
-    return 'Informe um valor inteiro entre 1 e 20.'
+    return 'Enter an integer between 1 and 20.'
   }
-  return 'Não foi possível salvar a configuração.'
+  return 'Failed to save the setting.'
 }
 
 // Lets the user edit the OpenRouter key and every profile field without
@@ -52,7 +52,7 @@ function SettingsScreen({ profile, onProfileUpdated }: SettingsScreenProps) {
     void hasOpenRouterKey().then(setHasKey)
     void getKnowledgeExtractionSettings()
       .then((settings) => setMaxExtractionItems(settings.maxKnowledgeExtractionItems))
-      .catch(() => setExtractionSettingsError('Não foi possível carregar a configuração.'))
+      .catch(() => setExtractionSettingsError('Failed to load the setting.'))
   }, [])
 
   function updateField<K extends keyof ProfileDraft>(field: K, value: ProfileDraft[K]) {
@@ -210,7 +210,7 @@ function SettingsScreen({ profile, onProfileUpdated }: SettingsScreenProps) {
 
       <div className="flex flex-col gap-4 border-t border-border pt-8">
         <h2 className="font-heading text-sm font-bold tracking-[0.14em] text-foreground uppercase">
-          Extração de conhecimento
+          Knowledge extraction
         </h2>
         <form
           className="flex flex-col gap-4"
@@ -218,7 +218,7 @@ function SettingsScreen({ profile, onProfileUpdated }: SettingsScreenProps) {
           onSubmit={(event) => void handleExtractionSettingsSubmit(event)}
         >
           <div className="flex flex-col gap-1.5 text-left">
-            <Label htmlFor="settings-max-extraction-items">Máximo de itens por extração</Label>
+            <Label htmlFor="settings-max-extraction-items">Maximum items per extraction</Label>
             <Input
               id="settings-max-extraction-items"
               type="number"
@@ -227,7 +227,7 @@ function SettingsScreen({ profile, onProfileUpdated }: SettingsScreenProps) {
               value={maxExtractionItems}
               onChange={(event) => setMaxExtractionItems(Number(event.target.value))}
             />
-            <p className="text-xs text-muted-foreground">Escolha um valor entre 1 e 20.</p>
+            <p className="text-xs text-muted-foreground">Choose a value between 1 and 20.</p>
           </div>
           {extractionSettingsError && (
             <Alert variant="destructive">
@@ -236,11 +236,11 @@ function SettingsScreen({ profile, onProfileUpdated }: SettingsScreenProps) {
           )}
           {extractionSettingsSaved && (
             <Alert>
-              <AlertDescription>Configuração salva.</AlertDescription>
+              <AlertDescription>Setting saved.</AlertDescription>
             </Alert>
           )}
           <Button type="submit" disabled={isSavingExtractionSettings}>
-            {isSavingExtractionSettings ? 'Salvando...' : 'Salvar configuração de extração'}
+            {isSavingExtractionSettings ? 'Saving...' : 'Save extraction setting'}
           </Button>
         </form>
       </div>

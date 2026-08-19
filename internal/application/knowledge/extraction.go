@@ -58,9 +58,9 @@ func (s *Service) SaveDrafts(ctx context.Context, items []domainknowledge.Item) 
 
 // SaveAndApprove revalidates and persists confirmed candidates sequentially,
 // directly as approved — skipping the draft review stage. See
-// specs/Athena.md §12 ("Salvar como conhecimento"), the third option
-// alongside SaveDrafts ("Salvar como rascunho") and discarding the
-// candidates entirely ("Ignorar").
+// specs/Athena.md §12 ("Save as knowledge"), the third option alongside
+// SaveDrafts ("Save as drafts") and discarding the candidates entirely
+// ("Dismiss").
 func (s *Service) SaveAndApprove(ctx context.Context, items []domainknowledge.Item) ([]int, error) {
 	return s.saveCandidates(ctx, items, domainknowledge.StatusApproved)
 }

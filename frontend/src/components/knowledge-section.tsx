@@ -44,7 +44,7 @@ function KnowledgeSection({ selectedTopic }: KnowledgeSectionProps) {
   return (
     <div className="flex h-full w-full flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
-        <div role="tablist" aria-label="Modo de visualização" className="flex gap-1 rounded-lg border p-0.5">
+        <div role="tablist" aria-label="View mode" className="flex gap-1 rounded-lg border p-0.5">
           <button
             type="button"
             role="tab"
