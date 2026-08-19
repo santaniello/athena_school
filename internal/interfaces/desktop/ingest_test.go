@@ -82,9 +82,17 @@ func TestApp_ImportNotes_emitsProgressThenDone_onSuccess(t *testing.T) {
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nBasics of Go."}).
 		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}, Model: domainllm.EmbeddingModel}, nil).Once()
 	chunks.EXPECT().DeleteByFilePath(ctx, "go.md").Return(nil).Once()
-	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()
-	items.EXPECT().Save(ctx, mock.Anything).Return(nil).Once()
-	ingestedFiles.EXPECT().Upsert(ctx, mock.Anything).Return(nil).Once()
+	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
+		return len(cs) == 1 && cs[0].FilePath == "go.md" && cs[0].Heading == "Go" &&
+			cs[0].Source == domainknowledge.SourceImportedDoc && cs[0].Status == domainknowledge.StatusApproved
+	})).Return(nil).Once()
+	items.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
+		return item.Concept == "Go" && item.Definition == "Basics of Go." &&
+			item.Source == domainknowledge.SourceImportedDoc && item.Status == domainknowledge.StatusApproved
+	})).Return(nil).Once()
+	ingestedFiles.EXPECT().Upsert(ctx, mock.MatchedBy(func(f domainknowledge.IngestedFile) bool {
+		return f.Path == "go.md" && f.ChunkCount == 1 && f.EmbeddingModel == domainllm.EmbeddingModel
+	})).Return(nil).Once()
 
 	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, llm)
 
