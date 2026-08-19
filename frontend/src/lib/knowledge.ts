@@ -98,7 +98,10 @@ export interface KnowledgeItemEdit {
   relatedConcepts: string[]
 }
 
-export async function updateKnowledgeItem(id: string, fields: KnowledgeItemEdit): Promise<KnowledgeItem> {
+export async function updateKnowledgeItem(
+  id: string,
+  fields: KnowledgeItemEdit,
+): Promise<KnowledgeItem> {
   return UpdateKnowledgeItem(id, {
     id: '',
     topic: fields.topic,

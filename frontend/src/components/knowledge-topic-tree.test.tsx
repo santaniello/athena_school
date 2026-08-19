@@ -49,9 +49,7 @@ describe('KnowledgeTopicTree', () => {
     render(<KnowledgeTopicTree selectedTopic={null} onSelectTopic={vi.fn()} />)
 
     // Then both rows carry the shared row styling
-    expect(screen.getByRole('button', { name: /All topics/ }).className).toContain(
-      'cursor-pointer',
-    )
+    expect(screen.getByRole('button', { name: /All topics/ }).className).toContain('cursor-pointer')
     expect((await screen.findByRole('button', { name: 'Go' })).className).toContain(
       'cursor-pointer',
     )
@@ -115,9 +113,7 @@ describe('KnowledgeTopicTree', () => {
     render(<KnowledgeTopicTree selectedTopic={null} onSelectTopic={vi.fn()} />)
 
     // Then "All topics" carries the active styling and "Go" does not
-    expect(screen.getByRole('button', { name: /All topics/ }).className).toContain(
-      'bg-secondary',
-    )
+    expect(screen.getByRole('button', { name: /All topics/ }).className).toContain('bg-secondary')
     expect((await screen.findByRole('button', { name: 'Go' })).className).not.toContain(
       'bg-secondary',
     )

@@ -33,7 +33,11 @@ describe('KnowledgeDeleteDialog', () => {
   it('shows the concept name and no imported-note caveat for an Athena item', () => {
     // Given an Athena-sourced item
     render(
-      <KnowledgeDeleteDialog item={testItem({ source: 'athena' })} onCancel={vi.fn()} onConfirm={vi.fn()} />,
+      <KnowledgeDeleteDialog
+        item={testItem({ source: 'athena' })}
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+      />,
     )
 
     // Then the title names the concept and there is no extra file-related copy

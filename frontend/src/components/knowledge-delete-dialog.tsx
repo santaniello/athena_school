@@ -32,14 +32,14 @@ function KnowledgeDeleteDialog({ item, onCancel, onConfirm }: KnowledgeDeleteDia
         <AlertDialogHeader>
           <AlertDialogTitle>Delete &quot;{item?.concept}&quot;?</AlertDialogTitle>
           <AlertDialogDescription>
-            This item and all of its indexed chunks will be permanently deleted. This action
-            cannot be undone.
+            This item and all of its indexed chunks will be permanently deleted. This action cannot
+            be undone.
             {item?.source === 'imported_doc' && (
               <>
                 {' '}
-                The original file is not deleted, and reimporting the same folder without
-                changing it will not bring this content back — edit the file before reimporting
-                if you want to recover it.
+                The original file is not deleted, and reimporting the same folder without changing
+                it will not bring this content back — edit the file before reimporting if you want
+                to recover it.
               </>
             )}
           </AlertDialogDescription>

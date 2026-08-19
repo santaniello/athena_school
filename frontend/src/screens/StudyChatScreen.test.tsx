@@ -770,9 +770,7 @@ describe('StudyChatScreen — knowledge extraction', () => {
 
     // Then the internal error is translated into actionable Portuguese UI text
     expect(
-      await screen.findByText(
-        'The most recent message is too large to process in full.',
-      ),
+      await screen.findByText('The most recent message is too large to process in full.'),
     ).toBeInTheDocument()
   })
 })

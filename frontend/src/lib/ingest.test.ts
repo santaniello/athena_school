@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ImportNotes, PickNotesFolder } from '../../wailsjs/go/desktop/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
-import { importNotes, onIngestDone, onIngestError, onIngestProgress, pickNotesFolder } from './ingest'
+import {
+  importNotes,
+  onIngestDone,
+  onIngestError,
+  onIngestProgress,
+  pickNotesFolder,
+} from './ingest'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
   PickNotesFolder: vi.fn(),

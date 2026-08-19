@@ -89,7 +89,9 @@ describe('KnowledgeSection', () => {
 
     // Then the Review tab carries no count badge
     await waitFor(() => expect(listKnowledgeItems).toHaveBeenCalled())
-    expect(screen.getByRole('tab', { name: 'Review' }).querySelector('[data-slot="badge"]')).toBeNull()
+    expect(
+      screen.getByRole('tab', { name: 'Review' }).querySelector('[data-slot="badge"]'),
+    ).toBeNull()
   })
 
   it('opens the progress dialog and starts the import once a folder is picked', async () => {

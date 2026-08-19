@@ -127,7 +127,10 @@ function AppShell({ onLogout }: AppShellProps) {
                   />
                 )}
                 {item.id === 'knowledge' && section === 'knowledge' && (
-                  <KnowledgeTopicTree selectedTopic={selectedTopic} onSelectTopic={setSelectedTopic} />
+                  <KnowledgeTopicTree
+                    selectedTopic={selectedTopic}
+                    onSelectTopic={setSelectedTopic}
+                  />
                 )}
               </div>
             ))}

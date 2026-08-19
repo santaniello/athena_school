@@ -84,9 +84,7 @@ describe('IngestProgressDialog', () => {
     // Then the import starts immediately for that folder, and the dialog
     // explains that it is still processing
     expect(importNotes).toHaveBeenCalledWith('/home/user/notes')
-    expect(
-      screen.getByText('Processing files in the selected folder.'),
-    ).toBeInTheDocument()
+    expect(screen.getByText('Processing files in the selected folder.')).toBeInTheDocument()
     void events
   })
 
@@ -183,9 +181,7 @@ describe('IngestProgressDialog', () => {
     render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />)
 
     // Then a generic error is shown and the dialog still becomes closable
-    expect(
-      await screen.findByText('Failed to import notes. Please try again.'),
-    ).toBeInTheDocument()
+    expect(await screen.findByText('Failed to import notes. Please try again.')).toBeInTheDocument()
     expect(await findFooterCloseButton()).toBeInTheDocument()
     void events
   })
@@ -308,9 +304,7 @@ describe('IngestProgressDialog', () => {
     expect(await findFooterCloseButton()).toBeInTheDocument()
 
     // When it is closed then reopened for a new folder
-    rerender(
-      <IngestProgressDialog open={false} folderPath="/home/user/notes" onClose={vi.fn()} />,
-    )
+    rerender(<IngestProgressDialog open={false} folderPath="/home/user/notes" onClose={vi.fn()} />)
     rerender(<IngestProgressDialog open folderPath="/home/user/other" onClose={vi.fn()} />)
 
     // Then it starts a fresh import instead of showing the stale summary

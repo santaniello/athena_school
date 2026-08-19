@@ -269,9 +269,7 @@ describe('KnowledgeExtractionDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Try again' }))
 
     // Then the retry goes through the same approve-directly binding, not the draft one
-    await waitFor(() =>
-      expect(saveAndApproveExtractedKnowledge).toHaveBeenNthCalledWith(2, items),
-    )
+    await waitFor(() => expect(saveAndApproveExtractedKnowledge).toHaveBeenNthCalledWith(2, items))
     expect(saveExtractedKnowledge).not.toHaveBeenCalled()
   })
 })

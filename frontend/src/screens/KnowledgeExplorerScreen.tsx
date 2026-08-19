@@ -257,9 +257,7 @@ function KnowledgeExplorerScreen({ selectedTopic, mode }: KnowledgeExplorerScree
                       )}
                     >
                       <span className="flex w-full items-center justify-between gap-2">
-                        <span className="truncate font-medium text-foreground">
-                          {item.concept}
-                        </span>
+                        <span className="truncate font-medium text-foreground">{item.concept}</span>
                         <Badge variant={item.status === 'approved' ? 'default' : 'muted'}>
                           {statusLabel(item.status)}
                         </Badge>
