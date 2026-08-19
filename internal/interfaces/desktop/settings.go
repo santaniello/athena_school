@@ -1,6 +1,8 @@
 package desktop
 
 import (
+	"math"
+
 	domainconfig "github.com/santaniello/athena/internal/domain/config"
 	domainprofile "github.com/santaniello/athena/internal/domain/profile"
 )
@@ -21,12 +23,15 @@ func (a *App) GetKnowledgeExtractionSettings() (KnowledgeExtractionSettings, err
 }
 
 // UpdateKnowledgeExtractionSettings validates and persists the extraction maximum.
-func (a *App) UpdateKnowledgeExtractionSettings(maxItems int) error {
+func (a *App) UpdateKnowledgeExtractionSettings(maxItems float64) error {
+	if math.Trunc(maxItems) != maxItems {
+		return domainconfig.ErrMaxKnowledgeExtractionItemsOutOfRange
+	}
 	cfg, err := a.config.Load()
 	if err != nil {
 		return err
 	}
-	cfg.MaxKnowledgeExtractionItems = maxItems
+	cfg.MaxKnowledgeExtractionItems = int(maxItems)
 	if err := cfg.Validate(); err != nil {
 		return err
 	}

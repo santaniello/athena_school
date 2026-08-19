@@ -218,7 +218,7 @@ Indices are required because validation skips invalid items and continues. For i
 - A session whose transcript fits under `maxTranscriptChars` completes in a single call, with no truncation prompt shown
 - Extracted items carry `status = "draft"`, `source = "athena"`, the session's topic, and a server-generated ID — never values taken from the LLM payload
 - Choosing "Ignore" writes nothing: `knowledge_items` row count is unchanged
-- Choosing "Save as drafts" persists exactly the checked items and returns the count; the button is disabled when zero items are checked
+- Choosing "Save as drafts" persists exactly the checked items and returns their exact input positions in `savedIndices`; skipped invalid entries do not shift those positions, partial failures retain every successful index, and the button is disabled when zero items are checked
 - A response wrapped in ```json fences is parsed successfully
 - Malformed JSON produces no crash: the binding logs it and the UI shows an empty result
 - An item missing its definition is skipped while its valid siblings are still saved

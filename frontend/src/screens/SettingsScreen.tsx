@@ -24,6 +24,16 @@ interface SettingsScreenProps {
   onProfileUpdated: (profile: ProfileDraft) => void
 }
 
+const EXTRACTION_LIMIT_ERROR =
+  'maximum knowledge extraction items must be an integer between 1 and 20'
+
+function extractionSettingsErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.includes(EXTRACTION_LIMIT_ERROR)) {
+    return 'Informe um valor inteiro entre 1 e 20.'
+  }
+  return 'Não foi possível salvar a configuração.'
+}
+
 // Lets the user edit the OpenRouter key and every profile field without
 // re-running onboarding — both share validation/save logic with onboarding
 // instead of duplicating it. See
@@ -67,17 +77,13 @@ function SettingsScreen({ profile, onProfileUpdated }: SettingsScreenProps) {
   async function handleExtractionSettingsSubmit(event: FormEvent) {
     event.preventDefault()
     setExtractionSettingsSaved(false)
-    if (maxExtractionItems < 1 || maxExtractionItems > 20) {
-      setExtractionSettingsError('Informe um valor entre 1 e 20.')
-      return
-    }
     setExtractionSettingsError('')
     setIsSavingExtractionSettings(true)
     try {
       await updateKnowledgeExtractionSettings(maxExtractionItems)
       setExtractionSettingsSaved(true)
-    } catch {
-      setExtractionSettingsError('Não foi possível salvar a configuração.')
+    } catch (err) {
+      setExtractionSettingsError(extractionSettingsErrorMessage(err))
     } finally {
       setIsSavingExtractionSettings(false)
     }

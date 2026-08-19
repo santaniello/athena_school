@@ -28,10 +28,7 @@ export interface KnowledgeExtractionSettings {
   maxKnowledgeExtractionItems: number
 }
 
-export interface KnowledgeSaveResult {
-  savedIndices: number[]
-  error: string
-}
+export type KnowledgeSaveResult = Awaited<ReturnType<typeof SaveExtractedKnowledge>>
 
 export async function extractKnowledge(
   sessionId: string,

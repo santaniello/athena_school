@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HasOpenRouterKey, UpdateProfile } from '../../wailsjs/go/desktop/App'
 import SettingsScreen from './SettingsScreen'
@@ -141,8 +141,11 @@ describe('SettingsScreen', () => {
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
   })
 
-  it('validates the knowledge extraction maximum before saving', async () => {
-    // Given the knowledge extraction settings form
+  it('shows the binding validation error for a maximum above the limit', async () => {
+    // Given the binding rejects an out-of-range maximum
+    vi.mocked(updateKnowledgeExtractionSettings).mockRejectedValueOnce(
+      new Error('maximum knowledge extraction items must be an integer between 1 and 20'),
+    )
     const user = userEvent.setup()
     render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
     const input = await screen.findByLabelText('Máximo de itens por extração')
@@ -152,13 +155,16 @@ describe('SettingsScreen', () => {
     await user.type(input, '21')
     await user.click(screen.getByRole('button', { name: 'Salvar configuração de extração' }))
 
-    // Then a client-side error is shown and the binding is not called
-    expect(await screen.findByText('Informe um valor entre 1 e 20.')).toBeInTheDocument()
-    expect(updateKnowledgeExtractionSettings).not.toHaveBeenCalled()
+    // Then the backend receives the value and its validation error is translated
+    expect(await screen.findByText('Informe um valor inteiro entre 1 e 20.')).toBeInTheDocument()
+    expect(updateKnowledgeExtractionSettings).toHaveBeenCalledWith(21)
   })
 
   it('rejects a knowledge extraction maximum below the minimum', async () => {
-    // Given the knowledge extraction settings form
+    // Given the binding rejects a value below the allowed range
+    vi.mocked(updateKnowledgeExtractionSettings).mockRejectedValueOnce(
+      new Error('maximum knowledge extraction items must be an integer between 1 and 20'),
+    )
     const user = userEvent.setup()
     render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
     const input = await screen.findByLabelText('Máximo de itens por extração')
@@ -168,9 +174,27 @@ describe('SettingsScreen', () => {
     await user.type(input, '0')
     await user.click(screen.getByRole('button', { name: 'Salvar configuração de extração' }))
 
-    // Then validation blocks persistence
-    expect(await screen.findByText('Informe um valor entre 1 e 20.')).toBeInTheDocument()
-    expect(updateKnowledgeExtractionSettings).not.toHaveBeenCalled()
+    // Then the backend receives the value and its validation error is translated
+    expect(await screen.findByText('Informe um valor inteiro entre 1 e 20.')).toBeInTheDocument()
+    expect(updateKnowledgeExtractionSettings).toHaveBeenCalledWith(0)
+  })
+
+  it('shows the binding validation error for a fractional maximum', async () => {
+    // Given the binding rejects a fractional maximum
+    vi.mocked(updateKnowledgeExtractionSettings).mockRejectedValueOnce(
+      new Error('maximum knowledge extraction items must be an integer between 1 and 20'),
+    )
+    const user = userEvent.setup()
+    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
+    const input = await screen.findByLabelText('Máximo de itens por extração')
+
+    // When entering a fractional value and saving
+    fireEvent.change(input, { target: { value: '1.5' } })
+    await user.click(screen.getByRole('button', { name: 'Salvar configuração de extração' }))
+
+    // Then the backend receives the fraction and its validation error is translated
+    expect(await screen.findByText('Informe um valor inteiro entre 1 e 20.')).toBeInTheDocument()
+    expect(updateKnowledgeExtractionSettings).toHaveBeenCalledWith(1.5)
   })
 
   it('saves a valid knowledge extraction maximum', async () => {
@@ -240,20 +264,24 @@ describe('SettingsScreen', () => {
   })
 
   it('clears stale validation and success messages before a new valid save', async () => {
-    // Given a previous validation failure
+    // Given a previous validation failure returned by the binding
     let resolveSave!: () => void
-    vi.mocked(updateKnowledgeExtractionSettings).mockReturnValueOnce(
-      new Promise<void>((resolve) => {
-        resolveSave = resolve
-      }),
-    )
+    vi.mocked(updateKnowledgeExtractionSettings)
+      .mockRejectedValueOnce(
+        new Error('maximum knowledge extraction items must be an integer between 1 and 20'),
+      )
+      .mockReturnValueOnce(
+        new Promise<void>((resolve) => {
+          resolveSave = resolve
+        }),
+      )
     const user = userEvent.setup()
     render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
     const input = await screen.findByLabelText('Máximo de itens por extração')
     await user.clear(input)
     await user.type(input, '21')
     await user.click(screen.getByRole('button', { name: 'Salvar configuração de extração' }))
-    expect(await screen.findByText('Informe um valor entre 1 e 20.')).toBeInTheDocument()
+    expect(await screen.findByText('Informe um valor inteiro entre 1 e 20.')).toBeInTheDocument()
 
     // When starting a valid save
     await user.clear(input)
@@ -261,7 +289,7 @@ describe('SettingsScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Salvar configuração de extração' }))
 
     // Then stale feedback is cleared before the request resolves
-    expect(screen.queryByText('Informe um valor entre 1 e 20.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Informe um valor inteiro entre 1 e 20.')).not.toBeInTheDocument()
     expect(screen.queryByText('Configuração salva.')).not.toBeInTheDocument()
     resolveSave()
     expect(await screen.findByText('Configuração salva.')).toBeInTheDocument()

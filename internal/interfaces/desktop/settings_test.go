@@ -89,6 +89,19 @@ func TestApp_UpdateKnowledgeExtractionSettings_rejectsOutOfRangeMaximum(t *testi
 	assert.ErrorIs(t, err, domainconfig.ErrMaxKnowledgeExtractionItemsOutOfRange)
 }
 
+func TestApp_UpdateKnowledgeExtractionSettings_rejectsFractionalMaximum(t *testing.T) {
+	// Given an App and a fractional extraction maximum
+	configs := configmocks.NewMockStore(t)
+	app := NewApp(nil, nil, nil, nil, configs, nil, nil, nil, nil)
+
+	// When changing the setting to a fractional value
+	err := app.UpdateKnowledgeExtractionSettings(1.5)
+
+	// Then validation rejects it before loading or saving the configuration
+	assert.ErrorIs(t, err, domainconfig.ErrMaxKnowledgeExtractionItemsOutOfRange)
+	assert.EqualError(t, err, "maximum knowledge extraction items must be an integer between 1 and 20")
+}
+
 func TestApp_UpdateProfile_propagatesValidationError_whenGoalsIsMissing(t *testing.T) {
 	// Given an App backed by a profile store with an existing profile, and a
 	// store that must never be called to save

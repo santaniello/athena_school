@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,7 +30,13 @@ func TestApp_ExtractKnowledge_returnsFullCandidateAndTruncationState(t *testing.
 	sessions.EXPECT().GetByID(ctx, "session-1").Return(domainstudy.Session{Topic: "Go"}, nil).Once()
 	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{{Role: domainstudy.RoleUser, Content: "Explain channels"}}, nil).Once()
 	configs.EXPECT().Load().Return(domainconfig.Config{MaxKnowledgeExtractionItems: 8}, nil).Once()
-	llm.EXPECT().Chat(ctx, mock.AnythingOfType("llm.ChatRequest")).Return(domainllm.ChatResponse{Content: `{"items":[{"concept":"Channels","definition":"Typed conduits.","properties":["typed"],"trade_offs":["coordination"],"related_concepts":["goroutines"]}]}`}, nil).Once()
+	llm.EXPECT().Chat(ctx, mock.MatchedBy(func(req domainllm.ChatRequest) bool {
+		return req.SessionID == "session-1" &&
+			req.Task == domainllm.TaskKnowledgeExtraction &&
+			len(req.Messages) == 1 &&
+			req.Messages[0].Role == "system" &&
+			strings.Contains(req.Messages[0].Content, "User: Explain channels")
+	})).Return(domainllm.ChatResponse{Content: `{"items":[{"concept":"Channels","definition":"Typed conduits.","properties":["typed"],"trade_offs":["coordination"],"related_concepts":["goroutines"]}]}`}, nil).Once()
 	service := applicationknowledge.NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil)
 	app.Startup(ctx)
@@ -57,7 +64,13 @@ func TestApp_ExtractKnowledge_returnsEmptyResultForMalformedLLMResponse(t *testi
 	sessions.EXPECT().GetByID(ctx, "session-1").Return(domainstudy.Session{Topic: "Go"}, nil).Once()
 	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{{Role: domainstudy.RoleUser, Content: "Explain channels"}}, nil).Once()
 	configs.EXPECT().Load().Return(domainconfig.Config{MaxKnowledgeExtractionItems: 8}, nil).Once()
-	llm.EXPECT().Chat(ctx, mock.AnythingOfType("llm.ChatRequest")).Return(domainllm.ChatResponse{Content: "not json"}, nil).Once()
+	llm.EXPECT().Chat(ctx, mock.MatchedBy(func(req domainllm.ChatRequest) bool {
+		return req.SessionID == "session-1" &&
+			req.Task == domainllm.TaskKnowledgeExtraction &&
+			len(req.Messages) == 1 &&
+			req.Messages[0].Role == "system" &&
+			strings.Contains(req.Messages[0].Content, "User: Explain channels")
+	})).Return(domainllm.ChatResponse{Content: "not json"}, nil).Once()
 	service := applicationknowledge.NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil)
 	app.Startup(ctx)

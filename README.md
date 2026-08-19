@@ -28,7 +28,7 @@ Payments         Paddle
 |---|---|
 | 0 | Repo setup, Wails scaffold, pre-commit quality gates, GitHub Actions CI/CD |
 | 1 | Conversational onboarding, personalized study sessions, streaming LLM responses |
-| 2 | On-demand knowledge extraction with draft review, personal knowledge base, Markdown notes import, RAG retrieval |
+| 2 | On-demand knowledge extraction with draft review (session transcript sent to OpenRouter only when requested), personal knowledge base, Markdown notes import, RAG retrieval |
 | 3 | Challenge mode, gap detection, spaced repetition flashcards (SM-2) |
 | 4 | Interview simulation with timer, per-answer evaluation, domain-aware feedback |
 | 5 | Plan management, Paddle payments, macOS + Linux + Windows distribution |
@@ -209,7 +209,7 @@ athena/
 
 ## Local Data
 
-All user data is stored on-device:
+All user data is stored on-device at rest:
 
 ```text
 ~/.athena/
@@ -221,7 +221,7 @@ All user data is stored on-device:
 └── logs/              # Structured execution logs
 ```
 
-The auth server only manages accounts and licenses. Your notes and knowledge base never leave your machine.
+The auth server only manages accounts and licenses. Your notes and knowledge base never leave your machine. When you explicitly click **Extract knowledge**, Athena sends the relevant session transcript to OpenRouter so its configured language model can propose draft knowledge items. Nothing is sent for extraction automatically, and candidates are stored locally only after you choose which drafts to save.
 
 ---
 

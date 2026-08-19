@@ -16,7 +16,7 @@ var ErrKeyInvalid = errors.New("openrouter key is invalid or unauthorized")
 
 // ErrMaxKnowledgeExtractionItemsOutOfRange is returned when the configured
 // extraction limit is outside the supported 1-20 range.
-var ErrMaxKnowledgeExtractionItemsOutOfRange = errors.New("maximum knowledge extraction items must be between 1 and 20")
+var ErrMaxKnowledgeExtractionItemsOutOfRange = errors.New("maximum knowledge extraction items must be an integer between 1 and 20")
 
 // DefaultMaxKnowledgeExtractionItems is the extraction ceiling used when the setting is absent.
 const DefaultMaxKnowledgeExtractionItems = 8
