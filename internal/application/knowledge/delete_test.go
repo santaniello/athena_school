@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	txmocks "github.com/santaniello/athena/internal/application/knowledge/mocks"
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 )
 
@@ -16,15 +17,23 @@ func TestDeleteItem_cascadesToChunks_thenDeletesTheItem(t *testing.T) {
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
 	chunks := knowledgemocks.NewMockChunkRepository(t)
-	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return(nil).Once()
-	repository.EXPECT().Delete(ctx, "item-1").Return(nil).Once()
-	service := NewService(repository, nil, nil, nil, nil, chunks)
+	var order []string
+	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Run(func(context.Context, string) {
+		order = append(order, "chunks")
+	}).Return(nil).Once()
+	repository.EXPECT().Delete(ctx, "item-1").Run(func(context.Context, string) {
+		order = append(order, "item")
+	}).Return(nil).Once()
+	tx := txmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	service := NewService(repository, nil, nil, nil, nil, chunks, tx)
 
 	// When deleting it
 	err := service.DeleteItem(ctx, "item-1")
 
-	// Then both the chunks and the item are removed
+	// Then both the chunks and the item are removed, chunks first
 	require.NoError(t, err)
+	assert.Equal(t, []string{"chunks", "item"}, order)
 }
 
 func TestDeleteItem_propagatesChunkDeletionError_withoutDeletingTheItem(t *testing.T) {
@@ -34,7 +43,9 @@ func TestDeleteItem_propagatesChunkDeletionError_withoutDeletingTheItem(t *testi
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	boom := errors.New("disk full")
 	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return(boom).Once()
-	service := NewService(repository, nil, nil, nil, nil, chunks)
+	tx := txmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	service := NewService(repository, nil, nil, nil, nil, chunks, tx)
 
 	// When deleting the item
 	err := service.DeleteItem(ctx, "item-1")

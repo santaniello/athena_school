@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	txmocks "github.com/santaniello/athena/internal/application/knowledge/mocks"
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 )
@@ -28,7 +29,9 @@ func TestUpdateItem_overwritesEditableFields_andRestampsUpdatedAt(t *testing.T) 
 			item.Status == domainknowledge.StatusApproved && item.Source == domainknowledge.SourceAthena &&
 			item.CreatedAt.Equal(originalCreatedAt) && item.UpdatedAt.After(originalCreatedAt)
 	})).Return(nil).Once()
-	service := NewService(repository, nil, nil, nil, nil, nil)
+	tx := txmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	service := NewService(repository, nil, nil, nil, nil, nil, tx)
 
 	// When updating its editable fields
 	updated, err := service.UpdateItem(ctx, "item-1", ItemFields{
@@ -51,7 +54,9 @@ func TestUpdateItem_returnsValidationError_whenConceptIsCleared_andNeverCallsUpd
 	repository.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{
 		ID: "item-1", Topic: "Go", Concept: "Old", Definition: "Old def.",
 	}, nil).Once()
-	service := NewService(repository, nil, nil, nil, nil, nil)
+	tx := txmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	service := NewService(repository, nil, nil, nil, nil, nil, tx)
 
 	// When updating with a blank concept
 	_, err := service.UpdateItem(ctx, "item-1", ItemFields{Topic: "Go", Concept: "", Definition: "Old def."})
@@ -66,7 +71,9 @@ func TestUpdateItem_propagatesNotFound_whenItemDoesNotExist(t *testing.T) {
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
 	repository.EXPECT().GetByID(ctx, "missing").Return(domainknowledge.Item{}, domainknowledge.ErrItemNotFound).Once()
-	service := NewService(repository, nil, nil, nil, nil, nil)
+	tx := txmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	service := NewService(repository, nil, nil, nil, nil, nil, tx)
 
 	// When updating it
 	_, err := service.UpdateItem(ctx, "missing", ItemFields{Topic: "Go", Concept: "X", Definition: "Y"})

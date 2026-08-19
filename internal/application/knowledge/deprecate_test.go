@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	txmocks "github.com/santaniello/athena/internal/application/knowledge/mocks"
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 )
@@ -23,7 +24,9 @@ func TestDeprecate_transitionsApprovedToDeprecated_andPersists(t *testing.T) {
 	repository.EXPECT().Update(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.ID == "item-1" && item.Status == domainknowledge.StatusDeprecated
 	})).Return(nil).Once()
-	service := NewService(repository, nil, nil, nil, nil, nil)
+	tx := txmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	service := NewService(repository, nil, nil, nil, nil, nil, tx)
 
 	// When deprecating it
 	updated, err := service.Deprecate(ctx, "item-1")
@@ -40,7 +43,9 @@ func TestDeprecate_returnsInvalidTransition_whenItemIsStillADraft(t *testing.T) 
 	repository.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{
 		ID: "item-1", Status: domainknowledge.StatusDraft,
 	}, nil).Once()
-	service := NewService(repository, nil, nil, nil, nil, nil)
+	tx := txmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	service := NewService(repository, nil, nil, nil, nil, nil, tx)
 
 	// When deprecating it
 	_, err := service.Deprecate(ctx, "item-1")

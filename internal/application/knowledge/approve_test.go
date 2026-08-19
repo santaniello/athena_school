@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	txmocks "github.com/santaniello/athena/internal/application/knowledge/mocks"
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 )
@@ -23,7 +24,9 @@ func TestApprove_transitionsDraftToApproved_andPersists(t *testing.T) {
 	repository.EXPECT().Update(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.ID == "item-1" && item.Status == domainknowledge.StatusApproved && !item.UpdatedAt.IsZero()
 	})).Return(nil).Once()
-	service := NewService(repository, nil, nil, nil, nil, nil)
+	tx := txmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	service := NewService(repository, nil, nil, nil, nil, nil, tx)
 
 	// When approving it
 	updated, err := service.Approve(ctx, "item-1")
@@ -40,7 +43,9 @@ func TestApprove_returnsInvalidTransition_whenItemIsAlreadyApproved(t *testing.T
 	repository.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{
 		ID: "item-1", Status: domainknowledge.StatusApproved,
 	}, nil).Once()
-	service := NewService(repository, nil, nil, nil, nil, nil)
+	tx := txmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	service := NewService(repository, nil, nil, nil, nil, nil, tx)
 
 	// When approving it again
 	_, err := service.Approve(ctx, "item-1")
@@ -55,7 +60,9 @@ func TestApprove_propagatesNotFound_whenItemDoesNotExist(t *testing.T) {
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
 	repository.EXPECT().GetByID(ctx, "missing").Return(domainknowledge.Item{}, domainknowledge.ErrItemNotFound).Once()
-	service := NewService(repository, nil, nil, nil, nil, nil)
+	tx := txmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	service := NewService(repository, nil, nil, nil, nil, nil, tx)
 
 	// When approving it
 	_, err := service.Approve(ctx, "missing")

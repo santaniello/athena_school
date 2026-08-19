@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
+	txmocks "github.com/santaniello/athena/internal/application/knowledge/mocks"
 	domainconfig "github.com/santaniello/athena/internal/domain/config"
 	configmocks "github.com/santaniello/athena/internal/domain/config/mocks"
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
@@ -37,7 +38,7 @@ func TestApp_ExtractKnowledge_returnsFullCandidateAndTruncationState(t *testing.
 			req.Messages[0].Role == "system" &&
 			strings.Contains(req.Messages[0].Content, "User: Explain channels")
 	})).Return(domainllm.ChatResponse{Content: `{"items":[{"concept":"Channels","definition":"Typed conduits.","properties":["typed"],"trade_offs":["coordination"],"related_concepts":["goroutines"]}]}`}, nil).Once()
-	service := applicationknowledge.NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t))
+	service := applicationknowledge.NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
 	app.Startup(ctx)
 
@@ -71,7 +72,7 @@ func TestApp_ExtractKnowledge_returnsEmptyResultForMalformedLLMResponse(t *testi
 			req.Messages[0].Role == "system" &&
 			strings.Contains(req.Messages[0].Content, "User: Explain channels")
 	})).Return(domainllm.ChatResponse{Content: "not json"}, nil).Once()
-	service := applicationknowledge.NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t))
+	service := applicationknowledge.NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
 	app.Startup(ctx)
 
@@ -91,7 +92,7 @@ func TestApp_SaveExtractedKnowledge_preservesFullInputAndReturnsSavedIndices(t *
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.Concept == "Channels" && assert.ObjectsAreEqual([]string{"typed"}, item.Properties)
 	})).Return(nil).Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t))
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
 	app.Startup(ctx)
 
@@ -115,7 +116,7 @@ func TestApp_SaveExtractedKnowledge_returnsExactIndicesAlongsidePartialFailure(t
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.Concept == "failed"
 	})).Return(assert.AnError).Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t))
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
 	app.Startup(ctx)
 
@@ -138,7 +139,7 @@ func TestApp_SaveAndApproveExtractedKnowledge_persistsDirectlyAsApproved(t *test
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.Concept == "Channels" && item.Status == domainknowledge.StatusApproved
 	})).Return(nil).Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t))
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
 	app.Startup(ctx)
 
@@ -158,7 +159,7 @@ func TestApp_ListKnowledgeItems_returnsItemsForTopicAndStatus(t *testing.T) {
 	repository := knowledgemocks.NewMockRepository(t)
 	repository.EXPECT().List(ctx, domainknowledge.Filter{Topic: "Go", Status: domainknowledge.StatusApproved}).
 		Return([]domainknowledge.Item{{ID: "item-1", Topic: "Go", Concept: "Channels", Status: domainknowledge.StatusApproved}}, nil).Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t))
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
 	app.Startup(ctx)
 
@@ -176,7 +177,7 @@ func TestApp_ListKnowledgeTopics_returnsTopics(t *testing.T) {
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
 	repository.EXPECT().ListTopics(ctx).Return([]string{"Go", "Kubernetes"}, nil).Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t))
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
 	app.Startup(ctx)
 
@@ -198,7 +199,10 @@ func TestApp_ApproveKnowledgeItem_returnsTheUpdatedItem(t *testing.T) {
 	repository.EXPECT().Update(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.Status == domainknowledge.StatusApproved
 	})).Return(nil).Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t))
+	tx := txmocks.NewMockTransactor(t)
+	tx.EXPECT().WithinTx(mock.Anything, mock.Anything).
+		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), tx)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
 	app.Startup(ctx)
 
@@ -220,7 +224,10 @@ func TestApp_DeprecateKnowledgeItem_returnsTheUpdatedItem(t *testing.T) {
 	repository.EXPECT().Update(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.Status == domainknowledge.StatusDeprecated
 	})).Return(nil).Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t))
+	tx := txmocks.NewMockTransactor(t)
+	tx.EXPECT().WithinTx(mock.Anything, mock.Anything).
+		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), tx)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
 	app.Startup(ctx)
 
@@ -242,7 +249,10 @@ func TestApp_UpdateKnowledgeItem_persistsEditableFields_andReturnsTheUpdatedItem
 	repository.EXPECT().Update(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.Concept == "New" && item.Status == domainknowledge.StatusApproved
 	})).Return(nil).Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t))
+	tx := txmocks.NewMockTransactor(t)
+	tx.EXPECT().WithinTx(mock.Anything, mock.Anything).
+		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), tx)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
 	app.Startup(ctx)
 
@@ -263,7 +273,10 @@ func TestApp_DeleteKnowledgeItem_deletesTheItemAndItsChunks(t *testing.T) {
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return(nil).Once()
 	repository.EXPECT().Delete(ctx, "item-1").Return(nil).Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks)
+	tx := txmocks.NewMockTransactor(t)
+	tx.EXPECT().WithinTx(mock.Anything, mock.Anything).
+		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
 	app.Startup(ctx)
 
