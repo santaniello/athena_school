@@ -8,6 +8,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.12.0
 	github.com/wailsapp/wails/v2 v2.14.0
+	github.com/yuin/goldmark v1.8.5
 	golang.org/x/crypto v0.55.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.56.0
