@@ -211,6 +211,59 @@ func TestImportFolder_editedFile_reembedsOnlyThatFile_andUpdatesExistingShadowIt
 	items.AssertNotCalled(t, "Save", mock.Anything, mock.Anything)
 }
 
+func TestImportFolder_reimport_afterItemDeleted_recreatesTheShadowItemInsteadOfFailingForever(t *testing.T) {
+	// Given a file whose ingested_files record still points at item-1, but
+	// the Knowledge Explorer has since deleted that Item (DeleteItem never
+	// touches ingested_files — see its own doc comment)
+	root := fstest.MapFS{"notes/go.md": {Data: []byte("# Go\nUpdated body."), ModTime: fixedModTime}}
+	ctx := context.Background()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	items := knowledgemocks.NewMockRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	tx := ingestmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+
+	ingestedFiles.EXPECT().ListAll(ctx).Return(map[string]domainknowledge.IngestedFile{
+		"notes/go.md": {
+			Path: "notes/go.md", MTime: fixedModTime.Add(-time.Hour).Unix(),
+			EmbeddingModel: domainllm.EmbeddingModel, ChunkCount: 1, ItemID: "item-1",
+		},
+	}, nil).Once()
+
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nUpdated body."}).
+		Return(embeddingResponse(), nil).Once()
+	chunks.EXPECT().DeleteByFilePath(ctx, "notes/go.md").Return(nil).Once()
+	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
+		return len(cs) == 1 && cs[0].ItemID == "item-1"
+	})).Return(nil).Once()
+
+	items.EXPECT().GetByID(ctx, "item-1").
+		Return(domainknowledge.Item{}, domainknowledge.ErrItemNotFound).Once()
+	items.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
+		return item.ID == "item-1" && item.Definition == "Updated body." &&
+			item.Source == domainknowledge.SourceImportedDoc && item.Status == domainknowledge.StatusApproved
+	})).Return(nil).Once()
+
+	ingestedFiles.EXPECT().Upsert(ctx, mock.MatchedBy(func(f domainknowledge.IngestedFile) bool {
+		return f.Path == "notes/go.md" && f.ItemID == "item-1"
+	})).Return(nil).Once()
+
+	service := newTestService(chunks, ingestedFiles, items, llm, tx)
+
+	// When re-importing the folder
+	summary, err := service.ImportFolder(ctx, root, noopProgress)
+
+	// Then the file is ingested successfully — a fresh Item is recreated
+	// under the same ID already baked into its chunks, rather than the
+	// import permanently failing on ErrItemNotFound — and Update is never
+	// called, since there is nothing to update
+	require.NoError(t, err)
+	assert.Equal(t, 1, summary.FilesIngested)
+	assert.Equal(t, 0, summary.FilesFailed)
+	items.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
+}
+
 func TestImportFolder_perFileFailure_isRecordedInSummary_andImportContinues(t *testing.T) {
 	// Given two files, one of which fails to embed
 	root := fstest.MapFS{

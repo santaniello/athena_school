@@ -2,6 +2,7 @@ package ingest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"path"
@@ -221,31 +222,41 @@ func (s *Service) ingestFile(
 // saveShadowItem creates itemID on first import, or overwrites its
 // Topic/Concept/Definition/UpdatedAt in place on every subsequent one —
 // ID, Source, Status and CreatedAt are preserved from the existing record.
+//
+// hasPrev only means ingested_files still remembers itemID from a past
+// import; the Knowledge Explorer's DeleteItem can remove the Item itself
+// without touching ingested_files (deleting an imported note's Item must
+// not resurrect it on the next unrelated import — see DeleteItem's own
+// doc comment). So a hasPrev GetByID miss falls back to recreating the
+// Item under the same itemID already baked into this file's chunks,
+// instead of failing every subsequent import of that file forever.
 func (s *Service) saveShadowItem(
 	ctx context.Context, itemID, topic, concept, definition string, now time.Time, hasPrev bool,
 ) error {
-	if !hasPrev {
-		return s.items.Save(ctx, domainknowledge.Item{
-			ID:         itemID,
-			Topic:      topic,
-			Concept:    concept,
-			Definition: definition,
-			Source:     domainknowledge.SourceImportedDoc,
-			Status:     domainknowledge.StatusApproved,
-			CreatedAt:  now,
-			UpdatedAt:  now,
-		})
+	if hasPrev {
+		item, err := s.items.GetByID(ctx, itemID)
+		if err == nil {
+			item.Topic = topic
+			item.Concept = concept
+			item.Definition = definition
+			item.UpdatedAt = now
+			return s.items.Update(ctx, item)
+		}
+		if !errors.Is(err, domainknowledge.ErrItemNotFound) {
+			return err
+		}
 	}
 
-	item, err := s.items.GetByID(ctx, itemID)
-	if err != nil {
-		return err
-	}
-	item.Topic = topic
-	item.Concept = concept
-	item.Definition = definition
-	item.UpdatedAt = now
-	return s.items.Update(ctx, item)
+	return s.items.Save(ctx, domainknowledge.Item{
+		ID:         itemID,
+		Topic:      topic,
+		Concept:    concept,
+		Definition: definition,
+		Source:     domainknowledge.SourceImportedDoc,
+		Status:     domainknowledge.StatusApproved,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	})
 }
 
 // toFloat32 converts an EmbeddingResponse's float64 vector to the float32
