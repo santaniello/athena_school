@@ -3,11 +3,17 @@
 import {desktop} from '../models';
 import {context} from '../models';
 
+export function ApproveKnowledgeItem(arg1:string):Promise<desktop.KnowledgeItemResult>;
+
 export function CreateFolder(arg1:string):Promise<desktop.FolderResult>;
 
 export function DeleteFolder(arg1:string):Promise<void>;
 
+export function DeleteKnowledgeItem(arg1:string):Promise<void>;
+
 export function DeleteStudySession(arg1:string):Promise<void>;
+
+export function DeprecateKnowledgeItem(arg1:string):Promise<desktop.KnowledgeItemResult>;
 
 export function ExtractKnowledge(arg1:string,arg2:boolean):Promise<desktop.ExtractionResult>;
 
@@ -21,7 +27,13 @@ export function HasOpenRouterKey():Promise<boolean>;
 
 export function HasUserProfile():Promise<boolean>;
 
+export function ImportNotes(arg1:string):Promise<void>;
+
 export function ListFolders():Promise<Array<desktop.FolderResult>>;
+
+export function ListKnowledgeItems(arg1:string,arg2:string):Promise<Array<desktop.KnowledgeItemResult>>;
+
+export function ListKnowledgeTopics():Promise<Array<string>>;
 
 export function ListStudySessionsByFolder(arg1:string):Promise<Array<desktop.StudySessionResult>>;
 
@@ -30,6 +42,8 @@ export function Login(arg1:string,arg2:string):Promise<desktop.LoginResult>;
 export function Logout():Promise<void>;
 
 export function MoveStudySession(arg1:string,arg2:string):Promise<void>;
+
+export function PickNotesFolder():Promise<string>;
 
 export function Register(arg1:string,arg2:string):Promise<void>;
 
@@ -54,5 +68,7 @@ export function StartStudySession(arg1:string,arg2:string):Promise<desktop.Study
 export function Startup(arg1:context.Context):Promise<void>;
 
 export function UpdateKnowledgeExtractionSettings(arg1:number):Promise<void>;
+
+export function UpdateKnowledgeItem(arg1:string,arg2:desktop.KnowledgeItemInput):Promise<desktop.KnowledgeItemResult>;
 
 export function UpdateProfile(arg1:desktop.UserProfileInput):Promise<desktop.UserProfileInput>;
