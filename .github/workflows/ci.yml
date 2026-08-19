@@ -61,29 +61,22 @@ jobs:
       # 142 kB/s) for the identical package set — which made this single step
       # the dominant, and most unpredictable, cost of the whole gate. The set
       # never changes between runs, so cache the .deb archives and install
-      # them offline with dpkg. The key carries the runner image version
-      # because apt resolves the closure against what the image already has;
-      # bump the -vN suffix to force a refresh for any other reason.
+      # them offline with dpkg.
       #
-      # ImageOS/ImageVersion are process env vars on the runner, not entries
-      # in the `env` expression context, so they have to be read inside a
-      # `run:` step — `${{ env.ImageVersion }}` in the key silently expands
-      # to an empty string.
-      - name: Resolve runner image version
-        id: image
-        run: |
-          if [ -z "${ImageOS}" ] || [ -z "${ImageVersion}" ]; then
-            echo "::error::ImageOS/ImageVersion unset — the apt cache key would not track the runner image."
-            exit 1
-          fi
-          echo "id=${ImageOS}-${ImageVersion}" >> "$GITHUB_OUTPUT"
-
+      # The key is deliberately static. Keying it on the runner image version
+      # (ImageVersion) was tried and reverted: the image rolled from
+      # 20260810.271.1 to 20260816.277.1 between two runs six minutes apart,
+      # and the pool serves several versions concurrently, so the cache
+      # essentially never hit. The closure is resolved against the image, so
+      # a stale archive is possible in principle — that is what the apt
+      # fallback below is for. Bump the -vN suffix to force a refresh; the
+      # fallback's warning in the log is the signal that it is time to.
       - name: Cache cgo dependency packages
         id: apt-cache
         uses: actions/cache@v6
         with:
           path: ~/apt-archives
-          key: apt-cgo-${{ steps.image.outputs.id }}-webkit2gtk41-v1
+          key: apt-cgo-${{ runner.os }}-webkit2gtk41-v1
 
       - name: Download cgo dependency packages
         if: steps.apt-cache.outputs.cache-hit != 'true'
@@ -95,11 +88,11 @@ jobs:
             libgtk-3-dev libwebkit2gtk-4.1-dev
           sudo chown -R "$USER" ~/apt-archives
 
-      # A restored .deb set is resolved against the runner image it was built
-      # on. The cache key tracks that image, but a stale or partial archive
-      # would otherwise fail the job outright — fall back to a plain apt
-      # install so the gate stays green (just slow) instead of going red on
-      # an infrastructure detail.
+      # A restored .deb set was resolved against whichever runner image built
+      # it, and the static key does not track that. This is the safety net:
+      # if the archive is stale or partial, dpkg fails and a plain apt
+      # install takes over, so the gate stays green (just slow) instead of
+      # going red on an infrastructure detail.
       - name: Install Linux cgo dependencies
         run: |
           if ! sudo dpkg --install --skip-same-version ~/apt-archives/*.deb; then
