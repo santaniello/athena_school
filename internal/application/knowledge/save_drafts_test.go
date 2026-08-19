@@ -26,7 +26,7 @@ func TestSaveDrafts_revalidatesAndRegeneratesServerOwnedFields(t *testing.T) {
 			item.Source == domainknowledge.SourceAthena && item.Status == domainknowledge.StatusDraft &&
 			!item.CreatedAt.IsZero() && item.CreatedAt.Equal(item.UpdatedAt)
 	})).Return(nil).Once()
-	service := NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t))
+	service := NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t))
 	input := []domainknowledge.Item{
 		{ID: "client-id", Topic: " Go ", Concept: " Channels ", Definition: " Typed conduits. ", Source: domainknowledge.SourceImportedDoc, Status: domainknowledge.StatusApproved},
 		{Topic: "Go", Concept: "Invalid", Definition: "   "},
@@ -47,7 +47,7 @@ func TestSaveDrafts_stopsAtRepositoryFailureAndReturnsSavedIndices(t *testing.T)
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool { return item.Concept == "first" })).Return(nil).Once()
 	saveErr := errors.New("database locked")
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool { return item.Concept == "second" })).Return(saveErr).Once()
-	service := NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t))
+	service := NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t))
 	input := []domainknowledge.Item{
 		{Topic: "Go", Concept: "first", Definition: "one"},
 		{Topic: "Go", Concept: "second", Definition: "two"},
@@ -73,7 +73,7 @@ func TestSaveDrafts_returnsExactSavedIndicesWhenInvalidItemsPrecedeFailure(t *te
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.Concept == "failed"
 	})).Return(saveErr).Once()
-	service := NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t))
+	service := NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t))
 	input := []domainknowledge.Item{
 		{Topic: "Go", Concept: "invalid", Definition: ""},
 		{Topic: "Go", Concept: "saved", Definition: "persisted"},

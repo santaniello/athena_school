@@ -85,9 +85,9 @@ func main() {
 	studyService := study.NewService(studySessions, studyMessages, llmClient, profiles, folders)
 	folderService := folder.NewService(folders, studySessions)
 	knowledgeItems := sqlite.NewKnowledgeRepository(db)
-	knowledgeService := applicationknowledge.NewService(knowledgeItems, studySessions, studyMessages, llmClient, configStore)
-
 	knowledgeChunks := sqlite.NewChunkRepository(db)
+	knowledgeService := applicationknowledge.NewService(knowledgeItems, studySessions, studyMessages, llmClient, configStore, knowledgeChunks)
+
 	ingestedFiles := sqlite.NewIngestedFileRepository(db)
 	transactor := sqlite.NewSQLTransactor(db)
 	ingestService := applicationingest.NewService(knowledgeChunks, ingestedFiles, knowledgeItems, llmClient, transactor)
