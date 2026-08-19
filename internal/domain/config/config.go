@@ -14,9 +14,33 @@ import (
 // by OpenRouter (missing, malformed, disabled or unauthorized).
 var ErrKeyInvalid = errors.New("openrouter key is invalid or unauthorized")
 
+// ErrMaxKnowledgeExtractionItemsOutOfRange is returned when the configured
+// extraction limit is outside the supported 1-20 range.
+var ErrMaxKnowledgeExtractionItemsOutOfRange = errors.New("maximum knowledge extraction items must be between 1 and 20")
+
+// DefaultMaxKnowledgeExtractionItems is the extraction ceiling used when the setting is absent.
+const DefaultMaxKnowledgeExtractionItems = 8
+
 // Config is the local app configuration persisted to ~/.athena/config.yaml.
 type Config struct {
-	OpenRouterKey string
+	OpenRouterKey               string
+	MaxKnowledgeExtractionItems int
+}
+
+// WithDefaults returns a copy with unset optional values defaulted.
+func (c Config) WithDefaults() Config {
+	if c.MaxKnowledgeExtractionItems == 0 {
+		c.MaxKnowledgeExtractionItems = DefaultMaxKnowledgeExtractionItems
+	}
+	return c
+}
+
+// Validate checks that configured values are within their supported ranges.
+func (c Config) Validate() error {
+	if c.MaxKnowledgeExtractionItems < 1 || c.MaxKnowledgeExtractionItems > 20 {
+		return ErrMaxKnowledgeExtractionItemsOutOfRange
+	}
+	return nil
 }
 
 // Store persists the local Config.

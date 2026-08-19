@@ -82,3 +82,47 @@ func TestTransitionTo_leavesReceiverUnmodified(t *testing.T) {
 	assert.Equal(t, StatusDraft, item.Status)
 	assert.Equal(t, originalUpdatedAt, item.UpdatedAt)
 }
+
+func TestItem_Validate_acceptsRequiredFields(t *testing.T) {
+	// Given an item with every required field
+	item := Item{Topic: "Distributed systems", Concept: "CAP theorem", Definition: "A consistency trade-off."}
+
+	// When validating it
+	err := item.Validate()
+
+	// Then it is accepted
+	require.NoError(t, err)
+}
+
+func TestItem_Validate_returnsTopicRequiredWhenBlank(t *testing.T) {
+	// Given an item with a blank topic
+	item := Item{Topic: "  ", Concept: "CAP theorem", Definition: "A consistency trade-off."}
+
+	// When validating it
+	err := item.Validate()
+
+	// Then the topic error is returned
+	assert.ErrorIs(t, err, ErrTopicRequired)
+}
+
+func TestItem_Validate_returnsConceptRequiredWhenBlank(t *testing.T) {
+	// Given an item with a blank concept
+	item := Item{Topic: "Distributed systems", Concept: "  ", Definition: "A consistency trade-off."}
+
+	// When validating it
+	err := item.Validate()
+
+	// Then the concept error is returned
+	assert.ErrorIs(t, err, ErrConceptRequired)
+}
+
+func TestItem_Validate_returnsDefinitionRequiredWhenBlank(t *testing.T) {
+	// Given an item with a blank definition
+	item := Item{Topic: "Distributed systems", Concept: "CAP theorem", Definition: "  "}
+
+	// When validating it
+	err := item.Validate()
+
+	// Then the definition error is returned
+	assert.ErrorIs(t, err, ErrDefinitionRequired)
+}

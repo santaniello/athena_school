@@ -1,8 +1,40 @@
 package desktop
 
 import (
+	domainconfig "github.com/santaniello/athena/internal/domain/config"
 	domainprofile "github.com/santaniello/athena/internal/domain/profile"
 )
+
+// KnowledgeExtractionSettings is the desktop-facing extraction configuration.
+type KnowledgeExtractionSettings struct {
+	MaxKnowledgeExtractionItems int `json:"maxKnowledgeExtractionItems"`
+}
+
+// GetKnowledgeExtractionSettings reads the current extraction configuration.
+func (a *App) GetKnowledgeExtractionSettings() (KnowledgeExtractionSettings, error) {
+	cfg, err := a.config.Load()
+	if err != nil {
+		return KnowledgeExtractionSettings{}, err
+	}
+	cfg = cfg.WithDefaults()
+	return KnowledgeExtractionSettings{MaxKnowledgeExtractionItems: cfg.MaxKnowledgeExtractionItems}, nil
+}
+
+// UpdateKnowledgeExtractionSettings validates and persists the extraction maximum.
+func (a *App) UpdateKnowledgeExtractionSettings(maxItems int) error {
+	cfg, err := a.config.Load()
+	if err != nil {
+		return err
+	}
+	cfg.MaxKnowledgeExtractionItems = maxItems
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
+	return a.config.Save(domainconfig.Config{
+		OpenRouterKey:               cfg.OpenRouterKey,
+		MaxKnowledgeExtractionItems: cfg.MaxKnowledgeExtractionItems,
+	})
+}
 
 // UpdateProfile validates and persists changes to the already-saved
 // profile, preserving its original CreatedAt. It returns the saved

@@ -1,0 +1,90 @@
+package desktop
+
+import (
+	"errors"
+	"fmt"
+	"log"
+	"time"
+
+	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
+	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
+)
+
+// KnowledgeItemResult is an unpersisted extraction candidate returned to the UI.
+type KnowledgeItemResult struct {
+	ID              string   `json:"id"`
+	Topic           string   `json:"topic"`
+	Concept         string   `json:"concept"`
+	Definition      string   `json:"definition"`
+	Properties      []string `json:"properties"`
+	TradeOffs       []string `json:"tradeOffs"`
+	RelatedConcepts []string `json:"relatedConcepts"`
+	Source          string   `json:"source"`
+	Status          string   `json:"status"`
+	CreatedAt       string   `json:"createdAt"`
+	UpdatedAt       string   `json:"updatedAt"`
+}
+
+// KnowledgeItemInput mirrors the full candidate returned by ExtractKnowledge.
+type KnowledgeItemInput struct {
+	ID              string   `json:"id"`
+	Topic           string   `json:"topic"`
+	Concept         string   `json:"concept"`
+	Definition      string   `json:"definition"`
+	Properties      []string `json:"properties"`
+	TradeOffs       []string `json:"tradeOffs"`
+	RelatedConcepts []string `json:"relatedConcepts"`
+	Source          string   `json:"source"`
+	Status          string   `json:"status"`
+	CreatedAt       string   `json:"createdAt"`
+	UpdatedAt       string   `json:"updatedAt"`
+}
+
+// ExtractionResult carries candidates and the transcript truncation signal.
+type ExtractionResult struct {
+	Items     []KnowledgeItemResult `json:"items"`
+	Truncated bool                  `json:"truncated"`
+}
+
+// ExtractKnowledge extracts unpersisted knowledge candidates for review.
+func (a *App) ExtractKnowledge(sessionID string, confirmedTruncation bool) (ExtractionResult, error) {
+	items, truncated, err := a.knowledge.ExtractFromSession(a.ctx, sessionID, confirmedTruncation)
+	if errors.Is(err, applicationknowledge.ErrMalformedExtraction) {
+		log.Printf("knowledge extraction returned malformed JSON: %v", err)
+		return ExtractionResult{Items: []KnowledgeItemResult{}}, nil
+	}
+	if err != nil {
+		return ExtractionResult{}, err
+	}
+	results := make([]KnowledgeItemResult, len(items))
+	for index, item := range items {
+		results[index] = toKnowledgeItemResult(item)
+	}
+	return ExtractionResult{Items: results, Truncated: truncated}, nil
+}
+
+// SaveExtractedKnowledge persists only the candidates confirmed by the user.
+func (a *App) SaveExtractedKnowledge(inputs []KnowledgeItemInput) (int, error) {
+	items := make([]domainknowledge.Item, len(inputs))
+	for index, input := range inputs {
+		items[index] = domainknowledge.Item{
+			ID: input.ID, Topic: input.Topic, Concept: input.Concept, Definition: input.Definition,
+			Properties: input.Properties, TradeOffs: input.TradeOffs, RelatedConcepts: input.RelatedConcepts,
+			Source: input.Source, Status: input.Status,
+		}
+	}
+	count, err := a.knowledge.SaveDrafts(a.ctx, items)
+	if err != nil {
+		return count, fmt.Errorf("knowledge save failed after %d items: %w", count, err)
+	}
+	return count, nil
+}
+
+func toKnowledgeItemResult(item domainknowledge.Item) KnowledgeItemResult {
+	return KnowledgeItemResult{
+		ID: item.ID, Topic: item.Topic, Concept: item.Concept, Definition: item.Definition,
+		Properties: item.Properties, TradeOffs: item.TradeOffs, RelatedConcepts: item.RelatedConcepts,
+		Source: item.Source, Status: item.Status,
+		CreatedAt: item.CreatedAt.Format(time.RFC3339Nano), UpdatedAt: item.UpdatedAt.Format(time.RFC3339Nano),
+	}
+}

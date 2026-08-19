@@ -35,7 +35,7 @@ func newTestOnboardingAppWithKeyUpdater(
 	apiKeyUpdater domainllm.APIKeyUpdater,
 ) *App {
 	t.Helper()
-	app := NewApp(nil, nil, onboarding.NewService(profiles, config, validator), profiles, config, nil, nil, apiKeyUpdater)
+	app := NewApp(nil, nil, onboarding.NewService(profiles, config, validator), profiles, config, nil, nil, nil, apiKeyUpdater)
 	app.Startup(context.Background())
 	return app
 }
@@ -73,7 +73,8 @@ func TestApp_SaveOpenRouterKey_savesKey_whenValid(t *testing.T) {
 	apiKeyUpdater := llmmocks.NewMockAPIKeyUpdater(t)
 	const key = "sk-or-valid"
 	validator.EXPECT().ValidateKey(context.Background(), key).Return(nil).Once()
-	config.EXPECT().Save(domainconfig.Config{OpenRouterKey: key}).Return(nil).Once()
+	config.EXPECT().Load().Return(domainconfig.Config{MaxKnowledgeExtractionItems: 8}, nil).Once()
+	config.EXPECT().Save(domainconfig.Config{OpenRouterKey: key, MaxKnowledgeExtractionItems: 8}).Return(nil).Once()
 	apiKeyUpdater.EXPECT().SetAPIKey(key).Once()
 	app := newTestOnboardingAppWithKeyUpdater(t, profilemocks.NewMockStore(t), config, validator, apiKeyUpdater)
 

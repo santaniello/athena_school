@@ -20,7 +20,8 @@ func TestSaveOpenRouterKey_savesConfig_whenKeyIsValid(t *testing.T) {
 	const key = "sk-or-valid"
 
 	validator.EXPECT().ValidateKey(ctx, key).Return(nil).Once()
-	store.EXPECT().Save(domainconfig.Config{OpenRouterKey: key}).Return(nil).Once()
+	store.EXPECT().Load().Return(domainconfig.Config{OpenRouterKey: "old", MaxKnowledgeExtractionItems: 12}, nil).Once()
+	store.EXPECT().Save(domainconfig.Config{OpenRouterKey: key, MaxKnowledgeExtractionItems: 12}).Return(nil).Once()
 
 	service := NewService(nil, store, validator)
 

@@ -23,7 +23,13 @@ func (s *Service) SaveOpenRouterKey(ctx context.Context, key string) error {
 		return fmt.Errorf("onboarding: validating openrouter key: %w", err)
 	}
 
-	if err := s.config.Save(domainconfig.Config{OpenRouterKey: key}); err != nil {
+	cfg, loadErr := s.config.Load()
+	if loadErr != nil {
+		cfg = domainconfig.Config{}
+	}
+	cfg = cfg.WithDefaults()
+	cfg.OpenRouterKey = key
+	if err := s.config.Save(cfg); err != nil {
 		return fmt.Errorf("onboarding: saving openrouter key: %w", err)
 	}
 

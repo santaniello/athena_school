@@ -14,6 +14,14 @@ export function DeleteStudySession(arg1) {
   return window['go']['desktop']['App']['DeleteStudySession'](arg1);
 }
 
+export function ExtractKnowledge(arg1, arg2) {
+  return window['go']['desktop']['App']['ExtractKnowledge'](arg1, arg2);
+}
+
+export function GetKnowledgeExtractionSettings() {
+  return window['go']['desktop']['App']['GetKnowledgeExtractionSettings']();
+}
+
 export function GetProfile() {
   return window['go']['desktop']['App']['GetProfile']();
 }
@@ -70,6 +78,10 @@ export function ResumeStudySession(arg1) {
   return window['go']['desktop']['App']['ResumeStudySession'](arg1);
 }
 
+export function SaveExtractedKnowledge(arg1) {
+  return window['go']['desktop']['App']['SaveExtractedKnowledge'](arg1);
+}
+
 export function SaveOpenRouterKey(arg1) {
   return window['go']['desktop']['App']['SaveOpenRouterKey'](arg1);
 }
@@ -88,6 +100,10 @@ export function StartStudySession(arg1, arg2) {
 
 export function Startup(arg1) {
   return window['go']['desktop']['App']['Startup'](arg1);
+}
+
+export function UpdateKnowledgeExtractionSettings(arg1) {
+  return window['go']['desktop']['App']['UpdateKnowledgeExtractionSettings'](arg1);
 }
 
 export function UpdateProfile(arg1) {

@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	domainconfig "github.com/santaniello/athena/internal/domain/config"
 	configmocks "github.com/santaniello/athena/internal/domain/config/mocks"
 	domainprofile "github.com/santaniello/athena/internal/domain/profile"
 	profilemocks "github.com/santaniello/athena/internal/domain/profile/mocks"
@@ -45,6 +46,47 @@ func TestApp_UpdateProfile_savesProfile_andReturnsSavedFields_whenValid(t *testi
 	// Then it succeeds and returns the saved fields
 	require.NoError(t, err)
 	assert.Equal(t, "Nova Atena", got.AssistantName)
+}
+
+func TestApp_GetKnowledgeExtractionSettings_returnsConfiguredMaximum(t *testing.T) {
+	// Given an App with a configured extraction maximum
+	configs := configmocks.NewMockStore(t)
+	configs.EXPECT().Load().Return(domainconfig.Config{MaxKnowledgeExtractionItems: 12}, nil).Once()
+	app := NewApp(nil, nil, nil, nil, configs, nil, nil, nil, nil)
+
+	// When reading knowledge extraction settings
+	result, err := app.GetKnowledgeExtractionSettings()
+
+	// Then the configured maximum is returned
+	require.NoError(t, err)
+	assert.Equal(t, 12, result.MaxKnowledgeExtractionItems)
+}
+
+func TestApp_UpdateKnowledgeExtractionSettings_validatesAndPreservesOpenRouterKey(t *testing.T) {
+	// Given an App with an existing OpenRouter key
+	configs := configmocks.NewMockStore(t)
+	configs.EXPECT().Load().Return(domainconfig.Config{OpenRouterKey: "sk-or-existing", MaxKnowledgeExtractionItems: 8}, nil).Once()
+	configs.EXPECT().Save(domainconfig.Config{OpenRouterKey: "sk-or-existing", MaxKnowledgeExtractionItems: 12}).Return(nil).Once()
+	app := NewApp(nil, nil, nil, nil, configs, nil, nil, nil, nil)
+
+	// When changing the extraction maximum
+	err := app.UpdateKnowledgeExtractionSettings(12)
+
+	// Then the setting is saved without replacing the key
+	require.NoError(t, err)
+}
+
+func TestApp_UpdateKnowledgeExtractionSettings_rejectsOutOfRangeMaximum(t *testing.T) {
+	// Given an App and an out-of-range maximum
+	configs := configmocks.NewMockStore(t)
+	configs.EXPECT().Load().Return(domainconfig.Config{OpenRouterKey: "sk-or-existing", MaxKnowledgeExtractionItems: 8}, nil).Once()
+	app := NewApp(nil, nil, nil, nil, configs, nil, nil, nil, nil)
+
+	// When changing the setting to an invalid value
+	err := app.UpdateKnowledgeExtractionSettings(21)
+
+	// Then validation rejects it and Save is never called
+	assert.ErrorIs(t, err, domainconfig.ErrMaxKnowledgeExtractionItemsOutOfRange)
 }
 
 func TestApp_UpdateProfile_propagatesValidationError_whenGoalsIsMissing(t *testing.T) {

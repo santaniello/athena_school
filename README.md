@@ -28,7 +28,7 @@ Payments         Paddle
 |---|---|
 | 0 | Repo setup, Wails scaffold, pre-commit quality gates, GitHub Actions CI/CD |
 | 1 | Conversational onboarding, personalized study sessions, streaming LLM responses |
-| 2 | Personal knowledge base, Markdown notes import, RAG retrieval |
+| 2 | On-demand knowledge extraction with draft review, personal knowledge base, Markdown notes import, RAG retrieval |
 | 3 | Challenge mode, gap detection, spaced repetition flashcards (SM-2) |
 | 4 | Interview simulation with timer, per-answer evaluation, domain-aware feedback |
 | 5 | Plan management, Paddle payments, macOS + Linux + Windows distribution |
@@ -213,7 +213,7 @@ All user data is stored on-device:
 
 ```text
 ~/.athena/
-├── config.yaml        # OpenRouter key, model preferences
+├── config.yaml        # OpenRouter key and knowledge-extraction limit
 ├── profile.json       # User profile (name, area, level, goals)
 ├── session.json       # Auth token cache
 ├── athena.db          # SQLite (sessions, knowledge, flashcards, progress)

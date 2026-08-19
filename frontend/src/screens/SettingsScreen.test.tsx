@@ -4,11 +4,17 @@ import userEvent from '@testing-library/user-event'
 import { HasOpenRouterKey, UpdateProfile } from '../../wailsjs/go/desktop/App'
 import SettingsScreen from './SettingsScreen'
 import type { ProfileDraft } from '@/lib/profile'
+import { getKnowledgeExtractionSettings, updateKnowledgeExtractionSettings } from '@/lib/knowledge'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
   UpdateProfile: vi.fn(),
   SaveOpenRouterKey: vi.fn(),
   HasOpenRouterKey: vi.fn(),
+}))
+
+vi.mock('@/lib/knowledge', () => ({
+  getKnowledgeExtractionSettings: vi.fn(),
+  updateKnowledgeExtractionSettings: vi.fn(),
 }))
 
 function currentProfile(): ProfileDraft {
@@ -26,6 +32,9 @@ function currentProfile(): ProfileDraft {
 describe('SettingsScreen', () => {
   beforeEach(() => {
     vi.mocked(HasOpenRouterKey).mockResolvedValue(false)
+    vi.mocked(getKnowledgeExtractionSettings).mockResolvedValue({
+      maxKnowledgeExtractionItems: 8,
+    })
   })
 
   it('shows that a key is already configured, without ever showing it', async () => {
@@ -105,5 +114,51 @@ describe('SettingsScreen', () => {
 
     // Then the shared OpenRouter key form is present
     expect(screen.getByLabelText('OpenRouter key')).toBeInTheDocument()
+  })
+
+  it('loads and displays the configured knowledge extraction maximum', async () => {
+    // Given a configured maximum
+    vi.mocked(getKnowledgeExtractionSettings).mockResolvedValueOnce({
+      maxKnowledgeExtractionItems: 12,
+    })
+
+    // When opening Settings
+    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
+
+    // Then the Knowledge Extraction section displays it
+    expect(await screen.findByLabelText('Máximo de itens por extração')).toHaveValue(12)
+  })
+
+  it('validates the knowledge extraction maximum before saving', async () => {
+    // Given the knowledge extraction settings form
+    const user = userEvent.setup()
+    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
+    const input = await screen.findByLabelText('Máximo de itens por extração')
+
+    // When entering an out-of-range value and saving
+    await user.clear(input)
+    await user.type(input, '21')
+    await user.click(screen.getByRole('button', { name: 'Salvar configuração de extração' }))
+
+    // Then a client-side error is shown and the binding is not called
+    expect(await screen.findByText('Informe um valor entre 1 e 20.')).toBeInTheDocument()
+    expect(updateKnowledgeExtractionSettings).not.toHaveBeenCalled()
+  })
+
+  it('saves a valid knowledge extraction maximum', async () => {
+    // Given the knowledge extraction settings form
+    vi.mocked(updateKnowledgeExtractionSettings).mockResolvedValueOnce()
+    const user = userEvent.setup()
+    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
+    const input = await screen.findByLabelText('Máximo de itens por extração')
+
+    // When entering a valid value and saving
+    await user.clear(input)
+    await user.type(input, '12')
+    await user.click(screen.getByRole('button', { name: 'Salvar configuração de extração' }))
+
+    // Then the backend receives it and success is shown
+    await waitFor(() => expect(updateKnowledgeExtractionSettings).toHaveBeenCalledWith(12))
+    expect(await screen.findByText('Configuração salva.')).toBeInTheDocument()
   })
 })

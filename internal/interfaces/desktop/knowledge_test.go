@@ -1,0 +1,93 @@
+package desktop
+
+import (
+	"context"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
+	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
+	domainconfig "github.com/santaniello/athena/internal/domain/config"
+	configmocks "github.com/santaniello/athena/internal/domain/config/mocks"
+	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
+	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
+	domainllm "github.com/santaniello/athena/internal/domain/llm"
+	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
+	domainstudy "github.com/santaniello/athena/internal/domain/study"
+	studymocks "github.com/santaniello/athena/internal/domain/study/mocks"
+)
+
+func TestApp_ExtractKnowledge_returnsFullCandidateAndTruncationState(t *testing.T) {
+	// Given a knowledge service returning a full candidate from the LLM
+	ctx := context.Background()
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	configs := configmocks.NewMockStore(t)
+	sessions.EXPECT().GetByID(ctx, "session-1").Return(domainstudy.Session{Topic: "Go"}, nil).Once()
+	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{{Role: domainstudy.RoleUser, Content: "Explain channels"}}, nil).Once()
+	configs.EXPECT().Load().Return(domainconfig.Config{MaxKnowledgeExtractionItems: 8}, nil).Once()
+	llm.EXPECT().Chat(ctx, mock.AnythingOfType("llm.ChatRequest")).Return(domainllm.ChatResponse{Content: `{"items":[{"concept":"Channels","definition":"Typed conduits.","properties":["typed"],"trade_offs":["coordination"],"related_concepts":["goroutines"]}]}`}, nil).Once()
+	service := applicationknowledge.NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil)
+	app.Startup(ctx)
+
+	// When extracting through the desktop adapter
+	result, err := app.ExtractKnowledge("session-1", false)
+
+	// Then the wrapper and every candidate field survive the translation
+	require.NoError(t, err)
+	assert.False(t, result.Truncated)
+	require.Len(t, result.Items, 1)
+	assert.Equal(t, "Channels", result.Items[0].Concept)
+	assert.Equal(t, []string{"typed"}, result.Items[0].Properties)
+	assert.Equal(t, []string{"coordination"}, result.Items[0].TradeOffs)
+	assert.Equal(t, []string{"goroutines"}, result.Items[0].RelatedConcepts)
+}
+
+func TestApp_ExtractKnowledge_returnsEmptyResultForMalformedLLMResponse(t *testing.T) {
+	// Given a service whose LLM returns malformed JSON
+	ctx := context.Background()
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	configs := configmocks.NewMockStore(t)
+	sessions.EXPECT().GetByID(ctx, "session-1").Return(domainstudy.Session{Topic: "Go"}, nil).Once()
+	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{{Role: domainstudy.RoleUser, Content: "Explain channels"}}, nil).Once()
+	configs.EXPECT().Load().Return(domainconfig.Config{MaxKnowledgeExtractionItems: 8}, nil).Once()
+	llm.EXPECT().Chat(ctx, mock.AnythingOfType("llm.ChatRequest")).Return(domainllm.ChatResponse{Content: "not json"}, nil).Once()
+	service := applicationknowledge.NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil)
+	app.Startup(ctx)
+
+	// When extracting through the desktop adapter
+	result, err := app.ExtractKnowledge("session-1", false)
+
+	// Then the malformed response is swallowed as an empty result
+	require.NoError(t, err)
+	assert.Empty(t, result.Items)
+	assert.False(t, result.Truncated)
+}
+
+func TestApp_SaveExtractedKnowledge_preservesFullInputAndReturnsCount(t *testing.T) {
+	// Given a knowledge service backed by a repository
+	ctx := context.Background()
+	repository := knowledgemocks.NewMockRepository(t)
+	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
+		return item.Concept == "Channels" && assert.ObjectsAreEqual([]string{"typed"}, item.Properties)
+	})).Return(nil).Once()
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t))
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil)
+	app.Startup(ctx)
+
+	// When saving a full desktop candidate
+	count, err := app.SaveExtractedKnowledge([]KnowledgeItemInput{{
+		Topic: "Go", Concept: "Channels", Definition: "Typed conduits.", Properties: []string{"typed"},
+	}})
+
+	// Then it is persisted and the count is returned
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+}

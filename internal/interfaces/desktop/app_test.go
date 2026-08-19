@@ -18,7 +18,7 @@ func TestNewApp_returnsNonNilApp(t *testing.T) {
 	sessions := mocks.NewMockSessionStore(t)
 
 	// When creating a new App
-	app := NewApp(authService, sessions, nil, nil, nil, nil, nil, nil)
+	app := NewApp(authService, sessions, nil, nil, nil, nil, nil, nil, nil)
 
 	// Then the App instance is ready to use
 	assert.NotNil(t, app)
@@ -27,7 +27,7 @@ func TestNewApp_returnsNonNilApp(t *testing.T) {
 func TestStartup_storesContext(t *testing.T) {
 	// Given a new App and a context
 	authService := auth.NewService(mocks.NewMockAccountRepository(t), mocks.NewMockSessionStore(t))
-	app := NewApp(authService, mocks.NewMockSessionStore(t), nil, nil, nil, nil, nil, nil)
+	app := NewApp(authService, mocks.NewMockSessionStore(t), nil, nil, nil, nil, nil, nil, nil)
 	ctx := context.Background()
 
 	// When Startup is called with that context
@@ -42,7 +42,7 @@ func TestHasLocalSession_returnsTrue_whenSessionStoreHasSession(t *testing.T) {
 	sessions := mocks.NewMockSessionStore(t)
 	sessions.EXPECT().Load().Return(domainauth.Session{AccountID: "acc-1"}, nil).Once()
 	authService := auth.NewService(mocks.NewMockAccountRepository(t), mocks.NewMockSessionStore(t))
-	app := NewApp(authService, sessions, nil, nil, nil, nil, nil, nil)
+	app := NewApp(authService, sessions, nil, nil, nil, nil, nil, nil, nil)
 
 	// When checking for a local session
 	has := app.HasLocalSession()
@@ -56,7 +56,7 @@ func TestHasLocalSession_returnsFalse_whenSessionStoreHasNoSession(t *testing.T)
 	sessions := mocks.NewMockSessionStore(t)
 	sessions.EXPECT().Load().Return(domainauth.Session{}, errors.New("session: reading session file: no such file")).Once()
 	authService := auth.NewService(mocks.NewMockAccountRepository(t), mocks.NewMockSessionStore(t))
-	app := NewApp(authService, sessions, nil, nil, nil, nil, nil, nil)
+	app := NewApp(authService, sessions, nil, nil, nil, nil, nil, nil, nil)
 
 	// When checking for a local session
 	has := app.HasLocalSession()
