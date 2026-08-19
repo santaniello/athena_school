@@ -208,7 +208,7 @@ Indices are required because validation skips invalid items and continues. For i
 - [ ] `frontend/src/screens/StudyChatScreen.tsx` — labeled "Extract knowledge" button in the composer row, disabled while streaming, extracting (`isExtracting`), or with an empty transcript; a distinct error `Alert` (reusing the existing pattern) for genuine `Chat` failures, separate from the "No new knowledge found" empty state
 - [ ] `frontend/src/screens/SettingsScreen.tsx` — new "Knowledge Extraction" section with a numeric input for `MaxKnowledgeExtractionItems`, validated 1–20
 
-> The third modal button, **[Save & approve]**, is added in 2.3 once `ApproveKnowledgeItem` exists. It completes the three-option flow of `specs/Athena.md` §12 without anticipating a use case that does not exist yet.
+> The third modal button, **[Save as knowledge]**, is added in 2.3 once `ApproveKnowledgeItem` exists. It completes the three-option flow of `specs/Athena.md` §12 without anticipating a use case that does not exist yet.
 
 ## Acceptance Criteria
 

@@ -411,7 +411,7 @@ O domínio `study` não tem conceito de fim de sessão (`Session` não tem `Ende
 > a justificativa completa.
 
 - [ ] `internal/application/ingest/` — pipeline de ingestão sobre `fs.FS` (`os.OpenRoot` dá confinamento contra symlink escape; testes usam `fstest.MapFS`)
-- [ ] UI: botão "Importar notas" no toolbar do Knowledge Explorer + seletor de pasta (`PickNotesFolder` e `ImportNotes` como bindings separados; o diálogo Wails precisa ser injetável, como o `emit`) + `Dialog` de progresso (shadcn `progress`), terminando num resumo com falhas por arquivo
+- [ ] UI: botão "Import notes" no toolbar do Knowledge Explorer + seletor de pasta (`PickNotesFolder` e `ImportNotes` como bindings separados; o diálogo Wails precisa ser injetável, como o `emit`) + `Dialog` de progresso (shadcn `progress`), terminando num resumo com falhas por arquivo
 - [ ] Pipeline:
 
 ```text

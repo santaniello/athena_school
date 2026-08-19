@@ -47,6 +47,7 @@ SELECT i...
         c.id IS NULL
      OR c.item_updated_at IS NULL
      OR c.item_updated_at <> i.updated_at
+     OR c.status IS NULL
      OR c.status <> i.status
      OR c.embedding_model IS NULL
      OR c.embedding_model <> :current_embedding_model
