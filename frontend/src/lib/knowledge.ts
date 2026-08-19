@@ -6,6 +6,7 @@ import {
   GetKnowledgeExtractionSettings,
   ListKnowledgeItems,
   ListKnowledgeTopics,
+  SaveAndApproveExtractedKnowledge,
   SaveExtractedKnowledge,
   UpdateKnowledgeExtractionSettings,
   UpdateKnowledgeItem,
@@ -45,6 +46,16 @@ export async function extractKnowledge(
 
 export async function saveExtractedKnowledge(items: KnowledgeItem[]): Promise<KnowledgeSaveResult> {
   return SaveExtractedKnowledge(items)
+}
+
+// saveAndApproveExtractedKnowledge persists items directly as approved,
+// skipping the draft review stage — the "Salvar como conhecimento" option
+// from specs/Athena.md §12, alongside saveExtractedKnowledge ("Salvar como
+// rascunho") and discarding the candidates entirely ("Ignorar").
+export async function saveAndApproveExtractedKnowledge(
+  items: KnowledgeItem[],
+): Promise<KnowledgeSaveResult> {
+  return SaveAndApproveExtractedKnowledge(items)
 }
 
 export async function getKnowledgeExtractionSettings(): Promise<KnowledgeExtractionSettings> {

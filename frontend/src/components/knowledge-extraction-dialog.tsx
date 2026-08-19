@@ -9,13 +9,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { saveExtractedKnowledge, type KnowledgeItem } from '@/lib/knowledge'
+import {
+  saveAndApproveExtractedKnowledge,
+  saveExtractedKnowledge,
+  type KnowledgeItem,
+} from '@/lib/knowledge'
 
 interface KnowledgeExtractionDialogProps {
   open: boolean
   items: KnowledgeItem[]
   onClose: () => void
 }
+
+// The three options from specs/Athena.md §12 ("Knowledge Promotion"):
+// "Salvar como conhecimento" (save directly as approved), "Salvar como
+// rascunho" (save as draft, the default review flow), "Ignorar" (discard).
+type SaveMode = 'draft' | 'approve'
 
 export function KnowledgeExtractionDialog({
   open,
@@ -28,6 +37,9 @@ export function KnowledgeExtractionDialog({
   const [saved, setSaved] = useState<Set<number>>(new Set())
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  // Tracks which button triggered the in-flight/last-failed save, so retry
+  // re-attempts the same mode and the other button stays at its default label.
+  const [lastMode, setLastMode] = useState<SaveMode | null>(null)
 
   const pendingIndices = useMemo(
     () => [...selected].filter((index) => !saved.has(index)).sort((a, b) => a - b),
@@ -43,12 +55,14 @@ export function KnowledgeExtractionDialog({
     })
   }
 
-  async function handleSave() {
+  async function handleSave(mode: SaveMode) {
     if (pendingIndices.length === 0) return
     setIsSaving(true)
     setSaveError('')
+    setLastMode(mode)
     try {
-      const result = await saveExtractedKnowledge(pendingIndices.map((index) => items[index]))
+      const save = mode === 'approve' ? saveAndApproveExtractedKnowledge : saveExtractedKnowledge
+      const result = await save(pendingIndices.map((index) => items[index]))
       const persistedIndices = result.savedIndices
         .map((index) => pendingIndices[index])
         .filter((index): index is number => index !== undefined)
@@ -66,6 +80,13 @@ export function KnowledgeExtractionDialog({
     } finally {
       setIsSaving(false)
     }
+  }
+
+  function saveButtonLabel(mode: SaveMode, idleLabel: string) {
+    if (lastMode !== mode) return idleLabel
+    if (isSaving) return 'Salvando...'
+    if (saveError) return 'Tentar novamente'
+    return idleLabel
   }
 
   return (
@@ -117,12 +138,21 @@ export function KnowledgeExtractionDialog({
             Ignorar
           </Button>
           {items.length > 0 && (
-            <Button
-              onClick={() => void handleSave()}
-              disabled={pendingIndices.length === 0 || isSaving}
-            >
-              {isSaving ? 'Salvando...' : saveError ? 'Tentar novamente' : 'Salvar como rascunhos'}
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                onClick={() => void handleSave('draft')}
+                disabled={pendingIndices.length === 0 || isSaving}
+              >
+                {saveButtonLabel('draft', 'Salvar como rascunhos')}
+              </Button>
+              <Button
+                onClick={() => void handleSave('approve')}
+                disabled={pendingIndices.length === 0 || isSaving}
+              >
+                {saveButtonLabel('approve', 'Salvar como conhecimento')}
+              </Button>
+            </>
           )}
         </DialogFooter>
       </DialogContent>

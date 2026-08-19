@@ -106,6 +106,10 @@ export function ResumeStudySession(arg1) {
   return window['go']['desktop']['App']['ResumeStudySession'](arg1);
 }
 
+export function SaveAndApproveExtractedKnowledge(arg1) {
+  return window['go']['desktop']['App']['SaveAndApproveExtractedKnowledge'](arg1);
+}
+
 export function SaveExtractedKnowledge(arg1) {
   return window['go']['desktop']['App']['SaveExtractedKnowledge'](arg1);
 }

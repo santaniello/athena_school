@@ -1,12 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { saveExtractedKnowledge, type KnowledgeItem } from '@/lib/knowledge'
+import {
+  saveAndApproveExtractedKnowledge,
+  saveExtractedKnowledge,
+  type KnowledgeItem,
+} from '@/lib/knowledge'
 import { KnowledgeExtractionDialog } from './knowledge-extraction-dialog'
 
 vi.mock('@/lib/knowledge', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/knowledge')>()
-  return { ...original, saveExtractedKnowledge: vi.fn() }
+  return {
+    ...original,
+    saveExtractedKnowledge: vi.fn(),
+    saveAndApproveExtractedKnowledge: vi.fn(),
+  }
 })
 
 function candidate(id: string, concept: string): KnowledgeItem {
@@ -187,5 +195,65 @@ describe('KnowledgeExtractionDialog', () => {
     // Then a user-safe fallback is shown and retry remains available
     expect(await screen.findByText('Falha ao salvar os rascunhos.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Tentar novamente' })).toBeEnabled()
+  })
+
+  it('saves and approves via "Salvar como conhecimento", directly closing on success', async () => {
+    // Given a complete candidate
+    const items = [candidate('1', 'Channels'), candidate('2', 'Goroutines')]
+    vi.mocked(saveAndApproveExtractedKnowledge).mockResolvedValueOnce({
+      savedIndices: [0, 1],
+      error: '',
+    })
+    const onClose = vi.fn()
+    const user = userEvent.setup()
+    render(<KnowledgeExtractionDialog open items={items} onClose={onClose} />)
+
+    // When saving via "Salvar como conhecimento"
+    await user.click(screen.getByRole('button', { name: 'Salvar como conhecimento' }))
+
+    // Then it calls the approve-directly binding (never the draft one) with
+    // every selected candidate, and closes the dialog
+    await waitFor(() => expect(saveAndApproveExtractedKnowledge).toHaveBeenCalledWith(items))
+    expect(saveExtractedKnowledge).not.toHaveBeenCalled()
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('keeps "Salvar como rascunhos" at its idle label while "Salvar como conhecimento" is saving', async () => {
+    // Given a save-and-approve request that remains in flight
+    vi.mocked(saveAndApproveExtractedKnowledge).mockReturnValueOnce(new Promise<never>(() => {}))
+    const user = userEvent.setup()
+    render(
+      <KnowledgeExtractionDialog open items={[candidate('1', 'Channels')]} onClose={vi.fn()} />,
+    )
+
+    // When saving via "Salvar como conhecimento"
+    await user.click(screen.getByRole('button', { name: 'Salvar como conhecimento' }))
+
+    // Then only that button shows the in-flight label; the draft button
+    // keeps its idle label (just disabled, not relabeled) and selection locks
+    expect(screen.getByRole('button', { name: 'Salvando...' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Salvar como rascunhos' })).toBeDisabled()
+    expect(screen.getByLabelText('Selecionar Channels')).toBeDisabled()
+  })
+
+  it('retries the same "Salvar como conhecimento" mode after its own failure', async () => {
+    // Given a save-and-approve call that fails once, then succeeds
+    const items = [candidate('1', 'Channels')]
+    vi.mocked(saveAndApproveExtractedKnowledge)
+      .mockResolvedValueOnce({ savedIndices: [], error: 'database unavailable' })
+      .mockResolvedValueOnce({ savedIndices: [0], error: '' })
+    const user = userEvent.setup()
+    render(<KnowledgeExtractionDialog open items={items} onClose={vi.fn()} />)
+    await user.click(screen.getByRole('button', { name: 'Salvar como conhecimento' }))
+    expect(await screen.findByText('database unavailable')).toBeInTheDocument()
+
+    // When retrying
+    await user.click(screen.getByRole('button', { name: 'Tentar novamente' }))
+
+    // Then the retry goes through the same approve-directly binding, not the draft one
+    await waitFor(() =>
+      expect(saveAndApproveExtractedKnowledge).toHaveBeenNthCalledWith(2, items),
+    )
+    expect(saveExtractedKnowledge).not.toHaveBeenCalled()
   })
 })

@@ -7,6 +7,7 @@ import {
   GetKnowledgeExtractionSettings,
   ListKnowledgeItems,
   ListKnowledgeTopics,
+  SaveAndApproveExtractedKnowledge,
   SaveExtractedKnowledge,
   UpdateKnowledgeExtractionSettings,
   UpdateKnowledgeItem,
@@ -21,6 +22,7 @@ import {
   groupByTopic,
   listKnowledgeItems,
   listKnowledgeTopics,
+  saveAndApproveExtractedKnowledge,
   saveExtractedKnowledge,
   updateKnowledgeExtractionSettings,
   updateKnowledgeItem,
@@ -30,6 +32,7 @@ import {
 vi.mock('../../wailsjs/go/desktop/App', () => ({
   ExtractKnowledge: vi.fn(),
   SaveExtractedKnowledge: vi.fn(),
+  SaveAndApproveExtractedKnowledge: vi.fn(),
   GetKnowledgeExtractionSettings: vi.fn(),
   UpdateKnowledgeExtractionSettings: vi.fn(),
   ListKnowledgeItems: vi.fn(),
@@ -79,6 +82,36 @@ describe('knowledge bindings', () => {
 
     // Then no fields are dropped
     expect(SaveExtractedKnowledge).toHaveBeenCalledWith(items)
+    expect(result).toEqual({ savedIndices: [0], error: '' })
+  })
+
+  it('saves and approves the selected full candidates', async () => {
+    // Given a complete candidate
+    const items = [
+      {
+        id: 'candidate-1',
+        topic: 'Go',
+        concept: 'Channels',
+        definition: 'Typed conduits.',
+        properties: ['typed'],
+        tradeOffs: ['coordination'],
+        relatedConcepts: ['goroutines'],
+        source: 'athena',
+        status: 'draft',
+        createdAt: '2026-08-18T10:00:00Z',
+        updatedAt: '2026-08-18T10:00:00Z',
+      },
+    ]
+    vi.mocked(SaveAndApproveExtractedKnowledge).mockResolvedValueOnce({
+      savedIndices: [0],
+      error: '',
+    })
+
+    // When saving and approving it
+    const result = await saveAndApproveExtractedKnowledge(items)
+
+    // Then no fields are dropped
+    expect(SaveAndApproveExtractedKnowledge).toHaveBeenCalledWith(items)
     expect(result).toEqual({ savedIndices: [0], error: '' })
   })
 
