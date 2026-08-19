@@ -138,7 +138,11 @@ Fields, built purely from already-parsed data, no LLM call:
 - `Definition` — the first 300 characters of the file's leading chunk (the one
   with `Heading = ""` if the file has front matter/intro text, otherwise its
   first real section), truncated on a word boundary with a trailing `…`. A plain
-  textual preview, never a rewrite.
+  textual preview, never a rewrite. A file that produces **zero chunks** (empty,
+  or whitespace-only) still gets its one Item, with `Definition` falling back to
+  a fixed placeholder ("This file has no content.") instead of `""` — an empty
+  `Definition` fails `knowledge.Item.Validate`, and the shadow Item must stay
+  valid both to save on import and to edit back to valid later from the Explorer.
 - `Properties`, `TradeOffs`, `RelatedConcepts` — left empty. These fields only
   make sense for LLM-structured content; inventing values for them here would be
   fabricating data that doesn't exist.
@@ -559,7 +563,7 @@ a follow-up, not a task below.
       `Properties` / `TradeOffs` / `RelatedConcepts`, `Input` for concept,
       `Textarea` for definition
 - [ ] `frontend/src/components/knowledge-extraction-dialog.tsx` — add the third
-      button **[Save & approve]**, completing the flow of `specs/Athena.md` §12
+      button **[Save as knowledge]**, completing the flow of `specs/Athena.md` §12
 - [ ] `frontend/src/components/ingest-progress-dialog.tsx` — progress bar
       (vendor shadcn `progress`) that transitions in place to the result
       summary on `ingest:done` / `ingest:error`

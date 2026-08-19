@@ -71,12 +71,15 @@ func TestBuildShadowItem_definition_isReturnedAsIs_whenUnder300Chars(t *testing.
 	assert.Equal(t, "Uma nota curta.", definition)
 }
 
-func TestBuildShadowItem_definition_isEmpty_whenThereAreNoChunks(t *testing.T) {
+func TestBuildShadowItem_definition_fallsBackToAPlaceholder_whenThereAreNoChunks(t *testing.T) {
 	// Given no chunks at all (an empty file)
 	_, _, definition := BuildShadowItem("notes/empty.md", "", nil)
 
-	// Then the definition is empty rather than panicking
-	assert.Empty(t, definition)
+	// Then the definition falls back to a fixed, non-blank placeholder
+	// rather than "" — knowledge.Item.Validate rejects a blank Definition,
+	// and the shadow Item must stay valid to save and to edit back to
+	// valid from the Explorer
+	assert.Equal(t, emptyFileDefinition, definition)
 }
 
 func TestBuildShadowItem_topic_usesFirstLevelDirectoryUnderRoot(t *testing.T) {

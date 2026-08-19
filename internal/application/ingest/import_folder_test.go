@@ -109,6 +109,44 @@ func TestImportFolder_ingestsMarkdownAndTxtFiles_skipsHiddenDirectoriesEntirely(
 	assert.Equal(t, 2, summary.ChunksCreated)
 }
 
+func TestImportFolder_emptyFile_stillGetsExactlyOneItem_withZeroChunks(t *testing.T) {
+	// Given a completely empty .md file
+	root := fstest.MapFS{"notes/empty.md": {Data: []byte("")}}
+	ctx := context.Background()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	items := knowledgemocks.NewMockRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	tx := ingestmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+
+	ingestedFiles.EXPECT().ListAll(ctx).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
+	chunks.EXPECT().DeleteByFilePath(ctx, "notes/empty.md").Return(nil).Once()
+	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
+		return len(cs) == 0
+	})).Return(nil).Once()
+	items.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
+		return item.Definition == emptyFileDefinition
+	})).Return(nil).Once()
+	ingestedFiles.EXPECT().Upsert(ctx, mock.MatchedBy(func(f domainknowledge.IngestedFile) bool {
+		return f.Path == "notes/empty.md" && f.ChunkCount == 0
+	})).Return(nil).Once()
+
+	service := newTestService(chunks, ingestedFiles, items, llm, tx)
+
+	// When importing the folder
+	summary, err := service.ImportFolder(ctx, root, noopProgress)
+
+	// Then the file is ingested as a single Item with zero chunks (and no
+	// LLM call, since there is nothing to embed), rather than failing —
+	// the shadow Item's placeholder Definition keeps it valid to save
+	require.NoError(t, err)
+	assert.Equal(t, 1, summary.FilesIngested)
+	assert.Equal(t, 0, summary.FilesFailed)
+	assert.Equal(t, 0, summary.ChunksCreated)
+	llm.AssertNotCalled(t, "Embeddings", mock.Anything, mock.Anything)
+}
+
 func TestImportFolder_reimport_isIdempotent_whenNothingChanged(t *testing.T) {
 	// Given one file already recorded with its current mtime and embedding
 	// model (alphabetically first, so it is skipped before the walk

@@ -50,13 +50,21 @@ func topicFor(relPath, h1 string, hasH1 bool) string {
 	return baseNameWithoutExt(relPath)
 }
 
+// emptyFileDefinition is the shadow Item's Definition for a file that
+// produced zero chunks (empty, or containing only whitespace/a heading
+// with no body). knowledge.Item.Validate rejects a blank Definition, so
+// this placeholder — rather than "" — is what keeps such a file's shadow
+// Item valid to save and, later, to edit back to valid from the Explorer.
+const emptyFileDefinition = "This file has no content."
+
 // definitionFor is the first definitionPreviewChars characters of the
 // file's leading chunk (chunks[0]), stripped of that chunk's own raw
 // heading-marker line and truncated on a word boundary with a trailing
-// "…" when it runs over budget.
+// "…" when it runs over budget. Falls back to emptyFileDefinition when
+// the file produced no chunks at all.
 func definitionFor(chunks []ChunkCandidate) string {
 	if len(chunks) == 0 {
-		return ""
+		return emptyFileDefinition
 	}
 	return truncateAtWordBoundary(stripLeadingHeadingLine(chunks[0].Content), definitionPreviewChars)
 }
