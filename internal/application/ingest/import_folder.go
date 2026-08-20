@@ -166,7 +166,11 @@ func (s *Service) ingestFile(
 		candidates = ChunkText(content)
 	}
 
-	topic, concept, definition := BuildShadowItem(filePath, content, candidates)
+	rawTopic, concept, definition := BuildShadowItem(filePath, content, candidates)
+	topic, err := domainknowledge.NormalizeTopic(rawTopic)
+	if err != nil {
+		return 0, fmt.Errorf("deriving topic: %w", err)
+	}
 
 	itemID := uuid.NewString()
 	if hasPrev {

@@ -343,6 +343,39 @@ func TestImportFolder_perFileFailure_isRecordedInSummary_andImportContinues(t *t
 	assert.Contains(t, summary.Failures[0].Reason, boom.Error())
 }
 
+func TestImportFolder_perFileFailure_whenDerivedTopicIsBlank(t *testing.T) {
+	// Given a root-level file named exactly ".md" (no directory to derive a
+	// topic from, and no heading): path.Ext(".md") == ".md", so
+	// baseNameWithoutExt strips the entire name down to "", and
+	// BuildShadowItem's fallback chain would otherwise produce an empty Topic
+	root := fstest.MapFS{
+		".md": {Data: []byte("Some body text with no heading.")},
+	}
+	ctx := context.Background()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	items := knowledgemocks.NewMockRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	// No WithinTx expectation: the blank topic is caught before the file
+	// ever reaches the transactional replace step, so it must never be called.
+	tx := ingestmocks.NewMockTransactor(t)
+
+	ingestedFiles.EXPECT().ListAll(ctx).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
+
+	service := newTestService(chunks, ingestedFiles, items, llm, tx)
+
+	// When importing the folder
+	summary, err := service.ImportFolder(ctx, root, noopProgress)
+
+	// Then the file is recorded as failed instead of persisting a
+	// blank-topic chunk/item, and nothing is embedded, transacted, or saved
+	require.NoError(t, err)
+	assert.Equal(t, 1, summary.FilesFailed)
+	require.Len(t, summary.Failures, 1)
+	assert.Equal(t, ".md", summary.Failures[0].Path)
+	assert.Contains(t, summary.Failures[0].Reason, domainknowledge.ErrTopicRequired.Error())
+}
+
 func TestImportFolder_onProgressError_stopsWalkImmediately_returningPartialSummary(t *testing.T) {
 	// Given two files that would both otherwise import successfully
 	root := fstest.MapFS{

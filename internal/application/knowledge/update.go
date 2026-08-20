@@ -35,7 +35,12 @@ func (s *Service) UpdateItem(ctx context.Context, id string, fields ItemFields) 
 			return err
 		}
 
-		item.Topic = fields.Topic
+		topic, err := domainknowledge.NormalizeTopic(fields.Topic)
+		if err != nil {
+			return err
+		}
+
+		item.Topic = topic
 		item.Concept = fields.Concept
 		item.Definition = fields.Definition
 		item.Properties = fields.Properties

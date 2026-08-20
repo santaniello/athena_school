@@ -40,11 +40,16 @@ func parseExtraction(raw, topic string, maxItems int, now time.Time) ([]domainkn
 	}
 	envelope.Items = envelope.Items[:min(len(envelope.Items), maxItems)]
 
+	normalizedTopic, topicErr := domainknowledge.NormalizeTopic(topic)
+	if topicErr != nil {
+		return []domainknowledge.Item{}, nil
+	}
+
 	items := make([]domainknowledge.Item, 0, len(envelope.Items))
 	for _, candidate := range envelope.Items {
 		item := domainknowledge.Item{
 			ID:              uuid.NewString(),
-			Topic:           strings.TrimSpace(topic),
+			Topic:           normalizedTopic,
 			Concept:         truncateString(candidate.Concept, maxConceptChars),
 			Definition:      truncateString(candidate.Definition, maxDefinitionChars),
 			Properties:      normalizeList(candidate.Properties),

@@ -66,6 +66,49 @@ func TestUpdateItem_returnsValidationError_whenConceptIsCleared_andNeverCallsUpd
 	repository.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
 }
 
+func TestUpdateItem_trimsTopicWhitespace_beforePersisting(t *testing.T) {
+	// Given an existing item
+	ctx := context.Background()
+	repository := knowledgemocks.NewMockRepository(t)
+	repository.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{
+		ID: "item-1", Topic: "Go", Concept: "Old", Definition: "Old def.",
+	}, nil).Once()
+	repository.EXPECT().Update(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
+		return item.Topic == "Distributed systems"
+	})).Return(nil).Once()
+	tx := txmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	service := NewService(repository, nil, nil, nil, nil, nil, tx)
+
+	// When updating with a topic padded with whitespace
+	updated, err := service.UpdateItem(ctx, "item-1", ItemFields{
+		Topic: "  Distributed systems  ", Concept: "New", Definition: "New def.",
+	})
+
+	// Then the persisted and returned topic is trimmed
+	require.NoError(t, err)
+	assert.Equal(t, "Distributed systems", updated.Topic)
+}
+
+func TestUpdateItem_returnsTopicRequired_whenTopicIsBlank_andNeverCallsUpdate(t *testing.T) {
+	// Given an existing item
+	ctx := context.Background()
+	repository := knowledgemocks.NewMockRepository(t)
+	repository.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{
+		ID: "item-1", Topic: "Go", Concept: "Old", Definition: "Old def.",
+	}, nil).Once()
+	tx := txmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	service := NewService(repository, nil, nil, nil, nil, nil, tx)
+
+	// When updating with a whitespace-only topic
+	_, err := service.UpdateItem(ctx, "item-1", ItemFields{Topic: "   ", Concept: "New", Definition: "New def."})
+
+	// Then it fails validation and never reaches the repository's Update
+	assert.ErrorIs(t, err, domainknowledge.ErrTopicRequired)
+	repository.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
+}
+
 func TestUpdateItem_propagatesNotFound_whenItemDoesNotExist(t *testing.T) {
 	// Given no matching item
 	ctx := context.Background()
