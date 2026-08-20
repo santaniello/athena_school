@@ -229,10 +229,10 @@ func normalizeVector(vec []float32) []float32 {
 	for _, v := range vec {
 		sumSquares += float64(v) * float64(v)
 	}
-	norm := float32(math.Sqrt(sumSquares))
+	norm := math.Sqrt(sumSquares)
 	out := make([]float32, len(vec))
 	for i, v := range vec {
-		out[i] = v / norm
+		out[i] = float32(float64(v) / norm)
 	}
 	return out
 }
