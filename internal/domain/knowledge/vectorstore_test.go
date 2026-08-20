@@ -184,6 +184,23 @@ func TestValidateVector_returnsErrInvalidVector_whenNormIsZero(t *testing.T) {
 	assert.ErrorIs(t, err, ErrInvalidVector)
 }
 
+func TestReasonForValidationError_mapsEachValidateChunkSentinel_toItsStableCode(t *testing.T) {
+	cases := map[error]string{
+		ErrInvalidChunkID: ChunkIssueInvalidChunkID,
+		ErrUnknownSource:  ChunkIssueUnknownSource,
+		ErrUnknownStatus:  ChunkIssueUnknownStatus,
+		ErrInvalidVector:  ChunkIssueInvalidVector,
+	}
+	for err, want := range cases {
+		// Given each error ValidateChunk can return
+		// When mapping it to a stable ChunkLoadIssue reason code
+		got := ReasonForValidationError(err)
+
+		// Then it maps to the matching reason code
+		assert.Equal(t, want, got, "for %v", err)
+	}
+}
+
 func TestValidateVector_doesNotOverflow_withManyLargeComponents(t *testing.T) {
 	// Given a high-dimensional vector whose squared components would
 	// overflow float32 accumulation (float32 max is ~3.4e38; 2000 dims of

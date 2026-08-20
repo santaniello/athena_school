@@ -131,6 +131,23 @@ const (
 	IndexStateFailed            IndexState = "failed"
 )
 
+// ReasonForValidationError maps an error ValidateChunk can return to its
+// stable ChunkLoadIssue reason code. Shared by the SQLite loader
+// (ListCurrent) and the background index loader's own defense-in-depth
+// re-validation, so both report the same code for the same defect.
+func ReasonForValidationError(err error) string {
+	switch {
+	case errors.Is(err, ErrInvalidChunkID):
+		return ChunkIssueInvalidChunkID
+	case errors.Is(err, ErrUnknownSource):
+		return ChunkIssueUnknownSource
+	case errors.Is(err, ErrUnknownStatus):
+		return ChunkIssueUnknownStatus
+	default:
+		return ChunkIssueInvalidVector
+	}
+}
+
 // IndexStatus is the coordinator's current lifecycle snapshot. HasSnapshot
 // distinguishes an initial load from a retry that can keep serving a
 // previously published, still-valid snapshot.

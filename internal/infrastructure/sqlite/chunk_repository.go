@@ -3,7 +3,6 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"time"
 
@@ -216,7 +215,7 @@ func scanCurrentChunkRow(rows *sql.Rows) (knowledge.Chunk, *knowledge.ChunkLoadI
 	}
 
 	if validateErr := knowledge.ValidateChunk(chunk); validateErr != nil {
-		return knowledge.Chunk{}, chunkLoadIssue(chunk, reasonForValidationError(validateErr)), nil
+		return knowledge.Chunk{}, chunkLoadIssue(chunk, knowledge.ReasonForValidationError(validateErr)), nil
 	}
 
 	return chunk, nil, nil
@@ -229,24 +228,6 @@ func chunkLoadIssue(chunk knowledge.Chunk, reason string) *knowledge.ChunkLoadIs
 		Source:   chunk.Source,
 		FilePath: chunk.FilePath,
 		Reason:   reason,
-	}
-}
-
-// reasonForValidationError maps a knowledge.ValidateChunk error to its
-// stable ChunkLoadIssue reason code. Every branch ValidateChunk can return
-// is covered explicitly, so a future sentinel added there without a
-// matching case here fails loudly (a wrong/misleading reason) rather than
-// silently falling through.
-func reasonForValidationError(err error) string {
-	switch {
-	case errors.Is(err, knowledge.ErrInvalidChunkID):
-		return knowledge.ChunkIssueInvalidChunkID
-	case errors.Is(err, knowledge.ErrUnknownSource):
-		return knowledge.ChunkIssueUnknownSource
-	case errors.Is(err, knowledge.ErrUnknownStatus):
-		return knowledge.ChunkIssueUnknownStatus
-	default:
-		return knowledge.ChunkIssueInvalidVector
 	}
 }
 
