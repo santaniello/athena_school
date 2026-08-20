@@ -123,6 +123,25 @@ describe('IngestProgressDialog', () => {
     expect(indicator).toHaveStyle({ transform: 'translateX(-70%)' })
   })
 
+  it('keeps the progress bar at zero without dividing by zero when the file total has not arrived yet', () => {
+    // Given a dialog mid-import, before any files have been counted
+    const events = setupSubscriptions()
+    vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
+    render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />)
+
+    // When a progress event arrives reporting zero files total
+    events.emitProgress({
+      filesProcessed: 0,
+      filesTotal: 0,
+      chunksCreated: 0,
+      currentFile: '',
+    })
+
+    // Then the bar stays at a clean 0% instead of computing 0/0
+    const indicator = document.querySelector('[data-slot="progress-indicator"]')
+    expect(indicator).toHaveStyle({ transform: 'translateX(-100%)' })
+  })
+
   it('transitions to the result summary when ingest:done fires', async () => {
     // Given a dialog mid-import
     const events = setupSubscriptions()
@@ -313,12 +332,18 @@ describe('IngestProgressDialog', () => {
   })
 
   it('resets to a fresh progress state when reopened for another folder', async () => {
-    // Given a dialog that already finished one import
+    // Given a dialog that made progress, then finished one import
     const events = setupSubscriptions()
     vi.mocked(importNotes).mockReturnValue(new Promise<void>(() => {}))
     const { rerender } = render(
       <IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />,
     )
+    events.emitProgress({
+      filesProcessed: 3,
+      filesTotal: 10,
+      chunksCreated: 9,
+      currentFile: 'go/channels.md',
+    })
     events.emitDone(emptySummary)
     expect(await findFooterCloseButton()).toBeInTheDocument()
 
