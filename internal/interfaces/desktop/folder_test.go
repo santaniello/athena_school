@@ -19,7 +19,7 @@ import (
 func newTestFolderApp(t *testing.T, folders domainfolder.Repository, sessions domainstudy.SessionRepository) *App {
 	t.Helper()
 	folderService := folder.NewService(folders, sessions)
-	app := NewApp(nil, nil, nil, nil, nil, nil, folderService, nil, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, nil, folderService, nil, nil, nil, nil)
 	app.Startup(context.Background())
 	return app
 }

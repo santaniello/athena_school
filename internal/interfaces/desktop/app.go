@@ -31,6 +31,7 @@ type App struct {
 	folder        *folder.Service
 	knowledge     *applicationknowledge.Service
 	ingest        *applicationingest.Service
+	index         *applicationknowledge.IndexLoader
 	apiKeyUpdater domainllm.APIKeyUpdater
 	// emit defaults to wailsruntime.EventsEmit, which calls log.Fatal (i.e.
 	// os.Exit) when a.ctx was never produced by the real Wails runtime —
@@ -45,8 +46,8 @@ type App struct {
 
 // NewApp creates a new App instance backed by the given auth service,
 // session store, onboarding service, profile store, config store, study
-// service, folder service, knowledge service, notes-import service and the
-// live LLM client's key updater.
+// service, folder service, knowledge service, notes-import service, the
+// knowledge vector index coordinator, and the live LLM client's key updater.
 func NewApp(
 	authService *auth.Service,
 	sessions domainauth.SessionStore,
@@ -58,6 +59,7 @@ func NewApp(
 	knowledgeService *applicationknowledge.Service,
 	ingestService *applicationingest.Service,
 	apiKeyUpdater domainllm.APIKeyUpdater,
+	indexLoader *applicationknowledge.IndexLoader,
 ) *App {
 	return &App{
 		auth:          authService,
@@ -70,6 +72,7 @@ func NewApp(
 		knowledge:     knowledgeService,
 		ingest:        ingestService,
 		apiKeyUpdater: apiKeyUpdater,
+		index:         indexLoader,
 		emit:          wailsruntime.EventsEmit,
 		openDirectory: wailsruntime.OpenDirectoryDialog,
 	}

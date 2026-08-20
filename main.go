@@ -101,7 +101,7 @@ func main() {
 		knowledgeChunks, ingestedFiles, knowledgeItems, llmClient, transactor, vectorStore, indexLoader,
 	)
 
-	app := desktop.NewApp(authService, sessions, onboardingService, profiles, configStore, studyService, folderService, knowledgeService, ingestService, llmClient)
+	app := desktop.NewApp(authService, sessions, onboardingService, profiles, configStore, studyService, folderService, knowledgeService, ingestService, llmClient, indexLoader)
 
 	err = wails.Run(&options.App{
 		Title:            "Athena",
@@ -123,6 +123,13 @@ func main() {
 			if goruntime.GOOS == "linux" {
 				go activateLinuxWindow()
 			}
+		},
+		// Loading begins here, after the frontend is ready to receive the
+		// "knowledge-index:status" event, rather than synchronously before
+		// wails.Run — so the window can render "Loading knowledge index..."
+		// immediately instead of blocking on SQLite decode/normalize first.
+		OnDomReady: func(ctx context.Context) {
+			go app.StartKnowledgeIndex(ctx)
 		},
 		Bind: []interface{}{
 			app,

@@ -42,6 +42,11 @@ type IngestSummaryResult struct {
 	FilesFailed   int                   `json:"filesFailed"`
 	ChunksCreated int                   `json:"chunksCreated"`
 	Failures      []IngestFailureResult `json:"failures"`
+	// IndexWarnings lists files that persisted successfully — counted in
+	// FilesIngested, never in FilesFailed — but whose in-memory vector
+	// index reconciliation failed. A full Retry from the Knowledge section
+	// self-heals these from SQLite.
+	IndexWarnings []IngestFailureResult `json:"indexWarnings"`
 }
 
 func toIngestProgressResult(p ingest.Progress) IngestProgressResult {
@@ -58,6 +63,11 @@ func toIngestSummaryResult(s ingest.Summary) IngestSummaryResult {
 	for i, f := range s.Failures {
 		failures[i] = IngestFailureResult{Path: f.Path, Reason: f.Reason}
 	}
+	indexWarnings := make([]IngestFailureResult, len(s.IndexWarnings))
+	for i, w := range s.IndexWarnings {
+		indexWarnings[i] = IngestFailureResult{Path: w.Path, Reason: w.Reason}
+		log.Printf("knowledge index: reconciling imported file %q: %s", w.Path, w.Reason)
+	}
 	return IngestSummaryResult{
 		FilesScanned:  s.FilesScanned,
 		FilesIngested: s.FilesIngested,
@@ -65,6 +75,7 @@ func toIngestSummaryResult(s ingest.Summary) IngestSummaryResult {
 		FilesFailed:   s.FilesFailed,
 		ChunksCreated: s.ChunksCreated,
 		Failures:      failures,
+		IndexWarnings: indexWarnings,
 	}
 }
 

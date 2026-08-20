@@ -1,7 +1,11 @@
 package desktop
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"log"
+	"os"
 	"strings"
 	"testing"
 
@@ -39,7 +43,7 @@ func TestApp_ExtractKnowledge_returnsFullCandidateAndTruncationState(t *testing.
 			strings.Contains(req.Messages[0].Content, "User: Explain channels")
 	})).Return(domainllm.ChatResponse{Content: `{"items":[{"concept":"Channels","definition":"Typed conduits.","properties":["typed"],"trade_offs":["coordination"],"related_concepts":["goroutines"]}]}`}, nil).Once()
 	service := applicationknowledge.NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil, nil, nil)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
 	// When extracting through the desktop adapter
@@ -73,7 +77,7 @@ func TestApp_ExtractKnowledge_returnsEmptyResultForMalformedLLMResponse(t *testi
 			strings.Contains(req.Messages[0].Content, "User: Explain channels")
 	})).Return(domainllm.ChatResponse{Content: "not json"}, nil).Once()
 	service := applicationknowledge.NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil, nil, nil)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
 	// When extracting through the desktop adapter
@@ -93,7 +97,7 @@ func TestApp_SaveExtractedKnowledge_preservesFullInputAndReturnsSavedIndices(t *
 		return item.Concept == "Channels" && assert.ObjectsAreEqual([]string{"typed"}, item.Properties)
 	})).Return(nil).Once()
 	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
 	// When saving a full desktop candidate
@@ -117,7 +121,7 @@ func TestApp_SaveExtractedKnowledge_returnsExactIndicesAlongsidePartialFailure(t
 		return item.Concept == "failed"
 	})).Return(assert.AnError).Once()
 	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
 	// When saving through the desktop adapter
@@ -140,7 +144,7 @@ func TestApp_SaveAndApproveExtractedKnowledge_persistsDirectlyAsApproved(t *test
 		return item.Concept == "Channels" && item.Status == domainknowledge.StatusApproved
 	})).Return(nil).Once()
 	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
 	// When saving and approving a full desktop candidate
@@ -160,7 +164,7 @@ func TestApp_ListKnowledgeItems_returnsItemsForTopicAndStatus(t *testing.T) {
 	repository.EXPECT().List(ctx, domainknowledge.Filter{Topic: "Go", Status: domainknowledge.StatusApproved}).
 		Return([]domainknowledge.Item{{ID: "item-1", Topic: "Go", Concept: "Channels", Status: domainknowledge.StatusApproved}}, nil).Once()
 	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
 	// When listing through the desktop adapter
@@ -178,7 +182,7 @@ func TestApp_ListKnowledgeTopics_returnsTopics(t *testing.T) {
 	repository := knowledgemocks.NewMockRepository(t)
 	repository.EXPECT().ListTopics(ctx).Return([]string{"Go", "Kubernetes"}, nil).Once()
 	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
 	// When listing topics through the desktop adapter
@@ -209,7 +213,7 @@ func TestApp_ApproveKnowledgeItem_returnsTheUpdatedItem(t *testing.T) {
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().CheckMutationAllowed().Return(nil).Once()
 	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
 	// When approving through the desktop adapter
@@ -240,7 +244,7 @@ func TestApp_DeprecateKnowledgeItem_returnsTheUpdatedItem(t *testing.T) {
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().CheckMutationAllowed().Return(nil).Once()
 	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
 	// When deprecating through the desktop adapter
@@ -271,7 +275,7 @@ func TestApp_UpdateKnowledgeItem_persistsEditableFields_andReturnsTheUpdatedItem
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().CheckMutationAllowed().Return(nil).Once()
 	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
 	// When updating through the desktop adapter
@@ -299,7 +303,7 @@ func TestApp_DeleteKnowledgeItem_deletesTheItemAndItsChunks(t *testing.T) {
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().CheckMutationAllowed().Return(nil).Once()
 	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
 	// When deleting through the desktop adapter
@@ -307,4 +311,141 @@ func TestApp_DeleteKnowledgeItem_deletesTheItemAndItsChunks(t *testing.T) {
 
 	// Then it succeeds
 	require.NoError(t, err)
+}
+
+// captureLog redirects the standard logger's output into a buffer for the
+// duration of the test, restoring it on cleanup.
+func captureLog(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	return &buf
+}
+
+func TestApp_ApproveKnowledgeItem_reportsSuccess_whenPostCommitReconciliationFails(t *testing.T) {
+	// Given an item whose approval persists but whose store reconciliation fails
+	ctx := context.Background()
+	repository := knowledgemocks.NewMockRepository(t)
+	repository.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{
+		ID: "item-1", Topic: "Go", Concept: "Channels", Definition: "Typed conduits.", Status: domainknowledge.StatusDraft,
+	}, nil).Once()
+	repository.EXPECT().Update(ctx, mock.Anything).Return(nil).Once()
+	tx := txmocks.NewMockTransactor(t)
+	tx.EXPECT().WithinTx(ctx, mock.Anything).
+		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Go", domainknowledge.StatusApproved).Return(nil, nil).Once()
+	boom := errors.New("store exploded")
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Add(mock.Anything, ([]domainknowledge.Chunk)(nil)).Return(boom).Once()
+	guard := txmocks.NewMockIndexGuard(t)
+	guard.EXPECT().CheckMutationAllowed().Return(nil).Once()
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
+	app.Startup(ctx)
+	logs := captureLog(t)
+
+	// When approving through the desktop adapter
+	result, err := app.ApproveKnowledgeItem("item-1")
+
+	// Then the durable transition is reported as successful, and the
+	// technical failure is logged rather than swallowed
+	require.NoError(t, err)
+	assert.Equal(t, domainknowledge.StatusApproved, result.Status)
+	assert.Contains(t, logs.String(), boom.Error())
+}
+
+func TestApp_DeprecateKnowledgeItem_reportsSuccess_whenPostCommitReconciliationFails(t *testing.T) {
+	// Given an item whose deprecation persists but whose store reconciliation fails
+	ctx := context.Background()
+	repository := knowledgemocks.NewMockRepository(t)
+	repository.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{
+		ID: "item-1", Topic: "Go", Concept: "Channels", Definition: "Typed conduits.", Status: domainknowledge.StatusApproved,
+	}, nil).Once()
+	repository.EXPECT().Update(ctx, mock.Anything).Return(nil).Once()
+	tx := txmocks.NewMockTransactor(t)
+	tx.EXPECT().WithinTx(ctx, mock.Anything).
+		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Go", domainknowledge.StatusDeprecated).Return(nil, nil).Once()
+	boom := errors.New("store exploded")
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Add(mock.Anything, ([]domainknowledge.Chunk)(nil)).Return(boom).Once()
+	guard := txmocks.NewMockIndexGuard(t)
+	guard.EXPECT().CheckMutationAllowed().Return(nil).Once()
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
+	app.Startup(ctx)
+	logs := captureLog(t)
+
+	// When deprecating through the desktop adapter
+	result, err := app.DeprecateKnowledgeItem("item-1")
+
+	// Then the durable transition is reported as successful
+	require.NoError(t, err)
+	assert.Equal(t, domainknowledge.StatusDeprecated, result.Status)
+	assert.Contains(t, logs.String(), boom.Error())
+}
+
+func TestApp_UpdateKnowledgeItem_reportsSuccess_whenPostCommitReconciliationFails(t *testing.T) {
+	// Given an item whose update persists but whose store reconciliation fails
+	ctx := context.Background()
+	repository := knowledgemocks.NewMockRepository(t)
+	repository.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{
+		ID: "item-1", Topic: "Go", Concept: "Old", Definition: "Old def.", Status: domainknowledge.StatusApproved,
+	}, nil).Once()
+	repository.EXPECT().Update(ctx, mock.Anything).Return(nil).Once()
+	tx := txmocks.NewMockTransactor(t)
+	tx.EXPECT().WithinTx(ctx, mock.Anything).
+		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Go", domainknowledge.StatusApproved).Return(nil, nil).Once()
+	boom := errors.New("store exploded")
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Add(mock.Anything, ([]domainknowledge.Chunk)(nil)).Return(boom).Once()
+	guard := txmocks.NewMockIndexGuard(t)
+	guard.EXPECT().CheckMutationAllowed().Return(nil).Once()
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
+	app.Startup(ctx)
+	logs := captureLog(t)
+
+	// When updating through the desktop adapter
+	result, err := app.UpdateKnowledgeItem("item-1", KnowledgeItemInput{
+		Topic: "Go", Concept: "New", Definition: "New def.",
+	})
+
+	// Then the durable update is reported as successful
+	require.NoError(t, err)
+	assert.Equal(t, "New", result.Concept)
+	assert.Contains(t, logs.String(), boom.Error())
+}
+
+func TestApp_DeleteKnowledgeItem_reportsSuccess_whenPostCommitReconciliationFails(t *testing.T) {
+	// Given an item whose delete persists but whose store reconciliation fails
+	ctx := context.Background()
+	repository := knowledgemocks.NewMockRepository(t)
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return([]string{"chunk-1"}, nil).Once()
+	repository.EXPECT().Delete(ctx, "item-1").Return(nil).Once()
+	tx := txmocks.NewMockTransactor(t)
+	tx.EXPECT().WithinTx(ctx, mock.Anything).
+		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
+	boom := errors.New("store exploded")
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Remove(mock.Anything, []string{"chunk-1"}).Return(boom).Once()
+	guard := txmocks.NewMockIndexGuard(t)
+	guard.EXPECT().CheckMutationAllowed().Return(nil).Once()
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
+	app.Startup(ctx)
+	logs := captureLog(t)
+
+	// When deleting through the desktop adapter
+	err := app.DeleteKnowledgeItem("item-1")
+
+	// Then the durable delete is reported as successful
+	require.NoError(t, err)
+	assert.Contains(t, logs.String(), boom.Error())
 }
