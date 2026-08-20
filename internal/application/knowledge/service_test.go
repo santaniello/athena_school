@@ -28,7 +28,8 @@ func runWithinTx(tx *txmocks.MockTransactor) {
 // guard rejecting one.
 func passingIndexGuard(t *testing.T) *txmocks.MockIndexGuard {
 	guard := txmocks.NewMockIndexGuard(t)
-	guard.EXPECT().CheckMutationAllowed().Return(nil)
+	guard.EXPECT().BeginMutation().Return(nil)
+	guard.EXPECT().EndMutation()
 	return guard
 }
 

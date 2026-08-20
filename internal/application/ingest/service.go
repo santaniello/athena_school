@@ -16,14 +16,20 @@ type Transactor interface {
 	WithinTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
-// IndexGuard reports whether a knowledge mutation may proceed right now.
-// Defined here (consumer side) per Go convention; implemented by
-// *applicationknowledge.IndexLoader — CheckMutationAllowed rejects an
-// import while the vector index is loading or retrying, so a retry
-// snapshot can never be overwritten by, or silently lose, a concurrent
-// import.
+// IndexGuard reports whether a knowledge mutation may proceed right now, and
+// reserves the index against a concurrent reload for as long as one is in
+// flight. Defined here (consumer side) per Go convention; implemented by
+// *applicationknowledge.IndexLoader.
+//
+// CheckMutationAllowed is a point-in-time read. ImportFolder instead holds
+// BeginMutation/EndMutation for its entire walk — a point-in-time check
+// alone would let a retry started mid-import interleave its
+// ListCurrent/ReplaceAll with individual files' transaction commits and
+// VectorStore reconciliation.
 type IndexGuard interface {
 	CheckMutationAllowed() error
+	BeginMutation() error
+	EndMutation()
 }
 
 // Service implements the notes-import pipeline against the application's

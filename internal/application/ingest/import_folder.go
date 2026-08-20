@@ -56,9 +56,14 @@ type Summary struct {
 // a non-nil error, the walk stops immediately and ImportFolder returns the
 // Summary accumulated so far alongside that error.
 func (s *Service) ImportFolder(ctx context.Context, root fs.FS, onProgress func(Progress) error) (Summary, error) {
-	if err := s.index.CheckMutationAllowed(); err != nil {
+	// Held for the entire walk, not just checked once up front — a retry
+	// starting mid-import must wait for the whole import to finish rather
+	// than interleaving its ListCurrent/ReplaceAll with individual files'
+	// transaction commits and VectorStore reconciliation.
+	if err := s.index.BeginMutation(); err != nil {
 		return Summary{}, err
 	}
+	defer s.index.EndMutation()
 
 	candidates, err := collectCandidates(root)
 	if err != nil {

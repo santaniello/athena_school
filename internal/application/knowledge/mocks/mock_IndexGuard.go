@@ -17,6 +17,51 @@ func (_m *MockIndexGuard) EXPECT() *MockIndexGuard_Expecter {
 	return &MockIndexGuard_Expecter{mock: &_m.Mock}
 }
 
+// BeginMutation provides a mock function with no fields
+func (_m *MockIndexGuard) BeginMutation() error {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for BeginMutation")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func() error); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockIndexGuard_BeginMutation_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'BeginMutation'
+type MockIndexGuard_BeginMutation_Call struct {
+	*mock.Call
+}
+
+// BeginMutation is a helper method to define mock.On call
+func (_e *MockIndexGuard_Expecter) BeginMutation() *MockIndexGuard_BeginMutation_Call {
+	return &MockIndexGuard_BeginMutation_Call{Call: _e.mock.On("BeginMutation")}
+}
+
+func (_c *MockIndexGuard_BeginMutation_Call) Run(run func()) *MockIndexGuard_BeginMutation_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockIndexGuard_BeginMutation_Call) Return(_a0 error) *MockIndexGuard_BeginMutation_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockIndexGuard_BeginMutation_Call) RunAndReturn(run func() error) *MockIndexGuard_BeginMutation_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CheckMutationAllowed provides a mock function with no fields
 func (_m *MockIndexGuard) CheckMutationAllowed() error {
 	ret := _m.Called()
@@ -59,6 +104,38 @@ func (_c *MockIndexGuard_CheckMutationAllowed_Call) Return(_a0 error) *MockIndex
 
 func (_c *MockIndexGuard_CheckMutationAllowed_Call) RunAndReturn(run func() error) *MockIndexGuard_CheckMutationAllowed_Call {
 	_c.Call.Return(run)
+	return _c
+}
+
+// EndMutation provides a mock function with no fields
+func (_m *MockIndexGuard) EndMutation() {
+	_m.Called()
+}
+
+// MockIndexGuard_EndMutation_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'EndMutation'
+type MockIndexGuard_EndMutation_Call struct {
+	*mock.Call
+}
+
+// EndMutation is a helper method to define mock.On call
+func (_e *MockIndexGuard_Expecter) EndMutation() *MockIndexGuard_EndMutation_Call {
+	return &MockIndexGuard_EndMutation_Call{Call: _e.mock.On("EndMutation")}
+}
+
+func (_c *MockIndexGuard_EndMutation_Call) Run(run func()) *MockIndexGuard_EndMutation_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockIndexGuard_EndMutation_Call) Return() *MockIndexGuard_EndMutation_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *MockIndexGuard_EndMutation_Call) RunAndReturn(run func()) *MockIndexGuard_EndMutation_Call {
+	_c.Run(run)
 	return _c
 }
 

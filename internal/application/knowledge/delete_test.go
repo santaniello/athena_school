@@ -65,7 +65,7 @@ func TestDeleteItem_returnsErrIndexLoading_whenIndexIsLoading_andNeverTouchesThe
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
 	guard := txmocks.NewMockIndexGuard(t)
-	guard.EXPECT().CheckMutationAllowed().Return(ErrIndexLoading).Once()
+	guard.EXPECT().BeginMutation().Return(ErrIndexLoading).Once()
 	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, guard)
 
 	// When deleting an item

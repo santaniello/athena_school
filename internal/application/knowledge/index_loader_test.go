@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
@@ -278,6 +277,168 @@ func TestRetry_setsStateToLoading_whilePreservingHasSnapshot_duringTheReload(t *
 	}
 }
 
+func TestBeginMutation_returnsErrIndexLoading_immediately_whileAReloadIsInProgress(t *testing.T) {
+	// Given an already-ready loader whose Retry is blocked mid-reload
+	ctx := context.Background()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	store := knowledgemocks.NewMockVectorStore(t)
+	first := []domainknowledge.Chunk{testLoadChunk("c1")}
+	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).Return(domainknowledge.ChunkLoadResult{Chunks: first}, nil).Once()
+	store.EXPECT().ReplaceAll(ctx, first).Return(nil).Once()
+	loader := NewIndexLoader(chunks, store, testEmbeddingModel)
+	loader.LoadInitial(ctx)
+
+	release := make(chan struct{})
+	reachedReload := make(chan struct{})
+	second := []domainknowledge.Chunk{testLoadChunk("c2")}
+	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).RunAndReturn(
+		func(context.Context, string) (domainknowledge.ChunkLoadResult, error) {
+			close(reachedReload)
+			<-release
+			return domainknowledge.ChunkLoadResult{Chunks: second}, nil
+		},
+	).Once()
+	store.EXPECT().ReplaceAll(ctx, second).Return(nil).Once()
+
+	done := make(chan domainknowledge.IndexStatus, 1)
+	go func() { done <- loader.Retry(ctx) }()
+	select {
+	case <-reachedReload:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for the retry to reach the reload")
+	}
+
+	// When a mutation tries to begin while the reload holds the reservation
+	err := loader.BeginMutation()
+
+	// Then it is rejected immediately, matching CheckMutationAllowed's
+	// contract — not blocked until the reload finishes
+	assert.ErrorIs(t, err, ErrIndexLoading)
+
+	close(release)
+	<-done
+}
+
+func TestReload_waitsForAnInFlightMutation_beforeReadingOrPublishing(t *testing.T) {
+	// Given an already-ready loader, with a mutation currently holding the
+	// reservation (its transaction committed, its VectorStore reconciliation
+	// not run yet)
+	ctx := context.Background()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	store := knowledgemocks.NewMockVectorStore(t)
+	first := []domainknowledge.Chunk{testLoadChunk("c1")}
+	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).Return(domainknowledge.ChunkLoadResult{Chunks: first}, nil).Once()
+	store.EXPECT().ReplaceAll(ctx, first).Return(nil).Once()
+	loader := NewIndexLoader(chunks, store, testEmbeddingModel)
+	loader.LoadInitial(ctx)
+	require.NoError(t, loader.BeginMutation())
+
+	// When a retry is triggered concurrently
+	reloadStarted := make(chan struct{})
+	second := []domainknowledge.Chunk{testLoadChunk("c2")}
+	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).RunAndReturn(
+		func(context.Context, string) (domainknowledge.ChunkLoadResult, error) {
+			close(reloadStarted)
+			return domainknowledge.ChunkLoadResult{Chunks: second}, nil
+		},
+	).Once()
+	store.EXPECT().ReplaceAll(ctx, second).Return(nil).Once()
+
+	done := make(chan domainknowledge.IndexStatus, 1)
+	go func() { done <- loader.Retry(ctx) }()
+
+	// Then the reload does not even start reading while the mutation still
+	// holds the reservation — otherwise it could read a pre-commit snapshot
+	// and publish it after the mutation's own reconciliation, resurrecting
+	// stale content (see delete.go's DeleteItem)
+	select {
+	case <-reloadStarted:
+		t.Fatal("reload started before the in-flight mutation released its reservation")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	// When the mutation ends
+	loader.EndMutation()
+
+	// Then the reload proceeds and completes normally
+	select {
+	case status := <-done:
+		assert.Equal(t, domainknowledge.IndexStateReady, status.State)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for Retry to return after EndMutation")
+	}
+}
+
+func TestReload_serializesTwoConcurrentRetries_soTheirPublishesCannotInterleave(t *testing.T) {
+	// Given an already-ready loader
+	ctx := context.Background()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	store := knowledgemocks.NewMockVectorStore(t)
+	first := []domainknowledge.Chunk{testLoadChunk("c1")}
+	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).Return(domainknowledge.ChunkLoadResult{Chunks: first}, nil).Once()
+	store.EXPECT().ReplaceAll(ctx, first).Return(nil).Once()
+	loader := NewIndexLoader(chunks, store, testEmbeddingModel)
+	loader.LoadInitial(ctx)
+
+	// When two retries race, the first one blocked mid-reload
+	release := make(chan struct{})
+	firstReloadStarted := make(chan struct{})
+	second := []domainknowledge.Chunk{testLoadChunk("c2")}
+	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).RunAndReturn(
+		func(context.Context, string) (domainknowledge.ChunkLoadResult, error) {
+			close(firstReloadStarted)
+			<-release
+			return domainknowledge.ChunkLoadResult{Chunks: second}, nil
+		},
+	).Once()
+	store.EXPECT().ReplaceAll(ctx, second).Return(nil).Once()
+
+	firstDone := make(chan struct{})
+	go func() { loader.Retry(ctx); close(firstDone) }()
+	select {
+	case <-firstReloadStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for the first retry to reach the reload")
+	}
+
+	secondReloadStarted := make(chan struct{})
+	third := []domainknowledge.Chunk{testLoadChunk("c3")}
+	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).RunAndReturn(
+		func(context.Context, string) (domainknowledge.ChunkLoadResult, error) {
+			close(secondReloadStarted)
+			return domainknowledge.ChunkLoadResult{Chunks: third}, nil
+		},
+	).Once()
+	store.EXPECT().ReplaceAll(ctx, third).Return(nil).Once()
+
+	secondDone := make(chan domainknowledge.IndexStatus, 1)
+	go func() { secondDone <- loader.Retry(ctx) }()
+
+	// Then the second retry's reload does not start while the first is still
+	// mid-flight — otherwise their ReplaceAll calls could land out of order
+	select {
+	case <-secondReloadStarted:
+		t.Fatal("second retry's reload started before the first one finished")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	// When the first retry is released and completes
+	close(release)
+	select {
+	case <-firstDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for the first retry to return")
+	}
+
+	// Then the second retry's reload now proceeds and completes
+	select {
+	case status := <-secondDone:
+		assert.Equal(t, domainknowledge.IndexStateReady, status.State)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for the second retry to return")
+	}
+}
+
 func TestStatus_isSafeForConcurrentUse(t *testing.T) {
 	// Given a loader with LoadInitial already running in the background
 	ctx := context.Background()
@@ -285,7 +446,7 @@ func TestStatus_isSafeForConcurrentUse(t *testing.T) {
 	store := knowledgemocks.NewMockVectorStore(t)
 	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).
 		Return(domainknowledge.ChunkLoadResult{}, nil).Maybe()
-	store.EXPECT().ReplaceAll(ctx, mock.Anything).Return(nil).Maybe()
+	store.EXPECT().ReplaceAll(ctx, []domainknowledge.Chunk{}).Return(nil).Maybe()
 	loader := NewIndexLoader(chunks, store, testEmbeddingModel)
 
 	done := make(chan struct{})
@@ -300,5 +461,6 @@ func TestStatus_isSafeForConcurrentUse(t *testing.T) {
 	}
 	<-done
 
-	// Then no assertion beyond "go test -race reports nothing" is needed
+	// Then the load settled into a terminal state
+	assert.NotEqual(t, domainknowledge.IndexStateLoading, loader.Status().State)
 }

@@ -26,6 +26,17 @@ type IndexLoader struct {
 
 	mu     sync.Mutex
 	status domainknowledge.IndexStatus
+
+	// opMu is held for the full duration of one reload (LoadInitial/Retry:
+	// ListCurrent through ReplaceAll) or one mutation reservation
+	// (BeginMutation/EndMutation: transaction commit through VectorStore
+	// Add/Remove), never both at once. That closes the race where a reload
+	// reads a pre-commit snapshot and publishes it after a concurrent
+	// mutation's own Add/Remove already ran, resurrecting stale content —
+	// and, since reload holds it too, the same lock also serializes two
+	// reloads (LoadInitial racing a fast Retry, or two Retries) so their
+	// ReplaceAll calls can never land out of order.
+	opMu sync.Mutex
 }
 
 // NewIndexLoader creates an IndexLoader that has not started loading yet:
@@ -61,6 +72,27 @@ func (l *IndexLoader) CheckMutationAllowed() error {
 		return ErrIndexLoading
 	}
 	return nil
+}
+
+// BeginMutation reserves the index against a concurrent reload for the
+// entire duration of one knowledge mutation — from its transaction commit
+// through its post-commit VectorStore reconciliation — unlike
+// CheckMutationAllowed's point-in-time read. It never blocks: if a reload
+// currently holds the reservation, it returns ErrIndexLoading immediately,
+// same contract as CheckMutationAllowed. Callers must call EndMutation
+// exactly once after a nil return, even on the mutation's own later error,
+// typically via `defer`.
+func (l *IndexLoader) BeginMutation() error {
+	if !l.opMu.TryLock() {
+		return ErrIndexLoading
+	}
+	return nil
+}
+
+// EndMutation releases the reservation acquired by a successful
+// BeginMutation.
+func (l *IndexLoader) EndMutation() {
+	l.opMu.Unlock()
 }
 
 // LoadInitial performs the first load. A failure marks the index failed —
@@ -108,6 +140,9 @@ func (l *IndexLoader) setStatus(status domainknowledge.IndexStatus) {
 // itself — callers decide how to fold the result in (LoadInitial publishes
 // it directly, Retry may restore a prior snapshot on failure instead).
 func (l *IndexLoader) reload(ctx context.Context) domainknowledge.IndexStatus {
+	l.opMu.Lock()
+	defer l.opMu.Unlock()
+
 	result, err := l.chunks.ListCurrent(ctx, l.embeddingModel)
 	if err != nil {
 		log.Printf("knowledge index: loading current chunks: %v", err)

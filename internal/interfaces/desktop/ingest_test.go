@@ -39,14 +39,19 @@ func newTestIngestApp(
 ) (*App, *capturedIngestEvents) {
 	t.Helper()
 	tx := ingestmocks.NewMockTransactor(t)
-	tx.EXPECT().WithinTx(mock.Anything, mock.Anything).
+	// app.Startup(context.Background()) below stashes that exact context on
+	// a.ctx, and every dependency call forwards it unchanged — matching it
+	// precisely (instead of mock.Anything) means this helper would fail if
+	// ImportNotes ever stopped propagating it.
+	tx.EXPECT().WithinTx(context.Background(), mock.Anything).
 		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error {
 			return fn(ctx)
 		}).Maybe()
 	guard := ingestmocks.NewMockIndexGuard(t)
 	// .Maybe(): a path that fails before ever reaching ImportFolder (e.g. a
 	// folder that doesn't exist) never calls the guard at all.
-	guard.EXPECT().CheckMutationAllowed().Return(nil).Maybe()
+	guard.EXPECT().BeginMutation().Return(nil).Maybe()
+	guard.EXPECT().EndMutation().Maybe()
 	ingestService := applicationingest.NewService(chunks, ingestedFiles, items, llm, tx, store, guard)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, ingestService, nil, nil)
 	app.Startup(context.Background())
@@ -98,9 +103,15 @@ func TestApp_ImportNotes_emitsProgressThenDone_onSuccess(t *testing.T) {
 	ingestedFiles.EXPECT().Upsert(ctx, mock.MatchedBy(func(f domainknowledge.IngestedFile) bool {
 		return f.Path == "go.md" && f.ChunkCount == 1 && f.EmbeddingModel == domainllm.EmbeddingModel
 	})).Return(nil).Once()
+	// VectorStore reconciliation runs with reconcileContext(), a short-lived
+	// context deliberately independent of a.ctx — mock.Anything is correct
+	// here, not a gap.
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Remove(mock.Anything, ([]string)(nil)).Return(nil).Once()
-	store.EXPECT().Add(mock.Anything, mock.Anything).Return(nil).Once()
+	store.EXPECT().Add(mock.Anything, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
+		return len(cs) == 1 && cs[0].FilePath == "go.md" && cs[0].Heading == "Go" &&
+			cs[0].Source == domainknowledge.SourceImportedDoc && cs[0].Status == domainknowledge.StatusApproved
+	})).Return(nil).Once()
 
 	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, llm, store)
 
@@ -188,7 +199,7 @@ func TestApp_ImportNotes_emitsError_whenImportFolderFails(t *testing.T) {
 	items := knowledgemocks.NewMockRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	boom := errors.New("database unavailable")
-	ingestedFiles.EXPECT().ListAll(mock.Anything).Return(nil, boom).Once()
+	ingestedFiles.EXPECT().ListAll(context.Background()).Return(nil, boom).Once()
 	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, llm, nil)
 
 	// When importing that folder

@@ -22,13 +22,23 @@ type Transactor interface {
 	WithinTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
-// IndexGuard reports whether a knowledge mutation may proceed right now.
-// Defined here (consumer side) per Go convention; implemented by
-// *IndexLoader — CheckMutationAllowed rejects a mutation while the vector
-// index is loading or retrying, so a retry snapshot can never be
-// overwritten by, or silently lose, a concurrent change.
+// IndexGuard reports whether a knowledge mutation may proceed right now, and
+// reserves the index against a concurrent reload for as long as one is in
+// flight. Defined here (consumer side) per Go convention; implemented by
+// *IndexLoader.
+//
+// CheckMutationAllowed is a point-in-time read, kept for callers that only
+// need an early rejection. BeginMutation/EndMutation instead hold the
+// reservation for a mutation's entire duration — its transaction commit
+// through its post-commit VectorStore reconciliation — so a reload started
+// partway through can never publish a snapshot older than what the mutation
+// just wrote, or race its Add/Remove. Every mutation that touches the
+// VectorStore must wrap its full body in BeginMutation/EndMutation, not
+// just check CheckMutationAllowed once up front.
 type IndexGuard interface {
 	CheckMutationAllowed() error
+	BeginMutation() error
+	EndMutation()
 }
 
 // Service implements knowledge extraction and Explorer management against

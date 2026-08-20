@@ -49,7 +49,8 @@ func newTestService(
 // guard rejecting one.
 func passingIndexGuard(t *testing.T) *ingestmocks.MockIndexGuard {
 	guard := ingestmocks.NewMockIndexGuard(t)
-	guard.EXPECT().CheckMutationAllowed().Return(nil)
+	guard.EXPECT().BeginMutation().Return(nil)
+	guard.EXPECT().EndMutation()
 	return guard
 }
 
@@ -590,7 +591,7 @@ func TestImportFolder_returnsErrIndexLoading_whenIndexIsLoading_andNeverScansThe
 	tx := ingestmocks.NewMockTransactor(t)
 	boom := errors.New("knowledge index is loading")
 	guard := ingestmocks.NewMockIndexGuard(t)
-	guard.EXPECT().CheckMutationAllowed().Return(boom).Once()
+	guard.EXPECT().BeginMutation().Return(boom).Once()
 	service := newTestService(chunks, ingestedFiles, items, llm, tx, nil, guard)
 
 	// When importing the folder

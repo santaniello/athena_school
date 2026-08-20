@@ -16,9 +16,10 @@ import "context"
 // reconciliation failure never undoes the durable delete — it comes back
 // as an *IndexingWarning (see IndexingWarning).
 func (s *Service) DeleteItem(ctx context.Context, id string) error {
-	if err := s.index.CheckMutationAllowed(); err != nil {
+	if err := s.index.BeginMutation(); err != nil {
 		return err
 	}
+	defer s.index.EndMutation()
 
 	var removedChunkIDs []string
 	err := s.tx.WithinTx(ctx, func(ctx context.Context) error {

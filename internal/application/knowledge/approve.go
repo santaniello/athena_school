@@ -21,9 +21,10 @@ import (
 // transition — it comes back as an *IndexingWarning alongside the real,
 // transitioned item (see IndexingWarning).
 func (s *Service) Approve(ctx context.Context, id string) (domainknowledge.Item, error) {
-	if err := s.index.CheckMutationAllowed(); err != nil {
+	if err := s.index.BeginMutation(); err != nil {
 		return domainknowledge.Item{}, err
 	}
+	defer s.index.EndMutation()
 
 	var item domainknowledge.Item
 	var updatedChunks []domainknowledge.Chunk
