@@ -271,7 +271,7 @@ func TestApp_DeleteKnowledgeItem_deletesTheItemAndItsChunks(t *testing.T) {
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
 	chunks := knowledgemocks.NewMockChunkRepository(t)
-	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return(nil).Once()
+	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return(nil, nil).Once()
 	repository.EXPECT().Delete(ctx, "item-1").Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	tx.EXPECT().WithinTx(ctx, mock.Anything).

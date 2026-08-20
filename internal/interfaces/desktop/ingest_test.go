@@ -81,7 +81,7 @@ func TestApp_ImportNotes_emitsProgressThenDone_onSuccess(t *testing.T) {
 	ingestedFiles.EXPECT().ListAll(ctx).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nBasics of Go."}).
 		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}, Model: domainllm.EmbeddingModel}, nil).Once()
-	chunks.EXPECT().DeleteByFilePath(ctx, "go.md").Return(nil).Once()
+	chunks.EXPECT().DeleteByFilePath(ctx, "go.md").Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
 		return len(cs) == 1 && cs[0].FilePath == "go.md" && cs[0].Heading == "Go" &&
 			cs[0].Source == domainknowledge.SourceImportedDoc && cs[0].Status == domainknowledge.StatusApproved

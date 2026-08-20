@@ -20,7 +20,7 @@ func TestDeleteItem_cascadesToChunks_thenDeletesTheItem(t *testing.T) {
 	var order []string
 	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Run(func(context.Context, string) {
 		order = append(order, "chunks")
-	}).Return(nil).Once()
+	}).Return(nil, nil).Once()
 	repository.EXPECT().Delete(ctx, "item-1").Run(func(context.Context, string) {
 		order = append(order, "item")
 	}).Return(nil).Once()
@@ -42,7 +42,7 @@ func TestDeleteItem_propagatesChunkDeletionError_withoutDeletingTheItem(t *testi
 	repository := knowledgemocks.NewMockRepository(t)
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	boom := errors.New("disk full")
-	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return(boom).Once()
+	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return(nil, boom).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
 	service := NewService(repository, nil, nil, nil, nil, chunks, tx)

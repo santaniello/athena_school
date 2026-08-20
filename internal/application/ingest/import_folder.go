@@ -200,7 +200,7 @@ func (s *Service) ingestFile(
 	}
 
 	err = s.tx.WithinTx(ctx, func(ctx context.Context) error {
-		if err := s.chunks.DeleteByFilePath(ctx, filePath); err != nil {
+		if _, err := s.chunks.DeleteByFilePath(ctx, filePath); err != nil {
 			return err
 		}
 		if err := s.chunks.SaveAll(ctx, chunks); err != nil {

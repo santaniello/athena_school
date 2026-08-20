@@ -103,6 +103,22 @@ type ChunkLoadIssue struct {
 	Reason   string
 }
 
+// Stable ChunkLoadIssue.Reason codes produced by ListCurrent. A wrong
+// embedding model is deliberately not among them — it is expected reindex
+// work, excluded silently rather than reported.
+const (
+	ChunkIssueMissingItem        = "missing_item"
+	ChunkIssueSourceMismatch     = "source_mismatch"
+	ChunkIssueTopicMismatch      = "topic_mismatch"
+	ChunkIssueStatusMismatch     = "status_mismatch"
+	ChunkIssueStaleItem          = "stale_item"
+	ChunkIssueMalformedEmbedding = "malformed_embedding"
+	ChunkIssueInvalidChunkID     = "invalid_chunk_id"
+	ChunkIssueUnknownSource      = "unknown_source"
+	ChunkIssueUnknownStatus      = "unknown_status"
+	ChunkIssueInvalidVector      = "invalid_vector"
+)
+
 // IndexState is the externally observable lifecycle state of the vector
 // index coordinator.
 type IndexState string

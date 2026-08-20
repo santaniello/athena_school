@@ -71,8 +71,8 @@ func TestImportFolder_ingestsMarkdownAndTxtFiles_skipsHiddenDirectoriesEntirely(
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Plain text note without any heading."}).
 		Return(embeddingResponse(), nil).Once()
 
-	chunks.EXPECT().DeleteByFilePath(ctx, "notes/go.md").Return(nil).Once()
-	chunks.EXPECT().DeleteByFilePath(ctx, "notes/plain.txt").Return(nil).Once()
+	chunks.EXPECT().DeleteByFilePath(ctx, "notes/go.md").Return(nil, nil).Once()
+	chunks.EXPECT().DeleteByFilePath(ctx, "notes/plain.txt").Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
 		return len(cs) == 1 && cs[0].FilePath == "notes/go.md" && cs[0].Heading == "Go"
 	})).Return(nil).Once()
@@ -121,7 +121,7 @@ func TestImportFolder_emptyFile_stillGetsExactlyOneItem_withZeroChunks(t *testin
 	runWithinTx(tx)
 
 	ingestedFiles.EXPECT().ListAll(ctx).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
-	chunks.EXPECT().DeleteByFilePath(ctx, "notes/empty.md").Return(nil).Once()
+	chunks.EXPECT().DeleteByFilePath(ctx, "notes/empty.md").Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
 		return len(cs) == 0
 	})).Return(nil).Once()
@@ -171,7 +171,7 @@ func TestImportFolder_reimport_isIdempotent_whenNothingChanged(t *testing.T) {
 	}, nil).Once()
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# B\nBrand new."}).
 		Return(embeddingResponse(), nil).Once()
-	chunks.EXPECT().DeleteByFilePath(ctx, "notes/b-new.md").Return(nil).Once()
+	chunks.EXPECT().DeleteByFilePath(ctx, "notes/b-new.md").Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()
 	items.EXPECT().Save(ctx, mock.Anything).Return(nil).Once()
 	ingestedFiles.EXPECT().Upsert(ctx, mock.Anything).Return(nil).Once()
@@ -218,7 +218,7 @@ func TestImportFolder_editedFile_reembedsOnlyThatFile_andUpdatesExistingShadowIt
 
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nUpdated body."}).
 		Return(embeddingResponse(), nil).Once()
-	chunks.EXPECT().DeleteByFilePath(ctx, "notes/go.md").Return(nil).Once()
+	chunks.EXPECT().DeleteByFilePath(ctx, "notes/go.md").Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
 		return len(cs) == 1 && cs[0].ItemID == "item-1"
 	})).Return(nil).Once()
@@ -271,7 +271,7 @@ func TestImportFolder_reimport_afterItemDeleted_recreatesTheShadowItemInsteadOfF
 
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nUpdated body."}).
 		Return(embeddingResponse(), nil).Once()
-	chunks.EXPECT().DeleteByFilePath(ctx, "notes/go.md").Return(nil).Once()
+	chunks.EXPECT().DeleteByFilePath(ctx, "notes/go.md").Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
 		return len(cs) == 1 && cs[0].ItemID == "item-1"
 	})).Return(nil).Once()
@@ -324,7 +324,7 @@ func TestImportFolder_perFileFailure_isRecordedInSummary_andImportContinues(t *t
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Good\nWill embed fine."}).
 		Return(embeddingResponse(), nil).Once()
 
-	chunks.EXPECT().DeleteByFilePath(ctx, "notes/good.md").Return(nil).Once()
+	chunks.EXPECT().DeleteByFilePath(ctx, "notes/good.md").Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()
 	items.EXPECT().Save(ctx, mock.Anything).Return(nil).Once()
 	ingestedFiles.EXPECT().Upsert(ctx, mock.Anything).Return(nil).Once()
@@ -393,7 +393,7 @@ func TestImportFolder_onProgressError_stopsWalkImmediately_returningPartialSumma
 	ingestedFiles.EXPECT().ListAll(ctx).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# A\nBody A."}).
 		Return(embeddingResponse(), nil).Once()
-	chunks.EXPECT().DeleteByFilePath(ctx, "notes/a.md").Return(nil).Once()
+	chunks.EXPECT().DeleteByFilePath(ctx, "notes/a.md").Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()
 	items.EXPECT().Save(ctx, mock.Anything).Return(nil).Once()
 	ingestedFiles.EXPECT().Upsert(ctx, mock.Anything).Return(nil).Once()
@@ -437,7 +437,7 @@ func TestImportFolder_changedEmbeddingModel_forcesReembed_evenWhenMTimeIsUnchang
 
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nBasics of Go."}).
 		Return(embeddingResponse(), nil).Once()
-	chunks.EXPECT().DeleteByFilePath(ctx, "notes/go.md").Return(nil).Once()
+	chunks.EXPECT().DeleteByFilePath(ctx, "notes/go.md").Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
 		return len(cs) == 1 && cs[0].EmbeddingModel == domainllm.EmbeddingModel
 	})).Return(nil).Once()
@@ -477,7 +477,7 @@ func TestImportFolder_manyFiles_completesReportingProgressPerFile(t *testing.T) 
 
 	ingestedFiles.EXPECT().ListAll(ctx).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
 	llm.EXPECT().Embeddings(ctx, mock.Anything).Return(embeddingResponse(), nil).Times(fileCount)
-	chunks.EXPECT().DeleteByFilePath(ctx, mock.Anything).Return(nil).Times(fileCount)
+	chunks.EXPECT().DeleteByFilePath(ctx, mock.Anything).Return(nil, nil).Times(fileCount)
 	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Times(fileCount)
 	items.EXPECT().Save(ctx, mock.Anything).Return(nil).Times(fileCount)
 	ingestedFiles.EXPECT().Upsert(ctx, mock.Anything).Return(nil).Times(fileCount)
