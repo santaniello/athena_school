@@ -110,6 +110,11 @@ func (a *App) ListKnowledgeTopics() ([]string, error) {
 // the updated item.
 func (a *App) ApproveKnowledgeItem(id string) (KnowledgeItemResult, error) {
 	item, err := a.knowledge.Approve(a.ctx, id)
+	var warning *applicationknowledge.IndexingWarning
+	if errors.As(err, &warning) {
+		logIndexingWarning("approving", id, warning)
+		return toKnowledgeItemResult(item), nil
+	}
 	if err != nil {
 		return KnowledgeItemResult{}, err
 	}
@@ -120,6 +125,11 @@ func (a *App) ApproveKnowledgeItem(id string) (KnowledgeItemResult, error) {
 // returns the updated item.
 func (a *App) DeprecateKnowledgeItem(id string) (KnowledgeItemResult, error) {
 	item, err := a.knowledge.Deprecate(a.ctx, id)
+	var warning *applicationknowledge.IndexingWarning
+	if errors.As(err, &warning) {
+		logIndexingWarning("deprecating", id, warning)
+		return toKnowledgeItemResult(item), nil
+	}
 	if err != nil {
 		return KnowledgeItemResult{}, err
 	}
@@ -137,6 +147,11 @@ func (a *App) UpdateKnowledgeItem(id string, input KnowledgeItemInput) (Knowledg
 		TradeOffs:       input.TradeOffs,
 		RelatedConcepts: input.RelatedConcepts,
 	})
+	var warning *applicationknowledge.IndexingWarning
+	if errors.As(err, &warning) {
+		logIndexingWarning("updating", id, warning)
+		return toKnowledgeItemResult(item), nil
+	}
 	if err != nil {
 		return KnowledgeItemResult{}, err
 	}
@@ -146,7 +161,21 @@ func (a *App) UpdateKnowledgeItem(id string, input KnowledgeItemInput) (Knowledg
 // DeleteKnowledgeItem permanently removes id and every chunk it owns. This
 // cannot be undone.
 func (a *App) DeleteKnowledgeItem(id string) error {
-	return a.knowledge.DeleteItem(a.ctx, id)
+	err := a.knowledge.DeleteItem(a.ctx, id)
+	var warning *applicationknowledge.IndexingWarning
+	if errors.As(err, &warning) {
+		logIndexingWarning("deleting", id, warning)
+		return nil
+	}
+	return err
+}
+
+// logIndexingWarning logs a post-commit VectorStore reconciliation failure.
+// The durable mutation already succeeded (see IndexingWarning), so every
+// caller reports success to the frontend regardless — a full index Retry
+// self-heals from SQLite, which remains the source of truth.
+func logIndexingWarning(op, itemID string, warning *applicationknowledge.IndexingWarning) {
+	log.Printf("knowledge index: %s item %s: %v", op, itemID, warning.Err)
 }
 
 // SaveAndApproveExtractedKnowledge persists only the confirmed candidates,

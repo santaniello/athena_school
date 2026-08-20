@@ -38,8 +38,30 @@ func newTestService(
 	items *knowledgemocks.MockRepository,
 	llm *llmmocks.MockProvider,
 	tx *ingestmocks.MockTransactor,
+	store *knowledgemocks.MockVectorStore,
+	index IndexGuard,
 ) *Service {
-	return NewService(chunks, ingestedFiles, items, llm, tx)
+	return NewService(chunks, ingestedFiles, items, llm, tx, store, index)
+}
+
+// passingIndexGuard returns an IndexGuard mock that always allows the
+// mutation — the default for every test that isn't specifically about the
+// guard rejecting one.
+func passingIndexGuard(t *testing.T) *ingestmocks.MockIndexGuard {
+	guard := ingestmocks.NewMockIndexGuard(t)
+	guard.EXPECT().BeginMutation().Return(nil)
+	guard.EXPECT().EndMutation()
+	return guard
+}
+
+// noOpReconciliationStore returns a VectorStore mock whose Remove/Add both
+// succeed as no-ops — the default for tests whose focus is the SQLite/
+// orchestration side of ImportFolder, not vector-store reconciliation.
+func noOpReconciliationStore(t *testing.T) *knowledgemocks.MockVectorStore {
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Remove(mock.Anything, mock.Anything).Return(nil)
+	store.EXPECT().Add(mock.Anything, mock.Anything).Return(nil)
+	return store
 }
 
 func embeddingResponse() domainllm.EmbeddingResponse {
@@ -71,8 +93,8 @@ func TestImportFolder_ingestsMarkdownAndTxtFiles_skipsHiddenDirectoriesEntirely(
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Plain text note without any heading."}).
 		Return(embeddingResponse(), nil).Once()
 
-	chunks.EXPECT().DeleteByFilePath(ctx, "notes/go.md").Return(nil).Once()
-	chunks.EXPECT().DeleteByFilePath(ctx, "notes/plain.txt").Return(nil).Once()
+	chunks.EXPECT().DeleteByFilePath(ctx, "notes/go.md").Return(nil, nil).Once()
+	chunks.EXPECT().DeleteByFilePath(ctx, "notes/plain.txt").Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
 		return len(cs) == 1 && cs[0].FilePath == "notes/go.md" && cs[0].Heading == "Go"
 	})).Return(nil).Once()
@@ -94,7 +116,7 @@ func TestImportFolder_ingestsMarkdownAndTxtFiles_skipsHiddenDirectoriesEntirely(
 		return f.Path == "notes/plain.txt" && f.ChunkCount == 1
 	})).Return(nil).Once()
 
-	service := newTestService(chunks, ingestedFiles, items, llm, tx)
+	service := newTestService(chunks, ingestedFiles, items, llm, tx, noOpReconciliationStore(t), passingIndexGuard(t))
 
 	// When importing the folder
 	summary, err := service.ImportFolder(ctx, root, noopProgress)
@@ -121,7 +143,7 @@ func TestImportFolder_emptyFile_stillGetsExactlyOneItem_withZeroChunks(t *testin
 	runWithinTx(tx)
 
 	ingestedFiles.EXPECT().ListAll(ctx).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
-	chunks.EXPECT().DeleteByFilePath(ctx, "notes/empty.md").Return(nil).Once()
+	chunks.EXPECT().DeleteByFilePath(ctx, "notes/empty.md").Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
 		return len(cs) == 0
 	})).Return(nil).Once()
@@ -132,7 +154,7 @@ func TestImportFolder_emptyFile_stillGetsExactlyOneItem_withZeroChunks(t *testin
 		return f.Path == "notes/empty.md" && f.ChunkCount == 0
 	})).Return(nil).Once()
 
-	service := newTestService(chunks, ingestedFiles, items, llm, tx)
+	service := newTestService(chunks, ingestedFiles, items, llm, tx, noOpReconciliationStore(t), passingIndexGuard(t))
 
 	// When importing the folder
 	summary, err := service.ImportFolder(ctx, root, noopProgress)
@@ -171,7 +193,7 @@ func TestImportFolder_reimport_isIdempotent_whenNothingChanged(t *testing.T) {
 	}, nil).Once()
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# B\nBrand new."}).
 		Return(embeddingResponse(), nil).Once()
-	chunks.EXPECT().DeleteByFilePath(ctx, "notes/b-new.md").Return(nil).Once()
+	chunks.EXPECT().DeleteByFilePath(ctx, "notes/b-new.md").Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()
 	items.EXPECT().Save(ctx, mock.Anything).Return(nil).Once()
 	ingestedFiles.EXPECT().Upsert(ctx, mock.Anything).Return(nil).Once()
@@ -181,7 +203,7 @@ func TestImportFolder_reimport_isIdempotent_whenNothingChanged(t *testing.T) {
 		seen = append(seen, p)
 		return nil
 	}
-	service := newTestService(chunks, ingestedFiles, items, llm, tx)
+	service := newTestService(chunks, ingestedFiles, items, llm, tx, noOpReconciliationStore(t), passingIndexGuard(t))
 
 	// When importing the folder
 	summary, err := service.ImportFolder(ctx, root, onProgress)
@@ -218,7 +240,7 @@ func TestImportFolder_editedFile_reembedsOnlyThatFile_andUpdatesExistingShadowIt
 
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nUpdated body."}).
 		Return(embeddingResponse(), nil).Once()
-	chunks.EXPECT().DeleteByFilePath(ctx, "notes/go.md").Return(nil).Once()
+	chunks.EXPECT().DeleteByFilePath(ctx, "notes/go.md").Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
 		return len(cs) == 1 && cs[0].ItemID == "item-1"
 	})).Return(nil).Once()
@@ -236,7 +258,7 @@ func TestImportFolder_editedFile_reembedsOnlyThatFile_andUpdatesExistingShadowIt
 		return f.Path == "notes/go.md" && f.ItemID == "item-1"
 	})).Return(nil).Once()
 
-	service := newTestService(chunks, ingestedFiles, items, llm, tx)
+	service := newTestService(chunks, ingestedFiles, items, llm, tx, noOpReconciliationStore(t), passingIndexGuard(t))
 
 	// When re-importing the folder
 	summary, err := service.ImportFolder(ctx, root, noopProgress)
@@ -247,6 +269,62 @@ func TestImportFolder_editedFile_reembedsOnlyThatFile_andUpdatesExistingShadowIt
 	assert.Equal(t, 1, summary.FilesIngested)
 	assert.Equal(t, 0, summary.FilesSkipped)
 	items.AssertNotCalled(t, "Save", mock.Anything, mock.Anything)
+}
+
+func TestImportFolder_editedFile_evictsOldChunkIDsFromTheStore_beforeAddingTheNewOnes(t *testing.T) {
+	// Given a file whose SQLite-deleted chunk IDs are known, so the memory
+	// eviction can be observed precisely — the old memory entries must be
+	// removed before the replacements are added, so an Add failure can
+	// temporarily omit content but can never keep serving stale content
+	root := fstest.MapFS{"notes/go.md": {Data: []byte("# Go\nUpdated body."), ModTime: fixedModTime}}
+	ctx := context.Background()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	items := knowledgemocks.NewMockRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	tx := ingestmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+
+	ingestedFiles.EXPECT().ListAll(ctx).Return(map[string]domainknowledge.IngestedFile{
+		"notes/go.md": {
+			Path: "notes/go.md", MTime: fixedModTime.Add(-time.Hour).Unix(),
+			EmbeddingModel: domainllm.EmbeddingModel, ChunkCount: 1, ItemID: "item-1",
+		},
+	}, nil).Once()
+
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nUpdated body."}).
+		Return(embeddingResponse(), nil).Once()
+	chunks.EXPECT().DeleteByFilePath(ctx, "notes/go.md").Return([]string{"old-chunk-1"}, nil).Once()
+	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()
+	items.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{
+		ID: "item-1", Topic: "notes", Concept: "Go", Definition: "old",
+		Source: domainknowledge.SourceImportedDoc, Status: domainknowledge.StatusApproved,
+	}, nil).Once()
+	items.EXPECT().Update(ctx, mock.Anything).Return(nil).Once()
+	ingestedFiles.EXPECT().Upsert(ctx, mock.Anything).Return(nil).Once()
+
+	var order []string
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Remove(mock.Anything, []string{"old-chunk-1"}).Run(func(context.Context, []string) {
+		order = append(order, "remove")
+	}).Return(nil).Once()
+	store.EXPECT().Add(mock.Anything, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
+		return len(cs) == 1 && cs[0].ItemID == "item-1"
+	})).Run(func(context.Context, []domainknowledge.Chunk) {
+		order = append(order, "add")
+	}).Return(nil).Once()
+
+	service := newTestService(chunks, ingestedFiles, items, llm, tx, store, passingIndexGuard(t))
+
+	// When re-importing the folder
+	summary, err := service.ImportFolder(ctx, root, noopProgress)
+
+	// Then the SQLite-deleted ID is evicted from the store before the new
+	// chunk is added, and the durable import succeeds
+	require.NoError(t, err)
+	assert.Equal(t, 1, summary.FilesIngested)
+	assert.Empty(t, summary.IndexWarnings)
+	assert.Equal(t, []string{"remove", "add"}, order)
 }
 
 func TestImportFolder_reimport_afterItemDeleted_recreatesTheShadowItemInsteadOfFailingForever(t *testing.T) {
@@ -271,7 +349,7 @@ func TestImportFolder_reimport_afterItemDeleted_recreatesTheShadowItemInsteadOfF
 
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nUpdated body."}).
 		Return(embeddingResponse(), nil).Once()
-	chunks.EXPECT().DeleteByFilePath(ctx, "notes/go.md").Return(nil).Once()
+	chunks.EXPECT().DeleteByFilePath(ctx, "notes/go.md").Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
 		return len(cs) == 1 && cs[0].ItemID == "item-1"
 	})).Return(nil).Once()
@@ -287,7 +365,7 @@ func TestImportFolder_reimport_afterItemDeleted_recreatesTheShadowItemInsteadOfF
 		return f.Path == "notes/go.md" && f.ItemID == "item-1"
 	})).Return(nil).Once()
 
-	service := newTestService(chunks, ingestedFiles, items, llm, tx)
+	service := newTestService(chunks, ingestedFiles, items, llm, tx, noOpReconciliationStore(t), passingIndexGuard(t))
 
 	// When re-importing the folder
 	summary, err := service.ImportFolder(ctx, root, noopProgress)
@@ -324,12 +402,12 @@ func TestImportFolder_perFileFailure_isRecordedInSummary_andImportContinues(t *t
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Good\nWill embed fine."}).
 		Return(embeddingResponse(), nil).Once()
 
-	chunks.EXPECT().DeleteByFilePath(ctx, "notes/good.md").Return(nil).Once()
+	chunks.EXPECT().DeleteByFilePath(ctx, "notes/good.md").Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()
 	items.EXPECT().Save(ctx, mock.Anything).Return(nil).Once()
 	ingestedFiles.EXPECT().Upsert(ctx, mock.Anything).Return(nil).Once()
 
-	service := newTestService(chunks, ingestedFiles, items, llm, tx)
+	service := newTestService(chunks, ingestedFiles, items, llm, tx, noOpReconciliationStore(t), passingIndexGuard(t))
 
 	// When importing the folder
 	summary, err := service.ImportFolder(ctx, root, noopProgress)
@@ -341,6 +419,41 @@ func TestImportFolder_perFileFailure_isRecordedInSummary_andImportContinues(t *t
 	require.Len(t, summary.Failures, 1)
 	assert.Equal(t, "notes/bad.md", summary.Failures[0].Path)
 	assert.Contains(t, summary.Failures[0].Reason, boom.Error())
+}
+
+func TestImportFolder_perFileFailure_whenDerivedTopicIsBlank(t *testing.T) {
+	// Given a root-level file named exactly ".md" (no directory to derive a
+	// topic from, and no heading): path.Ext(".md") == ".md", so
+	// baseNameWithoutExt strips the entire name down to "", and
+	// BuildShadowItem's fallback chain would otherwise produce an empty Topic
+	root := fstest.MapFS{
+		".md": {Data: []byte("Some body text with no heading.")},
+	}
+	ctx := context.Background()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	items := knowledgemocks.NewMockRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	// No WithinTx expectation: the blank topic is caught before the file
+	// ever reaches the transactional replace step, so it must never be called.
+	tx := ingestmocks.NewMockTransactor(t)
+
+	ingestedFiles.EXPECT().ListAll(ctx).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
+
+	// No VectorStore expectation either: the blank topic is caught before
+	// ingestFile ever reaches the post-commit reconciliation step.
+	service := newTestService(chunks, ingestedFiles, items, llm, tx, nil, passingIndexGuard(t))
+
+	// When importing the folder
+	summary, err := service.ImportFolder(ctx, root, noopProgress)
+
+	// Then the file is recorded as failed instead of persisting a
+	// blank-topic chunk/item, and nothing is embedded, transacted, or saved
+	require.NoError(t, err)
+	assert.Equal(t, 1, summary.FilesFailed)
+	require.Len(t, summary.Failures, 1)
+	assert.Equal(t, ".md", summary.Failures[0].Path)
+	assert.Contains(t, summary.Failures[0].Reason, domainknowledge.ErrTopicRequired.Error())
 }
 
 func TestImportFolder_onProgressError_stopsWalkImmediately_returningPartialSummary(t *testing.T) {
@@ -360,7 +473,7 @@ func TestImportFolder_onProgressError_stopsWalkImmediately_returningPartialSumma
 	ingestedFiles.EXPECT().ListAll(ctx).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# A\nBody A."}).
 		Return(embeddingResponse(), nil).Once()
-	chunks.EXPECT().DeleteByFilePath(ctx, "notes/a.md").Return(nil).Once()
+	chunks.EXPECT().DeleteByFilePath(ctx, "notes/a.md").Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()
 	items.EXPECT().Save(ctx, mock.Anything).Return(nil).Once()
 	ingestedFiles.EXPECT().Upsert(ctx, mock.Anything).Return(nil).Once()
@@ -371,7 +484,7 @@ func TestImportFolder_onProgressError_stopsWalkImmediately_returningPartialSumma
 		calls++
 		return stopErr
 	}
-	service := newTestService(chunks, ingestedFiles, items, llm, tx)
+	service := newTestService(chunks, ingestedFiles, items, llm, tx, noOpReconciliationStore(t), passingIndexGuard(t))
 
 	// When the progress callback fails after the first file
 	summary, err := service.ImportFolder(ctx, root, onProgress)
@@ -404,7 +517,7 @@ func TestImportFolder_changedEmbeddingModel_forcesReembed_evenWhenMTimeIsUnchang
 
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nBasics of Go."}).
 		Return(embeddingResponse(), nil).Once()
-	chunks.EXPECT().DeleteByFilePath(ctx, "notes/go.md").Return(nil).Once()
+	chunks.EXPECT().DeleteByFilePath(ctx, "notes/go.md").Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
 		return len(cs) == 1 && cs[0].EmbeddingModel == domainllm.EmbeddingModel
 	})).Return(nil).Once()
@@ -414,7 +527,7 @@ func TestImportFolder_changedEmbeddingModel_forcesReembed_evenWhenMTimeIsUnchang
 		return f.EmbeddingModel == domainllm.EmbeddingModel
 	})).Return(nil).Once()
 
-	service := newTestService(chunks, ingestedFiles, items, llm, tx)
+	service := newTestService(chunks, ingestedFiles, items, llm, tx, noOpReconciliationStore(t), passingIndexGuard(t))
 
 	// When re-importing despite the unchanged mtime
 	summary, err := service.ImportFolder(ctx, root, noopProgress)
@@ -444,7 +557,7 @@ func TestImportFolder_manyFiles_completesReportingProgressPerFile(t *testing.T) 
 
 	ingestedFiles.EXPECT().ListAll(ctx).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
 	llm.EXPECT().Embeddings(ctx, mock.Anything).Return(embeddingResponse(), nil).Times(fileCount)
-	chunks.EXPECT().DeleteByFilePath(ctx, mock.Anything).Return(nil).Times(fileCount)
+	chunks.EXPECT().DeleteByFilePath(ctx, mock.Anything).Return(nil, nil).Times(fileCount)
 	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Times(fileCount)
 	items.EXPECT().Save(ctx, mock.Anything).Return(nil).Times(fileCount)
 	ingestedFiles.EXPECT().Upsert(ctx, mock.Anything).Return(nil).Times(fileCount)
@@ -455,7 +568,7 @@ func TestImportFolder_manyFiles_completesReportingProgressPerFile(t *testing.T) 
 		assert.Equal(t, fileCount, p.FilesTotal)
 		return nil
 	}
-	service := newTestService(chunks, ingestedFiles, items, llm, tx)
+	service := newTestService(chunks, ingestedFiles, items, llm, tx, noOpReconciliationStore(t), passingIndexGuard(t))
 
 	// When importing the folder
 	summary, err := service.ImportFolder(ctx, root, onProgress)
@@ -465,4 +578,69 @@ func TestImportFolder_manyFiles_completesReportingProgressPerFile(t *testing.T) 
 	assert.Equal(t, fileCount, summary.FilesScanned)
 	assert.Equal(t, fileCount, summary.FilesIngested)
 	assert.Equal(t, fileCount, progressCalls)
+}
+
+func TestImportFolder_returnsErrIndexLoading_whenIndexIsLoading_andNeverScansTheFolder(t *testing.T) {
+	// Given a loading/retrying index
+	root := fstest.MapFS{"notes/go.md": {Data: []byte("# Go\nBasics of Go.")}}
+	ctx := context.Background()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	items := knowledgemocks.NewMockRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	tx := ingestmocks.NewMockTransactor(t)
+	boom := errors.New("knowledge index is loading")
+	guard := ingestmocks.NewMockIndexGuard(t)
+	guard.EXPECT().BeginMutation().Return(boom).Once()
+	service := newTestService(chunks, ingestedFiles, items, llm, tx, nil, guard)
+
+	// When importing the folder
+	summary, err := service.ImportFolder(ctx, root, noopProgress)
+
+	// Then the import is rejected before ever listing ingested files —
+	// a retry snapshot can never be overwritten by a concurrent import
+	assert.ErrorIs(t, err, boom)
+	assert.Equal(t, Summary{}, summary)
+	ingestedFiles.AssertNotCalled(t, "ListAll", mock.Anything)
+}
+
+func TestImportFolder_reportsIndexingWarning_whenPostCommitReconciliationFails_butStillCountsTheFileAsIngested(t *testing.T) {
+	// Given a file whose durable import succeeds
+	root := fstest.MapFS{"notes/go.md": {Data: []byte("# Go\nBasics of Go.")}}
+	ctx := context.Background()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	items := knowledgemocks.NewMockRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	tx := ingestmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+
+	ingestedFiles.EXPECT().ListAll(ctx).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nBasics of Go."}).
+		Return(embeddingResponse(), nil).Once()
+	chunks.EXPECT().DeleteByFilePath(ctx, "notes/go.md").Return(nil, nil).Once()
+	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()
+	items.EXPECT().Save(ctx, mock.Anything).Return(nil).Once()
+	ingestedFiles.EXPECT().Upsert(ctx, mock.Anything).Return(nil).Once()
+
+	boom := errors.New("store exploded")
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Remove(mock.Anything, mock.Anything).Return(nil).Once()
+	store.EXPECT().Add(mock.Anything, mock.Anything).Return(boom).Once()
+
+	service := newTestService(chunks, ingestedFiles, items, llm, tx, store, passingIndexGuard(t))
+
+	// When importing the folder and the post-commit reconciliation fails
+	summary, err := service.ImportFolder(ctx, root, noopProgress)
+
+	// Then the durable import is not reported as a failure — ingested_files
+	// already recorded the new mtime/model, so a repeat import would
+	// legitimately skip it — the file is counted as ingested with a warning
+	require.NoError(t, err)
+	assert.Equal(t, 1, summary.FilesIngested)
+	assert.Equal(t, 0, summary.FilesFailed)
+	assert.Empty(t, summary.Failures)
+	require.Len(t, summary.IndexWarnings, 1)
+	assert.Equal(t, "notes/go.md", summary.IndexWarnings[0].Path)
+	assert.Contains(t, summary.IndexWarnings[0].Reason, boom.Error())
 }

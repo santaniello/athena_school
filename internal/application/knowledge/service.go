@@ -3,6 +3,7 @@ package knowledge
 
 import (
 	"context"
+	"time"
 
 	domainconfig "github.com/santaniello/athena/internal/domain/config"
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
@@ -21,6 +22,25 @@ type Transactor interface {
 	WithinTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
+// IndexGuard reports whether a knowledge mutation may proceed right now, and
+// reserves the index against a concurrent reload for as long as one is in
+// flight. Defined here (consumer side) per Go convention; implemented by
+// *IndexLoader.
+//
+// CheckMutationAllowed is a point-in-time read, kept for callers that only
+// need an early rejection. BeginMutation/EndMutation instead hold the
+// reservation for a mutation's entire duration — its transaction commit
+// through its post-commit VectorStore reconciliation — so a reload started
+// partway through can never publish a snapshot older than what the mutation
+// just wrote, or race its Add/Remove. Every mutation that touches the
+// VectorStore must wrap its full body in BeginMutation/EndMutation, not
+// just check CheckMutationAllowed once up front.
+type IndexGuard interface {
+	CheckMutationAllowed() error
+	BeginMutation() error
+	EndMutation()
+}
+
 // Service implements knowledge extraction and Explorer management against
 // the application's ports.
 type Service struct {
@@ -31,6 +51,8 @@ type Service struct {
 	configs  domainconfig.Store
 	chunks   domainknowledge.ChunkRepository
 	tx       Transactor
+	store    domainknowledge.VectorStore
+	index    IndexGuard
 }
 
 // NewService creates a knowledge extraction and Explorer management service.
@@ -42,9 +64,21 @@ func NewService(
 	configs domainconfig.Store,
 	chunks domainknowledge.ChunkRepository,
 	tx Transactor,
+	store domainknowledge.VectorStore,
+	index IndexGuard,
 ) *Service {
 	return &Service{
 		items: items, sessions: sessions, messages: messages,
 		llm: llm, configs: configs, chunks: chunks, tx: tx,
+		store: store, index: index,
 	}
+}
+
+// reconcileContext returns a short-lived context for post-commit VectorStore
+// reconciliation (Add/Remove), independent of the original request context.
+// It is deliberately not the caller's ctx: a request context canceled right
+// after commit must not skip mandatory in-memory cleanup and leave stale
+// content searchable.
+func reconcileContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), 5*time.Second)
 }

@@ -18,7 +18,7 @@ func TestListItems_forwardsTopicAndStatusFilter(t *testing.T) {
 	expected := []domainknowledge.Item{{ID: "item-1", Topic: "Go", Status: domainknowledge.StatusApproved}}
 	repository.EXPECT().List(ctx, domainknowledge.Filter{Topic: "Go", Status: domainknowledge.StatusApproved}).
 		Return(expected, nil).Once()
-	service := NewService(repository, nil, nil, nil, nil, nil, nil)
+	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	// When listing items by topic and status
 	items, err := service.ListItems(ctx, "Go", domainknowledge.StatusApproved)
@@ -33,7 +33,7 @@ func TestListTopics_returnsRepositoryTopics(t *testing.T) {
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
 	repository.EXPECT().ListTopics(ctx).Return([]string{"Go", "Kubernetes"}, nil).Once()
-	service := NewService(repository, nil, nil, nil, nil, nil, nil)
+	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	// When listing topics
 	topics, err := service.ListTopics(ctx)

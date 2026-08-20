@@ -1,5 +1,25 @@
 export namespace desktop {
 	
+	export class ChunkLoadIssueResult {
+	    chunkId: string;
+	    itemId: string;
+	    source: string;
+	    filePath: string;
+	    reason: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ChunkLoadIssueResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.chunkId = source["chunkId"];
+	        this.itemId = source["itemId"];
+	        this.source = source["source"];
+	        this.filePath = source["filePath"];
+	        this.reason = source["reason"];
+	    }
+	}
 	export class KnowledgeItemResult {
 	    id: string;
 	    topic: string;
@@ -79,6 +99,42 @@ export namespace desktop {
 	        this.name = source["name"];
 	        this.isDefault = source["isDefault"];
 	    }
+	}
+	export class IndexStatusResult {
+	    state: string;
+	    hasSnapshot: boolean;
+	    issues: ChunkLoadIssueResult[];
+	    lastError: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new IndexStatusResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.hasSnapshot = source["hasSnapshot"];
+	        this.issues = this.convertValues(source["issues"], ChunkLoadIssueResult);
+	        this.lastError = source["lastError"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class KnowledgeExtractionSettings {
 	    maxKnowledgeExtractionItems: number;

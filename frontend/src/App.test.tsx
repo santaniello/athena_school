@@ -58,6 +58,17 @@ vi.mock('../wailsjs/go/desktop/App', () => ({
   SaveProfile: vi.fn(),
 }))
 
+// AppShell subscribes to the knowledge index status unconditionally on
+// mount (before any section navigation), so every test reaching the app
+// shell needs this mocked — same reasoning as app-shell.test.tsx's mock.
+vi.mock('@/lib/knowledge-index', () => ({
+  getKnowledgeIndexStatus: vi
+    .fn()
+    .mockResolvedValue({ state: 'ready', hasSnapshot: true, issues: [], lastError: '' }),
+  retryKnowledgeIndex: vi.fn(),
+  onKnowledgeIndexStatus: vi.fn(() => vi.fn()),
+}))
+
 describe('App', () => {
   it('shows the login screen when no local session exists', async () => {
     // Given no local session on disk

@@ -7,6 +7,10 @@ import { ComingSoonPanel } from '@/components/coming-soon-panel'
 import { StudyFolderTree } from '@/components/study-folder-tree'
 import { KnowledgeTopicTree } from '@/components/knowledge-topic-tree'
 import { KnowledgeSection } from '@/components/knowledge-section'
+import { IndexLoadingScreen } from '@/components/index-loading-screen'
+import { IndexFailedScreen } from '@/components/index-failed-screen'
+import { IndexStatusBanner } from '@/components/index-status-banner'
+import { IndexReviewDialog } from '@/components/index-review-dialog'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import HomeScreen from '@/screens/HomeScreen'
 import StudyChatScreen from '@/screens/StudyChatScreen'
@@ -15,6 +19,19 @@ import DocumentationScreen from '@/screens/DocumentationScreen'
 import { NAVIGATION, type AppSection } from '@/lib/navigation'
 import { getUserProfile, type ProfileDraft } from '@/lib/profile'
 import type { StudySession } from '@/lib/study'
+import {
+  getKnowledgeIndexStatus,
+  onKnowledgeIndexStatus,
+  retryKnowledgeIndex,
+  type IndexStatus,
+} from '@/lib/knowledge-index'
+
+const INITIAL_INDEX_STATUS: IndexStatus = {
+  state: 'loading',
+  hasSnapshot: false,
+  issues: [],
+  lastError: '',
+}
 
 interface AppShellProps {
   onLogout: () => void
@@ -48,10 +65,68 @@ function AppShell({ onLogout }: AppShellProps) {
   const [profile, setProfile] = useState<ProfileDraft | null>(null)
   const [activeSession, setActiveSession] = useState<ActiveStudySession | null>(null)
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
+  const [indexStatus, setIndexStatus] = useState<IndexStatus>(INITIAL_INDEX_STATUS)
+  const [continuedWithoutSearch, setContinuedWithoutSearch] = useState(false)
+  const [retryingIndex, setRetryingIndex] = useState(false)
+  const [reviewOpen, setReviewOpen] = useState(false)
 
   useEffect(() => {
     void getUserProfile().then(setProfile)
   }, [])
+
+  // The listener is registered before the initial query fires, closing the
+  // race where a fast background load finishes before this subscribes —
+  // continuous polling is not used (see
+  // specs/phases/phase-02-knowledge-engine/04-vector-search.md).
+  useEffect(() => {
+    let active = true
+    let receivedStatusEvent = false
+    const unsubscribe = onKnowledgeIndexStatus((status) => {
+      receivedStatusEvent = true
+      setIndexStatus(status)
+    })
+
+    // A rejected initial query must still resolve `loading` into a terminal
+    // state — otherwise the app stays stuck behind IndexLoadingScreen
+    // forever. Guarded by `receivedStatusEvent` so a slow initial response
+    // can never overwrite a newer status pushed by the event above.
+    void getKnowledgeIndexStatus()
+      .then((status) => {
+        if (active && !receivedStatusEvent) setIndexStatus(status)
+      })
+      .catch(() => {
+        if (active && !receivedStatusEvent) {
+          setIndexStatus({
+            ...INITIAL_INDEX_STATUS,
+            state: 'failed',
+            lastError: 'Could not load the knowledge index.',
+          })
+        }
+      })
+
+    return () => {
+      active = false
+      unsubscribe()
+    }
+  }, [])
+
+  async function handleRetryIndex() {
+    setRetryingIndex(true)
+    try {
+      // "knowledge-index:status" also fires with this exact outcome, but
+      // applying the resolved value directly here does not depend on that
+      // separate event channel having fired yet.
+      const result = await retryKnowledgeIndex()
+      setIndexStatus(result)
+      // Only drop the "continue without search" opt-in on an actual
+      // recovery — a retry that fails again (no prior snapshot to fall
+      // back to) must not silently re-block the app the user already
+      // chose to continue using.
+      if (result.state !== 'failed') setContinuedWithoutSearch(false)
+    } finally {
+      setRetryingIndex(false)
+    }
+  }
 
   const activeItem = NAVIGATION.find((item) => item.id === section)!
   const studyItem = NAVIGATION.find((item) => item.id === 'study')!
@@ -87,6 +162,29 @@ function AppShell({ onLogout }: AppShellProps) {
     setActiveSession((current) => (current ? { ...current, topic } : current))
   }
 
+  // The entire application stays behind this screen until the initial
+  // background load finishes — no search or knowledge mutation can race the
+  // initial snapshot.
+  if (indexStatus.state === 'loading' && !indexStatus.hasSnapshot) {
+    return <IndexLoadingScreen />
+  }
+
+  // A failed, snapshot-less index is unavailable, not empty — offer Retry
+  // or an explicit opt-in to continue with a persistent warning instead. A
+  // failed retry that still has a preserved snapshot never reaches this
+  // screen: the previous snapshot keeps search working, so only the banner
+  // below needs to surface the failure.
+  if (indexStatus.state === 'failed' && !indexStatus.hasSnapshot && !continuedWithoutSearch) {
+    return (
+      <IndexFailedScreen
+        lastError={indexStatus.lastError}
+        retrying={retryingIndex}
+        onRetry={() => void handleRetryIndex()}
+        onContinue={() => setContinuedWithoutSearch(true)}
+      />
+    )
+  }
+
   // ResizablePanelGroup/ResizablePanel hard-code `height: 100%` and
   // `overflow: auto` as inline styles, which beat any h-*/overflow-* class.
   // #root has no height of its own, so a class alone would collapse the shell
@@ -94,141 +192,155 @@ function AppShell({ onLogout }: AppShellProps) {
   // the sidebar's. The library merges the style prop over its defaults, so
   // these two have to stay inline.
   return (
-    <ResizablePanelGroup orientation="horizontal" style={{ height: '100vh' }}>
-      <ResizablePanel
-        defaultSize={224}
-        minSize={200}
-        maxSize={420}
-        groupResizeBehavior="preserve-pixel-size"
-        className="flex h-full flex-col"
-        style={{ overflow: 'hidden' }}
-      >
-        <nav className="flex h-full w-full flex-col bg-[oklch(0.115_0.014_50)] p-3">
-          <div className="flex items-center gap-2 px-1.5 py-2">
-            <AthenaLogo className="size-6 shrink-0" />
-            <span className="font-heading text-sm font-bold tracking-[0.2em] text-primary">
-              ATHENA
-            </span>
-          </div>
-
-          <div
-            className="thin-scroll mt-2 flex flex-1 flex-col gap-0.5 overflow-y-auto"
-            style={{ scrollbarGutter: 'stable' }}
-          >
-            {PRIMARY_ITEMS.map((item) => (
-              <div key={item.id}>
-                <NavItem item={item} active={item.id === section} onSelect={setSection} />
-                {item.id === 'study' && section === 'study' && (
-                  <StudyFolderTree
-                    selectedSessionId={activeSession?.id ?? null}
-                    onSelectSession={handleSelectSession}
-                    onSessionStarted={handleSessionStarted}
-                    onSessionDeleted={handleSessionDeleted}
-                  />
-                )}
-                {item.id === 'knowledge' && section === 'knowledge' && (
-                  <KnowledgeTopicTree
-                    selectedTopic={selectedTopic}
-                    onSelectTopic={setSelectedTopic}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div className="flex flex-col gap-0.5 border-t border-border pt-2">
-            {FOOTER_ITEMS.map((item) => (
-              <NavItem
-                key={item.id}
-                item={item}
-                active={item.id === section}
-                onSelect={setSection}
-              />
-            ))}
-          </div>
-
-          <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
-            <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary font-heading text-xs font-bold text-primary-foreground">
-              {profile?.name.charAt(0).toUpperCase()}
+    <>
+      <ResizablePanelGroup orientation="horizontal" style={{ height: '100vh' }}>
+        <ResizablePanel
+          defaultSize={224}
+          minSize={200}
+          maxSize={420}
+          groupResizeBehavior="preserve-pixel-size"
+          className="flex h-full flex-col"
+          style={{ overflow: 'hidden' }}
+        >
+          <nav className="flex h-full w-full flex-col bg-[oklch(0.115_0.014_50)] p-3">
+            <div className="flex items-center gap-2 px-1.5 py-2">
+              <AthenaLogo className="size-6 shrink-0" />
+              <span className="font-heading text-sm font-bold tracking-[0.2em] text-primary">
+                ATHENA
+              </span>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-foreground">{profile?.name}</p>
-            </div>
-            <button
-              type="button"
-              aria-label="Log out"
-              onClick={() => void handleLogout()}
-              className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+
+            <div
+              className="thin-scroll mt-2 flex flex-1 flex-col gap-0.5 overflow-y-auto"
+              style={{ scrollbarGutter: 'stable' }}
             >
-              <LogOut className="size-4" aria-hidden="true" />
-            </button>
-          </div>
-        </nav>
-      </ResizablePanel>
-
-      <ResizableHandle className="transition-colors hover:bg-primary/60 active:bg-primary" />
-
-      <ResizablePanel
-        minSize={360}
-        className="flex h-full w-full flex-col"
-        style={{ overflow: 'hidden' }}
-      >
-        <header className="flex min-h-11 shrink-0 items-center border-b border-border px-6 py-2">
-          {section === 'study' && activeSession ? (
-            <div className="min-w-0">
-              <p className="truncate text-[11px] text-muted-foreground">
-                Study / {activeSession.folderName}
-              </p>
-              <h1 className="font-heading truncate text-base font-bold text-foreground">
-                {activeSession.topic}
-              </h1>
+              {PRIMARY_ITEMS.map((item) => (
+                <div key={item.id}>
+                  <NavItem item={item} active={item.id === section} onSelect={setSection} />
+                  {item.id === 'study' && section === 'study' && (
+                    <StudyFolderTree
+                      selectedSessionId={activeSession?.id ?? null}
+                      onSelectSession={handleSelectSession}
+                      onSessionStarted={handleSessionStarted}
+                      onSessionDeleted={handleSessionDeleted}
+                    />
+                  )}
+                  {item.id === 'knowledge' && section === 'knowledge' && (
+                    <KnowledgeTopicTree
+                      selectedTopic={selectedTopic}
+                      onSelectTopic={setSelectedTopic}
+                    />
+                  )}
+                </div>
+              ))}
             </div>
-          ) : (
-            <h1 className="font-heading text-xs font-bold tracking-[0.14em] text-foreground uppercase">
-              {activeItem.label}
-            </h1>
-          )}
-        </header>
-        {/* min-h-0 lets this flex item shrink below its content's height —
+
+            <div className="flex flex-col gap-0.5 border-t border-border pt-2">
+              {FOOTER_ITEMS.map((item) => (
+                <NavItem
+                  key={item.id}
+                  item={item}
+                  active={item.id === section}
+                  onSelect={setSection}
+                />
+              ))}
+            </div>
+
+            <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
+              <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary font-heading text-xs font-bold text-primary-foreground">
+                {profile?.name.charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-foreground">{profile?.name}</p>
+              </div>
+              <button
+                type="button"
+                aria-label="Log out"
+                onClick={() => void handleLogout()}
+                className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+              >
+                <LogOut className="size-4" aria-hidden="true" />
+              </button>
+            </div>
+          </nav>
+        </ResizablePanel>
+
+        <ResizableHandle className="transition-colors hover:bg-primary/60 active:bg-primary" />
+
+        <ResizablePanel
+          minSize={360}
+          className="flex h-full w-full flex-col"
+          style={{ overflow: 'hidden' }}
+        >
+          <header className="flex min-h-11 shrink-0 items-center border-b border-border px-6 py-2">
+            {section === 'study' && activeSession ? (
+              <div className="min-w-0">
+                <p className="truncate text-[11px] text-muted-foreground">
+                  Study / {activeSession.folderName}
+                </p>
+                <h1 className="font-heading truncate text-base font-bold text-foreground">
+                  {activeSession.topic}
+                </h1>
+              </div>
+            ) : (
+              <h1 className="font-heading text-xs font-bold tracking-[0.14em] text-foreground uppercase">
+                {activeItem.label}
+              </h1>
+            )}
+          </header>
+          <IndexStatusBanner
+            status={indexStatus}
+            continuedWithoutSearch={continuedWithoutSearch}
+            retrying={retryingIndex}
+            onRetry={() => void handleRetryIndex()}
+            onReview={() => setReviewOpen(true)}
+          />
+          {/* min-h-0 lets this flex item shrink below its content's height —
             without it a long chat transcript stretches <main> past the
             viewport instead of scrolling inside its own scroll area. */}
-        <main className="flex min-h-0 flex-1 p-10">
-          {section === 'home' ? (
-            <HomeScreen
-              profile={profile}
-              studyLocked={studyItem.status === 'locked'}
-              onStartStudy={() => setSection('study')}
-            />
-          ) : section === 'study' ? (
-            activeSession ? (
-              <StudyChatScreen
-                key={activeSession.id}
-                sessionId={activeSession.id}
-                initialTopic={activeSession.topic}
-                mode={activeSession.mode}
-                onTopicResolved={handleTopicResolved}
+          <main className="flex min-h-0 flex-1 p-10">
+            {section === 'home' ? (
+              <HomeScreen
+                profile={profile}
+                studyLocked={studyItem.status === 'locked'}
+                onStartStudy={() => setSection('study')}
               />
+            ) : section === 'study' ? (
+              activeSession ? (
+                <StudyChatScreen
+                  key={activeSession.id}
+                  sessionId={activeSession.id}
+                  initialTopic={activeSession.topic}
+                  mode={activeSession.mode}
+                  onTopicResolved={handleTopicResolved}
+                />
+              ) : (
+                <div className="m-auto flex flex-col items-center gap-2 text-center">
+                  <BookOpen className="size-8 text-muted-foreground" aria-hidden="true" />
+                  <p className="text-sm font-semibold text-foreground">No session open</p>
+                  <p className="max-w-64 text-sm text-muted-foreground">
+                    Pick one from the tree on the left, or start a new one inside a folder.
+                  </p>
+                </div>
+              )
+            ) : section === 'knowledge' ? (
+              <KnowledgeSection selectedTopic={selectedTopic} mutationsDisabled={retryingIndex} />
+            ) : section === 'documentation' ? (
+              <DocumentationScreen />
+            ) : section === 'settings' && profile ? (
+              <SettingsScreen profile={profile} onProfileUpdated={setProfile} />
             ) : (
-              <div className="m-auto flex flex-col items-center gap-2 text-center">
-                <BookOpen className="size-8 text-muted-foreground" aria-hidden="true" />
-                <p className="text-sm font-semibold text-foreground">No session open</p>
-                <p className="max-w-64 text-sm text-muted-foreground">
-                  Pick one from the tree on the left, or start a new one inside a folder.
-                </p>
-              </div>
-            )
-          ) : section === 'knowledge' ? (
-            <KnowledgeSection selectedTopic={selectedTopic} />
-          ) : section === 'documentation' ? (
-            <DocumentationScreen />
-          ) : section === 'settings' && profile ? (
-            <SettingsScreen profile={profile} onProfileUpdated={setProfile} />
-          ) : (
-            <ComingSoonPanel item={activeItem} />
-          )}
-        </main>
-      </ResizablePanel>
-    </ResizablePanelGroup>
+              <ComingSoonPanel item={activeItem} />
+            )}
+          </main>
+        </ResizablePanel>
+      </ResizablePanelGroup>
+      <IndexReviewDialog
+        open={reviewOpen}
+        issues={indexStatus.issues}
+        onClose={() => setReviewOpen(false)}
+      />
+    </>
   )
 }
 

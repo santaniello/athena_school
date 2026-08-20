@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { GetProfile, Logout, UpdateProfile } from '../../wailsjs/go/desktop/App'
 import {
@@ -10,6 +10,12 @@ import {
   startStudySession,
 } from '@/lib/study'
 import type { StudySession } from '@/lib/study'
+import {
+  getKnowledgeIndexStatus,
+  onKnowledgeIndexStatus,
+  retryKnowledgeIndex,
+} from '@/lib/knowledge-index'
+import type { IndexStatus } from '@/lib/knowledge-index'
 import { AppShell } from './app-shell'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
@@ -69,6 +75,17 @@ vi.mock('@/lib/ingest', () => ({
   onIngestProgress: vi.fn(() => vi.fn()),
   onIngestDone: vi.fn(() => vi.fn()),
   onIngestError: vi.fn(() => vi.fn()),
+}))
+
+// Defaults every test to a fully ready index, so the shell renders past the
+// knowledge-index gate immediately — tests specifically about the gate's
+// own states (loading/failed/ready_with_warnings/retry) override these.
+vi.mock('@/lib/knowledge-index', () => ({
+  getKnowledgeIndexStatus: vi
+    .fn()
+    .mockResolvedValue({ state: 'ready', hasSnapshot: true, issues: [], lastError: '' }),
+  retryKnowledgeIndex: vi.fn(),
+  onKnowledgeIndexStatus: vi.fn(() => vi.fn()),
 }))
 
 const profileResult = {
@@ -530,5 +547,362 @@ describe('AppShell', () => {
 
     // Then the CTA has no "locked" caption
     expect(screen.queryByText('Locked until Study Mode ships')).not.toBeInTheDocument()
+  })
+})
+
+function pendingStatus(): Promise<IndexStatus> {
+  return new Promise(() => {})
+}
+
+describe('AppShell knowledge index lifecycle', () => {
+  it('subscribes to knowledge-index:status before querying the initial status, and shows the loading screen until it resolves', () => {
+    // Given the initial status query never resolves during this assertion
+    const order: string[] = []
+    vi.mocked(onKnowledgeIndexStatus).mockImplementationOnce((handler) => {
+      order.push('subscribe')
+      void handler
+      return vi.fn()
+    })
+    vi.mocked(getKnowledgeIndexStatus).mockImplementationOnce(() => {
+      order.push('query')
+      return pendingStatus()
+    })
+
+    // When the shell mounts
+    renderShell()
+
+    // Then the event listener was registered before the initial query fired
+    // — closing the race where a fast background load finishes before the
+    // listener subscribes — and the loading screen blocks everything else
+    expect(order).toEqual(['subscribe', 'query'])
+    expect(screen.getByText('Loading knowledge index...')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Home' })).not.toBeInTheDocument()
+  })
+
+  it('releases the app once the initial load resolves ready', async () => {
+    // Given the default ready mock (see the module-level vi.mock above)
+    renderShell()
+
+    // Then the shell renders normally once the status resolves
+    expect(await screen.findByRole('button', { name: 'Home' })).toBeInTheDocument()
+  })
+
+  it('shows the failure screen when the initial load fails, and Continue reveals the app with a persistent warning', async () => {
+    // Given an initial load that fails outright
+    vi.mocked(getKnowledgeIndexStatus).mockResolvedValueOnce({
+      state: 'failed',
+      hasSnapshot: false,
+      issues: [],
+      lastError: 'Could not load the knowledge index from the database.',
+    })
+    const user = userEvent.setup()
+    renderShell()
+
+    // Then the failure screen blocks the app
+    expect(await screen.findByText('Knowledge index could not be loaded.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Home' })).not.toBeInTheDocument()
+
+    // When continuing without local search
+    await user.click(screen.getByRole('button', { name: 'Continue without local search' }))
+
+    // Then the app opens, with a persistent unavailable warning
+    expect(await screen.findByRole('button', { name: 'Home' })).toBeInTheDocument()
+    expect(screen.getByText(/Local search is unavailable/)).toBeInTheDocument()
+  })
+
+  it('retries from the failure screen and releases the app on success', async () => {
+    // Given an initial load that fails outright
+    vi.mocked(getKnowledgeIndexStatus).mockResolvedValueOnce({
+      state: 'failed',
+      hasSnapshot: false,
+      issues: [],
+      lastError: 'disk full',
+    })
+    vi.mocked(retryKnowledgeIndex).mockResolvedValueOnce({
+      state: 'ready',
+      hasSnapshot: true,
+      issues: [],
+      lastError: '',
+    })
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText('Knowledge index could not be loaded.')
+
+    // When retrying
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+
+    // Then the app opens, with no lingering failure screen or warning
+    expect(await screen.findByRole('button', { name: 'Home' })).toBeInTheDocument()
+    expect(screen.queryByText(/Local search is unavailable/)).not.toBeInTheDocument()
+  })
+
+  it('shows a warning banner with the affected count when ready_with_warnings, and opens the review dialog', async () => {
+    // Given a load that isolated one chunk
+    vi.mocked(getKnowledgeIndexStatus).mockResolvedValueOnce({
+      state: 'ready_with_warnings',
+      hasSnapshot: true,
+      issues: [
+        {
+          chunkId: 'chunk-1',
+          itemId: 'item-1',
+          source: 'imported_doc',
+          filePath: 'notes/go.md',
+          reason: 'missing_item',
+        },
+      ],
+      lastError: '',
+    })
+    const user = userEvent.setup()
+    renderShell()
+
+    // Then the app opens with a warning banner reporting the affected count
+    expect(await screen.findByText(/1 item/)).toBeInTheDocument()
+
+    // When opening Review
+    await user.click(screen.getByRole('button', { name: 'Review' }))
+
+    // Then the isolated chunk's file and guidance appear
+    expect(await screen.findByText('notes/go.md')).toBeInTheDocument()
+    expect(
+      screen.getByText('The knowledge item this content belonged to no longer exists.'),
+    ).toBeInTheDocument()
+  })
+
+  it('closes the review dialog when dismissed', async () => {
+    // Given the app is open with the review dialog showing one issue
+    vi.mocked(getKnowledgeIndexStatus).mockResolvedValueOnce({
+      state: 'ready_with_warnings',
+      hasSnapshot: true,
+      issues: [
+        {
+          chunkId: 'chunk-1',
+          itemId: 'item-1',
+          source: 'imported_doc',
+          filePath: 'notes/go.md',
+          reason: 'missing_item',
+        },
+      ],
+      lastError: '',
+    })
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/1 item/)
+    await user.click(screen.getByRole('button', { name: 'Review' }))
+    await screen.findByText('notes/go.md')
+
+    // When closing it
+    const closeButtons = await screen.findAllByRole('button', { name: 'Close' })
+    await user.click(closeButtons[0])
+
+    // Then it is dismissed
+    await waitFor(() => expect(screen.queryByText('notes/go.md')).not.toBeInTheDocument())
+  })
+
+  it('disables Retry/Continue while a retry is in flight, and releases the app once it resolves', async () => {
+    // Given the failure screen, with a retry that stays pending until released
+    vi.mocked(getKnowledgeIndexStatus).mockResolvedValueOnce({
+      state: 'failed',
+      hasSnapshot: false,
+      issues: [],
+      lastError: 'disk full',
+    })
+    let resolveRetry: (status: IndexStatus) => void = () => {}
+    vi.mocked(retryKnowledgeIndex).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveRetry = resolve
+      }),
+    )
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText('Knowledge index could not be loaded.')
+
+    // When retrying
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+
+    // Then both actions are disabled while the retry is still pending
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Continue without local search' })).toBeDisabled()
+
+    // When the retry resolves
+    resolveRetry({ state: 'ready', hasSnapshot: true, issues: [], lastError: '' })
+
+    // Then the app opens — no failure screen, no lingering disabled state
+    expect(await screen.findByRole('button', { name: 'Home' })).toBeInTheDocument()
+  })
+
+  it('retrying from the persistent banner does not silently re-block the app when it fails again', async () => {
+    // Given the user already continued past a failed load with no snapshot
+    vi.mocked(getKnowledgeIndexStatus).mockResolvedValueOnce({
+      state: 'failed',
+      hasSnapshot: false,
+      issues: [],
+      lastError: 'disk full',
+    })
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText('Knowledge index could not be loaded.')
+    await user.click(screen.getByRole('button', { name: 'Continue without local search' }))
+    await screen.findByText(/Local search is unavailable/)
+
+    // When retrying from the banner and it fails again (still no snapshot)
+    vi.mocked(retryKnowledgeIndex).mockResolvedValueOnce({
+      state: 'failed',
+      hasSnapshot: false,
+      issues: [],
+      lastError: 'disk full again',
+    })
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+
+    // Then the app stays open (does not silently re-block behind the
+    // failure screen) and the persistent warning is still shown
+    await waitFor(() => expect(retryKnowledgeIndex).toHaveBeenCalledOnce())
+    expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument()
+    expect(screen.getByText(/Local search is unavailable/)).toBeInTheDocument()
+  })
+
+  it('actually resets the "continued without search" opt-in on a successful retry, re-blocking on a later failure', async () => {
+    // Given the user already continued past a failed load with no snapshot,
+    // with the status-event handler captured so a later event can be
+    // simulated directly (the banner disappearing on success alone can't
+    // distinguish "opt-in was reset" from "opt-in is just masked by state"
+    // — both look identical once state moves off 'failed')
+    let statusHandler: (status: IndexStatus) => void = () => {}
+    vi.mocked(onKnowledgeIndexStatus).mockImplementationOnce((handler) => {
+      statusHandler = handler
+      return vi.fn()
+    })
+    vi.mocked(getKnowledgeIndexStatus).mockResolvedValueOnce({
+      state: 'failed',
+      hasSnapshot: false,
+      issues: [],
+      lastError: 'disk full',
+    })
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText('Knowledge index could not be loaded.')
+    await user.click(screen.getByRole('button', { name: 'Continue without local search' }))
+    await screen.findByText(/Local search is unavailable/)
+
+    // When retrying from the banner and it succeeds this time
+    vi.mocked(retryKnowledgeIndex).mockResolvedValueOnce({
+      state: 'ready',
+      hasSnapshot: true,
+      issues: [],
+      lastError: '',
+    })
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() =>
+      expect(screen.queryByText(/Local search is unavailable/)).not.toBeInTheDocument(),
+    )
+
+    // And a later load genuinely fails again (e.g. a subsequent retry
+    // elsewhere, or a fresh OnDomReady on the next launch, reported via the
+    // same status event)
+    act(() => {
+      statusHandler({
+        state: 'failed',
+        hasSnapshot: false,
+        issues: [],
+        lastError: 'disk full again',
+      })
+    })
+
+    // Then the app re-blocks behind the failure screen — proving the opt-in
+    // was truly reset to false, not left stuck true from the earlier choice
+    expect(await screen.findByText('Knowledge index could not be loaded.')).toBeInTheDocument()
+  })
+
+  it('resolves out of the loading screen when the initial status query rejects', async () => {
+    // Given the initial query fails outright (e.g. the backend never
+    // responds to the Wails call)
+    vi.mocked(getKnowledgeIndexStatus).mockRejectedValueOnce(new Error('boom'))
+    renderShell()
+
+    // Then the app falls back to the failure screen instead of hanging
+    // behind IndexLoadingScreen forever
+    expect(await screen.findByText('Knowledge index could not be loaded.')).toBeInTheDocument()
+  })
+
+  it('ignores a delayed initial response that resolves after a newer status event already arrived', async () => {
+    // Given the initial query stays pending, with its resolver captured
+    let resolveInitial: (status: IndexStatus) => void = () => {}
+    vi.mocked(getKnowledgeIndexStatus).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveInitial = resolve
+      }),
+    )
+    let statusHandler: (status: IndexStatus) => void = () => {}
+    vi.mocked(onKnowledgeIndexStatus).mockImplementationOnce((handler) => {
+      statusHandler = handler
+      return vi.fn()
+    })
+    renderShell()
+    expect(screen.getByText('Loading knowledge index...')).toBeInTheDocument()
+
+    // When a newer status event arrives first
+    act(() => {
+      statusHandler({ state: 'ready', hasSnapshot: true, issues: [], lastError: '' })
+    })
+    expect(await screen.findByRole('button', { name: 'Home' })).toBeInTheDocument()
+
+    // And the stale initial query resolves afterward with an older status
+    await act(async () => {
+      resolveInitial({ state: 'loading', hasSnapshot: false, issues: [], lastError: '' })
+      await Promise.resolve()
+    })
+
+    // Then the newer event's state is not overwritten by the late response
+    expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument()
+  })
+
+  it('does not block the app when a retry fails but a previous snapshot is preserved', async () => {
+    // Given a ready index whose retry then fails without losing its snapshot
+    vi.mocked(getKnowledgeIndexStatus).mockResolvedValueOnce({
+      state: 'ready',
+      hasSnapshot: true,
+      issues: [],
+      lastError: '',
+    })
+    vi.mocked(retryKnowledgeIndex).mockResolvedValueOnce({
+      state: 'failed',
+      hasSnapshot: true,
+      issues: [],
+      lastError: 'disk full',
+    })
+    let statusHandler: (status: IndexStatus) => void = () => {}
+    vi.mocked(onKnowledgeIndexStatus).mockImplementationOnce((handler) => {
+      statusHandler = handler
+      return vi.fn()
+    })
+    renderShell()
+    await screen.findByRole('button', { name: 'Home' })
+
+    // When a retry fails, reported through the same status event app-shell
+    // subscribes to for every retry outcome
+    act(() => {
+      statusHandler({ state: 'failed', hasSnapshot: true, issues: [], lastError: 'disk full' })
+    })
+
+    // Then the app never falls back to the blocking failure screen — the
+    // preserved snapshot means search still works — and the banner offers Retry
+    expect(screen.queryByText('Knowledge index could not be loaded.')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+  })
+
+  it('queries and subscribes to the knowledge index status exactly once, even across section navigation', async () => {
+    // Given the app is open
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByRole('button', { name: 'Home' })
+    expect(getKnowledgeIndexStatus).toHaveBeenCalledOnce()
+    expect(onKnowledgeIndexStatus).toHaveBeenCalledOnce()
+
+    // When navigating to another section (a re-render, not a remount)
+    await user.click(screen.getByRole('button', { name: 'Settings' }))
+
+    // Then the subscription/query effect never re-ran
+    expect(getKnowledgeIndexStatus).toHaveBeenCalledOnce()
+    expect(onKnowledgeIndexStatus).toHaveBeenCalledOnce()
   })
 })

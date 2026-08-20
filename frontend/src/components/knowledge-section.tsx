@@ -10,6 +10,10 @@ import KnowledgeExplorerScreen from '@/screens/KnowledgeExplorerScreen'
 interface KnowledgeSectionProps {
   // null means "All topics".
   selectedTopic: string | null
+  // True while the knowledge index is retrying — import/edit/approve/
+  // deprecate/delete are rejected by a backend guard during a retry, so the
+  // UI disables them too rather than letting a call fail confusingly.
+  mutationsDisabled: boolean
 }
 
 type Tab = 'explorer' | 'review'
@@ -18,7 +22,7 @@ type Tab = 'explorer' | 'review'
 // action — the main-pane counterpart to KnowledgeTopicTree in the sidebar.
 // See the layout in
 // specs/phases/phase-02-knowledge-engine/03-notes-import-and-knowledge-explorer.md.
-function KnowledgeSection({ selectedTopic }: KnowledgeSectionProps) {
+function KnowledgeSection({ selectedTopic, mutationsDisabled }: KnowledgeSectionProps) {
   const [activeTab, setActiveTab] = useState<Tab>('explorer')
   const [draftCount, setDraftCount] = useState(0)
   const [importFolderPath, setImportFolderPath] = useState<string | null>(null)
@@ -66,11 +70,17 @@ function KnowledgeSection({ selectedTopic }: KnowledgeSectionProps) {
           </button>
         </div>
 
-        <Button onClick={() => void handleImportClick()}>Import notes</Button>
+        <Button onClick={() => void handleImportClick()} disabled={mutationsDisabled}>
+          Import notes
+        </Button>
       </div>
 
       <div className="min-h-0 flex-1">
-        <KnowledgeExplorerScreen selectedTopic={selectedTopic} mode={activeTab} />
+        <KnowledgeExplorerScreen
+          selectedTopic={selectedTopic}
+          mode={activeTab}
+          mutationsDisabled={mutationsDisabled}
+        />
       </div>
 
       <IngestProgressDialog

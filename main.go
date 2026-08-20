@@ -20,12 +20,14 @@ import (
 	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
 	"github.com/santaniello/athena/internal/application/onboarding"
 	"github.com/santaniello/athena/internal/application/study"
+	domainllm "github.com/santaniello/athena/internal/domain/llm"
 	"github.com/santaniello/athena/internal/infrastructure/athenahome"
 	"github.com/santaniello/athena/internal/infrastructure/configfile"
 	"github.com/santaniello/athena/internal/infrastructure/openrouter"
 	"github.com/santaniello/athena/internal/infrastructure/profilefile"
 	"github.com/santaniello/athena/internal/infrastructure/session"
 	"github.com/santaniello/athena/internal/infrastructure/sqlite"
+	"github.com/santaniello/athena/internal/infrastructure/vectorstore"
 	"github.com/santaniello/athena/internal/interfaces/desktop"
 )
 
@@ -87,12 +89,19 @@ func main() {
 	knowledgeItems := sqlite.NewKnowledgeRepository(db)
 	knowledgeChunks := sqlite.NewChunkRepository(db)
 	transactor := sqlite.NewSQLTransactor(db)
-	knowledgeService := applicationknowledge.NewService(knowledgeItems, studySessions, studyMessages, llmClient, configStore, knowledgeChunks, transactor)
+	vectorStore := vectorstore.New()
+	indexLoader := applicationknowledge.NewIndexLoader(knowledgeChunks, vectorStore, domainllm.EmbeddingModel)
+	knowledgeService := applicationknowledge.NewService(
+		knowledgeItems, studySessions, studyMessages, llmClient, configStore, knowledgeChunks, transactor,
+		vectorStore, indexLoader,
+	)
 
 	ingestedFiles := sqlite.NewIngestedFileRepository(db)
-	ingestService := applicationingest.NewService(knowledgeChunks, ingestedFiles, knowledgeItems, llmClient, transactor)
+	ingestService := applicationingest.NewService(
+		knowledgeChunks, ingestedFiles, knowledgeItems, llmClient, transactor, vectorStore, indexLoader,
+	)
 
-	app := desktop.NewApp(authService, sessions, onboardingService, profiles, configStore, studyService, folderService, knowledgeService, ingestService, llmClient)
+	app := desktop.NewApp(authService, sessions, onboardingService, profiles, configStore, studyService, folderService, knowledgeService, ingestService, llmClient, indexLoader)
 
 	err = wails.Run(&options.App{
 		Title:            "Athena",
@@ -114,6 +123,13 @@ func main() {
 			if goruntime.GOOS == "linux" {
 				go activateLinuxWindow()
 			}
+		},
+		// Loading begins here, after the frontend is ready to receive the
+		// "knowledge-index:status" event, rather than synchronously before
+		// wails.Run — so the window can render "Loading knowledge index..."
+		// immediately instead of blocking on SQLite decode/normalize first.
+		OnDomReady: func(ctx context.Context) {
+			go app.StartKnowledgeIndex(ctx)
 		},
 		Bind: []interface{}{
 			app,

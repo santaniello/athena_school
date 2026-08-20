@@ -23,21 +23,33 @@ func (_m *MockChunkRepository) EXPECT() *MockChunkRepository_Expecter {
 }
 
 // DeleteByFilePath provides a mock function with given fields: ctx, path
-func (_m *MockChunkRepository) DeleteByFilePath(ctx context.Context, path string) error {
+func (_m *MockChunkRepository) DeleteByFilePath(ctx context.Context, path string) ([]string, error) {
 	ret := _m.Called(ctx, path)
 
 	if len(ret) == 0 {
 		panic("no return value specified for DeleteByFilePath")
 	}
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
+	var r0 []string
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) ([]string, error)); ok {
+		return rf(ctx, path)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) []string); ok {
 		r0 = rf(ctx, path)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
 	}
 
-	return r0
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, path)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // MockChunkRepository_DeleteByFilePath_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteByFilePath'
@@ -59,32 +71,44 @@ func (_c *MockChunkRepository_DeleteByFilePath_Call) Run(run func(ctx context.Co
 	return _c
 }
 
-func (_c *MockChunkRepository_DeleteByFilePath_Call) Return(_a0 error) *MockChunkRepository_DeleteByFilePath_Call {
-	_c.Call.Return(_a0)
+func (_c *MockChunkRepository_DeleteByFilePath_Call) Return(_a0 []string, _a1 error) *MockChunkRepository_DeleteByFilePath_Call {
+	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockChunkRepository_DeleteByFilePath_Call) RunAndReturn(run func(context.Context, string) error) *MockChunkRepository_DeleteByFilePath_Call {
+func (_c *MockChunkRepository_DeleteByFilePath_Call) RunAndReturn(run func(context.Context, string) ([]string, error)) *MockChunkRepository_DeleteByFilePath_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // DeleteByItemID provides a mock function with given fields: ctx, itemID
-func (_m *MockChunkRepository) DeleteByItemID(ctx context.Context, itemID string) error {
+func (_m *MockChunkRepository) DeleteByItemID(ctx context.Context, itemID string) ([]string, error) {
 	ret := _m.Called(ctx, itemID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for DeleteByItemID")
 	}
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
+	var r0 []string
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) ([]string, error)); ok {
+		return rf(ctx, itemID)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) []string); ok {
 		r0 = rf(ctx, itemID)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
 	}
 
-	return r0
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, itemID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // MockChunkRepository_DeleteByItemID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteByItemID'
@@ -106,12 +130,12 @@ func (_c *MockChunkRepository_DeleteByItemID_Call) Run(run func(ctx context.Cont
 	return _c
 }
 
-func (_c *MockChunkRepository_DeleteByItemID_Call) Return(_a0 error) *MockChunkRepository_DeleteByItemID_Call {
-	_c.Call.Return(_a0)
+func (_c *MockChunkRepository_DeleteByItemID_Call) Return(_a0 []string, _a1 error) *MockChunkRepository_DeleteByItemID_Call {
+	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockChunkRepository_DeleteByItemID_Call) RunAndReturn(run func(context.Context, string) error) *MockChunkRepository_DeleteByItemID_Call {
+func (_c *MockChunkRepository_DeleteByItemID_Call) RunAndReturn(run func(context.Context, string) ([]string, error)) *MockChunkRepository_DeleteByItemID_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -174,6 +198,63 @@ func (_c *MockChunkRepository_ListAll_Call) RunAndReturn(run func(context.Contex
 	return _c
 }
 
+// ListCurrent provides a mock function with given fields: ctx, embeddingModel
+func (_m *MockChunkRepository) ListCurrent(ctx context.Context, embeddingModel string) (knowledge.ChunkLoadResult, error) {
+	ret := _m.Called(ctx, embeddingModel)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListCurrent")
+	}
+
+	var r0 knowledge.ChunkLoadResult
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) (knowledge.ChunkLoadResult, error)); ok {
+		return rf(ctx, embeddingModel)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) knowledge.ChunkLoadResult); ok {
+		r0 = rf(ctx, embeddingModel)
+	} else {
+		r0 = ret.Get(0).(knowledge.ChunkLoadResult)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, embeddingModel)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockChunkRepository_ListCurrent_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListCurrent'
+type MockChunkRepository_ListCurrent_Call struct {
+	*mock.Call
+}
+
+// ListCurrent is a helper method to define mock.On call
+//   - ctx context.Context
+//   - embeddingModel string
+func (_e *MockChunkRepository_Expecter) ListCurrent(ctx interface{}, embeddingModel interface{}) *MockChunkRepository_ListCurrent_Call {
+	return &MockChunkRepository_ListCurrent_Call{Call: _e.mock.On("ListCurrent", ctx, embeddingModel)}
+}
+
+func (_c *MockChunkRepository_ListCurrent_Call) Run(run func(ctx context.Context, embeddingModel string)) *MockChunkRepository_ListCurrent_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockChunkRepository_ListCurrent_Call) Return(_a0 knowledge.ChunkLoadResult, _a1 error) *MockChunkRepository_ListCurrent_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockChunkRepository_ListCurrent_Call) RunAndReturn(run func(context.Context, string) (knowledge.ChunkLoadResult, error)) *MockChunkRepository_ListCurrent_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SaveAll provides a mock function with given fields: ctx, chunks
 func (_m *MockChunkRepository) SaveAll(ctx context.Context, chunks []knowledge.Chunk) error {
 	ret := _m.Called(ctx, chunks)
@@ -217,6 +298,67 @@ func (_c *MockChunkRepository_SaveAll_Call) Return(_a0 error) *MockChunkReposito
 }
 
 func (_c *MockChunkRepository_SaveAll_Call) RunAndReturn(run func(context.Context, []knowledge.Chunk) error) *MockChunkRepository_SaveAll_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// UpdateMetadataByItemID provides a mock function with given fields: ctx, itemID, topic, status
+func (_m *MockChunkRepository) UpdateMetadataByItemID(ctx context.Context, itemID string, topic string, status string) ([]knowledge.Chunk, error) {
+	ret := _m.Called(ctx, itemID, topic, status)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateMetadataByItemID")
+	}
+
+	var r0 []knowledge.Chunk
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string) ([]knowledge.Chunk, error)); ok {
+		return rf(ctx, itemID, topic, status)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string) []knowledge.Chunk); ok {
+		r0 = rf(ctx, itemID, topic, status)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]knowledge.Chunk)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, string) error); ok {
+		r1 = rf(ctx, itemID, topic, status)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockChunkRepository_UpdateMetadataByItemID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateMetadataByItemID'
+type MockChunkRepository_UpdateMetadataByItemID_Call struct {
+	*mock.Call
+}
+
+// UpdateMetadataByItemID is a helper method to define mock.On call
+//   - ctx context.Context
+//   - itemID string
+//   - topic string
+//   - status string
+func (_e *MockChunkRepository_Expecter) UpdateMetadataByItemID(ctx interface{}, itemID interface{}, topic interface{}, status interface{}) *MockChunkRepository_UpdateMetadataByItemID_Call {
+	return &MockChunkRepository_UpdateMetadataByItemID_Call{Call: _e.mock.On("UpdateMetadataByItemID", ctx, itemID, topic, status)}
+}
+
+func (_c *MockChunkRepository_UpdateMetadataByItemID_Call) Run(run func(ctx context.Context, itemID string, topic string, status string)) *MockChunkRepository_UpdateMetadataByItemID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(string))
+	})
+	return _c
+}
+
+func (_c *MockChunkRepository_UpdateMetadataByItemID_Call) Return(_a0 []knowledge.Chunk, _a1 error) *MockChunkRepository_UpdateMetadataByItemID_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockChunkRepository_UpdateMetadataByItemID_Call) RunAndReturn(run func(context.Context, string, string, string) ([]knowledge.Chunk, error)) *MockChunkRepository_UpdateMetadataByItemID_Call {
 	_c.Call.Return(run)
 	return _c
 }

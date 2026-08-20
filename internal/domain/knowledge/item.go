@@ -52,6 +52,22 @@ type Item struct {
 	UpdatedAt       time.Time
 }
 
+// NormalizeTopic trims topic's edges and rejects an empty result with
+// ErrTopicRequired. Case, accents, and internal whitespace are preserved —
+// this phase deliberately keeps Topic identity case-sensitive (see
+// specs/phases/phase-02-knowledge-engine/04-vector-search.md); a canonical,
+// case-insensitive topic key is a separate, not-yet-implemented spec. Every
+// knowledge write boundary that sets Topic calls this instead of trimming
+// ad hoc, so the value a Chunk's exact-match filters see is always
+// consistent with the value an Item's own field holds.
+func NormalizeTopic(topic string) (string, error) {
+	trimmed := strings.TrimSpace(topic)
+	if trimmed == "" {
+		return "", ErrTopicRequired
+	}
+	return trimmed, nil
+}
+
 // Validate checks the fields required for a useful knowledge item.
 func (i Item) Validate() error {
 	if strings.TrimSpace(i.Topic) == "" {

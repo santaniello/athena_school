@@ -70,6 +70,7 @@ const emptySummary: IngestSummary = {
   filesFailed: 0,
   chunksCreated: 24,
   failures: [],
+  indexWarnings: [],
 }
 
 describe('IngestProgressDialog', () => {
@@ -157,6 +158,24 @@ describe('IngestProgressDialog', () => {
     // Then the failing path and its reason are both shown
     expect(screen.getByText('notes/broken.md')).toBeInTheDocument()
     expect(screen.getByText(/invalid utf-8/)).toBeInTheDocument()
+  })
+
+  it('lists files that imported successfully but need a knowledge index retry', () => {
+    // Given a dialog mid-import
+    const events = setupSubscriptions()
+    vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
+    render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />)
+
+    // When the import finishes with one file that persisted but whose
+    // index reconciliation failed
+    events.emitDone({
+      ...emptySummary,
+      indexWarnings: [{ path: 'notes/go.md', reason: 'store exploded' }],
+    })
+
+    // Then the file is listed, distinctly from a real failure
+    expect(screen.getByText('notes/go.md')).toBeInTheDocument()
+    expect(screen.getByText(/retry the knowledge index/)).toBeInTheDocument()
   })
 
   it('shows the error state when ingest:error fires instead of ingest:done', async () => {

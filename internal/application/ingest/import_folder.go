@@ -38,6 +38,11 @@ type Summary struct {
 	FilesFailed   int
 	ChunksCreated int
 	Failures      []FileFailure
+	// IndexWarnings lists files that persisted successfully (ingested_files
+	// already recorded their new mtime/model, so a repeat import correctly
+	// skips them) but whose in-memory vector index reconciliation failed —
+	// distinct from Failures, which are durable write failures.
+	IndexWarnings []FileFailure
 }
 
 // ImportFolder walks every .md/.txt file under root (an fs.FS — the
@@ -51,6 +56,15 @@ type Summary struct {
 // a non-nil error, the walk stops immediately and ImportFolder returns the
 // Summary accumulated so far alongside that error.
 func (s *Service) ImportFolder(ctx context.Context, root fs.FS, onProgress func(Progress) error) (Summary, error) {
+	// Held for the entire walk, not just checked once up front — a retry
+	// starting mid-import must wait for the whole import to finish rather
+	// than interleaving its ListCurrent/ReplaceAll with individual files'
+	// transaction commits and VectorStore reconciliation.
+	if err := s.index.BeginMutation(); err != nil {
+		return Summary{}, err
+	}
+	defer s.index.EndMutation()
+
 	candidates, err := collectCandidates(root)
 	if err != nil {
 		return Summary{}, fmt.Errorf("ingest: scanning folder: %w", err)
@@ -90,13 +104,22 @@ func (s *Service) ImportFolder(ctx context.Context, root fs.FS, onProgress func(
 		}
 
 		chunksCreated, ingestErr := s.ingestFile(ctx, root, filePath, mtime, prev, hasPrev)
-		if ingestErr != nil {
-			summary.FilesFailed++
-			summary.Failures = append(summary.Failures, FileFailure{Path: filePath, Reason: ingestErr.Error()})
-		} else {
+		var indexWarning *IndexingWarning
+		switch {
+		case errors.As(ingestErr, &indexWarning):
+			// The durable write already succeeded — ingested_files recorded
+			// the new mtime/model — so this counts as ingested, not failed.
 			summary.FilesIngested++
 			summary.ChunksCreated += chunksCreated
 			progress.ChunksCreated += chunksCreated
+			summary.IndexWarnings = append(summary.IndexWarnings, FileFailure{Path: filePath, Reason: indexWarning.Error()})
+		case ingestErr == nil:
+			summary.FilesIngested++
+			summary.ChunksCreated += chunksCreated
+			progress.ChunksCreated += chunksCreated
+		default:
+			summary.FilesFailed++
+			summary.Failures = append(summary.Failures, FileFailure{Path: filePath, Reason: ingestErr.Error()})
 		}
 
 		progress.FilesProcessed++
@@ -166,7 +189,11 @@ func (s *Service) ingestFile(
 		candidates = ChunkText(content)
 	}
 
-	topic, concept, definition := BuildShadowItem(filePath, content, candidates)
+	rawTopic, concept, definition := BuildShadowItem(filePath, content, candidates)
+	topic, err := domainknowledge.NormalizeTopic(rawTopic)
+	if err != nil {
+		return 0, fmt.Errorf("deriving topic: %w", err)
+	}
 
 	itemID := uuid.NewString()
 	if hasPrev {
@@ -195,8 +222,11 @@ func (s *Service) ingestFile(
 		}
 	}
 
+	var removedChunkIDs []string
 	err = s.tx.WithinTx(ctx, func(ctx context.Context) error {
-		if err := s.chunks.DeleteByFilePath(ctx, filePath); err != nil {
+		var err error
+		removedChunkIDs, err = s.chunks.DeleteByFilePath(ctx, filePath)
+		if err != nil {
 			return err
 		}
 		if err := s.chunks.SaveAll(ctx, chunks); err != nil {
@@ -215,6 +245,18 @@ func (s *Service) ingestFile(
 	})
 	if err != nil {
 		return 0, fmt.Errorf("replacing chunks and item: %w", err)
+	}
+
+	// The old memory entries are removed before the replacements are
+	// added, so an Add failure can temporarily omit content but can never
+	// keep serving stale content.
+	reconcileCtx, cancel := reconcileContext()
+	defer cancel()
+	if err := s.store.Remove(reconcileCtx, removedChunkIDs); err != nil {
+		return len(chunks), &IndexingWarning{Err: err}
+	}
+	if err := s.store.Add(reconcileCtx, chunks); err != nil {
+		return len(chunks), &IndexingWarning{Err: err}
 	}
 	return len(chunks), nil
 }

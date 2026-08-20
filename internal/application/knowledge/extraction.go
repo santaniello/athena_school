@@ -2,7 +2,6 @@ package knowledge
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -70,10 +69,14 @@ func (s *Service) SaveAndApprove(ctx context.Context, items []domainknowledge.It
 func (s *Service) saveCandidates(ctx context.Context, items []domainknowledge.Item, status string) ([]int, error) {
 	savedIndices := make([]int, 0, len(items))
 	for index, input := range items {
+		topic, topicErr := domainknowledge.NormalizeTopic(input.Topic)
+		if topicErr != nil {
+			continue
+		}
 		now := time.Now().UTC()
 		item := domainknowledge.Item{
 			ID:              uuid.NewString(),
-			Topic:           strings.TrimSpace(input.Topic),
+			Topic:           topic,
 			Concept:         truncateString(input.Concept, maxConceptChars),
 			Definition:      truncateString(input.Definition, maxDefinitionChars),
 			Properties:      normalizeList(input.Properties),

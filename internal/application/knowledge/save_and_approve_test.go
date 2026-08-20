@@ -27,7 +27,7 @@ func TestSaveAndApprove_revalidatesAndPersistsDirectlyAsApproved(t *testing.T) {
 			item.Source == domainknowledge.SourceAthena && item.Status == domainknowledge.StatusApproved &&
 			!item.CreatedAt.IsZero() && item.CreatedAt.Equal(item.UpdatedAt)
 	})).Return(nil).Once()
-	service := NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil)
+	service := NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil)
 	input := []domainknowledge.Item{
 		{ID: "client-id", Topic: " Go ", Concept: " Channels ", Definition: " Typed conduits. ", Source: domainknowledge.SourceImportedDoc, Status: domainknowledge.StatusDraft},
 		{Topic: "Go", Concept: "Invalid", Definition: "   "},
@@ -48,7 +48,7 @@ func TestSaveAndApprove_stopsAtRepositoryFailureAndReturnsSavedIndices(t *testin
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool { return item.Concept == "first" })).Return(nil).Once()
 	saveErr := errors.New("database locked")
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool { return item.Concept == "second" })).Return(saveErr).Once()
-	service := NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil)
+	service := NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil)
 	input := []domainknowledge.Item{
 		{Topic: "Go", Concept: "first", Definition: "one"},
 		{Topic: "Go", Concept: "second", Definition: "two"},
