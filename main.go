@@ -20,12 +20,14 @@ import (
 	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
 	"github.com/santaniello/athena/internal/application/onboarding"
 	"github.com/santaniello/athena/internal/application/study"
+	domainllm "github.com/santaniello/athena/internal/domain/llm"
 	"github.com/santaniello/athena/internal/infrastructure/athenahome"
 	"github.com/santaniello/athena/internal/infrastructure/configfile"
 	"github.com/santaniello/athena/internal/infrastructure/openrouter"
 	"github.com/santaniello/athena/internal/infrastructure/profilefile"
 	"github.com/santaniello/athena/internal/infrastructure/session"
 	"github.com/santaniello/athena/internal/infrastructure/sqlite"
+	"github.com/santaniello/athena/internal/infrastructure/vectorstore"
 	"github.com/santaniello/athena/internal/interfaces/desktop"
 )
 
@@ -87,7 +89,12 @@ func main() {
 	knowledgeItems := sqlite.NewKnowledgeRepository(db)
 	knowledgeChunks := sqlite.NewChunkRepository(db)
 	transactor := sqlite.NewSQLTransactor(db)
-	knowledgeService := applicationknowledge.NewService(knowledgeItems, studySessions, studyMessages, llmClient, configStore, knowledgeChunks, transactor)
+	vectorStore := vectorstore.New()
+	indexLoader := applicationknowledge.NewIndexLoader(knowledgeChunks, vectorStore, domainllm.EmbeddingModel)
+	knowledgeService := applicationknowledge.NewService(
+		knowledgeItems, studySessions, studyMessages, llmClient, configStore, knowledgeChunks, transactor,
+		vectorStore, indexLoader,
+	)
 
 	ingestedFiles := sqlite.NewIngestedFileRepository(db)
 	ingestService := applicationingest.NewService(knowledgeChunks, ingestedFiles, knowledgeItems, llmClient, transactor)

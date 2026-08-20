@@ -25,9 +25,20 @@ type ItemFields struct {
 // The read and the write run inside one transaction so a concurrent
 // Approve or Deprecate on the same id can never have its transition
 // overwritten by this call reading a stale Status in the gap (see
-// Transactor).
+// Transactor). The same transaction updates every owned chunk's topic
+// metadata (editing an imported note's concept/definition never touches
+// its raw chunk embeddings — only topic/status metadata mirrors the Item);
+// after commit, the VectorStore is reconciled to match without a new
+// embedding call. A post-commit reconciliation failure never rolls back
+// the durable update — it comes back as an *IndexingWarning alongside the
+// real, updated item (see IndexingWarning).
 func (s *Service) UpdateItem(ctx context.Context, id string, fields ItemFields) (domainknowledge.Item, error) {
+	if err := s.index.CheckMutationAllowed(); err != nil {
+		return domainknowledge.Item{}, err
+	}
+
 	var item domainknowledge.Item
+	var updatedChunks []domainknowledge.Chunk
 	err := s.tx.WithinTx(ctx, func(ctx context.Context) error {
 		var err error
 		item, err = s.items.GetByID(ctx, id)
@@ -52,10 +63,20 @@ func (s *Service) UpdateItem(ctx context.Context, id string, fields ItemFields) 
 		}
 		item.UpdatedAt = time.Now().UTC()
 
-		return s.items.Update(ctx, item)
+		if err := s.items.Update(ctx, item); err != nil {
+			return err
+		}
+		updatedChunks, err = s.chunks.UpdateMetadataByItemID(ctx, id, item.Topic, item.Status)
+		return err
 	})
 	if err != nil {
 		return domainknowledge.Item{}, err
+	}
+
+	reconcileCtx, cancel := reconcileContext()
+	defer cancel()
+	if err := s.store.Add(reconcileCtx, updatedChunks); err != nil {
+		return item, &IndexingWarning{Err: err}
 	}
 	return item, nil
 }
