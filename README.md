@@ -104,7 +104,7 @@ npm run test:coverage # vitest run --coverage (80% threshold)
 Coverage only proves a line *ran* during a test, not that the test would *notice* a bug on that line. Mutation testing checks this: it introduces small, deliberate bugs ("mutants" — e.g. `>` becomes `>=`) into the code and re-runs the tests against each one. A mutant that survives (all tests still pass) means the test asserts too little.
 
 ```bash
-make mutation-go        # Gremlins, scoped to internal/domain and internal/application
+make mutation-go        # Gremlins, scoped to internal/domain, internal/application, and internal/infrastructure/vectorstore
 make mutation-frontend  # StrykerJS, scoped to frontend/src
 ```
 
@@ -218,12 +218,13 @@ All user data is stored on-device at rest:
 ├── config.yaml        # OpenRouter key and knowledge-extraction limit
 ├── profile.json       # User profile (name, area, level, goals)
 ├── session.json       # Auth token cache
-├── athena.db          # SQLite (sessions, knowledge, flashcards, progress)
-├── vectors/           # Local embeddings
+├── athena.db          # SQLite (sessions, knowledge, flashcards, progress, embeddings)
 └── logs/              # Structured execution logs
 ```
 
 The auth server only manages accounts and licenses. Your notes and knowledge base never leave your machine. When you explicitly click **Extract knowledge**, Athena sends the relevant session transcript to OpenRouter so its configured language model can propose draft knowledge items. Nothing is sent for extraction automatically, and candidates are stored locally only after you choose which drafts to save.
+
+Embeddings live only in `athena.db` (`knowledge_chunks.embedding`, a packed float32 BLOB) — there is no separate `~/.athena/vectors/` directory. On launch, Athena loads the current chunks into an in-process, pure-Go cosine-similarity index (`internal/infrastructure/vectorstore`) in the background, so the window renders immediately behind a "Loading knowledge index..." screen instead of blocking on it; SQLite stays the single source of truth, and the in-memory index is a disposable cache rebuilt from it on every launch (and on demand via **Retry**, from the Knowledge section, if the initial load fails or a chunk gets isolated). See [ADR-004](specs/decisions/ADR-004-local-vector-store.md).
 
 ---
 
@@ -240,3 +241,5 @@ Athena is licensed under the [Business Source License 1.1](LICENSE). You may use
 - [Phase Specs](specs/phases/README.md)
 - [ADR-001 — Hexagonal Architecture](specs/decisions/ADR-001-hexagonal-architecture.md)
 - [ADR-002 — Mutation Testing](specs/decisions/ADR-002-mutation-testing.md)
+- [ADR-003 — Mocking Strategy](specs/decisions/ADR-003-mocking-strategy.md)
+- [ADR-004 — Local Vector Store](specs/decisions/ADR-004-local-vector-store.md)
