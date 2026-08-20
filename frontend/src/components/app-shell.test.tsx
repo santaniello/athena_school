@@ -529,6 +529,40 @@ describe('AppShell', () => {
     expect(screen.getByRole('button', { name: 'Home' })).not.toHaveAttribute('aria-current')
   })
 
+  it('shows the topic tree in the sidebar only while on the Knowledge section, exactly once', async () => {
+    // Given the app shell mounts on Home
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+
+    // Then the topic tree is not shown yet
+    expect(screen.queryByText('All topics')).not.toBeInTheDocument()
+
+    // When selecting Knowledge
+    await user.click(screen.getByRole('button', { name: 'Knowledge' }))
+
+    // Then the tree appears, exactly once — not once per sidebar nav row
+    expect(await screen.findAllByText('All topics')).toHaveLength(1)
+
+    // When navigating away to a different section
+    await user.click(screen.getByRole('button', { name: 'Documentation' }))
+
+    // Then the tree is gone again
+    expect(screen.queryByText('All topics')).not.toBeInTheDocument()
+  })
+
+  it('renders the sidebar safely, with no name shown yet, before the profile has loaded', async () => {
+    // Given the profile fetch never resolves during this assertion
+    vi.mocked(GetProfile).mockReturnValueOnce(new Promise(() => {}))
+    const { container } = render(<AppShell onLogout={vi.fn()} />)
+
+    // Then the shell still renders past the knowledge-index gate, with an
+    // empty avatar/name instead of crashing on the missing profile
+    expect(await screen.findByRole('heading', { name: 'Home', level: 1 })).toBeInTheDocument()
+    const avatar = container.querySelector('.text-primary-foreground') as HTMLElement
+    expect(avatar.textContent).toBe('')
+  })
+
   it('renders the sidebar avatar initial as the uppercase first letter of the profile name', async () => {
     // Given the app shell mounts with a profile named "Felipe"
     const { container } = renderShell()
