@@ -19,6 +19,8 @@ export function ExtractKnowledge(arg1:string,arg2:boolean):Promise<desktop.Extra
 
 export function GetKnowledgeExtractionSettings():Promise<desktop.KnowledgeExtractionSettings>;
 
+export function GetKnowledgeIndexStatus():Promise<desktop.IndexStatusResult>;
+
 export function GetProfile():Promise<desktop.UserProfileInput>;
 
 export function HasLocalSession():Promise<boolean>;
@@ -55,6 +57,8 @@ export function ResetLocalAccount(arg1:string):Promise<void>;
 
 export function ResumeStudySession(arg1:string):Promise<desktop.StudySessionHistoryResult>;
 
+export function RetryKnowledgeIndex():Promise<desktop.IndexStatusResult>;
+
 export function SaveAndApproveExtractedKnowledge(arg1:Array<desktop.KnowledgeItemInput>):Promise<desktop.KnowledgeSaveResult>;
 
 export function SaveExtractedKnowledge(arg1:Array<desktop.KnowledgeItemInput>):Promise<desktop.KnowledgeSaveResult>;
@@ -64,6 +68,8 @@ export function SaveOpenRouterKey(arg1:string):Promise<void>;
 export function SaveProfile(arg1:desktop.UserProfileInput):Promise<void>;
 
 export function SendStudyMessage(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function StartKnowledgeIndex(arg1:context.Context):Promise<void>;
 
 export function StartStudySession(arg1:string,arg2:string):Promise<desktop.StudySessionResult>;
 

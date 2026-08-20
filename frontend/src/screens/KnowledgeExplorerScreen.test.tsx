@@ -62,7 +62,9 @@ describe('KnowledgeExplorerScreen', () => {
     ])
 
     // When rendering the Explorer for all topics
-    render(<KnowledgeExplorerScreen selectedTopic={null} mode="explorer" />)
+    render(
+      <KnowledgeExplorerScreen selectedTopic={null} mode="explorer" mutationsDisabled={false} />,
+    )
 
     // Then both appear under the same "Go" group, each with its own source badge
     await screen.findByText('Channels')
@@ -78,7 +80,13 @@ describe('KnowledgeExplorerScreen', () => {
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
 
     // When rendering the Explorer for a specific topic
-    render(<KnowledgeExplorerScreen selectedTopic="Kubernetes" mode="explorer" />)
+    render(
+      <KnowledgeExplorerScreen
+        selectedTopic="Kubernetes"
+        mode="explorer"
+        mutationsDisabled={false}
+      />,
+    )
 
     // Then it fetches exactly that topic with no status constraint (empty = all)
     await waitFor(() => expect(listKnowledgeItems).toHaveBeenCalledWith('Kubernetes', ''))
@@ -95,12 +103,20 @@ describe('KnowledgeExplorerScreen', () => {
     vi.mocked(listKnowledgeItems).mockResolvedValueOnce([
       testItem({ id: 'k', concept: 'Pods', topic: 'Kubernetes' }),
     ])
-    const { rerender } = render(<KnowledgeExplorerScreen selectedTopic="Go" mode="explorer" />)
+    const { rerender } = render(
+      <KnowledgeExplorerScreen selectedTopic="Go" mode="explorer" mutationsDisabled={false} />,
+    )
     await waitFor(() => expect(listKnowledgeItems).toHaveBeenCalledWith('Go', ''))
 
     // When the topic changes before that first request resolves, and the
     // new request settles first
-    rerender(<KnowledgeExplorerScreen selectedTopic="Kubernetes" mode="explorer" />)
+    rerender(
+      <KnowledgeExplorerScreen
+        selectedTopic="Kubernetes"
+        mode="explorer"
+        mutationsDisabled={false}
+      />,
+    )
     await screen.findByText('Pods')
 
     // Then the stale "Go" response arriving afterward is ignored instead
@@ -127,7 +143,9 @@ describe('KnowledgeExplorerScreen', () => {
     vi.mocked(listKnowledgeItems).mockResolvedValueOnce([
       testItem({ id: 'r', concept: 'Refetched' }),
     ])
-    render(<KnowledgeExplorerScreen selectedTopic={null} mode="explorer" />)
+    render(
+      <KnowledgeExplorerScreen selectedTopic={null} mode="explorer" mutationsDisabled={false} />,
+    )
     await waitFor(() => expect(listKnowledgeItems).toHaveBeenCalledTimes(1))
 
     // When a notes import completes before the initial load resolves,
@@ -156,7 +174,9 @@ describe('KnowledgeExplorerScreen', () => {
       }),
     )
     const user = userEvent.setup()
-    render(<KnowledgeExplorerScreen selectedTopic={null} mode="explorer" />)
+    render(
+      <KnowledgeExplorerScreen selectedTopic={null} mode="explorer" mutationsDisabled={false} />,
+    )
     await user.click(await screen.findByRole('combobox', { name: 'Status:' }))
     await user.click(await screen.findByRole('option', { name: 'Draft' }))
     await user.click(await screen.findByText('Channels'))
@@ -182,7 +202,7 @@ describe('KnowledgeExplorerScreen', () => {
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
 
     // When rendering it
-    render(<KnowledgeExplorerScreen selectedTopic={null} mode="review" />)
+    render(<KnowledgeExplorerScreen selectedTopic={null} mode="review" mutationsDisabled={false} />)
 
     // Then it always queries status=draft and offers no status dropdown
     await waitFor(() => expect(listKnowledgeItems).toHaveBeenCalledWith('', 'draft'))
@@ -198,7 +218,9 @@ describe('KnowledgeExplorerScreen', () => {
     })
     vi.mocked(listKnowledgeItems).mockRejectedValueOnce(new Error('offline'))
     vi.mocked(listKnowledgeItems).mockResolvedValueOnce([testItem()])
-    render(<KnowledgeExplorerScreen selectedTopic={null} mode="explorer" />)
+    render(
+      <KnowledgeExplorerScreen selectedTopic={null} mode="explorer" mutationsDisabled={false} />,
+    )
     expect(await screen.findByText('Failed to load knowledge items.')).toBeInTheDocument()
 
     // When a notes import completes and the reload succeeds
@@ -220,7 +242,9 @@ describe('KnowledgeExplorerScreen', () => {
       return vi.fn()
     })
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
-    render(<KnowledgeExplorerScreen selectedTopic={null} mode="explorer" />)
+    render(
+      <KnowledgeExplorerScreen selectedTopic={null} mode="explorer" mutationsDisabled={false} />,
+    )
     await waitFor(() => expect(listKnowledgeItems).toHaveBeenCalledTimes(1))
 
     // When an import completes
@@ -237,7 +261,9 @@ describe('KnowledgeExplorerScreen', () => {
     vi.mocked(listKnowledgeItems).mockResolvedValueOnce([draftItem])
     vi.mocked(approveKnowledgeItem).mockResolvedValueOnce({ ...draftItem, status: 'approved' })
     const user = userEvent.setup()
-    render(<KnowledgeExplorerScreen selectedTopic={null} mode="explorer" />)
+    render(
+      <KnowledgeExplorerScreen selectedTopic={null} mode="explorer" mutationsDisabled={false} />,
+    )
     await user.click(await screen.findByText('Channels'))
 
     // Then Approve is offered, Deprecate is not
@@ -262,7 +288,7 @@ describe('KnowledgeExplorerScreen', () => {
     vi.mocked(listKnowledgeItems).mockResolvedValueOnce([draftItem])
     vi.mocked(approveKnowledgeItem).mockResolvedValueOnce({ ...draftItem, status: 'approved' })
     const user = userEvent.setup()
-    render(<KnowledgeExplorerScreen selectedTopic={null} mode="review" />)
+    render(<KnowledgeExplorerScreen selectedTopic={null} mode="review" mutationsDisabled={false} />)
     await user.click(await screen.findByText('Channels'))
 
     // When approving it
@@ -284,7 +310,9 @@ describe('KnowledgeExplorerScreen', () => {
       status: 'deprecated',
     })
     const user = userEvent.setup()
-    render(<KnowledgeExplorerScreen selectedTopic={null} mode="explorer" />)
+    render(
+      <KnowledgeExplorerScreen selectedTopic={null} mode="explorer" mutationsDisabled={false} />,
+    )
     await user.click(await screen.findByText('Channels'))
 
     // When deprecating it
@@ -304,7 +332,9 @@ describe('KnowledgeExplorerScreen', () => {
     vi.mocked(listKnowledgeItems).mockResolvedValueOnce([item])
     vi.mocked(updateKnowledgeItem).mockResolvedValueOnce({ ...item, concept: 'Buffered channels' })
     const user = userEvent.setup()
-    render(<KnowledgeExplorerScreen selectedTopic={null} mode="explorer" />)
+    render(
+      <KnowledgeExplorerScreen selectedTopic={null} mode="explorer" mutationsDisabled={false} />,
+    )
     await user.click(await screen.findByText('Channels'))
 
     // When editing the concept and saving
@@ -337,7 +367,9 @@ describe('KnowledgeExplorerScreen', () => {
     vi.mocked(listKnowledgeItems).mockResolvedValueOnce([item])
     vi.mocked(deleteKnowledgeItem).mockResolvedValueOnce()
     const user = userEvent.setup()
-    render(<KnowledgeExplorerScreen selectedTopic={null} mode="explorer" />)
+    render(
+      <KnowledgeExplorerScreen selectedTopic={null} mode="explorer" mutationsDisabled={false} />,
+    )
     await user.click(await screen.findByText('Channels'))
 
     // When clicking Delete
@@ -362,7 +394,13 @@ describe('KnowledgeExplorerScreen', () => {
     vi.mocked(listKnowledgeItems).mockResolvedValueOnce([testItem({ topic: 'Kubernetes' })])
 
     // When rendering with that topic selected
-    render(<KnowledgeExplorerScreen selectedTopic="Kubernetes" mode="explorer" />)
+    render(
+      <KnowledgeExplorerScreen
+        selectedTopic="Kubernetes"
+        mode="explorer"
+        mutationsDisabled={false}
+      />,
+    )
 
     // Then the request carries that topic constraint
     await waitFor(() => expect(listKnowledgeItems).toHaveBeenCalledWith('Kubernetes', ''))
@@ -374,9 +412,28 @@ describe('KnowledgeExplorerScreen', () => {
     vi.mocked(listKnowledgeItems).mockResolvedValueOnce([])
 
     // When rendering the Explorer
-    render(<KnowledgeExplorerScreen selectedTopic={null} mode="explorer" />)
+    render(
+      <KnowledgeExplorerScreen selectedTopic={null} mode="explorer" mutationsDisabled={false} />,
+    )
 
     // Then the empty state is shown
     expect(await screen.findByText('No items found.')).toBeInTheDocument()
+  })
+
+  it('disables every mutation action while mutationsDisabled is true, since the backend guard rejects them during a retry', async () => {
+    // Given a selected draft item, rendered while the index is retrying
+    stubIngestDone()
+    const item = testItem({ status: 'draft' })
+    vi.mocked(listKnowledgeItems).mockResolvedValueOnce([item])
+    const user = userEvent.setup()
+    render(
+      <KnowledgeExplorerScreen selectedTopic={null} mode="explorer" mutationsDisabled={true} />,
+    )
+    await user.click(await screen.findByText('Channels'))
+
+    // Then Approve, Edit and Delete are all disabled
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
   })
 })

@@ -20,6 +20,10 @@ export interface IngestSummary {
   filesFailed: number
   chunksCreated: number
   failures: IngestFailure[]
+  // Files that persisted successfully (counted in filesIngested, never in
+  // filesFailed) but whose in-memory vector index reconciliation failed. A
+  // full Retry from the Knowledge section self-heals these from SQLite.
+  indexWarnings: IngestFailure[]
 }
 
 // pickNotesFolder opens the OS folder picker and returns the chosen path,

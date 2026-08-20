@@ -34,6 +34,10 @@ export function GetKnowledgeExtractionSettings() {
   return window['go']['desktop']['App']['GetKnowledgeExtractionSettings']();
 }
 
+export function GetKnowledgeIndexStatus() {
+  return window['go']['desktop']['App']['GetKnowledgeIndexStatus']();
+}
+
 export function GetProfile() {
   return window['go']['desktop']['App']['GetProfile']();
 }
@@ -106,6 +110,10 @@ export function ResumeStudySession(arg1) {
   return window['go']['desktop']['App']['ResumeStudySession'](arg1);
 }
 
+export function RetryKnowledgeIndex() {
+  return window['go']['desktop']['App']['RetryKnowledgeIndex']();
+}
+
 export function SaveAndApproveExtractedKnowledge(arg1) {
   return window['go']['desktop']['App']['SaveAndApproveExtractedKnowledge'](arg1);
 }
@@ -124,6 +132,10 @@ export function SaveProfile(arg1) {
 
 export function SendStudyMessage(arg1, arg2, arg3) {
   return window['go']['desktop']['App']['SendStudyMessage'](arg1, arg2, arg3);
+}
+
+export function StartKnowledgeIndex(arg1) {
+  return window['go']['desktop']['App']['StartKnowledgeIndex'](arg1);
 }
 
 export function StartStudySession(arg1, arg2) {

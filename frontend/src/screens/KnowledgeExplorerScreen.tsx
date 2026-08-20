@@ -34,6 +34,8 @@ interface KnowledgeExplorerScreenProps {
   // 'review' forces the status filter to draft and hides the picker — the
   // review-queue shortcut described in the Explorer/Review tabs.
   mode: 'explorer' | 'review'
+  // True while the knowledge index is retrying — see KnowledgeSectionProps.
+  mutationsDisabled: boolean
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -85,7 +87,11 @@ function FieldList({ label, values }: { label: string; values: string[] }) {
   )
 }
 
-function KnowledgeExplorerScreen({ selectedTopic, mode }: KnowledgeExplorerScreenProps) {
+function KnowledgeExplorerScreen({
+  selectedTopic,
+  mode,
+  mutationsDisabled,
+}: KnowledgeExplorerScreenProps) {
   const [items, setItems] = useState<KnowledgeItem[]>([])
   const [statusFilter, setStatusFilter] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -358,17 +364,34 @@ function KnowledgeExplorerScreen({ selectedTopic, mode }: KnowledgeExplorerScree
 
               <div className="flex flex-wrap gap-2 pt-2">
                 {selectedItem.status === 'draft' && (
-                  <Button onClick={() => void handleApprove(selectedItem)}>Approve</Button>
+                  <Button
+                    onClick={() => void handleApprove(selectedItem)}
+                    disabled={mutationsDisabled}
+                  >
+                    Approve
+                  </Button>
                 )}
                 {selectedItem.status === 'approved' && (
-                  <Button variant="outline" onClick={() => void handleDeprecate(selectedItem)}>
+                  <Button
+                    variant="outline"
+                    onClick={() => void handleDeprecate(selectedItem)}
+                    disabled={mutationsDisabled}
+                  >
                     Deprecate
                   </Button>
                 )}
-                <Button variant="outline" onClick={() => startEditing(selectedItem)}>
+                <Button
+                  variant="outline"
+                  onClick={() => startEditing(selectedItem)}
+                  disabled={mutationsDisabled}
+                >
                   Edit
                 </Button>
-                <Button variant="destructive" onClick={() => setDeletingItem(selectedItem)}>
+                <Button
+                  variant="destructive"
+                  onClick={() => setDeletingItem(selectedItem)}
+                  disabled={mutationsDisabled}
+                >
                   Delete
                 </Button>
               </div>

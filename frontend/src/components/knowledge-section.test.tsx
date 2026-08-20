@@ -44,7 +44,7 @@ describe('KnowledgeSection', () => {
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
 
     // When rendering the section
-    render(<KnowledgeSection selectedTopic={null} />)
+    render(<KnowledgeSection selectedTopic={null} mutationsDisabled={false} />)
 
     // Then Explorer is the active tab and it queries with no status constraint
     expect(screen.getByRole('tab', { name: 'Explorer' })).toHaveAttribute('aria-selected', 'true')
@@ -55,7 +55,7 @@ describe('KnowledgeSection', () => {
     // Given the section rendered on Explorer
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
     const user = userEvent.setup()
-    render(<KnowledgeSection selectedTopic={null} />)
+    render(<KnowledgeSection selectedTopic={null} mutationsDisabled={false} />)
 
     // When switching to Review
     await user.click(screen.getByRole('tab', { name: 'Review' }))
@@ -74,7 +74,7 @@ describe('KnowledgeSection', () => {
     )
 
     // When rendering the section
-    render(<KnowledgeSection selectedTopic={null} />)
+    render(<KnowledgeSection selectedTopic={null} mutationsDisabled={false} />)
 
     // Then the Review tab carries a badge with that count
     expect(await screen.findByText('2')).toBeInTheDocument()
@@ -85,7 +85,7 @@ describe('KnowledgeSection', () => {
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
 
     // When rendering the section
-    render(<KnowledgeSection selectedTopic={null} />)
+    render(<KnowledgeSection selectedTopic={null} mutationsDisabled={false} />)
 
     // Then the Review tab carries no count badge
     await waitFor(() => expect(listKnowledgeItems).toHaveBeenCalled())
@@ -100,7 +100,7 @@ describe('KnowledgeSection', () => {
     vi.mocked(pickNotesFolder).mockResolvedValueOnce('/home/user/notes')
     vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
     const user = userEvent.setup()
-    render(<KnowledgeSection selectedTopic={null} />)
+    render(<KnowledgeSection selectedTopic={null} mutationsDisabled={false} />)
 
     // When clicking "Import notes"
     await user.click(screen.getByRole('button', { name: 'Import notes' }))
@@ -115,7 +115,7 @@ describe('KnowledgeSection', () => {
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
     vi.mocked(pickNotesFolder).mockResolvedValueOnce('')
     const user = userEvent.setup()
-    render(<KnowledgeSection selectedTopic={null} />)
+    render(<KnowledgeSection selectedTopic={null} mutationsDisabled={false} />)
 
     // When clicking "Import notes"
     await user.click(screen.getByRole('button', { name: 'Import notes' }))

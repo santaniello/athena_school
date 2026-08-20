@@ -142,6 +142,21 @@ export function IngestProgressDialog({ open, folderPath, onClose }: IngestProgre
                 ))}
               </div>
             )}
+            {summary.indexWarnings.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">
+                  Imported, but not yet searchable — retry the knowledge index from the Knowledge
+                  section to fix this:
+                </p>
+                <div className="thin-scroll max-h-40 space-y-1 overflow-y-auto rounded-lg border p-2">
+                  {summary.indexWarnings.map((warning) => (
+                    <p key={warning.path} className="text-xs text-muted-foreground">
+                      <span className="font-medium">{warning.path}</span>
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
