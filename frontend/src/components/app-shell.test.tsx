@@ -846,8 +846,9 @@ describe('AppShell knowledge index lifecycle', () => {
     expect(await screen.findByRole('button', { name: 'Home' })).toBeInTheDocument()
 
     // And the stale initial query resolves afterward with an older status
-    act(() => {
+    await act(async () => {
       resolveInitial({ state: 'loading', hasSnapshot: false, issues: [], lastError: '' })
+      await Promise.resolve()
     })
 
     // Then the newer event's state is not overwritten by the late response
