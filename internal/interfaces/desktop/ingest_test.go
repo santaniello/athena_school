@@ -35,6 +35,7 @@ func newTestIngestApp(
 	ingestedFiles domainknowledge.IngestedFileRepository,
 	items domainknowledge.Repository,
 	llm domainllm.Provider,
+	store domainknowledge.VectorStore,
 ) (*App, *capturedIngestEvents) {
 	t.Helper()
 	tx := ingestmocks.NewMockTransactor(t)
@@ -42,7 +43,11 @@ func newTestIngestApp(
 		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error {
 			return fn(ctx)
 		}).Maybe()
-	ingestService := applicationingest.NewService(chunks, ingestedFiles, items, llm, tx)
+	guard := ingestmocks.NewMockIndexGuard(t)
+	// .Maybe(): a path that fails before ever reaching ImportFolder (e.g. a
+	// folder that doesn't exist) never calls the guard at all.
+	guard.EXPECT().CheckMutationAllowed().Return(nil).Maybe()
+	ingestService := applicationingest.NewService(chunks, ingestedFiles, items, llm, tx, store, guard)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, ingestService, nil)
 	app.Startup(context.Background())
 
@@ -93,8 +98,11 @@ func TestApp_ImportNotes_emitsProgressThenDone_onSuccess(t *testing.T) {
 	ingestedFiles.EXPECT().Upsert(ctx, mock.MatchedBy(func(f domainknowledge.IngestedFile) bool {
 		return f.Path == "go.md" && f.ChunkCount == 1 && f.EmbeddingModel == domainllm.EmbeddingModel
 	})).Return(nil).Once()
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Remove(mock.Anything, ([]string)(nil)).Return(nil).Once()
+	store.EXPECT().Add(mock.Anything, mock.Anything).Return(nil).Once()
 
-	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, llm)
+	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, llm, store)
 
 	// When importing that folder through the desktop adapter
 	err := app.ImportNotes(dir)
@@ -116,7 +124,7 @@ func TestApp_ImportNotes_emitsError_whenFolderDoesNotExist(t *testing.T) {
 	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
 	items := knowledgemocks.NewMockRepository(t)
 	llm := llmmocks.NewMockProvider(t)
-	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, llm)
+	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, llm, nil)
 
 	// When importing it
 	err := app.ImportNotes(filepath.Join(t.TempDir(), "does-not-exist"))
@@ -139,7 +147,7 @@ func TestApp_ImportNotes_emitsError_whenImportFolderFails(t *testing.T) {
 	llm := llmmocks.NewMockProvider(t)
 	boom := errors.New("database unavailable")
 	ingestedFiles.EXPECT().ListAll(mock.Anything).Return(nil, boom).Once()
-	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, llm)
+	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, llm, nil)
 
 	// When importing that folder
 	err := app.ImportNotes(dir)

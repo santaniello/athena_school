@@ -97,7 +97,9 @@ func main() {
 	)
 
 	ingestedFiles := sqlite.NewIngestedFileRepository(db)
-	ingestService := applicationingest.NewService(knowledgeChunks, ingestedFiles, knowledgeItems, llmClient, transactor)
+	ingestService := applicationingest.NewService(
+		knowledgeChunks, ingestedFiles, knowledgeItems, llmClient, transactor, vectorStore, indexLoader,
+	)
 
 	app := desktop.NewApp(authService, sessions, onboardingService, profiles, configStore, studyService, folderService, knowledgeService, ingestService, llmClient)
 
