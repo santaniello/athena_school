@@ -42,6 +42,10 @@ type App struct {
 	// has the same real-runtime requirement as emit above. Tests override
 	// it with a fake to drive PickNotesFolder without a real OS dialog.
 	openDirectory func(ctx context.Context, options wailsruntime.OpenDialogOptions) (string, error)
+	// openFile defaults to wailsruntime.OpenFileDialog, which has the same
+	// real-runtime requirement as emit above. Tests override it with a
+	// fake to drive PickNotesFile without a real OS dialog.
+	openFile func(ctx context.Context, options wailsruntime.OpenDialogOptions) (string, error)
 }
 
 // NewApp creates a new App instance backed by the given auth service,
@@ -75,6 +79,7 @@ func NewApp(
 		index:         indexLoader,
 		emit:          wailsruntime.EventsEmit,
 		openDirectory: wailsruntime.OpenDirectoryDialog,
+		openFile:      wailsruntime.OpenFileDialog,
 	}
 }
 

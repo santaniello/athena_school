@@ -15,8 +15,8 @@ import (
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
 )
 
-// Progress reports ImportFolder's advance after each file, processed or
-// skipped.
+// Progress reports ImportFolder/ImportFile's advance after each file,
+// processed or skipped.
 type Progress struct {
 	FilesProcessed int
 	FilesTotal     int
@@ -30,7 +30,7 @@ type FileFailure struct {
 	Reason string
 }
 
-// Summary is ImportFolder's final report.
+// Summary is ImportFolder/ImportFile's final report.
 type Summary struct {
 	FilesScanned  int
 	FilesIngested int
@@ -45,17 +45,31 @@ type Summary struct {
 	IndexWarnings []FileFailure
 }
 
+// importCandidate separates the path used to read the current fs.FS from
+// the source's canonical identity.
+type importCandidate struct {
+	// ReadPath is relative to the fs.FS used for this invocation.
+	ReadPath string
+	// SourcePath is the source's canonical absolute identity, never
+	// displayed — combines the desktop-normalized root with ReadPath.
+	SourcePath string
+}
+
 // ImportFolder walks every .md/.txt file under root (an fs.FS — the
 // desktop binding opens the picked directory via os.OpenRoot(path).FS()
 // and passes it in, so this use case never touches the os package;
 // fstest.MapFS drives it in tests with no temp-dir fixtures), chunking,
 // embedding and persisting each one as knowledge_chunks plus a shadow
-// knowledge.Item.
+// knowledge.Item. sourceRoot is the picked directory's canonical absolute
+// path (desktop-normalized), combined with each candidate's relative path
+// to form its SourcePath identity.
 //
 // onProgress is called once per file, processed or skipped. If it returns
 // a non-nil error, the walk stops immediately and ImportFolder returns the
 // Summary accumulated so far alongside that error.
-func (s *Service) ImportFolder(ctx context.Context, root fs.FS, onProgress func(Progress) error) (Summary, error) {
+func (s *Service) ImportFolder(
+	ctx context.Context, root fs.FS, sourceRoot string, onProgress func(Progress) error,
+) (Summary, error) {
 	// Held for the entire walk, not just checked once up front — a retry
 	// starting mid-import must wait for the whole import to finish rather
 	// than interleaving its ListCurrent/ReplaceAll with individual files'
@@ -65,11 +79,80 @@ func (s *Service) ImportFolder(ctx context.Context, root fs.FS, onProgress func(
 	}
 	defer s.index.EndMutation()
 
-	candidates, err := collectCandidates(root)
+	paths, err := collectCandidates(root)
 	if err != nil {
 		return Summary{}, fmt.Errorf("ingest: scanning folder: %w", err)
 	}
+	candidates := makeImportCandidates(sourceRoot, paths)
+	// restoreDeletedItem is false: folder import preserves 2.3 behavior —
+	// an unchanged IngestedFile is skipped without resurrecting a shadow
+	// Item deleted in the Explorer.
+	return s.importCandidates(ctx, root, candidates, false, onProgress)
+}
 
+// ImportFile imports exactly one .md/.txt file, sharing every processing
+// step with ImportFolder except restoreDeletedItem (see importCandidates).
+// filePath is relative to root; sourceRoot is root's canonical absolute
+// path (desktop-normalized).
+//
+// Input validation deliberately precedes index reservation: an invalid
+// request always reports its own error, even while the index is busy.
+func (s *Service) ImportFile(
+	ctx context.Context, root fs.FS, sourceRoot, filePath string, onProgress func(Progress) error,
+) (Summary, error) {
+	if !fs.ValidPath(filePath) {
+		return Summary{}, fmt.Errorf("ingest: invalid file path %q", filePath)
+	}
+	switch strings.ToLower(path.Ext(filePath)) {
+	case ".md", ".txt":
+	default:
+		return Summary{}, fmt.Errorf("ingest: unsupported file type %q", path.Ext(filePath))
+	}
+
+	if err := s.index.BeginMutation(); err != nil {
+		return Summary{}, err
+	}
+	defer s.index.EndMutation()
+
+	candidate := makeImportCandidate(sourceRoot, filePath)
+	// restoreDeletedItem is true: a direct single-file import is an
+	// explicit restoration request (see importCandidates).
+	return s.importCandidates(ctx, root, []importCandidate{candidate}, true, onProgress)
+}
+
+// makeImportCandidate combines sourceRoot with readPath to form one
+// importCandidate's canonical SourcePath identity.
+func makeImportCandidate(sourceRoot, readPath string) importCandidate {
+	return importCandidate{ReadPath: readPath, SourcePath: path.Join(sourceRoot, readPath)}
+}
+
+// makeImportCandidates applies makeImportCandidate to every path found by
+// collectCandidates.
+func makeImportCandidates(sourceRoot string, paths []string) []importCandidate {
+	candidates := make([]importCandidate, len(paths))
+	for i, p := range paths {
+		candidates[i] = makeImportCandidate(sourceRoot, p)
+	}
+	return candidates
+}
+
+// importCandidates is the processing loop shared by ImportFolder and
+// ImportFile. Its caller must already hold BeginMutation/EndMutation for
+// the whole operation.
+//
+// restoreDeletedItem is the one intentional processing difference between
+// the two entry points:
+//   - false (folder import): an unchanged IngestedFile is skipped without
+//     resurrecting a shadow Item deleted in the Explorer;
+//   - true (single-file import): before skipping an unchanged source, it
+//     checks the recorded ItemID. ErrItemNotFound forces the ordinary
+//     ingestFile replacement path, which recreates the Item under the same
+//     ID and rebuilds its chunks. Another repository error is recorded as
+//     that candidate's failure.
+func (s *Service) importCandidates(
+	ctx context.Context, root fs.FS, candidates []importCandidate, restoreDeletedItem bool,
+	onProgress func(Progress) error,
+) (Summary, error) {
 	existing, err := s.ingestedFiles.ListAll(ctx)
 	if err != nil {
 		return Summary{}, fmt.Errorf("ingest: listing previously ingested files: %w", err)
@@ -78,14 +161,22 @@ func (s *Service) ImportFolder(ctx context.Context, root fs.FS, onProgress func(
 	var summary Summary
 	progress := Progress{FilesTotal: len(candidates)}
 
-	for _, filePath := range candidates {
+	for _, candidate := range candidates {
 		summary.FilesScanned++
-		progress.CurrentFile = filePath
+		prev, hasPrev := existing[candidate.SourcePath]
+		// The first import's relative path becomes the stable display
+		// path; a source already known keeps using the one fixed on its
+		// first import, even when reached through another entry point.
+		displayPath := candidate.ReadPath
+		if hasPrev {
+			displayPath = prev.Path
+		}
+		progress.CurrentFile = displayPath
 
-		mtime, statErr := modTime(root, filePath)
+		mtime, statErr := modTime(root, candidate.ReadPath)
 		if statErr != nil {
 			summary.FilesFailed++
-			summary.Failures = append(summary.Failures, FileFailure{Path: filePath, Reason: statErr.Error()})
+			summary.Failures = append(summary.Failures, FileFailure{Path: displayPath, Reason: statErr.Error()})
 			progress.FilesProcessed++
 			if err := onProgress(progress); err != nil {
 				return summary, err
@@ -93,34 +184,29 @@ func (s *Service) ImportFolder(ctx context.Context, root fs.FS, onProgress func(
 			continue
 		}
 
-		prev, hasPrev := existing[filePath]
-		if hasPrev && prev.MTime == mtime && prev.EmbeddingModel == domainllm.EmbeddingModel {
-			summary.FilesSkipped++
-			progress.FilesProcessed++
-			if err := onProgress(progress); err != nil {
-				return summary, err
+		if hasPrev && prev.MTimeUnixNano == mtime && prev.EmbeddingModel == domainllm.EmbeddingModel {
+			skip, failure, checkErr := s.shouldSkipUnchanged(ctx, prev, restoreDeletedItem)
+			if checkErr != nil {
+				summary.FilesFailed++
+				summary.Failures = append(summary.Failures, FileFailure{Path: displayPath, Reason: failure})
+				progress.FilesProcessed++
+				if err := onProgress(progress); err != nil {
+					return summary, err
+				}
+				continue
 			}
-			continue
+			if skip {
+				summary.FilesSkipped++
+				progress.FilesProcessed++
+				if err := onProgress(progress); err != nil {
+					return summary, err
+				}
+				continue
+			}
 		}
 
-		chunksCreated, ingestErr := s.ingestFile(ctx, root, filePath, mtime, prev, hasPrev)
-		var indexWarning *IndexingWarning
-		switch {
-		case errors.As(ingestErr, &indexWarning):
-			// The durable write already succeeded — ingested_files recorded
-			// the new mtime/model — so this counts as ingested, not failed.
-			summary.FilesIngested++
-			summary.ChunksCreated += chunksCreated
-			progress.ChunksCreated += chunksCreated
-			summary.IndexWarnings = append(summary.IndexWarnings, FileFailure{Path: filePath, Reason: indexWarning.Error()})
-		case ingestErr == nil:
-			summary.FilesIngested++
-			summary.ChunksCreated += chunksCreated
-			progress.ChunksCreated += chunksCreated
-		default:
-			summary.FilesFailed++
-			summary.Failures = append(summary.Failures, FileFailure{Path: filePath, Reason: ingestErr.Error()})
-		}
+		chunksCreated, ingestErr := s.ingestFile(ctx, root, candidate, displayPath, mtime, prev, hasPrev)
+		applyIngestOutcome(&summary, &progress, displayPath, chunksCreated, ingestErr)
 
 		progress.FilesProcessed++
 		if err := onProgress(progress); err != nil {
@@ -131,13 +217,64 @@ func (s *Service) ImportFolder(ctx context.Context, root fs.FS, onProgress func(
 	return summary, nil
 }
 
-// modTime returns path's modification time as Unix seconds.
-func modTime(root fs.FS, filePath string) (int64, error) {
-	info, err := fs.Stat(root, filePath)
+// applyIngestOutcome classifies one candidate's ingestFile result and
+// updates summary/progress accordingly: a *IndexingWarning (checked first,
+// since it is also a non-nil error) counts as ingested with a warning, any
+// other non-nil error counts as a failure, and nil counts as a plain
+// successful ingest.
+func applyIngestOutcome(summary *Summary, progress *Progress, displayPath string, chunksCreated int, ingestErr error) {
+	var indexWarning *IndexingWarning
+	if errors.As(ingestErr, &indexWarning) {
+		// The durable write already succeeded — ingested_files recorded
+		// the new mtime/model — so this counts as ingested, not failed.
+		summary.FilesIngested++
+		summary.ChunksCreated += chunksCreated
+		progress.ChunksCreated += chunksCreated
+		summary.IndexWarnings = append(summary.IndexWarnings, FileFailure{Path: displayPath, Reason: indexWarning.Error()})
+		return
+	}
+	if ingestErr != nil {
+		summary.FilesFailed++
+		summary.Failures = append(summary.Failures, FileFailure{Path: displayPath, Reason: ingestErr.Error()})
+		return
+	}
+	summary.FilesIngested++
+	summary.ChunksCreated += chunksCreated
+	progress.ChunksCreated += chunksCreated
+}
+
+// shouldSkipUnchanged decides whether an unchanged source (matching mtime
+// and embedding model) should be skipped. Folder import (restoreDeletedItem
+// == false) always skips. Single-file import additionally checks that
+// prev.ItemID's shadow Item still exists: a deleted Item forces the
+// ordinary replacement path instead of skipping, restoring it under the
+// same ID; any other repository error is reported as a failure via a
+// non-nil returned error, whose message is failure.
+func (s *Service) shouldSkipUnchanged(
+	ctx context.Context, prev domainknowledge.IngestedFile, restoreDeletedItem bool,
+) (skip bool, failure string, err error) {
+	if !restoreDeletedItem {
+		return true, "", nil
+	}
+	_, getErr := s.items.GetByID(ctx, prev.ItemID)
+	if getErr == nil {
+		return true, "", nil
+	}
+	if errors.Is(getErr, domainknowledge.ErrItemNotFound) {
+		return false, "", nil
+	}
+	return false, getErr.Error(), getErr
+}
+
+// modTime returns candidate ReadPath's modification time in root as
+// nanoseconds since the Unix epoch — nanosecond precision so a rapid edit
+// within the same second is never missed.
+func modTime(root fs.FS, readPath string) (int64, error) {
+	info, err := fs.Stat(root, readPath)
 	if err != nil {
 		return 0, err
 	}
-	return info.ModTime().Unix(), nil
+	return info.ModTime().UnixNano(), nil
 }
 
 // collectCandidates pre-walks root for every .md/.txt file (case-
@@ -168,28 +305,31 @@ func collectCandidates(root fs.FS) ([]string, error) {
 	return candidates, nil
 }
 
-// ingestFile reads, chunks, embeds and replaces filePath's stored chunks
+// ingestFile reads, chunks, embeds and replaces candidate's stored chunks
 // and shadow Item inside a single transaction. Embedding happens before
 // anything is deleted, so a failed or interrupted API call leaves the
-// previous chunks and Item intact.
+// previous chunks and Item intact. displayPath is the stable, root-relative
+// path used for BuildShadowItem, Chunk.FilePath, and provenance — the
+// source's first-import path, even when hasPrev came from another entry
+// point's sourceRoot.
 func (s *Service) ingestFile(
-	ctx context.Context, root fs.FS, filePath string, mtime int64,
+	ctx context.Context, root fs.FS, candidate importCandidate, displayPath string, mtime int64,
 	prev domainknowledge.IngestedFile, hasPrev bool,
 ) (int, error) {
-	raw, err := fs.ReadFile(root, filePath)
+	raw, err := fs.ReadFile(root, candidate.ReadPath)
 	if err != nil {
 		return 0, fmt.Errorf("reading file: %w", err)
 	}
 	content := string(raw)
 
-	var candidates []ChunkCandidate
-	if strings.EqualFold(path.Ext(filePath), ".md") {
-		candidates = ChunkMarkdown(content)
+	var chunkCandidates []ChunkCandidate
+	if strings.EqualFold(path.Ext(candidate.ReadPath), ".md") {
+		chunkCandidates = ChunkMarkdown(content)
 	} else {
-		candidates = ChunkText(content)
+		chunkCandidates = ChunkText(content)
 	}
 
-	rawTopic, concept, definition := BuildShadowItem(filePath, content, candidates)
+	rawTopic, concept, definition := BuildShadowItem(displayPath, content, chunkCandidates)
 	topic, err := domainknowledge.NormalizeTopic(rawTopic)
 	if err != nil {
 		return 0, fmt.Errorf("deriving topic: %w", err)
@@ -201,9 +341,9 @@ func (s *Service) ingestFile(
 	}
 
 	now := time.Now().UTC()
-	chunks := make([]domainknowledge.Chunk, len(candidates))
-	for i, candidate := range candidates {
-		response, embedErr := s.llm.Embeddings(ctx, domainllm.EmbeddingRequest{Input: candidate.Content})
+	chunks := make([]domainknowledge.Chunk, len(chunkCandidates))
+	for i, chunkCandidate := range chunkCandidates {
+		response, embedErr := s.llm.Embeddings(ctx, domainllm.EmbeddingRequest{Input: chunkCandidate.Content})
 		if embedErr != nil {
 			return 0, fmt.Errorf("embedding chunk %d: %w", i, embedErr)
 		}
@@ -213,9 +353,10 @@ func (s *Service) ingestFile(
 			Topic:          topic,
 			Status:         domainknowledge.StatusApproved,
 			ItemID:         itemID,
-			FilePath:       filePath,
-			Heading:        candidate.Heading,
-			Content:        candidate.Content,
+			SourcePath:     candidate.SourcePath,
+			FilePath:       displayPath,
+			Heading:        chunkCandidate.Heading,
+			Content:        chunkCandidate.Content,
 			Embedding:      toFloat32(response.Embedding),
 			EmbeddingModel: domainllm.EmbeddingModel,
 			CreatedAt:      now,
@@ -225,7 +366,7 @@ func (s *Service) ingestFile(
 	var removedChunkIDs []string
 	err = s.tx.WithinTx(ctx, func(ctx context.Context) error {
 		var err error
-		removedChunkIDs, err = s.chunks.DeleteByFilePath(ctx, filePath)
+		removedChunkIDs, err = s.chunks.DeleteBySourcePath(ctx, candidate.SourcePath)
 		if err != nil {
 			return err
 		}
@@ -236,8 +377,9 @@ func (s *Service) ingestFile(
 			return err
 		}
 		return s.ingestedFiles.Upsert(ctx, domainknowledge.IngestedFile{
-			Path:           filePath,
-			MTime:          mtime,
+			SourcePath:     candidate.SourcePath,
+			Path:           displayPath,
+			MTimeUnixNano:  mtime,
 			EmbeddingModel: domainllm.EmbeddingModel,
 			ChunkCount:     len(chunks),
 			ItemID:         itemID,

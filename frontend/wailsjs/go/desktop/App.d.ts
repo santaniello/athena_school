@@ -29,6 +29,8 @@ export function HasOpenRouterKey():Promise<boolean>;
 
 export function HasUserProfile():Promise<boolean>;
 
+export function ImportFile(arg1:string):Promise<void>;
+
 export function ImportNotes(arg1:string):Promise<void>;
 
 export function ListFolders():Promise<Array<desktop.FolderResult>>;
@@ -44,6 +46,8 @@ export function Login(arg1:string,arg2:string):Promise<desktop.LoginResult>;
 export function Logout():Promise<void>;
 
 export function MoveStudySession(arg1:string,arg2:string):Promise<void>;
+
+export function PickNotesFile():Promise<string>;
 
 export function PickNotesFolder():Promise<string>;
 

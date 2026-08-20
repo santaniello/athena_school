@@ -3,6 +3,7 @@ package desktop
 import (
 	"log"
 	"os"
+	"path/filepath"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -87,6 +88,22 @@ func (a *App) PickNotesFolder() (string, error) {
 	})
 }
 
+// PickNotesFile opens the OS file picker restricted to .md/.txt files and
+// returns the chosen path, or "" if the user cancelled. The filter exposes
+// every casing of .md/.txt because GTK glob matching is case-sensitive
+// even though the application rule (see ingest.ImportFile) is not.
+func (a *App) PickNotesFile() (string, error) {
+	return a.openFile(a.ctx, wailsruntime.OpenDialogOptions{
+		Title: "Select a note file",
+		Filters: []wailsruntime.FileFilter{
+			{
+				DisplayName: "Notes (*.md, *.txt)",
+				Pattern:     "*.md;*.mD;*.Md;*.MD;*.txt;*.txT;*.tXt;*.tXT;*.Txt;*.TxT;*.TXt;*.TXT",
+			},
+		},
+	})
+}
+
 // ImportNotes imports every .md/.txt file under path, streaming progress
 // via "ingest:progress" as each file is processed, then emitting
 // "ingest:done" with the final summary (or "ingest:error" on failure).
@@ -102,10 +119,58 @@ func (a *App) ImportNotes(path string) error {
 		}
 	}()
 
-	summary, err := a.ingest.ImportFolder(a.ctx, root.FS(), func(p ingest.Progress) error {
+	absolutePath, err := filepath.Abs(filepath.Clean(path))
+	if err != nil {
+		a.emit(a.ctx, eventIngestError, err.Error())
+		return err
+	}
+
+	summary, err := a.ingest.ImportFolder(a.ctx, root.FS(), filepath.ToSlash(absolutePath), func(p ingest.Progress) error {
 		a.emit(a.ctx, eventIngestProgress, toIngestProgressResult(p))
 		return nil
 	})
+	if err != nil {
+		a.emit(a.ctx, eventIngestError, err.Error())
+		return err
+	}
+	a.emit(a.ctx, eventIngestDone, toIngestSummaryResult(summary))
+	return nil
+}
+
+// ImportFile imports exactly one .md/.txt file, streaming progress via
+// "ingest:progress", then emitting "ingest:done" with the final summary
+// (or "ingest:error" on failure). selectedPath is not itself opened as an
+// os.Root — only its parent directory is, so the application service still
+// never touches OS paths directly.
+func (a *App) ImportFile(selectedPath string) error {
+	absolutePath, err := filepath.Abs(filepath.Clean(selectedPath))
+	if err != nil {
+		a.emit(a.ctx, eventIngestError, err.Error())
+		return err
+	}
+
+	dir := filepath.Dir(absolutePath)
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		a.emit(a.ctx, eventIngestError, err.Error())
+		return err
+	}
+	defer func() {
+		if closeErr := root.Close(); closeErr != nil {
+			log.Printf("closing note import root %q: %v", dir, closeErr)
+		}
+	}()
+
+	summary, err := a.ingest.ImportFile(
+		a.ctx,
+		root.FS(),
+		filepath.ToSlash(dir),
+		filepath.Base(absolutePath),
+		func(p ingest.Progress) error {
+			a.emit(a.ctx, eventIngestProgress, toIngestProgressResult(p))
+			return nil
+		},
+	)
 	if err != nil {
 		a.emit(a.ctx, eventIngestError, err.Error())
 		return err

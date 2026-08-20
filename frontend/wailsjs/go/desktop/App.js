@@ -54,6 +54,10 @@ export function HasUserProfile() {
   return window['go']['desktop']['App']['HasUserProfile']();
 }
 
+export function ImportFile(arg1) {
+  return window['go']['desktop']['App']['ImportFile'](arg1);
+}
+
 export function ImportNotes(arg1) {
   return window['go']['desktop']['App']['ImportNotes'](arg1);
 }
@@ -84,6 +88,10 @@ export function Logout() {
 
 export function MoveStudySession(arg1, arg2) {
   return window['go']['desktop']['App']['MoveStudySession'](arg1, arg2);
+}
+
+export function PickNotesFile() {
+  return window['go']['desktop']['App']['PickNotesFile']();
 }
 
 export function PickNotesFolder() {

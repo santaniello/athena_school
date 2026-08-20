@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path"
 	"path/filepath"
 	"testing"
 
@@ -20,6 +21,16 @@ import (
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 )
+
+// normalizedSourceRoot mirrors the desktop adapter's own normalization
+// (filepath.Abs + filepath.Clean + filepath.ToSlash) so tests can predict
+// the exact SourcePath a given real directory resolves to.
+func normalizedSourceRoot(t *testing.T, dir string) string {
+	t.Helper()
+	abs, err := filepath.Abs(filepath.Clean(dir))
+	require.NoError(t, err)
+	return filepath.ToSlash(abs)
+}
 
 // capturedIngestEvents records every ingest:* event emitted through
 // App.emit during a test.
@@ -88,12 +99,13 @@ func TestApp_ImportNotes_emitsProgressThenDone_onSuccess(t *testing.T) {
 	// call below — matching it precisely (instead of mock.Anything) means
 	// this test would fail if ImportNotes ever stopped propagating it.
 	ctx := context.Background()
+	sourcePath := path.Join(normalizedSourceRoot(t, dir), "go.md")
 	ingestedFiles.EXPECT().ListAll(ctx).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nBasics of Go."}).
 		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}, Model: domainllm.EmbeddingModel}, nil).Once()
-	chunks.EXPECT().DeleteByFilePath(ctx, "go.md").Return(nil, nil).Once()
+	chunks.EXPECT().DeleteBySourcePath(ctx, sourcePath).Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
-		return len(cs) == 1 && cs[0].FilePath == "go.md" && cs[0].Heading == "Go" &&
+		return len(cs) == 1 && cs[0].FilePath == "go.md" && cs[0].SourcePath == sourcePath && cs[0].Heading == "Go" &&
 			cs[0].Source == domainknowledge.SourceImportedDoc && cs[0].Status == domainknowledge.StatusApproved
 	})).Return(nil).Once()
 	items.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
@@ -101,7 +113,7 @@ func TestApp_ImportNotes_emitsProgressThenDone_onSuccess(t *testing.T) {
 			item.Source == domainknowledge.SourceImportedDoc && item.Status == domainknowledge.StatusApproved
 	})).Return(nil).Once()
 	ingestedFiles.EXPECT().Upsert(ctx, mock.MatchedBy(func(f domainknowledge.IngestedFile) bool {
-		return f.Path == "go.md" && f.ChunkCount == 1 && f.EmbeddingModel == domainllm.EmbeddingModel
+		return f.Path == "go.md" && f.SourcePath == sourcePath && f.ChunkCount == 1 && f.EmbeddingModel == domainllm.EmbeddingModel
 	})).Return(nil).Once()
 	// VectorStore reconciliation runs with reconcileContext(), a short-lived
 	// context deliberately independent of a.ctx — mock.Anything is correct
@@ -141,10 +153,11 @@ func TestApp_ImportNotes_reportsIndexWarnings_whenPostCommitReconciliationFails(
 	llm := llmmocks.NewMockProvider(t)
 
 	ctx := context.Background()
+	sourcePath := path.Join(normalizedSourceRoot(t, dir), "go.md")
 	ingestedFiles.EXPECT().ListAll(ctx).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nBasics of Go."}).
 		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}, Model: domainllm.EmbeddingModel}, nil).Once()
-	chunks.EXPECT().DeleteByFilePath(ctx, "go.md").Return(nil, nil).Once()
+	chunks.EXPECT().DeleteBySourcePath(ctx, sourcePath).Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()
 	items.EXPECT().Save(ctx, mock.Anything).Return(nil).Once()
 	ingestedFiles.EXPECT().Upsert(ctx, mock.Anything).Return(nil).Once()
@@ -242,4 +255,168 @@ func TestApp_PickNotesFolder_returnsError_whenDialogFails(t *testing.T) {
 
 	// Then the error propagates
 	assert.ErrorIs(t, err, boom)
+}
+
+func TestApp_PickNotesFile_usesTheExactTitleAndCaseCompleteFilter(t *testing.T) {
+	// Given an App whose file-picker dialog captures the options it was called with
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	app.Startup(context.Background())
+	var captured wailsruntime.OpenDialogOptions
+	app.openFile = func(_ context.Context, options wailsruntime.OpenDialogOptions) (string, error) {
+		captured = options
+		return "/home/user/notes/go.md", nil
+	}
+
+	// When picking a notes file
+	path, err := app.PickNotesFile()
+
+	// Then the chosen path is returned, and the dialog was configured with
+	// the exact title and every casing of .md/.txt (GTK glob matching is
+	// case-sensitive even though the application rule is not)
+	require.NoError(t, err)
+	assert.Equal(t, "/home/user/notes/go.md", path)
+	assert.Equal(t, "Select a note file", captured.Title)
+	require.Len(t, captured.Filters, 1)
+	assert.Equal(t, "Notes (*.md, *.txt)", captured.Filters[0].DisplayName)
+	assert.Equal(t, "*.md;*.mD;*.Md;*.MD;*.txt;*.txT;*.tXt;*.tXT;*.Txt;*.TxT;*.TXt;*.TXT", captured.Filters[0].Pattern)
+}
+
+func TestApp_PickNotesFile_returnsError_whenDialogFails(t *testing.T) {
+	// Given a file-picker dialog that fails
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	app.Startup(context.Background())
+	boom := errors.New("dialog unavailable")
+	app.openFile = func(context.Context, wailsruntime.OpenDialogOptions) (string, error) {
+		return "", boom
+	}
+
+	// When picking a notes file
+	_, err := app.PickNotesFile()
+
+	// Then the error propagates
+	assert.ErrorIs(t, err, boom)
+}
+
+func TestApp_PickNotesFile_returnsEmptyPath_onCancellation(t *testing.T) {
+	// Given a file-picker dialog the user cancelled
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	app.Startup(context.Background())
+	app.openFile = func(context.Context, wailsruntime.OpenDialogOptions) (string, error) {
+		return "", nil
+	}
+
+	// When picking a notes file
+	path, err := app.PickNotesFile()
+
+	// Then no error occurs and the empty path passes through as-is
+	require.NoError(t, err)
+	assert.Empty(t, path)
+}
+
+func TestApp_ImportFile_emitsProgressThenDone_onSuccess(t *testing.T) {
+	// Given a real single markdown file, and a fully-mocked knowledge/LLM
+	// stack that accepts it
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "go.md")
+	require.NoError(t, os.WriteFile(filePath, []byte("# Go\nBasics of Go."), 0o600))
+
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	items := knowledgemocks.NewMockRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+
+	ctx := context.Background()
+	sourcePath := path.Join(normalizedSourceRoot(t, dir), "go.md")
+	ingestedFiles.EXPECT().ListAll(ctx).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nBasics of Go."}).
+		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}, Model: domainllm.EmbeddingModel}, nil).Once()
+	chunks.EXPECT().DeleteBySourcePath(ctx, sourcePath).Return(nil, nil).Once()
+	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
+		return len(cs) == 1 && cs[0].FilePath == "go.md" && cs[0].SourcePath == sourcePath
+	})).Return(nil).Once()
+	items.EXPECT().Save(ctx, mock.Anything).Return(nil).Once()
+	ingestedFiles.EXPECT().Upsert(ctx, mock.MatchedBy(func(f domainknowledge.IngestedFile) bool {
+		return f.Path == "go.md" && f.SourcePath == sourcePath
+	})).Return(nil).Once()
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Remove(mock.Anything, ([]string)(nil)).Return(nil).Once()
+	store.EXPECT().Add(mock.Anything, mock.Anything).Return(nil).Once()
+
+	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, llm, store)
+
+	// When importing that file through the desktop adapter
+	err := app.ImportFile(filePath)
+
+	// Then progress is emitted for the one file, followed by a done
+	// summary reporting it ingested — 1 of 1 files
+	require.NoError(t, err)
+	require.Len(t, captured.progress, 1)
+	assert.Equal(t, 1, captured.progress[0].FilesTotal)
+	assert.Equal(t, "go.md", captured.progress[0].CurrentFile)
+	require.NotNil(t, captured.done)
+	assert.Equal(t, 1, captured.done.FilesIngested)
+	assert.Empty(t, captured.errors)
+}
+
+func TestApp_ImportFile_emitsError_whenFileDoesNotExist(t *testing.T) {
+	// Given a path that does not exist on disk
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	items := knowledgemocks.NewMockRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, llm, nil)
+
+	// When importing it
+	err := app.ImportFile(filepath.Join(t.TempDir(), "does-not-exist", "go.md"))
+
+	// Then an "ingest:error" event is emitted and the error is returned,
+	// with no "ingest:done" ever firing
+	require.Error(t, err)
+	require.Len(t, captured.errors, 1)
+	assert.Nil(t, captured.done)
+}
+
+func TestApp_ImportFile_emitsError_whenImportFileFails(t *testing.T) {
+	// Given a file whose only candidate fails to list previously-ingested
+	// state (simulating a repository failure)
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "go.md")
+	require.NoError(t, os.WriteFile(filePath, []byte("# Go\nBody."), 0o600))
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	items := knowledgemocks.NewMockRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	boom := errors.New("database unavailable")
+	ingestedFiles.EXPECT().ListAll(context.Background()).Return(nil, boom).Once()
+	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, llm, nil)
+
+	// When importing that file
+	err := app.ImportFile(filePath)
+
+	// Then the failure surfaces as an "ingest:error" event
+	require.Error(t, err)
+	require.Len(t, captured.errors, 1)
+	assert.Contains(t, captured.errors[0], boom.Error())
+	assert.Nil(t, captured.done)
+}
+
+func TestApp_ImportFile_emitsError_whenExtensionIsUnsupported(t *testing.T) {
+	// Given a real file whose extension is not .md/.txt
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "notes.pdf")
+	require.NoError(t, os.WriteFile(filePath, []byte("not a note"), 0o600))
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	items := knowledgemocks.NewMockRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, llm, nil)
+
+	// When importing it
+	err := app.ImportFile(filePath)
+
+	// Then it is rejected before ever reaching the index/repositories
+	require.Error(t, err)
+	require.Len(t, captured.errors, 1)
+	assert.Nil(t, captured.done)
+	ingestedFiles.AssertNotCalled(t, "ListAll", mock.Anything)
 }
