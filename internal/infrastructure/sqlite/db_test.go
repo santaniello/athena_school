@@ -374,18 +374,35 @@ func TestOpen_refusesToDropIngestedFiles_whenOlderTableIsNotEmpty(t *testing.T) 
 }
 
 func TestOpen_migrationIsIdempotentOnNextOpen(t *testing.T) {
-	// Given a database already migrated to the source_path schema
+	// Given a database that actually went through the pre-release-schema
+	// migration (not one created fresh with the target schema already in
+	// place), by starting from the old ingested_files shape
 	path := filepath.Join(t.TempDir(), "athena.db")
 	first, err := Open(path)
 	require.NoError(t, err)
+	_, execErr := first.Exec(`DROP TABLE ingested_files`)
+	require.NoError(t, execErr)
+	_, execErr = first.Exec(`CREATE TABLE ingested_files (
+		file_path TEXT PRIMARY KEY, mtime INTEGER NOT NULL, embedding_model TEXT NOT NULL,
+		chunk_count INTEGER NOT NULL, item_id TEXT NOT NULL, ingested_at DATETIME
+	)`)
+	require.NoError(t, execErr)
 	require.NoError(t, first.Close())
 
-	// When opening it again
+	// When reopening it (running the migration for real) and then
+	// reopening a third time against the now-already-migrated schema
 	second, err := Open(path)
-
-	// Then it succeeds without error on the repeated migration steps
 	require.NoError(t, err)
-	defer func() { _ = second.Close() }()
+	require.NoError(t, second.Close())
+	third, err := Open(path)
+
+	// Then the third open still succeeds, proving the migration step is a
+	// no-op once source_path already exists
+	require.NoError(t, err)
+	defer func() { _ = third.Close() }()
+	hasIt, colErr := hasColumn(third, "ingested_files", "source_path")
+	require.NoError(t, colErr)
+	assert.True(t, hasIt)
 }
 
 func TestOpen_addsFolderIDColumnToSessions(t *testing.T) {
