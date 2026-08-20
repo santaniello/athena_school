@@ -439,6 +439,69 @@ func TestReload_serializesTwoConcurrentRetries_soTheirPublishesCannotInterleave(
 	}
 }
 
+func TestRetry_secondConcurrentRetryFails_restoresTheFirstsSuccess_notAStaleLoadingSnapshot(t *testing.T) {
+	// Given an already-ready loader, and a first retry blocked mid-reload
+	ctx := context.Background()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	store := knowledgemocks.NewMockVectorStore(t)
+	first := []domainknowledge.Chunk{testLoadChunk("c1")}
+	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).Return(domainknowledge.ChunkLoadResult{Chunks: first}, nil).Once()
+	store.EXPECT().ReplaceAll(ctx, first).Return(nil).Once()
+	loader := NewIndexLoader(chunks, store, testEmbeddingModel)
+	loader.LoadInitial(ctx)
+
+	release := make(chan struct{})
+	firstReloadStarted := make(chan struct{})
+	second := []domainknowledge.Chunk{testLoadChunk("c2")}
+	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).RunAndReturn(
+		func(context.Context, string) (domainknowledge.ChunkLoadResult, error) {
+			close(firstReloadStarted)
+			<-release
+			return domainknowledge.ChunkLoadResult{Chunks: second}, nil
+		},
+	).Once()
+	store.EXPECT().ReplaceAll(ctx, second).Return(nil).Once()
+
+	firstDone := make(chan struct{})
+	go func() { loader.Retry(ctx); close(firstDone) }()
+	select {
+	case <-firstReloadStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for the first retry to reach the reload")
+	}
+
+	// When a second retry is issued concurrently — before the first one has
+	// published anything — and its own reload will fail
+	boom := errors.New("disk full")
+	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).Return(domainknowledge.ChunkLoadResult{}, boom).Once()
+	secondDone := make(chan domainknowledge.IndexStatus, 1)
+	go func() { secondDone <- loader.Retry(ctx) }()
+
+	// And the first retry is released and succeeds
+	close(release)
+	select {
+	case <-firstDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for the first retry to return")
+	}
+
+	// Then the second retry — which only reads "previous" once the first is
+	// fully done publishing, since the whole operation is serialized under
+	// opMu — restores the first's real Ready outcome on its own failure,
+	// instead of a transient Loading status the first had set mid-flight
+	select {
+	case status := <-secondDone:
+		assert.Equal(t, domainknowledge.IndexStateReady, status.State)
+		assert.True(t, status.HasSnapshot)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for the second retry to return")
+	}
+	final := loader.Status()
+	assert.Equal(t, domainknowledge.IndexStateReady, final.State)
+	assert.True(t, final.HasSnapshot)
+	assert.NoError(t, loader.CheckMutationAllowed())
+}
+
 func TestStatus_isSafeForConcurrentUse(t *testing.T) {
 	// Given a loader with LoadInitial already running in the background
 	ctx := context.Background()

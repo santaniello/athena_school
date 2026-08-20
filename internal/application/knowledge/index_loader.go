@@ -108,14 +108,20 @@ func (l *IndexLoader) LoadInitial(ctx context.Context) {
 // preceding ready state (keeping the old snapshot and its HasSnapshot=true)
 // rather than reporting a global failure, while still recording the
 // retry's own LastError.
+//
+// Reading the previous status, reloading, deciding whether to restore it,
+// and publishing the final status are all done under opMu as one atomic
+// operation — not just the reload — so a second concurrent Retry can never
+// read a first Retry's transient Loading status as "previous" and later
+// republish that Loading status as if it were a terminal one.
 func (l *IndexLoader) Retry(ctx context.Context) domainknowledge.IndexStatus {
-	l.mu.Lock()
-	previous := l.status
-	l.mu.Unlock()
+	l.opMu.Lock()
+	defer l.opMu.Unlock()
 
+	previous := l.Status()
 	l.setStatus(domainknowledge.IndexStatus{State: domainknowledge.IndexStateLoading, HasSnapshot: previous.HasSnapshot})
 
-	status := l.reload(ctx)
+	status := l.doReload(ctx)
 	if status.State == domainknowledge.IndexStateFailed && previous.HasSnapshot {
 		status = domainknowledge.IndexStatus{
 			State:       previous.State,
@@ -134,15 +140,21 @@ func (l *IndexLoader) setStatus(status domainknowledge.IndexStatus) {
 	l.status = status
 }
 
-// reload lists current chunks, re-validates them as defense-in-depth
+// reload acquires opMu for the duration of doReload — used directly by
+// LoadInitial, which (unlike Retry) has no "previous" status to protect.
+func (l *IndexLoader) reload(ctx context.Context) domainknowledge.IndexStatus {
+	l.opMu.Lock()
+	defer l.opMu.Unlock()
+	return l.doReload(ctx)
+}
+
+// doReload lists current chunks, re-validates them as defense-in-depth
 // against a repository-layer bug, publishes the valid subset atomically,
 // and reports ready/ready_with_warnings/failed. It never touches l.status
 // itself — callers decide how to fold the result in (LoadInitial publishes
 // it directly, Retry may restore a prior snapshot on failure instead).
-func (l *IndexLoader) reload(ctx context.Context) domainknowledge.IndexStatus {
-	l.opMu.Lock()
-	defer l.opMu.Unlock()
-
+// Callers must hold opMu.
+func (l *IndexLoader) doReload(ctx context.Context) domainknowledge.IndexStatus {
 	result, err := l.chunks.ListCurrent(ctx, l.embeddingModel)
 	if err != nil {
 		log.Printf("knowledge index: loading current chunks: %v", err)
