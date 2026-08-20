@@ -1,4 +1,9 @@
-import { ImportFile, ImportNotes, PickNotesFile, PickNotesFolder } from '../../wailsjs/go/desktop/App'
+import {
+  ImportFile,
+  ImportNotes,
+  PickNotesFile,
+  PickNotesFolder,
+} from '../../wailsjs/go/desktop/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 
 export interface IngestProgress {

@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ImportFile, ImportNotes, PickNotesFile, PickNotesFolder } from '../../wailsjs/go/desktop/App'
+import {
+  ImportFile,
+  ImportNotes,
+  PickNotesFile,
+  PickNotesFolder,
+} from '../../wailsjs/go/desktop/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import {
   importFile,
