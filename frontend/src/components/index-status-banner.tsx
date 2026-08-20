@@ -33,11 +33,14 @@ function IndexStatusBanner({
   }
 
   if (status.state === 'ready_with_warnings') {
+    // A ChunkLoadIssue is per-chunk, and one item can have several chunks —
+    // count distinct itemId so the message doesn't overcount items.
+    const itemCount = new Set(status.issues.map((issue) => issue.itemId)).size
     return (
       <Alert variant="destructive">
         <AlertDescription>
-          {status.issues.length} item{status.issues.length === 1 ? '' : 's'} need attention and were
-          left out of local search.
+          {itemCount} item{itemCount === 1 ? '' : 's'} need attention and were left out of local
+          search.
         </AlertDescription>
         <AlertAction>
           <Button size="sm" variant="outline" onClick={onReview}>
@@ -48,7 +51,10 @@ function IndexStatusBanner({
     )
   }
 
-  if (status.state === 'failed' && continuedWithoutSearch) {
+  // Shown both when the user explicitly opted to continue past a
+  // snapshot-less failure, and when a retry fails but a previous snapshot is
+  // still serving search — app-shell only blocks on the former case.
+  if (status.state === 'failed' && (continuedWithoutSearch || status.hasSnapshot)) {
     return (
       <Alert variant="destructive">
         <AlertDescription>

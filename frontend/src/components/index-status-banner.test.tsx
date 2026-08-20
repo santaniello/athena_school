@@ -116,6 +116,40 @@ describe('IndexStatusBanner', () => {
     expect(screen.getByText(/1 item /)).toBeInTheDocument()
   })
 
+  it('counts distinct items, not chunks, when one item has multiple isolated chunks', () => {
+    // Given two isolated chunks belonging to the same item
+    render(
+      <IndexStatusBanner
+        status={status({
+          state: 'ready_with_warnings',
+          issues: [
+            {
+              chunkId: 'c1',
+              itemId: 'i1',
+              source: 'imported_doc',
+              filePath: 'a.md',
+              reason: 'missing_item',
+            },
+            {
+              chunkId: 'c2',
+              itemId: 'i1',
+              source: 'imported_doc',
+              filePath: 'a.md',
+              reason: 'missing_item',
+            },
+          ],
+        })}
+        continuedWithoutSearch={false}
+        retrying={false}
+        onRetry={vi.fn()}
+        onReview={vi.fn()}
+      />,
+    )
+
+    // Then the count reflects one distinct item, not two chunks
+    expect(screen.getByText(/1 item /)).toBeInTheDocument()
+  })
+
   it('renders nothing when the index failed but the user has not opted to continue', () => {
     // Given a failed status the failure screen is still gating (not yet
     // dismissed via "Continue without local search")

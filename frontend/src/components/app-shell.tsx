@@ -79,9 +79,35 @@ function AppShell({ onLogout }: AppShellProps) {
   // continuous polling is not used (see
   // specs/phases/phase-02-knowledge-engine/04-vector-search.md).
   useEffect(() => {
-    const unsubscribe = onKnowledgeIndexStatus(setIndexStatus)
-    void getKnowledgeIndexStatus().then(setIndexStatus)
-    return unsubscribe
+    let active = true
+    let receivedStatusEvent = false
+    const unsubscribe = onKnowledgeIndexStatus((status) => {
+      receivedStatusEvent = true
+      setIndexStatus(status)
+    })
+
+    // A rejected initial query must still resolve `loading` into a terminal
+    // state — otherwise the app stays stuck behind IndexLoadingScreen
+    // forever. Guarded by `receivedStatusEvent` so a slow initial response
+    // can never overwrite a newer status pushed by the event above.
+    void getKnowledgeIndexStatus()
+      .then((status) => {
+        if (active && !receivedStatusEvent) setIndexStatus(status)
+      })
+      .catch(() => {
+        if (active && !receivedStatusEvent) {
+          setIndexStatus({
+            ...INITIAL_INDEX_STATUS,
+            state: 'failed',
+            lastError: 'Could not load the knowledge index.',
+          })
+        }
+      })
+
+    return () => {
+      active = false
+      unsubscribe()
+    }
   }, [])
 
   async function handleRetryIndex() {
@@ -144,8 +170,11 @@ function AppShell({ onLogout }: AppShellProps) {
   }
 
   // A failed, snapshot-less index is unavailable, not empty — offer Retry
-  // or an explicit opt-in to continue with a persistent warning instead.
-  if (indexStatus.state === 'failed' && !continuedWithoutSearch) {
+  // or an explicit opt-in to continue with a persistent warning instead. A
+  // failed retry that still has a preserved snapshot never reaches this
+  // screen: the previous snapshot keeps search working, so only the banner
+  // below needs to surface the failure.
+  if (indexStatus.state === 'failed' && !indexStatus.hasSnapshot && !continuedWithoutSearch) {
     return (
       <IndexFailedScreen
         lastError={indexStatus.lastError}

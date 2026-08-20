@@ -812,6 +812,83 @@ describe('AppShell knowledge index lifecycle', () => {
     expect(await screen.findByText('Knowledge index could not be loaded.')).toBeInTheDocument()
   })
 
+  it('resolves out of the loading screen when the initial status query rejects', async () => {
+    // Given the initial query fails outright (e.g. the backend never
+    // responds to the Wails call)
+    vi.mocked(getKnowledgeIndexStatus).mockRejectedValueOnce(new Error('boom'))
+    renderShell()
+
+    // Then the app falls back to the failure screen instead of hanging
+    // behind IndexLoadingScreen forever
+    expect(await screen.findByText('Knowledge index could not be loaded.')).toBeInTheDocument()
+  })
+
+  it('ignores a delayed initial response that resolves after a newer status event already arrived', async () => {
+    // Given the initial query stays pending, with its resolver captured
+    let resolveInitial: (status: IndexStatus) => void = () => {}
+    vi.mocked(getKnowledgeIndexStatus).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveInitial = resolve
+      }),
+    )
+    let statusHandler: (status: IndexStatus) => void = () => {}
+    vi.mocked(onKnowledgeIndexStatus).mockImplementationOnce((handler) => {
+      statusHandler = handler
+      return vi.fn()
+    })
+    renderShell()
+    expect(screen.getByText('Loading knowledge index...')).toBeInTheDocument()
+
+    // When a newer status event arrives first
+    act(() => {
+      statusHandler({ state: 'ready', hasSnapshot: true, issues: [], lastError: '' })
+    })
+    expect(await screen.findByRole('button', { name: 'Home' })).toBeInTheDocument()
+
+    // And the stale initial query resolves afterward with an older status
+    act(() => {
+      resolveInitial({ state: 'loading', hasSnapshot: false, issues: [], lastError: '' })
+    })
+
+    // Then the newer event's state is not overwritten by the late response
+    expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument()
+  })
+
+  it('does not block the app when a retry fails but a previous snapshot is preserved', async () => {
+    // Given a ready index whose retry then fails without losing its snapshot
+    vi.mocked(getKnowledgeIndexStatus).mockResolvedValueOnce({
+      state: 'ready',
+      hasSnapshot: true,
+      issues: [],
+      lastError: '',
+    })
+    vi.mocked(retryKnowledgeIndex).mockResolvedValueOnce({
+      state: 'failed',
+      hasSnapshot: true,
+      issues: [],
+      lastError: 'disk full',
+    })
+    let statusHandler: (status: IndexStatus) => void = () => {}
+    vi.mocked(onKnowledgeIndexStatus).mockImplementationOnce((handler) => {
+      statusHandler = handler
+      return vi.fn()
+    })
+    renderShell()
+    await screen.findByRole('button', { name: 'Home' })
+
+    // When a retry fails, reported through the same status event app-shell
+    // subscribes to for every retry outcome
+    act(() => {
+      statusHandler({ state: 'failed', hasSnapshot: true, issues: [], lastError: 'disk full' })
+    })
+
+    // Then the app never falls back to the blocking failure screen — the
+    // preserved snapshot means search still works — and the banner offers Retry
+    expect(screen.queryByText('Knowledge index could not be loaded.')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+  })
+
   it('queries and subscribes to the knowledge index status exactly once, even across section navigation', async () => {
     // Given the app is open
     const user = userEvent.setup()
