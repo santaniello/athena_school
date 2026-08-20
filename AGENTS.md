@@ -57,10 +57,11 @@ interfaces/desktop  →  application  →  domain  ←  infrastructure
 - Tests in the same package with `_test.go` suffix
 - Test coverage: every behavior documented in a spec must have a test
 - Minimum coverage threshold: **80%** — CI will reject PRs below this value
-- Mutation testing: changes to `internal/domain/` or `internal/application/` must be
-  verified with `make mutation-go` before commit — a surviving mutant means the test
-  asserts too little, not that a new test is missing; strengthen the existing
-  assertion instead of adding a redundant one
+- Mutation testing: changes to `internal/domain/`, `internal/application/`, or
+  `internal/infrastructure/vectorstore/` (see [ADR-004](specs/decisions/ADR-004-local-vector-store.md))
+  must be verified with `make mutation-go` before commit — a surviving mutant means
+  the test asserts too little, not that a new test is missing; strengthen the
+  existing assertion instead of adding a redundant one
 - Tests must follow the **GivenWhenThen** pattern: arrange the initial state (Given), execute the action (When), assert the outcome (Then)
 - Use **testify** for assertions (`assert` / `require`)
 - Use **Mockery** (`make mock`) to generate mocks from interfaces into a sibling `mocks` subpackage (never in-package) — see [ADR-003](specs/decisions/ADR-003-mocking-strategy.md) for the full rationale, including the frontend mocking approach

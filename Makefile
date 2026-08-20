@@ -11,7 +11,7 @@ lint:
 	golangci-lint run
 
 mutation-go:
-	@for dir in internal/domain internal/application; do \
+	@for dir in internal/domain internal/application internal/infrastructure/vectorstore; do \
 		if find "$$dir" -name '*.go' ! -name '*_test.go' | grep -q .; then \
 			go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 unleash ./$$dir || exit 1; \
 		else \
