@@ -130,7 +130,7 @@ The job does *not* install the GTK/WebKit development headers: the only cgo file
 
 Three more jobs run alongside `quality-gate`:
 
-- **`mutation-go`** — [Gremlins](https://github.com/go-gremlins/gremlins) mutation testing on `internal/domain`/`internal/application` (skipped gracefully while those packages are still empty)
+- **`mutation-go`** — [Gremlins](https://github.com/go-gremlins/gremlins) mutation testing on `internal/domain`/`internal/application`/`internal/infrastructure/vectorstore` (skipped gracefully while those packages are still empty)
 - **`mutation-frontend`** — [StrykerJS](https://stryker-mutator.io/) mutation testing on `frontend/src`
 - **`secret-scan`** — full git-history scan with `gitleaks`, on every push and PR
 - **`commit-lint`** — validates every commit message in a PR against the Conventional Commits format (see below); runs only on `pull_request` events
