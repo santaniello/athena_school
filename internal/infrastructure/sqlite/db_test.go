@@ -245,6 +245,166 @@ func TestOpen_createsIngestedFilesTable(t *testing.T) {
 	assert.Equal(t, "ingested_files", tableName)
 }
 
+func TestOpen_createsKnowledgeChunksSourcePathIndex(t *testing.T) {
+	// Given a path to a database file that does not exist yet
+	path := filepath.Join(t.TempDir(), "athena.db")
+
+	// When opening the database
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Then the source_path index exists
+	var name string
+	queryErr := db.QueryRow(
+		`SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_knowledge_chunks_source_path'`,
+	).Scan(&name)
+	require.NoError(t, queryErr)
+	assert.Equal(t, "idx_knowledge_chunks_source_path", name)
+}
+
+func TestOpen_addsSourcePathColumn_toAnOlderKnowledgeChunksTable_whenEmpty(t *testing.T) {
+	// Given a database whose knowledge_chunks table predates source_path
+	// (dropped down to the old column set, still empty)
+	path := filepath.Join(t.TempDir(), "athena.db")
+	db, err := Open(path)
+	require.NoError(t, err)
+	_, execErr := db.Exec(`DROP TABLE knowledge_chunks`)
+	require.NoError(t, execErr)
+	_, execErr = db.Exec(`CREATE TABLE knowledge_chunks (
+		id TEXT PRIMARY KEY, source TEXT, topic TEXT, status TEXT, item_id TEXT,
+		file_path TEXT, heading TEXT, content TEXT, embedding BLOB,
+		embedding_model TEXT NOT NULL, item_updated_at DATETIME, created_at DATETIME
+	)`)
+	require.NoError(t, execErr)
+	require.NoError(t, db.Close())
+
+	// When reopening the database (re-running migrations)
+	second, err := Open(path)
+
+	// Then it succeeds and the column now exists
+	require.NoError(t, err)
+	defer func() { _ = second.Close() }()
+	hasIt, colErr := hasColumn(second, "knowledge_chunks", "source_path")
+	require.NoError(t, colErr)
+	assert.True(t, hasIt)
+}
+
+func TestOpen_refusesToAlterKnowledgeChunks_whenOlderTableIsNotEmpty(t *testing.T) {
+	// Given a database whose old-schema knowledge_chunks table already has a row
+	path := filepath.Join(t.TempDir(), "athena.db")
+	db, err := Open(path)
+	require.NoError(t, err)
+	_, execErr := db.Exec(`DROP TABLE knowledge_chunks`)
+	require.NoError(t, execErr)
+	_, execErr = db.Exec(`CREATE TABLE knowledge_chunks (
+		id TEXT PRIMARY KEY, source TEXT, topic TEXT, status TEXT, item_id TEXT,
+		file_path TEXT, heading TEXT, content TEXT, embedding BLOB,
+		embedding_model TEXT NOT NULL, item_updated_at DATETIME, created_at DATETIME
+	)`)
+	require.NoError(t, execErr)
+	_, execErr = db.Exec(
+		`INSERT INTO knowledge_chunks (id, source, embedding_model) VALUES ('c1', 'imported_doc', 'model')`,
+	)
+	require.NoError(t, execErr)
+	require.NoError(t, db.Close())
+
+	// When reopening the database
+	_, err = Open(path)
+
+	// Then it fails loudly instead of silently dropping/altering the data
+	require.Error(t, err)
+}
+
+func TestOpen_migratesIngestedFilesToSourcePathSchema_whenEmpty(t *testing.T) {
+	// Given a database whose ingested_files table still uses the pre-release
+	// file_path-keyed, second-precision schema, and is empty
+	path := filepath.Join(t.TempDir(), "athena.db")
+	db, err := Open(path)
+	require.NoError(t, err)
+	_, execErr := db.Exec(`DROP TABLE ingested_files`)
+	require.NoError(t, execErr)
+	_, execErr = db.Exec(`CREATE TABLE ingested_files (
+		file_path TEXT PRIMARY KEY, mtime INTEGER NOT NULL, embedding_model TEXT NOT NULL,
+		chunk_count INTEGER NOT NULL, item_id TEXT NOT NULL, ingested_at DATETIME
+	)`)
+	require.NoError(t, execErr)
+	require.NoError(t, db.Close())
+
+	// When reopening the database (re-running migrations)
+	second, err := Open(path)
+
+	// Then it succeeds and the table now has the new schema
+	require.NoError(t, err)
+	defer func() { _ = second.Close() }()
+	hasIt, colErr := hasColumn(second, "ingested_files", "source_path")
+	require.NoError(t, colErr)
+	assert.True(t, hasIt)
+	_, execErr = second.Exec(
+		`INSERT INTO ingested_files (source_path, file_path, mtime_unix_nano, embedding_model, chunk_count, item_id)
+		 VALUES ('/abs/go.md', 'go.md', 123, 'model', 1, 'item-1')`,
+	)
+	assert.NoError(t, execErr)
+}
+
+func TestOpen_refusesToDropIngestedFiles_whenOlderTableIsNotEmpty(t *testing.T) {
+	// Given a database whose old-schema ingested_files table already has a row
+	path := filepath.Join(t.TempDir(), "athena.db")
+	db, err := Open(path)
+	require.NoError(t, err)
+	_, execErr := db.Exec(`DROP TABLE ingested_files`)
+	require.NoError(t, execErr)
+	_, execErr = db.Exec(`CREATE TABLE ingested_files (
+		file_path TEXT PRIMARY KEY, mtime INTEGER NOT NULL, embedding_model TEXT NOT NULL,
+		chunk_count INTEGER NOT NULL, item_id TEXT NOT NULL, ingested_at DATETIME
+	)`)
+	require.NoError(t, execErr)
+	_, execErr = db.Exec(
+		`INSERT INTO ingested_files (file_path, mtime, embedding_model, chunk_count, item_id)
+		 VALUES ('go.md', 123, 'model', 1, 'item-1')`,
+	)
+	require.NoError(t, execErr)
+	require.NoError(t, db.Close())
+
+	// When reopening the database
+	_, err = Open(path)
+
+	// Then it fails loudly instead of silently dropping the data
+	require.Error(t, err)
+}
+
+func TestOpen_migrationIsIdempotentOnNextOpen(t *testing.T) {
+	// Given a database that actually went through the pre-release-schema
+	// migration (not one created fresh with the target schema already in
+	// place), by starting from the old ingested_files shape
+	path := filepath.Join(t.TempDir(), "athena.db")
+	first, err := Open(path)
+	require.NoError(t, err)
+	_, execErr := first.Exec(`DROP TABLE ingested_files`)
+	require.NoError(t, execErr)
+	_, execErr = first.Exec(`CREATE TABLE ingested_files (
+		file_path TEXT PRIMARY KEY, mtime INTEGER NOT NULL, embedding_model TEXT NOT NULL,
+		chunk_count INTEGER NOT NULL, item_id TEXT NOT NULL, ingested_at DATETIME
+	)`)
+	require.NoError(t, execErr)
+	require.NoError(t, first.Close())
+
+	// When reopening it (running the migration for real) and then
+	// reopening a third time against the now-already-migrated schema
+	second, err := Open(path)
+	require.NoError(t, err)
+	require.NoError(t, second.Close())
+	third, err := Open(path)
+
+	// Then the third open still succeeds, proving the migration step is a
+	// no-op once source_path already exists
+	require.NoError(t, err)
+	defer func() { _ = third.Close() }()
+	hasIt, colErr := hasColumn(third, "ingested_files", "source_path")
+	require.NoError(t, colErr)
+	assert.True(t, hasIt)
+}
+
 func TestOpen_addsFolderIDColumnToSessions(t *testing.T) {
 	// Given a path to a database file that does not exist yet
 	path := filepath.Join(t.TempDir(), "athena.db")

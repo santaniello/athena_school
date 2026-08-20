@@ -51,6 +51,7 @@ func testChunk(id, filePath string, createdAt time.Time) knowledge.Chunk {
 		Topic:          "Go",
 		Status:         knowledge.StatusApproved,
 		ItemID:         "item-" + id,
+		SourcePath:     "/abs/" + filePath,
 		FilePath:       filePath,
 		Heading:        "Intro",
 		Content:        "Content for " + id,
@@ -111,8 +112,8 @@ func TestChunkRepository_ListAll_returnsChunksOldestFirst(t *testing.T) {
 	assert.Equal(t, "chunk-new", got[1].ID)
 }
 
-func TestChunkRepository_DeleteByFilePath_removesOnlyThatFilesChunks_andReturnsRemovedIDs(t *testing.T) {
-	// Given chunks from two different files
+func TestChunkRepository_DeleteBySourcePath_removesOnlyThatSourcesChunks_andReturnsRemovedIDs(t *testing.T) {
+	// Given chunks from two different sources
 	repo := newTestChunkRepository(t)
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Second)
@@ -122,10 +123,10 @@ func TestChunkRepository_DeleteByFilePath_removesOnlyThatFilesChunks_andReturnsR
 		testChunk("chunk-b1", "notes/b.md", now),
 	}))
 
-	// When deleting by one file's path
-	removedIDs, err := repo.DeleteByFilePath(ctx, "notes/a.md")
+	// When deleting by one source's path
+	removedIDs, err := repo.DeleteBySourcePath(ctx, "/abs/notes/a.md")
 
-	// Then only that file's chunks are gone, and their IDs are returned
+	// Then only that source's chunks are gone, and their IDs are returned
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"chunk-a1", "chunk-a2"}, removedIDs)
 	got, listErr := repo.ListAll(ctx)
@@ -134,17 +135,43 @@ func TestChunkRepository_DeleteByFilePath_removesOnlyThatFilesChunks_andReturnsR
 	assert.Equal(t, "chunk-b1", got[0].ID)
 }
 
-func TestChunkRepository_DeleteByFilePath_isNoOp_whenNothingMatches(t *testing.T) {
+func TestChunkRepository_DeleteBySourcePath_isNoOp_whenNothingMatches(t *testing.T) {
 	// Given a repository with no chunks at all
 	repo := newTestChunkRepository(t)
 	ctx := context.Background()
 
-	// When deleting by a file path that was never ingested
-	removedIDs, err := repo.DeleteByFilePath(ctx, "notes/never-imported.md")
+	// When deleting by a source path that was never ingested
+	removedIDs, err := repo.DeleteBySourcePath(ctx, "/abs/notes/never-imported.md")
 
 	// Then it succeeds without error and returns no IDs
 	require.NoError(t, err)
 	assert.Empty(t, removedIDs)
+}
+
+func TestChunkRepository_DeleteBySourcePath_targetsOnlyOneSource_whenTwoRootsShareTheSameRelativeName(t *testing.T) {
+	// Given two chunks with the same display FilePath but distinct
+	// canonical SourcePath identities — e.g. /course-a/notes.md and
+	// /course-b/notes.md — proving they coexist rather than colliding
+	repo := newTestChunkRepository(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Second)
+	courseA := testChunk("chunk-a", "notes.md", now)
+	courseA.SourcePath = "/course-a/notes.md"
+	courseB := testChunk("chunk-b", "notes.md", now)
+	courseB.SourcePath = "/course-b/notes.md"
+	require.NoError(t, repo.SaveAll(ctx, []knowledge.Chunk{courseA, courseB}))
+
+	// When deleting by only one of the two sources
+	removedIDs, err := repo.DeleteBySourcePath(ctx, "/course-a/notes.md")
+
+	// Then only that source's chunk is gone; the other survives untouched
+	require.NoError(t, err)
+	assert.Equal(t, []string{"chunk-a"}, removedIDs)
+	got, listErr := repo.ListAll(ctx)
+	require.NoError(t, listErr)
+	require.Len(t, got, 1)
+	assert.Equal(t, "chunk-b", got[0].ID)
+	assert.Equal(t, "/course-b/notes.md", got[0].SourcePath)
 }
 
 func TestChunkRepository_DeleteByItemID_removesOnlyThatItemsChunks_andReturnsRemovedIDs(t *testing.T) {

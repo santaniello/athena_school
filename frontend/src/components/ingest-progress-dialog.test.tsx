@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
+  importFile,
   importNotes,
   onIngestDone,
   onIngestError,
@@ -16,6 +17,7 @@ vi.mock('@/lib/ingest', async (importOriginal) => {
   return {
     ...original,
     importNotes: vi.fn(),
+    importFile: vi.fn(),
     onIngestProgress: vi.fn(),
     onIngestDone: vi.fn(),
     onIngestError: vi.fn(),
@@ -80,7 +82,7 @@ describe('IngestProgressDialog', () => {
     vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
 
     // When rendering it open
-    render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />)
+    render(<IngestProgressDialog open kind="folder" path="/home/user/notes" onClose={vi.fn()} />)
 
     // Then the import starts immediately for that folder, and the dialog
     // explains that it is still processing
@@ -94,7 +96,9 @@ describe('IngestProgressDialog', () => {
     setupSubscriptions()
 
     // When rendering it closed
-    render(<IngestProgressDialog open={false} folderPath="/home/user/notes" onClose={vi.fn()} />)
+    render(
+      <IngestProgressDialog open={false} kind="folder" path="/home/user/notes" onClose={vi.fn()} />,
+    )
 
     // Then no import is started
     expect(importNotes).not.toHaveBeenCalled()
@@ -104,7 +108,7 @@ describe('IngestProgressDialog', () => {
     // Given a dialog mid-import
     const events = setupSubscriptions()
     vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
-    render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />)
+    render(<IngestProgressDialog open kind="folder" path="/home/user/notes" onClose={vi.fn()} />)
 
     // When a progress event arrives
     events.emitProgress({
@@ -127,7 +131,7 @@ describe('IngestProgressDialog', () => {
     // Given a dialog mid-import, before any files have been counted
     const events = setupSubscriptions()
     vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
-    render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />)
+    render(<IngestProgressDialog open kind="folder" path="/home/user/notes" onClose={vi.fn()} />)
 
     // When a progress event arrives reporting zero files total
     events.emitProgress({
@@ -146,7 +150,7 @@ describe('IngestProgressDialog', () => {
     // Given a dialog mid-import
     const events = setupSubscriptions()
     vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
-    render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />)
+    render(<IngestProgressDialog open kind="folder" path="/home/user/notes" onClose={vi.fn()} />)
 
     // When the import finishes
     events.emitDone(emptySummary)
@@ -165,7 +169,7 @@ describe('IngestProgressDialog', () => {
     // Given a dialog mid-import
     const events = setupSubscriptions()
     vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
-    render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />)
+    render(<IngestProgressDialog open kind="folder" path="/home/user/notes" onClose={vi.fn()} />)
 
     // When the import finishes with one failure
     events.emitDone({
@@ -183,7 +187,7 @@ describe('IngestProgressDialog', () => {
     // Given a dialog mid-import
     const events = setupSubscriptions()
     vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
-    render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />)
+    render(<IngestProgressDialog open kind="folder" path="/home/user/notes" onClose={vi.fn()} />)
 
     // When the import finishes with one file that persisted but whose
     // index reconciliation failed
@@ -201,7 +205,7 @@ describe('IngestProgressDialog', () => {
     // Given a dialog mid-import
     const events = setupSubscriptions()
     vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
-    render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />)
+    render(<IngestProgressDialog open kind="folder" path="/home/user/notes" onClose={vi.fn()} />)
 
     // When the whole import fails outright
     events.emitError('the folder does not exist')
@@ -216,7 +220,7 @@ describe('IngestProgressDialog', () => {
     // emitting ingest:error (e.g. an IPC-level failure)
     const events = setupSubscriptions()
     vi.mocked(importNotes).mockReturnValueOnce(Promise.reject(new Error('IPC failure')))
-    render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />)
+    render(<IngestProgressDialog open kind="folder" path="/home/user/notes" onClose={vi.fn()} />)
 
     // Then a generic error is shown and the dialog still becomes closable
     expect(await screen.findByText('Failed to import notes. Please try again.')).toBeInTheDocument()
@@ -234,15 +238,17 @@ describe('IngestProgressDialog', () => {
     firstImport.catch(() => {}) // avoid an unhandled-rejection warning from this local reference
     vi.mocked(importNotes).mockReturnValueOnce(firstImport)
     const { rerender } = render(
-      <IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />,
+      <IngestProgressDialog open kind="folder" path="/home/user/notes" onClose={vi.fn()} />,
     )
 
     // When the dialog is closed, then reopened for a different folder
     // whose import is still pending, and only then does the first
     // folder's import reject
-    rerender(<IngestProgressDialog open={false} folderPath="/home/user/notes" onClose={vi.fn()} />)
+    rerender(
+      <IngestProgressDialog open={false} kind="folder" path="/home/user/notes" onClose={vi.fn()} />,
+    )
     vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
-    rerender(<IngestProgressDialog open folderPath="/home/user/other" onClose={vi.fn()} />)
+    rerender(<IngestProgressDialog open kind="folder" path="/home/user/other" onClose={vi.fn()} />)
     await waitFor(() => expect(importNotes).toHaveBeenCalledWith('/home/user/other'))
     await act(async () => {
       rejectFirst(new Error('stale IPC failure'))
@@ -259,7 +265,7 @@ describe('IngestProgressDialog', () => {
     // Given a dialog mid-import
     setupSubscriptions()
     vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
-    render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />)
+    render(<IngestProgressDialog open kind="folder" path="/home/user/notes" onClose={vi.fn()} />)
 
     // Then neither the dialog's own close (X) control nor the Close
     // action exists yet
@@ -272,7 +278,7 @@ describe('IngestProgressDialog', () => {
     vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
     const onClose = vi.fn()
     const user = userEvent.setup()
-    render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={onClose} />)
+    render(<IngestProgressDialog open kind="folder" path="/home/user/notes" onClose={onClose} />)
     events.emitDone(emptySummary)
 
     // When clicking Close
@@ -288,7 +294,7 @@ describe('IngestProgressDialog', () => {
     vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
     const onClose = vi.fn()
     const user = userEvent.setup()
-    render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={onClose} />)
+    render(<IngestProgressDialog open kind="folder" path="/home/user/notes" onClose={onClose} />)
     events.emitDone(emptySummary)
     await findFooterCloseButton()
 
@@ -305,7 +311,7 @@ describe('IngestProgressDialog', () => {
     vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
     const onClose = vi.fn()
     const user = userEvent.setup()
-    render(<IngestProgressDialog open folderPath="/home/user/notes" onClose={onClose} />)
+    render(<IngestProgressDialog open kind="folder" path="/home/user/notes" onClose={onClose} />)
 
     // When pressing Escape before it has finished
     await user.keyboard('{Escape}')
@@ -319,11 +325,13 @@ describe('IngestProgressDialog', () => {
     const events = setupSubscriptions()
     vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
     const { rerender } = render(
-      <IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />,
+      <IngestProgressDialog open kind="folder" path="/home/user/notes" onClose={vi.fn()} />,
     )
 
     // When it closes
-    rerender(<IngestProgressDialog open={false} folderPath="/home/user/notes" onClose={vi.fn()} />)
+    rerender(
+      <IngestProgressDialog open={false} kind="folder" path="/home/user/notes" onClose={vi.fn()} />,
+    )
 
     // Then every subscription is torn down
     expect(events.unsubscribeProgress).toHaveBeenCalled()
@@ -336,7 +344,7 @@ describe('IngestProgressDialog', () => {
     const events = setupSubscriptions()
     vi.mocked(importNotes).mockReturnValue(new Promise<void>(() => {}))
     const { rerender } = render(
-      <IngestProgressDialog open folderPath="/home/user/notes" onClose={vi.fn()} />,
+      <IngestProgressDialog open kind="folder" path="/home/user/notes" onClose={vi.fn()} />,
     )
     events.emitProgress({
       filesProcessed: 3,
@@ -348,12 +356,86 @@ describe('IngestProgressDialog', () => {
     expect(await findFooterCloseButton()).toBeInTheDocument()
 
     // When it is closed then reopened for a new folder
-    rerender(<IngestProgressDialog open={false} folderPath="/home/user/notes" onClose={vi.fn()} />)
-    rerender(<IngestProgressDialog open folderPath="/home/user/other" onClose={vi.fn()} />)
+    rerender(
+      <IngestProgressDialog open={false} kind="folder" path="/home/user/notes" onClose={vi.fn()} />,
+    )
+    rerender(<IngestProgressDialog open kind="folder" path="/home/user/other" onClose={vi.fn()} />)
 
     // Then it starts a fresh import instead of showing the stale summary
     await waitFor(() => expect(importNotes).toHaveBeenCalledWith('/home/user/other'))
     expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument()
     expect(screen.getByText('Starting...')).toBeInTheDocument()
+  })
+
+  describe('kind="file"', () => {
+    it('starts the import through importFile for the given path as soon as it opens, with the file description', () => {
+      // Given a dialog opened for a chosen file
+      const events = setupSubscriptions()
+      vi.mocked(importFile).mockReturnValueOnce(new Promise<void>(() => {}))
+
+      // When rendering it open
+      render(
+        <IngestProgressDialog open kind="file" path="/home/user/notes/go.md" onClose={vi.fn()} />,
+      )
+
+      // Then the import starts immediately through importFile (not
+      // importNotes), and the dialog explains it is processing the file
+      expect(importFile).toHaveBeenCalledWith('/home/user/notes/go.md')
+      expect(importNotes).not.toHaveBeenCalled()
+      expect(screen.getByText('Processing the selected file.')).toBeInTheDocument()
+      void events
+    })
+
+    it('shows 1 of 1 files like any other progress update', () => {
+      // Given a dialog mid single-file import
+      const events = setupSubscriptions()
+      vi.mocked(importFile).mockReturnValueOnce(new Promise<void>(() => {}))
+      render(
+        <IngestProgressDialog open kind="file" path="/home/user/notes/go.md" onClose={vi.fn()} />,
+      )
+
+      // When the progress event for the one file arrives
+      events.emitProgress({
+        filesProcessed: 1,
+        filesTotal: 1,
+        chunksCreated: 2,
+        currentFile: 'go.md',
+      })
+
+      // Then it renders with the same shared progress copy as folder import
+      expect(screen.getByText('1 of 1 files')).toBeInTheDocument()
+    })
+
+    it('transitions to the result summary when ingest:done fires, same as folder import', () => {
+      // Given a dialog mid single-file import
+      const events = setupSubscriptions()
+      vi.mocked(importFile).mockReturnValueOnce(new Promise<void>(() => {}))
+      render(
+        <IngestProgressDialog open kind="file" path="/home/user/notes/go.md" onClose={vi.fn()} />,
+      )
+
+      // When the import finishes
+      events.emitDone(emptySummary)
+
+      // Then the summary counts replace the progress bar
+      expect(screen.getByText('Import complete.')).toBeInTheDocument()
+    })
+
+    it('falls back to a closable error state when importFile rejects without an ingest:error event', async () => {
+      // Given a single-file import whose binding call itself fails before
+      // ever emitting ingest:error
+      const events = setupSubscriptions()
+      vi.mocked(importFile).mockReturnValueOnce(Promise.reject(new Error('IPC failure')))
+      render(
+        <IngestProgressDialog open kind="file" path="/home/user/notes/go.md" onClose={vi.fn()} />,
+      )
+
+      // Then a generic error is shown and the dialog still becomes closable
+      expect(
+        await screen.findByText('Failed to import notes. Please try again.'),
+      ).toBeInTheDocument()
+      expect(await findFooterCloseButton()).toBeInTheDocument()
+      void events
+    })
   })
 })

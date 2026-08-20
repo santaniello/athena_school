@@ -1,9 +1,16 @@
 import { useEffect, useState } from 'react'
+import { ChevronDownIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { IngestProgressDialog } from '@/components/ingest-progress-dialog'
 import { cn } from '@/lib/utils'
-import { pickNotesFolder } from '@/lib/ingest'
+import { pickNotesFile, pickNotesFolder } from '@/lib/ingest'
 import { listKnowledgeItems } from '@/lib/knowledge'
 import KnowledgeExplorerScreen from '@/screens/KnowledgeExplorerScreen'
 
@@ -18,14 +25,25 @@ interface KnowledgeSectionProps {
 
 type Tab = 'explorer' | 'review'
 
+// The single active import target, whichever picker produced it — the
+// progress dialog drives both flows off this one piece of state.
+interface ImportTarget {
+  kind: 'folder' | 'file'
+  path: string
+}
+
+const pickerErrorMessage = 'Failed to open the notes picker. Please try again.'
+
 // Owns the Explorer/Review tab state and the "Import notes" toolbar
-// action — the main-pane counterpart to KnowledgeTopicTree in the sidebar.
-// See the layout in
-// specs/phases/phase-02-knowledge-engine/03-notes-import-and-knowledge-explorer.md.
+// dropdown (folder or single file) — the main-pane counterpart to
+// KnowledgeTopicTree in the sidebar. See the layout in
+// specs/phases/phase-02-knowledge-engine/03-notes-import-and-knowledge-explorer.md
+// and specs/phases/phase-02-knowledge-engine/04-01-import-file.md.
 function KnowledgeSection({ selectedTopic, mutationsDisabled }: KnowledgeSectionProps) {
   const [activeTab, setActiveTab] = useState<Tab>('explorer')
   const [draftCount, setDraftCount] = useState(0)
-  const [importFolderPath, setImportFolderPath] = useState<string | null>(null)
+  const [importTarget, setImportTarget] = useState<ImportTarget | null>(null)
+  const [pickerError, setPickerError] = useState('')
 
   useEffect(() => {
     listKnowledgeItems('', 'draft')
@@ -33,9 +51,24 @@ function KnowledgeSection({ selectedTopic, mutationsDisabled }: KnowledgeSection
       .catch(() => {})
   }, [])
 
-  async function handleImportClick() {
-    const path = await pickNotesFolder()
-    if (path) setImportFolderPath(path)
+  async function handleImportFolderClick() {
+    setPickerError('')
+    try {
+      const path = await pickNotesFolder()
+      if (path) setImportTarget({ kind: 'folder', path })
+    } catch {
+      setPickerError(pickerErrorMessage)
+    }
+  }
+
+  async function handleImportFileClick() {
+    setPickerError('')
+    try {
+      const path = await pickNotesFile()
+      if (path) setImportTarget({ kind: 'file', path })
+    } catch {
+      setPickerError(pickerErrorMessage)
+    }
   }
 
   function tabClassName(tab: Tab) {
@@ -70,10 +103,25 @@ function KnowledgeSection({ selectedTopic, mutationsDisabled }: KnowledgeSection
           </button>
         </div>
 
-        <Button onClick={() => void handleImportClick()} disabled={mutationsDisabled}>
-          Import notes
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button disabled={mutationsDisabled}>
+              Import notes
+              <ChevronDownIcon />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => void handleImportFolderClick()}>
+              Import folder...
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => void handleImportFileClick()}>
+              Import file...
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
+
+      {pickerError && <p className="text-sm text-destructive">{pickerError}</p>}
 
       <div className="min-h-0 flex-1">
         <KnowledgeExplorerScreen
@@ -84,9 +132,10 @@ function KnowledgeSection({ selectedTopic, mutationsDisabled }: KnowledgeSection
       </div>
 
       <IngestProgressDialog
-        open={importFolderPath !== null}
-        folderPath={importFolderPath ?? ''}
-        onClose={() => setImportFolderPath(null)}
+        open={importTarget !== null}
+        kind={importTarget?.kind ?? 'folder'}
+        path={importTarget?.path ?? ''}
+        onClose={() => setImportTarget(null)}
       />
     </div>
   )

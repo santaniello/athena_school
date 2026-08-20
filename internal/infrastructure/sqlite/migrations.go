@@ -1,6 +1,9 @@
 package sqlite
 
-import "database/sql"
+import (
+	"database/sql"
+	"fmt"
+)
 
 // migrations are idempotent DDL/DML steps applied in order on every Open
 // call. Additive by design: a new table is a new entry in this slice, no
@@ -65,29 +68,34 @@ var migrations = []func(*sql.DB) error{
 	execSQL(`CREATE INDEX IF NOT EXISTS idx_knowledge_items_topic
 		ON knowledge_items(topic)`),
 	execSQL(`CREATE TABLE IF NOT EXISTS knowledge_chunks (
-		id         TEXT PRIMARY KEY,
-		source     TEXT,
-		topic      TEXT,
-		status     TEXT,
-		item_id    TEXT,
-		file_path  TEXT,
-		heading    TEXT,
-		content    TEXT,
-		embedding  BLOB, -- tightly-packed little-endian float32
+		id          TEXT PRIMARY KEY,
+		source      TEXT,
+		topic       TEXT,
+		status      TEXT,
+		item_id     TEXT,
+		source_path TEXT, -- canonical absolute identity; set for imported_doc
+		file_path   TEXT, -- stable first-import relative/display path
+		heading     TEXT,
+		content     TEXT,
+		embedding   BLOB, -- tightly-packed little-endian float32
 		embedding_model TEXT NOT NULL,
 		item_updated_at DATETIME, -- NULL for imported_doc
 		created_at DATETIME
 	)`),
 	execSQL(`CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_file_path ON knowledge_chunks(file_path)`),
 	execSQL(`CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_item_id ON knowledge_chunks(item_id)`),
+	addKnowledgeChunksSourcePathColumn,
+	execSQL(`CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_source_path ON knowledge_chunks(source_path)`),
 	execSQL(`CREATE TABLE IF NOT EXISTS ingested_files (
-		file_path       TEXT PRIMARY KEY,
-		mtime           INTEGER NOT NULL,
+		source_path     TEXT PRIMARY KEY,
+		file_path       TEXT NOT NULL,
+		mtime_unix_nano INTEGER NOT NULL,
 		embedding_model TEXT NOT NULL,
 		chunk_count     INTEGER NOT NULL,
 		item_id         TEXT NOT NULL,
 		ingested_at     DATETIME
 	)`),
+	migrateIngestedFilesToSourcePathSchema,
 }
 
 // addSessionsFolderIDColumn adds sessions.folder_id if it does not already
@@ -113,7 +121,12 @@ func addSessionsFolderIDColumn(db *sql.DB) error {
 // sessionsHasFolderIDColumn reports whether the sessions table already has
 // a folder_id column.
 func sessionsHasFolderIDColumn(db *sql.DB) (bool, error) {
-	rows, err := db.Query(`PRAGMA table_info(sessions)`)
+	return hasColumn(db, "sessions", "folder_id")
+}
+
+// hasColumn reports whether table already has a column named column.
+func hasColumn(db *sql.DB, table, column string) (bool, error) {
+	rows, err := db.Query(`PRAGMA table_info(` + table + `)`)
 	if err != nil {
 		return false, err
 	}
@@ -126,11 +139,88 @@ func sessionsHasFolderIDColumn(db *sql.DB) (bool, error) {
 		if err := rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
 			return false, err
 		}
-		if name == "folder_id" {
+		if name == column {
 			return true, nil
 		}
 	}
 	return false, rows.Err()
+}
+
+// tableIsEmpty reports whether table currently holds zero rows.
+func tableIsEmpty(db *sql.DB, table string) (bool, error) {
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&count); err != nil {
+		return false, err
+	}
+	return count == 0, nil
+}
+
+// addKnowledgeChunksSourcePathColumn adds knowledge_chunks.source_path when
+// an older schema (predating this column) is detected. This pre-release
+// schema correction assumes no deployed or local knowledge records must
+// survive it: it verifies the table holds no rows and fails rather than
+// silently proceeding if that premise is violated, instead of attempting a
+// heuristic backfill.
+func addKnowledgeChunksSourcePathColumn(db *sql.DB) error {
+	hasSourcePath, err := hasColumn(db, "knowledge_chunks", "source_path")
+	if err != nil {
+		return err
+	}
+	if hasSourcePath {
+		return nil
+	}
+
+	empty, err := tableIsEmpty(db, "knowledge_chunks")
+	if err != nil {
+		return err
+	}
+	if !empty {
+		return fmt.Errorf("sqlite: knowledge_chunks predates source_path and is not empty; refusing to alter it")
+	}
+
+	_, err = db.Exec(`ALTER TABLE knowledge_chunks ADD COLUMN source_path TEXT`)
+	return err
+}
+
+// migrateIngestedFilesToSourcePathSchema rebuilds the pre-release
+// ingested_files table (file_path PRIMARY KEY, mtime) into its
+// source_path-keyed, nanosecond-precision replacement when an older schema
+// is detected. There are no deployed or local knowledge records that must
+// survive this change, but as a safety net it still verifies the table
+// holds no rows and fails rather than dropping data if that premise is
+// violated. Idempotent on the next Open, since a rebuilt table already has
+// a source_path column.
+func migrateIngestedFilesToSourcePathSchema(db *sql.DB) error {
+	hasSourcePath, err := hasColumn(db, "ingested_files", "source_path")
+	if err != nil {
+		return err
+	}
+	if hasSourcePath {
+		return nil
+	}
+
+	empty, err := tableIsEmpty(db, "ingested_files")
+	if err != nil {
+		return err
+	}
+	if !empty {
+		return fmt.Errorf("sqlite: ingested_files predates source_path and is not empty; refusing to drop it")
+	}
+
+	_, err = db.Exec(`DROP TABLE ingested_files`)
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec(`CREATE TABLE ingested_files (
+		source_path     TEXT PRIMARY KEY,
+		file_path       TEXT NOT NULL,
+		mtime_unix_nano INTEGER NOT NULL,
+		embedding_model TEXT NOT NULL,
+		chunk_count     INTEGER NOT NULL,
+		item_id         TEXT NOT NULL,
+		ingested_at     DATETIME
+	)`)
+	return err
 }
 
 // execSQL adapts a plain DDL/DML statement, unconditionally safe to

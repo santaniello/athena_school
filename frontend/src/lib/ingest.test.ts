@@ -1,17 +1,26 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ImportNotes, PickNotesFolder } from '../../wailsjs/go/desktop/App'
+import {
+  ImportFile,
+  ImportNotes,
+  PickNotesFile,
+  PickNotesFolder,
+} from '../../wailsjs/go/desktop/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import {
+  importFile,
   importNotes,
   onIngestDone,
   onIngestError,
   onIngestProgress,
+  pickNotesFile,
   pickNotesFolder,
 } from './ingest'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
   PickNotesFolder: vi.fn(),
   ImportNotes: vi.fn(),
+  PickNotesFile: vi.fn(),
+  ImportFile: vi.fn(),
 }))
 
 vi.mock('../../wailsjs/runtime/runtime', () => ({
@@ -41,6 +50,32 @@ describe('importNotes', () => {
 
     // Then the path was forwarded
     expect(ImportNotes).toHaveBeenCalledWith('/home/user/notes')
+  })
+})
+
+describe('pickNotesFile', () => {
+  it('returns the path chosen by the OS dialog', async () => {
+    // Given a file picker that resolves to a chosen path
+    vi.mocked(PickNotesFile).mockResolvedValueOnce('/home/user/notes/go.md')
+
+    // When picking a notes file
+    const path = await pickNotesFile()
+
+    // Then the chosen path is returned
+    expect(path).toBe('/home/user/notes/go.md')
+  })
+})
+
+describe('importFile', () => {
+  it('forwards the chosen path', async () => {
+    // Given an import that resolves
+    vi.mocked(ImportFile).mockResolvedValueOnce()
+
+    // When importing a single file
+    await importFile('/home/user/notes/go.md')
+
+    // Then the path was forwarded
+    expect(ImportFile).toHaveBeenCalledWith('/home/user/notes/go.md')
   })
 })
 

@@ -37,8 +37,9 @@ func TestIngestedFileRepository_Upsert_thenListAll_roundTripsEveryField(t *testi
 	repo := newTestIngestedFileRepository(t)
 	ctx := context.Background()
 	file := knowledge.IngestedFile{
+		SourcePath:     "/abs/notes/go.md",
 		Path:           "notes/go.md",
-		MTime:          1700000000,
+		MTimeUnixNano:  1700000000123456789,
 		EmbeddingModel: "text-embedding-3-small",
 		ChunkCount:     3,
 		ItemID:         "item-1",
@@ -48,30 +49,57 @@ func TestIngestedFileRepository_Upsert_thenListAll_roundTripsEveryField(t *testi
 	require.NoError(t, repo.Upsert(ctx, file))
 	files, err := repo.ListAll(ctx)
 
-	// Then it round-trips, keyed by path
+	// Then it round-trips, keyed by SourcePath
 	require.NoError(t, err)
-	require.Contains(t, files, "notes/go.md")
-	assert.Equal(t, file, files["notes/go.md"])
+	require.Contains(t, files, "/abs/notes/go.md")
+	assert.Equal(t, file, files["/abs/notes/go.md"])
 }
 
-func TestIngestedFileRepository_Upsert_replacesExistingRow_forSamePath(t *testing.T) {
+func TestIngestedFileRepository_Upsert_replacesExistingRow_forSameSourcePath(t *testing.T) {
 	// Given an already-ingested file
 	repo := newTestIngestedFileRepository(t)
 	ctx := context.Background()
 	require.NoError(t, repo.Upsert(ctx, knowledge.IngestedFile{
-		Path: "notes/go.md", MTime: 1000, EmbeddingModel: "model-a", ChunkCount: 1, ItemID: "item-1",
+		SourcePath: "/abs/notes/go.md", Path: "notes/go.md",
+		MTimeUnixNano: 1000, EmbeddingModel: "model-a", ChunkCount: 1, ItemID: "item-1",
 	}))
 
-	// When upserting the same path again with different values
+	// When upserting the same source path again with different values
 	require.NoError(t, repo.Upsert(ctx, knowledge.IngestedFile{
-		Path: "notes/go.md", MTime: 2000, EmbeddingModel: "model-b", ChunkCount: 5, ItemID: "item-1",
+		SourcePath: "/abs/notes/go.md", Path: "notes/go.md",
+		MTimeUnixNano: 2000, EmbeddingModel: "model-b", ChunkCount: 5, ItemID: "item-1",
 	}))
 
 	// Then there is still exactly one row, holding the latest values
 	files, err := repo.ListAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, files, 1)
-	assert.Equal(t, int64(2000), files["notes/go.md"].MTime)
-	assert.Equal(t, "model-b", files["notes/go.md"].EmbeddingModel)
-	assert.Equal(t, 5, files["notes/go.md"].ChunkCount)
+	assert.Equal(t, int64(2000), files["/abs/notes/go.md"].MTimeUnixNano)
+	assert.Equal(t, "model-b", files["/abs/notes/go.md"].EmbeddingModel)
+	assert.Equal(t, 5, files["/abs/notes/go.md"].ChunkCount)
+}
+
+func TestIngestedFileRepository_ListAll_keepsTwoSourcesWithTheSameDisplayPath_distinct(t *testing.T) {
+	// Given two sources sharing the same display FilePath but reached
+	// through different folder roots (e.g. /course-a/notes.md and
+	// /course-b/notes.md) — they must coexist, not collide
+	repo := newTestIngestedFileRepository(t)
+	ctx := context.Background()
+	require.NoError(t, repo.Upsert(ctx, knowledge.IngestedFile{
+		SourcePath: "/course-a/notes.md", Path: "notes.md",
+		MTimeUnixNano: 1000, EmbeddingModel: "model-a", ChunkCount: 1, ItemID: "item-a",
+	}))
+	require.NoError(t, repo.Upsert(ctx, knowledge.IngestedFile{
+		SourcePath: "/course-b/notes.md", Path: "notes.md",
+		MTimeUnixNano: 2000, EmbeddingModel: "model-a", ChunkCount: 1, ItemID: "item-b",
+	}))
+
+	// When listing all ingested files
+	files, err := repo.ListAll(ctx)
+
+	// Then both are present as distinct records
+	require.NoError(t, err)
+	require.Len(t, files, 2)
+	assert.Equal(t, "item-a", files["/course-a/notes.md"].ItemID)
+	assert.Equal(t, "item-b", files["/course-b/notes.md"].ItemID)
 }

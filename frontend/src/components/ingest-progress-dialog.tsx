@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
 import {
+  importFile,
   importNotes,
   onIngestDone,
   onIngestError,
@@ -21,16 +22,23 @@ import {
 
 interface IngestProgressDialogProps {
   open: boolean
-  folderPath: string
+  kind: 'folder' | 'file'
+  path: string
   onClose: () => void
+}
+
+const processingDescription: Record<'folder' | 'file', string> = {
+  folder: 'Processing files in the selected folder.',
+  file: 'Processing the selected file.',
 }
 
 // No cancel affordance here by design: no operation in the app is
 // cancellable today, and each file's replace is already an isolated
 // transaction, so worst case the user waits out the import. The dialog
 // only becomes dismissible once ingest:done or ingest:error has fired —
-// see specs/phases/phase-02-knowledge-engine/03-notes-import-and-knowledge-explorer.md.
-export function IngestProgressDialog({ open, folderPath, onClose }: IngestProgressDialogProps) {
+// see specs/phases/phase-02-knowledge-engine/03-notes-import-and-knowledge-explorer.md
+// and specs/phases/phase-02-knowledge-engine/04-01-import-file.md.
+export function IngestProgressDialog({ open, kind, path, onClose }: IngestProgressDialogProps) {
   const [progress, setProgress] = useState<IngestProgress | null>(null)
   const [summary, setSummary] = useState<IngestSummary | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
@@ -38,9 +46,9 @@ export function IngestProgressDialog({ open, folderPath, onClose }: IngestProgre
   useEffect(() => {
     if (!open) return
     // Guards the catch below against a stale rejection: if the dialog is
-    // closed and reopened for another folder before the old importNotes
-    // call settles, that old rejection must not set errorMessage on the
-    // new import's state.
+    // closed and reopened for another target before the old import call
+    // settles, that old rejection must not set errorMessage on the new
+    // import's state.
     let active = true
 
     const unsubscribeProgress = onIngestProgress(setProgress)
@@ -48,12 +56,14 @@ export function IngestProgressDialog({ open, folderPath, onClose }: IngestProgre
     const unsubscribeError = onIngestError(setErrorMessage)
 
     // ingest:error is normally emitted with the details before this
-    // rejects (see App.ImportNotes), so the catch is usually just
-    // preventing an unhandled promise rejection. But if the binding call
-    // itself fails before ever reaching that emit — e.g. an IPC error —
-    // no ingest:error ever fires; fall back to a generic message so the
-    // dialog still becomes closable rather than staying stuck forever.
-    void importNotes(folderPath).catch(() => {
+    // rejects (see App.ImportNotes/App.ImportFile), so the catch is
+    // usually just preventing an unhandled promise rejection. But if the
+    // binding call itself fails before ever reaching that emit — e.g. an
+    // IPC error — no ingest:error ever fires; fall back to a generic
+    // message so the dialog still becomes closable rather than staying
+    // stuck forever.
+    const startImport = kind === 'folder' ? importNotes : importFile
+    void startImport(path).catch(() => {
       if (!active) return
       setErrorMessage((current) => current || 'Failed to import notes. Please try again.')
     })
@@ -64,13 +74,13 @@ export function IngestProgressDialog({ open, folderPath, onClose }: IngestProgre
       unsubscribeDone()
       unsubscribeError()
       // Reset here (on close, or right before the next open re-runs this
-      // effect for a new folder) rather than at the top of the effect body,
+      // effect for a new target) rather than at the top of the effect body,
       // so a fresh import never starts by briefly rendering stale state.
       setProgress(null)
       setSummary(null)
       setErrorMessage('')
     }
-  }, [open, folderPath])
+  }, [open, kind, path])
 
   const finished = summary !== null || errorMessage !== ''
   const percent =
@@ -89,7 +99,7 @@ export function IngestProgressDialog({ open, folderPath, onClose }: IngestProgre
         <DialogHeader>
           <DialogTitle>Importing notes</DialogTitle>
           <DialogDescription>
-            {finished ? 'Import complete.' : 'Processing files in the selected folder.'}
+            {finished ? 'Import complete.' : processingDescription[kind]}
           </DialogDescription>
         </DialogHeader>
 

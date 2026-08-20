@@ -22,65 +22,6 @@ func (_m *MockChunkRepository) EXPECT() *MockChunkRepository_Expecter {
 	return &MockChunkRepository_Expecter{mock: &_m.Mock}
 }
 
-// DeleteByFilePath provides a mock function with given fields: ctx, path
-func (_m *MockChunkRepository) DeleteByFilePath(ctx context.Context, path string) ([]string, error) {
-	ret := _m.Called(ctx, path)
-
-	if len(ret) == 0 {
-		panic("no return value specified for DeleteByFilePath")
-	}
-
-	var r0 []string
-	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string) ([]string, error)); ok {
-		return rf(ctx, path)
-	}
-	if rf, ok := ret.Get(0).(func(context.Context, string) []string); ok {
-		r0 = rf(ctx, path)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]string)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = rf(ctx, path)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// MockChunkRepository_DeleteByFilePath_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteByFilePath'
-type MockChunkRepository_DeleteByFilePath_Call struct {
-	*mock.Call
-}
-
-// DeleteByFilePath is a helper method to define mock.On call
-//   - ctx context.Context
-//   - path string
-func (_e *MockChunkRepository_Expecter) DeleteByFilePath(ctx interface{}, path interface{}) *MockChunkRepository_DeleteByFilePath_Call {
-	return &MockChunkRepository_DeleteByFilePath_Call{Call: _e.mock.On("DeleteByFilePath", ctx, path)}
-}
-
-func (_c *MockChunkRepository_DeleteByFilePath_Call) Run(run func(ctx context.Context, path string)) *MockChunkRepository_DeleteByFilePath_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(string))
-	})
-	return _c
-}
-
-func (_c *MockChunkRepository_DeleteByFilePath_Call) Return(_a0 []string, _a1 error) *MockChunkRepository_DeleteByFilePath_Call {
-	_c.Call.Return(_a0, _a1)
-	return _c
-}
-
-func (_c *MockChunkRepository_DeleteByFilePath_Call) RunAndReturn(run func(context.Context, string) ([]string, error)) *MockChunkRepository_DeleteByFilePath_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // DeleteByItemID provides a mock function with given fields: ctx, itemID
 func (_m *MockChunkRepository) DeleteByItemID(ctx context.Context, itemID string) ([]string, error) {
 	ret := _m.Called(ctx, itemID)
@@ -136,6 +77,65 @@ func (_c *MockChunkRepository_DeleteByItemID_Call) Return(_a0 []string, _a1 erro
 }
 
 func (_c *MockChunkRepository_DeleteByItemID_Call) RunAndReturn(run func(context.Context, string) ([]string, error)) *MockChunkRepository_DeleteByItemID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// DeleteBySourcePath provides a mock function with given fields: ctx, sourcePath
+func (_m *MockChunkRepository) DeleteBySourcePath(ctx context.Context, sourcePath string) ([]string, error) {
+	ret := _m.Called(ctx, sourcePath)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteBySourcePath")
+	}
+
+	var r0 []string
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) ([]string, error)); ok {
+		return rf(ctx, sourcePath)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) []string); ok {
+		r0 = rf(ctx, sourcePath)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, sourcePath)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockChunkRepository_DeleteBySourcePath_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteBySourcePath'
+type MockChunkRepository_DeleteBySourcePath_Call struct {
+	*mock.Call
+}
+
+// DeleteBySourcePath is a helper method to define mock.On call
+//   - ctx context.Context
+//   - sourcePath string
+func (_e *MockChunkRepository_Expecter) DeleteBySourcePath(ctx interface{}, sourcePath interface{}) *MockChunkRepository_DeleteBySourcePath_Call {
+	return &MockChunkRepository_DeleteBySourcePath_Call{Call: _e.mock.On("DeleteBySourcePath", ctx, sourcePath)}
+}
+
+func (_c *MockChunkRepository_DeleteBySourcePath_Call) Run(run func(ctx context.Context, sourcePath string)) *MockChunkRepository_DeleteBySourcePath_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockChunkRepository_DeleteBySourcePath_Call) Return(_a0 []string, _a1 error) *MockChunkRepository_DeleteBySourcePath_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockChunkRepository_DeleteBySourcePath_Call) RunAndReturn(run func(context.Context, string) ([]string, error)) *MockChunkRepository_DeleteBySourcePath_Call {
 	_c.Call.Return(run)
 	return _c
 }
