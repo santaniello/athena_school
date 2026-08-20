@@ -905,4 +905,26 @@ describe('KnowledgeExplorerScreen', () => {
     expect(screen.getByRole('button', { name: 'Edit' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
   })
+
+  it('disables Save once mutationsDisabled turns true while an edit is already open', async () => {
+    // Given an edit already open before the index starts retrying
+    stubIngestDone()
+    const item = testItem({ status: 'draft' })
+    vi.mocked(listKnowledgeItems).mockResolvedValueOnce([item])
+    const user = userEvent.setup()
+    const { rerender } = render(
+      <KnowledgeExplorerScreen selectedTopic={null} mode="explorer" mutationsDisabled={false} />,
+    )
+    await user.click(await screen.findByText('Channels'))
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
+
+    // When a retry starts and mutationsDisabled flips to true mid-edit
+    rerender(
+      <KnowledgeExplorerScreen selectedTopic={null} mode="explorer" mutationsDisabled={true} />,
+    )
+
+    // Then Save is disabled, since the backend guard would reject it anyway
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+  })
 })

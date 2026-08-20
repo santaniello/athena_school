@@ -337,7 +337,9 @@ function KnowledgeExplorerScreen({
                 />
               </div>
               <div className="flex gap-2 pt-2">
-                <Button onClick={() => void handleSaveEdit()}>Save</Button>
+                <Button onClick={() => void handleSaveEdit()} disabled={mutationsDisabled}>
+                  Save
+                </Button>
                 <Button variant="outline" onClick={() => setIsEditing(false)}>
                   Cancel
                 </Button>
