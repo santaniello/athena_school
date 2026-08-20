@@ -3,25 +3,25 @@ import { EventsOn } from '../../wailsjs/runtime/runtime'
 
 export type IndexState = 'loading' | 'ready' | 'ready_with_warnings' | 'failed'
 
-export interface ChunkLoadIssue {
-  chunkId: string
-  itemId: string
-  source: string
-  filePath: string
-  reason: string
-}
+// Projected from the Wails-generated binding's return type instead of
+// hand-duplicated, so a renamed/removed field on the Go DTO fails this file
+// to compile instead of silently drifting behind a cast.
+type IndexStatusResponse = Pick<
+  Awaited<ReturnType<typeof GetKnowledgeIndexStatus>>,
+  'state' | 'hasSnapshot' | 'issues' | 'lastError'
+>
 
-export interface IndexStatus {
+export type ChunkLoadIssue = IndexStatusResponse['issues'][number]
+
+export interface IndexStatus extends Omit<IndexStatusResponse, 'state'> {
   state: IndexState
-  hasSnapshot: boolean
-  issues: ChunkLoadIssue[]
-  lastError: string
 }
 
 // getKnowledgeIndexStatus returns the vector index coordinator's current
 // lifecycle snapshot.
 export async function getKnowledgeIndexStatus(): Promise<IndexStatus> {
-  return GetKnowledgeIndexStatus() as Promise<IndexStatus>
+  const result = await GetKnowledgeIndexStatus()
+  return { ...result, state: result.state as IndexState }
 }
 
 // retryKnowledgeIndex rebuilds a separate snapshot from SQLite. The
@@ -30,7 +30,8 @@ export async function getKnowledgeIndexStatus(): Promise<IndexStatus> {
 // value themselves, since "knowledge-index:status" fires with the same
 // outcome (see onKnowledgeIndexStatus).
 export async function retryKnowledgeIndex(): Promise<IndexStatus> {
-  return RetryKnowledgeIndex() as Promise<IndexStatus>
+  const result = await RetryKnowledgeIndex()
+  return { ...result, state: result.state as IndexState }
 }
 
 // EventsOn returns its own unsubscribe function. Callers must invoke it on
