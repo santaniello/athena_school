@@ -290,9 +290,7 @@ describe('KnowledgeExplorerScreen', () => {
 
     // Then the trigger reflects that too, and the query drops the constraint
     expect(within(trigger).getByText('All')).toBeInTheDocument()
-    await waitFor(() =>
-      expect(listKnowledgeItems).toHaveBeenLastCalledWith('', ''),
-    )
+    await waitFor(() => expect(listKnowledgeItems).toHaveBeenLastCalledWith('', ''))
   })
 
   it('drops an item from the list once a status change during a pending approval leaves it filtered out, matching the filter current now rather than at mount', async () => {
