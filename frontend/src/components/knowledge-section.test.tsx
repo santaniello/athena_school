@@ -65,6 +65,66 @@ describe('KnowledgeSection', () => {
     await waitFor(() => expect(listKnowledgeItems).toHaveBeenCalledWith('', 'draft'))
   })
 
+  it('queries the pending-review count across all topics, ignoring the sidebar topic filter', async () => {
+    // Given the section rendered under a specific sidebar topic
+    vi.mocked(listKnowledgeItems).mockResolvedValue([])
+
+    // When rendering the section
+    render(<KnowledgeSection selectedTopic="Kubernetes" mutationsDisabled={false} />)
+
+    // Then the draft-count query still carries no topic constraint — the
+    // Review badge reflects the whole review queue, not just this topic
+    await waitFor(() => expect(listKnowledgeItems).toHaveBeenCalledWith('', 'draft'))
+  })
+
+  it('marks aria-selected on only the actually active tab, and switching back to Explorer works too', async () => {
+    // Given the section rendered on Explorer (the default tab)
+    vi.mocked(listKnowledgeItems).mockResolvedValue([])
+    const user = userEvent.setup()
+    render(<KnowledgeSection selectedTopic={null} mutationsDisabled={false} />)
+    expect(screen.getByRole('tab', { name: 'Explorer' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Review' })).toHaveAttribute('aria-selected', 'false')
+
+    // When switching to Review
+    await user.click(screen.getByRole('tab', { name: 'Review' }))
+
+    // Then Review is now selected and Explorer is not
+    expect(screen.getByRole('tab', { name: 'Review' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Explorer' })).toHaveAttribute('aria-selected', 'false')
+
+    // When switching back to Explorer
+    await user.click(screen.getByRole('tab', { name: 'Explorer' }))
+
+    // Then Explorer is selected again
+    expect(screen.getByRole('tab', { name: 'Explorer' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Review' })).toHaveAttribute('aria-selected', 'false')
+  })
+
+  it('applies the highlight classes to only the active tab, keeping the shared base classes on both', async () => {
+    // Given the section rendered on Explorer (the default tab)
+    vi.mocked(listKnowledgeItems).mockResolvedValue([])
+    const user = userEvent.setup()
+    render(<KnowledgeSection selectedTopic={null} mutationsDisabled={false} />)
+    const explorerTab = screen.getByRole('tab', { name: 'Explorer' })
+    const reviewTab = screen.getByRole('tab', { name: 'Review' })
+
+    // Then only Explorer carries the active highlight, and both still share
+    // the base tab styling
+    expect(explorerTab.className).toContain('bg-secondary')
+    expect(explorerTab.className).toContain('rounded-md')
+    expect(reviewTab.className).not.toContain('bg-secondary')
+    expect(reviewTab.className).toContain('rounded-md')
+
+    // When switching to Review
+    await user.click(reviewTab)
+
+    // Then the highlight moves to Review, and the base classes remain on both
+    expect(reviewTab.className).toContain('bg-secondary')
+    expect(reviewTab.className).toContain('rounded-md')
+    expect(explorerTab.className).not.toContain('bg-secondary')
+    expect(explorerTab.className).toContain('rounded-md')
+  })
+
   it('shows the pending-review count on the Review tab', async () => {
     // Given two draft items — mocked by status, since the section's own
     // draft-count fetch and the nested Explorer's own fetch (status: '')
@@ -108,6 +168,25 @@ describe('KnowledgeSection', () => {
     // Then the progress dialog opens and the import starts for that path
     expect(await screen.findByText('Importing notes')).toBeInTheDocument()
     await waitFor(() => expect(importNotes).toHaveBeenCalledWith('/home/user/notes'))
+  })
+
+  it('closes the import dialog when Close is clicked after the import fails', async () => {
+    // Given an import that fails outright
+    vi.mocked(listKnowledgeItems).mockResolvedValue([])
+    vi.mocked(pickNotesFolder).mockResolvedValueOnce('/home/user/notes')
+    const failedImport = Promise.reject(new Error('IPC failure'))
+    failedImport.catch(() => {}) // avoid an unhandled-rejection warning from this local reference
+    vi.mocked(importNotes).mockReturnValueOnce(failedImport)
+    const user = userEvent.setup()
+    render(<KnowledgeSection selectedTopic={null} mutationsDisabled={false} />)
+    await user.click(screen.getByRole('button', { name: 'Import notes' }))
+    const [closeButton] = await screen.findAllByRole('button', { name: 'Close' })
+
+    // When closing it
+    await user.click(closeButton)
+
+    // Then the dialog is gone
+    expect(screen.queryByText('Importing notes')).not.toBeInTheDocument()
   })
 
   it('does nothing when the folder picker is cancelled', async () => {
