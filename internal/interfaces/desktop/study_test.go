@@ -12,11 +12,13 @@ import (
 	"github.com/santaniello/athena/internal/application/folder"
 	"github.com/santaniello/athena/internal/application/study"
 	domainfolder "github.com/santaniello/athena/internal/domain/folder"
+	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
 	domainprofile "github.com/santaniello/athena/internal/domain/profile"
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 
 	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
+	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 	profilemocks "github.com/santaniello/athena/internal/domain/profile/mocks"
 	studymocks "github.com/santaniello/athena/internal/domain/study/mocks"
@@ -26,14 +28,18 @@ import (
 // so assertions can inspect them without touching the real Wails runtime
 // (which os.Exit's when a.ctx wasn't produced by wails.Run).
 type capturedEvents struct {
-	chunks []string
-	done   bool
-	errors []string
+	chunks  []StudyChunkEvent
+	dones   []StudyDoneEvent
+	errors  []StudyErrorEvent
+	sources []StudySourcesEvent
+	// done/gone bools kept for tests that only check whether it fired.
+	done bool
 }
 
 func newTestStudyApp(t *testing.T, sessions domainstudy.SessionRepository, messages domainstudy.MessageRepository, llm domainllm.Provider, profiles domainprofile.Store, folders domainfolder.Repository) (*App, *capturedEvents) {
 	t.Helper()
-	studyService := study.NewService(sessions, messages, llm, profiles, folders)
+	retriever := knowledgemocks.NewMockRetriever(t)
+	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever)
 	folderService := folder.NewService(folders, sessions)
 	app := NewApp(nil, nil, nil, nil, nil, studyService, folderService, nil, nil, nil, nil)
 	app.Startup(context.Background())
@@ -42,11 +48,14 @@ func newTestStudyApp(t *testing.T, sessions domainstudy.SessionRepository, messa
 	app.emit = func(_ context.Context, eventName string, data ...interface{}) {
 		switch eventName {
 		case eventStudyChunk:
-			captured.chunks = append(captured.chunks, data[0].(string))
+			captured.chunks = append(captured.chunks, data[0].(StudyChunkEvent))
 		case eventStudyDone:
 			captured.done = true
+			captured.dones = append(captured.dones, data[0].(StudyDoneEvent))
 		case eventStudyError:
-			captured.errors = append(captured.errors, data[0].(string))
+			captured.errors = append(captured.errors, data[0].(StudyErrorEvent))
+		case eventStudySources:
+			captured.sources = append(captured.sources, data[0].(StudySourcesEvent))
 		}
 	}
 	return app, captured
@@ -125,11 +134,18 @@ func TestApp_RequestOpeningTurn_streamsChunksAndSignalsDone(t *testing.T) {
 	// When requesting the opening turn for an already-created session
 	err := app.RequestOpeningTurn("session-1", "Distributed systems")
 
-	// Then it streamed both chunks, ending with a "done" event
+	// Then it streamed both chunks, ending with a "done" event, all
+	// session-scoped, and no sources event fired (no retrieval on the
+	// opening turn)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"Hello ", "there!"}, captured.chunks)
-	assert.True(t, captured.done)
+	require.Len(t, captured.chunks, 2)
+	assert.Equal(t, "session-1", captured.chunks[0].SessionID)
+	assert.Equal(t, []string{"Hello ", "there!"}, []string{captured.chunks[0].Content, captured.chunks[1].Content})
+	require.True(t, captured.done)
+	require.Len(t, captured.dones, 1)
+	assert.Equal(t, "session-1", captured.dones[0].SessionID)
 	assert.Empty(t, captured.errors)
+	assert.Empty(t, captured.sources)
 }
 
 func TestApp_RequestOpeningTurn_emitsErrorEvent_onFailure(t *testing.T) {
@@ -146,16 +162,17 @@ func TestApp_RequestOpeningTurn_emitsErrorEvent_onFailure(t *testing.T) {
 	// When requesting the opening turn
 	err := app.RequestOpeningTurn("session-1", "Distributed systems")
 
-	// Then the error propagates and an error event was emitted, with no
-	// chunk or done event
+	// Then the error propagates and a session-scoped error event was
+	// emitted, with no chunk or done event
 	require.Error(t, err)
 	require.Len(t, captured.errors, 1)
+	assert.Equal(t, "session-1", captured.errors[0].SessionID)
 	assert.Empty(t, captured.chunks)
 	assert.False(t, captured.done)
 }
 
 func TestApp_SendStudyMessage_streamsReplyAndSignalsDone(t *testing.T) {
-	// Given an App backed by a study service that streams a reply
+	// Given an App backed by a study service that streams a reply in web mode
 	sessions := studymocks.NewMockSessionRepository(t)
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
@@ -173,17 +190,103 @@ func TestApp_SendStudyMessage_streamsReplyAndSignalsDone(t *testing.T) {
 		Once()
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
-	// When sending a message
-	err := app.SendStudyMessage("session-1", "Distributed systems", "What is CAP theorem?")
+	// When sending a message in web mode
+	err := app.SendStudyMessage("session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeWeb)
 
-	// Then it succeeds, forwarded the chunk and signaled done
+	// Then it succeeds, forwarded the chunk and signaled done, both
+	// session-scoped, and emitted an empty sources event first
 	require.NoError(t, err)
-	assert.Equal(t, []string{"It stands for..."}, captured.chunks)
+	require.Len(t, captured.chunks, 1)
+	assert.Equal(t, "session-1", captured.chunks[0].SessionID)
+	assert.Equal(t, "It stands for...", captured.chunks[0].Content)
 	assert.True(t, captured.done)
+	require.Len(t, captured.sources, 1)
+	assert.Equal(t, "session-1", captured.sources[0].SessionID)
+	assert.Equal(t, []StudySourceResult{}, captured.sources[0].Sources)
+}
+
+func TestApp_SendStudyMessage_invalidSourceMode_emitsErrorEventWithoutPersistingOrCallingAnyPort(t *testing.T) {
+	// Given an App and an unknown source mode; no port mock has any
+	// .EXPECT() set, so any call would fail the test
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
+	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
+
+	// When sending a message with an unrecognized source mode
+	err := app.SendStudyMessage("session-1", "Distributed systems", "What is CAP theorem?", "bogus-mode")
+
+	// Then the error propagates and a session-scoped error event was
+	// emitted (same failure-handling path as any other SendStudyMessage
+	// error), with no chunk, done, or sources event, and no port was ever
+	// called (no .EXPECT() set on any mock above)
+	require.ErrorIs(t, err, domainknowledge.ErrInvalidSourceMode)
+	assert.Empty(t, captured.chunks)
+	assert.False(t, captured.done)
+	require.Len(t, captured.errors, 1)
+	assert.Equal(t, "session-1", captured.errors[0].SessionID)
+	assert.Empty(t, captured.sources)
+}
+
+func TestApp_SendStudyMessage_emitsPostCapSourcesEvent_notes(t *testing.T) {
+	// Given a study service (via a real Service backed by mocks) whose
+	// retriever finds one surviving chunk in notes mode
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
+	retriever := knowledgemocks.NewMockRetriever(t)
+
+	messages.EXPECT().Append(mock.Anything, mock.AnythingOfType("study.Message")).Return(nil).Twice()
+	messages.EXPECT().ListBySession(mock.Anything, "session-1").Return(nil, nil).Once()
+	profiles.EXPECT().Load().Return(domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}, nil)
+	result := domainknowledge.RetrievalResult{
+		Chunks:     []domainknowledge.ScoredChunk{{Chunk: domainknowledge.Chunk{ID: "chunk-1"}, Score: 0.9}},
+		Sufficient: true,
+		Context:    `[{"heading":"H"}]`,
+		Sources: []domainknowledge.Source{
+			{ChunkID: "chunk-1", ItemID: "item-1", SourceType: domainknowledge.SourceImportedDoc, FilePath: "notes/a.md", Heading: "H", Concept: "Channels", Score: 0.9, Excerpt: "..."},
+		},
+	}
+	retriever.EXPECT().Retrieve(mock.Anything, "session-1", mock.AnythingOfType("string")).Return(result, nil).Once()
+	llm.EXPECT().ChatStream(mock.Anything, mock.AnythingOfType("llm.ChatRequest"), mock.AnythingOfType("func(string) error")).Return(nil).Once()
+
+	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever)
+	folderService := folder.NewService(folders, sessions)
+	app := NewApp(nil, nil, nil, nil, nil, studyService, folderService, nil, nil, nil, nil)
+	app.Startup(context.Background())
+	captured := &capturedEvents{}
+	app.emit = func(_ context.Context, eventName string, data ...interface{}) {
+		switch eventName {
+		case eventStudyChunk:
+			captured.chunks = append(captured.chunks, data[0].(StudyChunkEvent))
+		case eventStudyDone:
+			captured.done = true
+		case eventStudySources:
+			captured.sources = append(captured.sources, data[0].(StudySourcesEvent))
+		}
+	}
+
+	// When sending a message in notes mode
+	err := app.SendStudyMessage("session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeNotes)
+
+	// Then the emitted sources event carries exactly the DTO fields, in
+	// order, derived from the post-cap domain Source (no internal ID or
+	// excerpt field exists on the DTO type at all)
+	require.NoError(t, err)
+	require.Len(t, captured.sources, 1)
+	assert.Equal(t, "session-1", captured.sources[0].SessionID)
+	require.Len(t, captured.sources[0].Sources, 1)
+	assert.Equal(t, StudySourceResult{
+		SourceType: domainknowledge.SourceImportedDoc, FilePath: "notes/a.md", Heading: "H", Concept: "Channels", Score: 0.9,
+	}, captured.sources[0].Sources[0])
 }
 
 func TestApp_SendStudyMessage_emitsErrorEvent_onFailure(t *testing.T) {
-	// Given an App backed by a study service whose LLM call fails
+	// Given an App backed by a study service whose LLM call fails, in web mode
 	sessions := studymocks.NewMockSessionRepository(t)
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
@@ -199,12 +302,13 @@ func TestApp_SendStudyMessage_emitsErrorEvent_onFailure(t *testing.T) {
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
 	// When sending a message and the LLM call fails
-	err := app.SendStudyMessage("session-1", "Distributed systems", "What is CAP theorem?")
+	err := app.SendStudyMessage("session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeWeb)
 
-	// Then the error propagates and an error event was emitted, with no
-	// done event
+	// Then the error propagates and a session-scoped error event was
+	// emitted, with no done event
 	require.Error(t, err)
 	require.Len(t, captured.errors, 1)
+	assert.Equal(t, "session-1", captured.errors[0].SessionID)
 	assert.False(t, captured.done)
 }
 

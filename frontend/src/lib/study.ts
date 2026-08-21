@@ -27,6 +27,38 @@ export interface StudySessionHistory {
   messages: StudyMessage[]
 }
 
+// SourceMode controls whether and how a study turn consults local
+// knowledge before answering. It is transient — passed per call, never
+// stored or inferred from prior messages.
+export type SourceMode = 'notes' | 'strict-notes' | 'web'
+
+export interface StudySource {
+  sourceType: string
+  filePath: string
+  heading: string
+  concept: string
+  score: number
+}
+
+export interface StudyChunkEvent {
+  sessionId: string
+  content: string
+}
+
+export interface StudyDoneEvent {
+  sessionId: string
+}
+
+export interface StudyErrorEvent {
+  sessionId: string
+  message: string
+}
+
+export interface StudySourcesEvent {
+  sessionId: string
+  sources: StudySource[]
+}
+
 function toStudySession(result: {
   id: string
   topic: string
@@ -60,8 +92,9 @@ export async function sendStudyMessage(
   sessionId: string,
   topic: string,
   content: string,
+  sourceMode: SourceMode,
 ): Promise<void> {
-  await SendStudyMessage(sessionId, topic, content)
+  await SendStudyMessage(sessionId, topic, content, sourceMode)
 }
 
 // deleteStudySession permanently deletes sessionId and every message in it.
@@ -95,15 +128,21 @@ export async function listStudySessionsByFolder(folderId: string): Promise<Study
 
 // EventsOn returns its own unsubscribe function. Callers must invoke it on
 // unmount/session change to avoid leaking a listener across study sessions
-// (the first use of Wails runtime events in this codebase).
-export function onStudyChunk(handler: (chunk: string) => void): () => void {
-  return EventsOn('study:chunk', (chunk: string) => handler(chunk))
+// (the first use of Wails runtime events in this codebase). Every study
+// event is session-scoped; filtering by the currently displayed session is
+// the caller's responsibility (see StudyChatScreen), not this thin adapter.
+export function onStudyChunk(handler: (event: StudyChunkEvent) => void): () => void {
+  return EventsOn('study:chunk', (event: StudyChunkEvent) => handler(event))
 }
 
-export function onStudyDone(handler: () => void): () => void {
-  return EventsOn('study:done', () => handler())
+export function onStudyDone(handler: (event: StudyDoneEvent) => void): () => void {
+  return EventsOn('study:done', (event: StudyDoneEvent) => handler(event))
 }
 
-export function onStudyError(handler: (message: string) => void): () => void {
-  return EventsOn('study:error', (message: string) => handler(message))
+export function onStudyError(handler: (event: StudyErrorEvent) => void): () => void {
+  return EventsOn('study:error', (event: StudyErrorEvent) => handler(event))
+}
+
+export function onStudySources(handler: (event: StudySourcesEvent) => void): () => void {
+  return EventsOn('study:sources', (event: StudySourcesEvent) => handler(event))
 }

@@ -9,6 +9,7 @@ import (
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 
 	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
+	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 	profilemocks "github.com/santaniello/athena/internal/domain/profile/mocks"
 	studymocks "github.com/santaniello/athena/internal/domain/study/mocks"
@@ -25,7 +26,8 @@ func TestResume_returnsSessionAndFullHistory(t *testing.T) {
 	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(session, nil).Once()
 	history := []domainstudy.Message{{Role: domainstudy.RoleUser, Content: "Hi"}}
 	messages.EXPECT().ListBySession(context.Background(), "session-1").Return(history, nil).Once()
-	service := NewService(sessions, messages, llm, profiles, folders)
+	retriever := knowledgemocks.NewMockRetriever(t)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever)
 
 	// When resuming the session
 	got, msgs, err := service.Resume(context.Background(), "session-1")
@@ -44,7 +46,8 @@ func TestResume_propagatesSessionNotFound(t *testing.T) {
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
 	sessions.EXPECT().GetByID(context.Background(), "missing").Return(domainstudy.Session{}, domainstudy.ErrSessionNotFound).Once()
-	service := NewService(sessions, messages, llm, profiles, folders)
+	retriever := knowledgemocks.NewMockRetriever(t)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever)
 
 	// When resuming a session that does not exist
 	_, _, err := service.Resume(context.Background(), "missing")

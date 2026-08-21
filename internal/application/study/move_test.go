@@ -9,6 +9,7 @@ import (
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 
 	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
+	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 	profilemocks "github.com/santaniello/athena/internal/domain/profile/mocks"
 	studymocks "github.com/santaniello/athena/internal/domain/study/mocks"
@@ -22,7 +23,8 @@ func TestMoveToFolder_movesTheSession(t *testing.T) {
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
 	sessions.EXPECT().MoveToFolder(context.Background(), "session-1", "folder-b").Return(nil).Once()
-	service := NewService(sessions, messages, llm, profiles, folders)
+	retriever := knowledgemocks.NewMockRetriever(t)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever)
 
 	// When moving the session to another folder
 	err := service.MoveToFolder(context.Background(), "session-1", "folder-b")
@@ -39,7 +41,8 @@ func TestMoveToFolder_propagatesSessionNotFound(t *testing.T) {
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
 	sessions.EXPECT().MoveToFolder(context.Background(), "missing", "folder-b").Return(domainstudy.ErrSessionNotFound).Once()
-	service := NewService(sessions, messages, llm, profiles, folders)
+	retriever := knowledgemocks.NewMockRetriever(t)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever)
 
 	// When moving a session that does not exist
 	err := service.MoveToFolder(context.Background(), "missing", "folder-b")

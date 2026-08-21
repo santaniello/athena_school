@@ -138,8 +138,8 @@ export function SaveProfile(arg1) {
   return window['go']['desktop']['App']['SaveProfile'](arg1);
 }
 
-export function SendStudyMessage(arg1, arg2, arg3) {
-  return window['go']['desktop']['App']['SendStudyMessage'](arg1, arg2, arg3);
+export function SendStudyMessage(arg1, arg2, arg3, arg4) {
+  return window['go']['desktop']['App']['SendStudyMessage'](arg1, arg2, arg3, arg4);
 }
 
 export function StartKnowledgeIndex(arg1) {

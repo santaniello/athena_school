@@ -9,6 +9,7 @@ import (
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 
 	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
+	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 	profilemocks "github.com/santaniello/athena/internal/domain/profile/mocks"
 	studymocks "github.com/santaniello/athena/internal/domain/study/mocks"
@@ -26,7 +27,8 @@ func TestListSessionsByFolder_returnsEverySessionInThatFolder(t *testing.T) {
 		{ID: "s-2", Topic: "Concurrency patterns", FolderID: "folder-a"},
 	}
 	sessions.EXPECT().ListByFolder(context.Background(), "folder-a").Return(want, nil).Once()
-	service := NewService(sessions, messages, llm, profiles, folders)
+	retriever := knowledgemocks.NewMockRetriever(t)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever)
 
 	// When listing sessions in folder-a
 	got, err := service.ListSessionsByFolder(context.Background(), "folder-a")

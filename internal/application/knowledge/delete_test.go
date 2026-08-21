@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	txmocks "github.com/santaniello/athena/internal/application/knowledge/mocks"
+	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 )
 
@@ -29,7 +30,7 @@ func TestDeleteItem_cascadesToChunks_thenDeletesTheItem_thenReconcilesTheStore(t
 	store.EXPECT().Remove(mock.Anything, []string{"chunk-1", "chunk-2"}).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t))
+	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
 
 	// When deleting it
 	err := service.DeleteItem(ctx, "item-1")
@@ -49,7 +50,7 @@ func TestDeleteItem_propagatesChunkDeletionError_withoutDeletingTheItem(t *testi
 	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return(nil, boom).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, chunks, tx, nil, passingIndexGuard(t))
+	service := NewService(repository, nil, nil, nil, nil, chunks, tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
 
 	// When deleting the item
 	err := service.DeleteItem(ctx, "item-1")
@@ -66,7 +67,7 @@ func TestDeleteItem_returnsErrIndexLoading_whenIndexIsLoading_andNeverTouchesThe
 	repository := knowledgemocks.NewMockRepository(t)
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(ErrIndexLoading).Once()
-	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, guard)
+	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, guard, domainknowledge.RetrievalThresholds{})
 
 	// When deleting an item
 	err := service.DeleteItem(ctx, "item-1")
@@ -88,7 +89,7 @@ func TestDeleteItem_returnsIndexingWarning_whenPostCommitReconciliationFails_but
 	store.EXPECT().Remove(mock.Anything, []string{"chunk-1"}).Return(boom).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t))
+	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
 
 	// When deleting it and the post-commit reconciliation fails
 	err := service.DeleteItem(ctx, "item-1")

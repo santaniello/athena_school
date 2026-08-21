@@ -13,6 +13,7 @@ import (
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 
 	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
+	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 	profilemocks "github.com/santaniello/athena/internal/domain/profile/mocks"
 	studymocks "github.com/santaniello/athena/internal/domain/study/mocks"
@@ -46,7 +47,8 @@ func TestRequestOpeningTurn_streamsAndPersistsAssistantReply(t *testing.T) {
 		Once()
 
 	var received []string
-	service := NewService(sessions, messages, llm, profiles, folders)
+	retriever := knowledgemocks.NewMockRetriever(t)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever)
 
 	// When requesting the opening turn for an already-created session
 	err := service.RequestOpeningTurn(context.Background(), "session-1", "Distributed systems", func(chunk string) error {
@@ -70,7 +72,8 @@ func TestRequestOpeningTurn_propagatesProfileLoadError(t *testing.T) {
 	messages.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil).Once()
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{}, loadErr)
 
-	service := NewService(sessions, messages, llm, profiles, folders)
+	retriever := knowledgemocks.NewMockRetriever(t)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever)
 
 	// When requesting the opening turn
 	err := service.RequestOpeningTurn(context.Background(), "session-1", "Distributed systems", noopChunkHandler)
@@ -95,7 +98,8 @@ func TestRequestOpeningTurn_propagatesStreamError_withoutPersistingAssistantMess
 		Return(streamErr).
 		Once()
 
-	service := NewService(sessions, messages, llm, profiles, folders)
+	retriever := knowledgemocks.NewMockRetriever(t)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever)
 
 	// When requesting the opening turn
 	err := service.RequestOpeningTurn(context.Background(), "session-1", "Distributed systems", noopChunkHandler)
@@ -121,7 +125,8 @@ func TestRequestOpeningTurn_replaysExistingMessageInsteadOfGeneratingASecondOne(
 		Once()
 
 	var received []string
-	service := NewService(sessions, messages, llm, profiles, folders)
+	retriever := knowledgemocks.NewMockRetriever(t)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever)
 
 	// When requesting the opening turn again
 	err := service.RequestOpeningTurn(context.Background(), "session-1", "Distributed systems", func(chunk string) error {

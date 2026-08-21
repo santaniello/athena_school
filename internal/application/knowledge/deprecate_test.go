@@ -32,7 +32,7 @@ func TestDeprecate_transitionsApprovedToDeprecated_andReconcilesChunkMetadata(t 
 	store.EXPECT().Add(mock.Anything, updatedChunks).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t))
+	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
 
 	// When deprecating it
 	updated, err := service.Deprecate(ctx, "item-1")
@@ -51,7 +51,7 @@ func TestDeprecate_returnsInvalidTransition_whenItemIsStillADraft(t *testing.T) 
 	}, nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, nil, tx, nil, passingIndexGuard(t))
+	service := NewService(repository, nil, nil, nil, nil, nil, tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
 
 	// When deprecating it
 	_, err := service.Deprecate(ctx, "item-1")
@@ -67,7 +67,7 @@ func TestDeprecate_returnsErrIndexLoading_whenIndexIsLoading_andNeverTouchesTheR
 	repository := knowledgemocks.NewMockRepository(t)
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(ErrIndexLoading).Once()
-	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, guard)
+	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, guard, domainknowledge.RetrievalThresholds{})
 
 	// When deprecating an item
 	_, err := service.Deprecate(ctx, "item-1")
@@ -93,7 +93,7 @@ func TestDeprecate_returnsIndexingWarning_whenPostCommitReconciliationFails_butK
 	store.EXPECT().Add(mock.Anything, updatedChunks).Return(boom).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t))
+	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
 
 	// When deprecating it and the post-commit reconciliation fails
 	updated, err := service.Deprecate(ctx, "item-1")
