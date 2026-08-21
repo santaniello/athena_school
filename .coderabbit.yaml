@@ -70,8 +70,9 @@ reviews:
     - path: "frontend/src/**/*.{ts,tsx}"
       instructions: >-
         React nunca contém regra de negócio — chama apenas bindings Wails.
-        Texto de UI voltado ao usuário em Português (BR); identificadores,
-        comentários e nomes de arquivo em Inglês.
+        Texto de UI voltado ao usuário em Inglês (ver AGENTS.md §Language,
+        alterado no commit bee6472 de Português (BR) para Inglês);
+        identificadores, comentários e nomes de arquivo também em Inglês.
 
     - path: "**/*.go"
       instructions: >-
