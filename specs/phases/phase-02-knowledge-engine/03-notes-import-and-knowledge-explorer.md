@@ -7,6 +7,9 @@
 > exist for imported notes to be usable at all, and the screen's "Import notes"
 > button has nowhere to live before the Knowledge nav section is unlocked. See
 > "Why 2.3 and 2.6 merged" below.
+>
+> Phase number 2.6 was later reused for **Study Context Limits**. Every 2.6
+> reference in this document means the superseded Knowledge Explorer split.
 
 ## Goal
 

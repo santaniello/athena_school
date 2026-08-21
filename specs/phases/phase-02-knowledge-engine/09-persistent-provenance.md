@@ -66,24 +66,31 @@ supported the item at approval time.
 
 ```go
 type MessageSource struct {
-    MessageID string
-    Position  int
-    ChunkID   string
-    ItemID    string
-    FilePath  string
-    Heading   string
-    Concept   string
-    Score     float64
-    Excerpt   string
+    MessageID  string
+    Position   int
+    ChunkID    string
+    ItemID     string
+    SourceType string
+    FilePath   string
+    Heading    string
+    Concept    string
+    Score      float64
+    Excerpt    string
 }
 ```
 
 Only chunks that survive 2.5's similarity threshold and context cap are saved.
-`Position` preserves their exact rendered order. File path, heading, concept, score,
-and the exact chunk content used in the context are snapshots, so historical answers
-remain explainable after a note is re-imported or a Knowledge Item is edited.
+`Position` preserves their exact rendered order. Source type, file path, heading,
+concept, score, and the exact chunk content used in the context are snapshots, so
+historical answers remain explainable after a note is re-imported or a Knowledge
+Item is edited.
 
-The completed assistant message and its sources are appended atomically through a study-domain repository operation. A failed stream writes neither the partial assistant message nor sources. `study:sources` remains for immediate rendering, while `ResumeStudySession` loads persisted sources for historical assistant messages.
+The completed assistant message and its sources extend Phase 2.6's existing
+assistant-message/context-state transaction through a study-domain repository
+operation. A failed final transaction writes neither the assistant message,
+context state, nor sources. `study:sources` remains for immediate rendering,
+while `ResumeStudySession` loads persisted sources for historical assistant
+messages.
 
 ## Schema
 
@@ -104,15 +111,16 @@ CREATE TABLE IF NOT EXISTS knowledge_item_evidence (
 );
 
 CREATE TABLE IF NOT EXISTS message_sources (
-    message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-    position   INTEGER NOT NULL,
-    chunk_id   TEXT,
-    item_id    TEXT,
-    file_path  TEXT NOT NULL DEFAULT '',
-    heading    TEXT NOT NULL DEFAULT '',
-    concept    TEXT NOT NULL DEFAULT '',
-    score      REAL NOT NULL,
-    excerpt    TEXT NOT NULL,
+    message_id  TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    position    INTEGER NOT NULL,
+    chunk_id    TEXT,
+    item_id     TEXT,
+    source_type TEXT NOT NULL,
+    file_path   TEXT NOT NULL DEFAULT '',
+    heading     TEXT NOT NULL DEFAULT '',
+    concept     TEXT NOT NULL DEFAULT '',
+    score       REAL NOT NULL,
+    excerpt     TEXT NOT NULL,
     PRIMARY KEY (message_id, position)
 );
 
@@ -128,7 +136,7 @@ belong to the assistant message and cascade when that message is deleted.
 ## Tasks
 
 - [ ] `internal/domain/knowledge/evidence.go` — evidence types, validation, repositories, origin constants
-- [ ] `internal/domain/study/repository.go` — atomic completed-assistant-message + source append contract
+- [ ] `internal/domain/study/repository.go` — extend the 2.6 atomic completed-assistant-message/context update with sources
 - [ ] `internal/infrastructure/sqlite/migrations.go` — the three tables and evidence lookup index
 - [ ] `internal/infrastructure/sqlite/evidence_repository.go`, `message_source_repository.go`
 - [ ] `internal/application/knowledge/extraction.go` / `prompt.go` / `parse.go` — message markers, evidence IDs, server-side ownership validation, transactional save
@@ -146,6 +154,7 @@ belong to the assistant message and cascade when that message is deleted.
 - Saving an item and its evidence is atomic; a failure leaves neither behind
 - Editing or deleting the original message does not change the evidence snapshot
 - Sources shown during a RAG response are exactly the sources restored after an app restart
-- A failed stream persists neither a partial assistant message nor `message_sources`
+- A failed final transaction persists neither the assistant message, its context-state update, nor `message_sources`
+- Restored sources retain `SourceType`, so historical `user_note`, `imported_doc`, and `athena` labels match their live 2.5 rendering
 - Re-importing a changed note does not rewrite the exact chunk snapshot attached to historical answers
 - Deleting one item does not delete evidence still referenced by another item
