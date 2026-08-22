@@ -242,13 +242,14 @@ func TestClient_ChatStream_recordsUsageOnce_fromTheLastUsageBearingFrame(t *test
 	}))
 	defer server.Close()
 	recorder := mocks.NewMockUsageRecorder(t)
+	ctx := context.Background()
 	// No frame carries a "model" field either, so the resolved model is
 	// unconfirmed — recorded empty rather than under the requested alias.
-	recorder.EXPECT().Record(mock.Anything, usageEntryMatcher("sess-1", "", 7, 3, 0.002)).Return(nil).Once()
+	recorder.EXPECT().Record(ctx, usageEntryMatcher("sess-1", "", 7, 3, 0.002)).Return(nil).Once()
 	client := NewClient(server.URL, "sk-or-valid", recorder)
 
 	// When streaming a chat request
-	_, err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
+	_, err := client.ChatStream(ctx, domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
 
 	// Then usage is recorded once, using the last usage-bearing frame
 	require.NoError(t, err)
@@ -262,13 +263,14 @@ func TestClient_ChatStream_recordsZeroUsage_whenNoFrameCarriesUsage(t *testing.T
 	}))
 	defer server.Close()
 	recorder := mocks.NewMockUsageRecorder(t)
+	ctx := context.Background()
 	// No frame carries a "model" field either, so the resolved model is
 	// unconfirmed — recorded empty rather than under the requested alias.
-	recorder.EXPECT().Record(mock.Anything, usageEntryMatcher("sess-1", "", 0, 0, 0)).Return(nil).Once()
+	recorder.EXPECT().Record(ctx, usageEntryMatcher("sess-1", "", 0, 0, 0)).Return(nil).Once()
 	client := NewClient(server.URL, "sk-or-valid", recorder)
 
 	// When streaming a chat request
-	_, err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
+	_, err := client.ChatStream(ctx, domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
 
 	// Then usage is still recorded once, zeroed out
 	require.NoError(t, err)
@@ -425,14 +427,15 @@ func TestClient_ChatStream_fallsBackToFreeModel_whenFirstAttemptReturns402(t *te
 	}))
 	defer server.Close()
 	recorder := mocks.NewMockUsageRecorder(t)
+	ctx := context.Background()
 	// No frame carries a "model" field either, so the resolved model is
 	// unconfirmed — recorded empty rather than under the free-fallback alias.
-	recorder.EXPECT().Record(mock.Anything, usageEntryMatcher("sess-1", "", 0, 0, 0)).Return(nil).Once()
+	recorder.EXPECT().Record(ctx, usageEntryMatcher("sess-1", "", 0, 0, 0)).Return(nil).Once()
 	client := NewClient(server.URL, "sk-or-valid", recorder)
 
 	// When streaming a chat request for a premium task
 	var received []string
-	_, err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskInterviewEvaluation}, func(chunk string) error {
+	_, err := client.ChatStream(ctx, domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskInterviewEvaluation}, func(chunk string) error {
 		received = append(received, chunk)
 		return nil
 	})
@@ -498,14 +501,15 @@ func TestClient_ChatStream_leavesModelEmpty_whenFramesConflict(t *testing.T) {
 	}))
 	defer server.Close()
 	recorder := mocks.NewMockUsageRecorder(t)
+	ctx := context.Background()
 	// Recorded under an empty model too — conflicting metadata means the
 	// resolved model is unconfirmed, so usage must not be attributed to
 	// the requested alias as if it were confirmed.
-	recorder.EXPECT().Record(mock.Anything, usageEntryMatcher("sess-1", "", 0, 0, 0)).Return(nil).Once()
+	recorder.EXPECT().Record(ctx, usageEntryMatcher("sess-1", "", 0, 0, 0)).Return(nil).Once()
 	client := NewClient(server.URL, "sk-or-valid", recorder)
 
 	// When streaming a chat request
-	resp, err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
+	resp, err := client.ChatStream(ctx, domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
 
 	// Then the resolved model is left empty rather than guessed
 	require.NoError(t, err)
@@ -520,11 +524,12 @@ func TestClient_ChatStream_leavesModelEmpty_whenNoFrameReportsOne(t *testing.T) 
 	}))
 	defer server.Close()
 	recorder := mocks.NewMockUsageRecorder(t)
-	recorder.EXPECT().Record(mock.Anything, usageEntryMatcher("sess-1", "", 0, 0, 0)).Return(nil).Once()
+	ctx := context.Background()
+	recorder.EXPECT().Record(ctx, usageEntryMatcher("sess-1", "", 0, 0, 0)).Return(nil).Once()
 	client := NewClient(server.URL, "sk-or-valid", recorder)
 
 	// When streaming a chat request
-	resp, err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
+	resp, err := client.ChatStream(ctx, domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
 
 	// Then the resolved model stays empty
 	require.NoError(t, err)
