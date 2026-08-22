@@ -522,13 +522,16 @@ strict-notes sem chunks: resposta fixa sem chat/completion
 ### 2.6 — Study Context Limits
 
 - [ ] Separado do teto RAG por turno: mede o histórico completo reenviado ao modelo
-- [ ] `ChatStream` retorna modelo resolvido + usage; ocupação real = `input_tokens + output_tokens`
-- [ ] Catálogo dinâmico da OpenRouter fornece `context_length`, carregado assincronamente uma vez e mantido em cache; modelo ausente dispara refresh sob demanda
-- [ ] Falha do catálogo não bloqueia chat e mostra uma única notificação discreta por sessão aberta
-- [ ] Mensagem sem stream soma estimativa `ceil(runes/3) + 8`, independente do idioma; próxima medição real substitui o acumulado
-- [ ] Estado persistido `normal | warning | blocked`: alerta informativo em 80%, bloqueio de botão/Enter/backend em 95%
-- [ ] Alerta oferece nova sessão no mesmo folder/tópico, sem copiar histórico/fontes e com opening turn normal
-- [ ] Mensagem e estado de contexto são gravados atomicamente; resume restaura alerta/bloqueio sem nova chamada LLM
+- [ ] `ChatStream` retorna modelo resolvido consistente + usage válido; ausência/conflito de modelo não falha a resposta, e ocupação real = `input_tokens + output_tokens`
+- [ ] Estimativa fallback cobre cada mensagem realmente montada (system/RAG incluídos) + resposta; estado não regride no mesmo modelo/limite, mas mudança de modelo/limite recalcula em ambas as direções
+- [ ] Catálogo dinâmico validado da OpenRouter fornece `context_length`: warm-up único, cache substituído atomicamente, consultas cache-only e refresh assíncrono single-flight separados
+- [ ] Modelo ausente nunca atrasa resposta já concluída; medição fica com limite zero, refresh tardio usa compare-and-set, e falha relevante mostra uma notificação transitória por tela de sessão
+- [ ] Mensagem sem stream soma estimativa `ceil(runes/3) + 8`, independente do idioma; próxima medição real substitui o acumulado sem regredir o estado no mesmo modelo/limite
+- [ ] Estado persistido `normal | warning | blocked`: alerta informativo em 80%, bloqueio reativo em 95%, textarea read-only + botão/Enter/seletor/backend bloqueados
+- [ ] Um turno em voo por sessão; validação de entrada precede o slot, e read/guard + mensagem do usuário + incremento provisório compartilham transação
+- [ ] Alerta oferece nova sessão coordenada pelo `AppShell` no mesmo folder/tópico, sem copiar draft/histórico/fontes e com opening turn normal; falha de opening preserva a sessão criada
+- [ ] Eventos tipados por sessão incluem `normal`, transições provisórias/finais e limite novamente disponível; códigos estáveis reconciliam somente mensagens otimistas não persistidas
+- [ ] Mensagem e estado de contexto são gravados atomicamente; resume resolve cache sem I/O ou retorna imediatamente e atualiza em background, nunca chamando LLM
 - [ ] Nunca truncar, apagar ou resumir histórico silenciosamente
 
 ### 2.7 — Knowledge Review
