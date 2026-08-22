@@ -14,6 +14,10 @@ import {
   listStudySessionsByFolder,
   moveStudySession,
   onStudyChunk,
+  onStudyContextLimitReached,
+  onStudyContextLimitUnavailable,
+  onStudyContextNormal,
+  onStudyContextWarning,
   onStudyDone,
   onStudyError,
   onStudySources,
@@ -21,7 +25,16 @@ import {
   resumeStudySession,
   sendStudyMessage,
   startStudySession,
+  type StudyContextUsage,
 } from './study'
+
+const CONTEXT_NORMAL: StudyContextUsage = {
+  state: 'normal',
+  model: '',
+  usedTokens: 0,
+  contextLength: 0,
+  estimated: false,
+}
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
   StartStudySession: vi.fn(),
@@ -45,6 +58,7 @@ describe('startStudySession', () => {
       topic: 'Distributed systems',
       folderId: 'folder-1',
       startedAt: '2026-08-16T10:00:00Z',
+      context: CONTEXT_NORMAL,
     } as never)
 
     // When starting a study session in a folder
@@ -57,6 +71,7 @@ describe('startStudySession', () => {
       topic: 'Distributed systems',
       folderId: 'folder-1',
       startedAt: '2026-08-16T10:00:00Z',
+      context: CONTEXT_NORMAL,
     })
   })
 
@@ -67,6 +82,7 @@ describe('startStudySession', () => {
       topic: 'Distributed systems',
       folderId: 'default',
       startedAt: '2026-08-16T10:00:00Z',
+      context: CONTEXT_NORMAL,
     } as never)
 
     // When starting a session without specifying a folder
@@ -87,6 +103,7 @@ describe('resumeStudySession', () => {
         topic: 'Distributed systems',
         folderId: 'folder-1',
         startedAt: '2026-08-16T10:00:00Z',
+        context: CONTEXT_NORMAL,
       },
       messages: [{ role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z' }],
     } as never)
@@ -125,12 +142,14 @@ describe('listStudySessionsByFolder', () => {
         topic: 'Cache invalidation',
         folderId: 'folder-1',
         startedAt: '2026-08-16T10:00:00Z',
+        context: CONTEXT_NORMAL,
       },
       {
         id: 's-2',
         topic: 'Concurrency patterns',
         folderId: 'folder-1',
         startedAt: '2026-08-15T10:00:00Z',
+        context: CONTEXT_NORMAL,
       },
     ] as never)
 
@@ -246,7 +265,7 @@ describe('onStudyDone', () => {
 })
 
 describe('onStudyError', () => {
-  it('subscribes to the study:error event and forwards the sessionId and message', () => {
+  it('subscribes to the study:error event and forwards the sessionId, message and code', () => {
     // Given a handler and a mocked EventsOn
     vi.mocked(EventsOn).mockReturnValueOnce(vi.fn())
     const handler = vi.fn()
@@ -254,11 +273,75 @@ describe('onStudyError', () => {
     // When subscribing
     onStudyError(handler)
     const [, callback] = vi.mocked(EventsOn).mock.calls[0]
-    callback({ sessionId: 'session-1', message: 'upstream failure' })
+    callback({ sessionId: 'session-1', message: 'upstream failure', code: '' })
 
-    // Then the handler received the sessionId and error message
+    // Then the handler received the sessionId, error message and code
     expect(EventsOn).toHaveBeenCalledWith('study:error', expect.any(Function))
-    expect(handler).toHaveBeenCalledWith({ sessionId: 'session-1', message: 'upstream failure' })
+    expect(handler).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      message: 'upstream failure',
+      code: '',
+    })
+  })
+
+  it('forwards a stable error code when one is present', () => {
+    // Given a handler and a mocked EventsOn
+    vi.mocked(EventsOn).mockReturnValueOnce(vi.fn())
+    const handler = vi.fn()
+
+    // When subscribing and a pre-persistence error fires
+    onStudyError(handler)
+    const [, callback] = vi.mocked(EventsOn).mock.calls[0]
+    callback({ sessionId: 'session-1', message: 'blocked', code: 'context_limit_reached' })
+
+    // Then the code is forwarded as-is
+    expect(handler).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      message: 'blocked',
+      code: 'context_limit_reached',
+    })
+  })
+})
+
+describe.each([
+  ['onStudyContextNormal', onStudyContextNormal, 'study:context-normal'],
+  ['onStudyContextWarning', onStudyContextWarning, 'study:context-warning'],
+  ['onStudyContextLimitReached', onStudyContextLimitReached, 'study:context-limit-reached'],
+])('%s', (_name, subscribe, eventName) => {
+  it(`subscribes to ${'the event'} and forwards the payload`, () => {
+    // Given a handler and a mocked EventsOn
+    vi.mocked(EventsOn).mockReturnValueOnce(vi.fn())
+    const handler = vi.fn()
+    const payload = { sessionId: 'session-1', usedTokens: 8000, contextLength: 10000, estimated: true }
+
+    // When subscribing
+    subscribe(handler)
+    const [, callback] = vi.mocked(EventsOn).mock.calls[0]
+    callback(payload)
+
+    // Then it subscribed to the right event name and forwarded the payload
+    expect(EventsOn).toHaveBeenCalledWith(eventName, expect.any(Function))
+    expect(handler).toHaveBeenCalledWith(payload)
+  })
+})
+
+describe('onStudyContextLimitUnavailable', () => {
+  it('subscribes to the study:context-limit-unavailable event and forwards the payload', () => {
+    // Given a handler and a mocked EventsOn
+    vi.mocked(EventsOn).mockReturnValueOnce(vi.fn())
+    const handler = vi.fn()
+
+    // When subscribing
+    onStudyContextLimitUnavailable(handler)
+    const [, callback] = vi.mocked(EventsOn).mock.calls[0]
+    callback({ sessionId: 'session-1', message: "Unable to determine this session's context limit." })
+
+    // Then the handler received the sessionId and message
+    expect(EventsOn).toHaveBeenCalledWith('study:context-limit-unavailable', expect.any(Function))
+    expect(handler).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      message: "Unable to determine this session's context limit.",
+    })
   })
 })
 

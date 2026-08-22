@@ -35,7 +35,7 @@ func TestDeleteSession_deletesMessagesBeforeTheSession(t *testing.T) {
 		Return(nil).
 		Once()
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil)
 
 	// When deleting the session
 	err := service.DeleteSession(context.Background(), "session-1")
@@ -54,7 +54,7 @@ func TestDeleteSession_doesNotDeleteSession_whenDeletingMessagesFails(t *testing
 	folders := foldermocks.NewMockRepository(t)
 	messages.EXPECT().DeleteBySession(context.Background(), "session-1").Return(domainstudy.ErrSessionNotFound).Once()
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil)
 
 	// When deleting the session
 	err := service.DeleteSession(context.Background(), "session-1")
@@ -74,7 +74,7 @@ func TestDeleteSession_propagatesSessionNotFound(t *testing.T) {
 	messages.EXPECT().DeleteBySession(context.Background(), "missing").Return(nil).Once()
 	sessions.EXPECT().Delete(context.Background(), "missing").Return(domainstudy.ErrSessionNotFound).Once()
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil)
 
 	// When deleting a session that does not exist
 	err := service.DeleteSession(context.Background(), "missing")

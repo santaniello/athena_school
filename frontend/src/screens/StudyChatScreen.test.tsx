@@ -4,6 +4,10 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event'
 import {
   onStudyChunk,
+  onStudyContextLimitReached,
+  onStudyContextLimitUnavailable,
+  onStudyContextNormal,
+  onStudyContextWarning,
   onStudyDone,
   onStudyError,
   onStudySources,
@@ -11,6 +15,9 @@ import {
   resumeStudySession,
   sendStudyMessage,
   type StudyChunkEvent,
+  type StudyContextEvent,
+  type StudyContextUnavailableEvent,
+  type StudyContextUsage,
   type StudyDoneEvent,
   type StudyErrorEvent,
   type StudySourcesEvent,
@@ -26,6 +33,10 @@ vi.mock('@/lib/study', () => ({
   onStudyDone: vi.fn(),
   onStudyError: vi.fn(),
   onStudySources: vi.fn(),
+  onStudyContextNormal: vi.fn(),
+  onStudyContextWarning: vi.fn(),
+  onStudyContextLimitReached: vi.fn(),
+  onStudyContextLimitUnavailable: vi.fn(),
 }))
 
 vi.mock('@/lib/knowledge', () => ({
@@ -33,13 +44,38 @@ vi.mock('@/lib/knowledge', () => ({
   saveExtractedKnowledge: vi.fn(),
 }))
 
+const CONTEXT_NORMAL: StudyContextUsage = {
+  state: 'normal',
+  model: '',
+  usedTokens: 0,
+  contextLength: 0,
+  estimated: false,
+}
+
+function studyErrorEvent(sessionId: string, message: string, code = ''): StudyErrorEvent {
+  return { sessionId, message, code }
+}
+
 function setupSubscriptions() {
-  const unsubscribe = { chunk: vi.fn(), done: vi.fn(), error: vi.fn(), sources: vi.fn() }
+  const unsubscribe = {
+    chunk: vi.fn(),
+    done: vi.fn(),
+    error: vi.fn(),
+    sources: vi.fn(),
+    contextNormal: vi.fn(),
+    contextWarning: vi.fn(),
+    contextLimitReached: vi.fn(),
+    contextLimitUnavailable: vi.fn(),
+  }
   const handlers: {
     chunk?: (event: StudyChunkEvent) => void
     done?: (event: StudyDoneEvent) => void
     error?: (event: StudyErrorEvent) => void
     sources?: (event: StudySourcesEvent) => void
+    contextNormal?: (event: StudyContextEvent) => void
+    contextWarning?: (event: StudyContextEvent) => void
+    contextLimitReached?: (event: StudyContextEvent) => void
+    contextLimitUnavailable?: (event: StudyContextUnavailableEvent) => void
     unsubscribe: typeof unsubscribe
   } = { unsubscribe }
   vi.mocked(onStudyChunk).mockImplementation((handler) => {
@@ -58,13 +94,41 @@ function setupSubscriptions() {
     handlers.sources = handler
     return unsubscribe.sources
   })
+  vi.mocked(onStudyContextNormal).mockImplementation((handler) => {
+    handlers.contextNormal = handler
+    return unsubscribe.contextNormal
+  })
+  vi.mocked(onStudyContextWarning).mockImplementation((handler) => {
+    handlers.contextWarning = handler
+    return unsubscribe.contextWarning
+  })
+  vi.mocked(onStudyContextLimitReached).mockImplementation((handler) => {
+    handlers.contextLimitReached = handler
+    return unsubscribe.contextLimitReached
+  })
+  vi.mocked(onStudyContextLimitUnavailable).mockImplementation((handler) => {
+    handlers.contextLimitUnavailable = handler
+    return unsubscribe.contextLimitUnavailable
+  })
   return handlers
 }
 
 function renderNewSession() {
   return render(
-    <StudyChatScreen sessionId="session-1" initialTopic="Distributed systems" mode="new" />,
+    <StudyChatScreen
+      sessionId="session-1"
+      initialTopic="Distributed systems"
+      mode="new"
+      onStartNewSession={vi.fn()}
+      startingNewSession={false}
+    />,
   )
+}
+
+// Spread into every direct <StudyChatScreen> render in this file so the two
+// new required context-limit props don't need repeating at every call site.
+function newSessionActionProps() {
+  return { onStartNewSession: vi.fn(), startingNewSession: false }
 }
 
 async function renderStartedSession() {
@@ -172,7 +236,12 @@ describe('StudyChatScreen — starting a new session', () => {
     // effects in dev (mount → cleanup → mount) to surface missing cleanup
     render(
       <React.StrictMode>
-        <StudyChatScreen sessionId="session-1" initialTopic="Distributed systems" mode="new" />
+        <StudyChatScreen
+          sessionId="session-1"
+          initialTopic="Distributed systems"
+          mode="new"
+          {...newSessionActionProps()}
+        />
       </React.StrictMode>,
     )
 
@@ -216,6 +285,7 @@ describe('StudyChatScreen — resuming a session', () => {
         topic: 'Cache invalidation',
         folderId: 'folder-1',
         startedAt: '2026-08-16T10:00:00Z',
+        context: CONTEXT_NORMAL,
       },
       messages: [
         { role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z' },
@@ -231,6 +301,7 @@ describe('StudyChatScreen — resuming a session', () => {
         initialTopic=""
         mode="resume"
         onTopicResolved={onTopicResolved}
+        {...newSessionActionProps()}
       />,
     )
 
@@ -248,7 +319,14 @@ describe('StudyChatScreen — resuming a session', () => {
     vi.mocked(resumeStudySession).mockRejectedValueOnce(new Error('session not found'))
 
     // When the chat screen mounts in "resume" mode
-    render(<StudyChatScreen sessionId="session-1" initialTopic="" mode="resume" />)
+    render(
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic=""
+        mode="resume"
+        {...newSessionActionProps()}
+      />,
+    )
 
     // Then the error is shown
     expect(await screen.findByText('session not found')).toBeInTheDocument()
@@ -260,7 +338,14 @@ describe('StudyChatScreen — resuming a session', () => {
     vi.mocked(resumeStudySession).mockRejectedValueOnce('network down')
 
     // When the chat screen mounts in "resume" mode
-    render(<StudyChatScreen sessionId="session-1" initialTopic="" mode="resume" />)
+    render(
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic=""
+        mode="resume"
+        {...newSessionActionProps()}
+      />,
+    )
 
     // Then the generic fallback message is shown
     expect(await screen.findByText('Failed to load the session.')).toBeInTheDocument()
@@ -272,7 +357,14 @@ describe('StudyChatScreen — resuming a session', () => {
     vi.mocked(resumeStudySession).mockReturnValueOnce(new Promise(() => {}))
 
     // When the chat screen mounts in "resume" mode
-    render(<StudyChatScreen sessionId="session-1" initialTopic="" mode="resume" />)
+    render(
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic=""
+        mode="resume"
+        {...newSessionActionProps()}
+      />,
+    )
 
     // Then no thinking indicator shows — resuming isn't "streaming a new turn"
     // — and no message is rendered yet either, since the history hasn't
@@ -290,12 +382,20 @@ describe('StudyChatScreen — resuming a session', () => {
         topic: 'Cache invalidation',
         folderId: 'folder-1',
         startedAt: '2026-08-16T10:00:00Z',
+        context: CONTEXT_NORMAL,
       },
       messages: [{ role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z' }],
     })
 
     // When the chat screen mounts in "resume" mode
-    render(<StudyChatScreen sessionId="session-1" initialTopic="" mode="resume" />)
+    render(
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic=""
+        mode="resume"
+        {...newSessionActionProps()}
+      />,
+    )
 
     // Then it resolves normally instead of throwing
     expect(await screen.findByText('Hi')).toBeInTheDocument()
@@ -310,11 +410,17 @@ describe('StudyChatScreen — resuming a session', () => {
         topic: 'Cache invalidation',
         folderId: 'folder-1',
         startedAt: '2026-08-16T10:00:00Z',
+        context: CONTEXT_NORMAL,
       },
       messages: [{ role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z' }],
     })
     const { rerender } = render(
-      <StudyChatScreen sessionId="session-1" initialTopic="" mode="resume" />,
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic=""
+        mode="resume"
+        {...newSessionActionProps()}
+      />,
     )
     await screen.findByText('Hi')
 
@@ -327,10 +433,18 @@ describe('StudyChatScreen — resuming a session', () => {
         topic: 'Load balancing',
         folderId: 'folder-1',
         startedAt: '2026-08-16T11:00:00Z',
+        context: CONTEXT_NORMAL,
       },
       messages: [{ role: 'user', content: 'Hello again', createdAt: '2026-08-16T11:00:00Z' }],
     })
-    rerender(<StudyChatScreen sessionId="session-2" initialTopic="" mode="resume" />)
+    rerender(
+      <StudyChatScreen
+        sessionId="session-2"
+        initialTopic=""
+        mode="resume"
+        {...newSessionActionProps()}
+      />,
+    )
 
     // Then the new session's history is fetched and shown
     expect(await screen.findByText('Hello again')).toBeInTheDocument()
@@ -549,7 +663,7 @@ describe('StudyChatScreen — composing and sending', () => {
     const handlers = await renderStartedSession()
     act(() => {
       handlers.chunk?.({ sessionId: 'session-1', content: 'Partial before failure' })
-      handlers.error?.({ sessionId: 'session-1', message: 'upstream failure' })
+      handlers.error?.(studyErrorEvent('session-1', 'upstream failure'))
     })
     await screen.findByText('upstream failure')
     vi.mocked(sendStudyMessage).mockResolvedValueOnce()
@@ -579,7 +693,7 @@ describe('StudyChatScreen — composing and sending', () => {
     const handlers = await renderStartedSession()
 
     act(() => {
-      handlers.error?.({ sessionId: 'session-1', message: 'upstream failure' })
+      handlers.error?.(studyErrorEvent('session-1', 'upstream failure'))
     })
 
     expect(await screen.findByText('upstream failure')).toBeInTheDocument()
@@ -909,10 +1023,18 @@ describe('StudyChatScreen — source modes and local sources', () => {
         topic: 'Load balancing',
         folderId: 'folder-1',
         startedAt: '2026-08-16T11:00:00Z',
+        context: CONTEXT_NORMAL,
       },
       messages: [],
     })
-    render(<StudyChatScreen sessionId="session-2" initialTopic="" mode="resume" />)
+    render(
+      <StudyChatScreen
+        sessionId="session-2"
+        initialTopic=""
+        mode="resume"
+        {...newSessionActionProps()}
+      />,
+    )
 
     // Then the new instance defaults back to Notes
     const selects = screen.getAllByRole('combobox', { name: 'Source mode' })
@@ -1031,7 +1153,7 @@ describe('StudyChatScreen — source modes and local sources', () => {
       })
       handlers.chunk?.({ sessionId: 'another-session', content: 'Should not appear' })
       handlers.done?.({ sessionId: 'another-session' })
-      handlers.error?.({ sessionId: 'another-session', message: 'Should not appear either' })
+      handlers.error?.(studyErrorEvent('another-session', 'Should not appear either'))
     })
 
     // Then nothing from the foreign session affected this screen's state —
@@ -1051,5 +1173,269 @@ describe('StudyChatScreen — source modes and local sources', () => {
 
     await screen.findByText('Welcome!')
     expect(screen.queryByText(/Local sources/)).not.toBeInTheDocument()
+  })
+})
+
+describe('StudyChatScreen — context limits', () => {
+  it('hydrates the persistent state from a resumed session already at warning', async () => {
+    // Given a resumed session already measured into the warning state
+    setupSubscriptions()
+    vi.mocked(resumeStudySession).mockResolvedValueOnce({
+      session: {
+        id: 'session-1',
+        topic: 'Distributed systems',
+        folderId: 'folder-1',
+        startedAt: '2026-08-16T10:00:00Z',
+        context: { state: 'warning', model: 'anthropic/claude', usedTokens: 8000, contextLength: 10000, estimated: false },
+      },
+      messages: [],
+    })
+
+    // When the chat screen mounts in "resume" mode
+    render(
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic=""
+        mode="resume"
+        {...newSessionActionProps()}
+      />,
+    )
+
+    // Then the persistent warning banner renders immediately, with no event
+    // needed
+    expect(
+      await screen.findByText(/approaching the model's context limit/),
+    ).toBeInTheDocument()
+  })
+
+  it('shows the persistent warning banner and enables sending on study:context-warning', async () => {
+    const handlers = await renderSettledSession()
+
+    act(() => {
+      handlers.contextWarning?.({
+        sessionId: 'session-1',
+        usedTokens: 8000,
+        contextLength: 10000,
+        estimated: false,
+      })
+    })
+
+    expect(
+      await screen.findByText(/approaching the model's context limit/),
+    ).toBeInTheDocument()
+    // The button stays disabled only because the draft is empty, not
+    // because of the warning state — typing re-enables it.
+    const user = userEvent.setup()
+    await user.type(screen.getByPlaceholderText(/type your answer/i), 'x')
+    expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled()
+  })
+
+  it('blocks the composer on study:context-limit-reached: read-only textarea, disabled send/source-mode, Enter does nothing', async () => {
+    const handlers = await renderSettledSession()
+    const user = userEvent.setup()
+
+    act(() => {
+      handlers.contextLimitReached?.({
+        sessionId: 'session-1',
+        usedTokens: 9500,
+        contextLength: 10000,
+        estimated: false,
+      })
+    })
+
+    expect(
+      await screen.findByText(/This session has reached its context limit/),
+    ).toBeInTheDocument()
+    const textarea = screen.getByPlaceholderText(/type your answer/i)
+    expect(textarea).toHaveAttribute('readonly')
+    expect(screen.getByRole('combobox', { name: 'Source mode' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
+
+    // Typing is blocked by readOnly in a real browser; jsdom still lets
+    // userEvent write to it, so drive Enter's guard directly instead.
+    await user.click(textarea)
+    await user.keyboard('{Enter}')
+    expect(sendStudyMessage).not.toHaveBeenCalled()
+  })
+
+  it('calls onStartNewSession from the warning banner, disabled while starting', async () => {
+    const onStartNewSession = vi.fn()
+    const handlers = setupSubscriptions()
+    vi.mocked(requestOpeningTurn).mockResolvedValueOnce()
+    render(
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic="Distributed systems"
+        mode="new"
+        onStartNewSession={onStartNewSession}
+        startingNewSession={false}
+      />,
+    )
+    await screen.findByRole('status', { name: /thinking/i })
+    act(() => {
+      handlers.chunk?.({ sessionId: 'session-1', content: 'Welcome!' })
+      handlers.done?.({ sessionId: 'session-1' })
+      handlers.contextWarning?.({
+        sessionId: 'session-1',
+        usedTokens: 8000,
+        contextLength: 10000,
+        estimated: false,
+      })
+    })
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Start new session' }))
+
+    expect(onStartNewSession).toHaveBeenCalledOnce()
+  })
+
+  it('disables the "Start new session" button while startingNewSession is true', async () => {
+    const handlers = setupSubscriptions()
+    vi.mocked(requestOpeningTurn).mockResolvedValueOnce()
+    render(
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic="Distributed systems"
+        mode="new"
+        onStartNewSession={vi.fn()}
+        startingNewSession
+      />,
+    )
+    await screen.findByRole('status', { name: /thinking/i })
+    act(() => {
+      handlers.chunk?.({ sessionId: 'session-1', content: 'Welcome!' })
+      handlers.done?.({ sessionId: 'session-1' })
+      handlers.contextLimitReached?.({
+        sessionId: 'session-1',
+        usedTokens: 9500,
+        contextLength: 10000,
+        estimated: false,
+      })
+    })
+
+    expect(await screen.findByRole('button', { name: 'Start new session' })).toBeDisabled()
+  })
+
+  it('shows the unavailable notice at most once per mount, and clears it on a resolved state event', async () => {
+    const handlers = await renderSettledSession()
+
+    act(() => {
+      handlers.contextLimitUnavailable?.({
+        sessionId: 'session-1',
+        message: "Unable to determine this session's context limit.",
+      })
+    })
+    expect(
+      await screen.findByText("Unable to determine this session's context limit."),
+    ).toBeInTheDocument()
+
+    // A second unavailable event while still shown does not duplicate it
+    act(() => {
+      handlers.contextLimitUnavailable?.({
+        sessionId: 'session-1',
+        message: "Unable to determine this session's context limit.",
+      })
+    })
+    expect(
+      screen.getAllByText("Unable to determine this session's context limit."),
+    ).toHaveLength(1)
+
+    // A later resolved state event clears it
+    act(() => {
+      handlers.contextNormal?.({
+        sessionId: 'session-1',
+        usedTokens: 100,
+        contextLength: 10000,
+        estimated: false,
+      })
+    })
+    await waitFor(() =>
+      expect(
+        screen.queryByText("Unable to determine this session's context limit."),
+      ).not.toBeInTheDocument(),
+    )
+  })
+
+  it('dismisses the unavailable notice via its close button', async () => {
+    const handlers = await renderSettledSession()
+    act(() => {
+      handlers.contextLimitUnavailable?.({
+        sessionId: 'session-1',
+        message: "Unable to determine this session's context limit.",
+      })
+    })
+    await screen.findByText("Unable to determine this session's context limit.")
+    const user = userEvent.setup()
+
+    await user.click(screen.getByRole('button', { name: 'Dismiss' }))
+
+    expect(
+      screen.queryByText("Unable to determine this session's context limit."),
+    ).not.toBeInTheDocument()
+  })
+
+  it('removes the optimistic user message and restores the draft on a context_limit_reached error', async () => {
+    const handlers = await renderSettledSession()
+    vi.mocked(sendStudyMessage).mockReturnValueOnce(new Promise(() => {}))
+    const user = userEvent.setup()
+    const transcript = screen.getByRole('log', { name: 'Conversation' })
+
+    // When sending, then the backend rejects it as blocked before persisting
+    await user.type(screen.getByPlaceholderText(/type your answer/i), 'What is CAP theorem?')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+    expect(await within(transcript).findByText('What is CAP theorem?')).toBeInTheDocument()
+
+    act(() => {
+      handlers.error?.(studyErrorEvent('session-1', 'blocked', 'context_limit_reached'))
+    })
+
+    // Then the optimistic bubble is gone from the transcript and the draft
+    // is restored into the textarea (checking the transcript specifically,
+    // not the whole document — the restored draft's own text also lives in
+    // the textarea, which a page-wide query would otherwise match too)
+    await waitFor(() =>
+      expect(within(transcript).queryByText('What is CAP theorem?')).not.toBeInTheDocument(),
+    )
+    expect(screen.getByPlaceholderText(/type your answer/i)).toHaveValue('What is CAP theorem?')
+  })
+
+  it('removes the optimistic user message on a turn_in_progress error', async () => {
+    const handlers = await renderSettledSession()
+    vi.mocked(sendStudyMessage).mockReturnValueOnce(new Promise(() => {}))
+    const user = userEvent.setup()
+    const transcript = screen.getByRole('log', { name: 'Conversation' })
+
+    await user.type(screen.getByPlaceholderText(/type your answer/i), 'Another question')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+    expect(await within(transcript).findByText('Another question')).toBeInTheDocument()
+
+    act(() => {
+      handlers.error?.(studyErrorEvent('session-1', 'in progress', 'turn_in_progress'))
+    })
+
+    await waitFor(() =>
+      expect(within(transcript).queryByText('Another question')).not.toBeInTheDocument(),
+    )
+    expect(screen.getByPlaceholderText(/type your answer/i)).toHaveValue('Another question')
+  })
+
+  it('keeps the optimistic message for a plain (non-coded) error, unlike a pre-persistence one', async () => {
+    const handlers = await renderSettledSession()
+    vi.mocked(sendStudyMessage).mockReturnValueOnce(new Promise(() => {}))
+    const user = userEvent.setup()
+    const transcript = screen.getByRole('log', { name: 'Conversation' })
+
+    await user.type(screen.getByPlaceholderText(/type your answer/i), 'What is CAP theorem?')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+    expect(await within(transcript).findByText('What is CAP theorem?')).toBeInTheDocument()
+
+    act(() => {
+      handlers.error?.(studyErrorEvent('session-1', 'retrieval failed'))
+    })
+
+    // Then the bubble stays — the user message was already persisted before
+    // this kind of failure, so it's not reconciled away
+    expect(await screen.findByText('retrieval failed')).toBeInTheDocument()
+    expect(within(transcript).getByText('What is CAP theorem?')).toBeInTheDocument()
   })
 })

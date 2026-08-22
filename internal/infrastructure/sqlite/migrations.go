@@ -96,6 +96,7 @@ var migrations = []func(*sql.DB) error{
 		ingested_at     DATETIME
 	)`),
 	migrateIngestedFilesToSourcePathSchema,
+	addSessionsContextColumns,
 }
 
 // addSessionsFolderIDColumn adds sessions.folder_id if it does not already
@@ -122,6 +123,35 @@ func addSessionsFolderIDColumn(db *sql.DB) error {
 // a folder_id column.
 func sessionsHasFolderIDColumn(db *sql.DB) (bool, error) {
 	return hasColumn(db, "sessions", "folder_id")
+}
+
+// addSessionsContextColumns adds the sessions.context_* columns (see
+// specs/phases/phase-02-knowledge-engine/06-study-context-limits.md) if
+// they do not already exist. Unlike addSessionsFolderIDColumn, every
+// column here declares a NOT NULL DEFAULT, which SQLite backfills onto
+// existing rows as part of ADD COLUMN itself — no separate UPDATE pass is
+// needed.
+func addSessionsContextColumns(db *sql.DB) error {
+	columns := []struct{ name, ddl string }{
+		{"context_state", `ALTER TABLE sessions ADD COLUMN context_state TEXT NOT NULL DEFAULT 'normal'`},
+		{"context_model", `ALTER TABLE sessions ADD COLUMN context_model TEXT NOT NULL DEFAULT ''`},
+		{"context_used_tokens", `ALTER TABLE sessions ADD COLUMN context_used_tokens INTEGER NOT NULL DEFAULT 0`},
+		{"context_length", `ALTER TABLE sessions ADD COLUMN context_length INTEGER NOT NULL DEFAULT 0`},
+		{"context_estimated", `ALTER TABLE sessions ADD COLUMN context_estimated INTEGER NOT NULL DEFAULT 0`},
+	}
+	for _, column := range columns {
+		has, err := hasColumn(db, "sessions", column.name)
+		if err != nil {
+			return err
+		}
+		if has {
+			continue
+		}
+		if _, err := db.Exec(column.ddl); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // hasColumn reports whether table already has a column named column.

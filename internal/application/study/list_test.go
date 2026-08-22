@@ -28,7 +28,7 @@ func TestListSessionsByFolder_returnsEverySessionInThatFolder(t *testing.T) {
 	}
 	sessions.EXPECT().ListByFolder(context.Background(), "folder-a").Return(want, nil).Once()
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil)
 
 	// When listing sessions in folder-a
 	got, err := service.ListSessionsByFolder(context.Background(), "folder-a")

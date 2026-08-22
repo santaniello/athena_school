@@ -15,8 +15,11 @@ import (
 // domainstudy.SessionRepository, a domainstudy.MessageRepository, a
 // domainllm.Provider, a domainprofile.Store, a domainfolder.Repository
 // (used to fall back to the default folder and validate a chosen one
-// exists before creating a session), and a domainknowledge.Retriever (used
-// by SendMessage's local source modes; never called for SourceModeWeb).
+// exists before creating a session), a domainknowledge.Retriever (used by
+// SendMessage's local source modes; never called for SourceModeWeb), a
+// Transactor (atomic message + ContextUsage writes), and a
+// domainllm.ModelContextResolver (resolves a stream's model to its context
+// window; see specs/phases/phase-02-knowledge-engine/06-study-context-limits.md).
 type Service struct {
 	sessions  domainstudy.SessionRepository
 	messages  domainstudy.MessageRepository
@@ -24,6 +27,9 @@ type Service struct {
 	profiles  domainprofile.Store
 	folders   domainfolder.Repository
 	retriever domainknowledge.Retriever
+	tx        Transactor
+	catalog   domainllm.ModelContextResolver
+	inFlight  *inFlightCoordinator
 }
 
 // NewService creates a Service backed by the given ports.
@@ -34,9 +40,12 @@ func NewService(
 	profiles domainprofile.Store,
 	folders domainfolder.Repository,
 	retriever domainknowledge.Retriever,
+	tx Transactor,
+	catalog domainllm.ModelContextResolver,
 ) *Service {
 	return &Service{
 		sessions: sessions, messages: messages, llm: llm,
 		profiles: profiles, folders: folders, retriever: retriever,
+		tx: tx, catalog: catalog, inFlight: newInFlightCoordinator(),
 	}
 }

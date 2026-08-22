@@ -209,6 +209,26 @@ export namespace desktop {
 	        this.email = source["email"];
 	    }
 	}
+	export class StudyContextResult {
+	    state: string;
+	    model: string;
+	    usedTokens: number;
+	    contextLength: number;
+	    estimated: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new StudyContextResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.model = source["model"];
+	        this.usedTokens = source["usedTokens"];
+	        this.contextLength = source["contextLength"];
+	        this.estimated = source["estimated"];
+	    }
+	}
 	export class StudyMessageResult {
 	    role: string;
 	    content: string;
@@ -230,6 +250,7 @@ export namespace desktop {
 	    topic: string;
 	    folderId: string;
 	    startedAt: string;
+	    context: StudyContextResult;
 	
 	    static createFrom(source: any = {}) {
 	        return new StudySessionResult(source);
@@ -241,7 +262,26 @@ export namespace desktop {
 	        this.topic = source["topic"];
 	        this.folderId = source["folderId"];
 	        this.startedAt = source["startedAt"];
+	        this.context = this.convertValues(source["context"], StudyContextResult);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class StudySessionHistoryResult {
 	    session: StudySessionResult;

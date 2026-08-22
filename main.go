@@ -18,6 +18,7 @@ import (
 	"github.com/santaniello/athena/internal/application/folder"
 	applicationingest "github.com/santaniello/athena/internal/application/ingest"
 	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
+	"github.com/santaniello/athena/internal/application/modelcatalog"
 	"github.com/santaniello/athena/internal/application/onboarding"
 	"github.com/santaniello/athena/internal/application/study"
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
@@ -100,7 +101,10 @@ func main() {
 		knowledgeItems, studySessions, studyMessages, llmClient, configStore, knowledgeChunks, transactor,
 		vectorStore, indexLoader, retrievalThresholds,
 	)
-	studyService := study.NewService(studySessions, studyMessages, llmClient, profiles, folders, knowledgeService)
+	catalogService := modelcatalog.NewService(llmClient)
+	studyService := study.NewService(
+		studySessions, studyMessages, llmClient, profiles, folders, knowledgeService, transactor, catalogService,
+	)
 	folderService := folder.NewService(folders, studySessions)
 
 	ingestedFiles := sqlite.NewIngestedFileRepository(db)
@@ -137,6 +141,7 @@ func main() {
 		// immediately instead of blocking on SQLite decode/normalize first.
 		OnDomReady: func(ctx context.Context) {
 			go app.StartKnowledgeIndex(ctx)
+			go catalogService.Warm(ctx)
 		},
 		Bind: []interface{}{
 			app,

@@ -24,14 +24,34 @@ import (
 	studymocks "github.com/santaniello/athena/internal/domain/study/mocks"
 )
 
+// normalSession is the session GetByID returns for tests that just need the
+// context-limit guard to pass through: unmeasured, not blocked.
+var normalSession = domainstudy.Session{
+	ID: "session-1", Context: domainstudy.ContextUsage{State: domainstudy.ContextStateNormal},
+}
+
+// passthroughTransactor is a study.Transactor that runs fn directly against
+// the given ctx, with no real transaction — desktop tests exercise event
+// wiring against mocked repositories, not SQLite atomicity (see
+// internal/infrastructure/sqlite's own transaction tests for that).
+type passthroughTransactor struct{}
+
+func (passthroughTransactor) WithinTx(ctx context.Context, fn func(context.Context) error) error {
+	return fn(ctx)
+}
+
 // capturedEvents records every event emitted through App.emit during a test,
 // so assertions can inspect them without touching the real Wails runtime
 // (which os.Exit's when a.ctx wasn't produced by wails.Run).
 type capturedEvents struct {
-	chunks  []StudyChunkEvent
-	dones   []StudyDoneEvent
-	errors  []StudyErrorEvent
-	sources []StudySourcesEvent
+	chunks              []StudyChunkEvent
+	dones               []StudyDoneEvent
+	errors              []StudyErrorEvent
+	sources             []StudySourcesEvent
+	contextNormal       []StudyContextEvent
+	contextWarning      []StudyContextEvent
+	contextLimitReached []StudyContextEvent
+	contextUnavailable  []StudyContextUnavailableEvent
 	// done/gone bools kept for tests that only check whether it fired.
 	done bool
 }
@@ -39,7 +59,8 @@ type capturedEvents struct {
 func newTestStudyApp(t *testing.T, sessions domainstudy.SessionRepository, messages domainstudy.MessageRepository, llm domainllm.Provider, profiles domainprofile.Store, folders domainfolder.Repository) (*App, *capturedEvents) {
 	t.Helper()
 	retriever := knowledgemocks.NewMockRetriever(t)
-	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever)
+	catalog := llmmocks.NewMockModelContextResolver(t)
+	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog)
 	folderService := folder.NewService(folders, sessions)
 	app := NewApp(nil, nil, nil, nil, nil, studyService, folderService, nil, nil, nil, nil)
 	app.Startup(context.Background())
@@ -56,6 +77,14 @@ func newTestStudyApp(t *testing.T, sessions domainstudy.SessionRepository, messa
 			captured.errors = append(captured.errors, data[0].(StudyErrorEvent))
 		case eventStudySources:
 			captured.sources = append(captured.sources, data[0].(StudySourcesEvent))
+		case eventStudyContextNormal:
+			captured.contextNormal = append(captured.contextNormal, data[0].(StudyContextEvent))
+		case eventStudyContextWarning:
+			captured.contextWarning = append(captured.contextWarning, data[0].(StudyContextEvent))
+		case eventStudyContextLimitReached:
+			captured.contextLimitReached = append(captured.contextLimitReached, data[0].(StudyContextEvent))
+		case eventStudyContextLimitUnavailable:
+			captured.contextUnavailable = append(captured.contextUnavailable, data[0].(StudyContextUnavailableEvent))
 		}
 	}
 	return app, captured
@@ -81,11 +110,13 @@ func TestApp_StartStudySession_createsAndReturnsSession(t *testing.T) {
 
 	// Then it returns the created session without emitting any event (no
 	// streaming happened) and without touching the LLM/profile/messages
-	// ports (no .EXPECT() set on those mocks)
+	// ports (no .EXPECT() set on those mocks), and its context usage starts
+	// normal/unmeasured
 	require.NoError(t, err)
 	assert.NotEmpty(t, result.ID)
 	assert.Equal(t, "Distributed systems", result.Topic)
 	assert.NotEmpty(t, result.StartedAt)
+	assert.Equal(t, string(domainstudy.ContextStateNormal), result.Context.State)
 	assert.Empty(t, captured.chunks)
 	assert.False(t, captured.done)
 	assert.Empty(t, captured.errors)
@@ -119,6 +150,7 @@ func TestApp_RequestOpeningTurn_streamsChunksAndSignalsDone(t *testing.T) {
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
 	messages.EXPECT().ListBySession(mock.Anything, "session-1").Return(nil, nil).Once()
+	sessions.EXPECT().GetByID(mock.Anything, "session-1").Return(normalSession, nil).Once()
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}, nil)
 	llm.EXPECT().
 		ChatStream(mock.Anything, mock.AnythingOfType("llm.ChatRequest"), mock.AnythingOfType("func(string) error")).
@@ -126,9 +158,10 @@ func TestApp_RequestOpeningTurn_streamsChunksAndSignalsDone(t *testing.T) {
 			require.NoError(t, handler("Hello "))
 			require.NoError(t, handler("there!"))
 		}).
-		Return(nil).
+		Return(domainllm.StreamResponse{}, nil).
 		Once()
 	messages.EXPECT().Append(mock.Anything, mock.AnythingOfType("study.Message")).Return(nil).Once()
+	sessions.EXPECT().UpdateContext(mock.Anything, "session-1", mock.Anything).Return(nil).Once()
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
 	// When requesting the opening turn for an already-created session
@@ -156,6 +189,7 @@ func TestApp_RequestOpeningTurn_emitsErrorEvent_onFailure(t *testing.T) {
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
 	messages.EXPECT().ListBySession(mock.Anything, "session-1").Return(nil, nil).Once()
+	sessions.EXPECT().GetByID(mock.Anything, "session-1").Return(normalSession, nil).Once()
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{}, errors.New("profile not found"))
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
@@ -163,12 +197,38 @@ func TestApp_RequestOpeningTurn_emitsErrorEvent_onFailure(t *testing.T) {
 	err := app.RequestOpeningTurn("session-1", "Distributed systems")
 
 	// Then the error propagates and a session-scoped error event was
-	// emitted, with no chunk or done event
+	// emitted, with no chunk or done event, and no stable code since this
+	// isn't one of the pre-persistence errors
 	require.Error(t, err)
 	require.Len(t, captured.errors, 1)
 	assert.Equal(t, "session-1", captured.errors[0].SessionID)
+	assert.Empty(t, captured.errors[0].Code)
 	assert.Empty(t, captured.chunks)
 	assert.False(t, captured.done)
+}
+
+func TestApp_RequestOpeningTurn_blockedSession_emitsContextLimitReachedCode(t *testing.T) {
+	// Given a session that has already reached its context limit
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
+	messages.EXPECT().ListBySession(mock.Anything, "session-1").Return(nil, nil).Once()
+	sessions.EXPECT().GetByID(mock.Anything, "session-1").
+		Return(domainstudy.Session{ID: "session-1", Context: domainstudy.ContextUsage{State: domainstudy.ContextStateBlocked}}, nil).
+		Once()
+	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
+
+	// When requesting the opening turn; llm/profiles have no .EXPECT() set,
+	// so no provider call happens
+	err := app.RequestOpeningTurn("session-1", "Distributed systems")
+
+	// Then it fails with the domain sentinel, surfaced with the stable
+	// "context_limit_reached" code
+	require.ErrorIs(t, err, domainstudy.ErrSessionContextLimitReached)
+	require.Len(t, captured.errors, 1)
+	assert.Equal(t, errorCodeContextLimitReached, captured.errors[0].Code)
 }
 
 func TestApp_SendStudyMessage_streamsReplyAndSignalsDone(t *testing.T) {
@@ -178,6 +238,8 @@ func TestApp_SendStudyMessage_streamsReplyAndSignalsDone(t *testing.T) {
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
+	sessions.EXPECT().GetByID(mock.Anything, "session-1").Return(normalSession, nil).Once()
+	sessions.EXPECT().UpdateContext(mock.Anything, "session-1", mock.Anything).Return(nil).Twice()
 	messages.EXPECT().Append(mock.Anything, mock.AnythingOfType("study.Message")).Return(nil).Twice()
 	messages.EXPECT().ListBySession(mock.Anything, "session-1").Return(nil, nil).Once()
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}, nil)
@@ -186,7 +248,7 @@ func TestApp_SendStudyMessage_streamsReplyAndSignalsDone(t *testing.T) {
 		Run(func(_ context.Context, _ domainllm.ChatRequest, handler func(string) error) {
 			require.NoError(t, handler("It stands for..."))
 		}).
-		Return(nil).
+		Return(domainllm.StreamResponse{}, nil).
 		Once()
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
@@ -227,7 +289,31 @@ func TestApp_SendStudyMessage_invalidSourceMode_emitsErrorEventWithoutPersisting
 	assert.False(t, captured.done)
 	require.Len(t, captured.errors, 1)
 	assert.Equal(t, "session-1", captured.errors[0].SessionID)
+	assert.Empty(t, captured.errors[0].Code)
 	assert.Empty(t, captured.sources)
+}
+
+func TestApp_SendStudyMessage_blockedSession_emitsContextLimitReachedCode_withoutPersistingOrCallingAnyPort(t *testing.T) {
+	// Given a session that has already reached its context limit; no
+	// messages/retriever/llm mock has any .EXPECT() set
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
+	sessions.EXPECT().GetByID(mock.Anything, "session-1").
+		Return(domainstudy.Session{ID: "session-1", Context: domainstudy.ContextUsage{State: domainstudy.ContextStateBlocked}}, nil).
+		Once()
+	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
+
+	// When sending a message
+	err := app.SendStudyMessage("session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeWeb)
+
+	// Then it fails with the domain sentinel before persisting the message,
+	// surfaced with the stable "context_limit_reached" code
+	require.ErrorIs(t, err, domainstudy.ErrSessionContextLimitReached)
+	require.Len(t, captured.errors, 1)
+	assert.Equal(t, errorCodeContextLimitReached, captured.errors[0].Code)
 }
 
 func TestApp_SendStudyMessage_emitsPostCapSourcesEvent_notes(t *testing.T) {
@@ -239,7 +325,10 @@ func TestApp_SendStudyMessage_emitsPostCapSourcesEvent_notes(t *testing.T) {
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
+	catalog := llmmocks.NewMockModelContextResolver(t)
 
+	sessions.EXPECT().GetByID(mock.Anything, "session-1").Return(normalSession, nil).Once()
+	sessions.EXPECT().UpdateContext(mock.Anything, "session-1", mock.Anything).Return(nil).Twice()
 	messages.EXPECT().Append(mock.Anything, mock.AnythingOfType("study.Message")).Return(nil).Twice()
 	messages.EXPECT().ListBySession(mock.Anything, "session-1").Return(nil, nil).Once()
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}, nil)
@@ -252,9 +341,10 @@ func TestApp_SendStudyMessage_emitsPostCapSourcesEvent_notes(t *testing.T) {
 		},
 	}
 	retriever.EXPECT().Retrieve(mock.Anything, "session-1", mock.AnythingOfType("string")).Return(result, nil).Once()
-	llm.EXPECT().ChatStream(mock.Anything, mock.AnythingOfType("llm.ChatRequest"), mock.AnythingOfType("func(string) error")).Return(nil).Once()
+	llm.EXPECT().ChatStream(mock.Anything, mock.AnythingOfType("llm.ChatRequest"), mock.AnythingOfType("func(string) error")).
+		Return(domainllm.StreamResponse{}, nil).Once()
 
-	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever)
+	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog)
 	folderService := folder.NewService(folders, sessions)
 	app := NewApp(nil, nil, nil, nil, nil, studyService, folderService, nil, nil, nil, nil)
 	app.Startup(context.Background())
@@ -292,12 +382,14 @@ func TestApp_SendStudyMessage_emitsErrorEvent_onFailure(t *testing.T) {
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
+	sessions.EXPECT().GetByID(mock.Anything, "session-1").Return(normalSession, nil).Once()
+	sessions.EXPECT().UpdateContext(mock.Anything, "session-1", mock.Anything).Return(nil).Once()
 	messages.EXPECT().Append(mock.Anything, mock.AnythingOfType("study.Message")).Return(nil).Once()
 	messages.EXPECT().ListBySession(mock.Anything, "session-1").Return(nil, nil).Once()
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}, nil)
 	llm.EXPECT().
 		ChatStream(mock.Anything, mock.AnythingOfType("llm.ChatRequest"), mock.AnythingOfType("func(string) error")).
-		Return(errors.New("upstream failure")).
+		Return(domainllm.StreamResponse{}, errors.New("upstream failure")).
 		Once()
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
@@ -305,10 +397,12 @@ func TestApp_SendStudyMessage_emitsErrorEvent_onFailure(t *testing.T) {
 	err := app.SendStudyMessage("session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeWeb)
 
 	// Then the error propagates and a session-scoped error event was
-	// emitted, with no done event
+	// emitted, with no done event and no stable code (this happens after
+	// the user message was already persisted)
 	require.Error(t, err)
 	require.Len(t, captured.errors, 1)
 	assert.Equal(t, "session-1", captured.errors[0].SessionID)
+	assert.Empty(t, captured.errors[0].Code)
 	assert.False(t, captured.done)
 }
 
@@ -332,28 +426,33 @@ func TestApp_DeleteStudySession_deletesTheSession(t *testing.T) {
 
 func TestApp_ResumeStudySession_returnsSessionAndHistory(t *testing.T) {
 	// Given an App backed by a study service with a session that has one
-	// prior message
+	// prior message and an unresolved (never-measured) context
 	sessions := studymocks.NewMockSessionRepository(t)
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
-	session := domainstudy.Session{ID: "session-1", Topic: "Distributed systems", FolderID: "default"}
+	session := domainstudy.Session{ID: "session-1", Topic: "Distributed systems", FolderID: "default", Context: domainstudy.ContextUsage{State: domainstudy.ContextStateNormal}}
 	sessions.EXPECT().GetByID(mock.Anything, "session-1").Return(session, nil).Once()
 	messages.EXPECT().
 		ListBySession(mock.Anything, "session-1").
 		Return([]domainstudy.Message{{Role: domainstudy.RoleUser, Content: "Hi"}}, nil).
 		Once()
-	app, _ := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
+	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
 	// When resuming the session
 	result, err := app.ResumeStudySession("session-1")
 
-	// Then its session and history are returned
+	// Then its session and history are returned, with the model unresolved
+	// (blank model, zero context length) surfacing the transient
+	// unavailable notice rather than attempting a background refresh
 	require.NoError(t, err)
 	assert.Equal(t, "session-1", result.Session.ID)
+	assert.Equal(t, string(domainstudy.ContextStateNormal), result.Session.Context.State)
 	require.Len(t, result.Messages, 1)
 	assert.Equal(t, "Hi", result.Messages[0].Content)
+	require.Len(t, captured.contextUnavailable, 1)
+	assert.Equal(t, "session-1", captured.contextUnavailable[0].SessionID)
 }
 
 func TestApp_MoveStudySession_movesTheSession(t *testing.T) {

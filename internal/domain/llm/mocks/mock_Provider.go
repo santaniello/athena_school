@@ -80,21 +80,31 @@ func (_c *MockProvider_Chat_Call) RunAndReturn(run func(context.Context, llm.Cha
 }
 
 // ChatStream provides a mock function with given fields: ctx, req, handler
-func (_m *MockProvider) ChatStream(ctx context.Context, req llm.ChatRequest, handler func(string) error) error {
+func (_m *MockProvider) ChatStream(ctx context.Context, req llm.ChatRequest, handler func(string) error) (llm.StreamResponse, error) {
 	ret := _m.Called(ctx, req, handler)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ChatStream")
 	}
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, llm.ChatRequest, func(string) error) error); ok {
+	var r0 llm.StreamResponse
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, llm.ChatRequest, func(string) error) (llm.StreamResponse, error)); ok {
+		return rf(ctx, req, handler)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, llm.ChatRequest, func(string) error) llm.StreamResponse); ok {
 		r0 = rf(ctx, req, handler)
 	} else {
-		r0 = ret.Error(0)
+		r0 = ret.Get(0).(llm.StreamResponse)
 	}
 
-	return r0
+	if rf, ok := ret.Get(1).(func(context.Context, llm.ChatRequest, func(string) error) error); ok {
+		r1 = rf(ctx, req, handler)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // MockProvider_ChatStream_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ChatStream'
@@ -117,12 +127,12 @@ func (_c *MockProvider_ChatStream_Call) Run(run func(ctx context.Context, req ll
 	return _c
 }
 
-func (_c *MockProvider_ChatStream_Call) Return(_a0 error) *MockProvider_ChatStream_Call {
-	_c.Call.Return(_a0)
+func (_c *MockProvider_ChatStream_Call) Return(_a0 llm.StreamResponse, _a1 error) *MockProvider_ChatStream_Call {
+	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockProvider_ChatStream_Call) RunAndReturn(run func(context.Context, llm.ChatRequest, func(string) error) error) *MockProvider_ChatStream_Call {
+func (_c *MockProvider_ChatStream_Call) RunAndReturn(run func(context.Context, llm.ChatRequest, func(string) error) (llm.StreamResponse, error)) *MockProvider_ChatStream_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -328,6 +328,54 @@ func (_c *MockSessionRepository_ReassignFolder_Call) RunAndReturn(run func(conte
 	return _c
 }
 
+// UpdateContext provides a mock function with given fields: ctx, sessionID, usage
+func (_m *MockSessionRepository) UpdateContext(ctx context.Context, sessionID string, usage study.ContextUsage) error {
+	ret := _m.Called(ctx, sessionID, usage)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateContext")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, study.ContextUsage) error); ok {
+		r0 = rf(ctx, sessionID, usage)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockSessionRepository_UpdateContext_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateContext'
+type MockSessionRepository_UpdateContext_Call struct {
+	*mock.Call
+}
+
+// UpdateContext is a helper method to define mock.On call
+//   - ctx context.Context
+//   - sessionID string
+//   - usage study.ContextUsage
+func (_e *MockSessionRepository_Expecter) UpdateContext(ctx interface{}, sessionID interface{}, usage interface{}) *MockSessionRepository_UpdateContext_Call {
+	return &MockSessionRepository_UpdateContext_Call{Call: _e.mock.On("UpdateContext", ctx, sessionID, usage)}
+}
+
+func (_c *MockSessionRepository_UpdateContext_Call) Run(run func(ctx context.Context, sessionID string, usage study.ContextUsage)) *MockSessionRepository_UpdateContext_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(study.ContextUsage))
+	})
+	return _c
+}
+
+func (_c *MockSessionRepository_UpdateContext_Call) Return(_a0 error) *MockSessionRepository_UpdateContext_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockSessionRepository_UpdateContext_Call) RunAndReturn(run func(context.Context, string, study.ContextUsage) error) *MockSessionRepository_UpdateContext_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockSessionRepository creates a new instance of MockSessionRepository. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockSessionRepository(t interface {

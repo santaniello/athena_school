@@ -38,6 +38,7 @@ func (s *Service) Start(ctx context.Context, topic, folderID string) (domainstud
 		Mode:      domainstudy.ModeStudy,
 		FolderID:  folderID,
 		StartedAt: time.Now().UTC(),
+		Context:   domainstudy.ContextUsage{State: domainstudy.ContextStateNormal},
 	}
 	if err := s.sessions.Create(ctx, session); err != nil {
 		return domainstudy.Session{}, fmt.Errorf("study: creating session: %w", err)

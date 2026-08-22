@@ -64,9 +64,21 @@ type EmbeddingResponse struct {
 	Usage     Usage
 }
 
+// StreamResponse is the result of a successful Provider.ChatStream call:
+// the actual model that produced the response (which may differ from the
+// requested router alias, e.g. FreeFallbackModel) and its usage, reported
+// only once the stream completes.
+type StreamResponse struct {
+	Model string
+	Usage Usage
+	// UsedFreeFallback is true when the request initially failed with
+	// insufficient credits and was retried against FreeFallbackModel.
+	UsedFreeFallback bool
+}
+
 // Provider is the port every LLM backend adapter implements.
 type Provider interface {
 	Chat(ctx context.Context, req ChatRequest) (ChatResponse, error)
-	ChatStream(ctx context.Context, req ChatRequest, handler func(chunk string) error) error
+	ChatStream(ctx context.Context, req ChatRequest, handler func(chunk string) error) (StreamResponse, error)
 	Embeddings(ctx context.Context, req EmbeddingRequest) (EmbeddingResponse, error)
 }

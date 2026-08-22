@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BookOpen, LogOut } from 'lucide-react'
 import { Logout } from '../../wailsjs/go/desktop/App'
 import { AthenaLogo } from '@/components/athena-logo'
 import { NavItem } from '@/components/nav-item'
 import { ComingSoonPanel } from '@/components/coming-soon-panel'
-import { StudyFolderTree } from '@/components/study-folder-tree'
+import { StudyFolderTree, type StudyFolderTreeHandle } from '@/components/study-folder-tree'
 import { KnowledgeTopicTree } from '@/components/knowledge-topic-tree'
 import { KnowledgeSection } from '@/components/knowledge-section'
 import { IndexLoadingScreen } from '@/components/index-loading-screen'
@@ -18,7 +18,7 @@ import SettingsScreen from '@/screens/SettingsScreen'
 import DocumentationScreen from '@/screens/DocumentationScreen'
 import { NAVIGATION, type AppSection } from '@/lib/navigation'
 import { getUserProfile, type ProfileDraft } from '@/lib/profile'
-import type { StudySession } from '@/lib/study'
+import { startStudySession, type StudySession } from '@/lib/study'
 import {
   getKnowledgeIndexStatus,
   onKnowledgeIndexStatus,
@@ -40,6 +40,7 @@ interface AppShellProps {
 interface ActiveStudySession {
   id: string
   topic: string
+  folderId: string
   folderName: string
   // 'new' sessions request the opening turn; 'resume' sessions (picked from
   // the sidebar tree) load their prior history instead.
@@ -69,6 +70,9 @@ function AppShell({ onLogout }: AppShellProps) {
   const [continuedWithoutSearch, setContinuedWithoutSearch] = useState(false)
   const [retryingIndex, setRetryingIndex] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
+  const [startingNewSession, setStartingNewSession] = useState(false)
+  const [newSessionError, setNewSessionError] = useState<string | null>(null)
+  const studyFolderTreeRef = useRef<StudyFolderTreeHandle>(null)
 
   useEffect(() => {
     void getUserProfile().then(setProfile)
@@ -140,6 +144,7 @@ function AppShell({ onLogout }: AppShellProps) {
     setActiveSession({
       id: session.id,
       topic: session.topic,
+      folderId: session.folderId,
       folderName,
       mode: 'resume',
     })
@@ -149,6 +154,7 @@ function AppShell({ onLogout }: AppShellProps) {
     setActiveSession({
       id: session.id,
       topic: session.topic,
+      folderId: session.folderId,
       folderName,
       mode: 'new',
     })
@@ -160,6 +166,33 @@ function AppShell({ onLogout }: AppShellProps) {
 
   function handleTopicResolved(topic: string) {
     setActiveSession((current) => (current ? { ...current, topic } : current))
+  }
+
+  // Starts a fresh session on the same topic and folder as the currently
+  // open one — the "Start new session" action offered by StudyChatScreen's
+  // context-limit warning/blocked banners. Coordinated here (not inside
+  // StudyChatScreen or StudyFolderTree) since AppShell is the sole owner of
+  // navigation/active-session state and of the sidebar tree's ref. See
+  // specs/phases/phase-02-knowledge-engine/06-study-context-limits.md.
+  async function handleStartNewSession() {
+    if (!activeSession || startingNewSession) return
+    setStartingNewSession(true)
+    setNewSessionError(null)
+    try {
+      const session = await startStudySession(activeSession.topic, activeSession.folderId)
+      studyFolderTreeRef.current?.refreshFolder(session.folderId)
+      setActiveSession({
+        id: session.id,
+        topic: session.topic,
+        folderId: session.folderId,
+        folderName: activeSession.folderName,
+        mode: 'new',
+      })
+    } catch (err) {
+      setNewSessionError(err instanceof Error ? err.message : 'Failed to start a new session.')
+    } finally {
+      setStartingNewSession(false)
+    }
   }
 
   // The entire application stays behind this screen until the initial
@@ -219,6 +252,7 @@ function AppShell({ onLogout }: AppShellProps) {
                   <NavItem item={item} active={item.id === section} onSelect={setSection} />
                   {item.id === 'study' && section === 'study' && (
                     <StudyFolderTree
+                      ref={studyFolderTreeRef}
                       selectedSessionId={activeSession?.id ?? null}
                       onSelectSession={handleSelectSession}
                       onSessionStarted={handleSessionStarted}
@@ -295,6 +329,11 @@ function AppShell({ onLogout }: AppShellProps) {
             onRetry={() => void handleRetryIndex()}
             onReview={() => setReviewOpen(true)}
           />
+          {section === 'study' && newSessionError && (
+            <p className="border-b border-border px-6 py-2 text-sm text-destructive">
+              {newSessionError}
+            </p>
+          )}
           {/* min-h-0 lets this flex item shrink below its content's height —
             without it a long chat transcript stretches <main> past the
             viewport instead of scrolling inside its own scroll area. */}
@@ -313,6 +352,8 @@ function AppShell({ onLogout }: AppShellProps) {
                   initialTopic={activeSession.topic}
                   mode={activeSession.mode}
                   onTopicResolved={handleTopicResolved}
+                  onStartNewSession={handleStartNewSession}
+                  startingNewSession={startingNewSession}
                 />
               ) : (
                 <div className="m-auto flex flex-col items-center gap-2 text-center">
