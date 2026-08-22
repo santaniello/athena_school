@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event'
 import type { Folder } from '@/lib/folder'
 import { createFolder, deleteFolder, listFolders, renameFolder } from '@/lib/folder'
-import type { StudySession } from '@/lib/study'
+import type { StudyContextUsage, StudySession } from '@/lib/study'
 import {
   deleteStudySession,
   listStudySessionsByFolder,
@@ -41,17 +41,26 @@ afterEach(() => {
 const GENERAL: Folder = { id: 'default', name: 'General', isDefault: true }
 const SYSTEM_DESIGN: Folder = { id: 'folder-1', name: 'System Design', isDefault: false }
 
+const CONTEXT_NORMAL: StudyContextUsage = {
+  state: 'normal',
+  model: '',
+  usedTokens: 0,
+  contextLength: 0,
+  estimated: false,
+}
 const CACHE_SESSION: StudySession = {
   id: 'session-1',
   topic: 'Cache invalidation',
   folderId: 'folder-1',
   startedAt: '2026-08-16T10:00:00Z',
+  context: CONTEXT_NORMAL,
 }
 const LOAD_BALANCING_SESSION: StudySession = {
   id: 'session-3',
   topic: 'Load balancing',
   folderId: 'folder-1',
   startedAt: '2026-08-16T09:00:00Z',
+  context: CONTEXT_NORMAL,
 }
 
 function renderTree(props?: {

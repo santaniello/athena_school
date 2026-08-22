@@ -25,6 +25,11 @@ type SessionRepository interface {
 	// Delete permanently removes the session with the given id, or returns
 	// ErrSessionNotFound if it does not exist.
 	Delete(ctx context.Context, id string) error
+	// UpdateContext persists sessionID's new ContextUsage, or returns
+	// ErrSessionNotFound if it does not exist. Called from within a
+	// Transactor.WithinTx block whenever it must land atomically with a
+	// message write (see application/study).
+	UpdateContext(ctx context.Context, sessionID string, usage ContextUsage) error
 }
 
 // MessageRepository persists the Messages exchanged within a study Session.

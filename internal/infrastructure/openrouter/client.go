@@ -84,6 +84,7 @@ type chatCompletionResponse struct {
 }
 
 type chatCompletionChunk struct {
+	Model   string `json:"model"`
 	Choices []struct {
 		Delta struct {
 			Content string `json:"content"`
@@ -161,36 +162,65 @@ func (c *Client) chatCompletion(ctx context.Context, model string, messages []do
 // once per non-empty content delta until the stream ends. If the account
 // has run out of credits, it retries once against
 // domainllm.FreeFallbackModel before delivering any chunk to handler.
-func (c *Client) ChatStream(ctx context.Context, req domainllm.ChatRequest, handler func(chunk string) error) error {
+func (c *Client) ChatStream(ctx context.Context, req domainllm.ChatRequest, handler func(chunk string) error) (domainllm.StreamResponse, error) {
 	if c.key() == "" {
-		return domainllm.ErrAPIKeyMissing
+		return domainllm.StreamResponse{}, domainllm.ErrAPIKeyMissing
 	}
 
 	model := domainllm.ModelFor(req.Task)
-	usage, err := c.streamChatCompletion(ctx, model, req.Messages, handler)
+	result, err := c.streamChatCompletion(ctx, model, req.Messages, handler)
+	usedFallback := false
 	if errors.Is(err, domainllm.ErrInsufficientCredits) {
 		model = domainllm.FreeFallbackModel
-		usage, err = c.streamChatCompletion(ctx, model, req.Messages, handler)
+		usedFallback = true
+		result, err = c.streamChatCompletion(ctx, model, req.Messages, handler)
 	}
 	if err != nil {
-		return err
+		return domainllm.StreamResponse{}, err
 	}
 
-	return c.record(ctx, req.SessionID, model, usage)
+	// Record usage under the same resolved model reported on StreamResponse
+	// (the concrete model behind an auto-router alias like
+	// domainllm.FreeFallbackModel), including empty when the stream's
+	// metadata wasn't trustworthy — recording under the requested alias
+	// instead would attribute cost/usage to an unconfirmed model.
+	if err := c.record(ctx, req.SessionID, result.model, result.usage); err != nil {
+		return domainllm.StreamResponse{}, err
+	}
+
+	return domainllm.StreamResponse{
+		Model:            result.model,
+		Usage:            usageFrom(result.usage),
+		UsedFreeFallback: usedFallback,
+	}, nil
 }
 
-func (c *Client) streamChatCompletion(ctx context.Context, model string, messages []domainllm.Message, handler func(chunk string) error) (openRouterUsage, error) {
+// streamResult is streamChatCompletion's return: the final usage frame plus
+// the model resolved from the stream's own "model" field, which may differ
+// from the model requested (e.g. domainllm.FreeFallbackModel is an
+// auto-router alias, not a concrete model).
+type streamResult struct {
+	// model is the exact ID every non-empty per-chunk "model" value agreed
+	// on, or "" if no chunk reported one or two chunks disagreed — never
+	// invented.
+	model string
+	usage openRouterUsage
+}
+
+func (c *Client) streamChatCompletion(ctx context.Context, model string, messages []domainllm.Message, handler func(chunk string) error) (streamResult, error) {
 	resp, err := c.post(ctx, "/api/v1/chat/completions", chatCompletionRequest{
 		Model:    model,
 		Messages: toChatMessages(messages),
 		Stream:   true,
 	})
 	if err != nil {
-		return openRouterUsage{}, err
+		return streamResult{}, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	var lastUsage openRouterUsage
+	var resolvedModel string
+	modelConflict := false
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 		data, ok := strings.CutPrefix(scanner.Text(), "data: ")
@@ -203,23 +233,36 @@ func (c *Client) streamChatCompletion(ctx context.Context, model string, message
 
 		var chunk chatCompletionChunk
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			return openRouterUsage{}, fmt.Errorf("openrouter: decoding stream chunk: %w", err)
+			return streamResult{}, fmt.Errorf("openrouter: decoding stream chunk: %w", err)
 		}
 		if chunk.Usage != nil {
 			lastUsage = *chunk.Usage
+		}
+		if chunk.Model != "" {
+			switch resolvedModel {
+			case "":
+				resolvedModel = chunk.Model
+			case chunk.Model:
+				// same model reported again, no conflict.
+			default:
+				modelConflict = true
+			}
 		}
 		if len(chunk.Choices) == 0 || chunk.Choices[0].Delta.Content == "" {
 			continue
 		}
 		if err := handler(chunk.Choices[0].Delta.Content); err != nil {
-			return openRouterUsage{}, err
+			return streamResult{}, err
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return openRouterUsage{}, fmt.Errorf("openrouter: reading stream: %w", err)
+		return streamResult{}, fmt.Errorf("openrouter: reading stream: %w", err)
+	}
+	if modelConflict {
+		resolvedModel = ""
 	}
 
-	return lastUsage, nil
+	return streamResult{model: resolvedModel, usage: lastUsage}, nil
 }
 
 // Embeddings requests a vector embedding for a single input text. There is
@@ -293,6 +336,30 @@ func (c *Client) post(ctx context.Context, path string, body any) (*http.Respons
 		_ = resp.Body.Close()
 		return nil, fmt.Errorf("openrouter: %s returned status %d", path, resp.StatusCode)
 	}
+}
+
+// get sends a GET request to path, without requiring an API key (used by
+// ListModels, which OpenRouter serves publicly and which the catalog
+// warm-up may call before onboarding has set one). On success, the caller
+// owns closing the response body.
+func (c *Client) get(ctx context.Context, path string) (*http.Response, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("openrouter: building request: %w", err)
+	}
+	if key := c.key(); key != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+key)
+	}
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("openrouter: calling %s: %w", path, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		_ = resp.Body.Close()
+		return nil, fmt.Errorf("openrouter: %s returned status %d", path, resp.StatusCode)
+	}
+	return resp, nil
 }
 
 func (c *Client) record(ctx context.Context, sessionID, model string, usage openRouterUsage) error {

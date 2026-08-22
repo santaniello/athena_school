@@ -14,3 +14,13 @@ packages:
     config:
       recursive: true
       all: true
+  # ContextCallback/ContextUnavailableCallback are plain function types
+  # (never mocked — tests pass real closures or nil), and a generated mock
+  # for either would need to import this package for study.ContextEvent,
+  # creating an import cycle for study's own internal ("package study")
+  # test files that import their sibling mocks package for MockTransactor.
+  github.com/santaniello/athena/internal/application/study:
+    config:
+      recursive: true
+      all: false
+      include-regex: "^Transactor$"

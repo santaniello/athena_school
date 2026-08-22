@@ -89,3 +89,29 @@ func TestMessageRepository_DeleteBySession_removesEveryMessageForThatSession(t *
 	require.NoError(t, listErr)
 	assert.Len(t, other, 1)
 }
+
+func TestMessageRepository_Append_participatesInTransaction(t *testing.T) {
+	// Given a repository and a transactor sharing the same *sql.DB
+	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	repo := NewMessageRepository(db)
+	transactor := NewSQLTransactor(db)
+	ctx := context.Background()
+
+	// When an Append inside a failed transaction is rolled back
+	txErr := transactor.WithinTx(ctx, func(ctx context.Context) error {
+		if err := repo.Append(ctx, study.Message{
+			ID: "msg-1", SessionID: "session-1", Role: study.RoleUser, Content: "Hi", CreatedAt: time.Now().UTC(),
+		}); err != nil {
+			return err
+		}
+		return assert.AnError
+	})
+
+	// Then the transaction fails and the message never landed
+	require.Error(t, txErr)
+	messages, listErr := repo.ListBySession(ctx, "session-1")
+	require.NoError(t, listErr)
+	assert.Empty(t, messages)
+}

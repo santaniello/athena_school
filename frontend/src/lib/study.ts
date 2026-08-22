@@ -9,11 +9,22 @@ import {
 } from '../../wailsjs/go/desktop/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 
+// StudyContextUsage is a session's last-measured occupancy of its model's
+// context window. See specs/phases/phase-02-knowledge-engine/06-study-context-limits.md.
+export interface StudyContextUsage {
+  state: 'normal' | 'warning' | 'blocked'
+  model: string
+  usedTokens: number
+  contextLength: number
+  estimated: boolean
+}
+
 export interface StudySession {
   id: string
   topic: string
   folderId: string
   startedAt: string
+  context: StudyContextUsage
 }
 
 export interface StudyMessage {
@@ -52,6 +63,7 @@ export interface StudyDoneEvent {
 export interface StudyErrorEvent {
   sessionId: string
   message: string
+  code: string
 }
 
 export interface StudySourcesEvent {
@@ -59,17 +71,44 @@ export interface StudySourcesEvent {
   sources: StudySource[]
 }
 
+// StudyContextEvent is the payload of study:context-normal/warning/
+// limit-reached.
+export interface StudyContextEvent {
+  sessionId: string
+  usedTokens: number
+  contextLength: number
+  estimated: boolean
+}
+
+// StudyContextUnavailableEvent is study:context-limit-unavailable's
+// payload: transient technical feedback, not persisted context state.
+export interface StudyContextUnavailableEvent {
+  sessionId: string
+  message: string
+}
+
+// The generated StudyContextResult types `state` as a plain string (Wails
+// has no way to carry the Go ContextState enum's exact values into the
+// binding); the backend only ever sends 'normal' | 'warning' | 'blocked'.
 function toStudySession(result: {
   id: string
   topic: string
   folderId: string
   startedAt: string
+  context: {
+    state: string
+    model: string
+    usedTokens: number
+    contextLength: number
+    estimated: boolean
+  }
 }): StudySession {
   return {
     id: result.id,
     topic: result.topic,
     folderId: result.folderId,
     startedAt: result.startedAt,
+    context: { ...result.context, state: result.context.state as StudyContextUsage['state'] },
   }
 }
 
@@ -145,4 +184,26 @@ export function onStudyError(handler: (event: StudyErrorEvent) => void): () => v
 
 export function onStudySources(handler: (event: StudySourcesEvent) => void): () => void {
   return EventsOn('study:sources', (event: StudySourcesEvent) => handler(event))
+}
+
+export function onStudyContextNormal(handler: (event: StudyContextEvent) => void): () => void {
+  return EventsOn('study:context-normal', (event: StudyContextEvent) => handler(event))
+}
+
+export function onStudyContextWarning(handler: (event: StudyContextEvent) => void): () => void {
+  return EventsOn('study:context-warning', (event: StudyContextEvent) => handler(event))
+}
+
+export function onStudyContextLimitReached(
+  handler: (event: StudyContextEvent) => void,
+): () => void {
+  return EventsOn('study:context-limit-reached', (event: StudyContextEvent) => handler(event))
+}
+
+export function onStudyContextLimitUnavailable(
+  handler: (event: StudyContextUnavailableEvent) => void,
+): () => void {
+  return EventsOn('study:context-limit-unavailable', (event: StudyContextUnavailableEvent) =>
+    handler(event),
+  )
 }

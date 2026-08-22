@@ -223,7 +223,7 @@ func TestClient_ChatStream_deliversChunksToHandlerInOrder(t *testing.T) {
 
 	// When streaming a chat request
 	var received []string
-	err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(chunk string) error {
+	_, err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(chunk string) error {
 		received = append(received, chunk)
 		return nil
 	})
@@ -242,11 +242,14 @@ func TestClient_ChatStream_recordsUsageOnce_fromTheLastUsageBearingFrame(t *test
 	}))
 	defer server.Close()
 	recorder := mocks.NewMockUsageRecorder(t)
-	recorder.EXPECT().Record(mock.Anything, usageEntryMatcher("sess-1", "anthropic/claude-sonnet-4.5", 7, 3, 0.002)).Return(nil).Once()
+	ctx := context.Background()
+	// No frame carries a "model" field either, so the resolved model is
+	// unconfirmed — recorded empty rather than under the requested alias.
+	recorder.EXPECT().Record(ctx, usageEntryMatcher("sess-1", "", 7, 3, 0.002)).Return(nil).Once()
 	client := NewClient(server.URL, "sk-or-valid", recorder)
 
 	// When streaming a chat request
-	err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
+	_, err := client.ChatStream(ctx, domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
 
 	// Then usage is recorded once, using the last usage-bearing frame
 	require.NoError(t, err)
@@ -260,11 +263,14 @@ func TestClient_ChatStream_recordsZeroUsage_whenNoFrameCarriesUsage(t *testing.T
 	}))
 	defer server.Close()
 	recorder := mocks.NewMockUsageRecorder(t)
-	recorder.EXPECT().Record(mock.Anything, usageEntryMatcher("sess-1", "anthropic/claude-sonnet-4.5", 0, 0, 0)).Return(nil).Once()
+	ctx := context.Background()
+	// No frame carries a "model" field either, so the resolved model is
+	// unconfirmed — recorded empty rather than under the requested alias.
+	recorder.EXPECT().Record(ctx, usageEntryMatcher("sess-1", "", 0, 0, 0)).Return(nil).Once()
 	client := NewClient(server.URL, "sk-or-valid", recorder)
 
 	// When streaming a chat request
-	err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
+	_, err := client.ChatStream(ctx, domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
 
 	// Then usage is still recorded once, zeroed out
 	require.NoError(t, err)
@@ -284,7 +290,7 @@ func TestClient_ChatStream_stopsCallingHandler_whenHandlerReturnsError(t *testin
 
 	// When the handler fails on the first chunk
 	callCount := 0
-	err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error {
+	_, err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error {
 		callCount++
 		return handlerErr
 	})
@@ -309,7 +315,7 @@ func TestClient_ChatStream_skipsFrameWithEmptyChoices(t *testing.T) {
 
 	// When streaming a chat request
 	var received []string
-	err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(chunk string) error {
+	_, err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(chunk string) error {
 		received = append(received, chunk)
 		return nil
 	})
@@ -329,7 +335,7 @@ func TestClient_ChatStream_returnsError_whenChunkIsNotValidJSON(t *testing.T) {
 	client := NewClient(server.URL, "sk-or-valid", recorder)
 
 	// When streaming a chat request
-	err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
+	_, err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
 
 	// Then it fails loudly instead of silently skipping the bad frame
 	assert.Error(t, err)
@@ -346,7 +352,7 @@ func TestClient_ChatStream_returnsErrAPIKeyMissing_whenAPIKeyIsEmpty(t *testing.
 	client := NewClient(server.URL, "", recorder)
 
 	// When streaming a chat request
-	err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
+	_, err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
 
 	// Then it fails with the missing-key sentinel without reaching OpenRouter
 	assert.ErrorIs(t, err, domainllm.ErrAPIKeyMissing)
@@ -363,7 +369,7 @@ func TestClient_ChatStream_returnsErrAPIKeyInvalid_whenOpenRouterReturns401(t *t
 	client := NewClient(server.URL, "sk-or-invalid", recorder)
 
 	// When streaming a chat request
-	err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
+	_, err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
 
 	// Then it fails with the invalid-key sentinel
 	assert.ErrorIs(t, err, domainllm.ErrAPIKeyInvalid)
@@ -379,7 +385,7 @@ func TestClient_ChatStream_returnsGenericError_whenOpenRouterReturnsServerError(
 	client := NewClient(server.URL, "sk-or-valid", recorder)
 
 	// When streaming a chat request
-	err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
+	_, err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
 
 	// Then it fails, but not with any of the specific sentinels
 	assert.Error(t, err)
@@ -400,7 +406,7 @@ func TestClient_ChatStream_returnsError_whenRecordingUsageFails(t *testing.T) {
 	client := NewClient(server.URL, "sk-or-valid", recorder)
 
 	// When streaming a chat request
-	err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
+	_, err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
 
 	// Then the whole call fails even though the stream completed
 	assert.Error(t, err)
@@ -421,12 +427,15 @@ func TestClient_ChatStream_fallsBackToFreeModel_whenFirstAttemptReturns402(t *te
 	}))
 	defer server.Close()
 	recorder := mocks.NewMockUsageRecorder(t)
-	recorder.EXPECT().Record(mock.Anything, usageEntryMatcher("sess-1", domainllm.FreeFallbackModel, 0, 0, 0)).Return(nil).Once()
+	ctx := context.Background()
+	// No frame carries a "model" field either, so the resolved model is
+	// unconfirmed — recorded empty rather than under the free-fallback alias.
+	recorder.EXPECT().Record(ctx, usageEntryMatcher("sess-1", "", 0, 0, 0)).Return(nil).Once()
 	client := NewClient(server.URL, "sk-or-valid", recorder)
 
 	// When streaming a chat request for a premium task
 	var received []string
-	err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskInterviewEvaluation}, func(chunk string) error {
+	_, err := client.ChatStream(ctx, domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskInterviewEvaluation}, func(chunk string) error {
 		received = append(received, chunk)
 		return nil
 	})
@@ -450,12 +459,145 @@ func TestClient_ChatStream_returnsErrInsufficientCredits_whenFallbackAlsoReturns
 	client := NewClient(server.URL, "sk-or-valid", recorder)
 
 	// When streaming a chat request
-	err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
+	_, err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
 
 	// Then it fails with the insufficient-credits sentinel after exactly one
 	// retry, never a third attempt
 	assert.ErrorIs(t, err, domainllm.ErrInsufficientCredits)
 	assert.Equal(t, 2, callCount)
+}
+
+func TestClient_ChatStream_resolvesModel_whenEveryNonEmptyFrameAgrees(t *testing.T) {
+	// Given a stream whose frames all report the same concrete model —
+	// including a frame that omits it, which must be ignored rather than
+	// treated as a conflict
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		sseFrame(w, `{"model":"anthropic/claude-sonnet-4.5","choices":[{"delta":{"content":"hi"}}]}`)
+		sseFrame(w, `{"choices":[{"delta":{"content":" there"}}]}`)
+		sseFrame(w, `{"model":"anthropic/claude-sonnet-4.5","choices":[],"usage":{"prompt_tokens":1,"completion_tokens":1}}`)
+		sseFrame(w, `[DONE]`)
+	}))
+	defer server.Close()
+	recorder := mocks.NewMockUsageRecorder(t)
+	recorder.EXPECT().Record(mock.Anything, usageEntryMatcher("sess-1", "anthropic/claude-sonnet-4.5", 1, 1, 0)).Return(nil).Once()
+	client := NewClient(server.URL, "sk-or-valid", recorder)
+
+	// When streaming a chat request
+	resp, err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
+
+	// Then the resolved model is reported on the response and used to record
+	// usage
+	require.NoError(t, err)
+	assert.Equal(t, "anthropic/claude-sonnet-4.5", resp.Model)
+}
+
+func TestClient_ChatStream_leavesModelEmpty_whenFramesConflict(t *testing.T) {
+	// Given a stream whose frames disagree on the resolved model — must not
+	// invent one
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		sseFrame(w, `{"model":"provider/model-a","choices":[{"delta":{"content":"hi"}}]}`)
+		sseFrame(w, `{"model":"provider/model-b","choices":[{"delta":{"content":" there"}}]}`)
+		sseFrame(w, `[DONE]`)
+	}))
+	defer server.Close()
+	recorder := mocks.NewMockUsageRecorder(t)
+	ctx := context.Background()
+	// Recorded under an empty model too — conflicting metadata means the
+	// resolved model is unconfirmed, so usage must not be attributed to
+	// the requested alias as if it were confirmed.
+	recorder.EXPECT().Record(ctx, usageEntryMatcher("sess-1", "", 0, 0, 0)).Return(nil).Once()
+	client := NewClient(server.URL, "sk-or-valid", recorder)
+
+	// When streaming a chat request
+	resp, err := client.ChatStream(ctx, domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
+
+	// Then the resolved model is left empty rather than guessed
+	require.NoError(t, err)
+	assert.Empty(t, resp.Model)
+}
+
+func TestClient_ChatStream_leavesModelEmpty_whenNoFrameReportsOne(t *testing.T) {
+	// Given a stream where no frame carries a "model" field at all
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		sseFrame(w, `{"choices":[{"delta":{"content":"hi"}}]}`)
+		sseFrame(w, `[DONE]`)
+	}))
+	defer server.Close()
+	recorder := mocks.NewMockUsageRecorder(t)
+	ctx := context.Background()
+	recorder.EXPECT().Record(ctx, usageEntryMatcher("sess-1", "", 0, 0, 0)).Return(nil).Once()
+	client := NewClient(server.URL, "sk-or-valid", recorder)
+
+	// When streaming a chat request
+	resp, err := client.ChatStream(ctx, domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
+
+	// Then the resolved model stays empty
+	require.NoError(t, err)
+	assert.Empty(t, resp.Model)
+}
+
+// ---- ListModels ----
+
+func TestClient_ListModels_returnsModelInfoFromCatalogResponse(t *testing.T) {
+	// Given a fake OpenRouter model catalog with two entries
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{
+				{"id": "anthropic/claude-sonnet-4.5", "context_length": 200000},
+				{"id": "openrouter/free", "context_length": 32000},
+			},
+		})
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "sk-or-valid", mocks.NewMockUsageRecorder(t))
+
+	// When listing models
+	models, err := client.ListModels(context.Background())
+
+	// Then it returns every entry, unvalidated (validation is the caller's
+	// job)
+	require.NoError(t, err)
+	assert.Equal(t, []domainllm.ModelInfo{
+		{ID: "anthropic/claude-sonnet-4.5", ContextLength: 200000},
+		{ID: "openrouter/free", ContextLength: 32000},
+	}, models)
+}
+
+func TestClient_ListModels_worksWithoutAnAPIKey(t *testing.T) {
+	// Given a client with no API key configured — the catalog can load
+	// before onboarding sets one
+	var receivedAuth string
+	authHeaderSet := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedAuth = r.Header.Get("Authorization")
+		authHeaderSet = receivedAuth != ""
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{}})
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "", mocks.NewMockUsageRecorder(t))
+
+	// When listing models
+	_, err := client.ListModels(context.Background())
+
+	// Then it succeeds without sending an Authorization header
+	require.NoError(t, err)
+	assert.False(t, authHeaderSet, "expected no Authorization header, got %q", receivedAuth)
+}
+
+func TestClient_ListModels_returnsError_whenOpenRouterReturnsServerError(t *testing.T) {
+	// Given a fake OpenRouter that errors
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "sk-or-valid", mocks.NewMockUsageRecorder(t))
+
+	// When listing models
+	_, err := client.ListModels(context.Background())
+
+	// Then it fails
+	assert.Error(t, err)
 }
 
 // ---- Embeddings ----

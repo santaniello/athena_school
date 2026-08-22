@@ -24,7 +24,7 @@ func TestMoveToFolder_movesTheSession(t *testing.T) {
 	folders := foldermocks.NewMockRepository(t)
 	sessions.EXPECT().MoveToFolder(context.Background(), "session-1", "folder-b").Return(nil).Once()
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil)
 
 	// When moving the session to another folder
 	err := service.MoveToFolder(context.Background(), "session-1", "folder-b")
@@ -42,7 +42,7 @@ func TestMoveToFolder_propagatesSessionNotFound(t *testing.T) {
 	folders := foldermocks.NewMockRepository(t)
 	sessions.EXPECT().MoveToFolder(context.Background(), "missing", "folder-b").Return(domainstudy.ErrSessionNotFound).Once()
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil)
 
 	// When moving a session that does not exist
 	err := service.MoveToFolder(context.Background(), "missing", "folder-b")

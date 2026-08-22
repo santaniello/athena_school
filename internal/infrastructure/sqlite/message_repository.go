@@ -22,7 +22,7 @@ func NewMessageRepository(db *sql.DB) *MessageRepository {
 
 // Append inserts a new message.
 func (r *MessageRepository) Append(ctx context.Context, message study.Message) error {
-	_, err := r.db.ExecContext(ctx,
+	_, err := execer(ctx, r.db).ExecContext(ctx,
 		`INSERT INTO messages (id, session_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)`,
 		message.ID, message.SessionID, message.Role, message.Content, message.CreatedAt,
 	)
@@ -35,7 +35,7 @@ func (r *MessageRepository) Append(ctx context.Context, message study.Message) e
 // ListBySession returns every message for sessionID, ordered by when it was
 // created. It returns an empty slice, not an error, when there are none.
 func (r *MessageRepository) ListBySession(ctx context.Context, sessionID string) ([]study.Message, error) {
-	rows, err := r.db.QueryContext(ctx,
+	rows, err := execer(ctx, r.db).QueryContext(ctx,
 		`SELECT id, session_id, role, content, created_at FROM messages WHERE session_id = ? ORDER BY created_at ASC`,
 		sessionID,
 	)
@@ -60,7 +60,7 @@ func (r *MessageRepository) ListBySession(ctx context.Context, sessionID string)
 
 // DeleteBySession permanently removes every message for sessionID.
 func (r *MessageRepository) DeleteBySession(ctx context.Context, sessionID string) error {
-	_, err := r.db.ExecContext(ctx, `DELETE FROM messages WHERE session_id = ?`, sessionID)
+	_, err := execer(ctx, r.db).ExecContext(ctx, `DELETE FROM messages WHERE session_id = ?`, sessionID)
 	if err != nil {
 		return fmt.Errorf("sqlite: deleting messages by session: %w", err)
 	}

@@ -24,6 +24,10 @@ function extractionErrorMessage(error: unknown): string {
 import { extractKnowledge, type KnowledgeItem } from '@/lib/knowledge'
 import {
   onStudyChunk,
+  onStudyContextLimitReached,
+  onStudyContextLimitUnavailable,
+  onStudyContextNormal,
+  onStudyContextWarning,
   onStudyDone,
   onStudyError,
   onStudySources,
@@ -44,7 +48,21 @@ interface StudyChatScreenProps {
   // differ from the sidebar's cached copy — this reports it up so the
   // AppShell topbar (which owns the title) can stay in sync.
   onTopicResolved?: (topic: string) => void
+  // Starts a fresh session on the same topic/folder, offered by the
+  // warning/blocked context-limit banners below. Owned by AppShell (see
+  // specs/phases/phase-02-knowledge-engine/06-study-context-limits.md).
+  onStartNewSession: () => void | Promise<void>
+  startingNewSession: boolean
 }
+
+// ContextState mirrors the persisted study.ContextState the backend tracks
+// per session (see StudyContextUsage in lib/study.ts).
+type ContextState = 'normal' | 'warning' | 'blocked'
+
+// Error codes carried by StudyErrorEvent that mean the failure happened
+// before the user message was persisted — see StudyErrorEvent.code in
+// internal/interfaces/desktop/study.go.
+const PRE_PERSISTENCE_ERROR_CODES = new Set(['context_limit_reached', 'turn_in_progress'])
 
 interface ChatMessage {
   role: 'user' | 'assistant'
@@ -65,7 +83,14 @@ const STICKY_BOTTOM_THRESHOLD_PX = 80
 // session already exists, either freshly started or resumed from history.
 // See specs/phases/phase-01-desktop-mvp/06-study-mode.md and
 // specs/phases/phase-01-desktop-mvp/10-study-folders.md.
-function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: StudyChatScreenProps) {
+function StudyChatScreen({
+  sessionId,
+  initialTopic,
+  mode,
+  onTopicResolved,
+  onStartNewSession,
+  startingNewSession,
+}: StudyChatScreenProps) {
   const [sessionTopic, setSessionTopic] = useState(initialTopic)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streamingText, setStreamingText] = useState('')
@@ -78,11 +103,23 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
   const [extractedItems, setExtractedItems] = useState<KnowledgeItem[]>([])
   const [showExtractionDialog, setShowExtractionDialog] = useState(false)
   const [showTruncationDialog, setShowTruncationDialog] = useState(false)
+  // Persistent context-limit state, restored on resume and updated live by
+  // the study:context-* events below — unlike `error`, never cleared by the
+  // next handleSend. See
+  // specs/phases/phase-02-knowledge-engine/06-study-context-limits.md.
+  const [contextState, setContextState] = useState<ContextState>('normal')
+  const [contextUnavailable, setContextUnavailable] = useState<string | null>(null)
   const streamingTextRef = useRef('')
   // Holds the sources emitted by "study:sources" for the turn currently in
   // flight, until "study:done" attaches them to the completed assistant
   // message and clears this back to empty.
   const pendingSourcesRef = useRef<StudySource[]>([])
+  // Holds the draft text of the currently in-flight optimistic send, so a
+  // study:error carrying a pre-persistence code (context_limit_reached,
+  // turn_in_progress) can pop the optimistic bubble and restore it.
+  const pendingSendRef = useRef<string | null>(null)
+  // The unavailable notice shows at most once per mounted screen instance.
+  const contextUnavailableShownRef = useRef(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const transcriptRef = useRef<HTMLDivElement>(null)
   // Starts pinned so a resumed session opens on its most recent message.
@@ -91,6 +128,11 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
   // StrictMode's dev-only double-invoke of this effect (mount → cleanup →
   // mount) doesn't fire two independent LLM generations for one session.
   const openingTurnRequestedRef = useRef<string | null>(null)
+
+  function clearContextUnavailable() {
+    contextUnavailableShownRef.current = false
+    setContextUnavailable(null)
+  }
 
   // Keeps the newest content in view as messages arrive and the answer
   // streams in — but only while the user is still parked at the bottom, so
@@ -122,6 +164,7 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
       .then((history) => {
         setSessionTopic(history.session.topic)
         onTopicResolved?.(history.session.topic)
+        setContextState(history.session.context.state)
         setMessages(
           history.messages.map((message) => ({
             role: message.role as ChatMessage['role'],
@@ -154,6 +197,7 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
       streamingTextRef.current = ''
       const sources = pendingSourcesRef.current
       pendingSourcesRef.current = []
+      pendingSendRef.current = null
       setMessages((previous) => [...previous, { role: 'assistant', content, sources }])
       setStreamingText('')
       setIsStreaming(false)
@@ -163,11 +207,44 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
       streamingTextRef.current = ''
       setStreamingText('')
       setIsStreaming(false)
+      // A pre-persistence error (the turn was rejected before the user
+      // message was ever saved) only applies to a send actually in flight —
+      // an opening turn never sets pendingSendRef, so it falls through to
+      // the normal error path below with nothing to reconcile.
+      if (PRE_PERSISTENCE_ERROR_CODES.has(event.code) && pendingSendRef.current !== null) {
+        const restored = pendingSendRef.current
+        pendingSendRef.current = null
+        setMessages((previous) => previous.slice(0, -1))
+        setDraft(restored)
+        return
+      }
+      pendingSendRef.current = null
       setError(event.message)
     })
     const offSources = onStudySources((event) => {
       if (event.sessionId !== sessionId) return
       pendingSourcesRef.current = event.sources
+    })
+    const offContextNormal = onStudyContextNormal((event) => {
+      if (event.sessionId !== sessionId) return
+      setContextState('normal')
+      clearContextUnavailable()
+    })
+    const offContextWarning = onStudyContextWarning((event) => {
+      if (event.sessionId !== sessionId) return
+      setContextState('warning')
+      clearContextUnavailable()
+    })
+    const offContextLimitReached = onStudyContextLimitReached((event) => {
+      if (event.sessionId !== sessionId) return
+      setContextState('blocked')
+      clearContextUnavailable()
+    })
+    const offContextLimitUnavailable = onStudyContextLimitUnavailable((event) => {
+      if (event.sessionId !== sessionId) return
+      if (contextUnavailableShownRef.current) return
+      contextUnavailableShownRef.current = true
+      setContextUnavailable(event.message)
     })
 
     // First use of Wails runtime events in this codebase: EventsOn returns
@@ -178,12 +255,17 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
       offDone()
       offError()
       offSources()
+      offContextNormal()
+      offContextWarning()
+      offContextLimitReached()
+      offContextLimitUnavailable()
     }
   }, [sessionId])
 
   async function handleSend() {
     const content = draft.trim()
     if (!content) return
+    pendingSendRef.current = content
     setMessages((previous) => [...previous, { role: 'user', content }])
     setDraft('')
     setError(null)
@@ -242,7 +324,7 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
   function handleDraftKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key !== 'Enter' || event.shiftKey) return
     event.preventDefault()
-    if (!draft.trim() || isStreaming) return
+    if (!draft.trim() || isStreaming || contextState === 'blocked') return
     void handleSend()
   }
 
@@ -280,12 +362,59 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
           <AlertDescription>{extractionError}</AlertDescription>
         </Alert>
       )}
+      {contextState === 'warning' && (
+        <Alert>
+          <AlertDescription className="flex items-center justify-between gap-3">
+            <span>
+              This session is approaching the model&apos;s context limit. Start a new session on the
+              same topic to keep responses reliable.
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={startingNewSession}
+              onClick={() => void onStartNewSession()}
+            >
+              Start new session
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+      {contextState === 'blocked' && (
+        <Alert variant="destructive">
+          <AlertDescription className="flex items-center justify-between gap-3">
+            <span>
+              This session has reached its context limit. Start a new session on the same topic to
+              continue.
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={startingNewSession}
+              onClick={() => void onStartNewSession()}
+            >
+              Start new session
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+      {contextUnavailable && (
+        <Alert>
+          <AlertDescription className="flex items-center justify-between gap-3">
+            <span>{contextUnavailable}</span>
+            <Button size="sm" variant="ghost" onClick={() => setContextUnavailable(null)}>
+              Dismiss
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
       <div className="relative">
         <Textarea
           ref={textareaRef}
           value={draft}
           onChange={handleDraftChange}
           onKeyDown={handleDraftKeyDown}
+          readOnly={contextState === 'blocked'}
           placeholder="Type your answer..."
           className="min-h-24 max-h-[200px] resize-none overflow-y-auto pb-11"
         />
@@ -293,7 +422,7 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
           <SourceModeSelect
             value={sourceMode}
             onValueChange={setSourceMode}
-            disabled={isStreaming}
+            disabled={isStreaming || contextState === 'blocked'}
           />
         </div>
         <div className="absolute right-2 bottom-2 flex items-center gap-2">
@@ -311,7 +440,7 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
               <Button
                 size="icon-sm"
                 aria-label="Send"
-                disabled={!draft.trim() || isStreaming}
+                disabled={!draft.trim() || isStreaming || contextState === 'blocked'}
                 onClick={() => void handleSend()}
               >
                 <ArrowUp className="size-4" aria-hidden="true" />

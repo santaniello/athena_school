@@ -5,11 +5,13 @@ import { GetProfile, Logout, UpdateProfile } from '../../wailsjs/go/desktop/App'
 import {
   deleteStudySession,
   listStudySessionsByFolder,
+  onStudyContextWarning,
   requestOpeningTurn,
   resumeStudySession,
   startStudySession,
 } from '@/lib/study'
-import type { StudySession } from '@/lib/study'
+import type { StudyContextEvent } from '@/lib/study'
+import type { StudyContextUsage, StudySession } from '@/lib/study'
 import {
   getKnowledgeIndexStatus,
   onKnowledgeIndexStatus,
@@ -44,6 +46,10 @@ vi.mock('@/lib/study', () => ({
   onStudyDone: vi.fn(() => vi.fn()),
   onStudyError: vi.fn(() => vi.fn()),
   onStudySources: vi.fn(() => vi.fn()),
+  onStudyContextNormal: vi.fn(() => vi.fn()),
+  onStudyContextWarning: vi.fn(() => vi.fn()),
+  onStudyContextLimitReached: vi.fn(() => vi.fn()),
+  onStudyContextLimitUnavailable: vi.fn(() => vi.fn()),
 }))
 
 vi.mock('@/lib/folder', () => ({
@@ -97,6 +103,14 @@ const profileResult = {
   goals: ['System Design'],
   studyStyle: 'practical_examples',
   assistantLanguage: 'en',
+}
+
+const CONTEXT_NORMAL: StudyContextUsage = {
+  state: 'normal',
+  model: '',
+  usedTokens: 0,
+  contextLength: 0,
+  estimated: false,
 }
 
 function renderShell() {
@@ -233,6 +247,7 @@ describe('AppShell', () => {
       topic: 'Distributed systems',
       folderId: 'default',
       startedAt: '2026-08-17T10:00:00Z',
+      context: CONTEXT_NORMAL,
     }
     vi.mocked(startStudySession).mockResolvedValueOnce(startedSession)
     vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
@@ -326,6 +341,7 @@ describe('AppShell', () => {
       topic: 'Existing topic',
       folderId: 'default',
       startedAt: '2026-08-10T10:00:00Z',
+      context: CONTEXT_NORMAL,
     }
     vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([existingSession])
     vi.mocked(resumeStudySession).mockReturnValueOnce(new Promise(() => {}))
@@ -361,6 +377,7 @@ describe('AppShell', () => {
       topic: 'Session A',
       folderId: 'default',
       startedAt: '2026-08-10T10:00:00Z',
+      context: CONTEXT_NORMAL,
     }
     vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([session])
     vi.mocked(resumeStudySession).mockReturnValue(new Promise(() => {}))
@@ -396,6 +413,7 @@ describe('AppShell', () => {
       topic: 'Orphan session',
       folderId: 'default',
       startedAt: '2026-08-10T10:00:00Z',
+      context: CONTEXT_NORMAL,
     }
     vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([orphanSession])
     vi.mocked(deleteStudySession).mockResolvedValueOnce()
@@ -429,6 +447,7 @@ describe('AppShell', () => {
       topic: 'Cached topic',
       folderId: 'default',
       startedAt: '2026-08-10T10:00:00Z',
+      context: CONTEXT_NORMAL,
     }
     vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([cachedSession])
     vi.mocked(resumeStudySession).mockResolvedValueOnce({
@@ -462,6 +481,7 @@ describe('AppShell', () => {
       topic: 'Nav test topic',
       folderId: 'default',
       startedAt: '2026-08-17T10:00:00Z',
+      context: CONTEXT_NORMAL,
     }
     vi.mocked(startStudySession).mockResolvedValueOnce(startedSession)
     vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
@@ -482,6 +502,70 @@ describe('AppShell', () => {
     expect(screen.getByRole('heading', { name: 'Home', level: 1 })).toBeInTheDocument()
     expect(screen.queryByText('Study / General')).not.toBeInTheDocument()
     expect(screen.queryByText('Nav test topic')).not.toBeInTheDocument()
+  })
+
+  it('starts a new session on the same topic and folder from the context-limit warning banner, refreshing the sidebar tree', async () => {
+    // Given a session open in Study, already reporting a warning-level
+    // context usage (see specs/phases/phase-02-knowledge-engine/06-study-context-limits.md)
+    let contextWarningHandler: ((event: StudyContextEvent) => void) | undefined
+    vi.mocked(onStudyContextWarning).mockImplementationOnce((handler) => {
+      contextWarningHandler = handler
+      return vi.fn()
+    })
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+    await user.click(screen.getByRole('button', { name: 'Study' }))
+    await screen.findByText('General')
+
+    const startedSession: StudySession = {
+      id: 'session-original',
+      topic: 'Distributed systems',
+      folderId: 'default',
+      startedAt: '2026-08-17T10:00:00Z',
+      context: CONTEXT_NORMAL,
+    }
+    vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([])
+    vi.mocked(startStudySession).mockResolvedValueOnce(startedSession)
+    vi.mocked(requestOpeningTurn).mockResolvedValueOnce()
+    await user.click(screen.getByText('General'))
+    await user.click(await screen.findByText('New session'))
+    await user.type(
+      screen.getByPlaceholderText('What do you want to study?'),
+      'Distributed systems{Enter}',
+    )
+    expect(await screen.findByText('Study / General')).toBeInTheDocument()
+
+    act(() => {
+      contextWarningHandler?.({
+        sessionId: 'session-original',
+        usedTokens: 8000,
+        contextLength: 10000,
+        estimated: false,
+      })
+    })
+
+    // When starting a new session from the warning banner
+    const newSession: StudySession = {
+      id: 'session-continued',
+      topic: 'Distributed systems',
+      folderId: 'default',
+      startedAt: '2026-08-17T10:05:00Z',
+      context: CONTEXT_NORMAL,
+    }
+    vi.mocked(startStudySession).mockResolvedValueOnce(newSession)
+    vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([startedSession, newSession])
+    vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
+    await user.click(await screen.findByRole('button', { name: 'Start new session' }))
+
+    // Then it started a session on the same topic/folder as the one that
+    // was open, the sidebar tree refreshed to include it, and the chat view
+    // switched to it
+    expect(startStudySession).toHaveBeenCalledWith('Distributed systems', 'default')
+    await waitFor(() => expect(listStudySessionsByFolder).toHaveBeenCalledWith('default'))
+    await waitFor(() =>
+      expect(requestOpeningTurn).toHaveBeenCalledWith('session-continued', 'Distributed systems'),
+    )
   })
 
   it('applies the required inline layout styles to the resizable panels and the sidebar scroll container', async () => {
