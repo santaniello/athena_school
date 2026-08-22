@@ -61,8 +61,15 @@ func (s *Service) streamAndPersist(
 			return err
 		}
 		length := 0
-		if known {
+		switch {
+		case known:
 			length = contextLength
+		case priorContext.Model == streamResp.Model:
+			// A cache miss for the same model that was already resolved
+			// (e.g. right after an app restart, before the catalog has
+			// finished warming up) must not erase the window already known
+			// for it — reuse it rather than reporting unresolved.
+			length = priorContext.ContextLength
 		}
 		newUsage = domainstudy.NextContextUsage(priorContext, streamResp.Model, usedTokens, length, estimated)
 		return s.sessions.UpdateContext(ctx, sessionID, newUsage)

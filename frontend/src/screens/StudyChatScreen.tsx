@@ -366,8 +366,8 @@ function StudyChatScreen({
         <Alert>
           <AlertDescription className="flex items-center justify-between gap-3">
             <span>
-              This session is approaching the model&apos;s context limit. Start a new session on
-              the same topic to keep responses reliable.
+              This session is approaching the model&apos;s context limit. Start a new session on the
+              same topic to keep responses reliable.
             </span>
             <Button
               size="sm"
@@ -384,8 +384,8 @@ function StudyChatScreen({
         <Alert variant="destructive">
           <AlertDescription className="flex items-center justify-between gap-3">
             <span>
-              This session has reached its context limit. Start a new session on the same topic
-              to continue.
+              This session has reached its context limit. Start a new session on the same topic to
+              continue.
             </span>
             <Button
               size="sm"

@@ -1186,7 +1186,13 @@ describe('StudyChatScreen — context limits', () => {
         topic: 'Distributed systems',
         folderId: 'folder-1',
         startedAt: '2026-08-16T10:00:00Z',
-        context: { state: 'warning', model: 'anthropic/claude', usedTokens: 8000, contextLength: 10000, estimated: false },
+        context: {
+          state: 'warning',
+          model: 'anthropic/claude',
+          usedTokens: 8000,
+          contextLength: 10000,
+          estimated: false,
+        },
       },
       messages: [],
     })
@@ -1203,9 +1209,7 @@ describe('StudyChatScreen — context limits', () => {
 
     // Then the persistent warning banner renders immediately, with no event
     // needed
-    expect(
-      await screen.findByText(/approaching the model's context limit/),
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/approaching the model's context limit/)).toBeInTheDocument()
   })
 
   it('shows the persistent warning banner and enables sending on study:context-warning', async () => {
@@ -1220,9 +1224,7 @@ describe('StudyChatScreen — context limits', () => {
       })
     })
 
-    expect(
-      await screen.findByText(/approaching the model's context limit/),
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/approaching the model's context limit/)).toBeInTheDocument()
     // The button stays disabled only because the draft is empty, not
     // because of the warning state — typing re-enables it.
     const user = userEvent.setup()
@@ -1252,8 +1254,9 @@ describe('StudyChatScreen — context limits', () => {
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
 
     // Typing is blocked by readOnly in a real browser; jsdom still lets
-    // userEvent write to it, so drive Enter's guard directly instead.
-    await user.click(textarea)
+    // userEvent write to it, so type a non-empty draft to prove Enter's
+    // guard — not the empty-draft check — is what blocks the send.
+    await user.type(textarea, 'What is CAP theorem?')
     await user.keyboard('{Enter}')
     expect(sendStudyMessage).not.toHaveBeenCalled()
   })
@@ -1336,9 +1339,7 @@ describe('StudyChatScreen — context limits', () => {
         message: "Unable to determine this session's context limit.",
       })
     })
-    expect(
-      screen.getAllByText("Unable to determine this session's context limit."),
-    ).toHaveLength(1)
+    expect(screen.getAllByText("Unable to determine this session's context limit.")).toHaveLength(1)
 
     // A later resolved state event clears it
     act(() => {

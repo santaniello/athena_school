@@ -165,7 +165,16 @@ func TestBuildValidCache_returnsError_whenNoValidEntriesRemain(t *testing.T) {
 }
 
 func TestService_RefreshContextLength_singleFlight_coalescesConcurrentCallers(t *testing.T) {
-	// Given a catalog whose ListModels call is slow and only expected once
+	// Given a catalog whose ListModels call is slow. Deliberately no
+	// .Once()/.Times() constraint here: if the timing barriers below still
+	// let a straggler start a second load (see the comment on them), a
+	// mockery call-count violation would call t.FailNow() from inside that
+	// goroutine's call to ListModels — which unwinds via runtime.Goexit()
+	// straight past the direct (non-deferred) close(call.done) in
+	// refresh(), permanently blocking every other waiter on that call's
+	// done channel. An occasional extra call is an acceptable, visible
+	// assertion failure below; a goroutine leak that hangs the whole test
+	// binary for its full timeout is not.
 	catalog := mocks.NewMockModelCatalog(t)
 	release := make(chan struct{})
 	var calls int32
@@ -174,21 +183,44 @@ func TestService_RefreshContextLength_singleFlight_coalescesConcurrentCallers(t 
 			atomic.AddInt32(&calls, 1)
 			<-release
 			return []domainllm.ModelInfo{{ID: "anthropic/claude-sonnet-4.5", ContextLength: 200000}}, nil
-		}).
-		Once()
+		})
 	service := NewService(catalog)
 
 	// When many callers concurrently request a refresh before the first
-	// completes. release is held closed until every goroutine has at least
-	// reached the call to RefreshContextLength, so the loader's ListModels
-	// call (blocked on <-release) cannot return — and free up a slot for a
-	// stray "second load" — before all of them have had a chance to join
-	// the same in-flight call.
+	// completes. Two barriers make that overlap the overwhelmingly likely
+	// outcome, though neither is a hard guarantee:
+	//  1. The first caller is launched alone and awaited until it is
+	//     observably inside ListModels (calls == 1) — by that point
+	//     s.flight is already set, since refresh() assigns it before
+	//     calling load(). Only then are the other 9 launched, so none of
+	//     them can start before s.flight is non-nil.
+	//  2. release is only closed once all 9 have incremented launched,
+	//     which they do immediately before calling RefreshContextLength —
+	//     s.flight cannot become nil before release closes (the loader is
+	//     still blocked on <-release).
+	// What neither barrier rules out: a goroutine preempted between
+	// incrementing launched and actually acquiring the lock inside
+	// refresh() could in principle resume after the loader has already
+	// finished and cleared s.flight, and start a second load. No blocking
+	// call sits in that gap, so it is not realistically reachable — but,
+	// per the comment above, the test tolerates it via a failed assertion
+	// rather than a hang if it ever happens.
 	const concurrentCallers = 10
 	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		length, err := service.RefreshContextLength(context.Background(), "anthropic/claude-sonnet-4.5")
+		assert.NoError(t, err)
+		assert.Equal(t, 200000, length)
+	}()
+	for atomic.LoadInt32(&calls) < 1 {
+		runtime.Gosched()
+	}
+
 	var launched int32
-	wg.Add(concurrentCallers)
-	for i := 0; i < concurrentCallers; i++ {
+	wg.Add(concurrentCallers - 1)
+	for i := 0; i < concurrentCallers-1; i++ {
 		go func() {
 			defer wg.Done()
 			atomic.AddInt32(&launched, 1)
@@ -197,14 +229,12 @@ func TestService_RefreshContextLength_singleFlight_coalescesConcurrentCallers(t 
 			assert.Equal(t, 200000, length)
 		}()
 	}
-	for atomic.LoadInt32(&launched) < concurrentCallers {
+	for atomic.LoadInt32(&launched) < concurrentCallers-1 {
 		runtime.Gosched()
 	}
 	close(release)
 	wg.Wait()
 
-	// Then the catalog was only actually queried once (Mockery's .Once()
-	// above already fails the test on a second call; this is an explicit
-	// belt-and-suspenders check)
+	// Then the catalog was queried only once
 	assert.Equal(t, int32(1), atomic.LoadInt32(&calls))
 }

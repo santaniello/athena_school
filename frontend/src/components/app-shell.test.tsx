@@ -562,9 +562,7 @@ describe('AppShell', () => {
     // was open, the sidebar tree refreshed to include it, and the chat view
     // switched to it
     expect(startStudySession).toHaveBeenCalledWith('Distributed systems', 'default')
-    await waitFor(() =>
-      expect(listStudySessionsByFolder).toHaveBeenCalledWith('default'),
-    )
+    await waitFor(() => expect(listStudySessionsByFolder).toHaveBeenCalledWith('default'))
     await waitFor(() =>
       expect(requestOpeningTurn).toHaveBeenCalledWith('session-continued', 'Distributed systems'),
     )

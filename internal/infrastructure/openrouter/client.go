@@ -179,17 +179,12 @@ func (c *Client) ChatStream(ctx context.Context, req domainllm.ChatRequest, hand
 		return domainllm.StreamResponse{}, err
 	}
 
-	// Record usage under the resolved model when the stream reported one
+	// Record usage under the same resolved model reported on StreamResponse
 	// (the concrete model behind an auto-router alias like
-	// domainllm.FreeFallbackModel), falling back to the requested model so
-	// cost/usage tracking never regresses to a blank model just because
-	// context-length resolution (StreamResponse.Model) couldn't trust the
-	// stream's metadata.
-	recordModel := result.model
-	if recordModel == "" {
-		recordModel = model
-	}
-	if err := c.record(ctx, req.SessionID, recordModel, result.usage); err != nil {
+	// domainllm.FreeFallbackModel), including empty when the stream's
+	// metadata wasn't trustworthy — recording under the requested alias
+	// instead would attribute cost/usage to an unconfirmed model.
+	if err := c.record(ctx, req.SessionID, result.model, result.usage); err != nil {
 		return domainllm.StreamResponse{}, err
 	}
 

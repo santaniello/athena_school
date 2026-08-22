@@ -242,7 +242,9 @@ func TestClient_ChatStream_recordsUsageOnce_fromTheLastUsageBearingFrame(t *test
 	}))
 	defer server.Close()
 	recorder := mocks.NewMockUsageRecorder(t)
-	recorder.EXPECT().Record(mock.Anything, usageEntryMatcher("sess-1", "anthropic/claude-sonnet-4.5", 7, 3, 0.002)).Return(nil).Once()
+	// No frame carries a "model" field either, so the resolved model is
+	// unconfirmed — recorded empty rather than under the requested alias.
+	recorder.EXPECT().Record(mock.Anything, usageEntryMatcher("sess-1", "", 7, 3, 0.002)).Return(nil).Once()
 	client := NewClient(server.URL, "sk-or-valid", recorder)
 
 	// When streaming a chat request
@@ -260,7 +262,9 @@ func TestClient_ChatStream_recordsZeroUsage_whenNoFrameCarriesUsage(t *testing.T
 	}))
 	defer server.Close()
 	recorder := mocks.NewMockUsageRecorder(t)
-	recorder.EXPECT().Record(mock.Anything, usageEntryMatcher("sess-1", "anthropic/claude-sonnet-4.5", 0, 0, 0)).Return(nil).Once()
+	// No frame carries a "model" field either, so the resolved model is
+	// unconfirmed — recorded empty rather than under the requested alias.
+	recorder.EXPECT().Record(mock.Anything, usageEntryMatcher("sess-1", "", 0, 0, 0)).Return(nil).Once()
 	client := NewClient(server.URL, "sk-or-valid", recorder)
 
 	// When streaming a chat request
@@ -421,7 +425,9 @@ func TestClient_ChatStream_fallsBackToFreeModel_whenFirstAttemptReturns402(t *te
 	}))
 	defer server.Close()
 	recorder := mocks.NewMockUsageRecorder(t)
-	recorder.EXPECT().Record(mock.Anything, usageEntryMatcher("sess-1", domainllm.FreeFallbackModel, 0, 0, 0)).Return(nil).Once()
+	// No frame carries a "model" field either, so the resolved model is
+	// unconfirmed — recorded empty rather than under the free-fallback alias.
+	recorder.EXPECT().Record(mock.Anything, usageEntryMatcher("sess-1", "", 0, 0, 0)).Return(nil).Once()
 	client := NewClient(server.URL, "sk-or-valid", recorder)
 
 	// When streaming a chat request for a premium task
@@ -492,10 +498,10 @@ func TestClient_ChatStream_leavesModelEmpty_whenFramesConflict(t *testing.T) {
 	}))
 	defer server.Close()
 	recorder := mocks.NewMockUsageRecorder(t)
-	// Falls back to recording under the requested model, so cost tracking
-	// never regresses to a blank model just because the stream's own
-	// metadata conflicted.
-	recorder.EXPECT().Record(mock.Anything, usageEntryMatcher("sess-1", "anthropic/claude-sonnet-4.5", 0, 0, 0)).Return(nil).Once()
+	// Recorded under an empty model too — conflicting metadata means the
+	// resolved model is unconfirmed, so usage must not be attributed to
+	// the requested alias as if it were confirmed.
+	recorder.EXPECT().Record(mock.Anything, usageEntryMatcher("sess-1", "", 0, 0, 0)).Return(nil).Once()
 	client := NewClient(server.URL, "sk-or-valid", recorder)
 
 	// When streaming a chat request
@@ -514,7 +520,7 @@ func TestClient_ChatStream_leavesModelEmpty_whenNoFrameReportsOne(t *testing.T) 
 	}))
 	defer server.Close()
 	recorder := mocks.NewMockUsageRecorder(t)
-	recorder.EXPECT().Record(mock.Anything, mock.AnythingOfType("llm.UsageEntry")).Return(nil).Once()
+	recorder.EXPECT().Record(mock.Anything, usageEntryMatcher("sess-1", "", 0, 0, 0)).Return(nil).Once()
 	client := NewClient(server.URL, "sk-or-valid", recorder)
 
 	// When streaming a chat request

@@ -1,6 +1,10 @@
 package study
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestComputeContextState_thresholds(t *testing.T) {
 	cases := []struct {
@@ -24,10 +28,12 @@ func TestComputeContextState_thresholds(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			// Given a used-token count and a context length
+			// When classifying the state
 			got := ComputeContextState(c.usedTokens, c.contextLength)
-			if got != c.want {
-				t.Errorf("ComputeContextState(%d, %d) = %q, want %q", c.usedTokens, c.contextLength, got, c.want)
-			}
+
+			// Then the expected state is returned
+			assert.Equal(t, c.want, got)
 		})
 	}
 }
@@ -41,12 +47,10 @@ func TestNextContextUsage_unresolvedContextLength_preservesPreviousState(t *test
 
 	// Then the state is preserved unconditionally (thresholds can't be
 	// judged without a length), but the other fields update
-	if got.State != ContextStateWarning {
-		t.Errorf("State = %q, want %q", got.State, ContextStateWarning)
-	}
-	if got.ContextLength != 0 || got.UsedTokens != 50 || !got.Estimated {
-		t.Errorf("got %+v, want ContextLength=0 UsedTokens=50 Estimated=true", got)
-	}
+	assert.Equal(t, ContextStateWarning, got.State)
+	assert.Equal(t, 0, got.ContextLength)
+	assert.Equal(t, 50, got.UsedTokens)
+	assert.True(t, got.Estimated)
 }
 
 func TestNextContextUsage_sameModelAndLength_isMonotonic(t *testing.T) {
@@ -58,12 +62,9 @@ func TestNextContextUsage_sameModelAndLength_isMonotonic(t *testing.T) {
 
 	// Then the state cannot retreat below blocked even though 100/10000 is
 	// well under the warning threshold
-	if got.State != ContextStateBlocked {
-		t.Errorf("State = %q, want %q (monotonic)", got.State, ContextStateBlocked)
-	}
-	if got.UsedTokens != 100 || got.Estimated {
-		t.Errorf("got %+v, want UsedTokens=100 Estimated=false", got)
-	}
+	assert.Equal(t, ContextStateBlocked, got.State, "monotonic: state must not retreat")
+	assert.Equal(t, 100, got.UsedTokens)
+	assert.False(t, got.Estimated)
 }
 
 func TestNextContextUsage_modelChanged_recomputesInEitherDirection(t *testing.T) {
@@ -75,9 +76,7 @@ func TestNextContextUsage_modelChanged_recomputesInEitherDirection(t *testing.T)
 
 	// Then the state moves back down to normal — blocked -> normal is only
 	// allowed because the model changed
-	if got.State != ContextStateNormal {
-		t.Errorf("State = %q, want %q", got.State, ContextStateNormal)
-	}
+	assert.Equal(t, ContextStateNormal, got.State)
 }
 
 func TestNextContextUsage_contextLengthChanged_recomputesInEitherDirection(t *testing.T) {
@@ -88,19 +87,19 @@ func TestNextContextUsage_contextLengthChanged_recomputesInEitherDirection(t *te
 	got := NextContextUsage(previous, "m1", 850, 100000, false)
 
 	// Then the state drops back to normal
-	if got.State != ContextStateNormal {
-		t.Errorf("State = %q, want %q", got.State, ContextStateNormal)
-	}
+	assert.Equal(t, ContextStateNormal, got.State)
 }
 
 func TestNextContextUsage_freshSession_computesNormally(t *testing.T) {
+	// Given a session with no prior measurement
+	// When a first measurement crosses the blocked threshold
 	got := NextContextUsage(ContextUsage{}, "m1", 950, 1000, false)
-	if got.State != ContextStateBlocked {
-		t.Errorf("State = %q, want %q", got.State, ContextStateBlocked)
-	}
-	if got.Model != "m1" || got.ContextLength != 1000 {
-		t.Errorf("got %+v", got)
-	}
+
+	// Then the state is computed fresh, with no monotonicity constraint to
+	// apply
+	assert.Equal(t, ContextStateBlocked, got.State)
+	assert.Equal(t, "m1", got.Model)
+	assert.Equal(t, 1000, got.ContextLength)
 }
 
 func TestEstimateTokens(t *testing.T) {
@@ -116,10 +115,12 @@ func TestEstimateTokens(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			// Given a message's content
+			// When estimating its token count
 			got := EstimateTokens(c.content)
-			if got != c.want {
-				t.Errorf("EstimateTokens(%q) = %d, want %d", c.content, got, c.want)
-			}
+
+			// Then it matches ceil(runes/3)+8
+			assert.Equal(t, c.want, got)
 		})
 	}
 }

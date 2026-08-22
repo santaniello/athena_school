@@ -15,6 +15,10 @@ import (
 // (see resolveContextLengthInBackground) without blocking the return; a
 // session with no resolved model at all just surfaces the transient
 // unavailable notice, since there is no trustworthy ID to refresh against.
+// Resume is a read: a failure to persist a freshly resolved context length
+// degrades to the transient unavailable notice instead of denying access to
+// the session/history already loaded — the next real measurement persists
+// it again regardless.
 func (s *Service) Resume(
 	ctx context.Context, sessionID string,
 	onContext ContextCallback, onContextUnavailable ContextUnavailableCallback,
@@ -43,9 +47,12 @@ func (s *Service) Resume(
 				if err := s.tx.WithinTx(ctx, func(ctx context.Context) error {
 					return s.sessions.UpdateContext(ctx, sessionID, newUsage)
 				}); err != nil {
-					return domainstudy.Session{}, nil, fmt.Errorf("study: persisting resolved context: %w", err)
+					if onContextUnavailable != nil {
+						onContextUnavailable(unavailableContextMessage)
+					}
+				} else {
+					session.Context = newUsage
 				}
-				session.Context = newUsage
 			} else {
 				s.resolveContextLengthInBackground(ctx, sessionID, session.Context.Model, session.Context, onContext, onContextUnavailable)
 			}

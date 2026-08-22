@@ -95,7 +95,13 @@ function toStudySession(result: {
   topic: string
   folderId: string
   startedAt: string
-  context: { state: string; model: string; usedTokens: number; contextLength: number; estimated: boolean }
+  context: {
+    state: string
+    model: string
+    usedTokens: number
+    contextLength: number
+    estimated: boolean
+  }
 }): StudySession {
   return {
     id: result.id,

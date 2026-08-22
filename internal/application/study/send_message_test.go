@@ -212,7 +212,7 @@ func TestSendMessage_persistsUserMessageBeforeCallingLLM(t *testing.T) {
 }
 
 func TestSendMessage_provisionalIncrement_reachingBlocked_emitsContextImmediately_andStillContinuesTheTurn(t *testing.T) {
-	// Given a session already at 990/1000 tokens (normal is only true
+	// Given a session already at 940/1000 tokens (normal is only true
 	// because the model/length hasn't been evaluated against it before —
 	// here we start from a state that crosses the 95% boundary the moment
 	// the provisional increment is added)

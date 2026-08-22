@@ -312,7 +312,12 @@ describe.each([
     // Given a handler and a mocked EventsOn
     vi.mocked(EventsOn).mockReturnValueOnce(vi.fn())
     const handler = vi.fn()
-    const payload = { sessionId: 'session-1', usedTokens: 8000, contextLength: 10000, estimated: true }
+    const payload = {
+      sessionId: 'session-1',
+      usedTokens: 8000,
+      contextLength: 10000,
+      estimated: true,
+    }
 
     // When subscribing
     subscribe(handler)
@@ -334,7 +339,10 @@ describe('onStudyContextLimitUnavailable', () => {
     // When subscribing
     onStudyContextLimitUnavailable(handler)
     const [, callback] = vi.mocked(EventsOn).mock.calls[0]
-    callback({ sessionId: 'session-1', message: "Unable to determine this session's context limit." })
+    callback({
+      sessionId: 'session-1',
+      message: "Unable to determine this session's context limit.",
+    })
 
     // Then the handler received the sessionId and message
     expect(EventsOn).toHaveBeenCalledWith('study:context-limit-unavailable', expect.any(Function))
