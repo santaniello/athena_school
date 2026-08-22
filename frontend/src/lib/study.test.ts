@@ -16,6 +16,7 @@ import {
   onStudyChunk,
   onStudyDone,
   onStudyError,
+  onStudySources,
   requestOpeningTurn,
   resumeStudySession,
   sendStudyMessage,
@@ -156,18 +157,40 @@ describe('requestOpeningTurn', () => {
 })
 
 describe('sendStudyMessage', () => {
-  it('forwards sessionId, topic and content', async () => {
+  it('forwards sessionId, topic, content and sourceMode', async () => {
     // Given a SendStudyMessage call that succeeds
     vi.mocked(SendStudyMessage).mockResolvedValueOnce()
 
-    // When sending a message
-    await sendStudyMessage('session-1', 'Distributed systems', 'What is CAP theorem?')
+    // When sending a message in notes mode
+    await sendStudyMessage('session-1', 'Distributed systems', 'What is CAP theorem?', 'notes')
 
     // Then it forwarded every argument
     expect(SendStudyMessage).toHaveBeenCalledWith(
       'session-1',
       'Distributed systems',
       'What is CAP theorem?',
+      'notes',
+    )
+  })
+
+  it('forwards a non-default source mode', async () => {
+    // Given a SendStudyMessage call that succeeds
+    vi.mocked(SendStudyMessage).mockResolvedValueOnce()
+
+    // When sending a message in strict-notes mode
+    await sendStudyMessage(
+      'session-1',
+      'Distributed systems',
+      'What is CAP theorem?',
+      'strict-notes',
+    )
+
+    // Then the chosen mode is forwarded as-is
+    expect(SendStudyMessage).toHaveBeenCalledWith(
+      'session-1',
+      'Distributed systems',
+      'What is CAP theorem?',
+      'strict-notes',
     )
   })
 })
@@ -186,7 +209,7 @@ describe('deleteStudySession', () => {
 })
 
 describe('onStudyChunk', () => {
-  it('subscribes to the study:chunk event and forwards the chunk', () => {
+  it('subscribes to the study:chunk event and forwards the structured payload', () => {
     // Given a handler and a mocked EventsOn
     const unsubscribe = vi.fn()
     vi.mocked(EventsOn).mockReturnValueOnce(unsubscribe)
@@ -195,17 +218,18 @@ describe('onStudyChunk', () => {
     // When subscribing
     const result = onStudyChunk(handler)
     const [, callback] = vi.mocked(EventsOn).mock.calls[0]
-    callback('Hello there!')
+    callback({ sessionId: 'session-1', content: 'Hello there!' })
 
-    // Then the handler received the chunk and the unsubscribe function is returned
+    // Then the handler received the sessionId and content, and the
+    // unsubscribe function is returned
     expect(EventsOn).toHaveBeenCalledWith('study:chunk', expect.any(Function))
-    expect(handler).toHaveBeenCalledWith('Hello there!')
+    expect(handler).toHaveBeenCalledWith({ sessionId: 'session-1', content: 'Hello there!' })
     expect(result).toBe(unsubscribe)
   })
 })
 
 describe('onStudyDone', () => {
-  it('subscribes to the study:done event', () => {
+  it('subscribes to the study:done event and forwards the sessionId', () => {
     // Given a handler and a mocked EventsOn
     vi.mocked(EventsOn).mockReturnValueOnce(vi.fn())
     const handler = vi.fn()
@@ -213,16 +237,16 @@ describe('onStudyDone', () => {
     // When subscribing
     onStudyDone(handler)
     const [, callback] = vi.mocked(EventsOn).mock.calls[0]
-    callback()
+    callback({ sessionId: 'session-1' })
 
-    // Then the handler fired
+    // Then the handler fired with the sessionId
     expect(EventsOn).toHaveBeenCalledWith('study:done', expect.any(Function))
-    expect(handler).toHaveBeenCalledOnce()
+    expect(handler).toHaveBeenCalledWith({ sessionId: 'session-1' })
   })
 })
 
 describe('onStudyError', () => {
-  it('subscribes to the study:error event and forwards the message', () => {
+  it('subscribes to the study:error event and forwards the sessionId and message', () => {
     // Given a handler and a mocked EventsOn
     vi.mocked(EventsOn).mockReturnValueOnce(vi.fn())
     const handler = vi.fn()
@@ -230,10 +254,36 @@ describe('onStudyError', () => {
     // When subscribing
     onStudyError(handler)
     const [, callback] = vi.mocked(EventsOn).mock.calls[0]
-    callback('upstream failure')
+    callback({ sessionId: 'session-1', message: 'upstream failure' })
 
-    // Then the handler received the error message
+    // Then the handler received the sessionId and error message
     expect(EventsOn).toHaveBeenCalledWith('study:error', expect.any(Function))
-    expect(handler).toHaveBeenCalledWith('upstream failure')
+    expect(handler).toHaveBeenCalledWith({ sessionId: 'session-1', message: 'upstream failure' })
+  })
+})
+
+describe('onStudySources', () => {
+  it('subscribes to the study:sources event and forwards the sessionId and sources', () => {
+    // Given a handler and a mocked EventsOn
+    vi.mocked(EventsOn).mockReturnValueOnce(vi.fn())
+    const handler = vi.fn()
+    const sources = [
+      {
+        sourceType: 'imported_doc',
+        filePath: 'notes/a.md',
+        heading: 'H',
+        concept: 'Channels',
+        score: 0.68,
+      },
+    ]
+
+    // When subscribing
+    onStudySources(handler)
+    const [, callback] = vi.mocked(EventsOn).mock.calls[0]
+    callback({ sessionId: 'session-1', sources })
+
+    // Then the handler received the sessionId and sources
+    expect(EventsOn).toHaveBeenCalledWith('study:sources', expect.any(Function))
+    expect(handler).toHaveBeenCalledWith({ sessionId: 'session-1', sources })
   })
 })

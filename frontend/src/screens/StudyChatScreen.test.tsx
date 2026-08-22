@@ -1,14 +1,19 @@
 import React from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
   onStudyChunk,
   onStudyDone,
   onStudyError,
+  onStudySources,
   requestOpeningTurn,
   resumeStudySession,
   sendStudyMessage,
+  type StudyChunkEvent,
+  type StudyDoneEvent,
+  type StudyErrorEvent,
+  type StudySourcesEvent,
 } from '@/lib/study'
 import { extractKnowledge } from '@/lib/knowledge'
 import StudyChatScreen from './StudyChatScreen'
@@ -20,6 +25,7 @@ vi.mock('@/lib/study', () => ({
   onStudyChunk: vi.fn(),
   onStudyDone: vi.fn(),
   onStudyError: vi.fn(),
+  onStudySources: vi.fn(),
 }))
 
 vi.mock('@/lib/knowledge', () => ({
@@ -28,11 +34,12 @@ vi.mock('@/lib/knowledge', () => ({
 }))
 
 function setupSubscriptions() {
-  const unsubscribe = { chunk: vi.fn(), done: vi.fn(), error: vi.fn() }
+  const unsubscribe = { chunk: vi.fn(), done: vi.fn(), error: vi.fn(), sources: vi.fn() }
   const handlers: {
-    chunk?: (chunk: string) => void
-    done?: () => void
-    error?: (message: string) => void
+    chunk?: (event: StudyChunkEvent) => void
+    done?: (event: StudyDoneEvent) => void
+    error?: (event: StudyErrorEvent) => void
+    sources?: (event: StudySourcesEvent) => void
     unsubscribe: typeof unsubscribe
   } = { unsubscribe }
   vi.mocked(onStudyChunk).mockImplementation((handler) => {
@@ -46,6 +53,10 @@ function setupSubscriptions() {
   vi.mocked(onStudyError).mockImplementation((handler) => {
     handlers.error = handler
     return unsubscribe.error
+  })
+  vi.mocked(onStudySources).mockImplementation((handler) => {
+    handlers.sources = handler
+    return unsubscribe.sources
   })
   return handlers
 }
@@ -70,8 +81,8 @@ async function renderSettledSession() {
   renderNewSession()
   await screen.findByRole('status', { name: /thinking/i })
   act(() => {
-    handlers.chunk?.('Welcome!')
-    handlers.done?.()
+    handlers.chunk?.({ sessionId: 'session-1', content: 'Welcome!' })
+    handlers.done?.({ sessionId: 'session-1' })
   })
   await screen.findByText('Welcome!')
   return handlers
@@ -104,7 +115,7 @@ describe('StudyChatScreen — starting a new session', () => {
 
     // When the first chunk of the reply arrives
     act(() => {
-      handlers.chunk?.('Welcome!')
+      handlers.chunk?.({ sessionId: 'session-1', content: 'Welcome!' })
     })
 
     // Then the thinking indicator is gone and the streamed text is shown instead
@@ -175,8 +186,8 @@ describe('StudyChatScreen — starting a new session', () => {
 
     // When chunks stream in incrementally
     act(() => {
-      handlers.chunk?.('Hello ')
-      handlers.chunk?.('there!')
+      handlers.chunk?.({ sessionId: 'session-1', content: 'Hello ' })
+      handlers.chunk?.({ sessionId: 'session-1', content: 'there!' })
     })
 
     // Then the partial text is visible before the stream finishes
@@ -184,7 +195,7 @@ describe('StudyChatScreen — starting a new session', () => {
 
     // When the stream finishes
     act(() => {
-      handlers.done?.()
+      handlers.done?.({ sessionId: 'session-1' })
     })
 
     // Then the full message is shown as a settled assistant message
@@ -397,6 +408,7 @@ describe('StudyChatScreen — composing and sending', () => {
       'session-1',
       'Distributed systems',
       'What is CAP theorem?',
+      'notes',
     )
   })
 
@@ -412,6 +424,7 @@ describe('StudyChatScreen — composing and sending', () => {
       'session-1',
       'Distributed systems',
       'What is CAP theorem?',
+      'notes',
     )
     expect(screen.getByPlaceholderText(/type your answer/i)).toHaveValue('')
   })
@@ -439,6 +452,7 @@ describe('StudyChatScreen — composing and sending', () => {
       'session-1',
       'Distributed systems',
       'What is CAP theorem?',
+      'notes',
     )
   })
 
@@ -525,7 +539,7 @@ describe('StudyChatScreen — composing and sending', () => {
 
     // And the new reply starts clean once chunks arrive
     act(() => {
-      handlers.chunk?.('Fresh reply')
+      handlers.chunk?.({ sessionId: 'session-1', content: 'Fresh reply' })
     })
     expect(await screen.findByText('Fresh reply')).toBeInTheDocument()
   })
@@ -534,8 +548,8 @@ describe('StudyChatScreen — composing and sending', () => {
     // Given a stream that partially arrived, then failed
     const handlers = await renderStartedSession()
     act(() => {
-      handlers.chunk?.('Partial before failure')
-      handlers.error?.('upstream failure')
+      handlers.chunk?.({ sessionId: 'session-1', content: 'Partial before failure' })
+      handlers.error?.({ sessionId: 'session-1', message: 'upstream failure' })
     })
     await screen.findByText('upstream failure')
     vi.mocked(sendStudyMessage).mockResolvedValueOnce()
@@ -545,7 +559,7 @@ describe('StudyChatScreen — composing and sending', () => {
     await user.type(screen.getByPlaceholderText(/type your answer/i), 'Retry question')
     await user.click(screen.getByRole('button', { name: 'Send' }))
     act(() => {
-      handlers.chunk?.('Fresh reply')
+      handlers.chunk?.({ sessionId: 'session-1', content: 'Fresh reply' })
     })
 
     // Then the new reply doesn't carry over the earlier partial text
@@ -565,7 +579,7 @@ describe('StudyChatScreen — composing and sending', () => {
     const handlers = await renderStartedSession()
 
     act(() => {
-      handlers.error?.('upstream failure')
+      handlers.error?.({ sessionId: 'session-1', message: 'upstream failure' })
     })
 
     expect(await screen.findByText('upstream failure')).toBeInTheDocument()
@@ -585,6 +599,7 @@ describe('StudyChatScreen — composing and sending', () => {
     expect(handlers.unsubscribe.chunk).toHaveBeenCalledOnce()
     expect(handlers.unsubscribe.done).toHaveBeenCalledOnce()
     expect(handlers.unsubscribe.error).toHaveBeenCalledOnce()
+    expect(handlers.unsubscribe.sources).toHaveBeenCalledOnce()
   })
 })
 
@@ -601,8 +616,8 @@ describe('StudyChatScreen — knowledge extraction', () => {
 
     // When the first assistant message settles
     act(() => {
-      handlers.chunk?.('Welcome!')
-      handlers.done?.()
+      handlers.chunk?.({ sessionId: 'session-1', content: 'Welcome!' })
+      handlers.done?.({ sessionId: 'session-1' })
     })
 
     // Then extraction becomes available
@@ -800,7 +815,7 @@ describe('StudyChatScreen — transcript scrolling', () => {
 
     // When the next chunk of the answer streams in
     act(() => {
-      handlers.chunk?.('More of the answer')
+      handlers.chunk?.({ sessionId: 'session-1', content: 'More of the answer' })
     })
 
     // Then the transcript scrolls to keep it in view
@@ -817,7 +832,7 @@ describe('StudyChatScreen — transcript scrolling', () => {
 
     // When the next chunk of the answer streams in
     act(() => {
-      handlers.chunk?.('More of the answer')
+      handlers.chunk?.({ sessionId: 'session-1', content: 'More of the answer' })
     })
 
     // Then the transcript still auto-scrolls to keep it in view
@@ -834,7 +849,7 @@ describe('StudyChatScreen — transcript scrolling', () => {
 
     // When the next chunk of the answer streams in
     act(() => {
-      handlers.chunk?.('More of the answer')
+      handlers.chunk?.({ sessionId: 'session-1', content: 'More of the answer' })
     })
 
     // Then the boundary counts as "still following" and it auto-scrolls
@@ -851,7 +866,7 @@ describe('StudyChatScreen — transcript scrolling', () => {
 
     // When the next chunk of the answer streams in
     act(() => {
-      handlers.chunk?.('More of the answer')
+      handlers.chunk?.({ sessionId: 'session-1', content: 'More of the answer' })
     })
 
     // Then the transcript stays where they left it
@@ -867,5 +882,174 @@ describe('StudyChatScreen — navigation', () => {
 
     await user.hover(screen.getByRole('button', { name: 'Send' }))
     expect(await screen.findByText('Send message')).toBeInTheDocument()
+  })
+})
+
+describe('StudyChatScreen — source modes and local sources', () => {
+  it('renders the source-mode selector defaulted to Notes', async () => {
+    await renderSettledSession()
+
+    expect(screen.getByRole('combobox', { name: 'Source mode' })).toHaveTextContent('Notes')
+  })
+
+  it('resets to Notes when a different session mounts', async () => {
+    // Given a settled session with Web picked
+    await renderSettledSession()
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('combobox', { name: 'Source mode' }))
+    await user.click(within(screen.getByRole('listbox')).getByText('Web'))
+    expect(screen.getByRole('combobox', { name: 'Source mode' })).toHaveTextContent('Web')
+
+    // When a different session mounts as a fresh instance (AppShell keys
+    // StudyChatScreen by session id, so every session gets its own mount)
+    setupSubscriptions()
+    vi.mocked(resumeStudySession).mockResolvedValueOnce({
+      session: {
+        id: 'session-2',
+        topic: 'Load balancing',
+        folderId: 'folder-1',
+        startedAt: '2026-08-16T11:00:00Z',
+      },
+      messages: [],
+    })
+    render(<StudyChatScreen sessionId="session-2" initialTopic="" mode="resume" />)
+
+    // Then the new instance defaults back to Notes
+    const selects = screen.getAllByRole('combobox', { name: 'Source mode' })
+    expect(selects[selects.length - 1]).toHaveTextContent('Notes')
+  })
+
+  it('disables the mode selector while a response is streaming', async () => {
+    await renderStartedSession()
+
+    expect(screen.getByRole('combobox', { name: 'Source mode' })).toBeDisabled()
+  })
+
+  it('enables the mode selector once streaming settles', async () => {
+    await renderSettledSession()
+
+    expect(screen.getByRole('combobox', { name: 'Source mode' })).toBeEnabled()
+  })
+
+  it('sends the chosen source mode', async () => {
+    await renderSettledSession()
+    vi.mocked(sendStudyMessage).mockResolvedValueOnce()
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('combobox', { name: 'Source mode' }))
+    await user.click(within(screen.getByRole('listbox')).getByText('Strict notes'))
+
+    await user.type(screen.getByPlaceholderText(/type your answer/i), 'What is CAP theorem?')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(sendStudyMessage).toHaveBeenCalledWith(
+      'session-1',
+      'Distributed systems',
+      'What is CAP theorem?',
+      'strict-notes',
+    )
+  })
+
+  it('attaches post-cap sources to the completed assistant message only, not mid-stream', async () => {
+    // Given a new session about to stream a reply
+    const handlers = await renderStartedSession()
+    const sources = [
+      {
+        sourceType: 'imported_doc',
+        filePath: 'notes/a.md',
+        heading: 'CAP theorem',
+        concept: '',
+        score: 0.68,
+      },
+    ]
+
+    // When sources arrive, then chunks stream, before the turn completes
+    act(() => {
+      handlers.sources?.({ sessionId: 'session-1', sources })
+      handlers.chunk?.({ sessionId: 'session-1', content: 'It stands for...' })
+    })
+
+    // Then no strip is shown yet, while the reply is still streaming
+    await screen.findByText('It stands for...')
+    expect(screen.queryByText(/Local sources/)).not.toBeInTheDocument()
+
+    // When the turn completes
+    act(() => {
+      handlers.done?.({ sessionId: 'session-1' })
+    })
+
+    // Then the strip appears under the now-completed assistant message
+    expect(await screen.findByText('Local sources (1)')).toBeInTheDocument()
+  })
+
+  it('renders no strip when a completed message has no sources', async () => {
+    const handlers = await renderStartedSession()
+
+    act(() => {
+      handlers.sources?.({ sessionId: 'session-1', sources: [] })
+      handlers.chunk?.({ sessionId: 'session-1', content: 'Hello!' })
+      handlers.done?.({ sessionId: 'session-1' })
+    })
+
+    await screen.findByText('Hello!')
+    expect(screen.queryByText(/Local sources/)).not.toBeInTheDocument()
+  })
+
+  it('expands the collapsed strip to show each source', async () => {
+    const handlers = await renderStartedSession()
+    const sources = [
+      {
+        sourceType: 'imported_doc',
+        filePath: 'notes/a.md',
+        heading: 'CAP theorem',
+        concept: '',
+        score: 0.68,
+      },
+    ]
+
+    act(() => {
+      handlers.sources?.({ sessionId: 'session-1', sources })
+      handlers.chunk?.({ sessionId: 'session-1', content: 'It stands for...' })
+      handlers.done?.({ sessionId: 'session-1' })
+    })
+    const strip = await screen.findByText('Local sources (1)')
+    const user = userEvent.setup()
+
+    await user.click(strip)
+
+    expect(screen.getByText('notes/a.md')).toBeInTheDocument()
+  })
+
+  it('ignores study:chunk/done/error/sources events whose sessionId does not match the displayed session', async () => {
+    const handlers = await renderStartedSession()
+
+    act(() => {
+      handlers.sources?.({
+        sessionId: 'another-session',
+        sources: [
+          { sourceType: 'imported_doc', filePath: 'x.md', heading: 'H', concept: '', score: 0.9 },
+        ],
+      })
+      handlers.chunk?.({ sessionId: 'another-session', content: 'Should not appear' })
+      handlers.done?.({ sessionId: 'another-session' })
+      handlers.error?.({ sessionId: 'another-session', message: 'Should not appear either' })
+    })
+
+    // Then nothing from the foreign session affected this screen's state —
+    // still just the thinking indicator, no stray message or error
+    expect(screen.getByRole('status', { name: /thinking/i })).toBeInTheDocument()
+    expect(screen.queryByText('Should not appear')).not.toBeInTheDocument()
+    expect(screen.queryByText('Should not appear either')).not.toBeInTheDocument()
+  })
+
+  it('never renders a sources strip for the opening turn', async () => {
+    const handlers = await renderStartedSession()
+
+    act(() => {
+      handlers.chunk?.({ sessionId: 'session-1', content: 'Welcome!' })
+      handlers.done?.({ sessionId: 'session-1' })
+    })
+
+    await screen.findByText('Welcome!')
+    expect(screen.queryByText(/Local sources/)).not.toBeInTheDocument()
   })
 })

@@ -20,6 +20,7 @@ import (
 	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
 	"github.com/santaniello/athena/internal/application/onboarding"
 	"github.com/santaniello/athena/internal/application/study"
+	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
 	"github.com/santaniello/athena/internal/infrastructure/athenahome"
 	"github.com/santaniello/athena/internal/infrastructure/configfile"
@@ -56,6 +57,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("resolving config path: %v", err)
 	}
+	retrievalThresholds, thresholdsErr := domainknowledge.NewRetrievalThresholds(
+		domainknowledge.DefaultMinSimilarity, domainknowledge.DefaultSufficiency,
+	)
+	if thresholdsErr != nil {
+		log.Fatalf("configuring retrieval thresholds: %v", thresholdsErr)
+	}
 	db, err := sqlite.Open(dbPath)
 	if err != nil {
 		log.Fatalf("opening database: %v", err)
@@ -84,8 +91,6 @@ func main() {
 	studySessions := sqlite.NewSessionRepository(db)
 	studyMessages := sqlite.NewMessageRepository(db)
 	folders := sqlite.NewFolderRepository(db)
-	studyService := study.NewService(studySessions, studyMessages, llmClient, profiles, folders)
-	folderService := folder.NewService(folders, studySessions)
 	knowledgeItems := sqlite.NewKnowledgeRepository(db)
 	knowledgeChunks := sqlite.NewChunkRepository(db)
 	transactor := sqlite.NewSQLTransactor(db)
@@ -93,8 +98,10 @@ func main() {
 	indexLoader := applicationknowledge.NewIndexLoader(knowledgeChunks, vectorStore, domainllm.EmbeddingModel)
 	knowledgeService := applicationknowledge.NewService(
 		knowledgeItems, studySessions, studyMessages, llmClient, configStore, knowledgeChunks, transactor,
-		vectorStore, indexLoader,
+		vectorStore, indexLoader, retrievalThresholds,
 	)
+	studyService := study.NewService(studySessions, studyMessages, llmClient, profiles, folders, knowledgeService)
+	folderService := folder.NewService(folders, studySessions)
 
 	ingestedFiles := sqlite.NewIngestedFileRepository(db)
 	ingestService := applicationingest.NewService(

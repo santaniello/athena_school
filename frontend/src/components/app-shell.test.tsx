@@ -43,6 +43,7 @@ vi.mock('@/lib/study', () => ({
   onStudyChunk: vi.fn(() => vi.fn()),
   onStudyDone: vi.fn(() => vi.fn()),
   onStudyError: vi.fn(() => vi.fn()),
+  onStudySources: vi.fn(() => vi.fn()),
 }))
 
 vi.mock('@/lib/folder', () => ({

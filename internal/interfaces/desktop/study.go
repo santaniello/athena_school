@@ -3,17 +3,70 @@ package desktop
 import (
 	"time"
 
+	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 )
 
-// Wails events emitted while a study session streams. The UI only ever has
-// one study session active at a time, so chunk/error payloads are plain
-// strings — no sessionID needed to disambiguate.
+// Wails events emitted while a study session streams. Every payload is
+// session-scoped so the frontend can ignore events for a session other
+// than the one currently displayed — see
+// specs/phases/phase-02-knowledge-engine/05-rag-integration.md.
 const (
-	eventStudyChunk = "study:chunk"
-	eventStudyDone  = "study:done"
-	eventStudyError = "study:error"
+	eventStudyChunk   = "study:chunk"
+	eventStudyDone    = "study:done"
+	eventStudyError   = "study:error"
+	eventStudySources = "study:sources"
 )
+
+// StudyChunkEvent is study:chunk's payload.
+type StudyChunkEvent struct {
+	SessionID string `json:"sessionId"`
+	Content   string `json:"content"`
+}
+
+// StudyDoneEvent is study:done's payload.
+type StudyDoneEvent struct {
+	SessionID string `json:"sessionId"`
+}
+
+// StudyErrorEvent is study:error's payload.
+type StudyErrorEvent struct {
+	SessionID string `json:"sessionId"`
+	Message   string `json:"message"`
+}
+
+// StudySourceResult is the desktop-facing DTO for one local source the
+// model received. It deliberately omits internal IDs and the full
+// excerpt — see the domain Source it is built from.
+type StudySourceResult struct {
+	SourceType string  `json:"sourceType"`
+	FilePath   string  `json:"filePath"`
+	Heading    string  `json:"heading"`
+	Concept    string  `json:"concept"`
+	Score      float32 `json:"score"`
+}
+
+// StudySourcesEvent is study:sources' payload.
+type StudySourcesEvent struct {
+	SessionID string              `json:"sessionId"`
+	Sources   []StudySourceResult `json:"sources"`
+}
+
+// toStudySourceResults always returns a non-nil slice, so an empty source
+// list marshals to "[]", never "null".
+func toStudySourceResults(sources []domainknowledge.Source) []StudySourceResult {
+	results := make([]StudySourceResult, len(sources))
+	for i, s := range sources {
+		results[i] = StudySourceResult{
+			SourceType: s.SourceType,
+			FilePath:   s.FilePath,
+			Heading:    s.Heading,
+			Concept:    s.Concept,
+			Score:      s.Score,
+		}
+	}
+	return results
+}
 
 // StudySessionResult is the desktop-facing DTO for a study session.
 type StudySessionResult struct {
@@ -99,33 +152,42 @@ func (a *App) ListStudySessionsByFolder(folderID string) ([]StudySessionResult, 
 // RequestOpeningTurn streams the assistant's opening turn for sessionID
 // (about topic) via the "study:chunk" event as it arrives. It blocks until
 // the stream completes, then emits "study:done" (or "study:error" on
-// failure).
+// failure). The opening turn performs no retrieval and never emits
+// "study:sources".
 func (a *App) RequestOpeningTurn(sessionID, topic string) error {
 	err := a.study.RequestOpeningTurn(a.ctx, sessionID, topic, func(chunk string) error {
-		a.emit(a.ctx, eventStudyChunk, chunk)
+		a.emit(a.ctx, eventStudyChunk, StudyChunkEvent{SessionID: sessionID, Content: chunk})
 		return nil
 	})
 	if err != nil {
-		a.emit(a.ctx, eventStudyError, err.Error())
+		a.emit(a.ctx, eventStudyError, StudyErrorEvent{SessionID: sessionID, Message: err.Error()})
 		return err
 	}
-	a.emit(a.ctx, eventStudyDone)
+	a.emit(a.ctx, eventStudyDone, StudyDoneEvent{SessionID: sessionID})
 	return nil
 }
 
 // SendStudyMessage appends content to the session identified by sessionID
-// (about topic) and streams the LLM's reply via "study:chunk", ending with
-// "study:done" (or "study:error" on failure).
-func (a *App) SendStudyMessage(sessionID, topic, content string) error {
-	err := a.study.SendMessage(a.ctx, sessionID, topic, content, func(chunk string) error {
-		a.emit(a.ctx, eventStudyChunk, chunk)
-		return nil
-	})
+// (about topic), following sourceMode's local-knowledge retrieval policy,
+// and streams the LLM's reply via "study:chunk", ending with "study:done"
+// (or "study:error" on failure). "study:sources" is emitted exactly once
+// per call, before any "study:chunk".
+func (a *App) SendStudyMessage(sessionID, topic, content, sourceMode string) error {
+	err := a.study.SendMessage(a.ctx, sessionID, topic, content, sourceMode,
+		func(sources []domainknowledge.Source) error {
+			a.emit(a.ctx, eventStudySources, StudySourcesEvent{SessionID: sessionID, Sources: toStudySourceResults(sources)})
+			return nil
+		},
+		func(chunk string) error {
+			a.emit(a.ctx, eventStudyChunk, StudyChunkEvent{SessionID: sessionID, Content: chunk})
+			return nil
+		},
+	)
 	if err != nil {
-		a.emit(a.ctx, eventStudyError, err.Error())
+		a.emit(a.ctx, eventStudyError, StudyErrorEvent{SessionID: sessionID, Message: err.Error()})
 		return err
 	}
-	a.emit(a.ctx, eventStudyDone)
+	a.emit(a.ctx, eventStudyDone, StudyDoneEvent{SessionID: sessionID})
 	return nil
 }
 

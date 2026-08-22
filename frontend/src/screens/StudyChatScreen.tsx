@@ -9,6 +9,8 @@ import { MessageBubble } from '@/components/message-bubble'
 import { ThinkingIndicator } from '@/components/thinking-indicator'
 import { KnowledgeExtractionDialog } from '@/components/knowledge-extraction-dialog'
 import { TranscriptTruncationDialog } from '@/components/transcript-truncation-dialog'
+import { SourceModeSelect } from '@/components/source-mode-select'
+import { LocalSourcesStrip } from '@/components/local-sources-strip'
 
 const TRANSCRIPT_TOO_LARGE_ERROR = 'no complete transcript message fits within the extraction limit'
 
@@ -24,9 +26,12 @@ import {
   onStudyChunk,
   onStudyDone,
   onStudyError,
+  onStudySources,
   requestOpeningTurn,
   resumeStudySession,
   sendStudyMessage,
+  type SourceMode,
+  type StudySource,
 } from '@/lib/study'
 
 interface StudyChatScreenProps {
@@ -44,6 +49,9 @@ interface StudyChatScreenProps {
 interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
+  // Only ever set on a completed assistant message; undefined for the
+  // opening turn (no retrieval) and for user messages.
+  sources?: StudySource[]
 }
 
 // How close to the bottom of the transcript the user has to be for it to
@@ -62,6 +70,7 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streamingText, setStreamingText] = useState('')
   const [isStreaming, setIsStreaming] = useState(mode === 'new')
+  const [sourceMode, setSourceMode] = useState<SourceMode>('notes')
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [extractionError, setExtractionError] = useState<string | null>(null)
@@ -70,6 +79,10 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
   const [showExtractionDialog, setShowExtractionDialog] = useState(false)
   const [showTruncationDialog, setShowTruncationDialog] = useState(false)
   const streamingTextRef = useRef('')
+  // Holds the sources emitted by "study:sources" for the turn currently in
+  // flight, until "study:done" attaches them to the completed assistant
+  // message and clears this back to empty.
+  const pendingSourcesRef = useRef<StudySource[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const transcriptRef = useRef<HTMLDivElement>(null)
   // Starts pinned so a resumed session opens on its most recent message.
@@ -126,23 +139,35 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
   // "study:chunk"/"study:done" events for a session's opening turn are
   // emitted by the Go binding *before* requestOpeningTurn's own promise
   // resolves (it blocks until the whole stream finishes, then returns).
+  // Every event carries a sessionId; one whose sessionId doesn't match the
+  // session this screen instance displays is ignored, so a stale listener
+  // from a just-abandoned session can never bleed into this one.
   useEffect(() => {
-    const offChunk = onStudyChunk((chunk) => {
-      streamingTextRef.current += chunk
+    const offChunk = onStudyChunk((event) => {
+      if (event.sessionId !== sessionId) return
+      streamingTextRef.current += event.content
       setStreamingText(streamingTextRef.current)
     })
-    const offDone = onStudyDone(() => {
+    const offDone = onStudyDone((event) => {
+      if (event.sessionId !== sessionId) return
       const content = streamingTextRef.current
       streamingTextRef.current = ''
-      setMessages((previous) => [...previous, { role: 'assistant', content }])
+      const sources = pendingSourcesRef.current
+      pendingSourcesRef.current = []
+      setMessages((previous) => [...previous, { role: 'assistant', content, sources }])
       setStreamingText('')
       setIsStreaming(false)
     })
-    const offError = onStudyError((message) => {
+    const offError = onStudyError((event) => {
+      if (event.sessionId !== sessionId) return
       streamingTextRef.current = ''
       setStreamingText('')
       setIsStreaming(false)
-      setError(message)
+      setError(event.message)
+    })
+    const offSources = onStudySources((event) => {
+      if (event.sessionId !== sessionId) return
+      pendingSourcesRef.current = event.sources
     })
 
     // First use of Wails runtime events in this codebase: EventsOn returns
@@ -152,8 +177,9 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
       offChunk()
       offDone()
       offError()
+      offSources()
     }
-  }, [])
+  }, [sessionId])
 
   async function handleSend() {
     const content = draft.trim()
@@ -167,7 +193,7 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
     // back — 'auto' lets the CSS min-height take back over.
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
     try {
-      await sendStudyMessage(sessionId, sessionTopic, content)
+      await sendStudyMessage(sessionId, sessionTopic, content, sourceMode)
     } catch (err) {
       setIsStreaming(false)
       setError(err instanceof Error ? err.message : 'Failed to send the message.')
@@ -229,9 +255,16 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
         aria-label="Conversation"
         className="thin-scroll flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-2"
       >
-        {messages.map((message, index) => (
-          <MessageBubble key={index} role={message.role} content={message.content} />
-        ))}
+        {messages.map((message, index) =>
+          message.role === 'assistant' && message.sources && message.sources.length > 0 ? (
+            <div key={index} className="flex flex-col items-start gap-1">
+              <MessageBubble role={message.role} content={message.content} />
+              <LocalSourcesStrip sources={message.sources} />
+            </div>
+          ) : (
+            <MessageBubble key={index} role={message.role} content={message.content} />
+          ),
+        )}
         {isStreaming && !streamingText && <ThinkingIndicator />}
         {isStreaming && streamingText && (
           <MessageBubble role="assistant" content={streamingText} isStreaming />
@@ -256,6 +289,13 @@ function StudyChatScreen({ sessionId, initialTopic, mode, onTopicResolved }: Stu
           placeholder="Type your answer..."
           className="min-h-24 max-h-[200px] resize-none overflow-y-auto pb-11"
         />
+        <div className="absolute bottom-2 left-2">
+          <SourceModeSelect
+            value={sourceMode}
+            onValueChange={setSourceMode}
+            disabled={isStreaming}
+          />
+        </div>
         <div className="absolute right-2 bottom-2 flex items-center gap-2">
           <Button
             size="sm"

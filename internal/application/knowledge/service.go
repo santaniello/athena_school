@@ -35,24 +35,30 @@ type Transactor interface {
 // just wrote, or race its Add/Remove. Every mutation that touches the
 // VectorStore must wrap its full body in BeginMutation/EndMutation, not
 // just check CheckMutationAllowed once up front.
+//
+// Status reports the index coordinator's current lifecycle snapshot;
+// Retrieve reads it to distinguish a valid empty index from one that has
+// never loaded (see specs/phases/phase-02-knowledge-engine/05-rag-integration.md).
 type IndexGuard interface {
 	CheckMutationAllowed() error
 	BeginMutation() error
 	EndMutation()
+	Status() domainknowledge.IndexStatus
 }
 
 // Service implements knowledge extraction and Explorer management against
 // the application's ports.
 type Service struct {
-	items    domainknowledge.Repository
-	sessions domainstudy.SessionRepository
-	messages domainstudy.MessageRepository
-	llm      domainllm.Provider
-	configs  domainconfig.Store
-	chunks   domainknowledge.ChunkRepository
-	tx       Transactor
-	store    domainknowledge.VectorStore
-	index    IndexGuard
+	items      domainknowledge.Repository
+	sessions   domainstudy.SessionRepository
+	messages   domainstudy.MessageRepository
+	llm        domainllm.Provider
+	configs    domainconfig.Store
+	chunks     domainknowledge.ChunkRepository
+	tx         Transactor
+	store      domainknowledge.VectorStore
+	index      IndexGuard
+	thresholds domainknowledge.RetrievalThresholds
 }
 
 // NewService creates a knowledge extraction and Explorer management service.
@@ -66,11 +72,12 @@ func NewService(
 	tx Transactor,
 	store domainknowledge.VectorStore,
 	index IndexGuard,
+	thresholds domainknowledge.RetrievalThresholds,
 ) *Service {
 	return &Service{
 		items: items, sessions: sessions, messages: messages,
 		llm: llm, configs: configs, chunks: chunks, tx: tx,
-		store: store, index: index,
+		store: store, index: index, thresholds: thresholds,
 	}
 }
 

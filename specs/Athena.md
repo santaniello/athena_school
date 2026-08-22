@@ -547,35 +547,40 @@ O usuário poderá controlar a origem do conhecimento pela interface do desktop.
 
 ## notes
 
-Usa:
+Consulta primeiro:
 
 ```text
 User Notes
 +
 Athena Knowledge
 ```
+
+O LLM usa o material local como fonte principal e pode complementar lacunas com
+seu conhecimento geral.
 
 ## strict-notes
 
-Usa somente:
-
-```text
-User Notes
-```
-
-O LLM não deve utilizar conhecimento externo fora do contexto permitido.
-
-## web
-
-Pode combinar:
+Consulta as mesmas fontes locais aprovadas:
 
 ```text
 User Notes
 +
 Athena Knowledge
-+
-External/Web Knowledge
 ```
+
+O LLM formula a resposta exclusivamente a partir do contexto local recuperado e
+não deve utilizar conhecimento externo. Sem conteúdo local correspondente, o
+Athena retorna uma mensagem fixa sem chamar o modelo de chat.
+
+## web
+
+Ignora as fontes locais e faz uma chamada normal ao modelo:
+
+```text
+General model knowledge
+```
+
+O nome do modo não promete busca ao vivo na internet nesta fase.
 
 ---
 

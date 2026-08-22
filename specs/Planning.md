@@ -340,10 +340,11 @@ CREATE TABLE usage (
 **Entrega em três incrementos**, cada um demonstrável sozinho:
 
 1. **2.1 → 2.2 → 2.3 → 2.7** — modelo, extração, import de notas + explorer, fila de revisão
-2. **2.4 → 2.5 → 2.8** — vector search, RAG, indexação de todos os estados
+2. **2.4 → 2.5 → 2.6 → 2.8** — vector search, RAG, limites de contexto da sessão, indexação de todos os estados
 3. **2.9 → 2.10 → 2.11 → 2.12** — proveniência, duplicidade, reconciliação e histórico de revisões
 
-> A antiga 2.6 (Knowledge Explorer) foi absorvida pela 2.3: toda nota importada
+> A antiga 2.6 (Knowledge Explorer) foi absorvida pela 2.3, e o número 2.6 foi
+> reaproveitado para Study Context Limits: toda nota importada
 > também vira um `knowledge.Item` "sombra" (sem LLM), então a tela que
 > lista/gerencia Items precisa existir para a importação ser utilizável. Isso
 > quebra a independência original das duas trilhas — a 2.3 agora depende da 2.1
@@ -488,23 +489,47 @@ CREATE TABLE ingested_files (
 ```text
 Pergunta do usuário
     ↓
-Embedding da pergunta
+modo = web? → LLM sem retrieval local
+    ↓ não
+Snapshot válido? → erro se o índice nunca carregou
+    ↓ sim
+Store vazio? → nenhum chunk, sem gastar embedding
+    ↓ não
+Embedding de tópico + pergunta, atribuído à sessão
     ↓
-Vector search → top-K chunks relevantes
+Vector search approved-only → top-K chunks relevantes
     ↓
-Conhecimento suficiente?
-    YES → responder com conhecimento local
-    NO  → chamar OpenRouter com chunks como contexto
+Threshold → teto JSON de 8.000 caracteres → suficiência
+    ↓
+notes: LLM prefere/complementa contexto local
+strict-notes: LLM usa exclusivamente contexto local
+strict-notes sem chunks: resposta fixa sem chat/completion
 ```
 
-- [ ] Source modes: `notes` / `strict-notes` / `web` — transiente, passado por chamada em `SendStudyMessage`, sem migração
-- [ ] Em `strict-notes` sem chunks: responde `NoLocalKnowledgeMessage` **sem chamar o LLM** — inclusive com o store vazio, que é só a forma mais barata de não achar chunk e não pode curto-circuitar a checagem de modo
-- [ ] `DefaultTopK` explícito, junto com os thresholds
-- [ ] Thresholds de similaridade injetados no construtor (defaults 0.35 / 0.55, calibrados para `text-embedding-3-small`)
-- [ ] Contexto injetado como **segunda mensagem `system`**, preservando `buildSystemPrompt` e seus testes
-- [ ] Teto de contexto descartando chunks inteiros do menor score para cima — nunca truncar no meio, para que as fontes citadas batam com o que o modelo viu
+- [ ] Source modes `notes` / `strict-notes` / `web`: transientes por chamada; `study.Service` valida e não chama o Retriever em `web`
+- [ ] Busca em todos os tópicos/fontes locais com `status = approved`; query determinística combina tópico + mensagem atual
+- [ ] `Retriever.Retrieve(ctx, sessionID, query)` atribui o embedding à sessão; erro técnico nunca vira fallback silencioso
+- [ ] Prontidão usa `IndexStatus.HasSnapshot`: sem snapshot é `ErrVectorStoreUnavailable`; snapshot válido vazio pula embedding
+- [ ] Em `strict-notes` sem chunks, persistir e emitir `NoLocalKnowledgeMessage` sem chat/completion; embedding continua contabilizado quando o store não está vazio
+- [ ] `DefaultTopK = 8`; thresholds injetados 0.35 / 0.55, finitos em `[-1,1]`, `min <= sufficiency`; suficiência usa o maior score pós-cap
+- [ ] Contexto como JSON escapado de dados não confiáveis, com teto de 8.000 caracteres Unicode incluindo metadados; descartar chunks inteiros do menor score para cima
+- [ ] Contexto injetado como **segunda mensagem `system`**, preservando `buildSystemPrompt`; `Retrieve` renderiza dados e `buildKnowledgeContext` acrescenta a política do modo
 - [ ] `study.Service` recebe uma **porta** `knowledge.Retriever` definida no domínio; orquestrar isso no binding violaria a ADR-001
-- [ ] Evento `study:sources` com as fontes usadas (determinístico, em vez de pedir citação inline ao modelo)
+- [ ] Eventos de estudo ganham `sessionId`; `study:sources` é emitido exatamente uma vez antes dos chunks, inclusive vazio
+- [ ] UI: seletor default `notes` + faixa recolhida `Local sources (N)` por mensagem, com `sourceType`, metadados e score decimal
+- [ ] Turno automático de abertura permanece sem retrieval
+
+### 2.6 — Study Context Limits
+
+- [ ] Separado do teto RAG por turno: mede o histórico completo reenviado ao modelo
+- [ ] `ChatStream` retorna modelo resolvido + usage; ocupação real = `input_tokens + output_tokens`
+- [ ] Catálogo dinâmico da OpenRouter fornece `context_length`, carregado assincronamente uma vez e mantido em cache; modelo ausente dispara refresh sob demanda
+- [ ] Falha do catálogo não bloqueia chat e mostra uma única notificação discreta por sessão aberta
+- [ ] Mensagem sem stream soma estimativa `ceil(runes/3) + 8`, independente do idioma; próxima medição real substitui o acumulado
+- [ ] Estado persistido `normal | warning | blocked`: alerta informativo em 80%, bloqueio de botão/Enter/backend em 95%
+- [ ] Alerta oferece nova sessão no mesmo folder/tópico, sem copiar histórico/fontes e com opening turn normal
+- [ ] Mensagem e estado de contexto são gravados atomicamente; resume restaura alerta/bloqueio sem nova chamada LLM
+- [ ] Nunca truncar, apagar ou resumir histórico silenciosamente
 
 ### 2.7 — Knowledge Review
 
@@ -527,7 +552,7 @@ Todos os Knowledge Items entram no vector store para permitir detecção de dupl
 
 - [ ] Extração marca mensagens por ID e exige ao menos uma citação literal `{message_id, quote}` válida por candidato (máximo 5 × 1000 caracteres)
 - [ ] `knowledge_evidence` + `knowledge_item_evidence` guardam snapshots imutáveis; `Source` continua sendo apenas a categoria
-- [ ] `message_sources` persiste, em ordem, exatamente os chunks que sobreviveram ao threshold e ao teto de contexto
+- [ ] `message_sources` persiste, em ordem, exatamente os chunks que sobreviveram ao threshold e ao teto de contexto, incluindo `source_type` para reconstruir os rótulos da 2.5
 - [ ] Mensagem final do assistente e fontes são gravadas atomicamente; sessão retomada restaura as fontes
 - [ ] Explorer mostra evidências do item
 

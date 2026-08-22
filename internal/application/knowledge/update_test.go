@@ -37,7 +37,7 @@ func TestUpdateItem_overwritesEditableFields_andReconcilesChunkMetadata(t *testi
 	store.EXPECT().Add(mock.Anything, updatedChunks).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t))
+	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
 
 	// When updating its editable fields
 	updated, err := service.UpdateItem(ctx, "item-1", ItemFields{
@@ -62,7 +62,7 @@ func TestUpdateItem_returnsValidationError_whenConceptIsCleared_andNeverCallsUpd
 	}, nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, nil, tx, nil, passingIndexGuard(t))
+	service := NewService(repository, nil, nil, nil, nil, nil, tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
 
 	// When updating with a blank concept
 	_, err := service.UpdateItem(ctx, "item-1", ItemFields{Topic: "Go", Concept: "", Definition: "Old def."})
@@ -88,7 +88,7 @@ func TestUpdateItem_trimsTopicWhitespace_beforePersisting(t *testing.T) {
 	store.EXPECT().Add(mock.Anything, ([]domainknowledge.Chunk)(nil)).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t))
+	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
 
 	// When updating with a topic padded with whitespace
 	updated, err := service.UpdateItem(ctx, "item-1", ItemFields{
@@ -109,7 +109,7 @@ func TestUpdateItem_returnsTopicRequired_whenTopicIsBlank_andNeverCallsUpdate(t 
 	}, nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, nil, tx, nil, passingIndexGuard(t))
+	service := NewService(repository, nil, nil, nil, nil, nil, tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
 
 	// When updating with a whitespace-only topic
 	_, err := service.UpdateItem(ctx, "item-1", ItemFields{Topic: "   ", Concept: "New", Definition: "New def."})
@@ -126,7 +126,7 @@ func TestUpdateItem_propagatesNotFound_whenItemDoesNotExist(t *testing.T) {
 	repository.EXPECT().GetByID(ctx, "missing").Return(domainknowledge.Item{}, domainknowledge.ErrItemNotFound).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, nil, tx, nil, passingIndexGuard(t))
+	service := NewService(repository, nil, nil, nil, nil, nil, tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
 
 	// When updating it
 	_, err := service.UpdateItem(ctx, "missing", ItemFields{Topic: "Go", Concept: "X", Definition: "Y"})
@@ -141,7 +141,7 @@ func TestUpdateItem_returnsErrIndexLoading_whenIndexIsLoading_andNeverTouchesThe
 	repository := knowledgemocks.NewMockRepository(t)
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(ErrIndexLoading).Once()
-	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, guard)
+	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, guard, domainknowledge.RetrievalThresholds{})
 
 	// When updating an item
 	_, err := service.UpdateItem(ctx, "item-1", ItemFields{Topic: "Go", Concept: "X", Definition: "Y"})
@@ -167,7 +167,7 @@ func TestUpdateItem_returnsIndexingWarning_whenPostCommitReconciliationFails_but
 	store.EXPECT().Add(mock.Anything, updatedChunks).Return(boom).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t))
+	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
 
 	// When updating it and the post-commit reconciliation fails
 	updated, err := service.UpdateItem(ctx, "item-1", ItemFields{Topic: "Go", Concept: "New", Definition: "New def."})

@@ -9,6 +9,7 @@ import (
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 
 	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
+	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 	profilemocks "github.com/santaniello/athena/internal/domain/profile/mocks"
 	studymocks "github.com/santaniello/athena/internal/domain/study/mocks"
@@ -33,7 +34,8 @@ func TestDeleteSession_deletesMessagesBeforeTheSession(t *testing.T) {
 		Run(func(context.Context, string) { callOrder = append(callOrder, "delete-session") }).
 		Return(nil).
 		Once()
-	service := NewService(sessions, messages, llm, profiles, folders)
+	retriever := knowledgemocks.NewMockRetriever(t)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever)
 
 	// When deleting the session
 	err := service.DeleteSession(context.Background(), "session-1")
@@ -51,7 +53,8 @@ func TestDeleteSession_doesNotDeleteSession_whenDeletingMessagesFails(t *testing
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
 	messages.EXPECT().DeleteBySession(context.Background(), "session-1").Return(domainstudy.ErrSessionNotFound).Once()
-	service := NewService(sessions, messages, llm, profiles, folders)
+	retriever := knowledgemocks.NewMockRetriever(t)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever)
 
 	// When deleting the session
 	err := service.DeleteSession(context.Background(), "session-1")
@@ -70,7 +73,8 @@ func TestDeleteSession_propagatesSessionNotFound(t *testing.T) {
 	folders := foldermocks.NewMockRepository(t)
 	messages.EXPECT().DeleteBySession(context.Background(), "missing").Return(nil).Once()
 	sessions.EXPECT().Delete(context.Background(), "missing").Return(domainstudy.ErrSessionNotFound).Once()
-	service := NewService(sessions, messages, llm, profiles, folders)
+	retriever := knowledgemocks.NewMockRetriever(t)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever)
 
 	// When deleting a session that does not exist
 	err := service.DeleteSession(context.Background(), "missing")
