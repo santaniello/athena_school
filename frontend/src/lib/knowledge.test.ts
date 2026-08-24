@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ApproveKnowledgeItem,
+  CountDraftKnowledgeItems,
   DeleteKnowledgeItem,
   DeprecateKnowledgeItem,
   ExtractKnowledge,
@@ -14,6 +15,7 @@ import {
 } from '../../wailsjs/go/desktop/App'
 import {
   approveKnowledgeItem,
+  countDraftKnowledgeItems,
   definitionPreview,
   deleteKnowledgeItem,
   deprecateKnowledgeItem,
@@ -37,6 +39,7 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   UpdateKnowledgeExtractionSettings: vi.fn(),
   ListKnowledgeItems: vi.fn(),
   ListKnowledgeTopics: vi.fn(),
+  CountDraftKnowledgeItems: vi.fn(),
   ApproveKnowledgeItem: vi.fn(),
   DeprecateKnowledgeItem: vi.fn(),
   UpdateKnowledgeItem: vi.fn(),
@@ -219,6 +222,21 @@ describe('listKnowledgeTopics', () => {
 
     // Then they are returned as-is
     expect(topics).toEqual(['Go', 'Kubernetes'])
+  })
+})
+
+describe('countDraftKnowledgeItems', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('returns the draft count', async () => {
+    // Given a backend draft count
+    vi.mocked(CountDraftKnowledgeItems).mockResolvedValueOnce(3)
+
+    // When counting drafts
+    const count = await countDraftKnowledgeItems()
+
+    // Then it is returned as-is
+    expect(count).toEqual(3)
   })
 })
 

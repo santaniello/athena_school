@@ -176,6 +176,23 @@ func TestApp_ListKnowledgeItems_returnsItemsForTopicAndStatus(t *testing.T) {
 	assert.Equal(t, "Channels", results[0].Concept)
 }
 
+func TestApp_CountDraftKnowledgeItems_returnsRepositoryDraftCount(t *testing.T) {
+	// Given a repository with two draft items
+	ctx := context.Background()
+	repository := knowledgemocks.NewMockRepository(t)
+	repository.EXPECT().CountByStatus(ctx, domainknowledge.StatusDraft).Return(2, nil).Once()
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{})
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
+	app.Startup(ctx)
+
+	// When counting drafts through the desktop adapter
+	count, err := app.CountDraftKnowledgeItems()
+
+	// Then the repository's count is returned as-is
+	require.NoError(t, err)
+	assert.Equal(t, 2, count)
+}
+
 func TestApp_ListKnowledgeTopics_returnsTopics(t *testing.T) {
 	// Given a repository with two topics
 	ctx := context.Background()

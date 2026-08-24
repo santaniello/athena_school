@@ -19,6 +19,11 @@ interface KnowledgeExtractionDialogProps {
   open: boolean
   items: KnowledgeItem[]
   onClose: () => void
+  // Fired after a successful "Save as drafts" that actually persisted at
+  // least one candidate — the only save mode that adds to the review queue.
+  // Lets AppShell refresh the sidebar/Review-tab badge without a reload. See
+  // specs/phases/phase-02-knowledge-engine/07-knowledge-review.md.
+  onKnowledgeChanged?: () => void
 }
 
 // The three options from specs/Athena.md §12 ("Knowledge Promotion"):
@@ -30,6 +35,7 @@ export function KnowledgeExtractionDialog({
   open,
   items,
   onClose,
+  onKnowledgeChanged,
 }: KnowledgeExtractionDialogProps) {
   const [selected, setSelected] = useState<Set<number>>(
     () => new Set(items.map((_, index) => index)),
@@ -68,6 +74,7 @@ export function KnowledgeExtractionDialog({
         .filter((index): index is number => index !== undefined)
       if (persistedIndices.length > 0) {
         setSaved((previous) => new Set([...previous, ...persistedIndices]))
+        if (mode === 'draft') onKnowledgeChanged?.()
       }
       if (result.error) {
         setSaveError(result.error)
