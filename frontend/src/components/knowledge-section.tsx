@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { ChevronDownIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,6 @@ import {
 import { IngestProgressDialog } from '@/components/ingest-progress-dialog'
 import { cn } from '@/lib/utils'
 import { pickNotesFile, pickNotesFolder } from '@/lib/ingest'
-import { listKnowledgeItems } from '@/lib/knowledge'
 import KnowledgeExplorerScreen from '@/screens/KnowledgeExplorerScreen'
 
 interface KnowledgeSectionProps {
@@ -21,6 +20,14 @@ interface KnowledgeSectionProps {
   // deprecate/delete are rejected by a backend guard during a retry, so the
   // UI disables them too rather than letting a call fail confusingly.
   mutationsDisabled: boolean
+  // The count of drafts pending review, owned by AppShell (see
+  // specs/phases/phase-02-knowledge-engine/07-knowledge-review.md) — shown
+  // on the Review tab. Not fetched locally, to avoid a second independent
+  // count diverging from the sidebar badge.
+  draftCount: number
+  // Fired after an action inside the Explorer/Review screen changes the
+  // draft count, so AppShell can refresh both badges without a reload.
+  onKnowledgeChanged: () => void
 }
 
 type Tab = 'explorer' | 'review'
@@ -39,17 +46,15 @@ const pickerErrorMessage = 'Failed to open the notes picker. Please try again.'
 // KnowledgeTopicTree in the sidebar. See the layout in
 // specs/phases/phase-02-knowledge-engine/03-notes-import-and-knowledge-explorer.md
 // and specs/phases/phase-02-knowledge-engine/04-01-import-file.md.
-function KnowledgeSection({ selectedTopic, mutationsDisabled }: KnowledgeSectionProps) {
+function KnowledgeSection({
+  selectedTopic,
+  mutationsDisabled,
+  draftCount,
+  onKnowledgeChanged,
+}: KnowledgeSectionProps) {
   const [activeTab, setActiveTab] = useState<Tab>('explorer')
-  const [draftCount, setDraftCount] = useState(0)
   const [importTarget, setImportTarget] = useState<ImportTarget | null>(null)
   const [pickerError, setPickerError] = useState('')
-
-  useEffect(() => {
-    listKnowledgeItems('', 'draft')
-      .then((items) => setDraftCount(items.length))
-      .catch(() => {})
-  }, [])
 
   async function handleImportFolderClick() {
     setPickerError('')
@@ -128,6 +133,7 @@ function KnowledgeSection({ selectedTopic, mutationsDisabled }: KnowledgeSection
           selectedTopic={selectedTopic}
           mode={activeTab}
           mutationsDisabled={mutationsDisabled}
+          onKnowledgeChanged={onKnowledgeChanged}
         />
       </div>
 

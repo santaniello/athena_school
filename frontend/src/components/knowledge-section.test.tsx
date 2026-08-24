@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { listKnowledgeItems, type KnowledgeItem } from '@/lib/knowledge'
+import { approveKnowledgeItem, listKnowledgeItems, type KnowledgeItem } from '@/lib/knowledge'
 import { importFile, importNotes, pickNotesFile, pickNotesFolder } from '@/lib/ingest'
 import { KnowledgeSection } from './knowledge-section'
 
 vi.mock('@/lib/knowledge', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/knowledge')>()
-  return { ...original, listKnowledgeItems: vi.fn() }
+  return { ...original, listKnowledgeItems: vi.fn(), approveKnowledgeItem: vi.fn() }
 })
 
 vi.mock('@/lib/ingest', async (importOriginal) => {
@@ -52,7 +52,14 @@ describe('KnowledgeSection', () => {
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
 
     // When rendering the section
-    render(<KnowledgeSection selectedTopic={null} mutationsDisabled={false} />)
+    render(
+      <KnowledgeSection
+        selectedTopic={null}
+        mutationsDisabled={false}
+        draftCount={0}
+        onKnowledgeChanged={vi.fn()}
+      />,
+    )
 
     // Then Explorer is the active tab and it queries with no status constraint
     expect(screen.getByRole('tab', { name: 'Explorer' })).toHaveAttribute('aria-selected', 'true')
@@ -63,7 +70,14 @@ describe('KnowledgeSection', () => {
     // Given the section rendered on Explorer
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
     const user = userEvent.setup()
-    render(<KnowledgeSection selectedTopic={null} mutationsDisabled={false} />)
+    render(
+      <KnowledgeSection
+        selectedTopic={null}
+        mutationsDisabled={false}
+        draftCount={0}
+        onKnowledgeChanged={vi.fn()}
+      />,
+    )
 
     // When switching to Review
     await user.click(screen.getByRole('tab', { name: 'Review' }))
@@ -73,23 +87,18 @@ describe('KnowledgeSection', () => {
     await waitFor(() => expect(listKnowledgeItems).toHaveBeenCalledWith('', 'draft'))
   })
 
-  it('queries the pending-review count across all topics, ignoring the sidebar topic filter', async () => {
-    // Given the section rendered under a specific sidebar topic
-    vi.mocked(listKnowledgeItems).mockResolvedValue([])
-
-    // When rendering the section
-    render(<KnowledgeSection selectedTopic="Kubernetes" mutationsDisabled={false} />)
-
-    // Then the draft-count query still carries no topic constraint — the
-    // Review badge reflects the whole review queue, not just this topic
-    await waitFor(() => expect(listKnowledgeItems).toHaveBeenCalledWith('', 'draft'))
-  })
-
   it('marks aria-selected on only the actually active tab, and switching back to Explorer works too', async () => {
     // Given the section rendered on Explorer (the default tab)
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
     const user = userEvent.setup()
-    render(<KnowledgeSection selectedTopic={null} mutationsDisabled={false} />)
+    render(
+      <KnowledgeSection
+        selectedTopic={null}
+        mutationsDisabled={false}
+        draftCount={0}
+        onKnowledgeChanged={vi.fn()}
+      />,
+    )
     expect(screen.getByRole('tab', { name: 'Explorer' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tab', { name: 'Review' })).toHaveAttribute('aria-selected', 'false')
 
@@ -112,7 +121,14 @@ describe('KnowledgeSection', () => {
     // Given the section rendered on Explorer (the default tab)
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
     const user = userEvent.setup()
-    render(<KnowledgeSection selectedTopic={null} mutationsDisabled={false} />)
+    render(
+      <KnowledgeSection
+        selectedTopic={null}
+        mutationsDisabled={false}
+        draftCount={0}
+        onKnowledgeChanged={vi.fn()}
+      />,
+    )
     const explorerTab = screen.getByRole('tab', { name: 'Explorer' })
     const reviewTab = screen.getByRole('tab', { name: 'Review' })
 
@@ -133,40 +149,81 @@ describe('KnowledgeSection', () => {
     expect(explorerTab.className).toContain('rounded-md')
   })
 
-  it('shows the pending-review count on the Review tab', async () => {
-    // Given two draft items — mocked by status, since the section's own
-    // draft-count fetch and the nested Explorer's own fetch (status: '')
-    // both call listKnowledgeItems independently
-    vi.mocked(listKnowledgeItems).mockImplementation((_topic, status) =>
-      Promise.resolve(status === 'draft' ? [draftItem('1'), draftItem('2')] : []),
-    )
-
-    // When rendering the section
-    render(<KnowledgeSection selectedTopic={null} mutationsDisabled={false} />)
-
-    // Then the Review tab carries a badge with that count
-    expect(await screen.findByText('2')).toBeInTheDocument()
-  })
-
-  it('shows no badge when there are no drafts pending review', async () => {
-    // Given no draft items
+  it('shows the pending-review count on the Review tab, from the draftCount prop', async () => {
+    // Given a draftCount from the parent (AppShell), not fetched locally
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
 
     // When rendering the section
-    render(<KnowledgeSection selectedTopic={null} mutationsDisabled={false} />)
+    render(
+      <KnowledgeSection
+        selectedTopic={null}
+        mutationsDisabled={false}
+        draftCount={2}
+        onKnowledgeChanged={vi.fn()}
+      />,
+    )
+
+    // Then the Review tab carries a badge with that count
+    expect(screen.getByText('2')).toBeInTheDocument()
+  })
+
+  it('shows no badge when draftCount is zero', () => {
+    // Given a zero draftCount
+    vi.mocked(listKnowledgeItems).mockResolvedValue([])
+
+    // When rendering the section
+    render(
+      <KnowledgeSection
+        selectedTopic={null}
+        mutationsDisabled={false}
+        draftCount={0}
+        onKnowledgeChanged={vi.fn()}
+      />,
+    )
 
     // Then the Review tab carries no count badge
-    await waitFor(() => expect(listKnowledgeItems).toHaveBeenCalled())
     expect(
       screen.getByRole('tab', { name: 'Review' }).querySelector('[data-slot="badge"]'),
     ).toBeNull()
+  })
+
+  it('threads onKnowledgeChanged into the Review tab, firing it after approving a draft', async () => {
+    // Given a single draft item under the Review tab
+    const item = draftItem('1')
+    vi.mocked(listKnowledgeItems).mockResolvedValue([item])
+    vi.mocked(approveKnowledgeItem).mockResolvedValue({ ...item, status: 'approved' })
+    const onKnowledgeChanged = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <KnowledgeSection
+        selectedTopic={null}
+        mutationsDisabled={false}
+        draftCount={1}
+        onKnowledgeChanged={onKnowledgeChanged}
+      />,
+    )
+    await user.click(screen.getByRole('tab', { name: /Review/ }))
+    await user.click(await screen.findByText('Concept 1'))
+
+    // When approving it from inside the Review tab
+    await user.click(screen.getByRole('button', { name: 'Approve' }))
+
+    // Then AppShell's badge-freshness callback fires
+    await waitFor(() => expect(onKnowledgeChanged).toHaveBeenCalledTimes(1))
   })
 
   it('offers "Import folder..." and "Import file..." from the Import notes dropdown', async () => {
     // Given the section rendered
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
     const user = userEvent.setup()
-    render(<KnowledgeSection selectedTopic={null} mutationsDisabled={false} />)
+    render(
+      <KnowledgeSection
+        selectedTopic={null}
+        mutationsDisabled={false}
+        draftCount={0}
+        onKnowledgeChanged={vi.fn()}
+      />,
+    )
 
     // When opening the dropdown
     await user.click(screen.getByRole('button', { name: 'Import notes' }))
@@ -182,7 +239,14 @@ describe('KnowledgeSection', () => {
     vi.mocked(pickNotesFolder).mockResolvedValueOnce('/home/user/notes')
     vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
     const user = userEvent.setup()
-    render(<KnowledgeSection selectedTopic={null} mutationsDisabled={false} />)
+    render(
+      <KnowledgeSection
+        selectedTopic={null}
+        mutationsDisabled={false}
+        draftCount={0}
+        onKnowledgeChanged={vi.fn()}
+      />,
+    )
 
     // When picking "Import folder..." from the dropdown
     await openImportMenu(user, 'Import folder...')
@@ -198,7 +262,14 @@ describe('KnowledgeSection', () => {
     vi.mocked(pickNotesFile).mockResolvedValueOnce('/home/user/notes/go.md')
     vi.mocked(importFile).mockReturnValueOnce(new Promise<void>(() => {}))
     const user = userEvent.setup()
-    render(<KnowledgeSection selectedTopic={null} mutationsDisabled={false} />)
+    render(
+      <KnowledgeSection
+        selectedTopic={null}
+        mutationsDisabled={false}
+        draftCount={0}
+        onKnowledgeChanged={vi.fn()}
+      />,
+    )
 
     // When picking "Import file..." from the dropdown
     await openImportMenu(user, 'Import file...')
@@ -217,7 +288,14 @@ describe('KnowledgeSection', () => {
     failedImport.catch(() => {}) // avoid an unhandled-rejection warning from this local reference
     vi.mocked(importNotes).mockReturnValueOnce(failedImport)
     const user = userEvent.setup()
-    render(<KnowledgeSection selectedTopic={null} mutationsDisabled={false} />)
+    render(
+      <KnowledgeSection
+        selectedTopic={null}
+        mutationsDisabled={false}
+        draftCount={0}
+        onKnowledgeChanged={vi.fn()}
+      />,
+    )
     await openImportMenu(user, 'Import folder...')
     const [closeButton] = await screen.findAllByRole('button', { name: 'Close' })
 
@@ -233,7 +311,14 @@ describe('KnowledgeSection', () => {
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
     vi.mocked(pickNotesFolder).mockResolvedValueOnce('')
     const user = userEvent.setup()
-    render(<KnowledgeSection selectedTopic={null} mutationsDisabled={false} />)
+    render(
+      <KnowledgeSection
+        selectedTopic={null}
+        mutationsDisabled={false}
+        draftCount={0}
+        onKnowledgeChanged={vi.fn()}
+      />,
+    )
 
     // When picking "Import folder..." from the dropdown
     await openImportMenu(user, 'Import folder...')
@@ -249,7 +334,14 @@ describe('KnowledgeSection', () => {
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
     vi.mocked(pickNotesFile).mockResolvedValueOnce('')
     const user = userEvent.setup()
-    render(<KnowledgeSection selectedTopic={null} mutationsDisabled={false} />)
+    render(
+      <KnowledgeSection
+        selectedTopic={null}
+        mutationsDisabled={false}
+        draftCount={0}
+        onKnowledgeChanged={vi.fn()}
+      />,
+    )
 
     // When picking "Import file..." from the dropdown
     await openImportMenu(user, 'Import file...')
@@ -265,7 +357,14 @@ describe('KnowledgeSection', () => {
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
     vi.mocked(pickNotesFolder).mockRejectedValueOnce(new Error('dialog unavailable'))
     const user = userEvent.setup()
-    render(<KnowledgeSection selectedTopic={null} mutationsDisabled={false} />)
+    render(
+      <KnowledgeSection
+        selectedTopic={null}
+        mutationsDisabled={false}
+        draftCount={0}
+        onKnowledgeChanged={vi.fn()}
+      />,
+    )
 
     // When picking "Import folder..." from the dropdown
     await openImportMenu(user, 'Import folder...')
@@ -282,7 +381,14 @@ describe('KnowledgeSection', () => {
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
     vi.mocked(pickNotesFile).mockRejectedValueOnce(new Error('dialog unavailable'))
     const user = userEvent.setup()
-    render(<KnowledgeSection selectedTopic={null} mutationsDisabled={false} />)
+    render(
+      <KnowledgeSection
+        selectedTopic={null}
+        mutationsDisabled={false}
+        draftCount={0}
+        onKnowledgeChanged={vi.fn()}
+      />,
+    )
 
     // When picking "Import file..." from the dropdown
     await openImportMenu(user, 'Import file...')
@@ -299,7 +405,14 @@ describe('KnowledgeSection', () => {
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
     vi.mocked(pickNotesFolder).mockRejectedValueOnce(new Error('dialog unavailable'))
     const user = userEvent.setup()
-    render(<KnowledgeSection selectedTopic={null} mutationsDisabled={false} />)
+    render(
+      <KnowledgeSection
+        selectedTopic={null}
+        mutationsDisabled={false}
+        draftCount={0}
+        onKnowledgeChanged={vi.fn()}
+      />,
+    )
     await openImportMenu(user, 'Import folder...')
     expect(
       await screen.findByText('Failed to open the notes picker. Please try again.'),
@@ -319,7 +432,14 @@ describe('KnowledgeSection', () => {
   it('disables both menu items while mutations are disabled', () => {
     // Given the section rendered with mutations disabled
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
-    render(<KnowledgeSection selectedTopic={null} mutationsDisabled />)
+    render(
+      <KnowledgeSection
+        selectedTopic={null}
+        mutationsDisabled
+        draftCount={0}
+        onKnowledgeChanged={vi.fn()}
+      />,
+    )
 
     // Then the dropdown trigger itself is disabled
     expect(screen.getByRole('button', { name: 'Import notes' })).toBeDisabled()

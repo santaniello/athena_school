@@ -138,6 +138,77 @@ describe('KnowledgeExtractionDialog', () => {
     expect(screen.queryByRole('button', { name: 'Save as drafts' })).not.toBeInTheDocument()
   })
 
+  it('calls onKnowledgeChanged after a successful drafts save', async () => {
+    // Given a save that persists a candidate as a draft
+    vi.mocked(saveExtractedKnowledge).mockResolvedValueOnce({ savedIndices: [0], error: '' })
+    const onKnowledgeChanged = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <KnowledgeExtractionDialog
+        open
+        items={[candidate('1', 'Channels')]}
+        onClose={vi.fn()}
+        onKnowledgeChanged={onKnowledgeChanged}
+      />,
+    )
+
+    // When saving as drafts
+    await user.click(screen.getByRole('button', { name: 'Save as drafts' }))
+
+    // Then the badge-freshness callback fires — a new draft entered the queue
+    await waitFor(() => expect(onKnowledgeChanged).toHaveBeenCalledTimes(1))
+  })
+
+  it('does not call onKnowledgeChanged after "Save as knowledge", which never creates drafts', async () => {
+    // Given a save-and-approve that persists directly as approved
+    vi.mocked(saveAndApproveExtractedKnowledge).mockResolvedValueOnce({
+      savedIndices: [0],
+      error: '',
+    })
+    const onKnowledgeChanged = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <KnowledgeExtractionDialog
+        open
+        items={[candidate('1', 'Channels')]}
+        onClose={vi.fn()}
+        onKnowledgeChanged={onKnowledgeChanged}
+      />,
+    )
+
+    // When saving via "Save as knowledge"
+    await user.click(screen.getByRole('button', { name: 'Save as knowledge' }))
+
+    // Then the draft-count callback never fires
+    await waitFor(() => expect(saveAndApproveExtractedKnowledge).toHaveBeenCalled())
+    expect(onKnowledgeChanged).not.toHaveBeenCalled()
+  })
+
+  it('does not call onKnowledgeChanged when a drafts save persists nothing', async () => {
+    // Given a save failure that persisted no candidates
+    vi.mocked(saveExtractedKnowledge).mockResolvedValueOnce({
+      savedIndices: [],
+      error: 'database unavailable',
+    })
+    const onKnowledgeChanged = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <KnowledgeExtractionDialog
+        open
+        items={[candidate('1', 'Channels')]}
+        onClose={vi.fn()}
+        onKnowledgeChanged={onKnowledgeChanged}
+      />,
+    )
+
+    // When saving as drafts
+    await user.click(screen.getByRole('button', { name: 'Save as drafts' }))
+
+    // Then the callback never fires — nothing actually joined the queue
+    expect(await screen.findByText('database unavailable')).toBeInTheDocument()
+    expect(onKnowledgeChanged).not.toHaveBeenCalled()
+  })
+
   it('retries only exact unsaved candidates after a non-prefix partial failure', async () => {
     // Given three candidates and a first save that persisted only the middle one
     const items = [candidate('1', 'One'), candidate('2', 'Two'), candidate('3', 'Three')]

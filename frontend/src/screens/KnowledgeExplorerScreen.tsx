@@ -36,6 +36,11 @@ interface KnowledgeExplorerScreenProps {
   mode: 'explorer' | 'review'
   // True while the knowledge index is retrying — see KnowledgeSectionProps.
   mutationsDisabled: boolean
+  // Fired after approving or deleting a draft item — the two actions that
+  // change how many drafts are pending review. Lets the sidebar/Review-tab
+  // badge (owned by AppShell) stay live without a reload. See
+  // specs/phases/phase-02-knowledge-engine/07-knowledge-review.md.
+  onKnowledgeChanged?: () => void
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -91,6 +96,7 @@ function KnowledgeExplorerScreen({
   selectedTopic,
   mode,
   mutationsDisabled,
+  onKnowledgeChanged,
 }: KnowledgeExplorerScreenProps) {
   const [items, setItems] = useState<KnowledgeItem[]>([])
   const [statusFilter, setStatusFilter] = useState('')
@@ -173,6 +179,7 @@ function KnowledgeExplorerScreen({
   async function handleApprove(item: KnowledgeItem) {
     try {
       patchItem(await approveKnowledgeItem(item.id))
+      onKnowledgeChanged?.()
     } catch {
       setError(GENERIC_ERROR)
     }
@@ -204,11 +211,13 @@ function KnowledgeExplorerScreen({
   async function handleConfirmDelete() {
     if (!deletingItem) return
     const id = deletingItem.id
+    const wasDraft = deletingItem.status === 'draft'
     setDeletingItem(null)
     try {
       await deleteKnowledgeItem(id)
       setItems((previous) => previous.filter((item) => item.id !== id))
       setSelectedId((current) => (current === id ? null : current))
+      if (wasDraft) onKnowledgeChanged?.()
     } catch {
       setError(GENERIC_ERROR)
     }

@@ -22,7 +22,7 @@ import {
   type StudyErrorEvent,
   type StudySourcesEvent,
 } from '@/lib/study'
-import { extractKnowledge } from '@/lib/knowledge'
+import { extractKnowledge, saveExtractedKnowledge } from '@/lib/knowledge'
 import StudyChatScreen from './StudyChatScreen'
 
 vi.mock('@/lib/study', () => ({
@@ -782,6 +782,57 @@ describe('StudyChatScreen — knowledge extraction', () => {
     // Then the review dialog opens
     expect(await screen.findByText('New knowledge found')).toBeInTheDocument()
     expect(screen.getByText('CAP theorem')).toBeInTheDocument()
+  })
+
+  it('calls onKnowledgeChanged after saving extracted candidates as drafts', async () => {
+    // Given a settled session with one extracted candidate shown in the dialog
+    const handlers = setupSubscriptions()
+    vi.mocked(requestOpeningTurn).mockResolvedValueOnce()
+    const onKnowledgeChanged = vi.fn()
+    render(
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic="Distributed systems"
+        mode="new"
+        onKnowledgeChanged={onKnowledgeChanged}
+        {...newSessionActionProps()}
+      />,
+    )
+    await screen.findByRole('status', { name: /thinking/i })
+    act(() => {
+      handlers.chunk?.({ sessionId: 'session-1', content: 'Welcome!' })
+      handlers.done?.({ sessionId: 'session-1' })
+    })
+    await screen.findByText('Welcome!')
+    vi.mocked(extractKnowledge).mockResolvedValueOnce({
+      truncated: false,
+      items: [
+        {
+          id: 'candidate-1',
+          topic: 'Distributed systems',
+          concept: 'CAP theorem',
+          definition: 'A distributed-systems trade-off.',
+          properties: [],
+          tradeOffs: [],
+          relatedConcepts: [],
+          source: 'athena',
+          status: 'draft',
+          createdAt: '2026-08-18T10:00:00Z',
+          updatedAt: '2026-08-18T10:00:00Z',
+        },
+      ],
+    })
+    vi.mocked(saveExtractedKnowledge).mockResolvedValueOnce({ savedIndices: [0], error: '' })
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'Extract knowledge' }))
+    await screen.findByText('New knowledge found')
+
+    // When saving the candidate as a draft from the extraction dialog
+    await user.click(screen.getByRole('button', { name: 'Save as drafts' }))
+
+    // Then AppShell's badge-freshness callback fires, threaded through from
+    // StudyChatScreen into KnowledgeExtractionDialog
+    await waitFor(() => expect(onKnowledgeChanged).toHaveBeenCalledTimes(1))
   })
 
   it('asks before retrying a truncated transcript and proceeds only after confirmation', async () => {
