@@ -19,6 +19,7 @@ import DocumentationScreen from '@/screens/DocumentationScreen'
 import { NAVIGATION, type AppSection } from '@/lib/navigation'
 import { getUserProfile, type ProfileDraft } from '@/lib/profile'
 import { startStudySession, type StudySession } from '@/lib/study'
+import { countDraftKnowledgeItems } from '@/lib/knowledge'
 import {
   getKnowledgeIndexStatus,
   onKnowledgeIndexStatus,
@@ -72,10 +73,25 @@ function AppShell({ onLogout }: AppShellProps) {
   const [reviewOpen, setReviewOpen] = useState(false)
   const [startingNewSession, setStartingNewSession] = useState(false)
   const [newSessionError, setNewSessionError] = useState<string | null>(null)
+  const [draftCount, setDraftCount] = useState(0)
   const studyFolderTreeRef = useRef<StudyFolderTreeHandle>(null)
 
   useEffect(() => {
     void getUserProfile().then(setProfile)
+  }, [])
+
+  // draftCount is lifted here (alongside profile/activeSession) rather than
+  // fetched locally by KnowledgeSection, so the sidebar badge and the
+  // Review tab's own badge always agree — see
+  // specs/phases/phase-02-knowledge-engine/07-knowledge-review.md.
+  function refreshDraftCount() {
+    void countDraftKnowledgeItems()
+      .then(setDraftCount)
+      .catch(() => {})
+  }
+
+  useEffect(() => {
+    refreshDraftCount()
   }, [])
 
   // The listener is registered before the initial query fires, closing the
@@ -249,7 +265,12 @@ function AppShell({ onLogout }: AppShellProps) {
             >
               {PRIMARY_ITEMS.map((item) => (
                 <div key={item.id}>
-                  <NavItem item={item} active={item.id === section} onSelect={setSection} />
+                  <NavItem
+                    item={item}
+                    active={item.id === section}
+                    onSelect={setSection}
+                    badge={item.id === 'knowledge' ? draftCount : undefined}
+                  />
                   {item.id === 'study' && section === 'study' && (
                     <StudyFolderTree
                       ref={studyFolderTreeRef}
@@ -354,6 +375,7 @@ function AppShell({ onLogout }: AppShellProps) {
                   onTopicResolved={handleTopicResolved}
                   onStartNewSession={handleStartNewSession}
                   startingNewSession={startingNewSession}
+                  onKnowledgeChanged={refreshDraftCount}
                 />
               ) : (
                 <div className="m-auto flex flex-col items-center gap-2 text-center">
@@ -365,7 +387,12 @@ function AppShell({ onLogout }: AppShellProps) {
                 </div>
               )
             ) : section === 'knowledge' ? (
-              <KnowledgeSection selectedTopic={selectedTopic} mutationsDisabled={retryingIndex} />
+              <KnowledgeSection
+                selectedTopic={selectedTopic}
+                mutationsDisabled={retryingIndex}
+                draftCount={draftCount}
+                onKnowledgeChanged={refreshDraftCount}
+              />
             ) : section === 'documentation' ? (
               <DocumentationScreen />
             ) : section === 'settings' && profile ? (

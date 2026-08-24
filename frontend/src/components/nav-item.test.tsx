@@ -56,4 +56,30 @@ describe('NavItem', () => {
     // Then a tooltip explains when it ships
     expect(await screen.findByText(`Planned for Phase ${lockedItem.phase}`)).toBeInTheDocument()
   })
+
+  it('shows a badge with the count when badge is greater than zero', () => {
+    // Given an item rendered with a positive badge count
+    render(<NavItem item={homeItem} active={false} onSelect={vi.fn()} badge={3} />)
+
+    // Then the badge is visible
+    expect(screen.getByText('3')).toBeInTheDocument()
+  })
+
+  it('shows no badge when badge is zero or omitted', () => {
+    // Given an item rendered with a zero badge count
+    const { rerender } = render(
+      <NavItem item={homeItem} active={false} onSelect={vi.fn()} badge={0} />,
+    )
+
+    // Then no badge renders
+    expect(
+      screen.getByRole('button', { name: 'Home' }).querySelector('[data-slot="badge"]'),
+    ).toBeNull()
+
+    // And the same holds when badge is not passed at all
+    rerender(<NavItem item={homeItem} active={false} onSelect={vi.fn()} />)
+    expect(
+      screen.getByRole('button', { name: 'Home' }).querySelector('[data-slot="badge"]'),
+    ).toBeNull()
+  })
 })

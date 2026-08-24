@@ -6,6 +6,10 @@ export function ApproveKnowledgeItem(arg1) {
   return window['go']['desktop']['App']['ApproveKnowledgeItem'](arg1);
 }
 
+export function CountDraftKnowledgeItems() {
+  return window['go']['desktop']['App']['CountDraftKnowledgeItems']();
+}
+
 export function CreateFolder(arg1) {
   return window['go']['desktop']['App']['CreateFolder'](arg1);
 }
