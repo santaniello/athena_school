@@ -1,5 +1,6 @@
 import {
   ApproveKnowledgeItem,
+  CountDraftKnowledgeItems,
   DeleteKnowledgeItem,
   DeprecateKnowledgeItem,
   ExtractKnowledge,
@@ -77,6 +78,12 @@ export async function listKnowledgeItems(topic: string, status: string): Promise
 // alphabetically — used to build the Explorer's sidebar topic tree.
 export async function listKnowledgeTopics(): Promise<string[]> {
   return ListKnowledgeTopics()
+}
+
+// countDraftKnowledgeItems returns how many Items currently have draft
+// status, for the sidebar/Review-tab badge.
+export async function countDraftKnowledgeItems(): Promise<number> {
+  return CountDraftKnowledgeItems()
 }
 
 export async function approveKnowledgeItem(id: string): Promise<KnowledgeItem> {

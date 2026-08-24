@@ -18,6 +18,7 @@ import {
   retryKnowledgeIndex,
 } from '@/lib/knowledge-index'
 import type { IndexStatus } from '@/lib/knowledge-index'
+import { approveKnowledgeItem, countDraftKnowledgeItems, listKnowledgeItems } from '@/lib/knowledge'
 import { AppShell } from './app-shell'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
@@ -69,6 +70,7 @@ vi.mock('@/lib/knowledge', async (importOriginal) => {
     ...original,
     listKnowledgeItems: vi.fn().mockResolvedValue([]),
     listKnowledgeTopics: vi.fn().mockResolvedValue([]),
+    countDraftKnowledgeItems: vi.fn().mockResolvedValue(0),
     approveKnowledgeItem: vi.fn(),
     deprecateKnowledgeItem: vi.fn(),
     updateKnowledgeItem: vi.fn(),
@@ -193,6 +195,108 @@ describe('AppShell', () => {
     expect(screen.getByRole('heading', { name: 'Knowledge', level: 1 })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Explorer' })).toBeInTheDocument()
     expect(screen.queryByText('Planned for Phase 2')).not.toBeInTheDocument()
+  })
+
+  it('shows the draft count as a badge on the Knowledge nav item', async () => {
+    // Given three drafts pending review
+    vi.mocked(countDraftKnowledgeItems).mockResolvedValueOnce(3)
+
+    // When the app shell mounts
+    renderShell()
+    await screen.findByText(/Felipe\./)
+
+    // Then the Knowledge nav row carries the count
+    expect(await screen.findByRole('button', { name: 'Knowledge3' })).toBeInTheDocument()
+  })
+
+  it('shows no badge on the Knowledge nav item when there are no drafts', async () => {
+    // Given no drafts pending review (the default mock)
+    renderShell()
+    await screen.findByText(/Felipe\./)
+
+    // Then the nav row shows no count
+    expect(await screen.findByRole('button', { name: 'Knowledge' })).toBeInTheDocument()
+  })
+
+  it('refreshes the draft badge after approving a draft from the Review tab', async () => {
+    // Given one draft item visible in the Review tab
+    vi.mocked(countDraftKnowledgeItems).mockResolvedValueOnce(1)
+    const draftItem = {
+      id: 'item-1',
+      topic: 'Go',
+      concept: 'Channels',
+      definition: 'Typed conduits.',
+      properties: [],
+      tradeOffs: [],
+      relatedConcepts: [],
+      source: 'athena',
+      status: 'draft',
+      createdAt: '2026-08-18T10:00:00Z',
+      updatedAt: '2026-08-18T10:00:00Z',
+    }
+    vi.mocked(listKnowledgeItems).mockResolvedValue([draftItem])
+    vi.mocked(approveKnowledgeItem).mockResolvedValueOnce({ ...draftItem, status: 'approved' })
+    vi.mocked(countDraftKnowledgeItems).mockResolvedValueOnce(0)
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+    const navBadge = await screen.findByText('1')
+    await user.click(navBadge.closest('button')!)
+    await user.click(screen.getByRole('tab', { name: /Review/ }))
+    await user.click(await screen.findByText('Channels'))
+
+    // When approving it
+    await user.click(screen.getByRole('button', { name: 'Approve' }))
+
+    // Then the count is refetched, and the nav badge drops without a reload
+    await waitFor(() => expect(countDraftKnowledgeItems).toHaveBeenCalledTimes(2))
+    expect(await screen.findByRole('button', { name: 'Knowledge' })).toBeInTheDocument()
+  })
+
+  it('applies only the most recently started draft-count response, ignoring a stale one that resolves later', async () => {
+    // Given the mount fetch left pending, and a second fetch (triggered by
+    // approving a draft) that resolves before it does
+    let resolveMountFetch: (count: number) => void = () => {}
+    vi.mocked(countDraftKnowledgeItems).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveMountFetch = resolve
+      }),
+    )
+    const draftItem = {
+      id: 'item-1',
+      topic: 'Go',
+      concept: 'Channels',
+      definition: 'Typed conduits.',
+      properties: [],
+      tradeOffs: [],
+      relatedConcepts: [],
+      source: 'athena',
+      status: 'draft',
+      createdAt: '2026-08-18T10:00:00Z',
+      updatedAt: '2026-08-18T10:00:00Z',
+    }
+    vi.mocked(listKnowledgeItems).mockResolvedValue([draftItem])
+    vi.mocked(approveKnowledgeItem).mockResolvedValueOnce({ ...draftItem, status: 'approved' })
+    vi.mocked(countDraftKnowledgeItems).mockResolvedValueOnce(2)
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+
+    // When the approval's own count refetch resolves first...
+    await user.click(screen.getByRole('button', { name: 'Knowledge' }))
+    await user.click(screen.getByRole('tab', { name: /Review/ }))
+    await user.click(await screen.findByText('Channels'))
+    await user.click(screen.getByRole('button', { name: 'Approve' }))
+    const sidebar = screen.getByRole('navigation')
+    const navBadge = await within(sidebar).findByText('2')
+
+    // ...and only afterwards the stale mount fetch resolves
+    act(() => resolveMountFetch(5))
+
+    // Then the stale response never overwrites the newer count
+    await waitFor(() => expect(countDraftKnowledgeItems).toHaveBeenCalledTimes(2))
+    expect(navBadge).toBeInTheDocument()
+    expect(within(sidebar).queryByText('5')).not.toBeInTheDocument()
   })
 
   it('routes the Home CTA to the Study screen, same as the Study nav row', async () => {

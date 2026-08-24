@@ -835,6 +835,70 @@ describe('KnowledgeExplorerScreen', () => {
     expect(screen.getByText('Generics')).toBeInTheDocument()
   })
 
+  it('calls onKnowledgeChanged after approving a draft item', async () => {
+    // Given a draft item, selected
+    stubIngestDone()
+    const draftItem = testItem({ status: 'draft' })
+    vi.mocked(listKnowledgeItems).mockResolvedValueOnce([draftItem])
+    vi.mocked(approveKnowledgeItem).mockResolvedValueOnce({ ...draftItem, status: 'approved' })
+    const onKnowledgeChanged = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <KnowledgeExplorerScreen
+        selectedTopic={null}
+        mode="explorer"
+        mutationsDisabled={false}
+        onKnowledgeChanged={onKnowledgeChanged}
+      />,
+    )
+    await user.click(await screen.findByText('Channels'))
+
+    // When approving it
+    await user.click(screen.getByRole('button', { name: 'Approve' }))
+
+    // Then the badge-freshness callback fires, since a draft just left the queue
+    await waitFor(() => expect(onKnowledgeChanged).toHaveBeenCalledTimes(1))
+  })
+
+  it('calls onKnowledgeChanged after deleting a draft item, but not after deleting an approved item', async () => {
+    // Given one draft and one approved item
+    stubIngestDone()
+    const draftItem = testItem({ id: 'a', concept: 'Channels', status: 'draft' })
+    const approvedItem = testItem({ id: 'b', concept: 'Generics', status: 'approved' })
+    vi.mocked(listKnowledgeItems).mockResolvedValueOnce([draftItem, approvedItem])
+    vi.mocked(deleteKnowledgeItem).mockResolvedValue(undefined)
+    const onKnowledgeChanged = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <KnowledgeExplorerScreen
+        selectedTopic={null}
+        mode="explorer"
+        mutationsDisabled={false}
+        onKnowledgeChanged={onKnowledgeChanged}
+      />,
+    )
+
+    // When deleting the approved item
+    await user.click(await screen.findByText('Generics'))
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+    const approvedDialog = await screen.findByRole('alertdialog')
+    await user.click(within(approvedDialog).getByRole('button', { name: 'Delete' }))
+
+    // Then the callback does not fire — the draft count did not change
+    await waitFor(() => expect(deleteKnowledgeItem).toHaveBeenCalledWith('b'))
+    expect(onKnowledgeChanged).not.toHaveBeenCalled()
+
+    // When deleting the draft item
+    await user.click(screen.getByText('Channels'))
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+    const draftDialog = await screen.findByRole('alertdialog')
+    await user.click(within(draftDialog).getByRole('button', { name: 'Delete' }))
+
+    // Then the callback fires — a draft just left the queue
+    await waitFor(() => expect(deleteKnowledgeItem).toHaveBeenCalledWith('a'))
+    await waitFor(() => expect(onKnowledgeChanged).toHaveBeenCalledTimes(1))
+  })
+
   it('cancels the delete confirmation without deleting anything', async () => {
     // Given a selected item with the delete confirmation open
     stubIngestDone()
