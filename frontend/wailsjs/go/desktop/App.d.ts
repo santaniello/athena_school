@@ -5,6 +5,8 @@ import {context} from '../models';
 
 export function ApproveKnowledgeItem(arg1:string):Promise<desktop.KnowledgeItemResult>;
 
+export function CountDraftKnowledgeItems():Promise<number>;
+
 export function CreateFolder(arg1:string):Promise<desktop.FolderResult>;
 
 export function DeleteFolder(arg1:string):Promise<void>;

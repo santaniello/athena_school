@@ -1,4 +1,5 @@
 import { Lock } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type { AppSection, NavItem as NavItemData } from '@/lib/navigation'
@@ -7,12 +8,16 @@ interface NavItemProps {
   item: NavItemData
   active: boolean
   onSelect: (id: AppSection) => void
+  // A count badge next to the label, e.g. pending review items. A prop, not
+  // a field on NAVIGATION, which is static configuration data. Omitted or 0
+  // renders no badge.
+  badge?: number
 }
 
 // A single sidebar row. Locked rows (sections from an unbuilt phase) stay
 // fully clickable — routing to a ComingSoonPanel — instead of a dead click,
 // per specs/phases/phase-01-desktop-mvp/03-home-screen.md.
-function NavItem({ item, active, onSelect }: NavItemProps) {
+function NavItem({ item, active, onSelect, badge }: NavItemProps) {
   const locked = item.status === 'locked'
   const Icon = item.icon
 
@@ -29,6 +34,7 @@ function NavItem({ item, active, onSelect }: NavItemProps) {
     >
       <Icon className="size-4 shrink-0" aria-hidden="true" />
       <span className="flex-1 text-left">{item.label}</span>
+      {badge != null && badge > 0 && <Badge>{badge}</Badge>}
       {locked && <Lock className="size-3.5 shrink-0" aria-hidden="true" />}
     </button>
   )

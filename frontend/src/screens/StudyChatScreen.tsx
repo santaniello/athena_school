@@ -53,6 +53,10 @@ interface StudyChatScreenProps {
   // specs/phases/phase-02-knowledge-engine/06-study-context-limits.md).
   onStartNewSession: () => void | Promise<void>
   startingNewSession: boolean
+  // Fired after saving extracted candidates as drafts, so AppShell can
+  // refresh the sidebar/Review-tab badge without a reload. See
+  // specs/phases/phase-02-knowledge-engine/07-knowledge-review.md.
+  onKnowledgeChanged?: () => void
 }
 
 // ContextState mirrors the persisted study.ContextState the backend tracks
@@ -90,6 +94,7 @@ function StudyChatScreen({
   onTopicResolved,
   onStartNewSession,
   startingNewSession,
+  onKnowledgeChanged,
 }: StudyChatScreenProps) {
   const [sessionTopic, setSessionTopic] = useState(initialTopic)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -463,6 +468,7 @@ function StudyChatScreen({
           open
           items={extractedItems}
           onClose={() => setShowExtractionDialog(false)}
+          onKnowledgeChanged={onKnowledgeChanged}
         />
       )}
     </div>
