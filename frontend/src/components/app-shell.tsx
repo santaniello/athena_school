@@ -75,6 +75,12 @@ function AppShell({ onLogout }: AppShellProps) {
   const [newSessionError, setNewSessionError] = useState<string | null>(null)
   const [draftCount, setDraftCount] = useState(0)
   const studyFolderTreeRef = useRef<StudyFolderTreeHandle>(null)
+  // refreshDraftCount fires from several independent call sites (mount,
+  // approve, reject, save-as-drafts); their responses can arrive out of
+  // order, so only the reply to the most recently *started* call is ever
+  // applied — same requestVersion guard KnowledgeExplorerScreen uses for its
+  // own list fetch.
+  const draftCountRequestRef = useRef(0)
 
   useEffect(() => {
     void getUserProfile().then(setProfile)
@@ -85,8 +91,11 @@ function AppShell({ onLogout }: AppShellProps) {
   // Review tab's own badge always agree — see
   // specs/phases/phase-02-knowledge-engine/07-knowledge-review.md.
   function refreshDraftCount() {
+    const requestId = ++draftCountRequestRef.current
     void countDraftKnowledgeItems()
-      .then(setDraftCount)
+      .then((count) => {
+        if (draftCountRequestRef.current === requestId) setDraftCount(count)
+      })
       .catch(() => {})
   }
 

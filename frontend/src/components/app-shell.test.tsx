@@ -253,6 +253,52 @@ describe('AppShell', () => {
     expect(await screen.findByRole('button', { name: 'Knowledge' })).toBeInTheDocument()
   })
 
+  it('applies only the most recently started draft-count response, ignoring a stale one that resolves later', async () => {
+    // Given the mount fetch left pending, and a second fetch (triggered by
+    // approving a draft) that resolves before it does
+    let resolveMountFetch: (count: number) => void = () => {}
+    vi.mocked(countDraftKnowledgeItems).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveMountFetch = resolve
+      }),
+    )
+    const draftItem = {
+      id: 'item-1',
+      topic: 'Go',
+      concept: 'Channels',
+      definition: 'Typed conduits.',
+      properties: [],
+      tradeOffs: [],
+      relatedConcepts: [],
+      source: 'athena',
+      status: 'draft',
+      createdAt: '2026-08-18T10:00:00Z',
+      updatedAt: '2026-08-18T10:00:00Z',
+    }
+    vi.mocked(listKnowledgeItems).mockResolvedValue([draftItem])
+    vi.mocked(approveKnowledgeItem).mockResolvedValueOnce({ ...draftItem, status: 'approved' })
+    vi.mocked(countDraftKnowledgeItems).mockResolvedValueOnce(2)
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+
+    // When the approval's own count refetch resolves first...
+    await user.click(screen.getByRole('button', { name: 'Knowledge' }))
+    await user.click(screen.getByRole('tab', { name: /Review/ }))
+    await user.click(await screen.findByText('Channels'))
+    await user.click(screen.getByRole('button', { name: 'Approve' }))
+    const sidebar = screen.getByRole('navigation')
+    const navBadge = await within(sidebar).findByText('2')
+
+    // ...and only afterwards the stale mount fetch resolves
+    act(() => resolveMountFetch(5))
+
+    // Then the stale response never overwrites the newer count
+    await waitFor(() => expect(countDraftKnowledgeItems).toHaveBeenCalledTimes(2))
+    expect(navBadge).toBeInTheDocument()
+    expect(within(sidebar).queryByText('5')).not.toBeInTheDocument()
+  })
+
   it('routes the Home CTA to the Study screen, same as the Study nav row', async () => {
     // Given the app shell mounts on Home
     const user = userEvent.setup()
