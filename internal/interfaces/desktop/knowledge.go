@@ -106,6 +106,12 @@ func (a *App) ListKnowledgeTopics() ([]string, error) {
 	return a.knowledge.ListTopics(a.ctx)
 }
 
+// CountDraftKnowledgeItems returns how many Items currently have draft
+// status, for the sidebar review badge.
+func (a *App) CountDraftKnowledgeItems() (int, error) {
+	return a.knowledge.CountDrafts(a.ctx)
+}
+
 // ApproveKnowledgeItem transitions id from draft to approved and returns
 // the updated item.
 func (a *App) ApproveKnowledgeItem(id string) (KnowledgeItemResult, error) {
