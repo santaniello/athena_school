@@ -92,7 +92,9 @@ export function IngestProgressDialog({ open, kind, path, onClose }: IngestProgre
 
       void reindexKnowledgeItems().catch(() => {
         if (!active) return
-        setErrorMessage((current) => current || 'Failed to index knowledge items. Please try again.')
+        setErrorMessage(
+          (current) => current || 'Failed to index knowledge items. Please try again.',
+        )
       })
 
       return () => {
@@ -147,7 +149,8 @@ export function IngestProgressDialog({ open, kind, path, onClose }: IngestProgre
       : ingestProgress
         ? `${ingestProgress.filesProcessed} of ${ingestProgress.filesTotal} files`
         : 'Starting...'
-  const currentLabel = kind === 'reindex' ? reindexProgress?.currentTopic : ingestProgress?.currentFile
+  const currentLabel =
+    kind === 'reindex' ? reindexProgress?.currentTopic : ingestProgress?.currentFile
   const percent =
     kind === 'reindex'
       ? reindexProgress && reindexProgress.itemsTotal > 0
@@ -176,7 +179,9 @@ export function IngestProgressDialog({ open, kind, path, onClose }: IngestProgre
           <div className="space-y-2">
             <Progress value={percent} />
             <p className="text-sm text-muted-foreground">{progressLabel}</p>
-            {currentLabel && <p className="truncate text-xs text-muted-foreground">{currentLabel}</p>}
+            {currentLabel && (
+              <p className="truncate text-xs text-muted-foreground">{currentLabel}</p>
+            )}
           </div>
         )}
 
