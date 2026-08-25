@@ -35,7 +35,11 @@ func New() *Store {
 
 // Add validates and normalizes the batch, then upserts it by Chunk.ID into
 // the active slice: an existing ID is replaced in place, a new one is
-// appended. It never marks the store ready.
+// appended. Before that, any existing chunk that shares an incoming
+// chunk's ItemID but carries a different Chunk.ID is evicted — the stale
+// sibling a failed Remove left behind (see
+// specs/phases/phase-02-knowledge-engine/08-01-vectorstore-orphan-chunk-recovery.md).
+// Add never marks the store ready.
 func (s *Store) Add(ctx context.Context, chunks []knowledge.Chunk) error {
 	if len(chunks) == 0 {
 		return nil
@@ -50,6 +54,23 @@ func (s *Store) Add(ctx context.Context, chunks []knowledge.Chunk) error {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	incomingItemIDs := make(map[string]struct{}, len(prepared))
+	incomingIDs := make(map[string]struct{}, len(prepared))
+	for _, c := range prepared {
+		incomingItemIDs[c.ItemID] = struct{}{}
+		incomingIDs[c.ID] = struct{}{}
+	}
+	filtered := make([]knowledge.Chunk, 0, len(s.chunks))
+	for _, c := range s.chunks {
+		if _, sameItem := incomingItemIDs[c.ItemID]; sameItem {
+			if _, sameID := incomingIDs[c.ID]; !sameID {
+				continue
+			}
+		}
+		filtered = append(filtered, c)
+	}
+	s.chunks = filtered
 
 	index := make(map[string]int, len(s.chunks))
 	for i, c := range s.chunks {

@@ -169,6 +169,57 @@ func vectorNorm(vec []float32) float64 {
 	return math.Sqrt(sum)
 }
 
+func TestStore_Add_evictsStaleSiblingSharingItemID_beforeInserting(t *testing.T) {
+	// Given a ready store with an orphaned chunk for item-1 under an old
+	// ID — the kind of stale sibling a failed Remove can leave behind (see
+	// specs/phases/phase-02-knowledge-engine/08-01-vectorstore-orphan-chunk-recovery.md)
+	store := New()
+	ctx := context.Background()
+	orphan := testChunk("old-id", []float32{1, 0})
+	orphan.ItemID = "item-1"
+	require.NoError(t, store.ReplaceAll(ctx, []knowledge.Chunk{orphan}))
+
+	// When a freshly re-embedded chunk for the same item is added under a
+	// new ID
+	fresh := testChunk("new-id", []float32{0, 1})
+	fresh.ItemID = "item-1"
+	require.NoError(t, store.Add(ctx, []knowledge.Chunk{fresh}))
+
+	// Then the store converges to exactly the new chunk — the orphan never
+	// lingers alongside it
+	assert.Equal(t, 1, store.Len())
+	results, err := store.Search(ctx, []float32{0, 1}, 10, knowledge.SearchFilters{})
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, "new-id", results[0].Chunk.ID)
+}
+
+func TestStore_Add_leavesOtherItemsUntouched_whenEvictingAStaleSibling(t *testing.T) {
+	// Given a ready store with chunks for two different items
+	store := New()
+	ctx := context.Background()
+	itemOneOld := testChunk("item1-old", []float32{1, 0})
+	itemOneOld.ItemID = "item-1"
+	itemTwo := testChunk("item2", []float32{0, 1})
+	itemTwo.ItemID = "item-2"
+	require.NoError(t, store.ReplaceAll(ctx, []knowledge.Chunk{itemOneOld, itemTwo}))
+
+	// When item-1 is re-added under a new ID
+	itemOneNew := testChunk("item1-new", []float32{1, 1})
+	itemOneNew.ItemID = "item-1"
+	require.NoError(t, store.Add(ctx, []knowledge.Chunk{itemOneNew}))
+
+	// Then item-2's chunk is untouched and item-1 has only its new chunk
+	assert.Equal(t, 2, store.Len())
+	results, err := store.Search(ctx, []float32{0, 1}, 10, knowledge.SearchFilters{})
+	require.NoError(t, err)
+	ids := make([]string, len(results))
+	for i, r := range results {
+		ids[i] = r.Chunk.ID
+	}
+	assert.ElementsMatch(t, []string{"item1-new", "item2"}, ids)
+}
+
 func TestStore_ReplaceAll_publishesEmptySnapshot_andMarksReady(t *testing.T) {
 	// Given a fresh, never-loaded store
 	store := New()

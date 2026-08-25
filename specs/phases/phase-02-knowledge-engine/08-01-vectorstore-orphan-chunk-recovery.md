@@ -124,11 +124,58 @@ the documented, accepted behavior for now and revisit if a future
 `VectorStore` implementation (e.g. an external service) makes `Remove`
 failures common enough to matter.
 
-## Open decision
+## Decision
 
-Which of A/B/C/D to implement — and, if B or C, the exact interface
-signature change and the tests it needs — is not yet decided. Do not start
-implementation from this spec until that choice is made explicit here.
+**Option B**, decided during design discussion on 2026-08-25.
+
+Rationale: the failure that opens this window is rare and in-process (no
+network I/O), and the resulting drift is already bounded by a restart
+(`ReplaceAll` rebuilds the snapshot from SQLite, which never held the
+orphan). Option A's durable pending-removal bookkeeping is disproportionate
+to a failure this narrow — it adds a permanent mechanism, plus its own
+retry/recovery story, for a problem that already self-heals. Option C fixes
+the root cause but at the cost of migrating every existing `Remove`+`Add`
+call site (`approve.go`, `deprecate.go`, `delete.go`, `indexing.go`,
+`update.go`) to a new atomic method and defining its partial-failure
+semantics — more surface than the bug warrants. Option D alone was rejected
+because this is a desktop app that can stay open for days between restarts;
+in that window, a search could return two conflicting definitions of the
+same concept with no signal to the user, and Option B is cheap enough that
+accepting that risk isn't worth it.
+
+Option B was chosen specifically because it converges automatically the
+next time anything calls `Add` for the same `ItemID` — typically the next
+successful `indexKnowledgeItem` run, whether triggered by another edit or
+by the backfill sweep. It does **not** cover `DeleteItem`'s parallel
+failure, where the item row itself (not just the chunk) is gone and no
+future `Add` for that `ItemID` will ever happen — see
+`08-02-deleteitem-orphan-chunk-risk.md`, split out separately rather than
+folded into this implementation.
+
+A UI-facing warning for this specific failure (beyond the existing
+`log.Printf` in `logIndexingFailure`) was considered and deliberately left
+out: Option B already removes the user-visible symptom (the duplicate
+search result) automatically, so the warning would only announce a state
+that self-corrects before anyone acts on it.
+
+### Implementation shape
+
+- `internal/infrastructure/vectorstore/store.go` (`Store.Add`): before
+  upserting the incoming batch, evict any existing chunk that shares an
+  incoming chunk's `ItemID` but has a different `Chunk.ID`. Plain
+  upsert-by-`Chunk.ID` behavior (existing ID replaced in place) is
+  unchanged.
+- `internal/domain/knowledge/vectorstore.go`: update `VectorStore.Add`'s
+  doc comment to describe the new by-`ItemID` eviction, not just
+  upsert-by-`Chunk.ID`.
+- No application-layer call site changes — `approve.go`, `deprecate.go`,
+  `indexing.go`, `update.go` keep calling `Add` exactly as they do today.
+- Tests: new `vectorstore` package coverage for the by-`ItemID` eviction;
+  extend `TestUpdateItem_returnsErrIndexingFailed_whenEvictingTheStaleChunkFails`
+  (or add a companion test) to prove a subsequent `indexKnowledgeItem` run
+  leaves the store with exactly one chunk for the item, not two; audit
+  existing `Add` tests that assert upsert-by-`Chunk.ID` semantics for any
+  that would break under the new eviction.
 
 ## References
 
