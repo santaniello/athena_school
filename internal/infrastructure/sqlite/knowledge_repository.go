@@ -186,6 +186,56 @@ func (r *KnowledgeRepository) Delete(ctx context.Context, id string) error {
 	return requireRowAffected(result, knowledge.ErrItemNotFound)
 }
 
+// unindexedKnowledgeItemsQuery backs CountUnindexed/ListUnindexed: every
+// Source == athena item whose current chunk is missing or stale (by
+// ItemUpdatedAt, Status, or embedding model). i.source = 'athena' excludes
+// imported-doc shadow Items on purpose — their chunks always have
+// item_updated_at IS NULL by design (imported files use
+// ingested_files.mtime for staleness instead), so without this guard every
+// imported note would show up as permanently unindexed. See
+// specs/phases/phase-02-knowledge-engine/08-knowledge-item-indexing.md.
+const unindexedKnowledgeItemsQuery = `
+	FROM knowledge_items i
+	WHERE i.source = 'athena'
+	  AND NOT EXISTS (
+	        SELECT 1 FROM knowledge_chunks c
+	        WHERE c.item_id = i.id
+	          AND c.item_updated_at = i.updated_at
+	          AND c.status = i.status
+	          AND c.embedding_model = ?
+	      )`
+
+// knowledgeItemSelectColumnsQualified is knowledgeItemSelectColumns
+// prefixed with the "i." alias unindexedKnowledgeItemsQuery's table alias
+// requires.
+const knowledgeItemSelectColumnsQualified = `i.id, i.topic, i.concept, i.definition, COALESCE(i.properties, ''), COALESCE(i.trade_offs, ''), COALESCE(i.related_concepts, ''), i.source, i.status, i.created_at, i.updated_at`
+
+// CountUnindexed returns how many Source == athena items have no current
+// chunk under embeddingModel. See knowledge.Repository.CountUnindexed.
+func (r *KnowledgeRepository) CountUnindexed(ctx context.Context, embeddingModel string) (int, error) {
+	var count int
+	err := execer(ctx, r.db).QueryRowContext(ctx,
+		`SELECT COUNT(*) `+unindexedKnowledgeItemsQuery, embeddingModel,
+	).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("sqlite: counting unindexed knowledge items: %w", err)
+	}
+	return count, nil
+}
+
+// ListUnindexed returns every item CountUnindexed would count, oldest
+// first. See knowledge.Repository.ListUnindexed.
+func (r *KnowledgeRepository) ListUnindexed(ctx context.Context, embeddingModel string) ([]knowledge.Item, error) {
+	rows, err := execer(ctx, r.db).QueryContext(ctx,
+		`SELECT `+knowledgeItemSelectColumnsQualified+` `+unindexedKnowledgeItemsQuery+` ORDER BY i.created_at ASC, i.id ASC`,
+		embeddingModel,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: listing unindexed knowledge items: %w", err)
+	}
+	return scanItems(rows)
+}
+
 // rowScanner is satisfied by both *sql.Row and *sql.Rows.
 type rowScanner interface {
 	Scan(dest ...any) error

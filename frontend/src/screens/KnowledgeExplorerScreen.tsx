@@ -14,10 +14,12 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { TagInput } from '@/components/tag-input'
 import { KnowledgeDeleteDialog } from '@/components/knowledge-delete-dialog'
+import { IngestProgressDialog } from '@/components/ingest-progress-dialog'
 import { cn } from '@/lib/utils'
 import { onIngestDone } from '@/lib/ingest'
 import {
   approveKnowledgeItem,
+  countUnindexedKnowledgeItems,
   definitionPreview,
   deleteKnowledgeItem,
   deprecateKnowledgeItem,
@@ -105,6 +107,8 @@ function KnowledgeExplorerScreen({
   const [draft, setDraft] = useState<KnowledgeItemEdit | null>(null)
   const [deletingItem, setDeletingItem] = useState<KnowledgeItem | null>(null)
   const [error, setError] = useState('')
+  const [unindexedCount, setUnindexedCount] = useState(0)
+  const [reindexOpen, setReindexOpen] = useState(false)
 
   const effectiveStatus = mode === 'review' ? 'draft' : statusFilter
   // handleApprove/handleDeprecate are async closures: the render active
@@ -146,6 +150,33 @@ function KnowledgeExplorerScreen({
       unsubscribe()
     }
   }, [selectedTopic, effectiveStatus])
+
+  // On mount only: this is not silent, money-spending auto-indexing — it
+  // just counts what a user-triggered "Index now" would need to process,
+  // rendered as a dismissible-by-fixing Alert below. A count-fetch failure
+  // is not surfaced as a page error; the Alert simply stays hidden.
+  useEffect(() => {
+    let ignore = false
+    countUnindexedKnowledgeItems()
+      .then((count) => {
+        if (!ignore) setUnindexedCount(count)
+      })
+      .catch(() => {})
+    return () => {
+      ignore = true
+    }
+  }, [])
+
+  // Re-checks after the reindex dialog closes — a run that hits failures
+  // (e.g. the OpenRouter key is missing) can still leave items unindexed,
+  // so the alert's count must reflect whatever remains rather than
+  // assuming a full run always clears it to zero.
+  function handleReindexClose() {
+    setReindexOpen(false)
+    countUnindexedKnowledgeItems()
+      .then(setUnindexedCount)
+      .catch(() => {})
+  }
 
   const selectedItem = items.find((item) => item.id === selectedId) ?? null
   const groups = groupByTopic(items)
@@ -245,6 +276,17 @@ function KnowledgeExplorerScreen({
             </SelectContent>
           </Select>
         </div>
+      )}
+
+      {unindexedCount > 0 && (
+        <Alert>
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+            <span>⚠ {unindexedCount} knowledge items aren&apos;t indexed for search yet.</span>
+            <Button size="sm" onClick={() => setReindexOpen(true)} disabled={mutationsDisabled}>
+              Index now
+            </Button>
+          </AlertDescription>
+        </Alert>
       )}
 
       {error && (
@@ -416,6 +458,8 @@ function KnowledgeExplorerScreen({
         onCancel={() => setDeletingItem(null)}
         onConfirm={() => void handleConfirmDelete()}
       />
+
+      <IngestProgressDialog open={reindexOpen} kind="reindex" onClose={handleReindexClose} />
     </div>
   )
 }

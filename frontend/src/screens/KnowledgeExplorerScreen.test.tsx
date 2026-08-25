@@ -3,11 +3,15 @@ import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
   approveKnowledgeItem,
+  countUnindexedKnowledgeItems,
   deleteKnowledgeItem,
   deprecateKnowledgeItem,
   listKnowledgeItems,
+  onReindexDone,
+  reindexKnowledgeItems,
   updateKnowledgeItem,
   type KnowledgeItem,
+  type ReindexSummary,
 } from '@/lib/knowledge'
 import { onIngestDone } from '@/lib/ingest'
 import KnowledgeExplorerScreen from './KnowledgeExplorerScreen'
@@ -21,6 +25,16 @@ vi.mock('@/lib/knowledge', async (importOriginal) => {
     deprecateKnowledgeItem: vi.fn(),
     updateKnowledgeItem: vi.fn(),
     deleteKnowledgeItem: vi.fn(),
+    // Defaults to "nothing unindexed" so the backfill Alert stays out of
+    // every test that isn't specifically about it.
+    countUnindexedKnowledgeItems: vi.fn().mockResolvedValue(0),
+    // The reindex dialog's own event flow is covered by
+    // ingest-progress-dialog.test.tsx; here it only needs to stay inert
+    // (never resolving) so opening it doesn't drive real backend calls.
+    reindexKnowledgeItems: vi.fn(() => new Promise<void>(() => {})),
+    onReindexProgress: vi.fn(() => vi.fn()),
+    onReindexDone: vi.fn(() => vi.fn()),
+    onReindexError: vi.fn(() => vi.fn()),
   }
 })
 
@@ -990,5 +1004,83 @@ describe('KnowledgeExplorerScreen', () => {
 
     // Then Save is disabled, since the backend guard would reject it anyway
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+  })
+
+  it('shows the backfill alert with the count reported on mount', async () => {
+    // Given 3 knowledge items not yet indexed for search
+    stubIngestDone()
+    vi.mocked(listKnowledgeItems).mockResolvedValueOnce([])
+    vi.mocked(countUnindexedKnowledgeItems).mockResolvedValueOnce(3)
+
+    // When rendering the Explorer
+    render(
+      <KnowledgeExplorerScreen selectedTopic={null} mode="explorer" mutationsDisabled={false} />,
+    )
+
+    // Then the alert shows the exact count and an "Index now" action
+    expect(await screen.findByText(/3 knowledge items/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Index now' })).toBeInTheDocument()
+  })
+
+  it('opens the reindex dialog when "Index now" is clicked', async () => {
+    // Given the backfill alert showing 2 unindexed items
+    stubIngestDone()
+    vi.mocked(listKnowledgeItems).mockResolvedValueOnce([])
+    vi.mocked(countUnindexedKnowledgeItems).mockResolvedValueOnce(2)
+    const user = userEvent.setup()
+    render(
+      <KnowledgeExplorerScreen selectedTopic={null} mode="explorer" mutationsDisabled={false} />,
+    )
+    await screen.findByRole('button', { name: 'Index now' })
+
+    // When clicking "Index now"
+    await user.click(screen.getByRole('button', { name: 'Index now' }))
+
+    // Then the reindex progress dialog opens
+    expect(await screen.findByText('Indexing knowledge')).toBeInTheDocument()
+  })
+
+  it('re-checks the unindexed count after the reindex dialog closes', async () => {
+    // Given the backfill alert showing 2 unindexed items, and a run that
+    // will leave 1 remaining once closed (e.g. a partial failure)
+    stubIngestDone()
+    vi.mocked(listKnowledgeItems).mockResolvedValue([])
+    vi.mocked(countUnindexedKnowledgeItems).mockResolvedValueOnce(2).mockResolvedValueOnce(1)
+    vi.mocked(reindexKnowledgeItems).mockResolvedValueOnce(undefined)
+    let doneHandler: (summary: ReindexSummary) => void = () => {}
+    vi.mocked(onReindexDone).mockImplementation((handler) => {
+      doneHandler = handler
+      return vi.fn()
+    })
+    const user = userEvent.setup()
+    render(
+      <KnowledgeExplorerScreen selectedTopic={null} mode="explorer" mutationsDisabled={false} />,
+    )
+    await user.click(await screen.findByRole('button', { name: 'Index now' }))
+    await screen.findByText('Indexing knowledge')
+
+    // When the run finishes and the user closes the dialog
+    act(() => doneHandler({ itemsProcessed: 2, itemsIndexed: 2, itemsFailed: 0, failures: [] }))
+    const closeButtons = await screen.findAllByRole('button', { name: 'Close' })
+    await user.click(closeButtons[0])
+
+    // Then the count is fetched again and the alert reflects the new value
+    await waitFor(() => expect(countUnindexedKnowledgeItems).toHaveBeenCalledTimes(2))
+    expect(await screen.findByText(/1 knowledge item/)).toBeInTheDocument()
+  })
+
+  it('does not show the backfill alert when nothing is unindexed', async () => {
+    // Given zero unindexed items (the default mock)
+    stubIngestDone()
+    vi.mocked(listKnowledgeItems).mockResolvedValueOnce([])
+
+    // When rendering the Explorer
+    render(
+      <KnowledgeExplorerScreen selectedTopic={null} mode="explorer" mutationsDisabled={false} />,
+    )
+    await screen.findByText('No items found.')
+
+    // Then no "Index now" action is offered
+    expect(screen.queryByRole('button', { name: 'Index now' })).not.toBeInTheDocument()
   })
 })

@@ -226,6 +226,10 @@ The auth server only manages accounts and licenses. Your notes and knowledge bas
 
 Embeddings live only in `athena.db` (`knowledge_chunks.embedding`, a packed float32 BLOB) — there is no separate `~/.athena/vectors/` directory. On launch, Athena loads the current chunks into an in-process, pure-Go cosine-similarity index (`internal/infrastructure/vectorstore`) in the background, so the window renders immediately behind a "Loading knowledge index..." screen instead of blocking on it; SQLite stays the single source of truth, and the in-memory index is a disposable cache rebuilt from it on every launch (and on demand via **Retry**, from the Knowledge section, if the initial load fails or a chunk gets isolated). See [ADR-004](specs/decisions/ADR-004-local-vector-store.md).
 
+Every Knowledge Item — saved as a draft, approved, deprecated, or edited — is automatically embedded into a searchable chunk right after it is persisted. That embedding call can fail independently of the save (no OpenRouter key, offline), so an item can end up saved-but-unsearchable; this never fails the save itself and self-heals through the same mechanism as the vector-store cache above. On mount, the Knowledge Explorer shows an inline "N knowledge items aren't indexed for search yet — Index now" alert whenever that happens, so re-indexing is discoverable and consent-based rather than silently spending API credits in the background. Clicking **Index now** processes the backlog and streams progress the same way notes import does; a run that fails partway simply leaves the count non-zero for the next attempt.
+
+Because a Knowledge Item's chunk is tagged with the embedding model that produced it, **changing the configured embedding model makes every existing item eligible for re-indexing** — even ones whose vector already happens to share the same dimensions — since a stale-model vector isn't comparable to freshly embedded queries. The same "Index now" backfill alert is what surfaces and clears that backlog.
+
 ---
 
 ## License

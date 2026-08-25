@@ -40,4 +40,13 @@ type Repository interface {
 	// Delete permanently removes the item with the given id, or returns
 	// ErrItemNotFound if it does not exist.
 	Delete(ctx context.Context, id string) error
+	// CountUnindexed returns how many Source == athena items have no
+	// current chunk under embeddingModel — missing entirely, or stale by
+	// ItemUpdatedAt, Status, or embedding model. Imported-doc shadow Items
+	// are excluded: their freshness is governed by ingested_files (2.3),
+	// never by ItemUpdatedAt, which is always NULL for them by design.
+	CountUnindexed(ctx context.Context, embeddingModel string) (int, error)
+	// ListUnindexed returns every item CountUnindexed would count, oldest
+	// first — the backlog ReindexKnowledgeItems processes.
+	ListUnindexed(ctx context.Context, embeddingModel string) ([]Item, error)
 }

@@ -7,6 +7,8 @@ export function ApproveKnowledgeItem(arg1:string):Promise<desktop.KnowledgeItemR
 
 export function CountDraftKnowledgeItems():Promise<number>;
 
+export function CountUnindexedKnowledgeItems():Promise<number>;
+
 export function CreateFolder(arg1:string):Promise<desktop.FolderResult>;
 
 export function DeleteFolder(arg1:string):Promise<void>;
@@ -54,6 +56,8 @@ export function PickNotesFile():Promise<string>;
 export function PickNotesFolder():Promise<string>;
 
 export function Register(arg1:string,arg2:string):Promise<void>;
+
+export function ReindexKnowledgeItems():Promise<void>;
 
 export function RenameFolder(arg1:string,arg2:string):Promise<void>;
 

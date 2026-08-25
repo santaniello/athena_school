@@ -18,8 +18,12 @@ import (
 // transaction updates every owned chunk's status metadata; after commit,
 // the VectorStore is reconciled to match without a new embedding call. A
 // post-commit reconciliation failure never rolls back the durable
-// transition — it comes back as an *IndexingWarning alongside the real,
-// transitioned item (see IndexingWarning).
+// transition — it comes back as an error wrapping ErrIndexingFailed
+// alongside the real, transitioned item.
+//
+// If id owns no chunk yet (UpdateMetadataByItemID matched zero rows), the
+// transition still commits and indexKnowledgeItem attempts the recoverable
+// embedding afterwards, instead of reconciling an empty metadata update.
 func (s *Service) Deprecate(ctx context.Context, id string) (domainknowledge.Item, error) {
 	if err := s.index.BeginMutation(); err != nil {
 		return domainknowledge.Item{}, err
@@ -41,11 +45,18 @@ func (s *Service) Deprecate(ctx context.Context, id string) (domainknowledge.Ite
 		if err := s.items.Update(ctx, item); err != nil {
 			return err
 		}
-		updatedChunks, err = s.chunks.UpdateMetadataByItemID(ctx, id, item.Topic, item.Status)
+		updatedChunks, err = s.chunks.UpdateMetadataByItemID(ctx, id, item.Topic, item.Status, item.UpdatedAt)
 		return err
 	})
 	if err != nil {
 		return domainknowledge.Item{}, err
+	}
+
+	if len(updatedChunks) == 0 {
+		if err := s.indexKnowledgeItem(ctx, item); err != nil {
+			return item, err
+		}
+		return item, nil
 	}
 
 	reconcileCtx, cancel := reconcileContext()

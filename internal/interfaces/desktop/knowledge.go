@@ -80,6 +80,10 @@ func (a *App) SaveExtractedKnowledge(inputs []KnowledgeItemInput) KnowledgeSaveR
 		}
 	}
 	savedIndices, err := a.knowledge.SaveDrafts(a.ctx, items)
+	if errors.Is(err, applicationknowledge.ErrIndexingFailed) {
+		logIndexingFailure("saving drafts", err)
+		return KnowledgeSaveResult{SavedIndices: savedIndices}
+	}
 	result := KnowledgeSaveResult{SavedIndices: savedIndices}
 	if err != nil {
 		result.Error = fmt.Sprintf("knowledge save failed: %v", err)
@@ -116,9 +120,8 @@ func (a *App) CountDraftKnowledgeItems() (int, error) {
 // the updated item.
 func (a *App) ApproveKnowledgeItem(id string) (KnowledgeItemResult, error) {
 	item, err := a.knowledge.Approve(a.ctx, id)
-	var warning *applicationknowledge.IndexingWarning
-	if errors.As(err, &warning) {
-		logIndexingWarning("approving", id, warning)
+	if errors.Is(err, applicationknowledge.ErrIndexingFailed) {
+		logIndexingFailure("approving item "+id, err)
 		return toKnowledgeItemResult(item), nil
 	}
 	if err != nil {
@@ -131,9 +134,8 @@ func (a *App) ApproveKnowledgeItem(id string) (KnowledgeItemResult, error) {
 // returns the updated item.
 func (a *App) DeprecateKnowledgeItem(id string) (KnowledgeItemResult, error) {
 	item, err := a.knowledge.Deprecate(a.ctx, id)
-	var warning *applicationknowledge.IndexingWarning
-	if errors.As(err, &warning) {
-		logIndexingWarning("deprecating", id, warning)
+	if errors.Is(err, applicationknowledge.ErrIndexingFailed) {
+		logIndexingFailure("deprecating item "+id, err)
 		return toKnowledgeItemResult(item), nil
 	}
 	if err != nil {
@@ -153,9 +155,8 @@ func (a *App) UpdateKnowledgeItem(id string, input KnowledgeItemInput) (Knowledg
 		TradeOffs:       input.TradeOffs,
 		RelatedConcepts: input.RelatedConcepts,
 	})
-	var warning *applicationknowledge.IndexingWarning
-	if errors.As(err, &warning) {
-		logIndexingWarning("updating", id, warning)
+	if errors.Is(err, applicationknowledge.ErrIndexingFailed) {
+		logIndexingFailure("updating item "+id, err)
 		return toKnowledgeItemResult(item), nil
 	}
 	if err != nil {
@@ -168,20 +169,22 @@ func (a *App) UpdateKnowledgeItem(id string, input KnowledgeItemInput) (Knowledg
 // cannot be undone.
 func (a *App) DeleteKnowledgeItem(id string) error {
 	err := a.knowledge.DeleteItem(a.ctx, id)
-	var warning *applicationknowledge.IndexingWarning
-	if errors.As(err, &warning) {
-		logIndexingWarning("deleting", id, warning)
+	if errors.Is(err, applicationknowledge.ErrIndexingFailed) {
+		logIndexingFailure("deleting item "+id, err)
 		return nil
 	}
 	return err
 }
 
-// logIndexingWarning logs a post-commit VectorStore reconciliation failure.
-// The durable mutation already succeeded (see IndexingWarning), so every
-// caller reports success to the frontend regardless — a full index Retry
-// self-heals from SQLite, which remains the source of truth.
-func logIndexingWarning(op, itemID string, warning *applicationknowledge.IndexingWarning) {
-	log.Printf("knowledge index: %s item %s: %v", op, itemID, warning.Err)
+// logIndexingFailure logs an indexing failure (errors.Is(err,
+// applicationknowledge.ErrIndexingFailed)) — embedding, chunk persistence,
+// or VectorStore reconciliation alike. The durable Knowledge Item mutation
+// already succeeded, so every caller reports success to the frontend
+// regardless; the backfill flow (CountUnindexedKnowledgeItems / "Index
+// now") is the recovery path, and self-heals from SQLite on the next
+// startup even without it.
+func logIndexingFailure(op string, err error) {
+	log.Printf("knowledge index: %s: %v", op, err)
 }
 
 // SaveAndApproveExtractedKnowledge persists only the confirmed candidates,
@@ -198,6 +201,10 @@ func (a *App) SaveAndApproveExtractedKnowledge(inputs []KnowledgeItemInput) Know
 		}
 	}
 	savedIndices, err := a.knowledge.SaveAndApprove(a.ctx, items)
+	if errors.Is(err, applicationknowledge.ErrIndexingFailed) {
+		logIndexingFailure("saving and approving drafts", err)
+		return KnowledgeSaveResult{SavedIndices: savedIndices}
+	}
 	result := KnowledgeSaveResult{SavedIndices: savedIndices}
 	if err != nil {
 		result.Error = fmt.Sprintf("knowledge save failed: %v", err)
@@ -212,4 +219,72 @@ func toKnowledgeItemResult(item domainknowledge.Item) KnowledgeItemResult {
 		Source: item.Source, Status: item.Status,
 		CreatedAt: item.CreatedAt.Format(time.RFC3339Nano), UpdatedAt: item.UpdatedAt.Format(time.RFC3339Nano),
 	}
+}
+
+// ReindexProgressResult is the desktop-facing DTO for
+// ReindexKnowledgeItems' progress callback.
+type ReindexProgressResult struct {
+	ItemsProcessed int    `json:"itemsProcessed"`
+	ItemsTotal     int    `json:"itemsTotal"`
+	CurrentTopic   string `json:"currentTopic"`
+}
+
+// ReindexFailureResult is the desktop-facing DTO for one item that failed
+// to index during a reindex run.
+type ReindexFailureResult struct {
+	ItemID string `json:"itemId"`
+	Topic  string `json:"topic"`
+	Reason string `json:"reason"`
+}
+
+// ReindexSummaryResult is the desktop-facing DTO for ReindexKnowledgeItems'
+// final report.
+type ReindexSummaryResult struct {
+	ItemsProcessed int                    `json:"itemsProcessed"`
+	ItemsIndexed   int                    `json:"itemsIndexed"`
+	ItemsFailed    int                    `json:"itemsFailed"`
+	Failures       []ReindexFailureResult `json:"failures"`
+}
+
+func toReindexProgressResult(p applicationknowledge.ReindexProgress) ReindexProgressResult {
+	return ReindexProgressResult{
+		ItemsProcessed: p.ItemsProcessed, ItemsTotal: p.ItemsTotal, CurrentTopic: p.CurrentTopic,
+	}
+}
+
+func toReindexSummaryResult(s applicationknowledge.ReindexSummary) ReindexSummaryResult {
+	failures := make([]ReindexFailureResult, len(s.Failures))
+	for index, failure := range s.Failures {
+		failures[index] = ReindexFailureResult{ItemID: failure.ItemID, Topic: failure.Topic, Reason: failure.Reason}
+	}
+	return ReindexSummaryResult{
+		ItemsProcessed: s.ItemsProcessed, ItemsIndexed: s.ItemsIndexed, ItemsFailed: s.ItemsFailed, Failures: failures,
+	}
+}
+
+// CountUnindexedKnowledgeItems returns how many Knowledge Items currently
+// lack a current chunk — the count the Knowledge Explorer's backfill alert
+// shows on mount.
+func (a *App) CountUnindexedKnowledgeItems() (int, error) {
+	return a.knowledge.CountUnindexedItems(a.ctx)
+}
+
+// ReindexKnowledgeItems processes every currently-unindexed Knowledge Item
+// — the recovery path for every indexing failure documented in
+// specs/phases/phase-02-knowledge-engine/08-knowledge-item-indexing.md, run
+// only on explicit user consent ("Index now"). It streams progress via
+// "ingest:progress", reusing 2.3's events (the UI only ever has one such
+// operation active at a time), then emits "ingest:done" with the final
+// summary, or "ingest:error" on failure.
+func (a *App) ReindexKnowledgeItems() error {
+	summary, err := a.knowledge.ReindexKnowledgeItems(a.ctx, func(p applicationknowledge.ReindexProgress) error {
+		a.emit(a.ctx, eventIngestProgress, toReindexProgressResult(p))
+		return nil
+	})
+	if err != nil {
+		a.emit(a.ctx, eventIngestError, err.Error())
+		return err
+	}
+	a.emit(a.ctx, eventIngestDone, toReindexSummaryResult(summary))
+	return nil
 }

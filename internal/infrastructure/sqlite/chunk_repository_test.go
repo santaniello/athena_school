@@ -197,28 +197,34 @@ func TestChunkRepository_DeleteByItemID_removesOnlyThatItemsChunks_andReturnsRem
 	assert.Equal(t, "chunk-b1", got[0].ID)
 }
 
-func TestChunkRepository_UpdateMetadataByItemID_overwritesTopicAndStatus_andReturnsUpdatedChunks(t *testing.T) {
+func TestChunkRepository_UpdateMetadataByItemID_overwritesTopicStatusAndItemUpdatedAt_andReturnsUpdatedChunks(t *testing.T) {
 	// Given two chunks owned by the same item, and one owned by another
 	repo := newTestChunkRepository(t)
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Second)
 	a1 := testChunk("chunk-a1", "notes/a.md", now)
 	a1.ItemID = "item-a"
+	a1.ItemUpdatedAt = now
 	a2 := testChunk("chunk-a2", "notes/a.md", now)
 	a2.ItemID = "item-a"
+	a2.ItemUpdatedAt = now
 	b1 := testChunk("chunk-b1", "notes/b.md", now)
 	b1.ItemID = "item-b"
+	b1.ItemUpdatedAt = now
 	require.NoError(t, repo.SaveAll(ctx, []knowledge.Chunk{a1, a2, b1}))
 
-	// When updating item-a's metadata
-	updated, err := repo.UpdateMetadataByItemID(ctx, "item-a", "Rust", knowledge.StatusDeprecated)
+	// When updating item-a's metadata with a later ItemUpdatedAt (e.g. a
+	// status transition that restamped the Item's UpdatedAt)
+	newItemUpdatedAt := now.Add(time.Hour)
+	updated, err := repo.UpdateMetadataByItemID(ctx, "item-a", "Rust", knowledge.StatusDeprecated, newItemUpdatedAt)
 
-	// Then only item-a's chunks are returned with the new topic/status
+	// Then only item-a's chunks are returned with the new topic/status/ItemUpdatedAt
 	require.NoError(t, err)
 	require.Len(t, updated, 2)
 	for _, chunk := range updated {
 		assert.Equal(t, "Rust", chunk.Topic)
 		assert.Equal(t, knowledge.StatusDeprecated, chunk.Status)
+		assert.True(t, newItemUpdatedAt.Equal(chunk.ItemUpdatedAt))
 	}
 
 	// And the change is persisted, leaving the other item's chunk untouched
@@ -230,8 +236,10 @@ func TestChunkRepository_UpdateMetadataByItemID_overwritesTopicAndStatus_andRetu
 	}
 	assert.Equal(t, "Rust", byID["chunk-a1"].Topic)
 	assert.Equal(t, knowledge.StatusDeprecated, byID["chunk-a1"].Status)
+	assert.True(t, newItemUpdatedAt.Equal(byID["chunk-a1"].ItemUpdatedAt))
 	assert.Equal(t, "Go", byID["chunk-b1"].Topic)
 	assert.Equal(t, knowledge.StatusApproved, byID["chunk-b1"].Status)
+	assert.True(t, now.Equal(byID["chunk-b1"].ItemUpdatedAt))
 }
 
 func TestChunkRepository_UpdateMetadataByItemID_isNoOp_whenNothingMatches(t *testing.T) {
@@ -240,7 +248,7 @@ func TestChunkRepository_UpdateMetadataByItemID_isNoOp_whenNothingMatches(t *tes
 	ctx := context.Background()
 
 	// When updating an item ID no chunk carries
-	updated, err := repo.UpdateMetadataByItemID(ctx, "item-missing", "Rust", knowledge.StatusDeprecated)
+	updated, err := repo.UpdateMetadataByItemID(ctx, "item-missing", "Rust", knowledge.StatusDeprecated, time.Now().UTC())
 
 	// Then it succeeds without error and returns no rows
 	require.NoError(t, err)

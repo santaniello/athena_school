@@ -25,13 +25,27 @@ type ItemFields struct {
 // The read and the write run inside one transaction so a concurrent
 // Approve or Deprecate on the same id can never have its transition
 // overwritten by this call reading a stale Status in the gap (see
-// Transactor). The same transaction updates every owned chunk's topic
-// metadata (editing an imported note's concept/definition never touches
-// its raw chunk embeddings — only topic/status metadata mirrors the Item);
-// after commit, the VectorStore is reconciled to match without a new
-// embedding call. A post-commit reconciliation failure never rolls back
-// the durable update — it comes back as an *IndexingWarning alongside the
-// real, updated item (see IndexingWarning).
+// Transactor).
+//
+// Re-embedding only happens when Concept, Definition, Properties or
+// TradeOffs actually changed — those are the only fields the chunk's
+// content is rendered from (see indexKnowledgeItem/renderItemContent); a
+// Topic-only (or RelatedConcepts-only) edit stays on the cheaper
+// metadata-only path Approve/Deprecate already use, updating the chunk's
+// topic and ItemUpdatedAt without a new embedding call. Either way
+// UpdatedAt — and so the chunk's ItemUpdatedAt — is restamped on every
+// call, content-changing or not, so a Topic-only edit never makes the
+// chunk look stale at the next startup.
+//
+// When content changed: the old chunk is deleted in the same transaction
+// as the item write, evicted from the VectorStore immediately once that
+// commits — before the embedding call — so retrieval and duplicate
+// detection never serve stale content even while re-indexing is in
+// flight, then indexKnowledgeItem re-embeds and re-inserts it. A failed
+// re-embed leaves the item persisted with zero chunks (visible to
+// backfill) rather than a stale one. Either path's post-commit failure
+// comes back as an error wrapping ErrIndexingFailed alongside the real,
+// updated item.
 func (s *Service) UpdateItem(ctx context.Context, id string, fields ItemFields) (domainknowledge.Item, error) {
 	if err := s.index.BeginMutation(); err != nil {
 		return domainknowledge.Item{}, err
@@ -40,12 +54,15 @@ func (s *Service) UpdateItem(ctx context.Context, id string, fields ItemFields) 
 
 	var item domainknowledge.Item
 	var updatedChunks []domainknowledge.Chunk
+	var removedChunkIDs []string
+	var contentChanged bool
 	err := s.tx.WithinTx(ctx, func(ctx context.Context) error {
 		var err error
 		item, err = s.items.GetByID(ctx, id)
 		if err != nil {
 			return err
 		}
+		oldContent := renderItemContent(item)
 
 		topic, err := domainknowledge.NormalizeTopic(fields.Topic)
 		if err != nil {
@@ -62,16 +79,35 @@ func (s *Service) UpdateItem(ctx context.Context, id string, fields ItemFields) 
 		if err := item.Validate(); err != nil {
 			return err
 		}
+		contentChanged = renderItemContent(item) != oldContent
 		item.UpdatedAt = time.Now().UTC()
 
 		if err := s.items.Update(ctx, item); err != nil {
 			return err
 		}
-		updatedChunks, err = s.chunks.UpdateMetadataByItemID(ctx, id, item.Topic, item.Status)
+
+		if contentChanged {
+			removedChunkIDs, err = s.chunks.DeleteByItemID(ctx, id)
+			return err
+		}
+		updatedChunks, err = s.chunks.UpdateMetadataByItemID(ctx, id, item.Topic, item.Status, item.UpdatedAt)
 		return err
 	})
 	if err != nil {
 		return domainknowledge.Item{}, err
+	}
+
+	if contentChanged {
+		reconcileCtx, cancel := reconcileContext()
+		evictErr := s.store.Remove(reconcileCtx, removedChunkIDs)
+		cancel()
+		if evictErr != nil {
+			return item, indexingFailure(id, "evicting stale chunk for", evictErr)
+		}
+		if err := s.indexKnowledgeItem(ctx, item); err != nil {
+			return item, err
+		}
+		return item, nil
 	}
 
 	reconcileCtx, cancel := reconcileContext()

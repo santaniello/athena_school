@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -12,6 +13,8 @@ import (
 	txmocks "github.com/santaniello/athena/internal/application/knowledge/mocks"
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
+	domainllm "github.com/santaniello/athena/internal/domain/llm"
+	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 )
 
 func TestApprove_transitionsDraftToApproved_andReconcilesChunkMetadata(t *testing.T) {
@@ -27,7 +30,8 @@ func TestApprove_transitionsDraftToApproved_andReconcilesChunkMetadata(t *testin
 	})).Return(nil).Once()
 	updatedChunks := []domainknowledge.Chunk{{ID: "chunk-1", ItemID: "item-1", Topic: "Go", Status: domainknowledge.StatusApproved}}
 	chunks := knowledgemocks.NewMockChunkRepository(t)
-	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Go", domainknowledge.StatusApproved).Return(updatedChunks, nil).Once()
+	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Go", domainknowledge.StatusApproved,
+		mock.MatchedBy(func(ts time.Time) bool { return !ts.IsZero() })).Return(updatedChunks, nil).Once()
 	store := knowledgemocks.NewMockVectorStore(t)
 	// The reconciliation context is an internal post-commit context, not
 	// the caller's ctx — there is no viable exact matcher for it.
@@ -96,6 +100,72 @@ func TestApprove_returnsErrIndexLoading_whenIndexIsLoading_andNeverTouchesTheRep
 	repository.AssertNotCalled(t, "GetByID", mock.Anything, mock.Anything)
 }
 
+func TestApprove_reindexes_whenTheItemOwnsNoChunkYet(t *testing.T) {
+	// Given a draft item with no existing chunk — e.g. its original
+	// SaveDrafts indexing attempt failed, so UpdateMetadataByItemID
+	// matches zero rows
+	ctx := context.Background()
+	repository := knowledgemocks.NewMockRepository(t)
+	repository.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{
+		ID: "item-1", Topic: "Go", Concept: "Channels", Definition: "Typed conduits.",
+		Source: domainknowledge.SourceAthena, Status: domainknowledge.StatusDraft,
+	}, nil).Once()
+	repository.EXPECT().Update(ctx, mock.Anything).Return(nil).Once()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Go", domainknowledge.StatusApproved,
+		mock.MatchedBy(func(ts time.Time) bool { return !ts.IsZero() })).Return(nil, nil).Once()
+	wantContent := "Channels\n\nTyped conduits."
+	llm := llmmocks.NewMockProvider(t)
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: wantContent}).
+		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
+	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return(nil, nil).Once()
+	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
+		return len(cs) == 1 && cs[0].ItemID == "item-1" && cs[0].Content == wantContent
+	})).Return(nil).Once()
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Remove(mock.Anything, []string(nil)).Return(nil).Once()
+	store.EXPECT().Add(mock.Anything, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
+		return len(cs) == 1 && cs[0].ItemID == "item-1"
+	})).Return(nil).Once()
+	tx := txmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
+
+	// When approving it
+	updated, err := service.Approve(ctx, "item-1")
+
+	// Then it recovers by fully re-indexing rather than reconciling nothing
+	require.NoError(t, err)
+	assert.Equal(t, domainknowledge.StatusApproved, updated.Status)
+}
+
+func TestApprove_returnsErrIndexingFailed_whenRecoveryReindexingFails_butKeepsTheDurableTransition(t *testing.T) {
+	// Given a draft item with no existing chunk, and an embedding call that fails
+	ctx := context.Background()
+	repository := knowledgemocks.NewMockRepository(t)
+	repository.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{
+		ID: "item-1", Topic: "Go", Concept: "Channels", Definition: "Typed conduits.",
+		Source: domainknowledge.SourceAthena, Status: domainknowledge.StatusDraft,
+	}, nil).Once()
+	repository.EXPECT().Update(ctx, mock.Anything).Return(nil).Once()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Go", domainknowledge.StatusApproved,
+		mock.MatchedBy(func(ts time.Time) bool { return !ts.IsZero() })).Return(nil, nil).Once()
+	boom := errors.New("openrouter unavailable")
+	llm := llmmocks.NewMockProvider(t)
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Channels\n\nTyped conduits."}).Return(domainllm.EmbeddingResponse{}, boom).Once()
+	tx := txmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	service := NewService(repository, nil, nil, llm, nil, chunks, tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
+
+	// When approving it and the recovery re-indexing fails
+	updated, err := service.Approve(ctx, "item-1")
+
+	// Then the durable transition is preserved and the failure wraps ErrIndexingFailed
+	assert.ErrorIs(t, err, ErrIndexingFailed)
+	assert.Equal(t, domainknowledge.StatusApproved, updated.Status)
+}
+
 func TestApprove_returnsIndexingWarning_whenPostCommitReconciliationFails_butKeepsTheDurableResult(t *testing.T) {
 	// Given a draft item whose transition persists successfully
 	ctx := context.Background()
@@ -107,7 +177,8 @@ func TestApprove_returnsIndexingWarning_whenPostCommitReconciliationFails_butKee
 	repository.EXPECT().Update(ctx, mock.Anything).Return(nil).Once()
 	updatedChunks := []domainknowledge.Chunk{{ID: "chunk-1", ItemID: "item-1"}}
 	chunks := knowledgemocks.NewMockChunkRepository(t)
-	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Go", domainknowledge.StatusApproved).Return(updatedChunks, nil).Once()
+	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Go", domainknowledge.StatusApproved,
+		mock.MatchedBy(func(ts time.Time) bool { return !ts.IsZero() })).Return(updatedChunks, nil).Once()
 	boom := errors.New("store exploded")
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Add(mock.Anything, updatedChunks).Return(boom).Once()
