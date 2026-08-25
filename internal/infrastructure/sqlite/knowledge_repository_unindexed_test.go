@@ -145,6 +145,10 @@ func TestKnowledgeRepository_ListUnindexed_returnsOnlyUnindexedAthenaItems_oldes
 	unindexed.CreatedAt, unindexed.UpdatedAt = now.Add(-time.Hour), now.Add(-time.Hour)
 	require.NoError(t, items.Save(ctx, unindexed))
 
+	newer := testItem("item-unindexed-newer", "Elixir", knowledge.StatusDraft)
+	newer.CreatedAt, newer.UpdatedAt = now.Add(-30*time.Minute), now.Add(-30*time.Minute)
+	require.NoError(t, items.Save(ctx, newer))
+
 	imported := testItem("item-imported", "Python", knowledge.StatusApproved)
 	imported.Source = knowledge.SourceImportedDoc
 	imported.CreatedAt, imported.UpdatedAt = now, now
@@ -153,8 +157,36 @@ func TestKnowledgeRepository_ListUnindexed_returnsOnlyUnindexedAthenaItems_oldes
 	// When listing unindexed items
 	got, err := items.ListUnindexed(ctx, testUnindexedEmbeddingModel)
 
-	// Then only the unindexed athena item comes back
+	// Then only the unindexed athena items come back, oldest first
 	require.NoError(t, err)
-	require.Len(t, got, 1)
-	assert.Equal(t, "item-unindexed", got[0].ID)
+	require.Len(t, got, 2)
+	assert.Equal(t, []string{"item-unindexed", "item-unindexed-newer"},
+		[]string{got[0].ID, got[1].ID})
+}
+
+func TestKnowledgeRepository_ListUnindexed_excludesAnItemWithACurrentChunkAlongsideAStaleOne(t *testing.T) {
+	// Given an athena item that carries both its current chunk and a
+	// leftover stale chunk (e.g. a prior VectorStore eviction failure that
+	// left the old row behind) — the LEFT JOIN this query used to run
+	// would match both rows and could double-count or misclassify the item
+	chunks, items, _ := newTestChunkAndItemRepositories(t)
+	ctx := context.Background()
+	item := testItem("item-1", "Go", knowledge.StatusApproved)
+	require.NoError(t, items.Save(ctx, item))
+	stale := currentChunkFor(item, "chunk-stale")
+	stale.ItemUpdatedAt = item.UpdatedAt.Add(-time.Hour)
+	require.NoError(t, chunks.SaveAll(ctx, []knowledge.Chunk{
+		currentChunkFor(item, "chunk-current"),
+		stale,
+	}))
+
+	// When counting and listing unindexed items
+	count, countErr := items.CountUnindexed(ctx, testUnindexedEmbeddingModel)
+	got, listErr := items.ListUnindexed(ctx, testUnindexedEmbeddingModel)
+
+	// Then the item is excluded from both, exactly once
+	require.NoError(t, countErr)
+	require.NoError(t, listErr)
+	assert.Equal(t, 0, count)
+	assert.Empty(t, got)
 }

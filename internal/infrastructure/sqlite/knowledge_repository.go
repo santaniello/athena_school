@@ -196,23 +196,18 @@ func (r *KnowledgeRepository) Delete(ctx context.Context, id string) error {
 // specs/phases/phase-02-knowledge-engine/08-knowledge-item-indexing.md.
 const unindexedKnowledgeItemsQuery = `
 	FROM knowledge_items i
-	LEFT JOIN knowledge_chunks c ON c.item_id = i.id
 	WHERE i.source = 'athena'
-	  AND (
-	       c.id IS NULL
-	    OR c.item_updated_at IS NULL
-	    OR c.item_updated_at <> i.updated_at
-	    OR c.status IS NULL
-	    OR c.status <> i.status
-	    OR c.embedding_model IS NULL
-	    OR c.embedding_model <> ?
-	  )`
+	  AND NOT EXISTS (
+	        SELECT 1 FROM knowledge_chunks c
+	        WHERE c.item_id = i.id
+	          AND c.item_updated_at = i.updated_at
+	          AND c.status = i.status
+	          AND c.embedding_model = ?
+	      )`
 
 // knowledgeItemSelectColumnsQualified is knowledgeItemSelectColumns
-// prefixed with the "i." alias unindexedKnowledgeItemsQuery's join
-// requires — knowledge_chunks shares several column names (id, topic,
-// source, status, created_at) with knowledge_items, which would otherwise
-// be ambiguous.
+// prefixed with the "i." alias unindexedKnowledgeItemsQuery's table alias
+// requires.
 const knowledgeItemSelectColumnsQualified = `i.id, i.topic, i.concept, i.definition, COALESCE(i.properties, ''), COALESCE(i.trade_offs, ''), COALESCE(i.related_concepts, ''), i.source, i.status, i.created_at, i.updated_at`
 
 // CountUnindexed returns how many Source == athena items have no current
