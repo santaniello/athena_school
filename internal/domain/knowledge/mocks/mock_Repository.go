@@ -79,6 +79,63 @@ func (_c *MockRepository_CountByStatus_Call) RunAndReturn(run func(context.Conte
 	return _c
 }
 
+// CountUnindexed provides a mock function with given fields: ctx, embeddingModel
+func (_m *MockRepository) CountUnindexed(ctx context.Context, embeddingModel string) (int, error) {
+	ret := _m.Called(ctx, embeddingModel)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CountUnindexed")
+	}
+
+	var r0 int
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) (int, error)); ok {
+		return rf(ctx, embeddingModel)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) int); ok {
+		r0 = rf(ctx, embeddingModel)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, embeddingModel)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockRepository_CountUnindexed_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountUnindexed'
+type MockRepository_CountUnindexed_Call struct {
+	*mock.Call
+}
+
+// CountUnindexed is a helper method to define mock.On call
+//   - ctx context.Context
+//   - embeddingModel string
+func (_e *MockRepository_Expecter) CountUnindexed(ctx interface{}, embeddingModel interface{}) *MockRepository_CountUnindexed_Call {
+	return &MockRepository_CountUnindexed_Call{Call: _e.mock.On("CountUnindexed", ctx, embeddingModel)}
+}
+
+func (_c *MockRepository_CountUnindexed_Call) Run(run func(ctx context.Context, embeddingModel string)) *MockRepository_CountUnindexed_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockRepository_CountUnindexed_Call) Return(_a0 int, _a1 error) *MockRepository_CountUnindexed_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockRepository_CountUnindexed_Call) RunAndReturn(run func(context.Context, string) (int, error)) *MockRepository_CountUnindexed_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Delete provides a mock function with given fields: ctx, id
 func (_m *MockRepository) Delete(ctx context.Context, id string) error {
 	ret := _m.Called(ctx, id)
@@ -355,6 +412,65 @@ func (_c *MockRepository_ListTopics_Call) Return(_a0 []string, _a1 error) *MockR
 }
 
 func (_c *MockRepository_ListTopics_Call) RunAndReturn(run func(context.Context) ([]string, error)) *MockRepository_ListTopics_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListUnindexed provides a mock function with given fields: ctx, embeddingModel
+func (_m *MockRepository) ListUnindexed(ctx context.Context, embeddingModel string) ([]knowledge.Item, error) {
+	ret := _m.Called(ctx, embeddingModel)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListUnindexed")
+	}
+
+	var r0 []knowledge.Item
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) ([]knowledge.Item, error)); ok {
+		return rf(ctx, embeddingModel)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) []knowledge.Item); ok {
+		r0 = rf(ctx, embeddingModel)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]knowledge.Item)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, embeddingModel)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockRepository_ListUnindexed_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListUnindexed'
+type MockRepository_ListUnindexed_Call struct {
+	*mock.Call
+}
+
+// ListUnindexed is a helper method to define mock.On call
+//   - ctx context.Context
+//   - embeddingModel string
+func (_e *MockRepository_Expecter) ListUnindexed(ctx interface{}, embeddingModel interface{}) *MockRepository_ListUnindexed_Call {
+	return &MockRepository_ListUnindexed_Call{Call: _e.mock.On("ListUnindexed", ctx, embeddingModel)}
+}
+
+func (_c *MockRepository_ListUnindexed_Call) Run(run func(ctx context.Context, embeddingModel string)) *MockRepository_ListUnindexed_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockRepository_ListUnindexed_Call) Return(_a0 []knowledge.Item, _a1 error) *MockRepository_ListUnindexed_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockRepository_ListUnindexed_Call) RunAndReturn(run func(context.Context, string) ([]knowledge.Item, error)) *MockRepository_ListUnindexed_Call {
 	_c.Call.Return(run)
 	return _c
 }

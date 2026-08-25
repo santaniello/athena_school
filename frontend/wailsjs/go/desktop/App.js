@@ -10,6 +10,10 @@ export function CountDraftKnowledgeItems() {
   return window['go']['desktop']['App']['CountDraftKnowledgeItems']();
 }
 
+export function CountUnindexedKnowledgeItems() {
+  return window['go']['desktop']['App']['CountUnindexedKnowledgeItems']();
+}
+
 export function CreateFolder(arg1) {
   return window['go']['desktop']['App']['CreateFolder'](arg1);
 }
@@ -104,6 +108,10 @@ export function PickNotesFolder() {
 
 export function Register(arg1, arg2) {
   return window['go']['desktop']['App']['Register'](arg1, arg2);
+}
+
+export function ReindexKnowledgeItems() {
+  return window['go']['desktop']['App']['ReindexKnowledgeItems']();
 }
 
 export function RenameFolder(arg1, arg2) {

@@ -65,9 +65,21 @@ func (s *Service) SaveAndApprove(ctx context.Context, items []domainknowledge.It
 }
 
 // saveCandidates revalidates and persists confirmed candidates sequentially,
-// regenerating every server-owned field and stamping status.
+// regenerating every server-owned field and stamping status. Each saved item
+// is indexed right after its own persistence — but once one item's indexing
+// fails, the rest of the batch is still saved, just no longer indexed: every
+// unindexed item (attempted or not) is recovered uniformly by the backfill
+// flow, so there is no value in paying for N further failing embedding
+// calls in one request (e.g. a missing OpenRouter key). See Design
+// decisions in specs/phases/phase-02-knowledge-engine/08-knowledge-item-indexing.md.
 func (s *Service) saveCandidates(ctx context.Context, items []domainknowledge.Item, status string) ([]int, error) {
+	if err := s.index.BeginMutation(); err != nil {
+		return nil, err
+	}
+	defer s.index.EndMutation()
+
 	savedIndices := make([]int, 0, len(items))
+	var indexingErr error
 	for index, input := range items {
 		topic, topicErr := domainknowledge.NormalizeTopic(input.Topic)
 		if topicErr != nil {
@@ -94,6 +106,10 @@ func (s *Service) saveCandidates(ctx context.Context, items []domainknowledge.It
 			return savedIndices, err
 		}
 		savedIndices = append(savedIndices, index)
+
+		if indexingErr == nil {
+			indexingErr = s.indexKnowledgeItem(ctx, item)
+		}
 	}
-	return savedIndices, nil
+	return savedIndices, indexingErr
 }

@@ -13,10 +13,13 @@ import (
 	txmocks "github.com/santaniello/athena/internal/application/knowledge/mocks"
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
+	domainllm "github.com/santaniello/athena/internal/domain/llm"
+	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 )
 
-func TestUpdateItem_overwritesEditableFields_andReconcilesChunkMetadata(t *testing.T) {
-	// Given an existing approved item owning one chunk
+func TestUpdateItem_reindexesTheChunk_whenConceptOrDefinitionChanges(t *testing.T) {
+	// Given an existing approved item, edited with a genuinely new
+	// Concept/Definition — content the chunk is rendered from
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
 	originalCreatedAt := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -30,27 +33,109 @@ func TestUpdateItem_overwritesEditableFields_andReconcilesChunkMetadata(t *testi
 			item.Status == domainknowledge.StatusApproved && item.Source == domainknowledge.SourceAthena &&
 			item.CreatedAt.Equal(originalCreatedAt) && item.UpdatedAt.After(originalCreatedAt)
 	})).Return(nil).Once()
-	updatedChunks := []domainknowledge.Chunk{{ID: "chunk-1", ItemID: "item-1", Topic: "Go", Status: domainknowledge.StatusApproved}}
 	chunks := knowledgemocks.NewMockChunkRepository(t)
-	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Go", domainknowledge.StatusApproved).Return(updatedChunks, nil).Once()
+	// First DeleteByItemID is UpdateItem's own eviction, inside its
+	// transaction; the second is indexKnowledgeItem's own delete-then-insert,
+	// which finds nothing left.
+	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return([]string{"chunk-1"}, nil).Once()
+	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return(nil, nil).Once()
+	llm := llmmocks.NewMockProvider(t)
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "New\n\nNew def."}).
+		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
+	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
+		return len(cs) == 1 && cs[0].ItemID == "item-1" && cs[0].Content == "New\n\nNew def."
+	})).Return(nil).Once()
 	store := knowledgemocks.NewMockVectorStore(t)
-	store.EXPECT().Add(mock.Anything, updatedChunks).Return(nil).Once()
+	store.EXPECT().Remove(mock.Anything, []string{"chunk-1"}).Return(nil).Once()
+	store.EXPECT().Remove(mock.Anything, []string(nil)).Return(nil).Once()
+	store.EXPECT().Add(mock.Anything, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
+		return len(cs) == 1 && cs[0].ItemID == "item-1"
+	})).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
+	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
 
-	// When updating its editable fields
+	// When updating its concept and definition
 	updated, err := service.UpdateItem(ctx, "item-1", ItemFields{
 		Topic: "Go", Concept: "New", Definition: "New def.",
-		Properties: []string{"p1"}, TradeOffs: []string{"t1"}, RelatedConcepts: []string{"r1"},
 	})
 
-	// Then the change persists and Status/Source/CreatedAt are untouched
+	// Then the change persists, the stale chunk is evicted, and a fresh one is embedded
 	require.NoError(t, err)
 	assert.Equal(t, "New", updated.Concept)
 	assert.Equal(t, domainknowledge.StatusApproved, updated.Status)
 	assert.Equal(t, domainknowledge.SourceAthena, updated.Source)
 	assert.True(t, updated.CreatedAt.Equal(originalCreatedAt))
+}
+
+func TestUpdateItem_reindexesTheChunk_whenOnlyPropertiesChange(t *testing.T) {
+	// Given an existing item whose Concept/Definition stay the same but
+	// whose Properties differ — still part of the rendered chunk content
+	ctx := context.Background()
+	repository := knowledgemocks.NewMockRepository(t)
+	repository.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{
+		ID: "item-1", Topic: "Go", Concept: "Channels", Definition: "Typed conduits.",
+		Properties: []string{"typed"}, Source: domainknowledge.SourceAthena, Status: domainknowledge.StatusApproved,
+	}, nil).Once()
+	repository.EXPECT().Update(ctx, mock.Anything).Return(nil).Once()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return(nil, nil).Times(2)
+	llm := llmmocks.NewMockProvider(t)
+	llm.EXPECT().Embeddings(ctx, mock.Anything).
+		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
+	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Remove(mock.Anything, []string(nil)).Return(nil).Times(2)
+	store.EXPECT().Add(mock.Anything, mock.Anything).Return(nil).Once()
+	tx := txmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
+
+	// When updating with a new Properties list, same Concept/Definition
+	updated, err := service.UpdateItem(ctx, "item-1", ItemFields{
+		Topic: "Go", Concept: "Channels", Definition: "Typed conduits.",
+		Properties: []string{"typed", "blocking"},
+	})
+
+	// Then it still re-embeds rather than treating this as a metadata-only edit
+	require.NoError(t, err)
+	assert.Equal(t, "Channels", updated.Concept)
+}
+
+func TestUpdateItem_staysOnTheMetadataOnlyPath_whenOnlyTopicChanges(t *testing.T) {
+	// Given an existing item whose Concept/Definition/Properties/TradeOffs
+	// are resubmitted unchanged — only Topic differs
+	ctx := context.Background()
+	repository := knowledgemocks.NewMockRepository(t)
+	repository.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{
+		ID: "item-1", Topic: "Go", Concept: "Channels", Definition: "Typed conduits.",
+		Properties: []string{"typed"}, Status: domainknowledge.StatusApproved,
+	}, nil).Once()
+	repository.EXPECT().Update(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
+		return item.Topic == "Distributed systems"
+	})).Return(nil).Once()
+	updatedChunks := []domainknowledge.Chunk{{ID: "chunk-1", ItemID: "item-1", Topic: "Distributed systems"}}
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Distributed systems", domainknowledge.StatusApproved,
+		mock.MatchedBy(func(ts time.Time) bool { return !ts.IsZero() })).Return(updatedChunks, nil).Once()
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Add(mock.Anything, updatedChunks).Return(nil).Once()
+	llm := llmmocks.NewMockProvider(t)
+	tx := txmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
+
+	// When updating with only the topic changed (padded with whitespace)
+	updated, err := service.UpdateItem(ctx, "item-1", ItemFields{
+		Topic: "  Distributed systems  ", Concept: "Channels", Definition: "Typed conduits.",
+		Properties: []string{"typed"},
+	})
+
+	// Then no embedding call is made and the persisted topic is trimmed
+	require.NoError(t, err)
+	assert.Equal(t, "Distributed systems", updated.Topic)
+	llm.AssertNotCalled(t, "Embeddings", mock.Anything, mock.Anything)
+	chunks.AssertNotCalled(t, "DeleteByItemID", mock.Anything, mock.Anything)
 }
 
 func TestUpdateItem_returnsValidationError_whenConceptIsCleared_andNeverCallsUpdate(t *testing.T) {
@@ -70,34 +155,6 @@ func TestUpdateItem_returnsValidationError_whenConceptIsCleared_andNeverCallsUpd
 	// Then it fails validation and never reaches the repository's Update
 	assert.ErrorIs(t, err, domainknowledge.ErrConceptRequired)
 	repository.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
-}
-
-func TestUpdateItem_trimsTopicWhitespace_beforePersisting(t *testing.T) {
-	// Given an existing item
-	ctx := context.Background()
-	repository := knowledgemocks.NewMockRepository(t)
-	repository.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{
-		ID: "item-1", Topic: "Go", Concept: "Old", Definition: "Old def.",
-	}, nil).Once()
-	repository.EXPECT().Update(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
-		return item.Topic == "Distributed systems"
-	})).Return(nil).Once()
-	chunks := knowledgemocks.NewMockChunkRepository(t)
-	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Distributed systems", "").Return(nil, nil).Once()
-	store := knowledgemocks.NewMockVectorStore(t)
-	store.EXPECT().Add(mock.Anything, ([]domainknowledge.Chunk)(nil)).Return(nil).Once()
-	tx := txmocks.NewMockTransactor(t)
-	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
-
-	// When updating with a topic padded with whitespace
-	updated, err := service.UpdateItem(ctx, "item-1", ItemFields{
-		Topic: "  Distributed systems  ", Concept: "New", Definition: "New def.",
-	})
-
-	// Then the persisted and returned topic is trimmed
-	require.NoError(t, err)
-	assert.Equal(t, "Distributed systems", updated.Topic)
 }
 
 func TestUpdateItem_returnsTopicRequired_whenTopicIsBlank_andNeverCallsUpdate(t *testing.T) {
@@ -151,17 +208,18 @@ func TestUpdateItem_returnsErrIndexLoading_whenIndexIsLoading_andNeverTouchesThe
 	repository.AssertNotCalled(t, "GetByID", mock.Anything, mock.Anything)
 }
 
-func TestUpdateItem_returnsIndexingWarning_whenPostCommitReconciliationFails_butKeepsTheDurableResult(t *testing.T) {
-	// Given an existing item whose update persists successfully
+func TestUpdateItem_returnsIndexingWarning_whenPostCommitReconciliationFails_onTheMetadataOnlyPath(t *testing.T) {
+	// Given a topic-only edit (metadata-only path) whose store reconciliation fails
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
 	repository.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{
-		ID: "item-1", Topic: "Go", Concept: "Old", Definition: "Old def.",
+		ID: "item-1", Topic: "Go", Concept: "Channels", Definition: "Typed conduits.",
 	}, nil).Once()
 	repository.EXPECT().Update(ctx, mock.Anything).Return(nil).Once()
 	updatedChunks := []domainknowledge.Chunk{{ID: "chunk-1", ItemID: "item-1"}}
 	chunks := knowledgemocks.NewMockChunkRepository(t)
-	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Go", "").Return(updatedChunks, nil).Once()
+	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Distributed systems", "",
+		mock.MatchedBy(func(ts time.Time) bool { return !ts.IsZero() })).Return(updatedChunks, nil).Once()
 	boom := errors.New("store exploded")
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Add(mock.Anything, updatedChunks).Return(boom).Once()
@@ -169,13 +227,74 @@ func TestUpdateItem_returnsIndexingWarning_whenPostCommitReconciliationFails_but
 	runWithinTx(tx)
 	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
 
-	// When updating it and the post-commit reconciliation fails
-	updated, err := service.UpdateItem(ctx, "item-1", ItemFields{Topic: "Go", Concept: "New", Definition: "New def."})
+	// When updating it (topic only) and the post-commit reconciliation fails
+	updated, err := service.UpdateItem(ctx, "item-1", ItemFields{
+		Topic: "Distributed systems", Concept: "Channels", Definition: "Typed conduits.",
+	})
 
 	// Then the durable update is not reported as a failure
-	var warning *IndexingWarning
-	require.ErrorAs(t, err, &warning)
-	assert.ErrorIs(t, warning.Err, boom)
+	assert.ErrorIs(t, err, ErrIndexingFailed)
 	assert.Equal(t, "item-1", updated.ID)
+	assert.Equal(t, "Distributed systems", updated.Topic)
+}
+
+func TestUpdateItem_returnsErrIndexingFailed_whenReindexingFails_afterEvictingTheStaleChunk(t *testing.T) {
+	// Given a content edit whose old chunk is evicted successfully but
+	// whose re-embed then fails (e.g. the OpenRouter key is missing)
+	ctx := context.Background()
+	repository := knowledgemocks.NewMockRepository(t)
+	repository.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{
+		ID: "item-1", Topic: "Go", Concept: "Old", Definition: "Old def.",
+		Source: domainknowledge.SourceAthena, Status: domainknowledge.StatusApproved,
+	}, nil).Once()
+	repository.EXPECT().Update(ctx, mock.Anything).Return(nil).Once()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return([]string{"chunk-1"}, nil).Once()
+	boom := errors.New("openrouter unavailable")
+	llm := llmmocks.NewMockProvider(t)
+	llm.EXPECT().Embeddings(ctx, mock.Anything).Return(domainllm.EmbeddingResponse{}, boom).Once()
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Remove(mock.Anything, []string{"chunk-1"}).Return(nil).Once()
+	tx := txmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
+
+	// When updating it and the re-embed fails
+	updated, err := service.UpdateItem(ctx, "item-1", ItemFields{Topic: "Go", Concept: "New", Definition: "New def."})
+
+	// Then the durable edit persists, the stale chunk is already evicted
+	// (so search returns nothing rather than an obsolete definition), and
+	// the failure wraps ErrIndexingFailed
+	assert.ErrorIs(t, err, ErrIndexingFailed)
 	assert.Equal(t, "New", updated.Concept)
+}
+
+func TestUpdateItem_returnsErrIndexingFailed_whenEvictingTheStaleChunkFails(t *testing.T) {
+	// Given a content edit whose SQLite-level eviction commits but whose
+	// in-memory VectorStore eviction fails
+	ctx := context.Background()
+	repository := knowledgemocks.NewMockRepository(t)
+	repository.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{
+		ID: "item-1", Topic: "Go", Concept: "Old", Definition: "Old def.",
+		Source: domainknowledge.SourceAthena, Status: domainknowledge.StatusApproved,
+	}, nil).Once()
+	repository.EXPECT().Update(ctx, mock.Anything).Return(nil).Once()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return([]string{"chunk-1"}, nil).Once()
+	boom := errors.New("store exploded")
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Remove(mock.Anything, []string{"chunk-1"}).Return(boom).Once()
+	llm := llmmocks.NewMockProvider(t)
+	tx := txmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
+
+	// When updating it and eviction itself fails
+	updated, err := service.UpdateItem(ctx, "item-1", ItemFields{Topic: "Go", Concept: "New", Definition: "New def."})
+
+	// Then the durable edit persists, no embedding is even attempted, and
+	// the failure wraps ErrIndexingFailed
+	assert.ErrorIs(t, err, ErrIndexingFailed)
+	assert.Equal(t, "New", updated.Concept)
+	llm.AssertNotCalled(t, "Embeddings", mock.Anything, mock.Anything)
 }

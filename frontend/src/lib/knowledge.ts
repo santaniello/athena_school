@@ -1,17 +1,20 @@
 import {
   ApproveKnowledgeItem,
   CountDraftKnowledgeItems,
+  CountUnindexedKnowledgeItems,
   DeleteKnowledgeItem,
   DeprecateKnowledgeItem,
   ExtractKnowledge,
   GetKnowledgeExtractionSettings,
   ListKnowledgeItems,
   ListKnowledgeTopics,
+  ReindexKnowledgeItems,
   SaveAndApproveExtractedKnowledge,
   SaveExtractedKnowledge,
   UpdateKnowledgeExtractionSettings,
   UpdateKnowledgeItem,
 } from '../../wailsjs/go/desktop/App'
+import { EventsOn } from '../../wailsjs/runtime/runtime'
 
 export interface KnowledgeItem {
   id: string
@@ -128,6 +131,55 @@ export async function updateKnowledgeItem(
 // cannot be undone.
 export async function deleteKnowledgeItem(id: string): Promise<void> {
   await DeleteKnowledgeItem(id)
+}
+
+export interface ReindexProgress {
+  itemsProcessed: number
+  itemsTotal: number
+  currentTopic: string
+}
+
+export interface ReindexFailure {
+  itemId: string
+  topic: string
+  reason: string
+}
+
+export interface ReindexSummary {
+  itemsProcessed: number
+  itemsIndexed: number
+  itemsFailed: number
+  failures: ReindexFailure[]
+}
+
+// countUnindexedKnowledgeItems returns how many Knowledge Items currently
+// lack a current chunk for search — the count the Explorer's backfill
+// Alert shows on mount.
+export async function countUnindexedKnowledgeItems(): Promise<number> {
+  return CountUnindexedKnowledgeItems()
+}
+
+// reindexKnowledgeItems starts processing every currently-unindexed
+// Knowledge Item ("Index now"). It resolves once the run has finished
+// (successfully or not) — progress and the final summary arrive separately
+// via onReindexProgress/onReindexDone/onReindexError, which reuse the same
+// ingest:* events 2.3 already streams (the UI only ever has one such
+// operation active at a time), so callers should subscribe to those before
+// calling this.
+export async function reindexKnowledgeItems(): Promise<void> {
+  await ReindexKnowledgeItems()
+}
+
+export function onReindexProgress(handler: (progress: ReindexProgress) => void): () => void {
+  return EventsOn('ingest:progress', (progress: ReindexProgress) => handler(progress))
+}
+
+export function onReindexDone(handler: (summary: ReindexSummary) => void): () => void {
+  return EventsOn('ingest:done', (summary: ReindexSummary) => handler(summary))
+}
+
+export function onReindexError(handler: (message: string) => void): () => void {
+  return EventsOn('ingest:error', (message: string) => handler(message))
 }
 
 // groupByTopic buckets items by their topic, preserving each topic's

@@ -73,10 +73,15 @@ type ChunkRepository interface {
 	// IDs removed, so a caller can evict them from an in-memory index
 	// after this call's transaction commits.
 	DeleteByItemID(ctx context.Context, itemID string) ([]string, error)
-	// UpdateMetadataByItemID overwrites topic/status on every chunk owned
-	// by itemID and returns the updated rows, so a caller can upsert them
-	// into an in-memory index without a new embedding call.
-	UpdateMetadataByItemID(ctx context.Context, itemID, topic, status string) ([]Chunk, error)
+	// UpdateMetadataByItemID overwrites topic/status/ItemUpdatedAt on every
+	// chunk owned by itemID and returns the updated rows, so a caller can
+	// upsert them into an in-memory index without a new embedding call.
+	// itemUpdatedAt must be the owning Item's current UpdatedAt: every Item
+	// write restamps UpdatedAt regardless of whether content changed, and
+	// ListCurrent's staleness check is a blind equality comparison against
+	// it — leaving a chunk's ItemUpdatedAt behind here would make it look
+	// stale and drop out of the index on the next startup.
+	UpdateMetadataByItemID(ctx context.Context, itemID, topic, status string, itemUpdatedAt time.Time) ([]Chunk, error)
 }
 
 // IngestedFile records the dedup state for one previously imported source.

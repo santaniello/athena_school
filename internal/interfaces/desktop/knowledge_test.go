@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -24,6 +25,39 @@ import (
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 	studymocks "github.com/santaniello/athena/internal/domain/study/mocks"
 )
+
+// passingDesktopIndexGuard returns an IndexGuard mock that always allows
+// the mutation, for desktop tests exercising SaveExtractedKnowledge/
+// SaveAndApproveExtractedKnowledge (which now index each saved item).
+func passingDesktopIndexGuard(t *testing.T) *txmocks.MockIndexGuard {
+	guard := txmocks.NewMockIndexGuard(t)
+	guard.EXPECT().BeginMutation().Return(nil)
+	guard.EXPECT().EndMutation()
+	return guard
+}
+
+// expectDesktopSuccessfulIndexing wires llm/chunks/store/tx mocks so every
+// call indexKnowledgeItem makes succeeds, `times` times over.
+func expectDesktopSuccessfulIndexing(
+	ctx context.Context,
+	llm *llmmocks.MockProvider,
+	chunks *knowledgemocks.MockChunkRepository,
+	store *knowledgemocks.MockVectorStore,
+	tx *txmocks.MockTransactor,
+	times int,
+) {
+	llm.EXPECT().Embeddings(ctx, mock.MatchedBy(func(req domainllm.EmbeddingRequest) bool { return req.Input != "" })).
+		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Times(times)
+	chunks.EXPECT().DeleteByItemID(ctx, mock.MatchedBy(func(id string) bool { return id != "" })).
+		Return(nil, nil).Times(times)
+	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool { return len(cs) == 1 })).
+		Return(nil).Times(times)
+	store.EXPECT().Remove(mock.Anything, []string(nil)).Return(nil).Times(times)
+	store.EXPECT().Add(mock.Anything, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool { return len(cs) == 1 })).
+		Return(nil).Times(times)
+	tx.EXPECT().WithinTx(mock.Anything, mock.Anything).
+		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
+}
 
 func TestApp_ExtractKnowledge_returnsFullCandidateAndTruncationState(t *testing.T) {
 	// Given a knowledge service returning a full candidate from the LLM
@@ -96,7 +130,13 @@ func TestApp_SaveExtractedKnowledge_preservesFullInputAndReturnsSavedIndices(t *
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.Concept == "Channels" && assert.ObjectsAreEqual([]string{"typed"}, item.Properties)
 	})).Return(nil).Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{})
+	llm := llmmocks.NewMockProvider(t)
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	store := knowledgemocks.NewMockVectorStore(t)
+	tx := txmocks.NewMockTransactor(t)
+	guard := passingDesktopIndexGuard(t)
+	expectDesktopSuccessfulIndexing(ctx, llm, chunks, store, tx, 1)
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llm, configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{})
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -120,7 +160,13 @@ func TestApp_SaveExtractedKnowledge_returnsExactIndicesAlongsidePartialFailure(t
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.Concept == "failed"
 	})).Return(assert.AnError).Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{})
+	llm := llmmocks.NewMockProvider(t)
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	store := knowledgemocks.NewMockVectorStore(t)
+	tx := txmocks.NewMockTransactor(t)
+	guard := passingDesktopIndexGuard(t)
+	expectDesktopSuccessfulIndexing(ctx, llm, chunks, store, tx, 1)
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llm, configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{})
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -143,7 +189,13 @@ func TestApp_SaveAndApproveExtractedKnowledge_persistsDirectlyAsApproved(t *test
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.Concept == "Channels" && item.Status == domainknowledge.StatusApproved
 	})).Return(nil).Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{})
+	llm := llmmocks.NewMockProvider(t)
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	store := knowledgemocks.NewMockVectorStore(t)
+	tx := txmocks.NewMockTransactor(t)
+	guard := passingDesktopIndexGuard(t)
+	expectDesktopSuccessfulIndexing(ctx, llm, chunks, store, tx, 1)
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llm, configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{})
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -223,10 +275,12 @@ func TestApp_ApproveKnowledgeItem_returnsTheUpdatedItem(t *testing.T) {
 	tx := txmocks.NewMockTransactor(t)
 	tx.EXPECT().WithinTx(ctx, mock.Anything).
 		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
+	existingChunks := []domainknowledge.Chunk{{ID: "chunk-1", ItemID: "item-1"}}
 	chunks := knowledgemocks.NewMockChunkRepository(t)
-	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Go", domainknowledge.StatusApproved).Return(nil, nil).Once()
+	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Go", domainknowledge.StatusApproved,
+		mock.MatchedBy(func(ts time.Time) bool { return !ts.IsZero() })).Return(existingChunks, nil).Once()
 	store := knowledgemocks.NewMockVectorStore(t)
-	store.EXPECT().Add(mock.Anything, ([]domainknowledge.Chunk)(nil)).Return(nil).Once()
+	store.EXPECT().Add(mock.Anything, existingChunks).Return(nil).Once()
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
@@ -255,10 +309,12 @@ func TestApp_DeprecateKnowledgeItem_returnsTheUpdatedItem(t *testing.T) {
 	tx := txmocks.NewMockTransactor(t)
 	tx.EXPECT().WithinTx(ctx, mock.Anything).
 		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
+	existingChunks := []domainknowledge.Chunk{{ID: "chunk-1", ItemID: "item-1"}}
 	chunks := knowledgemocks.NewMockChunkRepository(t)
-	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Go", domainknowledge.StatusDeprecated).Return(nil, nil).Once()
+	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Go", domainknowledge.StatusDeprecated,
+		mock.MatchedBy(func(ts time.Time) bool { return !ts.IsZero() })).Return(existingChunks, nil).Once()
 	store := knowledgemocks.NewMockVectorStore(t)
-	store.EXPECT().Add(mock.Anything, ([]domainknowledge.Chunk)(nil)).Return(nil).Once()
+	store.EXPECT().Add(mock.Anything, existingChunks).Return(nil).Once()
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
@@ -288,13 +344,18 @@ func TestApp_UpdateKnowledgeItem_persistsEditableFields_andReturnsTheUpdatedItem
 	tx.EXPECT().WithinTx(ctx, mock.Anything).
 		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
 	chunks := knowledgemocks.NewMockChunkRepository(t)
-	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Go", domainknowledge.StatusApproved).Return(nil, nil).Once()
+	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return(nil, nil).Times(2)
+	llm := llmmocks.NewMockProvider(t)
+	llm.EXPECT().Embeddings(ctx, mock.Anything).
+		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
+	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()
 	store := knowledgemocks.NewMockVectorStore(t)
-	store.EXPECT().Add(mock.Anything, ([]domainknowledge.Chunk)(nil)).Return(nil).Once()
+	store.EXPECT().Remove(mock.Anything, []string(nil)).Return(nil).Times(2)
+	store.EXPECT().Add(mock.Anything, mock.Anything).Return(nil).Once()
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{})
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llm, configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{})
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -355,11 +416,13 @@ func TestApp_ApproveKnowledgeItem_reportsSuccess_whenPostCommitReconciliationFai
 	tx := txmocks.NewMockTransactor(t)
 	tx.EXPECT().WithinTx(ctx, mock.Anything).
 		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
+	existingChunks := []domainknowledge.Chunk{{ID: "chunk-1", ItemID: "item-1"}}
 	chunks := knowledgemocks.NewMockChunkRepository(t)
-	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Go", domainknowledge.StatusApproved).Return(nil, nil).Once()
+	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Go", domainknowledge.StatusApproved,
+		mock.MatchedBy(func(ts time.Time) bool { return !ts.IsZero() })).Return(existingChunks, nil).Once()
 	boom := errors.New("store exploded")
 	store := knowledgemocks.NewMockVectorStore(t)
-	store.EXPECT().Add(mock.Anything, ([]domainknowledge.Chunk)(nil)).Return(boom).Once()
+	store.EXPECT().Add(mock.Anything, existingChunks).Return(boom).Once()
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
@@ -389,11 +452,13 @@ func TestApp_DeprecateKnowledgeItem_reportsSuccess_whenPostCommitReconciliationF
 	tx := txmocks.NewMockTransactor(t)
 	tx.EXPECT().WithinTx(ctx, mock.Anything).
 		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
+	existingChunks := []domainknowledge.Chunk{{ID: "chunk-1", ItemID: "item-1"}}
 	chunks := knowledgemocks.NewMockChunkRepository(t)
-	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Go", domainknowledge.StatusDeprecated).Return(nil, nil).Once()
+	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Go", domainknowledge.StatusDeprecated,
+		mock.MatchedBy(func(ts time.Time) bool { return !ts.IsZero() })).Return(existingChunks, nil).Once()
 	boom := errors.New("store exploded")
 	store := knowledgemocks.NewMockVectorStore(t)
-	store.EXPECT().Add(mock.Anything, ([]domainknowledge.Chunk)(nil)).Return(boom).Once()
+	store.EXPECT().Add(mock.Anything, existingChunks).Return(boom).Once()
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
@@ -412,21 +477,23 @@ func TestApp_DeprecateKnowledgeItem_reportsSuccess_whenPostCommitReconciliationF
 }
 
 func TestApp_UpdateKnowledgeItem_reportsSuccess_whenPostCommitReconciliationFails(t *testing.T) {
-	// Given an item whose update persists but whose store reconciliation fails
+	// Given a topic-only edit (metadata-only path) whose store reconciliation fails
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
 	repository.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{
-		ID: "item-1", Topic: "Go", Concept: "Old", Definition: "Old def.", Status: domainknowledge.StatusApproved,
+		ID: "item-1", Topic: "Go", Concept: "Channels", Definition: "Typed conduits.", Status: domainknowledge.StatusApproved,
 	}, nil).Once()
 	repository.EXPECT().Update(ctx, mock.Anything).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	tx.EXPECT().WithinTx(ctx, mock.Anything).
 		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
+	existingChunks := []domainknowledge.Chunk{{ID: "chunk-1", ItemID: "item-1"}}
 	chunks := knowledgemocks.NewMockChunkRepository(t)
-	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Go", domainknowledge.StatusApproved).Return(nil, nil).Once()
+	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Distributed systems", domainknowledge.StatusApproved,
+		mock.MatchedBy(func(ts time.Time) bool { return !ts.IsZero() })).Return(existingChunks, nil).Once()
 	boom := errors.New("store exploded")
 	store := knowledgemocks.NewMockVectorStore(t)
-	store.EXPECT().Add(mock.Anything, ([]domainknowledge.Chunk)(nil)).Return(boom).Once()
+	store.EXPECT().Add(mock.Anything, existingChunks).Return(boom).Once()
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
@@ -435,14 +502,14 @@ func TestApp_UpdateKnowledgeItem_reportsSuccess_whenPostCommitReconciliationFail
 	app.Startup(ctx)
 	logs := captureLog(t)
 
-	// When updating through the desktop adapter
+	// When updating through the desktop adapter, changing only the topic
 	result, err := app.UpdateKnowledgeItem("item-1", KnowledgeItemInput{
-		Topic: "Go", Concept: "New", Definition: "New def.",
+		Topic: "Distributed systems", Concept: "Channels", Definition: "Typed conduits.",
 	})
 
 	// Then the durable update is reported as successful
 	require.NoError(t, err)
-	assert.Equal(t, "New", result.Concept)
+	assert.Equal(t, "Distributed systems", result.Topic)
 	assert.Contains(t, logs.String(), boom.Error())
 }
 
@@ -473,4 +540,110 @@ func TestApp_DeleteKnowledgeItem_reportsSuccess_whenPostCommitReconciliationFail
 	// Then the durable delete is reported as successful
 	require.NoError(t, err)
 	assert.Contains(t, logs.String(), boom.Error())
+}
+
+// capturedReindexEvents records every ingest:* event emitted through
+// App.emit during a ReindexKnowledgeItems test.
+type capturedReindexEvents struct {
+	progress []ReindexProgressResult
+	done     *ReindexSummaryResult
+	errors   []string
+}
+
+func newTestReindexApp(t *testing.T, service *applicationknowledge.Service) (*App, *capturedReindexEvents) {
+	t.Helper()
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
+	app.Startup(context.Background())
+
+	captured := &capturedReindexEvents{}
+	app.emit = func(_ context.Context, eventName string, data ...interface{}) {
+		switch eventName {
+		case eventIngestProgress:
+			p := data[0].(ReindexProgressResult)
+			captured.progress = append(captured.progress, p)
+		case eventIngestDone:
+			s := data[0].(ReindexSummaryResult)
+			captured.done = &s
+		case eventIngestError:
+			captured.errors = append(captured.errors, data[0].(string))
+		}
+	}
+	return app, captured
+}
+
+func TestApp_CountUnindexedKnowledgeItems_returnsRepositoryCount(t *testing.T) {
+	// Given a repository reporting 4 unindexed items
+	ctx := context.Background()
+	repository := knowledgemocks.NewMockRepository(t)
+	repository.EXPECT().CountUnindexed(ctx, domainllm.EmbeddingModel).Return(4, nil).Once()
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{})
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
+	app.Startup(ctx)
+
+	// When counting through the desktop adapter
+	count, err := app.CountUnindexedKnowledgeItems()
+
+	// Then the repository's count is returned as-is
+	require.NoError(t, err)
+	assert.Equal(t, 4, count)
+}
+
+func TestApp_ReindexKnowledgeItems_emitsProgressThenDone_onSuccess(t *testing.T) {
+	// Given one unindexed item that embeds successfully
+	ctx := context.Background()
+	repository := knowledgemocks.NewMockRepository(t)
+	repository.EXPECT().ListUnindexed(ctx, domainllm.EmbeddingModel).Return([]domainknowledge.Item{
+		{ID: "item-1", Topic: "Go", Concept: "Channels", Definition: "Typed conduits.", Status: domainknowledge.StatusApproved},
+	}, nil).Once()
+	llm := llmmocks.NewMockProvider(t)
+	llm.EXPECT().Embeddings(ctx, mock.Anything).
+		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return(nil, nil).Once()
+	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Remove(mock.Anything, []string(nil)).Return(nil).Once()
+	store.EXPECT().Add(mock.Anything, mock.Anything).Return(nil).Once()
+	tx := txmocks.NewMockTransactor(t)
+	tx.EXPECT().WithinTx(ctx, mock.Anything).
+		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
+	guard := txmocks.NewMockIndexGuard(t)
+	guard.EXPECT().BeginMutation().Return(nil).Once()
+	guard.EXPECT().EndMutation().Once()
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llm, configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{})
+	app, captured := newTestReindexApp(t, service)
+
+	// When reindexing through the desktop adapter
+	err := app.ReindexKnowledgeItems()
+
+	// Then progress is emitted for the one item, followed by a done summary
+	require.NoError(t, err)
+	require.Len(t, captured.progress, 1)
+	assert.Equal(t, 1, captured.progress[0].ItemsTotal)
+	assert.Equal(t, "Go", captured.progress[0].CurrentTopic)
+	require.NotNil(t, captured.done)
+	assert.Equal(t, 1, captured.done.ItemsIndexed)
+	assert.Empty(t, captured.errors)
+}
+
+func TestApp_ReindexKnowledgeItems_emitsError_whenTheRunFails(t *testing.T) {
+	// Given a repository whose listing fails
+	ctx := context.Background()
+	repository := knowledgemocks.NewMockRepository(t)
+	listErr := errors.New("database locked")
+	repository.EXPECT().ListUnindexed(ctx, domainllm.EmbeddingModel).Return(nil, listErr).Once()
+	guard := txmocks.NewMockIndexGuard(t)
+	guard.EXPECT().BeginMutation().Return(nil).Once()
+	guard.EXPECT().EndMutation().Once()
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, guard, domainknowledge.RetrievalThresholds{})
+	app, captured := newTestReindexApp(t, service)
+
+	// When reindexing through the desktop adapter
+	err := app.ReindexKnowledgeItems()
+
+	// Then the error is emitted and returned, with no done summary
+	require.Error(t, err)
+	require.Len(t, captured.errors, 1)
+	assert.Contains(t, captured.errors[0], listErr.Error())
+	assert.Nil(t, captured.done)
 }

@@ -10,13 +10,24 @@ knowledge.
 
 `specs/Athena.md` §9 makes "Athena Knowledge" a first-class source next to User Notes, and 2.4's `SearchFilters.Status` only makes sense if items reach the vector store. But the store does not exist until 2.4, while item creation and approval ship in 2.2/2.3 — so the hooks cannot live there, and items created before this spec need a backfill.
 
+## Design decisions
+
+These were worked out collaboratively before implementation; each row is the
+consequence the decision rests on, not just the choice.
+
+| Decision | Choice | Why |
+|---|---|---|
+| When does `UpdateItem` re-embed? | Only when Concept, Definition, Properties, or TradeOffs changed — a Topic-only (or RelatedConcepts-only) edit stays on the metadata-only path, since neither is part of the rendered chunk content. **Regardless of which path runs, the chunk's `ItemUpdatedAt` is always rewritten to match the Item's new `UpdatedAt`** — `UpdateItem` (and `TransitionTo`) restamp `UpdatedAt` on every write, content-changing or not, and `ListCurrent`'s staleness check is a blind equality comparison that doesn't know *why* the two drifted. Leaving `ItemUpdatedAt` behind on a metadata-only edit reproduces the exact "approved item vanishes from RAG after restart" bug this spec exists to fix, just triggered by a topic rename instead of a status transition. | Best of both worlds: no embedding cost for a rename, but the item never silently drops out of the index after a restart either way. |
+| Does `SaveDrafts` keep trying to index the rest of a batch after one item's indexing fails? | No — stop attempting indexing for the remaining items in that call once the first one fails (all items still get **saved** regardless). Recovery for every skipped/failed item is uniformly the backfill flow below; the backfill query can't distinguish "tried and failed" from "never attempted," so there's no bookkeeping cost to skipping. | Avoids N sequential slow/failing embedding calls in one request when the OpenRouter key is missing or the machine is offline — `SaveDrafts` is an incidental, implicit save, not a user's explicit request to fully process a backlog. |
+| Does `ReindexKnowledgeItems` (the "Index now" backfill run) stop at the first failure too? | No — it always attempts every unindexed item in the run, independent of earlier failures in the same run. | Unlike `SaveDrafts`, this is the user's explicit, consent-based "catch me up" action on a backlog that can be large; stopping at item 5 of 200 would leave 195 items that likely *would* index fine untouched, and force repeated manual clicks. Matches the existing `ImportFolder` precedent (one file's failure never aborts the rest of the batch). The unindexed-count alert simply reflects whatever remains after the run — it doesn't need to reach zero in one pass. |
+
 ## Indexing hook
 
 `knowledge.Service` gains `chunks ChunkRepository` and `store VectorStore` (it already has `llm`), and:
 
-- **`SaveDrafts`** calls `indexKnowledgeItem(ctx, item)` after persistence — renders the item to a **single chunk** (concept + definition + properties + trade-offs), embeds it, saves with `Source = SourceAthena`, the item's current status, `ItemID`, `Topic`, `EmbeddingModel`, and `ItemUpdatedAt`, then calls `store.Add`
+- **`SaveDrafts`** calls `indexKnowledgeItem(ctx, item)` after each item's persistence — renders the item to a **single chunk** (concept + definition + properties + trade-offs), embeds it, saves with `Source = SourceAthena`, the item's current status, `ItemID`, `Topic`, `EmbeddingModel`, and `ItemUpdatedAt`, then calls `store.Add`. Items keep saving even after an indexing failure, but indexing itself is not reattempted for the rest of that batch (see Design decisions)
 - **`Approve`** and **`Deprecate`** update the item plus an existing chunk's status and `ItemUpdatedAt` in one SQLite transaction, then replace its in-memory metadata without requesting another embedding; item content did not change. If the chunk is missing, the transition still commits and `indexKnowledgeItem` attempts the recoverable embedding afterwards. RAG filters `StatusApproved`, while duplicate detection deliberately searches all statuses
-- **`UpdateItem`** persists the item, immediately evicts its old in-memory chunk, then re-indexes it so retrieval and duplicate detection never use stale content. If embedding fails, the item remains saved but absent from search until backfill
+- **`UpdateItem`** persists the item. If Concept/Definition/Properties/TradeOffs changed, it deletes the old chunk in the same transaction as the item write, immediately evicts it from the in-memory store once that commits, then calls `indexKnowledgeItem` to re-embed — so retrieval and duplicate detection never use stale content, and a failed re-embed leaves the item with zero chunks (visible to backfill) rather than a stale one. If only Topic/RelatedConcepts changed, it stays on the cheaper metadata-only path used by Approve/Deprecate, still restamping `ItemUpdatedAt`
 - **`DeleteItem`** calls `chunks.DeleteByItemID` + `store.Remove`, because deletion — unlike deprecation — removes the concept completely
 
 ## Failure policy
@@ -74,20 +85,27 @@ The trigger is **not** silent-at-startup — that would spend the user's money w
 ⚠ N knowledge items aren't indexed for search yet.        [ Index now ]
 ```
 
-"Index now" runs `ReindexKnowledgeItems`, reusing the `ingest:progress` events from 2.3. This is discoverable, consent-based, and doubles as the recovery path for every indexing failure above.
+"Index now" runs `ReindexKnowledgeItems`, reusing the `ingest:progress` events from 2.3. This is discoverable, consent-based, and doubles as the recovery path for every indexing failure above — and unlike `SaveDrafts`, it never stops early: every unindexed item in the run gets attempted regardless of earlier failures in the same run (see Design decisions). The alert's count simply reflects whatever is still unindexed once the run ends; it does not have to reach zero in one pass.
 
 ## Tasks
 
-- [ ] `internal/application/knowledge/service.go` — add the `chunks` and `store` ports
-- [ ] `internal/application/knowledge/indexing.go` — `indexKnowledgeItem`, item→chunk rendering
-- [ ] `internal/domain/knowledge/chunk.go` — add the status/`ItemUpdatedAt` update needed by lifecycle transitions
-- [ ] `internal/application/knowledge/approve.go` / `deprecate.go` / `update.go` / `delete.go` — wire metadata update, re-index, and eviction
-- [ ] `internal/application/knowledge/extraction.go` — index newly saved drafts without turning an indexing warning into a failed save
-- [ ] `internal/application/knowledge/backfill.go` — `CountUnindexedItems(ctx)`, `ReindexKnowledgeItems(ctx, onProgress)`
-- [ ] `internal/infrastructure/sqlite/knowledge_repository.go` — the unindexed-items query
-- [ ] `internal/interfaces/desktop/knowledge.go` — `CountUnindexedKnowledgeItems`, `ReindexKnowledgeItems`
-- [ ] `frontend/src/screens/KnowledgeExplorerScreen.tsx` — the backfill `Alert` + "Index now", reusing the ingest progress dialog
-- [ ] `README.md` — the knowledge base as a feature, and the re-ingest-on-model-change consequence
+Ordered so each step is independently testable (TDD red/green/refactor per AGENTS.md) and later steps build on earlier ones.
+
+- [x] `internal/domain/knowledge/chunk.go` + `internal/infrastructure/sqlite/chunk_repository.go` — `ChunkRepository.UpdateMetadataByItemID` gains an `itemUpdatedAt time.Time` parameter and persists it; regenerate mocks
+- [x] `internal/application/knowledge/indexing.go` — `indexKnowledgeItem(ctx, item) error`: render item → single chunk content, embed, delete any existing chunk(s) for the item + insert the new one in one SQLite transaction, then reconcile the VectorStore (`Remove` old IDs, `Add` new chunk)
+- [x] `internal/application/knowledge/errors.go` — add the `ErrIndexingFailed` sentinel; make `IndexingWarning.Unwrap()` resolve to it so every call site can standardize on `errors.Is(err, ErrIndexingFailed)`
+- [x] `internal/application/knowledge/extraction.go` — `saveCandidates` calls `indexKnowledgeItem` right after each item's `items.Save`; stop attempting indexing for the rest of the batch after the first indexing failure (saves are unaffected); propagate `ErrIndexingFailed`
+- [x] `internal/interfaces/desktop/knowledge.go` — `SaveExtractedKnowledge`/`SaveAndApproveExtractedKnowledge` treat `ErrIndexingFailed` as a logged warning (same pattern already used by Approve/Deprecate/UpdateItem/DeleteItem), not a save failure
+- [x] `internal/application/knowledge/approve.go` / `deprecate.go` — pass `item.UpdatedAt` into `UpdateMetadataByItemID`; when it returns zero updated chunks (chunk missing), call `indexKnowledgeItem` instead of `store.Add`
+- [x] `internal/application/knowledge/update.go` — detect whether Concept/Definition/Properties/TradeOffs changed; unchanged → existing metadata-only path (now passing `item.UpdatedAt`); changed → delete the old chunk inside the item's own transaction, evict it from the VectorStore immediately after commit, then call `indexKnowledgeItem`
+- [x] `internal/application/knowledge/delete.go` — confirm it already satisfies `errors.Is(err, ErrIndexingFailed)` after the `errors.go` change; no behavior change expected
+- [x] `internal/domain/knowledge/repository.go` + `internal/infrastructure/sqlite/knowledge_repository.go` — the unindexed-items predicate as a shared SQL fragment, plus `CountUnindexed(ctx, embeddingModel)` and `ListUnindexed(ctx, embeddingModel)`
+- [x] `internal/application/knowledge/backfill.go` — `CountUnindexedItems(ctx)`, `ReindexKnowledgeItems(ctx, onProgress)`: loops every unindexed item via `indexKnowledgeItem`, always continuing past individual failures, guarded by `IndexGuard.BeginMutation`/`EndMutation` for the whole run
+- [x] `internal/interfaces/desktop/knowledge.go` — `CountUnindexedKnowledgeItems`, `ReindexKnowledgeItems`; the latter emits progress/done/error over the existing `ingest:progress`/`ingest:done`/`ingest:error` events with a reindex-shaped payload
+- [x] `frontend/src/lib/knowledge.ts` — bindings + types for `countUnindexedKnowledgeItems`/`reindexKnowledgeItems`
+- [x] `frontend/src/components/ingest-progress-dialog.tsx` — add a `reindex` kind with its own copy and a progress/summary shape suited to items (no "scanned"/"skipped" concepts)
+- [x] `frontend/src/screens/KnowledgeExplorerScreen.tsx` — on-mount `CountUnindexedKnowledgeItems` check, the inline `Alert` + "Index now", re-checking the count once the dialog closes (a partial run can still leave it > 0)
+- [x] `README.md` — the knowledge base as a feature, and the re-ingest-on-embedding-model-change consequence
 
 ## Acceptance Criteria
 

@@ -2,20 +2,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ApproveKnowledgeItem,
   CountDraftKnowledgeItems,
+  CountUnindexedKnowledgeItems,
   DeleteKnowledgeItem,
   DeprecateKnowledgeItem,
   ExtractKnowledge,
   GetKnowledgeExtractionSettings,
   ListKnowledgeItems,
   ListKnowledgeTopics,
+  ReindexKnowledgeItems,
   SaveAndApproveExtractedKnowledge,
   SaveExtractedKnowledge,
   UpdateKnowledgeExtractionSettings,
   UpdateKnowledgeItem,
 } from '../../wailsjs/go/desktop/App'
+import { EventsOn } from '../../wailsjs/runtime/runtime'
 import {
   approveKnowledgeItem,
   countDraftKnowledgeItems,
+  countUnindexedKnowledgeItems,
   definitionPreview,
   deleteKnowledgeItem,
   deprecateKnowledgeItem,
@@ -24,6 +28,10 @@ import {
   groupByTopic,
   listKnowledgeItems,
   listKnowledgeTopics,
+  onReindexDone,
+  onReindexError,
+  onReindexProgress,
+  reindexKnowledgeItems,
   saveAndApproveExtractedKnowledge,
   saveExtractedKnowledge,
   updateKnowledgeExtractionSettings,
@@ -40,10 +48,16 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   ListKnowledgeItems: vi.fn(),
   ListKnowledgeTopics: vi.fn(),
   CountDraftKnowledgeItems: vi.fn(),
+  CountUnindexedKnowledgeItems: vi.fn(),
+  ReindexKnowledgeItems: vi.fn(),
   ApproveKnowledgeItem: vi.fn(),
   DeprecateKnowledgeItem: vi.fn(),
   UpdateKnowledgeItem: vi.fn(),
   DeleteKnowledgeItem: vi.fn(),
+}))
+
+vi.mock('../../wailsjs/runtime/runtime', () => ({
+  EventsOn: vi.fn(),
 }))
 
 describe('knowledge bindings', () => {
@@ -439,5 +453,97 @@ describe('definitionPreview', () => {
 
     // Then the truncated result (including the ellipsis) fits the budget
     expect(result.length).toBeLessThanOrEqual(10)
+  })
+})
+
+describe('countUnindexedKnowledgeItems', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('returns the unindexed count', async () => {
+    // Given a backend unindexed count
+    vi.mocked(CountUnindexedKnowledgeItems).mockResolvedValueOnce(5)
+
+    // When counting unindexed items
+    const count = await countUnindexedKnowledgeItems()
+
+    // Then it is returned as-is
+    expect(count).toEqual(5)
+  })
+})
+
+describe('reindexKnowledgeItems', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('starts the reindex run', async () => {
+    // Given a backend that accepts the run
+    vi.mocked(ReindexKnowledgeItems).mockResolvedValueOnce(undefined)
+
+    // When starting a reindex
+    await reindexKnowledgeItems()
+
+    // Then the binding was called
+    expect(ReindexKnowledgeItems).toHaveBeenCalled()
+  })
+})
+
+describe('onReindexProgress', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('subscribes to the ingest:progress event and forwards the payload', () => {
+    // Given a handler and a mocked EventsOn
+    const unsubscribe = vi.fn()
+    vi.mocked(EventsOn).mockReturnValueOnce(unsubscribe)
+    const handler = vi.fn()
+    const progress = { itemsProcessed: 1, itemsTotal: 10, currentTopic: 'Go' }
+
+    // When subscribing
+    const result = onReindexProgress(handler)
+    const [, callback] = vi.mocked(EventsOn).mock.calls[0]
+    callback(progress)
+
+    // Then the handler received the progress payload, reusing the same
+    // event 2.3's ingest already streams
+    expect(EventsOn).toHaveBeenCalledWith('ingest:progress', expect.any(Function))
+    expect(handler).toHaveBeenCalledWith(progress)
+    expect(result).toBe(unsubscribe)
+  })
+})
+
+describe('onReindexDone', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('subscribes to the ingest:done event and forwards the summary', () => {
+    // Given a handler and a mocked EventsOn
+    vi.mocked(EventsOn).mockReturnValueOnce(vi.fn())
+    const handler = vi.fn()
+    const summary = { itemsProcessed: 10, itemsIndexed: 9, itemsFailed: 1, failures: [] }
+
+    // When subscribing
+    onReindexDone(handler)
+    const [, callback] = vi.mocked(EventsOn).mock.calls[0]
+    callback(summary)
+
+    // Then the handler received the summary
+    expect(EventsOn).toHaveBeenCalledWith('ingest:done', expect.any(Function))
+    expect(handler).toHaveBeenCalledWith(summary)
+  })
+})
+
+describe('onReindexError', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('subscribes to the ingest:error event and forwards the message', () => {
+    // Given a handler and a mocked EventsOn
+    vi.mocked(EventsOn).mockReturnValueOnce(vi.fn())
+    const handler = vi.fn()
+
+    // When subscribing
+    onReindexError(handler)
+    const [, callback] = vi.mocked(EventsOn).mock.calls[0]
+    callback('boom')
+
+    // Then the handler received the message
+    expect(EventsOn).toHaveBeenCalledWith('ingest:error', expect.any(Function))
+    expect(handler).toHaveBeenCalledWith('boom')
   })
 })

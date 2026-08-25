@@ -96,13 +96,13 @@ func (r *ChunkRepository) DeleteByItemID(ctx context.Context, itemID string) ([]
 	return ids, nil
 }
 
-// UpdateMetadataByItemID overwrites topic/status on every chunk owned by
-// itemID and returns the updated rows. It is a no-op, not an error, when no
-// chunk matches.
-func (r *ChunkRepository) UpdateMetadataByItemID(ctx context.Context, itemID, topic, status string) ([]knowledge.Chunk, error) {
+// UpdateMetadataByItemID overwrites topic/status/item_updated_at on every
+// chunk owned by itemID and returns the updated rows. It is a no-op, not an
+// error, when no chunk matches.
+func (r *ChunkRepository) UpdateMetadataByItemID(ctx context.Context, itemID, topic, status string, itemUpdatedAt time.Time) ([]knowledge.Chunk, error) {
 	rows, err := execer(ctx, r.db).QueryContext(ctx,
-		`UPDATE knowledge_chunks SET topic = ?, status = ? WHERE item_id = ? RETURNING `+chunkColumns,
-		topic, status, itemID,
+		`UPDATE knowledge_chunks SET topic = ?, status = ?, item_updated_at = ? WHERE item_id = ? RETURNING `+chunkColumns,
+		topic, status, toNullTime(itemUpdatedAt), itemID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: updating knowledge chunk metadata by item id: %w", err)

@@ -4,6 +4,7 @@ package mocks
 
 import (
 	context "context"
+	time "time"
 
 	knowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	mock "github.com/stretchr/testify/mock"
@@ -302,9 +303,9 @@ func (_c *MockChunkRepository_SaveAll_Call) RunAndReturn(run func(context.Contex
 	return _c
 }
 
-// UpdateMetadataByItemID provides a mock function with given fields: ctx, itemID, topic, status
-func (_m *MockChunkRepository) UpdateMetadataByItemID(ctx context.Context, itemID string, topic string, status string) ([]knowledge.Chunk, error) {
-	ret := _m.Called(ctx, itemID, topic, status)
+// UpdateMetadataByItemID provides a mock function with given fields: ctx, itemID, topic, status, itemUpdatedAt
+func (_m *MockChunkRepository) UpdateMetadataByItemID(ctx context.Context, itemID string, topic string, status string, itemUpdatedAt time.Time) ([]knowledge.Chunk, error) {
+	ret := _m.Called(ctx, itemID, topic, status, itemUpdatedAt)
 
 	if len(ret) == 0 {
 		panic("no return value specified for UpdateMetadataByItemID")
@@ -312,19 +313,19 @@ func (_m *MockChunkRepository) UpdateMetadataByItemID(ctx context.Context, itemI
 
 	var r0 []knowledge.Chunk
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, string) ([]knowledge.Chunk, error)); ok {
-		return rf(ctx, itemID, topic, status)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, time.Time) ([]knowledge.Chunk, error)); ok {
+		return rf(ctx, itemID, topic, status, itemUpdatedAt)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, string) []knowledge.Chunk); ok {
-		r0 = rf(ctx, itemID, topic, status)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, time.Time) []knowledge.Chunk); ok {
+		r0 = rf(ctx, itemID, topic, status, itemUpdatedAt)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]knowledge.Chunk)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, string, string, string) error); ok {
-		r1 = rf(ctx, itemID, topic, status)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, string, time.Time) error); ok {
+		r1 = rf(ctx, itemID, topic, status, itemUpdatedAt)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -342,13 +343,14 @@ type MockChunkRepository_UpdateMetadataByItemID_Call struct {
 //   - itemID string
 //   - topic string
 //   - status string
-func (_e *MockChunkRepository_Expecter) UpdateMetadataByItemID(ctx interface{}, itemID interface{}, topic interface{}, status interface{}) *MockChunkRepository_UpdateMetadataByItemID_Call {
-	return &MockChunkRepository_UpdateMetadataByItemID_Call{Call: _e.mock.On("UpdateMetadataByItemID", ctx, itemID, topic, status)}
+//   - itemUpdatedAt time.Time
+func (_e *MockChunkRepository_Expecter) UpdateMetadataByItemID(ctx interface{}, itemID interface{}, topic interface{}, status interface{}, itemUpdatedAt interface{}) *MockChunkRepository_UpdateMetadataByItemID_Call {
+	return &MockChunkRepository_UpdateMetadataByItemID_Call{Call: _e.mock.On("UpdateMetadataByItemID", ctx, itemID, topic, status, itemUpdatedAt)}
 }
 
-func (_c *MockChunkRepository_UpdateMetadataByItemID_Call) Run(run func(ctx context.Context, itemID string, topic string, status string)) *MockChunkRepository_UpdateMetadataByItemID_Call {
+func (_c *MockChunkRepository_UpdateMetadataByItemID_Call) Run(run func(ctx context.Context, itemID string, topic string, status string, itemUpdatedAt time.Time)) *MockChunkRepository_UpdateMetadataByItemID_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(string))
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(string), args[4].(time.Time))
 	})
 	return _c
 }
@@ -358,7 +360,7 @@ func (_c *MockChunkRepository_UpdateMetadataByItemID_Call) Return(_a0 []knowledg
 	return _c
 }
 
-func (_c *MockChunkRepository_UpdateMetadataByItemID_Call) RunAndReturn(run func(context.Context, string, string, string) ([]knowledge.Chunk, error)) *MockChunkRepository_UpdateMetadataByItemID_Call {
+func (_c *MockChunkRepository_UpdateMetadataByItemID_Call) RunAndReturn(run func(context.Context, string, string, string, time.Time) ([]knowledge.Chunk, error)) *MockChunkRepository_UpdateMetadataByItemID_Call {
 	_c.Call.Return(run)
 	return _c
 }
