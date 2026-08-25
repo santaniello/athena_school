@@ -35,11 +35,15 @@ func New() *Store {
 
 // Add validates and normalizes the batch, then upserts it by Chunk.ID into
 // the active slice: an existing ID is replaced in place, a new one is
-// appended. Before that, any existing chunk that shares an incoming
-// chunk's ItemID but carries a different Chunk.ID is evicted — the stale
-// sibling a failed Remove left behind (see
+// appended. Before that, any *previously stored* chunk that shares an
+// incoming chunk's ItemID but carries a different Chunk.ID is evicted —
+// the stale sibling a failed Remove left behind (see
 // specs/phases/phase-02-knowledge-engine/08-01-vectorstore-orphan-chunk-recovery.md).
-// Add never marks the store ready.
+// This eviction only ever looks at chunks already in the store: two
+// chunks arriving in the same batch that share an ItemID (e.g. a
+// multi-section document imported as several chunks, one per heading —
+// see internal/application/ingest) never evict each other. Add never
+// marks the store ready.
 func (s *Store) Add(ctx context.Context, chunks []knowledge.Chunk) error {
 	if len(chunks) == 0 {
 		return nil

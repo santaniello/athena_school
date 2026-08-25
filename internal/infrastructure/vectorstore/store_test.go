@@ -220,6 +220,27 @@ func TestStore_Add_leavesOtherItemsUntouched_whenEvictingAStaleSibling(t *testin
 	assert.ElementsMatch(t, []string{"item1-new", "item2"}, ids)
 }
 
+func TestStore_Add_preservesEveryChunkOfAMultiChunkItem_withinTheSameBatch(t *testing.T) {
+	// Given an empty store — a multi-section document (e.g. a markdown file
+	// with several headings) is imported as several Chunks that all share
+	// one ItemID, the way internal/application/ingest/import_folder.go
+	// builds its batch: one chunk per heading section, same ItemID
+	store := New()
+	ctx := context.Background()
+	sectionOne := testChunk("doc-section-1", []float32{1, 0})
+	sectionOne.ItemID = "item-doc"
+	sectionTwo := testChunk("doc-section-2", []float32{0, 1})
+	sectionTwo.ItemID = "item-doc"
+
+	// When both are added together in one Add call
+	require.NoError(t, store.Add(ctx, []knowledge.Chunk{sectionOne, sectionTwo}))
+
+	// Then neither is evicted as a stale sibling of the other — the
+	// by-ItemID eviction only clears chunks left behind by an *earlier*
+	// call, never chunks arriving together in the same batch
+	assert.Equal(t, 2, store.Len())
+}
+
 func TestStore_ReplaceAll_publishesEmptySnapshot_andMarksReady(t *testing.T) {
 	// Given a fresh, never-loaded store
 	store := New()

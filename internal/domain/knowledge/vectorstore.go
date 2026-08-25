@@ -23,9 +23,12 @@ type ScoredChunk struct {
 type VectorStore interface {
 	// Add validates and normalizes the batch, then upserts it by Chunk.ID:
 	// an existing ID is replaced in place, a new one is appended. Any
-	// existing chunk that shares an incoming chunk's ItemID but carries a
-	// different Chunk.ID is evicted first, so a stale sibling left behind
-	// by an earlier failed Remove never lingers alongside the current one.
+	// previously stored chunk that shares an incoming chunk's ItemID but
+	// carries a different Chunk.ID is evicted first, so a stale sibling
+	// left behind by an earlier failed Remove never lingers alongside the
+	// current one. This never evicts within the incoming batch itself —
+	// several chunks sharing one ItemID in the same Add call (e.g. a
+	// multi-section document) all persist.
 	Add(ctx context.Context, chunks []Chunk) error
 	// ReplaceAll validates and normalizes the batch, then atomically
 	// replaces the entire active snapshot with it — including marking the
