@@ -77,16 +77,25 @@ func TestUpdateItem_reindexesTheChunk_whenOnlyPropertiesChange(t *testing.T) {
 		ID: "item-1", Topic: "Go", Concept: "Channels", Definition: "Typed conduits.",
 		Properties: []string{"typed"}, Source: domainknowledge.SourceAthena, Status: domainknowledge.StatusApproved,
 	}, nil).Once()
-	repository.EXPECT().Update(ctx, mock.Anything).Return(nil).Once()
+	repository.EXPECT().Update(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
+		return item.ID == "item-1" && item.Concept == "Channels" && item.Definition == "Typed conduits." &&
+			assert.ObjectsAreEqual([]string{"typed", "blocking"}, item.Properties) &&
+			item.Status == domainknowledge.StatusApproved && item.Source == domainknowledge.SourceAthena
+	})).Return(nil).Once()
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return(nil, nil).Times(2)
+	wantContent := "Channels\n\nTyped conduits.\n\nProperties:\n- typed\n- blocking"
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Embeddings(ctx, mock.Anything).
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: wantContent}).
 		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
-	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()
+	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
+		return len(cs) == 1 && cs[0].ItemID == "item-1" && cs[0].Content == wantContent
+	})).Return(nil).Once()
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Remove(mock.Anything, []string(nil)).Return(nil).Times(2)
-	store.EXPECT().Add(mock.Anything, mock.Anything).Return(nil).Once()
+	store.EXPECT().Add(mock.Anything, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
+		return len(cs) == 1 && cs[0].ItemID == "item-1"
+	})).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
 	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
@@ -134,6 +143,42 @@ func TestUpdateItem_staysOnTheMetadataOnlyPath_whenOnlyTopicChanges(t *testing.T
 	// Then no embedding call is made and the persisted topic is trimmed
 	require.NoError(t, err)
 	assert.Equal(t, "Distributed systems", updated.Topic)
+	llm.AssertNotCalled(t, "Embeddings", mock.Anything, mock.Anything)
+	chunks.AssertNotCalled(t, "DeleteByItemID", mock.Anything, mock.Anything)
+}
+
+func TestUpdateItem_staysOnTheMetadataOnlyPath_whenPropertiesGoFromNilToAnEmptySlice(t *testing.T) {
+	// Given an existing item with no Properties/TradeOffs at all (nil) and
+	// a resubmission with an empty slice instead — renderItemContent treats
+	// both identically, so this must not be seen as a content change
+	ctx := context.Background()
+	repository := knowledgemocks.NewMockRepository(t)
+	repository.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{
+		ID: "item-1", Topic: "Go", Concept: "Channels", Definition: "Typed conduits.",
+		Status: domainknowledge.StatusApproved,
+	}, nil).Once()
+	repository.EXPECT().Update(ctx, mock.Anything).Return(nil).Once()
+	updatedChunks := []domainknowledge.Chunk{{ID: "chunk-1", ItemID: "item-1", Topic: "Go"}}
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Go", domainknowledge.StatusApproved,
+		mock.MatchedBy(func(ts time.Time) bool { return !ts.IsZero() })).Return(updatedChunks, nil).Once()
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Add(mock.Anything, updatedChunks).Return(nil).Once()
+	llm := llmmocks.NewMockProvider(t)
+	tx := txmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
+
+	// When updating with Properties/TradeOffs submitted as empty slices
+	updated, err := service.UpdateItem(ctx, "item-1", ItemFields{
+		Topic: "Go", Concept: "Channels", Definition: "Typed conduits.",
+		Properties: []string{}, TradeOffs: []string{},
+	})
+
+	// Then no embedding call is made — a nil-to-empty-slice edit renders
+	// identical content and stays on the cheaper metadata-only path
+	require.NoError(t, err)
+	assert.Equal(t, "item-1", updated.ID)
 	llm.AssertNotCalled(t, "Embeddings", mock.Anything, mock.Anything)
 	chunks.AssertNotCalled(t, "DeleteByItemID", mock.Anything, mock.Anything)
 }
@@ -252,7 +297,7 @@ func TestUpdateItem_returnsErrIndexingFailed_whenReindexingFails_afterEvictingTh
 	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return([]string{"chunk-1"}, nil).Once()
 	boom := errors.New("openrouter unavailable")
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Embeddings(ctx, mock.Anything).Return(domainllm.EmbeddingResponse{}, boom).Once()
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "New\n\nNew def."}).Return(domainllm.EmbeddingResponse{}, boom).Once()
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Remove(mock.Anything, []string{"chunk-1"}).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)

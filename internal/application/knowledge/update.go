@@ -2,7 +2,6 @@ package knowledge
 
 import (
 	"context"
-	"slices"
 	"time"
 
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
@@ -63,16 +62,12 @@ func (s *Service) UpdateItem(ctx context.Context, id string, fields ItemFields) 
 		if err != nil {
 			return err
 		}
+		oldContent := renderItemContent(item)
 
 		topic, err := domainknowledge.NormalizeTopic(fields.Topic)
 		if err != nil {
 			return err
 		}
-
-		contentChanged = fields.Concept != item.Concept ||
-			fields.Definition != item.Definition ||
-			!slices.Equal(fields.Properties, item.Properties) ||
-			!slices.Equal(fields.TradeOffs, item.TradeOffs)
 
 		item.Topic = topic
 		item.Concept = fields.Concept
@@ -84,6 +79,7 @@ func (s *Service) UpdateItem(ctx context.Context, id string, fields ItemFields) 
 		if err := item.Validate(); err != nil {
 			return err
 		}
+		contentChanged = renderItemContent(item) != oldContent
 		item.UpdatedAt = time.Now().UTC()
 
 		if err := s.items.Update(ctx, item); err != nil {
