@@ -358,7 +358,14 @@ func TestUpdateItem_selfHealsTheOrphanedChunk_whenLaterReindexed(t *testing.T) {
 		ID: "item-1", Topic: "Go", Concept: "Old", Definition: "Old def.",
 		Source: domainknowledge.SourceAthena, Status: domainknowledge.StatusApproved,
 	}, nil).Once()
-	repository.EXPECT().Update(ctx, mock.Anything).Return(nil).Once()
+	repository.EXPECT().Update(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
+		return item.ID == "item-1" &&
+			item.Topic == "Go" &&
+			item.Concept == "New" &&
+			item.Definition == "New def." &&
+			item.Source == domainknowledge.SourceAthena &&
+			item.Status == domainknowledge.StatusApproved
+	})).Return(nil).Once()
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	// An empty ID makes the real Store.Remove fail, the same shape a real
 	// eviction failure takes, without a mock standing in for VectorStore.
@@ -391,6 +398,13 @@ func TestUpdateItem_selfHealsTheOrphanedChunk_whenLaterReindexed(t *testing.T) {
 	require.NoError(t, service.indexKnowledgeItem(ctx, updated))
 
 	// Then the store converges to exactly one chunk for the item — the
-	// orphan is gone, not duplicated alongside the fresh one
+	// orphan is gone, not duplicated alongside the fresh one, and what's
+	// left is genuinely the new content rather than chunk-1 having simply
+	// survived untouched
 	assert.Equal(t, 1, store.Len())
+	results, err := store.Search(ctx, []float32{0, 1}, 10, domainknowledge.SearchFilters{})
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.NotEqual(t, "chunk-1", results[0].Chunk.ID)
+	assert.Equal(t, "New\n\nNew def.", results[0].Chunk.Content)
 }
