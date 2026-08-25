@@ -113,10 +113,13 @@ func TestSaveDrafts_savesEveryItem_butStopsAttemptingIndexingAfterTheFirstFailur
 	// specs/phases/phase-02-knowledge-engine/08-knowledge-item-indexing.md
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
-	repository.EXPECT().Save(ctx, mock.Anything).Return(nil).Times(3)
+	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
+		return item.ID != "" && item.Topic == "Go" &&
+			(item.Concept == "first" || item.Concept == "second" || item.Concept == "third")
+	})).Return(nil).Times(3)
 	embedErr := errors.New("openrouter api key is missing")
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Embeddings(ctx, mock.Anything).Return(domainllm.EmbeddingResponse{}, embedErr).Once()
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "first\n\none"}).Return(domainllm.EmbeddingResponse{}, embedErr).Once()
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	tx := txmocks.NewMockTransactor(t)
 	service := NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llm, configmocks.NewMockStore(t), chunks, tx, knowledgemocks.NewMockVectorStore(t), passingIndexGuard(t), domainknowledge.RetrievalThresholds{})

@@ -41,14 +41,19 @@ func TestReindexKnowledgeItems_indexesEveryItem_andReportsProgressForEach(t *tes
 	}
 	repository.EXPECT().ListUnindexed(ctx, domainllm.EmbeddingModel).Return(items, nil).Once()
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Embeddings(ctx, mock.Anything).
-		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Times(2)
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: renderItemContent(items[0])}).
+		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: renderItemContent(items[1])}).
+		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
 	chunks := knowledgemocks.NewMockChunkRepository(t)
-	chunks.EXPECT().DeleteByItemID(ctx, mock.Anything).Return(nil, nil).Times(2)
-	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Times(2)
+	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return(nil, nil).Once()
+	chunks.EXPECT().DeleteByItemID(ctx, "item-2").Return(nil, nil).Once()
+	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(matchesIndexedChunk(items[0], 1))).Return(nil).Once()
+	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(matchesIndexedChunk(items[1], 1))).Return(nil).Once()
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Remove(mock.Anything, []string(nil)).Return(nil).Times(2)
-	store.EXPECT().Add(mock.Anything, mock.Anything).Return(nil).Times(2)
+	store.EXPECT().Add(mock.Anything, mock.MatchedBy(matchesIndexedChunk(items[0], 1))).Return(nil).Once()
+	store.EXPECT().Add(mock.Anything, mock.MatchedBy(matchesIndexedChunk(items[1], 1))).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
 	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
@@ -82,15 +87,16 @@ func TestReindexKnowledgeItems_continuesPastAFailure_ratherThanStoppingEarly(t *
 	repository.EXPECT().ListUnindexed(ctx, domainllm.EmbeddingModel).Return(items, nil).Once()
 	boom := errors.New("openrouter unavailable")
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Embeddings(ctx, mock.Anything).Return(domainllm.EmbeddingResponse{}, boom).Once()
-	llm.EXPECT().Embeddings(ctx, mock.Anything).
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: renderItemContent(items[0])}).
+		Return(domainllm.EmbeddingResponse{}, boom).Once()
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: renderItemContent(items[1])}).
 		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	chunks.EXPECT().DeleteByItemID(ctx, "item-2").Return(nil, nil).Once()
-	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()
+	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(matchesIndexedChunk(items[1], 1))).Return(nil).Once()
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Remove(mock.Anything, []string(nil)).Return(nil).Once()
-	store.EXPECT().Add(mock.Anything, mock.Anything).Return(nil).Once()
+	store.EXPECT().Add(mock.Anything, mock.MatchedBy(matchesIndexedChunk(items[1], 1))).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
 	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
@@ -118,14 +124,14 @@ func TestReindexKnowledgeItems_stopsImmediately_whenOnProgressReturnsAnError(t *
 	}
 	repository.EXPECT().ListUnindexed(ctx, domainllm.EmbeddingModel).Return(items, nil).Once()
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Embeddings(ctx, mock.Anything).
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: renderItemContent(items[0])}).
 		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return(nil, nil).Once()
-	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()
+	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(matchesIndexedChunk(items[0], 1))).Return(nil).Once()
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Remove(mock.Anything, []string(nil)).Return(nil).Once()
-	store.EXPECT().Add(mock.Anything, mock.Anything).Return(nil).Once()
+	store.EXPECT().Add(mock.Anything, mock.MatchedBy(matchesIndexedChunk(items[0], 1))).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
 	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})

@@ -93,14 +93,19 @@ func TestDeprecate_reindexes_whenTheItemOwnsNoChunkYet(t *testing.T) {
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	chunks.EXPECT().UpdateMetadataByItemID(ctx, "item-1", "Go", domainknowledge.StatusDeprecated,
 		mock.MatchedBy(func(ts time.Time) bool { return !ts.IsZero() })).Return(nil, nil).Once()
+	wantContent := "Channels\n\nTyped conduits."
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Embeddings(ctx, mock.Anything).
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: wantContent}).
 		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
 	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return(nil, nil).Once()
-	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()
+	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
+		return len(cs) == 1 && cs[0].ItemID == "item-1" && cs[0].Content == wantContent
+	})).Return(nil).Once()
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Remove(mock.Anything, []string(nil)).Return(nil).Once()
-	store.EXPECT().Add(mock.Anything, mock.Anything).Return(nil).Once()
+	store.EXPECT().Add(mock.Anything, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
+		return len(cs) == 1 && cs[0].ItemID == "item-1"
+	})).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
 	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
@@ -127,7 +132,7 @@ func TestDeprecate_returnsErrIndexingFailed_whenRecoveryReindexingFails_butKeeps
 		mock.MatchedBy(func(ts time.Time) bool { return !ts.IsZero() })).Return(nil, nil).Once()
 	boom := errors.New("openrouter unavailable")
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Embeddings(ctx, mock.Anything).Return(domainllm.EmbeddingResponse{}, boom).Once()
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Channels\n\nTyped conduits."}).Return(domainllm.EmbeddingResponse{}, boom).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
 	service := NewService(repository, nil, nil, llm, nil, chunks, tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})

@@ -36,7 +36,10 @@ func TestIndexingWarning_ErrorsIs_matchesErrIndexingFailed(t *testing.T) {
 	warning := &IndexingWarning{Err: errors.New("store exploded")}
 	var err error = warning
 
-	// Then a single errors.Is(err, ErrIndexingFailed) check recognizes it,
-	// the same check every knowledge-indexing failure standardizes on
-	assert.ErrorIs(t, err, ErrIndexingFailed)
+	// When checking it against ErrIndexingFailed
+	matches := errors.Is(err, ErrIndexingFailed)
+
+	// Then it recognizes it — the same check every knowledge-indexing
+	// failure standardizes on
+	assert.True(t, matches)
 }
