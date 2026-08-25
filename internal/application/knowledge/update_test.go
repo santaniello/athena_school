@@ -15,6 +15,7 @@ import (
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
+	"github.com/santaniello/athena/internal/infrastructure/vectorstore"
 )
 
 func TestUpdateItem_reindexesTheChunk_whenConceptOrDefinitionChanges(t *testing.T) {
@@ -342,4 +343,68 @@ func TestUpdateItem_returnsErrIndexingFailed_whenEvictingTheStaleChunkFails(t *t
 	assert.ErrorIs(t, err, ErrIndexingFailed)
 	assert.Equal(t, "New", updated.Concept)
 	llm.AssertNotCalled(t, "Embeddings", mock.Anything, mock.Anything)
+}
+
+func TestUpdateItem_selfHealsTheOrphanedChunk_whenLaterReindexed(t *testing.T) {
+	// Given the same failure as above — the stale chunk survives in the
+	// VectorStore because Remove failed — but exercised against the real
+	// vectorstore.Store instead of a mock, so its Add can actually run its
+	// by-ItemID eviction (see
+	// specs/phases/phase-02-knowledge-engine/08-01-vectorstore-orphan-chunk-recovery.md,
+	// Option B)
+	ctx := context.Background()
+	repository := knowledgemocks.NewMockRepository(t)
+	repository.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{
+		ID: "item-1", Topic: "Go", Concept: "Old", Definition: "Old def.",
+		Source: domainknowledge.SourceAthena, Status: domainknowledge.StatusApproved,
+	}, nil).Once()
+	repository.EXPECT().Update(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
+		return item.ID == "item-1" &&
+			item.Topic == "Go" &&
+			item.Concept == "New" &&
+			item.Definition == "New def." &&
+			item.Source == domainknowledge.SourceAthena &&
+			item.Status == domainknowledge.StatusApproved
+	})).Return(nil).Once()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	// An empty ID makes the real Store.Remove fail, the same shape a real
+	// eviction failure takes, without a mock standing in for VectorStore.
+	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return([]string{""}, nil).Once()
+	llm := llmmocks.NewMockProvider(t)
+	tx := txmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	store := vectorstore.New()
+	require.NoError(t, store.ReplaceAll(ctx, []domainknowledge.Chunk{{
+		ID: "chunk-1", ItemID: "item-1", Source: domainknowledge.SourceAthena,
+		Topic: "Go", Status: domainknowledge.StatusApproved, Embedding: []float32{1, 0},
+	}}))
+	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
+
+	// When updating it and eviction itself fails
+	updated, err := service.UpdateItem(ctx, "item-1", ItemFields{Topic: "Go", Concept: "New", Definition: "New def."})
+	require.ErrorIs(t, err, ErrIndexingFailed)
+	require.Equal(t, 1, store.Len(), "the orphaned chunk-1 is still sitting in the store")
+
+	// And when the item is later reindexed again — e.g. by the backfill
+	// sweep, which is exactly what ListUnindexed picks it up for once it
+	// has zero current SQLite chunks
+	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return(nil, nil).Once()
+	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
+		return len(cs) == 1 && cs[0].ItemID == "item-1" && cs[0].ID != "chunk-1"
+	})).Return(nil).Once()
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "New\n\nNew def."}).
+		Return(domainllm.EmbeddingResponse{Embedding: []float64{0, 1}}, nil).Once()
+
+	require.NoError(t, service.indexKnowledgeItem(ctx, updated))
+
+	// Then the store converges to exactly one chunk for the item — the
+	// orphan is gone, not duplicated alongside the fresh one, and what's
+	// left is genuinely the new content rather than chunk-1 having simply
+	// survived untouched
+	assert.Equal(t, 1, store.Len())
+	results, err := store.Search(ctx, []float32{0, 1}, 10, domainknowledge.SearchFilters{})
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.NotEqual(t, "chunk-1", results[0].Chunk.ID)
+	assert.Equal(t, "New\n\nNew def.", results[0].Chunk.Content)
 }
