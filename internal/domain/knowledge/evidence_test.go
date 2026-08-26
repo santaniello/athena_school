@@ -97,8 +97,11 @@ func TestEvidenceRef_IsSupportedBy_rejectsAWhitespaceOnlyQuote(t *testing.T) {
 	// would otherwise treat a run of spaces as present in most real content
 	ref := EvidenceRef{MessageID: "message-1", Quote: "   "}
 
-	// Then it is never reported as supported, even though the content
-	// literally contains that whitespace
-	assert.False(t, ref.IsSupportedBy("A B C"))
-	assert.False(t, ref.IsSupportedBy("   "))
+	// When checking it against content that literally contains that whitespace
+	supportedByWords := ref.IsSupportedBy("A B C")
+	supportedByWhitespace := ref.IsSupportedBy("   ")
+
+	// Then it is never reported as supported
+	assert.False(t, supportedByWords)
+	assert.False(t, supportedByWhitespace)
 }
