@@ -84,6 +84,45 @@ func TestOpen_createsMessagesTable(t *testing.T) {
 	assert.Equal(t, "messages", tableName)
 }
 
+func TestOpen_createsKnowledgeEvidenceTablesWithSharingAndOwnershipConstraints(t *testing.T) {
+	// Given a freshly opened database with one Knowledge Item and one Evidence snapshot
+	path := filepath.Join(t.TempDir(), "athena.db")
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	_, err = db.Exec(`INSERT INTO knowledge_items
+		(id, topic, concept, definition, properties, trade_offs, related_concepts, source, status, created_at, updated_at)
+		VALUES ('item-1', 'Go', 'Channels', 'Typed conduits.', '[]', '[]', '[]', 'athena', 'draft', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO knowledge_evidence
+		(id, origin_type, origin_id, source_label, excerpt, created_at)
+		VALUES ('evidence-1', 'session_message', 'message-1', 'Go', 'literal quote', CURRENT_TIMESTAMP)`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO knowledge_item_evidence (item_id, evidence_id) VALUES ('item-1', 'evidence-1')`)
+	require.NoError(t, err)
+
+	// When attempting duplicate Evidence and links with missing owners
+	_, duplicateErr := db.Exec(`INSERT INTO knowledge_evidence
+		(id, origin_type, origin_id, source_label, excerpt, created_at)
+		VALUES ('evidence-duplicate', 'session_message', 'message-1', 'Go', 'literal quote', CURRENT_TIMESTAMP)`)
+	_, missingItemErr := db.Exec(`INSERT INTO knowledge_item_evidence (item_id, evidence_id) VALUES ('missing-item', 'evidence-1')`)
+	_, missingEvidenceErr := db.Exec(`INSERT INTO knowledge_item_evidence (item_id, evidence_id) VALUES ('item-1', 'missing-evidence')`)
+
+	// Then one origin plus excerpt is globally shared and both link owners are enforced
+	require.Error(t, duplicateErr)
+	require.Error(t, missingItemErr)
+	require.Error(t, missingEvidenceErr)
+
+	// And deleting the Item cascades only its link, preserving the immutable snapshot
+	_, err = db.Exec(`DELETE FROM knowledge_items WHERE id = 'item-1'`)
+	require.NoError(t, err)
+	var linkCount, evidenceCount int
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM knowledge_item_evidence`).Scan(&linkCount))
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM knowledge_evidence`).Scan(&evidenceCount))
+	assert.Zero(t, linkCount)
+	assert.Equal(t, 1, evidenceCount)
+}
+
 func TestOpen_enablesForeignKeysAndRejectsMessageForMissingSession(t *testing.T) {
 	// Given a freshly opened database
 	path := filepath.Join(t.TempDir(), "athena.db")

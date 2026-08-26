@@ -3,7 +3,9 @@ package knowledge
 import "context"
 
 // DeleteItem permanently removes id and every chunk it owns, atomically:
-// either both are gone or neither is.
+// either both are gone or neither is. It also cleans up any Evidence
+// snapshot left with no remaining Item reference — one still linked to
+// another Item survives (see EvidenceRepository.DeleteUnreferenced).
 //
 // This never touches ingested_files: for an imported note, deleting its
 // Item here has no effect on the source file, and does not un-suppress it
@@ -28,7 +30,10 @@ func (s *Service) DeleteItem(ctx context.Context, id string) error {
 		if err != nil {
 			return err
 		}
-		return s.items.Delete(ctx, id)
+		if err := s.items.Delete(ctx, id); err != nil {
+			return err
+		}
+		return s.evidence.DeleteUnreferenced(ctx)
 	})
 	if err != nil {
 		return err

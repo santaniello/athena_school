@@ -34,6 +34,10 @@ export function DeprecateKnowledgeItem(arg1) {
   return window['go']['desktop']['App']['DeprecateKnowledgeItem'](arg1);
 }
 
+export function DiscardExtraction(arg1) {
+  return window['go']['desktop']['App']['DiscardExtraction'](arg1);
+}
+
 export function ExtractKnowledge(arg1, arg2) {
   return window['go']['desktop']['App']['ExtractKnowledge'](arg1, arg2);
 }
@@ -72,6 +76,10 @@ export function ImportNotes(arg1) {
 
 export function ListFolders() {
   return window['go']['desktop']['App']['ListFolders']();
+}
+
+export function ListKnowledgeItemEvidence(arg1) {
+  return window['go']['desktop']['App']['ListKnowledgeItemEvidence'](arg1);
 }
 
 export function ListKnowledgeItems(arg1, arg2) {
@@ -134,12 +142,12 @@ export function RetryKnowledgeIndex() {
   return window['go']['desktop']['App']['RetryKnowledgeIndex']();
 }
 
-export function SaveAndApproveExtractedKnowledge(arg1) {
-  return window['go']['desktop']['App']['SaveAndApproveExtractedKnowledge'](arg1);
+export function SaveAndApproveExtractedKnowledge(arg1, arg2) {
+  return window['go']['desktop']['App']['SaveAndApproveExtractedKnowledge'](arg1, arg2);
 }
 
-export function SaveExtractedKnowledge(arg1) {
-  return window['go']['desktop']['App']['SaveExtractedKnowledge'](arg1);
+export function SaveExtractedKnowledge(arg1, arg2) {
+  return window['go']['desktop']['App']['SaveExtractedKnowledge'](arg1, arg2);
 }
 
 export function SaveOpenRouterKey(arg1) {

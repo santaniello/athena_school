@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {
+  discardExtraction,
   saveAndApproveExtractedKnowledge,
   saveExtractedKnowledge,
   type KnowledgeItem,
@@ -17,6 +18,7 @@ import {
 
 interface KnowledgeExtractionDialogProps {
   open: boolean
+  batchId: string
   items: KnowledgeItem[]
   onClose: () => void
   // Fired after a successful "Save as drafts" that actually persisted at
@@ -33,6 +35,7 @@ type SaveMode = 'draft' | 'approve'
 
 export function KnowledgeExtractionDialog({
   open,
+  batchId,
   items,
   onClose,
   onKnowledgeChanged,
@@ -61,6 +64,25 @@ export function KnowledgeExtractionDialog({
     })
   }
 
+  // handleClose covers every true dialog-close path — the explicit Dismiss
+  // button, clicking outside, Escape, and closing right after a fully
+  // successful save — and discards whatever candidates in this batch were
+  // never attempted (deselected, or not yet reached). It is never called
+  // from handleSave's error branch, so a partial-save failure always leaves
+  // the remaining receipts retryable.
+  async function handleClose() {
+    if (batchId) {
+      try {
+        await discardExtraction(batchId)
+      } catch {
+        // Best-effort: an unreachable backend during close should not block
+        // the dialog from dismissing. The receipt simply outlives this
+        // session's batch and stays orphaned until the app restarts.
+      }
+    }
+    onClose()
+  }
+
   async function handleSave(mode: SaveMode) {
     if (pendingIndices.length === 0) return
     setIsSaving(true)
@@ -68,7 +90,10 @@ export function KnowledgeExtractionDialog({
     setLastMode(mode)
     try {
       const save = mode === 'approve' ? saveAndApproveExtractedKnowledge : saveExtractedKnowledge
-      const result = await save(pendingIndices.map((index) => items[index]))
+      const result = await save(
+        batchId,
+        pendingIndices.map((index) => items[index]),
+      )
       const persistedIndices = result.savedIndices
         .map((index) => pendingIndices[index])
         .filter((index): index is number => index !== undefined)
@@ -80,7 +105,7 @@ export function KnowledgeExtractionDialog({
         setSaveError(result.error)
         return
       }
-      onClose()
+      void handleClose()
     } catch (caught) {
       const fallbackMessage =
         mode === 'approve' ? 'Failed to save as knowledge.' : 'Failed to save drafts.'
@@ -99,7 +124,7 @@ export function KnowledgeExtractionDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
+    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && void handleClose()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>New knowledge found</DialogTitle>
@@ -143,7 +168,7 @@ export function KnowledgeExtractionDialog({
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isSaving}>
+          <Button variant="outline" onClick={() => void handleClose()} disabled={isSaving}>
             Dismiss
           </Button>
           {items.length > 0 && (

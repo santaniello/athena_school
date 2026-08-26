@@ -4,8 +4,10 @@ import {
   CountUnindexedKnowledgeItems,
   DeleteKnowledgeItem,
   DeprecateKnowledgeItem,
+  DiscardExtraction,
   ExtractKnowledge,
   GetKnowledgeExtractionSettings,
+  ListKnowledgeItemEvidence,
   ListKnowledgeItems,
   ListKnowledgeTopics,
   ReindexKnowledgeItems,
@@ -31,6 +33,7 @@ export interface KnowledgeItem {
 }
 
 export interface ExtractionResult {
+  batchId: string
   items: KnowledgeItem[]
   truncated: boolean
 }
@@ -48,8 +51,15 @@ export async function extractKnowledge(
   return ExtractKnowledge(sessionId, confirmedTruncation)
 }
 
-export async function saveExtractedKnowledge(items: KnowledgeItem[]): Promise<KnowledgeSaveResult> {
-  return SaveExtractedKnowledge(items)
+// batchId identifies the backend extraction receipt returned by
+// extractKnowledge — each item's id is used only as an opaque lookup key
+// into that receipt; the backend, not this client, is authoritative for
+// the evidence behind every saved item.
+export async function saveExtractedKnowledge(
+  batchId: string,
+  items: KnowledgeItem[],
+): Promise<KnowledgeSaveResult> {
+  return SaveExtractedKnowledge(batchId, items)
 }
 
 // saveAndApproveExtractedKnowledge persists items directly as approved,
@@ -57,9 +67,17 @@ export async function saveExtractedKnowledge(items: KnowledgeItem[]): Promise<Kn
 // specs/Athena.md §12, alongside saveExtractedKnowledge ("Save as drafts")
 // and discarding the candidates entirely ("Dismiss").
 export async function saveAndApproveExtractedKnowledge(
+  batchId: string,
   items: KnowledgeItem[],
 ): Promise<KnowledgeSaveResult> {
-  return SaveAndApproveExtractedKnowledge(items)
+  return SaveAndApproveExtractedKnowledge(batchId, items)
+}
+
+// discardExtraction drops every unsaved candidate in batchId — call this
+// from every true Dismiss/dialog-close path, but never after a partial save
+// error, so unsaved or failed candidates stay retryable.
+export async function discardExtraction(batchId: string): Promise<void> {
+  await DiscardExtraction(batchId)
 }
 
 export async function getKnowledgeExtractionSettings(): Promise<KnowledgeExtractionSettings> {
@@ -131,6 +149,20 @@ export async function updateKnowledgeItem(
 // cannot be undone.
 export async function deleteKnowledgeItem(id: string): Promise<void> {
   await DeleteKnowledgeItem(id)
+}
+
+export interface KnowledgeEvidence {
+  originType: string
+  sourceLabel: string
+  excerpt: string
+  createdAt: string
+}
+
+// listKnowledgeItemEvidence returns id's persisted Evidence snapshots, in
+// deterministic order. Empty for a legacy or shadow Item that never went
+// through evidence-bearing extraction (e.g. an imported-note shadow Item).
+export async function listKnowledgeItemEvidence(id: string): Promise<KnowledgeEvidence[]> {
+  return ListKnowledgeItemEvidence(id)
 }
 
 export interface ReindexProgress {

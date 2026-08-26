@@ -5,8 +5,10 @@ import {
   CountUnindexedKnowledgeItems,
   DeleteKnowledgeItem,
   DeprecateKnowledgeItem,
+  DiscardExtraction,
   ExtractKnowledge,
   GetKnowledgeExtractionSettings,
+  ListKnowledgeItemEvidence,
   ListKnowledgeItems,
   ListKnowledgeTopics,
   ReindexKnowledgeItems,
@@ -23,9 +25,11 @@ import {
   definitionPreview,
   deleteKnowledgeItem,
   deprecateKnowledgeItem,
+  discardExtraction,
   extractKnowledge,
   getKnowledgeExtractionSettings,
   groupByTopic,
+  listKnowledgeItemEvidence,
   listKnowledgeItems,
   listKnowledgeTopics,
   onReindexDone,
@@ -43,10 +47,12 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   ExtractKnowledge: vi.fn(),
   SaveExtractedKnowledge: vi.fn(),
   SaveAndApproveExtractedKnowledge: vi.fn(),
+  DiscardExtraction: vi.fn(),
   GetKnowledgeExtractionSettings: vi.fn(),
   UpdateKnowledgeExtractionSettings: vi.fn(),
   ListKnowledgeItems: vi.fn(),
   ListKnowledgeTopics: vi.fn(),
+  ListKnowledgeItemEvidence: vi.fn(),
   CountDraftKnowledgeItems: vi.fn(),
   CountUnindexedKnowledgeItems: vi.fn(),
   ReindexKnowledgeItems: vi.fn(),
@@ -65,17 +71,21 @@ describe('knowledge bindings', () => {
 
   it('extracts knowledge with the truncation confirmation flag', async () => {
     // Given a backend extraction result
-    vi.mocked(ExtractKnowledge).mockResolvedValueOnce({ items: [], truncated: true } as never)
+    vi.mocked(ExtractKnowledge).mockResolvedValueOnce({
+      batchId: 'batch-1',
+      items: [],
+      truncated: true,
+    } as never)
 
     // When extracting from a session
     const result = await extractKnowledge('session-1', false)
 
     // Then the full result and call arguments are preserved
     expect(ExtractKnowledge).toHaveBeenCalledWith('session-1', false)
-    expect(result).toEqual({ items: [], truncated: true })
+    expect(result).toEqual({ batchId: 'batch-1', items: [], truncated: true })
   })
 
-  it('saves the selected full candidates', async () => {
+  it('saves the selected full candidates against their batch', async () => {
     // Given a complete candidate
     const items = [
       {
@@ -95,14 +105,14 @@ describe('knowledge bindings', () => {
     vi.mocked(SaveExtractedKnowledge).mockResolvedValueOnce({ savedIndices: [0], error: '' })
 
     // When saving it
-    const result = await saveExtractedKnowledge(items)
+    const result = await saveExtractedKnowledge('batch-1', items)
 
-    // Then no fields are dropped
-    expect(SaveExtractedKnowledge).toHaveBeenCalledWith(items)
+    // Then the batch ID and every field are forwarded
+    expect(SaveExtractedKnowledge).toHaveBeenCalledWith('batch-1', items)
     expect(result).toEqual({ savedIndices: [0], error: '' })
   })
 
-  it('saves and approves the selected full candidates', async () => {
+  it('saves and approves the selected full candidates against their batch', async () => {
     // Given a complete candidate
     const items = [
       {
@@ -125,11 +135,22 @@ describe('knowledge bindings', () => {
     })
 
     // When saving and approving it
-    const result = await saveAndApproveExtractedKnowledge(items)
+    const result = await saveAndApproveExtractedKnowledge('batch-1', items)
 
-    // Then no fields are dropped
-    expect(SaveAndApproveExtractedKnowledge).toHaveBeenCalledWith(items)
+    // Then the batch ID and every field are forwarded
+    expect(SaveAndApproveExtractedKnowledge).toHaveBeenCalledWith('batch-1', items)
     expect(result).toEqual({ savedIndices: [0], error: '' })
+  })
+
+  it('discards a batch', async () => {
+    // Given a backend that accepts the discard
+    vi.mocked(DiscardExtraction).mockResolvedValueOnce()
+
+    // When discarding a batch
+    await discardExtraction('batch-1')
+
+    // Then the batch ID was forwarded
+    expect(DiscardExtraction).toHaveBeenCalledWith('batch-1')
   })
 
   it('reads and updates extraction settings', async () => {
@@ -156,7 +177,7 @@ describe('knowledge bindings', () => {
     })
 
     // When saving candidates
-    const result = await saveExtractedKnowledge([])
+    const result = await saveExtractedKnowledge('batch-1', [])
 
     // Then the typed result is forwarded without parsing error text
     expect(result).toEqual({
@@ -171,7 +192,7 @@ describe('knowledge bindings', () => {
     vi.mocked(SaveExtractedKnowledge).mockRejectedValueOnce(failure)
 
     // When saving candidates
-    const promise = saveExtractedKnowledge([])
+    const promise = saveExtractedKnowledge('batch-1', [])
 
     // Then the original error is preserved without partial-save metadata
     await expect(promise).rejects.toBe(failure)
@@ -183,7 +204,7 @@ describe('knowledge bindings', () => {
     vi.mocked(SaveExtractedKnowledge).mockRejectedValueOnce('unavailable')
 
     // When saving candidates
-    const promise = saveExtractedKnowledge([])
+    const promise = saveExtractedKnowledge('batch-1', [])
 
     // Then the original rejection is propagated unchanged
     await expect(promise).rejects.toBe('unavailable')
@@ -221,6 +242,30 @@ describe('listKnowledgeItems', () => {
     // Then the filter is forwarded and the result returned as-is
     expect(ListKnowledgeItems).toHaveBeenCalledWith('Go', 'approved')
     expect(result).toEqual(items)
+  })
+})
+
+describe('listKnowledgeItemEvidence', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('forwards the item id and returns its evidence snapshots', async () => {
+    // Given a backend evidence list
+    const evidence = [
+      {
+        originType: 'session_message',
+        sourceLabel: 'Distributed systems',
+        excerpt: 'CAP describes trade-offs.',
+        createdAt: '2026-08-26T10:00:00Z',
+      },
+    ]
+    vi.mocked(ListKnowledgeItemEvidence).mockResolvedValueOnce(evidence)
+
+    // When listing an item's evidence
+    const result = await listKnowledgeItemEvidence('item-1')
+
+    // Then the id is forwarded and the snapshots are returned as-is
+    expect(ListKnowledgeItemEvidence).toHaveBeenCalledWith('item-1')
+    expect(result).toEqual(evidence)
   })
 })
 

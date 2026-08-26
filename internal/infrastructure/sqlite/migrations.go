@@ -67,6 +67,22 @@ var migrations = []func(*sql.DB) error{
 		ON knowledge_items(status, created_at)`),
 	execSQL(`CREATE INDEX IF NOT EXISTS idx_knowledge_items_topic
 		ON knowledge_items(topic)`),
+	execSQL(`CREATE TABLE IF NOT EXISTS knowledge_evidence (
+		id           TEXT PRIMARY KEY,
+		origin_type  TEXT NOT NULL,
+		origin_id    TEXT NOT NULL,
+		source_label TEXT NOT NULL,
+		excerpt      TEXT NOT NULL,
+		created_at   DATETIME NOT NULL,
+		UNIQUE (origin_type, origin_id, excerpt)
+	)`),
+	execSQL(`CREATE TABLE IF NOT EXISTS knowledge_item_evidence (
+		item_id     TEXT NOT NULL REFERENCES knowledge_items(id) ON DELETE CASCADE,
+		evidence_id TEXT NOT NULL REFERENCES knowledge_evidence(id),
+		PRIMARY KEY (item_id, evidence_id)
+	)`),
+	execSQL(`CREATE INDEX IF NOT EXISTS idx_knowledge_item_evidence_evidence
+		ON knowledge_item_evidence(evidence_id)`),
 	execSQL(`CREATE TABLE IF NOT EXISTS knowledge_chunks (
 		id          TEXT PRIMARY KEY,
 		source      TEXT,

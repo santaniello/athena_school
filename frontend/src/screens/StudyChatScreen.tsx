@@ -106,6 +106,7 @@ function StudyChatScreen({
   const [extractionError, setExtractionError] = useState<string | null>(null)
   const [isExtracting, setIsExtracting] = useState(false)
   const [extractedItems, setExtractedItems] = useState<KnowledgeItem[]>([])
+  const [extractionBatchId, setExtractionBatchId] = useState('')
   const [showExtractionDialog, setShowExtractionDialog] = useState(false)
   const [showTruncationDialog, setShowTruncationDialog] = useState(false)
   // Persistent context-limit state, restored on resume and updated live by
@@ -298,6 +299,7 @@ function StudyChatScreen({
         return
       }
       setExtractedItems(result.items)
+      setExtractionBatchId(result.batchId)
       setShowExtractionDialog(true)
     } catch (err) {
       setExtractionError(extractionErrorMessage(err))
@@ -466,6 +468,7 @@ function StudyChatScreen({
       {showExtractionDialog && (
         <KnowledgeExtractionDialog
           open
+          batchId={extractionBatchId}
           items={extractedItems}
           onClose={() => setShowExtractionDialog(false)}
           onKnowledgeChanged={onKnowledgeChanged}

@@ -66,17 +66,17 @@ func TestApp_ExtractKnowledge_returnsFullCandidateAndTruncationState(t *testing.
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	configs := configmocks.NewMockStore(t)
-	sessions.EXPECT().GetByID(ctx, "session-1").Return(domainstudy.Session{Topic: "Go"}, nil).Once()
-	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{{Role: domainstudy.RoleUser, Content: "Explain channels"}}, nil).Once()
+	sessions.EXPECT().GetByID(ctx, "session-1").Return(domainstudy.Session{ID: "session-1", Topic: "Go"}, nil).Once()
+	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{{ID: "message-1", Role: domainstudy.RoleUser, Content: "Explain channels"}}, nil).Once()
 	configs.EXPECT().Load().Return(domainconfig.Config{MaxKnowledgeExtractionItems: 8}, nil).Once()
 	llm.EXPECT().Chat(ctx, mock.MatchedBy(func(req domainllm.ChatRequest) bool {
 		return req.SessionID == "session-1" &&
 			req.Task == domainllm.TaskKnowledgeExtraction &&
 			len(req.Messages) == 1 &&
 			req.Messages[0].Role == "system" &&
-			strings.Contains(req.Messages[0].Content, "User: Explain channels")
-	})).Return(domainllm.ChatResponse{Content: `{"items":[{"concept":"Channels","definition":"Typed conduits.","properties":["typed"],"trade_offs":["coordination"],"related_concepts":["goroutines"]}]}`}, nil).Once()
-	service := applicationknowledge.NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{})
+			strings.Contains(req.Messages[0].Content, "[message:message-1] User:\nExplain channels")
+	})).Return(domainllm.ChatResponse{Content: `{"items":[{"concept":"Channels","definition":"Typed conduits.","properties":["typed"],"trade_offs":["coordination"],"related_concepts":["goroutines"],"evidence":[{"message_id":"message-1","quote":"Explain channels"}]}]}`}, nil).Once()
+	service := applicationknowledge.NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -86,6 +86,7 @@ func TestApp_ExtractKnowledge_returnsFullCandidateAndTruncationState(t *testing.
 	// Then the wrapper and every candidate field survive the translation
 	require.NoError(t, err)
 	assert.False(t, result.Truncated)
+	assert.NotEmpty(t, result.BatchID)
 	require.Len(t, result.Items, 1)
 	assert.Equal(t, "Channels", result.Items[0].Concept)
 	assert.Equal(t, []string{"typed"}, result.Items[0].Properties)
@@ -100,17 +101,17 @@ func TestApp_ExtractKnowledge_returnsEmptyResultForMalformedLLMResponse(t *testi
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	configs := configmocks.NewMockStore(t)
-	sessions.EXPECT().GetByID(ctx, "session-1").Return(domainstudy.Session{Topic: "Go"}, nil).Once()
-	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{{Role: domainstudy.RoleUser, Content: "Explain channels"}}, nil).Once()
+	sessions.EXPECT().GetByID(ctx, "session-1").Return(domainstudy.Session{ID: "session-1", Topic: "Go"}, nil).Once()
+	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{{ID: "message-1", Role: domainstudy.RoleUser, Content: "Explain channels"}}, nil).Once()
 	configs.EXPECT().Load().Return(domainconfig.Config{MaxKnowledgeExtractionItems: 8}, nil).Once()
 	llm.EXPECT().Chat(ctx, mock.MatchedBy(func(req domainllm.ChatRequest) bool {
 		return req.SessionID == "session-1" &&
 			req.Task == domainllm.TaskKnowledgeExtraction &&
 			len(req.Messages) == 1 &&
 			req.Messages[0].Role == "system" &&
-			strings.Contains(req.Messages[0].Content, "User: Explain channels")
+			strings.Contains(req.Messages[0].Content, "[message:message-1] User:\nExplain channels")
 	})).Return(domainllm.ChatResponse{Content: "not json"}, nil).Once()
-	service := applicationknowledge.NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{})
+	service := applicationknowledge.NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -124,25 +125,41 @@ func TestApp_ExtractKnowledge_returnsEmptyResultForMalformedLLMResponse(t *testi
 }
 
 func TestApp_SaveExtractedKnowledge_preservesFullInputAndReturnsSavedIndices(t *testing.T) {
-	// Given a knowledge service backed by a repository
+	// Given a knowledge service backed by a repository and a real extraction
+	// batch — the backend receipt, not the client input, is authoritative
+	// for provenance
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.Concept == "Channels" && assert.ObjectsAreEqual([]string{"typed"}, item.Properties)
 	})).Return(nil).Once()
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	sessions.EXPECT().GetByID(ctx, "session-1").Return(domainstudy.Session{ID: "session-1", Topic: "Go"}, nil).Once()
+	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{{ID: "message-1", Role: domainstudy.RoleUser, Content: "Explain channels"}}, nil).Twice()
+	configs := configmocks.NewMockStore(t)
+	configs.EXPECT().Load().Return(domainconfig.Config{MaxKnowledgeExtractionItems: 8}, nil).Once()
 	llm := llmmocks.NewMockProvider(t)
+	llm.EXPECT().Chat(ctx, mock.Anything).Return(domainllm.ChatResponse{Content: `{"items":[{"concept":"Channels","definition":"Typed conduits.","properties":["typed"],"evidence":[{"message_id":"message-1","quote":"Explain channels"}]}]}`}, nil).Once()
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	store := knowledgemocks.NewMockVectorStore(t)
 	tx := txmocks.NewMockTransactor(t)
 	guard := passingDesktopIndexGuard(t)
 	expectDesktopSuccessfulIndexing(ctx, llm, chunks, store, tx, 1)
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llm, configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{})
+	evidenceRepo := knowledgemocks.NewMockEvidenceRepository(t)
+	evidenceRepo.EXPECT().GetOrCreate(ctx, mock.Anything).Return(domainknowledge.Evidence{ID: "evidence-1"}, nil).Once()
+	evidenceRepo.EXPECT().LinkToItem(ctx, mock.Anything).Return(nil).Once()
+	service := applicationknowledge.NewService(repository, sessions, messages, llm, configs, chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, evidenceRepo)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
+	extracted, err := app.ExtractKnowledge("session-1", false)
+	require.NoError(t, err)
+	require.Len(t, extracted.Items, 1)
 
-	// When saving a full desktop candidate
-	result := app.SaveExtractedKnowledge([]KnowledgeItemInput{{
-		Topic: "Go", Concept: "Channels", Definition: "Typed conduits.", Properties: []string{"typed"},
+	// When saving the extracted candidate through the desktop adapter,
+	// carrying its batch ID
+	result := app.SaveExtractedKnowledge(extracted.BatchID, []KnowledgeItemInput{{
+		ID: extracted.Items[0].ID, Topic: "Go", Concept: "Channels", Definition: "Typed conduits.", Properties: []string{"typed"},
 	}})
 
 	// Then it is persisted and its exact input index is returned
@@ -151,7 +168,8 @@ func TestApp_SaveExtractedKnowledge_preservesFullInputAndReturnsSavedIndices(t *
 }
 
 func TestApp_SaveExtractedKnowledge_returnsExactIndicesAlongsidePartialFailure(t *testing.T) {
-	// Given an invalid input followed by one save and one repository failure
+	// Given an input with no matching receipt, followed by one save and one
+	// repository failure among two candidates from a real extraction batch
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
@@ -160,21 +178,38 @@ func TestApp_SaveExtractedKnowledge_returnsExactIndicesAlongsidePartialFailure(t
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.Concept == "failed"
 	})).Return(assert.AnError).Once()
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	sessions.EXPECT().GetByID(ctx, "session-1").Return(domainstudy.Session{ID: "session-1", Topic: "Go"}, nil).Once()
+	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{{ID: "message-1", Role: domainstudy.RoleUser, Content: "Explain channels"}}, nil).Times(3)
+	configs := configmocks.NewMockStore(t)
+	configs.EXPECT().Load().Return(domainconfig.Config{MaxKnowledgeExtractionItems: 8}, nil).Once()
 	llm := llmmocks.NewMockProvider(t)
+	llm.EXPECT().Chat(ctx, mock.Anything).Return(domainllm.ChatResponse{Content: `{"items":[` +
+		`{"concept":"saved","definition":"persisted","evidence":[{"message_id":"message-1","quote":"Explain channels"}]},` +
+		`{"concept":"failed","definition":"not persisted","evidence":[{"message_id":"message-1","quote":"Explain channels"}]}` +
+		`]}`}, nil).Once()
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	store := knowledgemocks.NewMockVectorStore(t)
 	tx := txmocks.NewMockTransactor(t)
 	guard := passingDesktopIndexGuard(t)
 	expectDesktopSuccessfulIndexing(ctx, llm, chunks, store, tx, 1)
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llm, configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{})
+	evidenceRepo := knowledgemocks.NewMockEvidenceRepository(t)
+	evidenceRepo.EXPECT().GetOrCreate(ctx, mock.Anything).Return(domainknowledge.Evidence{ID: "evidence-1"}, nil).Once()
+	evidenceRepo.EXPECT().LinkToItem(ctx, mock.Anything).Return(nil).Once()
+	service := applicationknowledge.NewService(repository, sessions, messages, llm, configs, chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, evidenceRepo)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
+	extracted, err := app.ExtractKnowledge("session-1", false)
+	require.NoError(t, err)
+	require.Len(t, extracted.Items, 2)
 
-	// When saving through the desktop adapter
-	result := app.SaveExtractedKnowledge([]KnowledgeItemInput{
-		{Topic: "Go", Concept: "invalid", Definition: ""},
-		{Topic: "Go", Concept: "saved", Definition: "persisted"},
-		{Topic: "Go", Concept: "failed", Definition: "not persisted"},
+	// When saving through the desktop adapter, with one input carrying an ID
+	// that matches no backend receipt at all
+	result := app.SaveExtractedKnowledge(extracted.BatchID, []KnowledgeItemInput{
+		{ID: "not-a-real-candidate", Topic: "Go", Concept: "invalid", Definition: ""},
+		{ID: extracted.Items[0].ID, Topic: "Go", Concept: "saved", Definition: "persisted"},
+		{ID: extracted.Items[1].ID, Topic: "Go", Concept: "failed", Definition: "not persisted"},
 	})
 
 	// Then the resolved result carries both the precise success and the failure
@@ -183,30 +218,74 @@ func TestApp_SaveExtractedKnowledge_returnsExactIndicesAlongsidePartialFailure(t
 }
 
 func TestApp_SaveAndApproveExtractedKnowledge_persistsDirectlyAsApproved(t *testing.T) {
-	// Given a knowledge service backed by a repository
+	// Given a knowledge service backed by a repository and a real extraction batch
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.Concept == "Channels" && item.Status == domainknowledge.StatusApproved
 	})).Return(nil).Once()
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	sessions.EXPECT().GetByID(ctx, "session-1").Return(domainstudy.Session{ID: "session-1", Topic: "Go"}, nil).Once()
+	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{{ID: "message-1", Role: domainstudy.RoleUser, Content: "Explain channels"}}, nil).Twice()
+	configs := configmocks.NewMockStore(t)
+	configs.EXPECT().Load().Return(domainconfig.Config{MaxKnowledgeExtractionItems: 8}, nil).Once()
 	llm := llmmocks.NewMockProvider(t)
+	llm.EXPECT().Chat(ctx, mock.Anything).Return(domainllm.ChatResponse{Content: `{"items":[{"concept":"Channels","definition":"Typed conduits.","evidence":[{"message_id":"message-1","quote":"Explain channels"}]}]}`}, nil).Once()
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	store := knowledgemocks.NewMockVectorStore(t)
 	tx := txmocks.NewMockTransactor(t)
 	guard := passingDesktopIndexGuard(t)
 	expectDesktopSuccessfulIndexing(ctx, llm, chunks, store, tx, 1)
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llm, configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{})
+	evidenceRepo := knowledgemocks.NewMockEvidenceRepository(t)
+	evidenceRepo.EXPECT().GetOrCreate(ctx, mock.Anything).Return(domainknowledge.Evidence{ID: "evidence-1"}, nil).Once()
+	evidenceRepo.EXPECT().LinkToItem(ctx, mock.Anything).Return(nil).Once()
+	service := applicationknowledge.NewService(repository, sessions, messages, llm, configs, chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, evidenceRepo)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
+	extracted, err := app.ExtractKnowledge("session-1", false)
+	require.NoError(t, err)
+	require.Len(t, extracted.Items, 1)
 
-	// When saving and approving a full desktop candidate
-	result := app.SaveAndApproveExtractedKnowledge([]KnowledgeItemInput{{
-		Topic: "Go", Concept: "Channels", Definition: "Typed conduits.",
+	// When saving and approving the extracted candidate
+	result := app.SaveAndApproveExtractedKnowledge(extracted.BatchID, []KnowledgeItemInput{{
+		ID: extracted.Items[0].ID, Topic: "Go", Concept: "Channels", Definition: "Typed conduits.",
 	}})
 
 	// Then it is persisted directly as approved and its exact input index is returned
 	assert.Equal(t, []int{0}, result.SavedIndices)
 	assert.Empty(t, result.Error)
+}
+
+func TestApp_DiscardExtraction_leavesTheBatchUnsavable(t *testing.T) {
+	// Given a real extraction batch with one pending candidate
+	ctx := context.Background()
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	sessions.EXPECT().GetByID(ctx, "session-1").Return(domainstudy.Session{ID: "session-1", Topic: "Go"}, nil).Once()
+	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{{ID: "message-1", Role: domainstudy.RoleUser, Content: "Explain channels"}}, nil).Once()
+	configs := configmocks.NewMockStore(t)
+	configs.EXPECT().Load().Return(domainconfig.Config{MaxKnowledgeExtractionItems: 8}, nil).Once()
+	llm := llmmocks.NewMockProvider(t)
+	llm.EXPECT().Chat(ctx, mock.Anything).Return(domainllm.ChatResponse{Content: `{"items":[{"concept":"Channels","definition":"Typed conduits.","evidence":[{"message_id":"message-1","quote":"Explain channels"}]}]}`}, nil).Once()
+	repository := knowledgemocks.NewMockRepository(t)
+	guard := passingDesktopIndexGuard(t)
+	service := applicationknowledge.NewService(repository, sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil, nil, guard, domainknowledge.RetrievalThresholds{}, knowledgemocks.NewMockEvidenceRepository(t))
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
+	app.Startup(ctx)
+	extracted, err := app.ExtractKnowledge("session-1", false)
+	require.NoError(t, err)
+	require.Len(t, extracted.Items, 1)
+
+	// When discarding the batch and then trying to save from it
+	app.DiscardExtraction(extracted.BatchID)
+	result := app.SaveExtractedKnowledge(extracted.BatchID, []KnowledgeItemInput{{
+		ID: extracted.Items[0].ID, Topic: "Go", Concept: "Channels", Definition: "Typed conduits.",
+	}})
+
+	// Then nothing is saved and the repository is never touched
+	assert.Empty(t, result.SavedIndices)
+	repository.AssertNotCalled(t, "Save", mock.Anything, mock.Anything)
 }
 
 func TestApp_ListKnowledgeItems_returnsItemsForTopicAndStatus(t *testing.T) {
@@ -215,7 +294,7 @@ func TestApp_ListKnowledgeItems_returnsItemsForTopicAndStatus(t *testing.T) {
 	repository := knowledgemocks.NewMockRepository(t)
 	repository.EXPECT().List(ctx, domainknowledge.Filter{Topic: "Go", Status: domainknowledge.StatusApproved}).
 		Return([]domainknowledge.Item{{ID: "item-1", Topic: "Go", Concept: "Channels", Status: domainknowledge.StatusApproved}}, nil).Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{})
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -233,7 +312,7 @@ func TestApp_CountDraftKnowledgeItems_returnsRepositoryDraftCount(t *testing.T) 
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
 	repository.EXPECT().CountByStatus(ctx, domainknowledge.StatusDraft).Return(2, nil).Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{})
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -250,7 +329,7 @@ func TestApp_ListKnowledgeTopics_returnsTopics(t *testing.T) {
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
 	repository.EXPECT().ListTopics(ctx).Return([]string{"Go", "Kubernetes"}, nil).Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{})
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -260,6 +339,30 @@ func TestApp_ListKnowledgeTopics_returnsTopics(t *testing.T) {
 	// Then they are returned as-is
 	require.NoError(t, err)
 	assert.Equal(t, []string{"Go", "Kubernetes"}, topics)
+}
+
+func TestApp_ListKnowledgeItemEvidence_returnsPersistedSnapshotsForTheItem(t *testing.T) {
+	// Given an item with a persisted Evidence snapshot
+	ctx := context.Background()
+	createdAt := time.Date(2026, 8, 26, 10, 0, 0, 0, time.UTC)
+	evidenceRepo := knowledgemocks.NewMockEvidenceRepository(t)
+	evidenceRepo.EXPECT().ListByItem(ctx, "item-1").Return([]domainknowledge.Evidence{
+		{ID: "evidence-1", OriginType: domainknowledge.OriginSessionMessage, OriginID: "message-1", SourceLabel: "Distributed systems", Excerpt: "CAP describes trade-offs.", CreatedAt: createdAt},
+	}, nil).Once()
+	service := applicationknowledge.NewService(knowledgemocks.NewMockRepository(t), studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, evidenceRepo)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
+	app.Startup(ctx)
+
+	// When listing that item's evidence through the desktop adapter
+	results, err := app.ListKnowledgeItemEvidence("item-1")
+
+	// Then the immutable snapshot is translated in order
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, domainknowledge.OriginSessionMessage, results[0].OriginType)
+	assert.Equal(t, "Distributed systems", results[0].SourceLabel)
+	assert.Equal(t, "CAP describes trade-offs.", results[0].Excerpt)
+	assert.Equal(t, createdAt.Format(time.RFC3339Nano), results[0].CreatedAt)
 }
 
 func TestApp_ApproveKnowledgeItem_returnsTheUpdatedItem(t *testing.T) {
@@ -284,7 +387,7 @@ func TestApp_ApproveKnowledgeItem_returnsTheUpdatedItem(t *testing.T) {
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{})
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -318,7 +421,7 @@ func TestApp_DeprecateKnowledgeItem_returnsTheUpdatedItem(t *testing.T) {
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{})
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -360,7 +463,7 @@ func TestApp_UpdateKnowledgeItem_persistsEditableFields_andReturnsTheUpdatedItem
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llm, configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{})
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llm, configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -381,6 +484,8 @@ func TestApp_DeleteKnowledgeItem_deletesTheItemAndItsChunks(t *testing.T) {
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return(nil, nil).Once()
 	repository.EXPECT().Delete(ctx, "item-1").Return(nil).Once()
+	evidenceRepo := knowledgemocks.NewMockEvidenceRepository(t)
+	evidenceRepo.EXPECT().DeleteUnreferenced(ctx).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	tx.EXPECT().WithinTx(ctx, mock.Anything).
 		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
@@ -389,7 +494,7 @@ func TestApp_DeleteKnowledgeItem_deletesTheItemAndItsChunks(t *testing.T) {
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{})
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, evidenceRepo)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -431,7 +536,7 @@ func TestApp_ApproveKnowledgeItem_reportsSuccess_whenPostCommitReconciliationFai
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{})
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 	logs := captureLog(t)
@@ -467,7 +572,7 @@ func TestApp_DeprecateKnowledgeItem_reportsSuccess_whenPostCommitReconciliationF
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{})
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 	logs := captureLog(t)
@@ -502,7 +607,7 @@ func TestApp_UpdateKnowledgeItem_reportsSuccess_whenPostCommitReconciliationFail
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{})
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 	logs := captureLog(t)
@@ -525,6 +630,8 @@ func TestApp_DeleteKnowledgeItem_reportsSuccess_whenPostCommitReconciliationFail
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return([]string{"chunk-1"}, nil).Once()
 	repository.EXPECT().Delete(ctx, "item-1").Return(nil).Once()
+	evidenceRepo := knowledgemocks.NewMockEvidenceRepository(t)
+	evidenceRepo.EXPECT().DeleteUnreferenced(ctx).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	tx.EXPECT().WithinTx(ctx, mock.Anything).
 		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
@@ -534,7 +641,7 @@ func TestApp_DeleteKnowledgeItem_reportsSuccess_whenPostCommitReconciliationFail
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{})
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, evidenceRepo)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 	logs := captureLog(t)
@@ -581,7 +688,7 @@ func TestApp_CountUnindexedKnowledgeItems_returnsRepositoryCount(t *testing.T) {
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
 	repository.EXPECT().CountUnindexed(ctx, domainllm.EmbeddingModel).Return(4, nil).Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{})
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -620,7 +727,7 @@ func TestApp_ReindexKnowledgeItems_emitsProgressThenDone_onSuccess(t *testing.T)
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llm, configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{})
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llm, configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, nil)
 	app, captured := newTestReindexApp(t, service)
 
 	// When reindexing through the desktop adapter
@@ -645,7 +752,7 @@ func TestApp_ReindexKnowledgeItems_emitsError_whenTheRunFails(t *testing.T) {
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, guard, domainknowledge.RetrievalThresholds{})
+	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, guard, domainknowledge.RetrievalThresholds{}, nil)
 	app, captured := newTestReindexApp(t, service)
 
 	// When reindexing through the desktop adapter

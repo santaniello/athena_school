@@ -94,12 +94,13 @@ func main() {
 	folders := sqlite.NewFolderRepository(db)
 	knowledgeItems := sqlite.NewKnowledgeRepository(db)
 	knowledgeChunks := sqlite.NewChunkRepository(db)
+	knowledgeEvidence := sqlite.NewEvidenceRepository(db)
 	transactor := sqlite.NewSQLTransactor(db)
 	vectorStore := vectorstore.New()
 	indexLoader := applicationknowledge.NewIndexLoader(knowledgeChunks, vectorStore, domainllm.EmbeddingModel)
 	knowledgeService := applicationknowledge.NewService(
 		knowledgeItems, studySessions, studyMessages, llmClient, configStore, knowledgeChunks, transactor,
-		vectorStore, indexLoader, retrievalThresholds,
+		vectorStore, indexLoader, retrievalThresholds, knowledgeEvidence,
 	)
 	catalogService := modelcatalog.NewService(llmClient)
 	studyService := study.NewService(

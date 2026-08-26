@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
+	domainstudy "github.com/santaniello/athena/internal/domain/study"
 )
 
 const (
@@ -22,14 +23,25 @@ type extractionEnvelope struct {
 }
 
 type extractedItem struct {
-	Concept         string   `json:"concept"`
-	Definition      string   `json:"definition"`
-	Properties      []string `json:"properties"`
-	TradeOffs       []string `json:"trade_offs"`
-	RelatedConcepts []string `json:"related_concepts"`
+	Concept         string                 `json:"concept"`
+	Definition      string                 `json:"definition"`
+	Properties      []string               `json:"properties"`
+	TradeOffs       []string               `json:"trade_offs"`
+	RelatedConcepts []string               `json:"related_concepts"`
+	Evidence        []extractedEvidenceRef `json:"evidence"`
 }
 
-func parseExtraction(raw, topic string, maxItems int, now time.Time) ([]domainknowledge.Item, error) {
+type extractedEvidenceRef struct {
+	MessageID string `json:"message_id"`
+	Quote     string `json:"quote"`
+}
+
+type parsedCandidate struct {
+	domainknowledge.Item
+	EvidenceRefs []domainknowledge.EvidenceRef
+}
+
+func parseExtraction(raw, topic string, maxItems int, now time.Time, includedMessages []domainstudy.Message) ([]parsedCandidate, error) {
 	object, ok := extractJSONObject(raw)
 	if !ok {
 		return nil, ErrMalformedExtraction
@@ -42,10 +54,15 @@ func parseExtraction(raw, topic string, maxItems int, now time.Time) ([]domainkn
 
 	normalizedTopic, topicErr := domainknowledge.NormalizeTopic(topic)
 	if topicErr != nil {
-		return []domainknowledge.Item{}, nil
+		return []parsedCandidate{}, nil
 	}
 
-	items := make([]domainknowledge.Item, 0, len(envelope.Items))
+	messagesByID := make(map[string]domainstudy.Message, len(includedMessages))
+	for _, message := range includedMessages {
+		messagesByID[message.ID] = message
+	}
+
+	items := make([]parsedCandidate, 0, len(envelope.Items))
 	for _, candidate := range envelope.Items {
 		item := domainknowledge.Item{
 			ID:              uuid.NewString(),
@@ -60,11 +77,33 @@ func parseExtraction(raw, topic string, maxItems int, now time.Time) ([]domainkn
 			CreatedAt:       now,
 			UpdatedAt:       now,
 		}
-		if item.Validate() == nil {
-			items = append(items, item)
+		evidenceRefs := validateEvidenceRefs(candidate.Evidence, messagesByID)
+		if item.Validate() == nil && len(evidenceRefs) > 0 {
+			items = append(items, parsedCandidate{Item: item, EvidenceRefs: evidenceRefs})
 		}
 	}
 	return items, nil
+}
+
+func validateEvidenceRefs(refs []extractedEvidenceRef, messagesByID map[string]domainstudy.Message) []domainknowledge.EvidenceRef {
+	valid := make([]domainknowledge.EvidenceRef, 0, min(len(refs), maxEvidencePerItem))
+	seen := make(map[string]struct{}, len(refs))
+	for _, ref := range refs {
+		message, exists := messagesByID[ref.MessageID]
+		quote := strings.TrimSpace(ref.Quote)
+		key := ref.MessageID + "\x00" + quote
+		_, duplicated := seen[key]
+		if !exists || quote == "" || len([]rune(quote)) > maxEvidenceQuoteChars ||
+			!strings.Contains(message.Content, quote) || duplicated {
+			continue
+		}
+		seen[key] = struct{}{}
+		valid = append(valid, domainknowledge.EvidenceRef{MessageID: ref.MessageID, Quote: quote})
+		if len(valid) == maxEvidencePerItem {
+			break
+		}
+	}
+	return valid
 }
 
 func extractJSONObject(raw string) (string, bool) {
