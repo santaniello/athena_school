@@ -3,7 +3,9 @@ package knowledge
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"unicode/utf8"
 
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
@@ -32,6 +34,13 @@ type contextEntry struct {
 // caps the result, and resolves each surviving chunk's owning item's
 // concept. study.Service calls this only for its local source modes —
 // never for SourceModeWeb.
+//
+// A survivor whose owning item no longer exists — e.g. a chunk orphaned in
+// the VectorStore by a failed post-commit Remove (see
+// specs/phases/phase-02-knowledge-engine/08-02-deleteitem-orphan-chunk-risk.md)
+// — is dropped rather than failing the whole call: a partial answer beats
+// none. Any other resolution error still aborts Retrieve, so a genuine
+// infrastructure failure is never mistaken for "nothing relevant found".
 func (s *Service) Retrieve(ctx context.Context, sessionID, query string) (domainknowledge.RetrievalResult, error) {
 	status := s.index.Status()
 	if !status.HasSnapshot {
@@ -65,17 +74,39 @@ func (s *Service) Retrieve(ctx context.Context, sessionID, query string) (domain
 	}
 
 	concepts := make(map[string]string, len(survivors))
+	orphaned := make(map[string]struct{})
 	for _, sc := range survivors {
 		if _, resolved := concepts[sc.Chunk.ItemID]; resolved {
 			continue
 		}
+		if _, dropped := orphaned[sc.Chunk.ItemID]; dropped {
+			continue
+		}
 		item, err := s.items.GetByID(ctx, sc.Chunk.ItemID)
 		if err != nil {
+			if errors.Is(err, domainknowledge.ErrItemNotFound) {
+				orphaned[sc.Chunk.ItemID] = struct{}{}
+				log.Printf("knowledge: retrieval: dropping orphaned chunk %s (item %s no longer exists)", sc.Chunk.ID, sc.Chunk.ItemID)
+				continue
+			}
 			return domainknowledge.RetrievalResult{}, fmt.Errorf(
 				"knowledge: resolving owning item %s: %w", sc.Chunk.ItemID, err,
 			)
 		}
 		concepts[sc.Chunk.ItemID] = item.Concept
+	}
+	if len(orphaned) > 0 {
+		filtered := make([]domainknowledge.ScoredChunk, 0, len(survivors))
+		for _, sc := range survivors {
+			if _, dropped := orphaned[sc.Chunk.ItemID]; dropped {
+				continue
+			}
+			filtered = append(filtered, sc)
+		}
+		survivors = filtered
+		if len(survivors) == 0 {
+			return domainknowledge.RetrievalResult{}, nil
+		}
 	}
 
 	// capped only ever shrinks by removing the lowest-scoring survivor

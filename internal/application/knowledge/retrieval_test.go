@@ -195,8 +195,10 @@ func TestRetrieve_resolvesConceptOncePerDistinctItemID(t *testing.T) {
 	require.Equal(t, "Channels", result.Sources[1].Concept)
 }
 
-func TestRetrieve_returnsIntegrityError_whenOwningItemMissing(t *testing.T) {
-	// Given a surviving chunk whose owning item does not exist
+func TestRetrieve_dropsSoleChunk_whenOwningItemMissing_yieldingNoMatch(t *testing.T) {
+	// Given a surviving chunk whose owning item no longer exists — e.g. an
+	// orphan left behind by a failed DeleteItem.Remove (see
+	// specs/phases/phase-02-knowledge-engine/08-02-deleteitem-orphan-chunk-risk.md)
 	guard := readyGuard(t)
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(1)
@@ -209,10 +211,65 @@ func TestRetrieve_returnsIntegrityError_whenOwningItemMissing(t *testing.T) {
 	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t))
 
 	// When retrieving
+	result, err := service.Retrieve(context.Background(), "session-1", "query")
+
+	// Then the orphaned chunk is dropped rather than failing the call,
+	// leaving no survivors — the same result as no local match at all
+	require.NoError(t, err)
+	require.Equal(t, domainknowledge.RetrievalResult{}, result)
+}
+
+func TestRetrieve_dropsOrphanedChunk_keepingOtherSurvivors(t *testing.T) {
+	// Given one valid surviving chunk and one whose owning item no longer
+	// exists
+	guard := readyGuard(t)
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Len().Return(2)
+	store.EXPECT().Search(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return([]domainknowledge.ScoredChunk{
+			scoredChunk("chunk-valid", "item-1", 0.9),
+			scoredChunk("chunk-orphan", "item-missing", 0.8),
+		}, nil).Once()
+	llm := llmmocks.NewMockProvider(t)
+	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
+	items := knowledgemocks.NewMockRepository(t)
+	items.EXPECT().GetByID(mock.Anything, "item-1").Return(domainknowledge.Item{ID: "item-1", Concept: "Channels"}, nil).Once()
+	items.EXPECT().GetByID(mock.Anything, "item-missing").Return(domainknowledge.Item{}, domainknowledge.ErrItemNotFound).Once()
+	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t))
+
+	// When retrieving
+	result, err := service.Retrieve(context.Background(), "session-1", "query")
+
+	// Then only the valid chunk survives into Chunks and Sources
+	require.NoError(t, err)
+	require.Len(t, result.Chunks, 1)
+	require.Equal(t, "chunk-valid", result.Chunks[0].Chunk.ID)
+	require.Len(t, result.Sources, 1)
+	require.Equal(t, "chunk-valid", result.Sources[0].ChunkID)
+}
+
+func TestRetrieve_propagatesNonNotFoundError_whenResolvingOwningItem(t *testing.T) {
+	// Given a surviving chunk whose owning item lookup fails for a reason
+	// other than the item not existing (e.g. the database is unavailable)
+	guard := readyGuard(t)
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Len().Return(1)
+	store.EXPECT().Search(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return([]domainknowledge.ScoredChunk{scoredChunk("chunk-1", "item-1", 0.9)}, nil).Once()
+	llm := llmmocks.NewMockProvider(t)
+	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
+	items := knowledgemocks.NewMockRepository(t)
+	dbErr := errors.New("database unavailable")
+	items.EXPECT().GetByID(mock.Anything, "item-1").Return(domainknowledge.Item{}, dbErr).Once()
+	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t))
+
+	// When retrieving
 	_, err := service.Retrieve(context.Background(), "session-1", "query")
 
-	// Then it fails as an integrity error, wrapping the domain sentinel
-	require.ErrorIs(t, err, domainknowledge.ErrItemNotFound)
+	// Then it fails — a genuine infrastructure error is never mistaken for
+	// "nothing relevant found"
+	require.ErrorIs(t, err, dbErr)
+	require.NotErrorIs(t, err, domainknowledge.ErrItemNotFound)
 }
 
 func TestRetrieve_preservesScoreDescendingIDAscendingOrder_acrossChunksSourcesAndJSON(t *testing.T) {
