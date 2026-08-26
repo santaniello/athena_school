@@ -23,13 +23,14 @@ func TestSaveAndApprove_revalidatesAgainstTheReceiptAndPersistsDirectlyAsApprove
 	// Message — see specs/Athena.md §12 ("Salvar como conhecimento" skips
 	// the draft stage)
 	ctx := context.Background()
+	var savedItemID string
 	repository := knowledgemocks.NewMockRepository(t)
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.ID != "candidate-1" && item.ID != "" &&
 			item.Topic == "Go" && item.Concept == "Channels" && item.Definition == "Typed conduits." &&
 			item.Source == domainknowledge.SourceAthena && item.Status == domainknowledge.StatusApproved &&
 			!item.CreatedAt.IsZero() && item.CreatedAt.Equal(item.UpdatedAt)
-	})).Return(nil).Once()
+	})).Run(func(_ context.Context, item domainknowledge.Item) { savedItemID = item.ID }).Return(nil).Once()
 	messages := studymocks.NewMockMessageRepository(t)
 	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{
 		{ID: "message-1", Content: "Channels are typed conduits."},
@@ -37,10 +38,11 @@ func TestSaveAndApprove_revalidatesAgainstTheReceiptAndPersistsDirectlyAsApprove
 	evidenceRepo := knowledgemocks.NewMockEvidenceRepository(t)
 	evidenceRepo.EXPECT().GetOrCreate(ctx, mock.MatchedBy(func(e domainknowledge.Evidence) bool {
 		return e.ID != "" && e.OriginType == domainknowledge.OriginSessionMessage &&
-			e.OriginID != "" && e.SourceLabel != "" && e.Excerpt != "" && !e.CreatedAt.IsZero()
+			e.OriginID == "message-1" && e.SourceLabel == "Go" &&
+			e.Excerpt == "Channels are typed conduits." && !e.CreatedAt.IsZero()
 	})).Return(domainknowledge.Evidence{ID: "evidence-1"}, nil).Once()
 	evidenceRepo.EXPECT().LinkToItem(ctx, mock.MatchedBy(func(link domainknowledge.ItemEvidence) bool {
-		return link.EvidenceID == "evidence-1" && link.ItemID != ""
+		return link.EvidenceID == "evidence-1" && link.ItemID == savedItemID
 	})).Return(nil).Once()
 	llm := llmmocks.NewMockProvider(t)
 	chunks := knowledgemocks.NewMockChunkRepository(t)
@@ -66,8 +68,10 @@ func TestSaveAndApprove_revalidatesAgainstTheReceiptAndPersistsDirectlyAsApprove
 func TestSaveAndApprove_stopsAtTransactionFailureAndKeepsThatReceiptForRetry(t *testing.T) {
 	// Given two candidates, the second of which fails to persist
 	ctx := context.Background()
+	var savedItemID string
 	repository := knowledgemocks.NewMockRepository(t)
-	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool { return item.Concept == "first" })).Return(nil).Once()
+	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool { return item.Concept == "first" })).
+		Run(func(_ context.Context, item domainknowledge.Item) { savedItemID = item.ID }).Return(nil).Once()
 	saveErr := errors.New("database locked")
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool { return item.Concept == "second" })).Return(saveErr).Once()
 	messages := studymocks.NewMockMessageRepository(t)
@@ -77,10 +81,11 @@ func TestSaveAndApprove_stopsAtTransactionFailureAndKeepsThatReceiptForRetry(t *
 	evidenceRepo := knowledgemocks.NewMockEvidenceRepository(t)
 	evidenceRepo.EXPECT().GetOrCreate(ctx, mock.MatchedBy(func(e domainknowledge.Evidence) bool {
 		return e.ID != "" && e.OriginType == domainknowledge.OriginSessionMessage &&
-			e.OriginID != "" && e.SourceLabel != "" && e.Excerpt != "" && !e.CreatedAt.IsZero()
+			e.OriginID == "message-1" && e.SourceLabel == "Go" &&
+			e.Excerpt == "shared evidence quote" && !e.CreatedAt.IsZero()
 	})).Return(domainknowledge.Evidence{ID: "evidence-1"}, nil).Once()
 	evidenceRepo.EXPECT().LinkToItem(ctx, mock.MatchedBy(func(link domainknowledge.ItemEvidence) bool {
-		return link.EvidenceID == "evidence-1" && link.ItemID != ""
+		return link.EvidenceID == "evidence-1" && link.ItemID == savedItemID
 	})).Return(nil).Once()
 	llm := llmmocks.NewMockProvider(t)
 	chunks := knowledgemocks.NewMockChunkRepository(t)

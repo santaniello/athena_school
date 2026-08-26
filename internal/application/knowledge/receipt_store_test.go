@@ -68,9 +68,28 @@ func TestReceiptStore_restorePutsAClaimedReceiptBackUnchangedForRetry(t *testing
 	assert.True(t, foundB)
 }
 
-func TestReceiptStore_restoreRecreatesTheBatchWhenItWasFullyConsumedOrDiscardedMeanwhile(t *testing.T) {
-	// Given a batch whose only candidate was claimed and then discarded
-	// while its save was still in flight
+func TestReceiptStore_restoreRecreatesTheBatchWhenItsOnlyCandidateWasSimplyClaimed(t *testing.T) {
+	// Given a batch whose only candidate was claimed — draining the batch —
+	// with no Discard involved
+	store := newReceiptStore()
+	batchID := store.Create("session-1", "Concurrency", []parsedCandidate{
+		{Item: domainknowledge.Item{ID: "candidate-a"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-a", Quote: "quote a"}}},
+	})
+	receiptA, claimed := store.Claim(batchID, "candidate-a")
+	require.True(t, claimed)
+
+	// When that save fails and restores its receipt
+	store.Restore(batchID, "candidate-a", receiptA)
+
+	// Then the batch exists again and the candidate is retryable
+	restored, found := store.Get(batchID, "candidate-a")
+	require.True(t, found)
+	assert.Equal(t, receiptA, restored)
+}
+
+func TestReceiptStore_restoreIsANoOpForABatchTheUserAlreadyDiscarded(t *testing.T) {
+	// Given a batch whose only candidate was claimed and then the whole
+	// batch discarded — a user Dismiss — while that save was still in flight
 	store := newReceiptStore()
 	batchID := store.Create("session-1", "Concurrency", []parsedCandidate{
 		{Item: domainknowledge.Item{ID: "candidate-a"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-a", Quote: "quote a"}}},
@@ -79,13 +98,13 @@ func TestReceiptStore_restoreRecreatesTheBatchWhenItWasFullyConsumedOrDiscardedM
 	require.True(t, claimed)
 	store.Discard(batchID)
 
-	// When that in-flight save nonetheless fails and restores its receipt
+	// When that in-flight save nonetheless fails and tries to restore its receipt
 	store.Restore(batchID, "candidate-a", receiptA)
 
-	// Then the batch exists again and the candidate is retryable
-	restored, found := store.Get(batchID, "candidate-a")
-	require.True(t, found)
-	assert.Equal(t, receiptA, restored)
+	// Then the batch stays gone — Restore must never resurrect a receipt the
+	// user explicitly dismissed
+	_, found := store.Get(batchID, "candidate-a")
+	assert.False(t, found)
 }
 
 func TestReceiptStore_discardRemovesEveryPendingCandidateInBatch(t *testing.T) {

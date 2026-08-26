@@ -81,3 +81,13 @@ func TestEvidenceRef_IsSupportedBy_reportsVerbatimContainment(t *testing.T) {
 	assert.False(t, ref.IsSupportedBy("A channel coordinates communication"))
 	assert.False(t, ref.IsSupportedBy(""))
 }
+
+func TestEvidenceRef_IsSupportedBy_rejectsABlankQuoteEvenThoughItIsASubstringOfAnything(t *testing.T) {
+	// Given a reference with a blank Quote — strings.Contains would otherwise
+	// treat "" as vacuously present in any content
+	ref := EvidenceRef{MessageID: "message-1", Quote: ""}
+
+	// Then it is never reported as supported, regardless of content
+	assert.False(t, ref.IsSupportedBy("Any content at all."))
+	assert.False(t, ref.IsSupportedBy(""))
+}

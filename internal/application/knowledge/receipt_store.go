@@ -17,10 +17,19 @@ type candidateReceipt struct {
 type receiptStore struct {
 	mu      sync.RWMutex
 	batches map[string]map[string]candidateReceipt
+	// discarded remembers every batch ID Discard has ever removed, so a
+	// Restore racing an in-flight save against a concurrent Discard cannot
+	// resurrect a batch the user explicitly dismissed. Batch IDs are
+	// per-extraction UUIDs, never reused, so this only ever grows — bounded
+	// in practice by how many extractions one long-running session performs.
+	discarded map[string]struct{}
 }
 
 func newReceiptStore() *receiptStore {
-	return &receiptStore{batches: make(map[string]map[string]candidateReceipt)}
+	return &receiptStore{
+		batches:   make(map[string]map[string]candidateReceipt),
+		discarded: make(map[string]struct{}),
+	}
 }
 
 func (s *receiptStore) Create(sessionID, sourceLabel string, candidates []parsedCandidate) string {
@@ -76,11 +85,18 @@ func (s *receiptStore) Claim(batchID, candidateID string) (candidateReceipt, boo
 }
 
 // Restore puts a claimed receipt back — after a save that did not end up
-// persisting the candidate — keeping it available for retry.
+// persisting the candidate — keeping it available for retry. It is a no-op
+// for a batch the user has since discarded: a save that was still in flight
+// when Discard ran must not resurrect a receipt the user explicitly
+// dismissed. A batch merely drained by every candidate being claimed (not
+// discarded) is recreated normally.
 func (s *receiptStore) Restore(batchID, candidateID string, receipt candidateReceipt) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if _, discarded := s.discarded[batchID]; discarded {
+		return
+	}
 	receipts, found := s.batches[batchID]
 	if !found {
 		receipts = make(map[string]candidateReceipt, 1)
@@ -93,4 +109,5 @@ func (s *receiptStore) Discard(batchID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.batches, batchID)
+	s.discarded[batchID] = struct{}{}
 }

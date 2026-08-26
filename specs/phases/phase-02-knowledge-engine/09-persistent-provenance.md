@@ -250,7 +250,8 @@ affected package:
   `Evidence`, `ItemEvidence`, `EvidenceRef`, validation errors, `Evidence.Validate`, and the
   `EvidenceRepository` port. `EvidenceRef.IsSupportedBy(content)` is the single domain-owned verbatim
   invariant shared by extraction-time validation and save-time revalidation, instead of two
-  independently drifting `strings.Contains` copies in the application layer.
+  independently drifting `strings.Contains` copies in the application layer; it rejects a blank Quote
+  outright, since `strings.Contains` otherwise treats `""` as present in any content.
 - `internal/application/knowledge/prompt.go` — renders transcript turns as
   `[message:<id>] <role>:\n<content>` and requires the LLM envelope to return
   `evidence: [{message_id, quote}]` (1–5 refs, ≤1000 Unicode chars each, verbatim).
@@ -261,7 +262,9 @@ affected package:
   grouped by extraction batch. `Claim`/`Restore` replace a separate `Get`+later-`Consume`: claiming
   atomically removes and returns a candidate's receipt so two concurrent `SaveDrafts`/`SaveAndApprove`
   calls can never both claim and persist the same candidate; a save that does not end up persisting it
-  (invalid evidence, a failed transaction) calls `Restore` to put the receipt back for retry.
+  (invalid evidence, a failed transaction) calls `Restore` to put the receipt back for retry. `Restore`
+  is a no-op for a batch already discarded (tracked separately from the live batch map), so a save
+  still in flight when the user dismisses the batch cannot resurrect it.
 - `internal/application/knowledge/extraction.go` and `service.go` — `ExtractFromSession` returns
   `ExtractionBatch{ID, Items}` and stores backend receipts; `Service` now takes an injected
   `EvidenceRepository`; `SaveDrafts`/`SaveAndApprove` accept the batch ID, claim each candidate's

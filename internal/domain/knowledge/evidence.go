@@ -50,8 +50,13 @@ type EvidenceRef struct {
 // IsSupportedBy reports whether content contains ref's Quote verbatim — the
 // invariant every Evidence reference must satisfy both when a candidate is
 // first extracted and again, against the Message's then-current content,
-// when it is later saved.
+// when it is later saved. A blank Quote is never supported: strings.Contains
+// treats "" as a substring of everything, which would make an empty quote
+// vacuously "verbatim" in any content.
 func (ref EvidenceRef) IsSupportedBy(content string) bool {
+	if ref.Quote == "" {
+		return false
+	}
 	return strings.Contains(content, ref.Quote)
 }
 
