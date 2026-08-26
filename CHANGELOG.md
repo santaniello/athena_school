@@ -58,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Moved the Wails entrypoint from `cmd/athena/` to root `main.go`: Wails v2 does not support a main package outside the project root
 
 ### Fixed
+- SQLite foreign-key integrity is now enforced on every opened database: legacy orphaned test rows are removed before `messages` and `usage` gain their session ownership actions, `PRAGMA foreign_key_check` blocks startup on any unexpected violation, deleting a Study Session atomically cascades its Messages while retaining historical usage with a `NULL` session reference, and provider calls outside a Study Session persist usage without a fabricated empty session ID
 - Knowledge extraction review follow-ups: extraction limits are validated as integers by the desktop binding, partial-save result types stay synchronized with generated Wails bindings, LLM request mocks assert the complete request shape, and privacy documentation now discloses explicit transcript transfer to OpenRouter
 - Knowledge extraction edge cases: saving an OpenRouter key no longer overwrites an unreadable configuration, oversized single messages never produce transcript-free LLM calls, and partial draft failures return exact persisted indices so retries cannot duplicate non-prefix successes
 - Frontend mutation coverage for knowledge extraction: assertions now exercise loading, retry, partial-save, dismissal, truncation confirmation, settings boundaries, and binding failure paths, raising the changed-file Stryker score above the required 80% threshold

@@ -84,6 +84,156 @@ func TestOpen_createsMessagesTable(t *testing.T) {
 	assert.Equal(t, "messages", tableName)
 }
 
+func TestOpen_enablesForeignKeysAndRejectsMessageForMissingSession(t *testing.T) {
+	// Given a freshly opened database
+	path := filepath.Join(t.TempDir(), "athena.db")
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// When inspecting foreign-key enforcement and inserting an orphan message
+	var foreignKeysEnabled int
+	queryErr := db.QueryRow(`PRAGMA foreign_keys`).Scan(&foreignKeysEnabled)
+	require.NoError(t, queryErr)
+	_, insertErr := db.Exec(`INSERT INTO messages (id, session_id, role, content, created_at)
+		VALUES ('message-1', 'missing-session', 'user', 'hello', CURRENT_TIMESTAMP)`)
+
+	// Then enforcement is active and the orphan write is rejected
+	assert.Equal(t, 1, foreignKeysEnabled)
+	require.Error(t, insertErr)
+}
+
+func TestOpen_configuresSessionDeletionToCascadeMessagesAndDetachUsage(t *testing.T) {
+	// Given a session with one message and one usage entry
+	path := filepath.Join(t.TempDir(), "athena.db")
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	_, err = db.Exec(`INSERT INTO sessions (id, topic, mode, folder_id, started_at)
+		VALUES ('session-1', 'Go', 'socratic', 'default', CURRENT_TIMESTAMP)`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO messages (id, session_id, role, content, created_at)
+		VALUES ('message-1', 'session-1', 'user', 'hello', CURRENT_TIMESTAMP)`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO usage (id, session_id, model, input_tokens, output_tokens, cost, created_at)
+		VALUES ('usage-1', 'session-1', 'model', 10, 5, 0.01, CURRENT_TIMESTAMP)`)
+	require.NoError(t, err)
+
+	// When deleting the session
+	_, deleteErr := db.Exec(`DELETE FROM sessions WHERE id = 'session-1'`)
+
+	// Then its messages are deleted and its usage remains detached
+	require.NoError(t, deleteErr)
+	var messageCount int
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM messages WHERE id = 'message-1'`).Scan(&messageCount))
+	assert.Zero(t, messageCount)
+	var usageSessionID sql.NullString
+	require.NoError(t, db.QueryRow(`SELECT session_id FROM usage WHERE id = 'usage-1'`).Scan(&usageSessionID))
+	assert.False(t, usageSessionID.Valid)
+}
+
+func TestOpen_migratesLegacyForeignKeysAndRemovesOnlyInvalidTestRows(t *testing.T) {
+	// Given a legacy database with valid rows, orphan rows, and a session
+	// whose folder no longer exists
+	path := filepath.Join(t.TempDir(), "athena.db")
+	legacy, err := sql.Open("sqlite", path)
+	require.NoError(t, err)
+	_, err = legacy.Exec(`
+		CREATE TABLE folders (
+			id TEXT PRIMARY KEY, name TEXT NOT NULL, is_default INTEGER NOT NULL DEFAULT 0, created_at DATETIME
+		);
+		CREATE TABLE sessions (
+			id TEXT PRIMARY KEY, topic TEXT, mode TEXT, folder_id TEXT REFERENCES folders(id), started_at DATETIME
+		);
+		CREATE TABLE messages (
+			id TEXT PRIMARY KEY, session_id TEXT REFERENCES sessions(id), role TEXT, content TEXT, created_at DATETIME
+		);
+		CREATE TABLE usage (
+			id TEXT PRIMARY KEY, session_id TEXT REFERENCES sessions(id), model TEXT,
+			input_tokens INTEGER, output_tokens INTEGER, cost REAL, created_at DATETIME
+		);
+		INSERT INTO folders (id, name, is_default) VALUES ('default', 'General', 1);
+		INSERT INTO sessions (id, topic, mode, folder_id) VALUES
+			('valid-session', 'Go', 'socratic', 'default'),
+			('invalid-session', 'Rust', 'socratic', 'missing-folder');
+		INSERT INTO messages (id, session_id, role, content) VALUES
+			('valid-message', 'valid-session', 'user', 'valid'),
+			('invalid-session-message', 'invalid-session', 'user', 'invalid parent'),
+			('orphan-message', 'missing-session', 'user', 'orphan');
+		INSERT INTO usage (id, session_id, model) VALUES
+			('valid-usage', 'valid-session', 'model'),
+			('invalid-session-usage', 'invalid-session', 'model'),
+			('orphan-usage', 'missing-session', 'model');
+	`)
+	require.NoError(t, err)
+	require.NoError(t, legacy.Close())
+
+	// When opening it through the current migration path
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Then invalid test rows are removed while valid rows remain
+	for _, check := range []struct {
+		name  string
+		query string
+	}{
+		{name: "sessions", query: `SELECT COUNT(*) FROM sessions`},
+		{name: "messages", query: `SELECT COUNT(*) FROM messages`},
+		{name: "usage", query: `SELECT COUNT(*) FROM usage`},
+	} {
+		var count int
+		require.NoError(t, db.QueryRow(check.query).Scan(&count))
+		assert.Equal(t, 1, count, check.name)
+	}
+	var validMessageContent string
+	require.NoError(t, db.QueryRow(`SELECT content FROM messages WHERE id = 'valid-message'`).Scan(&validMessageContent))
+	assert.Equal(t, "valid", validMessageContent)
+
+	// And the rebuilt constraints cascade messages, detach usage, and have
+	// no remaining violations
+	_, err = db.Exec(`DELETE FROM sessions WHERE id = 'valid-session'`)
+	require.NoError(t, err)
+	var messageCount int
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM messages`).Scan(&messageCount))
+	assert.Zero(t, messageCount)
+	var usageSessionID sql.NullString
+	require.NoError(t, db.QueryRow(`SELECT session_id FROM usage WHERE id = 'valid-usage'`).Scan(&usageSessionID))
+	assert.False(t, usageSessionID.Valid)
+	rows, err := db.Query(`PRAGMA foreign_key_check`)
+	require.NoError(t, err)
+	defer func() { _ = rows.Close() }()
+	assert.False(t, rows.Next())
+}
+
+func TestOpen_refusesDatabaseWithUnexpectedForeignKeyViolation(t *testing.T) {
+	// Given a database containing an orphan relationship unknown to Athena's
+	// targeted legacy cleanup
+	path := filepath.Join(t.TempDir(), "athena.db")
+	legacy, err := sql.Open("sqlite", path)
+	require.NoError(t, err)
+	_, err = legacy.Exec(`
+		CREATE TABLE unexpected_parent (id TEXT PRIMARY KEY);
+		CREATE TABLE unexpected_child (
+			id TEXT PRIMARY KEY,
+			parent_id TEXT REFERENCES unexpected_parent(id)
+		);
+		INSERT INTO unexpected_child (id, parent_id) VALUES ('child-1', 'missing-parent');
+	`)
+	require.NoError(t, err)
+	require.NoError(t, legacy.Close())
+
+	// When opening it through Athena
+	db, openErr := Open(path)
+	if db != nil {
+		_ = db.Close()
+	}
+
+	// Then startup is rejected rather than accepting the unknown violation
+	require.Error(t, openErr)
+	assert.ErrorContains(t, openErr, "foreign key check")
+}
+
 func TestOpen_createsFoldersTable(t *testing.T) {
 	// Given a path to a database file that does not exist yet
 	path := filepath.Join(t.TempDir(), "athena.db")

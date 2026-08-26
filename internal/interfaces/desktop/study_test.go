@@ -413,7 +413,6 @@ func TestApp_DeleteStudySession_deletesTheSession(t *testing.T) {
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
-	messages.EXPECT().DeleteBySession(mock.Anything, "session-1").Return(nil).Once()
 	sessions.EXPECT().Delete(mock.Anything, "session-1").Return(nil).Once()
 	app, _ := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 

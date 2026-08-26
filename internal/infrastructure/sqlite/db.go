@@ -42,5 +42,30 @@ func Open(path string) (*sql.DB, error) {
 			)
 		}
 	}
+	if _, err := db.Exec(`PRAGMA foreign_keys = ON`); err != nil {
+		return nil, errors.Join(fmt.Errorf("sqlite: enabling foreign keys: %w", err), db.Close())
+	}
+	if err := checkForeignKeys(db); err != nil {
+		return nil, errors.Join(fmt.Errorf("sqlite: foreign key check: %w", err), db.Close())
+	}
 	return db, nil
+}
+
+func checkForeignKeys(db *sql.DB) error {
+	rows, err := db.Query(`PRAGMA foreign_key_check`)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+
+	if !rows.Next() {
+		return rows.Err()
+	}
+	var table, parent string
+	var rowID sql.NullInt64
+	var foreignKeyID int
+	if err := rows.Scan(&table, &rowID, &parent, &foreignKeyID); err != nil {
+		return err
+	}
+	return fmt.Errorf("table %q row %v references missing parent %q through foreign key %d", table, rowID, parent, foreignKeyID)
 }

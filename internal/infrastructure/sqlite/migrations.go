@@ -21,7 +21,7 @@ var migrations = []func(*sql.DB) error{
 	)`),
 	execSQL(`CREATE TABLE IF NOT EXISTS usage (
 		id            TEXT PRIMARY KEY,
-		session_id    TEXT REFERENCES sessions(id),
+		session_id    TEXT REFERENCES sessions(id) ON DELETE SET NULL,
 		model         TEXT,
 		input_tokens  INTEGER,
 		output_tokens INTEGER,
@@ -36,7 +36,7 @@ var migrations = []func(*sql.DB) error{
 	)`),
 	execSQL(`CREATE TABLE IF NOT EXISTS messages (
 		id         TEXT PRIMARY KEY,
-		session_id TEXT REFERENCES sessions(id),
+		session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
 		role       TEXT,
 		content    TEXT,
 		created_at DATETIME
@@ -97,6 +97,7 @@ var migrations = []func(*sql.DB) error{
 	)`),
 	migrateIngestedFilesToSourcePathSchema,
 	addSessionsContextColumns,
+	migrateSessionForeignKeyActions,
 }
 
 // addSessionsFolderIDColumn adds sessions.folder_id if it does not already
@@ -251,6 +252,105 @@ func migrateIngestedFilesToSourcePathSchema(db *sql.DB) error {
 		ingested_at     DATETIME
 	)`)
 	return err
+}
+
+// migrateSessionForeignKeyActions upgrades the two pre-enforcement session
+// relationships to their ownership semantics: messages are owned by their
+// session, while usage remains as an unattributed financial record after a
+// session is deleted. Rows that cannot satisfy the new relationships are
+// pre-release test data and are removed before the tables are rebuilt.
+func migrateSessionForeignKeyActions(db *sql.DB) error {
+	messagesReady, err := hasForeignKeyDeleteAction(db, "messages", "session_id", "sessions", "CASCADE")
+	if err != nil {
+		return err
+	}
+	usageReady, err := hasForeignKeyDeleteAction(db, "usage", "session_id", "sessions", "SET NULL")
+	if err != nil {
+		return err
+	}
+	if messagesReady && usageReady {
+		return nil
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("sqlite: beginning session foreign-key migration: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	statements := []string{
+		`DELETE FROM sessions
+		 WHERE folder_id IS NULL
+		    OR NOT EXISTS (SELECT 1 FROM folders WHERE folders.id = sessions.folder_id)`,
+		`DELETE FROM messages
+		 WHERE session_id IS NULL
+		    OR session_id = ''
+		    OR NOT EXISTS (SELECT 1 FROM sessions WHERE sessions.id = messages.session_id)`,
+		`DELETE FROM usage
+		 WHERE session_id IS NOT NULL
+		   AND (session_id = ''
+		        OR NOT EXISTS (SELECT 1 FROM sessions WHERE sessions.id = usage.session_id))`,
+		`ALTER TABLE messages RENAME TO messages_before_foreign_keys`,
+		`CREATE TABLE messages (
+			id         TEXT PRIMARY KEY,
+			session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+			role       TEXT,
+			content    TEXT,
+			created_at DATETIME
+		)`,
+		`INSERT INTO messages (id, session_id, role, content, created_at)
+		 SELECT id, session_id, role, content, created_at FROM messages_before_foreign_keys`,
+		`DROP TABLE messages_before_foreign_keys`,
+		`ALTER TABLE usage RENAME TO usage_before_foreign_keys`,
+		`CREATE TABLE usage (
+			id            TEXT PRIMARY KEY,
+			session_id    TEXT REFERENCES sessions(id) ON DELETE SET NULL,
+			model         TEXT,
+			input_tokens  INTEGER,
+			output_tokens INTEGER,
+			cost          REAL,
+			created_at    DATETIME
+		)`,
+		`INSERT INTO usage (id, session_id, model, input_tokens, output_tokens, cost, created_at)
+		 SELECT id, session_id, model, input_tokens, output_tokens, cost, created_at
+		 FROM usage_before_foreign_keys`,
+		`DROP TABLE usage_before_foreign_keys`,
+	}
+	for _, statement := range statements {
+		if _, err := tx.Exec(statement); err != nil {
+			return fmt.Errorf("sqlite: migrating session foreign keys: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("sqlite: committing session foreign-key migration: %w", err)
+	}
+	committed = true
+	return nil
+}
+
+func hasForeignKeyDeleteAction(db *sql.DB, table, fromColumn, referencedTable, action string) (bool, error) {
+	rows, err := db.Query(`PRAGMA foreign_key_list(` + table + `)`)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var id, sequence int
+		var target, from, to, onUpdate, onDelete, match string
+		if err := rows.Scan(&id, &sequence, &target, &from, &to, &onUpdate, &onDelete, &match); err != nil {
+			return false, err
+		}
+		if target == referencedTable && from == fromColumn && onDelete == action {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }
 
 // execSQL adapts a plain DDL/DML statement, unconditionally safe to
