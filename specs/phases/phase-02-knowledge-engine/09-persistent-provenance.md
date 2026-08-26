@@ -3,8 +3,11 @@
 ## Goal
 
 Every Knowledge Item created by an evidence-bearing extraction flow records the
-evidence that supported its extracted version, and every RAG-assisted answer keeps
-the exact sources used after the session is resumed or the app restarts. Lightweight
+evidence that supported its extracted version — the **Knowledge Item Evidence**
+increment below, implemented and complete. Every RAG-assisted answer keeping the
+exact sources used after the session is resumed or the app restarts is this spec's
+second, **Persisted answer sources** increment: designed here but not yet
+authorized or implemented (see the Implementation handoff). Lightweight
 imported-file shadow Items remain the explicit exception described below.
 
 This spec adds provenance, not automatic trust. Evidence explains **where the
@@ -245,7 +248,9 @@ affected package:
 
 - `internal/domain/knowledge/evidence.go` — `OriginSessionMessage`, `OriginKnowledgeChunk`,
   `Evidence`, `ItemEvidence`, `EvidenceRef`, validation errors, `Evidence.Validate`, and the
-  `EvidenceRepository` port.
+  `EvidenceRepository` port. `EvidenceRef.IsSupportedBy(content)` is the single domain-owned verbatim
+  invariant shared by extraction-time validation and save-time revalidation, instead of two
+  independently drifting `strings.Contains` copies in the application layer.
 - `internal/application/knowledge/prompt.go` — renders transcript turns as
   `[message:<id>] <role>:\n<content>` and requires the LLM envelope to return
   `evidence: [{message_id, quote}]` (1–5 refs, ≤1000 Unicode chars each, verbatim).
@@ -253,14 +258,19 @@ affected package:
   IDs, blanks, over-limit or non-verbatim quotes, duplicates all rejected); caps accepted references
   at `maxEvidencePerItem`, mutation-protected by a 6-reference boundary test.
 - `internal/application/knowledge/receipt_store.go` — mutex-protected, in-memory receipt store
-  grouped by extraction batch (`Create`/`Get`/`Consume`/`Discard`).
+  grouped by extraction batch. `Claim`/`Restore` replace a separate `Get`+later-`Consume`: claiming
+  atomically removes and returns a candidate's receipt so two concurrent `SaveDrafts`/`SaveAndApprove`
+  calls can never both claim and persist the same candidate; a save that does not end up persisting it
+  (invalid evidence, a failed transaction) calls `Restore` to put the receipt back for retry.
 - `internal/application/knowledge/extraction.go` and `service.go` — `ExtractFromSession` returns
   `ExtractionBatch{ID, Items}` and stores backend receipts; `Service` now takes an injected
-  `EvidenceRepository`; `SaveDrafts`/`SaveAndApprove` accept the batch ID, resolve each candidate's
-  receipt, reload and revalidate its Study Session Messages, and save the regenerated Item plus its
-  Evidence snapshots/links in one `Transactor.WithinTx` per Item — the receipt is consumed only after
-  commit, so a failed or unattempted candidate's receipt stays retryable; `DiscardExtraction(batchID)`
-  drops a batch's remaining receipts.
+  `EvidenceRepository`; `SaveDrafts`/`SaveAndApprove` accept the batch ID, claim each candidate's
+  receipt, reload and revalidate its Study Session Messages (each cited session's Messages load once
+  per save batch, not once per candidate — every candidate in one batch shares its extraction's
+  session), and save the regenerated Item plus its Evidence snapshots/links in one `Transactor.WithinTx`
+  per Item — the claimed receipt is restored only if the candidate does not end up persisted, so a
+  failed or unattempted candidate's receipt stays retryable; `DiscardExtraction(batchID)` drops a
+  batch's remaining receipts.
 - `internal/application/knowledge/delete.go` — `DeleteItem` now also runs
   `EvidenceRepository.DeleteUnreferenced` inside its existing Item/chunk transaction.
 - `internal/application/knowledge/list.go` — `ListItemEvidence(ctx, itemID)`.
@@ -280,9 +290,10 @@ affected package:
   fully successful save) calls `discardExtraction`, but never from `handleSave`'s error branch, so a
   partial-save failure leaves the remaining receipts retryable; the Knowledge Explorer item detail
   gained an **Extraction Evidence** section (source label, exact excerpt, an empty state for
-  legacy/shadow Items, and the meaning-preserving warning `Evidence captured during extraction. Later
-  edits may no longer be supported by this excerpt.`). Wails bindings regenerated via `wails generate
-  module`.
+  legacy/shadow Items, the meaning-preserving warning `Evidence captured during extraction. Later
+  edits may no longer be supported by this excerpt.`, and a distinct retryable error state so a
+  genuine load failure never renders identically to "no evidence for this item"). Wails bindings
+  regenerated via `wails generate module`.
 
 Quality gates run against the complete change: `go test ./...` (race-free, no `-race` flag needed —
 matches existing CI), `golangci-lint run` (0 issues), `govulncheck ./...` (0 vulnerabilities in this

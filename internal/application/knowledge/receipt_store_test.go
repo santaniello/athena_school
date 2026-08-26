@@ -9,29 +9,83 @@ import (
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 )
 
-func TestReceiptStore_consumeRemovesOnlySavedCandidateAndKeepsPendingSiblings(t *testing.T) {
+func TestReceiptStore_claimAtomicallyRemovesOnlyThatCandidateAndKeepsPendingSiblings(t *testing.T) {
 	// Given one extraction batch containing candidates A, B, and C
+	store := newReceiptStore()
+	refsA := []domainknowledge.EvidenceRef{{MessageID: "message-a", Quote: "quote a"}}
+	batchID := store.Create("session-1", "Concurrency", []parsedCandidate{
+		{Item: domainknowledge.Item{ID: "candidate-a"}, EvidenceRefs: refsA},
+		{Item: domainknowledge.Item{ID: "candidate-b"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-b", Quote: "quote b"}}},
+		{Item: domainknowledge.Item{ID: "candidate-c"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-c", Quote: "quote c"}}},
+	})
+	// Mutating the input slice after Create must not reach the stored receipt
+	refsA[0].Quote = "tampered after create"
+
+	// When candidate A is claimed for its save transaction
+	receiptA, claimedA := store.Claim(batchID, "candidate-a")
+
+	// Then A is claimed with its untampered snapshot and is gone from the store
+	require.True(t, claimedA)
+	assert.Equal(t, "session-1", receiptA.SessionID)
+	assert.Equal(t, "Concurrency", receiptA.SourceLabel)
+	assert.Equal(t, []domainknowledge.EvidenceRef{{MessageID: "message-a", Quote: "quote a"}}, receiptA.EvidenceRefs)
+	_, foundA := store.Get(batchID, "candidate-a")
+	assert.False(t, foundA)
+
+	// And a second concurrent claim of the same candidate fails — proving
+	// Claim is atomic, so two concurrent saves can never both persist it
+	_, claimedAgain := store.Claim(batchID, "candidate-a")
+	assert.False(t, claimedAgain)
+
+	// Mutating the claimed receipt's slice must not reach B/C's stored receipts
+	receiptA.EvidenceRefs[0].Quote = "mutated after claim"
+	receiptB, foundB := store.Get(batchID, "candidate-b")
+	receiptC, foundC := store.Get(batchID, "candidate-c")
+	require.True(t, foundB)
+	require.True(t, foundC)
+	assert.Equal(t, []domainknowledge.EvidenceRef{{MessageID: "message-b", Quote: "quote b"}}, receiptB.EvidenceRefs)
+	assert.Equal(t, []domainknowledge.EvidenceRef{{MessageID: "message-c", Quote: "quote c"}}, receiptC.EvidenceRefs)
+}
+
+func TestReceiptStore_restorePutsAClaimedReceiptBackUnchangedForRetry(t *testing.T) {
+	// Given a claimed receipt from a batch that still has a pending sibling
 	store := newReceiptStore()
 	batchID := store.Create("session-1", "Concurrency", []parsedCandidate{
 		{Item: domainknowledge.Item{ID: "candidate-a"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-a", Quote: "quote a"}}},
 		{Item: domainknowledge.Item{ID: "candidate-b"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-b", Quote: "quote b"}}},
-		{Item: domainknowledge.Item{ID: "candidate-c"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-c", Quote: "quote c"}}},
 	})
+	receiptA, claimed := store.Claim(batchID, "candidate-a")
+	require.True(t, claimed)
 
-	// When candidate A is consumed after its successful transaction
-	store.Consume(batchID, "candidate-a")
+	// When the save fails and the receipt is restored
+	store.Restore(batchID, "candidate-a", receiptA)
 
-	// Then A is gone while B and C retain their exact extraction receipts
-	_, foundA := store.Get(batchID, "candidate-a")
-	receiptB, foundB := store.Get(batchID, "candidate-b")
-	receiptC, foundC := store.Get(batchID, "candidate-c")
-	assert.False(t, foundA)
-	require.True(t, foundB)
-	require.True(t, foundC)
-	assert.Equal(t, "session-1", receiptB.SessionID)
-	assert.Equal(t, "Concurrency", receiptB.SourceLabel)
-	assert.Equal(t, []domainknowledge.EvidenceRef{{MessageID: "message-b", Quote: "quote b"}}, receiptB.EvidenceRefs)
-	assert.Equal(t, []domainknowledge.EvidenceRef{{MessageID: "message-c", Quote: "quote c"}}, receiptC.EvidenceRefs)
+	// Then candidate A is available again, unchanged, alongside its sibling
+	restored, found := store.Get(batchID, "candidate-a")
+	require.True(t, found)
+	assert.Equal(t, receiptA, restored)
+	_, foundB := store.Get(batchID, "candidate-b")
+	assert.True(t, foundB)
+}
+
+func TestReceiptStore_restoreRecreatesTheBatchWhenItWasFullyConsumedOrDiscardedMeanwhile(t *testing.T) {
+	// Given a batch whose only candidate was claimed and then discarded
+	// while its save was still in flight
+	store := newReceiptStore()
+	batchID := store.Create("session-1", "Concurrency", []parsedCandidate{
+		{Item: domainknowledge.Item{ID: "candidate-a"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-a", Quote: "quote a"}}},
+	})
+	receiptA, claimed := store.Claim(batchID, "candidate-a")
+	require.True(t, claimed)
+	store.Discard(batchID)
+
+	// When that in-flight save nonetheless fails and restores its receipt
+	store.Restore(batchID, "candidate-a", receiptA)
+
+	// Then the batch exists again and the candidate is retryable
+	restored, found := store.Get(batchID, "candidate-a")
+	require.True(t, found)
+	assert.Equal(t, receiptA, restored)
 }
 
 func TestReceiptStore_discardRemovesEveryPendingCandidateInBatch(t *testing.T) {

@@ -35,8 +35,13 @@ func TestSaveAndApprove_revalidatesAgainstTheReceiptAndPersistsDirectlyAsApprove
 		{ID: "message-1", Content: "Channels are typed conduits."},
 	}, nil).Once()
 	evidenceRepo := knowledgemocks.NewMockEvidenceRepository(t)
-	evidenceRepo.EXPECT().GetOrCreate(ctx, mock.Anything).Return(domainknowledge.Evidence{ID: "evidence-1"}, nil).Once()
-	evidenceRepo.EXPECT().LinkToItem(ctx, mock.Anything).Return(nil).Once()
+	evidenceRepo.EXPECT().GetOrCreate(ctx, mock.MatchedBy(func(e domainknowledge.Evidence) bool {
+		return e.ID != "" && e.OriginType == domainknowledge.OriginSessionMessage &&
+			e.OriginID != "" && e.SourceLabel != "" && e.Excerpt != "" && !e.CreatedAt.IsZero()
+	})).Return(domainknowledge.Evidence{ID: "evidence-1"}, nil).Once()
+	evidenceRepo.EXPECT().LinkToItem(ctx, mock.MatchedBy(func(link domainknowledge.ItemEvidence) bool {
+		return link.EvidenceID == "evidence-1" && link.ItemID != ""
+	})).Return(nil).Once()
 	llm := llmmocks.NewMockProvider(t)
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	store := knowledgemocks.NewMockVectorStore(t)
@@ -68,10 +73,15 @@ func TestSaveAndApprove_stopsAtTransactionFailureAndKeepsThatReceiptForRetry(t *
 	messages := studymocks.NewMockMessageRepository(t)
 	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{
 		{ID: "message-1", Content: "shared evidence quote"},
-	}, nil).Twice()
+	}, nil).Once()
 	evidenceRepo := knowledgemocks.NewMockEvidenceRepository(t)
-	evidenceRepo.EXPECT().GetOrCreate(ctx, mock.Anything).Return(domainknowledge.Evidence{ID: "evidence-1"}, nil).Once()
-	evidenceRepo.EXPECT().LinkToItem(ctx, mock.Anything).Return(nil).Once()
+	evidenceRepo.EXPECT().GetOrCreate(ctx, mock.MatchedBy(func(e domainknowledge.Evidence) bool {
+		return e.ID != "" && e.OriginType == domainknowledge.OriginSessionMessage &&
+			e.OriginID != "" && e.SourceLabel != "" && e.Excerpt != "" && !e.CreatedAt.IsZero()
+	})).Return(domainknowledge.Evidence{ID: "evidence-1"}, nil).Once()
+	evidenceRepo.EXPECT().LinkToItem(ctx, mock.MatchedBy(func(link domainknowledge.ItemEvidence) bool {
+		return link.EvidenceID == "evidence-1" && link.ItemID != ""
+	})).Return(nil).Once()
 	llm := llmmocks.NewMockProvider(t)
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	store := knowledgemocks.NewMockVectorStore(t)

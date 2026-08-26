@@ -140,15 +140,22 @@ func TestApp_SaveExtractedKnowledge_preservesFullInputAndReturnsSavedIndices(t *
 	configs := configmocks.NewMockStore(t)
 	configs.EXPECT().Load().Return(domainconfig.Config{MaxKnowledgeExtractionItems: 8}, nil).Once()
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Chat(ctx, mock.Anything).Return(domainllm.ChatResponse{Content: `{"items":[{"concept":"Channels","definition":"Typed conduits.","properties":["typed"],"evidence":[{"message_id":"message-1","quote":"Explain channels"}]}]}`}, nil).Once()
+	llm.EXPECT().Chat(ctx, mock.MatchedBy(func(req domainllm.ChatRequest) bool {
+		return req.SessionID == "session-1" && req.Task == domainllm.TaskKnowledgeExtraction
+	})).Return(domainllm.ChatResponse{Content: `{"items":[{"concept":"Channels","definition":"Typed conduits.","properties":["typed"],"evidence":[{"message_id":"message-1","quote":"Explain channels"}]}]}`}, nil).Once()
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	store := knowledgemocks.NewMockVectorStore(t)
 	tx := txmocks.NewMockTransactor(t)
 	guard := passingDesktopIndexGuard(t)
 	expectDesktopSuccessfulIndexing(ctx, llm, chunks, store, tx, 1)
 	evidenceRepo := knowledgemocks.NewMockEvidenceRepository(t)
-	evidenceRepo.EXPECT().GetOrCreate(ctx, mock.Anything).Return(domainknowledge.Evidence{ID: "evidence-1"}, nil).Once()
-	evidenceRepo.EXPECT().LinkToItem(ctx, mock.Anything).Return(nil).Once()
+	evidenceRepo.EXPECT().GetOrCreate(ctx, mock.MatchedBy(func(e domainknowledge.Evidence) bool {
+		return e.ID != "" && e.OriginType == domainknowledge.OriginSessionMessage &&
+			e.OriginID != "" && e.SourceLabel != "" && e.Excerpt != "" && !e.CreatedAt.IsZero()
+	})).Return(domainknowledge.Evidence{ID: "evidence-1"}, nil).Once()
+	evidenceRepo.EXPECT().LinkToItem(ctx, mock.MatchedBy(func(link domainknowledge.ItemEvidence) bool {
+		return link.EvidenceID == "evidence-1" && link.ItemID != ""
+	})).Return(nil).Once()
 	service := applicationknowledge.NewService(repository, sessions, messages, llm, configs, chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, evidenceRepo)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
@@ -181,11 +188,13 @@ func TestApp_SaveExtractedKnowledge_returnsExactIndicesAlongsidePartialFailure(t
 	sessions := studymocks.NewMockSessionRepository(t)
 	messages := studymocks.NewMockMessageRepository(t)
 	sessions.EXPECT().GetByID(ctx, "session-1").Return(domainstudy.Session{ID: "session-1", Topic: "Go"}, nil).Once()
-	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{{ID: "message-1", Role: domainstudy.RoleUser, Content: "Explain channels"}}, nil).Times(3)
+	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{{ID: "message-1", Role: domainstudy.RoleUser, Content: "Explain channels"}}, nil).Twice()
 	configs := configmocks.NewMockStore(t)
 	configs.EXPECT().Load().Return(domainconfig.Config{MaxKnowledgeExtractionItems: 8}, nil).Once()
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Chat(ctx, mock.Anything).Return(domainllm.ChatResponse{Content: `{"items":[` +
+	llm.EXPECT().Chat(ctx, mock.MatchedBy(func(req domainllm.ChatRequest) bool {
+		return req.SessionID == "session-1" && req.Task == domainllm.TaskKnowledgeExtraction
+	})).Return(domainllm.ChatResponse{Content: `{"items":[` +
 		`{"concept":"saved","definition":"persisted","evidence":[{"message_id":"message-1","quote":"Explain channels"}]},` +
 		`{"concept":"failed","definition":"not persisted","evidence":[{"message_id":"message-1","quote":"Explain channels"}]}` +
 		`]}`}, nil).Once()
@@ -195,8 +204,13 @@ func TestApp_SaveExtractedKnowledge_returnsExactIndicesAlongsidePartialFailure(t
 	guard := passingDesktopIndexGuard(t)
 	expectDesktopSuccessfulIndexing(ctx, llm, chunks, store, tx, 1)
 	evidenceRepo := knowledgemocks.NewMockEvidenceRepository(t)
-	evidenceRepo.EXPECT().GetOrCreate(ctx, mock.Anything).Return(domainknowledge.Evidence{ID: "evidence-1"}, nil).Once()
-	evidenceRepo.EXPECT().LinkToItem(ctx, mock.Anything).Return(nil).Once()
+	evidenceRepo.EXPECT().GetOrCreate(ctx, mock.MatchedBy(func(e domainknowledge.Evidence) bool {
+		return e.ID != "" && e.OriginType == domainknowledge.OriginSessionMessage &&
+			e.OriginID != "" && e.SourceLabel != "" && e.Excerpt != "" && !e.CreatedAt.IsZero()
+	})).Return(domainknowledge.Evidence{ID: "evidence-1"}, nil).Once()
+	evidenceRepo.EXPECT().LinkToItem(ctx, mock.MatchedBy(func(link domainknowledge.ItemEvidence) bool {
+		return link.EvidenceID == "evidence-1" && link.ItemID != ""
+	})).Return(nil).Once()
 	service := applicationknowledge.NewService(repository, sessions, messages, llm, configs, chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, evidenceRepo)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
@@ -231,15 +245,22 @@ func TestApp_SaveAndApproveExtractedKnowledge_persistsDirectlyAsApproved(t *test
 	configs := configmocks.NewMockStore(t)
 	configs.EXPECT().Load().Return(domainconfig.Config{MaxKnowledgeExtractionItems: 8}, nil).Once()
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Chat(ctx, mock.Anything).Return(domainllm.ChatResponse{Content: `{"items":[{"concept":"Channels","definition":"Typed conduits.","evidence":[{"message_id":"message-1","quote":"Explain channels"}]}]}`}, nil).Once()
+	llm.EXPECT().Chat(ctx, mock.MatchedBy(func(req domainllm.ChatRequest) bool {
+		return req.SessionID == "session-1" && req.Task == domainllm.TaskKnowledgeExtraction
+	})).Return(domainllm.ChatResponse{Content: `{"items":[{"concept":"Channels","definition":"Typed conduits.","evidence":[{"message_id":"message-1","quote":"Explain channels"}]}]}`}, nil).Once()
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	store := knowledgemocks.NewMockVectorStore(t)
 	tx := txmocks.NewMockTransactor(t)
 	guard := passingDesktopIndexGuard(t)
 	expectDesktopSuccessfulIndexing(ctx, llm, chunks, store, tx, 1)
 	evidenceRepo := knowledgemocks.NewMockEvidenceRepository(t)
-	evidenceRepo.EXPECT().GetOrCreate(ctx, mock.Anything).Return(domainknowledge.Evidence{ID: "evidence-1"}, nil).Once()
-	evidenceRepo.EXPECT().LinkToItem(ctx, mock.Anything).Return(nil).Once()
+	evidenceRepo.EXPECT().GetOrCreate(ctx, mock.MatchedBy(func(e domainknowledge.Evidence) bool {
+		return e.ID != "" && e.OriginType == domainknowledge.OriginSessionMessage &&
+			e.OriginID != "" && e.SourceLabel != "" && e.Excerpt != "" && !e.CreatedAt.IsZero()
+	})).Return(domainknowledge.Evidence{ID: "evidence-1"}, nil).Once()
+	evidenceRepo.EXPECT().LinkToItem(ctx, mock.MatchedBy(func(link domainknowledge.ItemEvidence) bool {
+		return link.EvidenceID == "evidence-1" && link.ItemID != ""
+	})).Return(nil).Once()
 	service := applicationknowledge.NewService(repository, sessions, messages, llm, configs, chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, evidenceRepo)
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
@@ -267,7 +288,9 @@ func TestApp_DiscardExtraction_leavesTheBatchUnsavable(t *testing.T) {
 	configs := configmocks.NewMockStore(t)
 	configs.EXPECT().Load().Return(domainconfig.Config{MaxKnowledgeExtractionItems: 8}, nil).Once()
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Chat(ctx, mock.Anything).Return(domainllm.ChatResponse{Content: `{"items":[{"concept":"Channels","definition":"Typed conduits.","evidence":[{"message_id":"message-1","quote":"Explain channels"}]}]}`}, nil).Once()
+	llm.EXPECT().Chat(ctx, mock.MatchedBy(func(req domainllm.ChatRequest) bool {
+		return req.SessionID == "session-1" && req.Task == domainllm.TaskKnowledgeExtraction
+	})).Return(domainllm.ChatResponse{Content: `{"items":[{"concept":"Channels","definition":"Typed conduits.","evidence":[{"message_id":"message-1","quote":"Explain channels"}]}]}`}, nil).Once()
 	repository := knowledgemocks.NewMockRepository(t)
 	guard := passingDesktopIndexGuard(t)
 	service := applicationknowledge.NewService(repository, sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil, nil, guard, domainknowledge.RetrievalThresholds{}, knowledgemocks.NewMockEvidenceRepository(t))

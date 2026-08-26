@@ -2,7 +2,6 @@ package knowledge
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -96,10 +95,11 @@ func (s *Service) SaveAndApprove(ctx context.Context, batchID string, items []do
 // its saved siblings.
 //
 // Each Item, together with its immutable Evidence snapshots and links, is
-// saved in its own SQLite transaction — a failure leaves neither behind.
-// The receipt is consumed only after that transaction commits, so a failed
-// save keeps the receipt available for retry; siblings not yet attempted
-// keep theirs too.
+// saved in its own SQLite transaction — a failure leaves neither behind. A
+// candidate's receipt is claimed before that transaction (so a concurrent
+// call cannot also claim and save it) and restored if the candidate does
+// not end up persisted — invalid evidence, a failed transaction — keeping
+// it available for retry; siblings not yet attempted keep theirs too.
 //
 // Each saved item is indexed right after its own persistence — but once one
 // item's indexing fails, the rest of the batch is still saved (and its
@@ -115,21 +115,33 @@ func (s *Service) saveCandidates(ctx context.Context, batchID string, items []do
 	defer s.index.EndMutation()
 
 	savedIndices := make([]int, 0, len(items))
+	// Every candidate in one batch shares its extraction's SessionID (see
+	// receiptStore.Create), so this cache loads each cited session's
+	// Messages at most once per save, instead of once per candidate.
+	messagesBySession := make(map[string]map[string]domainstudy.Message)
 	var indexingErr error
 	for index, input := range items {
 		topic, topicErr := domainknowledge.NormalizeTopic(input.Topic)
 		if topicErr != nil {
 			continue
 		}
-		receipt, found := s.receipts.Get(batchID, input.ID)
-		if !found {
+		receipt, claimed := s.receipts.Claim(batchID, input.ID)
+		if !claimed {
 			continue
 		}
-		validRefs, err := s.revalidateEvidenceRefs(ctx, receipt)
-		if err != nil {
-			return savedIndices, err
+		messagesByID, cached := messagesBySession[receipt.SessionID]
+		if !cached {
+			var err error
+			messagesByID, err = s.loadMessagesByID(ctx, receipt.SessionID)
+			if err != nil {
+				s.receipts.Restore(batchID, input.ID, receipt)
+				return savedIndices, err
+			}
+			messagesBySession[receipt.SessionID] = messagesByID
 		}
+		validRefs := revalidateEvidenceRefs(receipt, messagesByID)
 		if len(validRefs) == 0 {
+			s.receipts.Restore(batchID, input.ID, receipt)
 			continue
 		}
 
@@ -148,10 +160,11 @@ func (s *Service) saveCandidates(ctx context.Context, batchID string, items []do
 			UpdatedAt:       now,
 		}
 		if item.Validate() != nil {
+			s.receipts.Restore(batchID, input.ID, receipt)
 			continue
 		}
 
-		err = s.tx.WithinTx(ctx, func(ctx context.Context) error {
+		err := s.tx.WithinTx(ctx, func(ctx context.Context) error {
 			if err := s.items.Save(ctx, item); err != nil {
 				return err
 			}
@@ -174,9 +187,9 @@ func (s *Service) saveCandidates(ctx context.Context, batchID string, items []do
 			return nil
 		})
 		if err != nil {
+			s.receipts.Restore(batchID, input.ID, receipt)
 			return savedIndices, err
 		}
-		s.receipts.Consume(batchID, input.ID)
 		savedIndices = append(savedIndices, index)
 
 		if indexingErr == nil {
@@ -194,12 +207,9 @@ func (s *Service) DiscardExtraction(batchID string) {
 	s.receipts.Discard(batchID)
 }
 
-// revalidateEvidenceRefs reloads receipt's Study Session Messages and keeps
-// only the EvidenceRefs whose Message still exists and still contains the
-// exact quote — repeating, at save time, the ownership and verbatim checks
-// already performed once at extraction time.
-func (s *Service) revalidateEvidenceRefs(ctx context.Context, receipt candidateReceipt) ([]domainknowledge.EvidenceRef, error) {
-	messages, err := s.messages.ListBySession(ctx, receipt.SessionID)
+// loadMessagesByID loads sessionID's Study Session Messages, keyed by ID.
+func (s *Service) loadMessagesByID(ctx context.Context, sessionID string) (map[string]domainstudy.Message, error) {
+	messages, err := s.messages.ListBySession(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
@@ -207,13 +217,21 @@ func (s *Service) revalidateEvidenceRefs(ctx context.Context, receipt candidateR
 	for _, message := range messages {
 		messagesByID[message.ID] = message
 	}
+	return messagesByID, nil
+}
+
+// revalidateEvidenceRefs keeps only the EvidenceRefs whose Message still
+// exists in messagesByID and still supports the exact quote — repeating, at
+// save time, the ownership and verbatim checks already performed once at
+// extraction time.
+func revalidateEvidenceRefs(receipt candidateReceipt, messagesByID map[string]domainstudy.Message) []domainknowledge.EvidenceRef {
 	valid := make([]domainknowledge.EvidenceRef, 0, len(receipt.EvidenceRefs))
 	for _, ref := range receipt.EvidenceRefs {
 		message, exists := messagesByID[ref.MessageID]
-		if !exists || !strings.Contains(message.Content, ref.Quote) {
+		if !exists || !ref.IsSupportedBy(message.Content) {
 			continue
 		}
 		valid = append(valid, ref)
 	}
-	return valid, nil
+	return valid
 }

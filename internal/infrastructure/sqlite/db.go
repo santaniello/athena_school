@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 
 	_ "modernc.org/sqlite" // registers the "sqlite" database/sql driver
 )
@@ -67,5 +68,9 @@ func checkForeignKeys(db *sql.DB) error {
 	if err := rows.Scan(&table, &rowID, &parent, &foreignKeyID); err != nil {
 		return err
 	}
-	return fmt.Errorf("table %q row %v references missing parent %q through foreign key %d", table, rowID, parent, foreignKeyID)
+	rowDescription := "NULL" // a WITHOUT ROWID table reports no row id
+	if rowID.Valid {
+		rowDescription = strconv.FormatInt(rowID.Int64, 10)
+	}
+	return fmt.Errorf("table %q row %s references missing parent %q through foreign key %d", table, rowDescription, parent, foreignKeyID)
 }

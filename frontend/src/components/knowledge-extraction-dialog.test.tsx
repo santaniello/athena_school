@@ -95,7 +95,12 @@ describe('KnowledgeExtractionDialog', () => {
     vi.mocked(saveExtractedKnowledge).mockReturnValueOnce(new Promise<never>(() => {}))
     const user = userEvent.setup()
     render(
-      <KnowledgeExtractionDialog open batchId="batch-1" items={[candidate('1', 'Channels')]} onClose={vi.fn()} />,
+      <KnowledgeExtractionDialog
+        open
+        batchId="batch-1"
+        items={[candidate('1', 'Channels')]}
+        onClose={vi.fn()}
+      />,
     )
 
     // When saving drafts
@@ -112,7 +117,12 @@ describe('KnowledgeExtractionDialog', () => {
     const onClose = vi.fn()
     const user = userEvent.setup()
     render(
-      <KnowledgeExtractionDialog open batchId="batch-1" items={[candidate('1', 'Channels')]} onClose={onClose} />,
+      <KnowledgeExtractionDialog
+        open
+        batchId="batch-1"
+        items={[candidate('1', 'Channels')]}
+        onClose={onClose}
+      />,
     )
 
     // When dismissing it through the dialog close control
@@ -174,7 +184,12 @@ describe('KnowledgeExtractionDialog', () => {
     // Given one candidate that the user unchecks
     const user = userEvent.setup()
     render(
-      <KnowledgeExtractionDialog open batchId="batch-1" items={[candidate('1', 'Channels')]} onClose={vi.fn()} />,
+      <KnowledgeExtractionDialog
+        open
+        batchId="batch-1"
+        items={[candidate('1', 'Channels')]}
+        onClose={vi.fn()}
+      />,
     )
     await user.click(screen.getByLabelText('Select Channels'))
 
@@ -313,7 +328,12 @@ describe('KnowledgeExtractionDialog', () => {
     vi.mocked(saveExtractedKnowledge).mockRejectedValueOnce('unavailable')
     const user = userEvent.setup()
     render(
-      <KnowledgeExtractionDialog open batchId="batch-1" items={[candidate('1', 'Channels')]} onClose={vi.fn()} />,
+      <KnowledgeExtractionDialog
+        open
+        batchId="batch-1"
+        items={[candidate('1', 'Channels')]}
+        onClose={vi.fn()}
+      />,
     )
 
     // When saving
@@ -329,7 +349,12 @@ describe('KnowledgeExtractionDialog', () => {
     vi.mocked(saveAndApproveExtractedKnowledge).mockRejectedValueOnce('unavailable')
     const user = userEvent.setup()
     render(
-      <KnowledgeExtractionDialog open batchId="batch-1" items={[candidate('1', 'Channels')]} onClose={vi.fn()} />,
+      <KnowledgeExtractionDialog
+        open
+        batchId="batch-1"
+        items={[candidate('1', 'Channels')]}
+        onClose={vi.fn()}
+      />,
     )
 
     // When saving via "Save as knowledge"
@@ -358,7 +383,9 @@ describe('KnowledgeExtractionDialog', () => {
 
     // Then it calls the approve-directly binding (never the draft one) with
     // every selected candidate, and closes the dialog
-    await waitFor(() => expect(saveAndApproveExtractedKnowledge).toHaveBeenCalledWith('batch-1', items))
+    await waitFor(() =>
+      expect(saveAndApproveExtractedKnowledge).toHaveBeenCalledWith('batch-1', items),
+    )
     expect(saveExtractedKnowledge).not.toHaveBeenCalled()
     expect(onClose).toHaveBeenCalled()
   })
@@ -368,7 +395,12 @@ describe('KnowledgeExtractionDialog', () => {
     vi.mocked(saveAndApproveExtractedKnowledge).mockReturnValueOnce(new Promise<never>(() => {}))
     const user = userEvent.setup()
     render(
-      <KnowledgeExtractionDialog open batchId="batch-1" items={[candidate('1', 'Channels')]} onClose={vi.fn()} />,
+      <KnowledgeExtractionDialog
+        open
+        batchId="batch-1"
+        items={[candidate('1', 'Channels')]}
+        onClose={vi.fn()}
+      />,
     )
 
     // When saving via "Save as knowledge"
@@ -396,7 +428,9 @@ describe('KnowledgeExtractionDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Try again' }))
 
     // Then the retry goes through the same approve-directly binding, not the draft one
-    await waitFor(() => expect(saveAndApproveExtractedKnowledge).toHaveBeenNthCalledWith(2, 'batch-1', items))
+    await waitFor(() =>
+      expect(saveAndApproveExtractedKnowledge).toHaveBeenNthCalledWith(2, 'batch-1', items),
+    )
     expect(saveExtractedKnowledge).not.toHaveBeenCalled()
   })
 })

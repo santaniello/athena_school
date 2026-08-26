@@ -91,14 +91,15 @@ func validateEvidenceRefs(refs []extractedEvidenceRef, messagesByID map[string]d
 	for _, ref := range refs {
 		message, exists := messagesByID[ref.MessageID]
 		quote := strings.TrimSpace(ref.Quote)
+		candidate := domainknowledge.EvidenceRef{MessageID: ref.MessageID, Quote: quote}
 		key := ref.MessageID + "\x00" + quote
 		_, duplicated := seen[key]
 		if !exists || quote == "" || len([]rune(quote)) > maxEvidenceQuoteChars ||
-			!strings.Contains(message.Content, quote) || duplicated {
+			!candidate.IsSupportedBy(message.Content) || duplicated {
 			continue
 		}
 		seen[key] = struct{}{}
-		valid = append(valid, domainknowledge.EvidenceRef{MessageID: ref.MessageID, Quote: quote})
+		valid = append(valid, candidate)
 		if len(valid) == maxEvidencePerItem {
 			break
 		}

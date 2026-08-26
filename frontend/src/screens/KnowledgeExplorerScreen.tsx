@@ -102,16 +102,31 @@ function FieldList({ label, values }: { label: string; values: string[] }) {
 // warns that an Evidence excerpt reflects the Item's state at extraction
 // time only: it is not re-verified against any later edit (see
 // specs/phases/phase-02-knowledge-engine/09-persistent-provenance.md).
-function EvidenceSection({ evidence }: { evidence: KnowledgeEvidence[] }) {
+// A genuine load failure renders as a distinct, retryable error instead of
+// looking identical to a legitimate empty result.
+function EvidenceSection({
+  evidence,
+  error,
+  onRetry,
+}: {
+  evidence: KnowledgeEvidence[]
+  error: boolean
+  onRetry: () => void
+}) {
   return (
     <div>
       <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
         Extraction Evidence
       </h3>
-      {evidence.length === 0 ? (
-        <p className="mt-1 text-sm text-muted-foreground">
-          No extraction evidence for this item.
+      {error ? (
+        <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+          Failed to load extraction evidence.
+          <Button variant="outline" size="sm" onClick={onRetry}>
+            Retry
+          </Button>
         </p>
+      ) : evidence.length === 0 ? (
+        <p className="mt-1 text-sm text-muted-foreground">No extraction evidence for this item.</p>
       ) : (
         <>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -146,6 +161,8 @@ function KnowledgeExplorerScreen({
   const [deletingItem, setDeletingItem] = useState<KnowledgeItem | null>(null)
   const [error, setError] = useState('')
   const [evidence, setEvidence] = useState<KnowledgeEvidence[]>([])
+  const [evidenceError, setEvidenceError] = useState(false)
+  const [evidenceReloadToken, setEvidenceReloadToken] = useState(0)
   const [unindexedCount, setUnindexedCount] = useState(0)
   const [reindexOpen, setReindexOpen] = useState(false)
 
@@ -222,22 +239,26 @@ function KnowledgeExplorerScreen({
 
   // Loads the selected Item's Evidence snapshots. A legacy or shadow Item
   // that never went through evidence-bearing extraction simply resolves to
-  // an empty list — not an error — so a fetch failure is likewise treated
-  // as "no evidence to show" rather than surfaced as a page error.
+  // an empty list — not an error. A genuine fetch failure is kept distinct
+  // (evidenceError) so it renders as a retryable error instead of silently
+  // looking identical to "no evidence for this item".
   useEffect(() => {
     if (!selectedId) return
     let ignore = false
     listKnowledgeItemEvidence(selectedId)
       .then((result) => {
-        if (!ignore) setEvidence(result)
+        if (!ignore) {
+          setEvidence(result)
+          setEvidenceError(false)
+        }
       })
       .catch(() => {
-        if (!ignore) setEvidence([])
+        if (!ignore) setEvidenceError(true)
       })
     return () => {
       ignore = true
     }
-  }, [selectedId])
+  }, [selectedId, evidenceReloadToken])
 
   function selectItem(item: KnowledgeItem) {
     setSelectedId(item.id)
@@ -247,6 +268,7 @@ function KnowledgeExplorerScreen({
     // the previous item's evidence never flashes under the new item's
     // heading while its own fetch is still in flight.
     setEvidence([])
+    setEvidenceError(false)
   }
 
   // A status transition (approve/deprecate) can move updated out of the
@@ -476,7 +498,11 @@ function KnowledgeExplorerScreen({
               <FieldList label="Properties" values={selectedItem.properties} />
               <FieldList label="Trade-offs" values={selectedItem.tradeOffs} />
               <FieldList label="Related concepts" values={selectedItem.relatedConcepts} />
-              <EvidenceSection evidence={evidence} />
+              <EvidenceSection
+                evidence={evidence}
+                error={evidenceError}
+                onRetry={() => setEvidenceReloadToken((token) => token + 1)}
+              />
 
               <div className="flex flex-wrap gap-2 pt-2">
                 {selectedItem.status === 'draft' && (

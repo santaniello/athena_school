@@ -47,6 +47,14 @@ type EvidenceRef struct {
 	Quote     string
 }
 
+// IsSupportedBy reports whether content contains ref's Quote verbatim — the
+// invariant every Evidence reference must satisfy both when a candidate is
+// first extracted and again, against the Message's then-current content,
+// when it is later saved.
+func (ref EvidenceRef) IsSupportedBy(content string) bool {
+	return strings.Contains(content, ref.Quote)
+}
+
 // EvidenceRepository persists immutable Evidence snapshots and their Item links.
 type EvidenceRepository interface {
 	GetOrCreate(ctx context.Context, evidence Evidence) (Evidence, error)

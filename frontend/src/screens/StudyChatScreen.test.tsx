@@ -866,7 +866,11 @@ describe('StudyChatScreen — knowledge extraction', () => {
   it('stops after the user declines truncated transcript processing', async () => {
     // Given a settled long session whose extraction needs confirmation
     await renderSettledSession()
-    vi.mocked(extractKnowledge).mockResolvedValueOnce({ batchId: 'batch-1', items: [], truncated: true })
+    vi.mocked(extractKnowledge).mockResolvedValueOnce({
+      batchId: 'batch-1',
+      items: [],
+      truncated: true,
+    })
     const user = userEvent.setup()
     await user.click(screen.getByRole('button', { name: 'Extract knowledge' }))
     expect(await screen.findByText(/this session is long/i)).toBeInTheDocument()
@@ -882,7 +886,11 @@ describe('StudyChatScreen — knowledge extraction', () => {
   it('closes extracted candidate review when ignored', async () => {
     // Given an extraction review with no new candidates
     await renderSettledSession()
-    vi.mocked(extractKnowledge).mockResolvedValueOnce({ batchId: 'batch-1', items: [], truncated: false })
+    vi.mocked(extractKnowledge).mockResolvedValueOnce({
+      batchId: 'batch-1',
+      items: [],
+      truncated: false,
+    })
     const user = userEvent.setup()
     await user.click(screen.getByRole('button', { name: 'Extract knowledge' }))
     expect(await screen.findByText('No new knowledge found')).toBeInTheDocument()

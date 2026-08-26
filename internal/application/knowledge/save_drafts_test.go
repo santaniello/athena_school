@@ -153,8 +153,13 @@ func TestSaveDrafts_savesCandidateWhenTheMessageWasEditedAroundTheQuote(t *testi
 		{ID: "message-1", Content: "Edited intro. Channels are typed conduits. Edited outro."},
 	}, nil).Once()
 	evidenceRepo := knowledgemocks.NewMockEvidenceRepository(t)
-	evidenceRepo.EXPECT().GetOrCreate(ctx, mock.Anything).Return(domainknowledge.Evidence{ID: "evidence-1"}, nil).Once()
-	evidenceRepo.EXPECT().LinkToItem(ctx, mock.Anything).Return(nil).Once()
+	evidenceRepo.EXPECT().GetOrCreate(ctx, mock.MatchedBy(func(e domainknowledge.Evidence) bool {
+		return e.ID != "" && e.OriginType == domainknowledge.OriginSessionMessage &&
+			e.OriginID != "" && e.SourceLabel != "" && e.Excerpt != "" && !e.CreatedAt.IsZero()
+	})).Return(domainknowledge.Evidence{ID: "evidence-1"}, nil).Once()
+	evidenceRepo.EXPECT().LinkToItem(ctx, mock.MatchedBy(func(link domainknowledge.ItemEvidence) bool {
+		return link.EvidenceID == "evidence-1" && link.ItemID != ""
+	})).Return(nil).Once()
 	llm := llmmocks.NewMockProvider(t)
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	store := knowledgemocks.NewMockVectorStore(t)
@@ -186,8 +191,13 @@ func TestSaveDrafts_stopsWhenLinkingEvidenceToTheItemFails(t *testing.T) {
 	}, nil).Once()
 	linkErr := errors.New("database locked")
 	evidenceRepo := knowledgemocks.NewMockEvidenceRepository(t)
-	evidenceRepo.EXPECT().GetOrCreate(ctx, mock.Anything).Return(domainknowledge.Evidence{ID: "evidence-1"}, nil).Once()
-	evidenceRepo.EXPECT().LinkToItem(ctx, mock.Anything).Return(linkErr).Once()
+	evidenceRepo.EXPECT().GetOrCreate(ctx, mock.MatchedBy(func(e domainknowledge.Evidence) bool {
+		return e.ID != "" && e.OriginType == domainknowledge.OriginSessionMessage &&
+			e.OriginID != "" && e.SourceLabel != "" && e.Excerpt != "" && !e.CreatedAt.IsZero()
+	})).Return(domainknowledge.Evidence{ID: "evidence-1"}, nil).Once()
+	evidenceRepo.EXPECT().LinkToItem(ctx, mock.MatchedBy(func(link domainknowledge.ItemEvidence) bool {
+		return link.EvidenceID == "evidence-1" && link.ItemID != ""
+	})).Return(linkErr).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
 	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, evidenceRepo)
@@ -219,10 +229,15 @@ func TestSaveDrafts_stopsAtTransactionFailureAndKeepsThatReceiptForRetry(t *test
 	messages := studymocks.NewMockMessageRepository(t)
 	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{
 		{ID: "message-1", Content: "shared evidence quote"},
-	}, nil).Twice()
+	}, nil).Once()
 	evidenceRepo := knowledgemocks.NewMockEvidenceRepository(t)
-	evidenceRepo.EXPECT().GetOrCreate(ctx, mock.Anything).Return(domainknowledge.Evidence{ID: "evidence-1"}, nil).Once()
-	evidenceRepo.EXPECT().LinkToItem(ctx, mock.Anything).Return(nil).Once()
+	evidenceRepo.EXPECT().GetOrCreate(ctx, mock.MatchedBy(func(e domainknowledge.Evidence) bool {
+		return e.ID != "" && e.OriginType == domainknowledge.OriginSessionMessage &&
+			e.OriginID != "" && e.SourceLabel != "" && e.Excerpt != "" && !e.CreatedAt.IsZero()
+	})).Return(domainknowledge.Evidence{ID: "evidence-1"}, nil).Once()
+	evidenceRepo.EXPECT().LinkToItem(ctx, mock.MatchedBy(func(link domainknowledge.ItemEvidence) bool {
+		return link.EvidenceID == "evidence-1" && link.ItemID != ""
+	})).Return(nil).Once()
 	llm := llmmocks.NewMockProvider(t)
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	store := knowledgemocks.NewMockVectorStore(t)
@@ -265,10 +280,15 @@ func TestSaveDrafts_savesEveryItemAndConsumesEveryReceipt_butStopsAttemptingInde
 	messages := studymocks.NewMockMessageRepository(t)
 	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{
 		{ID: "message-1", Content: "shared evidence quote"},
-	}, nil).Times(3)
+	}, nil).Once()
 	evidenceRepo := knowledgemocks.NewMockEvidenceRepository(t)
-	evidenceRepo.EXPECT().GetOrCreate(ctx, mock.Anything).Return(domainknowledge.Evidence{ID: "evidence-1"}, nil).Times(3)
-	evidenceRepo.EXPECT().LinkToItem(ctx, mock.Anything).Return(nil).Times(3)
+	evidenceRepo.EXPECT().GetOrCreate(ctx, mock.MatchedBy(func(e domainknowledge.Evidence) bool {
+		return e.ID != "" && e.OriginType == domainknowledge.OriginSessionMessage &&
+			e.OriginID != "" && e.SourceLabel != "" && e.Excerpt != "" && !e.CreatedAt.IsZero()
+	})).Return(domainknowledge.Evidence{ID: "evidence-1"}, nil).Times(3)
+	evidenceRepo.EXPECT().LinkToItem(ctx, mock.MatchedBy(func(link domainknowledge.ItemEvidence) bool {
+		return link.EvidenceID == "evidence-1" && link.ItemID != ""
+	})).Return(nil).Times(3)
 	embedErr := errors.New("openrouter api key is missing")
 	llm := llmmocks.NewMockProvider(t)
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "first\n\none"}).Return(domainllm.EmbeddingResponse{}, embedErr).Once()

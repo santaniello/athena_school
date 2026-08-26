@@ -66,3 +66,18 @@ func TestEvidence_Validate_rejectsUnknownOriginAndMissingSnapshotFields(t *testi
 		})
 	}
 }
+
+func TestEvidenceRef_IsSupportedBy_reportsVerbatimContainment(t *testing.T) {
+	ref := EvidenceRef{MessageID: "message-1", Quote: "A channel coordinates communication."}
+
+	// A message whose content contains the quote verbatim supports it,
+	// including with surrounding text
+	assert.True(t, ref.IsSupportedBy("Intro. A channel coordinates communication. Outro."))
+	assert.True(t, ref.IsSupportedBy("A channel coordinates communication."))
+
+	// A message that was edited to remove or alter the quote no longer
+	// supports it
+	assert.False(t, ref.IsSupportedBy("Completely rewritten content."))
+	assert.False(t, ref.IsSupportedBy("A channel coordinates communication"))
+	assert.False(t, ref.IsSupportedBy(""))
+}
