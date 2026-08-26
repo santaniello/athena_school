@@ -91,3 +91,14 @@ func TestEvidenceRef_IsSupportedBy_rejectsABlankQuoteEvenThoughItIsASubstringOfA
 	assert.False(t, ref.IsSupportedBy("Any content at all."))
 	assert.False(t, ref.IsSupportedBy(""))
 }
+
+func TestEvidenceRef_IsSupportedBy_rejectsAWhitespaceOnlyQuote(t *testing.T) {
+	// Given a reference whose Quote is only whitespace — strings.Contains
+	// would otherwise treat a run of spaces as present in most real content
+	ref := EvidenceRef{MessageID: "message-1", Quote: "   "}
+
+	// Then it is never reported as supported, even though the content
+	// literally contains that whitespace
+	assert.False(t, ref.IsSupportedBy("A B C"))
+	assert.False(t, ref.IsSupportedBy("   "))
+}

@@ -148,8 +148,10 @@ func TestSaveDrafts_savesCandidateWhenTheMessageWasEditedAroundTheQuote(t *testi
 	ctx := context.Background()
 	var savedItemID string
 	repository := knowledgemocks.NewMockRepository(t)
-	repository.EXPECT().Save(ctx, mock.Anything).
-		Run(func(_ context.Context, item domainknowledge.Item) { savedItemID = item.ID }).Return(nil).Once()
+	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
+		return item.ID != "candidate-1" && item.ID != "" &&
+			item.Topic == "Go" && item.Concept == "Channels" && item.Definition == "Typed conduits."
+	})).Run(func(_ context.Context, item domainknowledge.Item) { savedItemID = item.ID }).Return(nil).Once()
 	messages := studymocks.NewMockMessageRepository(t)
 	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{
 		{ID: "message-1", Content: "Edited intro. Channels are typed conduits. Edited outro."},
@@ -188,8 +190,10 @@ func TestSaveDrafts_stopsWhenLinkingEvidenceToTheItemFails(t *testing.T) {
 	ctx := context.Background()
 	var savedItemID string
 	repository := knowledgemocks.NewMockRepository(t)
-	repository.EXPECT().Save(ctx, mock.Anything).
-		Run(func(_ context.Context, item domainknowledge.Item) { savedItemID = item.ID }).Return(nil).Once()
+	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
+		return item.ID != "candidate-1" && item.ID != "" &&
+			item.Topic == "Go" && item.Concept == "Channels" && item.Definition == "Typed conduits."
+	})).Run(func(_ context.Context, item domainknowledge.Item) { savedItemID = item.ID }).Return(nil).Once()
 	messages := studymocks.NewMockMessageRepository(t)
 	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{
 		{ID: "message-1", Content: "shared evidence quote"},
@@ -299,11 +303,13 @@ func TestSaveDrafts_savesEveryItemAndConsumesEveryReceipt_butStopsAttemptingInde
 			e.OriginID == "message-1" && e.SourceLabel == "Go" &&
 			e.Excerpt == "shared evidence quote" && !e.CreatedAt.IsZero()
 	})).Return(domainknowledge.Evidence{ID: "evidence-1"}, nil).Times(3)
+	linkedItemIDs := map[string]bool{}
 	evidenceRepo.EXPECT().LinkToItem(ctx, mock.MatchedBy(func(link domainknowledge.ItemEvidence) bool {
-		// Each link must name one of this batch's actually-saved item IDs —
-		// not just any non-empty string — proving Evidence is linked to the
-		// specific Item that was just persisted, not a stale or wrong one.
-		if link.EvidenceID != "evidence-1" {
+		// Each link must name one of this batch's actually-saved item IDs,
+		// not yet linked by an earlier call — proving a strict one-to-one
+		// association between the three saved Items and the three link
+		// calls, not just "some" saved ID reused across calls.
+		if link.EvidenceID != "evidence-1" || linkedItemIDs[link.ItemID] {
 			return false
 		}
 		for _, id := range savedItemIDByConcept {
@@ -312,7 +318,9 @@ func TestSaveDrafts_savesEveryItemAndConsumesEveryReceipt_butStopsAttemptingInde
 			}
 		}
 		return false
-	})).Return(nil).Times(3)
+	})).Run(func(_ context.Context, link domainknowledge.ItemEvidence) {
+		linkedItemIDs[link.ItemID] = true
+	}).Return(nil).Times(3)
 	embedErr := errors.New("openrouter api key is missing")
 	llm := llmmocks.NewMockProvider(t)
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "first\n\none"}).Return(domainllm.EmbeddingResponse{}, embedErr).Once()
