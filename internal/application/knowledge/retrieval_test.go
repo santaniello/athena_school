@@ -240,12 +240,29 @@ func TestRetrieve_dropsOrphanedChunk_keepingOtherSurvivors(t *testing.T) {
 	// When retrieving
 	result, err := service.Retrieve(context.Background(), "session-1", "query")
 
-	// Then only the valid chunk survives into Chunks and Sources
+	// Then only the valid chunk survives, with its metadata and Source
+	// intact — not just its ChunkID
 	require.NoError(t, err)
 	require.Len(t, result.Chunks, 1)
 	require.Equal(t, "chunk-valid", result.Chunks[0].Chunk.ID)
 	require.Len(t, result.Sources, 1)
-	require.Equal(t, "chunk-valid", result.Sources[0].ChunkID)
+	require.Equal(t, domainknowledge.Source{
+		ChunkID:    "chunk-valid",
+		ItemID:     "item-1",
+		SourceType: domainknowledge.SourceImportedDoc,
+		FilePath:   "notes/chunk-valid.md",
+		Heading:    "Heading chunk-valid",
+		Concept:    "Channels",
+		Score:      0.9,
+		Excerpt:    "Content chunk-valid",
+	}, result.Sources[0])
+
+	var entries []map[string]any
+	require.NoError(t, json.Unmarshal([]byte(result.Context), &entries))
+	require.Len(t, entries, 1)
+	require.Equal(t, "Heading chunk-valid", entries[0]["heading"])
+	require.Equal(t, "Content chunk-valid", entries[0]["content"])
+	require.Equal(t, "Channels", entries[0]["concept"])
 }
 
 func TestRetrieve_propagatesNonNotFoundError_whenResolvingOwningItem(t *testing.T) {

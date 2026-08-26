@@ -86,7 +86,6 @@ func (s *Service) Retrieve(ctx context.Context, sessionID, query string) (domain
 		if err != nil {
 			if errors.Is(err, domainknowledge.ErrItemNotFound) {
 				orphaned[sc.Chunk.ItemID] = struct{}{}
-				log.Printf("knowledge: retrieval: dropping orphaned chunk %s (item %s no longer exists)", sc.Chunk.ID, sc.Chunk.ItemID)
 				continue
 			}
 			return domainknowledge.RetrievalResult{}, fmt.Errorf(
@@ -99,6 +98,7 @@ func (s *Service) Retrieve(ctx context.Context, sessionID, query string) (domain
 		filtered := make([]domainknowledge.ScoredChunk, 0, len(survivors))
 		for _, sc := range survivors {
 			if _, dropped := orphaned[sc.Chunk.ItemID]; dropped {
+				log.Printf("knowledge: retrieval: dropping orphaned chunk %s (item %s no longer exists)", sc.Chunk.ID, sc.Chunk.ItemID)
 				continue
 			}
 			filtered = append(filtered, sc)
