@@ -142,6 +142,22 @@ func TestOpen_enablesForeignKeysAndRejectsMessageForMissingSession(t *testing.T)
 	require.Error(t, insertErr)
 }
 
+func TestOpen_appliesForeignKeysPragma_whenPathAlreadyHasQueryParameters(t *testing.T) {
+	// Given a path that already carries its own URI query parameters
+	path := "file:" + filepath.Join(t.TempDir(), "athena.db") + "?mode=rwc"
+
+	// When opening the database
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Then foreign-key enforcement is still applied — the existing query
+	// string is extended with '&', not overwritten by a second '?'
+	var foreignKeysEnabled int
+	require.NoError(t, db.QueryRow(`PRAGMA foreign_keys`).Scan(&foreignKeysEnabled))
+	assert.Equal(t, 1, foreignKeysEnabled)
+}
+
 func TestOpen_enforcesForeignKeysOnAFreshConnectionAfterTheFirstIsDiscarded(t *testing.T) {
 	// Given a freshly opened database with idle connections disabled, so
 	// database/sql cannot keep reusing the one connection Open happened to
@@ -291,6 +307,64 @@ func TestOpen_migratesLegacyForeignKeysAndDetachesUsageWithoutRemovingIt(t *test
 	require.NoError(t, err)
 	defer func() { _ = rows.Close() }()
 	assert.False(t, rows.Next())
+}
+
+func TestOpen_repairsOrphanedSessionFolders_evenWhenMessagesAndUsageAreAlreadyMigrated(t *testing.T) {
+	// Given a database whose messages/usage tables already declare the
+	// current foreign-key actions — as any schema created fresh, or
+	// already migrated in an earlier Open, would — but whose sessions
+	// carry NULL, empty, and dangling folder_id values, as if only the
+	// sessions table had been restored from an older backup into an
+	// otherwise up-to-date database
+	path := filepath.Join(t.TempDir(), "athena.db")
+	legacy, err := sql.Open("sqlite", path)
+	require.NoError(t, err)
+	_, err = legacy.Exec(`
+		CREATE TABLE folders (
+			id TEXT PRIMARY KEY, name TEXT NOT NULL, is_default INTEGER NOT NULL DEFAULT 0, created_at DATETIME
+		);
+		CREATE TABLE sessions (
+			id TEXT PRIMARY KEY, topic TEXT, mode TEXT, folder_id TEXT REFERENCES folders(id), started_at DATETIME
+		);
+		CREATE TABLE messages (
+			id         TEXT PRIMARY KEY,
+			session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+			role       TEXT, content TEXT, created_at DATETIME
+		);
+		CREATE TABLE usage (
+			id            TEXT PRIMARY KEY,
+			session_id    TEXT REFERENCES sessions(id) ON DELETE SET NULL,
+			model TEXT, input_tokens INTEGER, output_tokens INTEGER, cost REAL, created_at DATETIME
+		);
+		INSERT INTO folders (id, name, is_default) VALUES ('default', 'General', 1);
+		INSERT INTO sessions (id, topic, mode, folder_id) VALUES
+			('null-folder-session', 'Go', 'socratic', NULL),
+			('empty-folder-session', 'Rust', 'socratic', ''),
+			('missing-folder-session', 'Python', 'socratic', 'missing-folder');
+		INSERT INTO messages (id, session_id, role, content) VALUES
+			('null-folder-message', 'null-folder-session', 'user', 'a'),
+			('empty-folder-message', 'empty-folder-session', 'user', 'b'),
+			('missing-folder-message', 'missing-folder-session', 'user', 'c');
+	`)
+	require.NoError(t, err)
+	require.NoError(t, legacy.Close())
+
+	// When opening it through the current migration path
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Then every session is reassigned to the default folder — the repair
+	// is not skipped just because messages/usage already had the current
+	// foreign-key actions — and every message survives with it
+	for _, id := range []string{"null-folder-session", "empty-folder-session", "missing-folder-session"} {
+		var folderID string
+		require.NoError(t, db.QueryRow(`SELECT folder_id FROM sessions WHERE id = ?`, id).Scan(&folderID))
+		assert.Equal(t, "default", folderID, id)
+	}
+	var messageCount int
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM messages`).Scan(&messageCount))
+	assert.Equal(t, 3, messageCount)
 }
 
 func TestOpen_refusesDatabaseWithUnexpectedForeignKeyViolation(t *testing.T) {

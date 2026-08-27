@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	_ "modernc.org/sqlite" // registers the "sqlite" database/sql driver
 )
@@ -37,7 +38,14 @@ func Open(path string) (*sql.DB, error) {
 	// a driver-level connection hook, it has no effect on any other
 	// sql.Open("sqlite", ...) call in the process, such as the raw
 	// connections test fixtures open to build pre-migration legacy data.
-	db, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(1)")
+	// path may already carry its own query parameters (a "file:...?mode=rwc"
+	// URI, say), so the pragma is appended with '&' when a '?' is already
+	// present rather than starting a second, DSN-breaking query string.
+	separator := "?"
+	if strings.Contains(path, "?") {
+		separator = "&"
+	}
+	db, err := sql.Open("sqlite", path+separator+"_pragma=foreign_keys(1)")
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: opening database: %w", err)
 	}
