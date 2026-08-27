@@ -307,7 +307,7 @@ func migrateSessionForeignKeyActions(db *sql.DB) error {
 		 WHERE session_id IS NULL
 		    OR session_id = ''
 		    OR NOT EXISTS (SELECT 1 FROM sessions WHERE sessions.id = messages.session_id)`,
-		`DELETE FROM usage
+		`UPDATE usage SET session_id = NULL
 		 WHERE session_id IS NOT NULL
 		   AND (session_id = ''
 		        OR NOT EXISTS (SELECT 1 FROM sessions WHERE sessions.id = usage.session_id))`,

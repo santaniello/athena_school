@@ -171,7 +171,7 @@ func TestOpen_configuresSessionDeletionToCascadeMessagesAndDetachUsage(t *testin
 	assert.False(t, usageSessionID.Valid)
 }
 
-func TestOpen_migratesLegacyForeignKeysAndRemovesOnlyInvalidTestRows(t *testing.T) {
+func TestOpen_migratesLegacyForeignKeysAndDetachesUsageWithoutRemovingIt(t *testing.T) {
 	// Given a legacy database with valid rows, orphan rows, and a session
 	// whose folder no longer exists
 	path := filepath.Join(t.TempDir(), "athena.db")
@@ -212,14 +212,15 @@ func TestOpen_migratesLegacyForeignKeysAndRemovesOnlyInvalidTestRows(t *testing.
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 
-	// Then invalid test rows are removed while valid rows remain
+	// Then invalid test rows owning messages are removed while valid rows
+	// remain — but usage is a financial record, never deleted for merely
+	// losing its session: every row survives, detached instead
 	for _, check := range []struct {
 		name  string
 		query string
 	}{
 		{name: "sessions", query: `SELECT COUNT(*) FROM sessions`},
 		{name: "messages", query: `SELECT COUNT(*) FROM messages`},
-		{name: "usage", query: `SELECT COUNT(*) FROM usage`},
 	} {
 		var count int
 		require.NoError(t, db.QueryRow(check.query).Scan(&count))
@@ -228,6 +229,18 @@ func TestOpen_migratesLegacyForeignKeysAndRemovesOnlyInvalidTestRows(t *testing.
 	var validMessageContent string
 	require.NoError(t, db.QueryRow(`SELECT content FROM messages WHERE id = 'valid-message'`).Scan(&validMessageContent))
 	assert.Equal(t, "valid", validMessageContent)
+	var usageCount int
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM usage`).Scan(&usageCount))
+	assert.Equal(t, 3, usageCount, "usage rows are detached from an invalid session, never deleted")
+	for _, id := range []string{"invalid-session-usage", "orphan-usage"} {
+		var sessionID sql.NullString
+		require.NoError(t, db.QueryRow(`SELECT session_id FROM usage WHERE id = ?`, id).Scan(&sessionID))
+		assert.Falsef(t, sessionID.Valid, "usage %q should be detached (NULL session_id), not still pointing at an invalid session", id)
+	}
+	var validUsageSessionID sql.NullString
+	require.NoError(t, db.QueryRow(`SELECT session_id FROM usage WHERE id = 'valid-usage'`).Scan(&validUsageSessionID))
+	require.True(t, validUsageSessionID.Valid)
+	assert.Equal(t, "valid-session", validUsageSessionID.String)
 
 	// And the rebuilt constraints cascade messages, detach usage, and have
 	// no remaining violations
