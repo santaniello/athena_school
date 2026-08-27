@@ -212,9 +212,11 @@ func TestOpen_migratesLegacyForeignKeysAndDetachesUsageWithoutRemovingIt(t *test
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 
-	// Then invalid test rows owning messages are removed while valid rows
-	// remain — but usage is a financial record, never deleted for merely
-	// losing its session: every row survives, detached instead
+	// Then the session with a stale folder reference is reassigned to the
+	// default folder, not deleted — its message survives with it. Only the
+	// message with no owning session at all is removed. Usage is a
+	// financial record, never deleted for merely losing its session: every
+	// row survives, detached instead
 	for _, check := range []struct {
 		name  string
 		query string
@@ -224,19 +226,27 @@ func TestOpen_migratesLegacyForeignKeysAndDetachesUsageWithoutRemovingIt(t *test
 	} {
 		var count int
 		require.NoError(t, db.QueryRow(check.query).Scan(&count))
-		assert.Equal(t, 1, count, check.name)
+		assert.Equal(t, 2, count, check.name)
 	}
+	var invalidSessionFolderID string
+	require.NoError(t, db.QueryRow(`SELECT folder_id FROM sessions WHERE id = 'invalid-session'`).Scan(&invalidSessionFolderID))
+	assert.Equal(t, "default", invalidSessionFolderID, "session with a stale folder reference is reassigned to default, not deleted")
 	var validMessageContent string
 	require.NoError(t, db.QueryRow(`SELECT content FROM messages WHERE id = 'valid-message'`).Scan(&validMessageContent))
 	assert.Equal(t, "valid", validMessageContent)
+	var invalidSessionMessageContent string
+	require.NoError(t, db.QueryRow(`SELECT content FROM messages WHERE id = 'invalid-session-message'`).Scan(&invalidSessionMessageContent))
+	assert.Equal(t, "invalid parent", invalidSessionMessageContent, "message survives because its session was reassigned, not deleted")
 	var usageCount int
 	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM usage`).Scan(&usageCount))
-	assert.Equal(t, 3, usageCount, "usage rows are detached from an invalid session, never deleted")
-	for _, id := range []string{"invalid-session-usage", "orphan-usage"} {
-		var sessionID sql.NullString
-		require.NoError(t, db.QueryRow(`SELECT session_id FROM usage WHERE id = ?`, id).Scan(&sessionID))
-		assert.Falsef(t, sessionID.Valid, "usage %q should be detached (NULL session_id), not still pointing at an invalid session", id)
-	}
+	assert.Equal(t, 3, usageCount, "usage rows are never deleted")
+	var invalidSessionUsageSessionID sql.NullString
+	require.NoError(t, db.QueryRow(`SELECT session_id FROM usage WHERE id = 'invalid-session-usage'`).Scan(&invalidSessionUsageSessionID))
+	require.True(t, invalidSessionUsageSessionID.Valid, "usage stays attached to invalid-session, since that session was reassigned, not deleted")
+	assert.Equal(t, "invalid-session", invalidSessionUsageSessionID.String)
+	var orphanUsageSessionID sql.NullString
+	require.NoError(t, db.QueryRow(`SELECT session_id FROM usage WHERE id = 'orphan-usage'`).Scan(&orphanUsageSessionID))
+	assert.Falsef(t, orphanUsageSessionID.Valid, "orphan-usage should be detached (NULL session_id), since missing-session never existed")
 	var validUsageSessionID sql.NullString
 	require.NoError(t, db.QueryRow(`SELECT session_id FROM usage WHERE id = 'valid-usage'`).Scan(&validUsageSessionID))
 	require.True(t, validUsageSessionID.Valid)
@@ -248,7 +258,7 @@ func TestOpen_migratesLegacyForeignKeysAndDetachesUsageWithoutRemovingIt(t *test
 	require.NoError(t, err)
 	var messageCount int
 	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM messages`).Scan(&messageCount))
-	assert.Zero(t, messageCount)
+	assert.Equal(t, 1, messageCount, "only valid-session's message cascades away; invalid-session's message survives with its reassigned session")
 	var usageSessionID sql.NullString
 	require.NoError(t, db.QueryRow(`SELECT session_id FROM usage WHERE id = 'valid-usage'`).Scan(&usageSessionID))
 	assert.False(t, usageSessionID.Valid)

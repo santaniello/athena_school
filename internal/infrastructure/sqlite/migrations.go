@@ -273,8 +273,12 @@ func migrateIngestedFilesToSourcePathSchema(db *sql.DB) error {
 // migrateSessionForeignKeyActions upgrades the two pre-enforcement session
 // relationships to their ownership semantics: messages are owned by their
 // session, while usage remains as an unattributed financial record after a
-// session is deleted. Rows that cannot satisfy the new relationships are
-// pre-release test data and are removed before the tables are rebuilt.
+// session is deleted. A session whose folder_id predates folders existing,
+// or points at one that no longer does, is reassigned to the default folder
+// (mirroring addSessionsFolderIDColumn's own backfill) rather than deleted,
+// since a session is never lost over a stale folder reference. Only a
+// message or usage row with no owning session at all is removed, before the
+// tables are rebuilt.
 func migrateSessionForeignKeyActions(db *sql.DB) error {
 	messagesReady, err := hasForeignKeyDeleteAction(db, "messages", "session_id", "sessions", "CASCADE")
 	if err != nil {
@@ -300,8 +304,9 @@ func migrateSessionForeignKeyActions(db *sql.DB) error {
 	}()
 
 	statements := []string{
-		`DELETE FROM sessions
+		`UPDATE sessions SET folder_id = 'default'
 		 WHERE folder_id IS NULL
+		    OR folder_id = ''
 		    OR NOT EXISTS (SELECT 1 FROM folders WHERE folders.id = sessions.folder_id)`,
 		`DELETE FROM messages
 		 WHERE session_id IS NULL
