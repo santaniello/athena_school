@@ -142,6 +142,31 @@ func TestOpen_enablesForeignKeysAndRejectsMessageForMissingSession(t *testing.T)
 	require.Error(t, insertErr)
 }
 
+func TestOpen_enforcesForeignKeysOnAFreshConnectionAfterTheFirstIsDiscarded(t *testing.T) {
+	// Given a freshly opened database with idle connections disabled, so
+	// database/sql cannot keep reusing the one connection Open happened to
+	// use for the checks above — every query below has to open (or
+	// re-open) a physical connection of its own
+	path := filepath.Join(t.TempDir(), "athena.db")
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	db.SetMaxIdleConns(0)
+
+	// When querying foreign-key enforcement across several connections in
+	// a row
+	for i := 0; i < 5; i++ {
+		var foreignKeysEnabled int
+		require.NoError(t, db.QueryRow(`PRAGMA foreign_keys`).Scan(&foreignKeysEnabled))
+
+		// Then every one of them enforces foreign keys, not just the
+		// connection Open itself used — proving enforcement comes from the
+		// DSN applied to every connection this *sql.DB opens, not a
+		// one-time Exec against whichever connection served it
+		assert.Equal(t, 1, foreignKeysEnabled, "connection %d", i)
+	}
+}
+
 func TestOpen_configuresSessionDeletionToCascadeMessagesAndDetachUsage(t *testing.T) {
 	// Given a session with one message and one usage entry
 	path := filepath.Join(t.TempDir(), "athena.db")
