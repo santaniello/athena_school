@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
+  discardExtraction,
   saveAndApproveExtractedKnowledge,
   saveExtractedKnowledge,
   type KnowledgeItem,
@@ -14,6 +15,7 @@ vi.mock('@/lib/knowledge', async (importOriginal) => {
     ...original,
     saveExtractedKnowledge: vi.fn(),
     saveAndApproveExtractedKnowledge: vi.fn(),
+    discardExtraction: vi.fn(),
   }
 })
 
@@ -39,7 +41,7 @@ describe('KnowledgeExtractionDialog', () => {
     const items = [candidate('1', 'Channels'), candidate('2', 'Goroutines')]
 
     // When opening the dialog
-    render(<KnowledgeExtractionDialog open items={items} onClose={vi.fn()} />)
+    render(<KnowledgeExtractionDialog open batchId="batch-1" items={items} onClose={vi.fn()} />)
 
     // Then concepts and definitions are visible and all candidates are selected
     expect(screen.getByText('Channels')).toBeInTheDocument()
@@ -55,15 +57,18 @@ describe('KnowledgeExtractionDialog', () => {
     vi.mocked(saveExtractedKnowledge).mockResolvedValueOnce({ savedIndices: [0], error: '' })
     const onClose = vi.fn()
     const user = userEvent.setup()
-    render(<KnowledgeExtractionDialog open items={items} onClose={onClose} />)
+    render(<KnowledgeExtractionDialog open batchId="batch-1" items={items} onClose={onClose} />)
     await user.click(screen.getByLabelText('Select Goroutines'))
 
     // When saving drafts
     await user.click(screen.getByRole('button', { name: 'Save as drafts' }))
 
-    // Then only the complete first candidate is sent and the dialog closes
-    await waitFor(() => expect(saveExtractedKnowledge).toHaveBeenCalledWith([items[0]]))
+    // Then only the complete first candidate is sent and the dialog closes,
+    // discarding the batch so the unselected second candidate's still-pending
+    // receipt does not linger on the backend forever
+    await waitFor(() => expect(saveExtractedKnowledge).toHaveBeenCalledWith('batch-1', [items[0]]))
     expect(onClose).toHaveBeenCalled()
+    await waitFor(() => expect(discardExtraction).toHaveBeenCalledWith('batch-1'))
   })
 
   it('restores a candidate and preserves the original order when it is selected again', async () => {
@@ -74,7 +79,7 @@ describe('KnowledgeExtractionDialog', () => {
       error: '',
     })
     const user = userEvent.setup()
-    render(<KnowledgeExtractionDialog open items={items} onClose={vi.fn()} />)
+    render(<KnowledgeExtractionDialog open batchId="batch-1" items={items} onClose={vi.fn()} />)
     await user.click(screen.getByLabelText('Select One'))
 
     // When selecting the first candidate again and saving
@@ -82,7 +87,7 @@ describe('KnowledgeExtractionDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Save as drafts' }))
 
     // Then all candidates retain their displayed order
-    await waitFor(() => expect(saveExtractedKnowledge).toHaveBeenCalledWith(items))
+    await waitFor(() => expect(saveExtractedKnowledge).toHaveBeenCalledWith('batch-1', items))
   })
 
   it('locks every action and reports progress while saving', async () => {
@@ -90,7 +95,12 @@ describe('KnowledgeExtractionDialog', () => {
     vi.mocked(saveExtractedKnowledge).mockReturnValueOnce(new Promise<never>(() => {}))
     const user = userEvent.setup()
     render(
-      <KnowledgeExtractionDialog open items={[candidate('1', 'Channels')]} onClose={vi.fn()} />,
+      <KnowledgeExtractionDialog
+        open
+        batchId="batch-1"
+        items={[candidate('1', 'Channels')]}
+        onClose={vi.fn()}
+      />,
     )
 
     // When saving drafts
@@ -107,21 +117,79 @@ describe('KnowledgeExtractionDialog', () => {
     const onClose = vi.fn()
     const user = userEvent.setup()
     render(
-      <KnowledgeExtractionDialog open items={[candidate('1', 'Channels')]} onClose={onClose} />,
+      <KnowledgeExtractionDialog
+        open
+        batchId="batch-1"
+        items={[candidate('1', 'Channels')]}
+        onClose={onClose}
+      />,
     )
 
     // When dismissing it through the dialog close control
     await user.click(screen.getByRole('button', { name: 'Close' }))
 
-    // Then the owner is notified exactly once
+    // Then the owner is notified exactly once and the batch is discarded —
+    // every true dialog-close path counts as a dismiss, not just the button
     expect(onClose).toHaveBeenCalledOnce()
+    await waitFor(() => expect(discardExtraction).toHaveBeenCalledWith('batch-1'))
+  })
+
+  it('discards the batch when the Dismiss button is used', async () => {
+    // Given an open extraction dialog
+    const onClose = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <KnowledgeExtractionDialog
+        open
+        batchId="batch-1"
+        items={[candidate('1', 'Channels')]}
+        onClose={onClose}
+      />,
+    )
+
+    // When dismissing it via the explicit Dismiss button
+    await user.click(screen.getByRole('button', { name: 'Dismiss' }))
+
+    // Then the batch is discarded and the owner is notified
+    await waitFor(() => expect(discardExtraction).toHaveBeenCalledWith('batch-1'))
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('does not discard the batch while a partial save failure keeps the dialog open', async () => {
+    // Given a save that fails without persisting anything
+    vi.mocked(saveExtractedKnowledge).mockResolvedValueOnce({
+      savedIndices: [],
+      error: 'database unavailable',
+    })
+    const user = userEvent.setup()
+    render(
+      <KnowledgeExtractionDialog
+        open
+        batchId="batch-1"
+        items={[candidate('1', 'Channels')]}
+        onClose={vi.fn()}
+      />,
+    )
+
+    // When saving fails, leaving the dialog open for a retry
+    await user.click(screen.getByRole('button', { name: 'Save as drafts' }))
+    expect(await screen.findByText('database unavailable')).toBeInTheDocument()
+
+    // Then the batch is never discarded — the remaining receipt must stay
+    // retryable, only a true dialog-close counts as abandoning it
+    expect(discardExtraction).not.toHaveBeenCalled()
   })
 
   it('disables saving when no candidate is checked', async () => {
     // Given one candidate that the user unchecks
     const user = userEvent.setup()
     render(
-      <KnowledgeExtractionDialog open items={[candidate('1', 'Channels')]} onClose={vi.fn()} />,
+      <KnowledgeExtractionDialog
+        open
+        batchId="batch-1"
+        items={[candidate('1', 'Channels')]}
+        onClose={vi.fn()}
+      />,
     )
     await user.click(screen.getByLabelText('Select Channels'))
 
@@ -131,7 +199,7 @@ describe('KnowledgeExtractionDialog', () => {
 
   it('shows an empty result without attempting to save', () => {
     // Given extraction found no candidates
-    render(<KnowledgeExtractionDialog open items={[]} onClose={vi.fn()} />)
+    render(<KnowledgeExtractionDialog open batchId="batch-1" items={[]} onClose={vi.fn()} />)
 
     // Then the empty state is shown and no save action exists
     expect(screen.getByText('No new knowledge found')).toBeInTheDocument()
@@ -146,6 +214,7 @@ describe('KnowledgeExtractionDialog', () => {
     render(
       <KnowledgeExtractionDialog
         open
+        batchId="batch-1"
         items={[candidate('1', 'Channels')]}
         onClose={vi.fn()}
         onKnowledgeChanged={onKnowledgeChanged}
@@ -170,6 +239,7 @@ describe('KnowledgeExtractionDialog', () => {
     render(
       <KnowledgeExtractionDialog
         open
+        batchId="batch-1"
         items={[candidate('1', 'Channels')]}
         onClose={vi.fn()}
         onKnowledgeChanged={onKnowledgeChanged}
@@ -195,6 +265,7 @@ describe('KnowledgeExtractionDialog', () => {
     render(
       <KnowledgeExtractionDialog
         open
+        batchId="batch-1"
         items={[candidate('1', 'Channels')]}
         onClose={vi.fn()}
         onKnowledgeChanged={onKnowledgeChanged}
@@ -216,7 +287,7 @@ describe('KnowledgeExtractionDialog', () => {
       .mockResolvedValueOnce({ savedIndices: [1], error: 'knowledge save failed: database locked' })
       .mockResolvedValueOnce({ savedIndices: [0, 1], error: '' })
     const user = userEvent.setup()
-    render(<KnowledgeExtractionDialog open items={items} onClose={vi.fn()} />)
+    render(<KnowledgeExtractionDialog open batchId="batch-1" items={items} onClose={vi.fn()} />)
 
     // When saving and then retrying
     await user.click(screen.getByRole('button', { name: 'Save as drafts' }))
@@ -228,7 +299,7 @@ describe('KnowledgeExtractionDialog', () => {
 
     // Then the retry excludes exactly the already-saved middle candidate
     await waitFor(() =>
-      expect(saveExtractedKnowledge).toHaveBeenNthCalledWith(2, [items[0], items[2]]),
+      expect(saveExtractedKnowledge).toHaveBeenNthCalledWith(2, 'batch-1', [items[0], items[2]]),
     )
     await waitFor(() => expect(screen.queryByText(/database locked/i)).not.toBeInTheDocument())
   })
@@ -240,7 +311,7 @@ describe('KnowledgeExtractionDialog', () => {
       .mockResolvedValueOnce({ savedIndices: [], error: 'database unavailable' })
       .mockResolvedValueOnce({ savedIndices: [0, 1], error: '' })
     const user = userEvent.setup()
-    render(<KnowledgeExtractionDialog open items={items} onClose={vi.fn()} />)
+    render(<KnowledgeExtractionDialog open batchId="batch-1" items={items} onClose={vi.fn()} />)
 
     // When saving and retrying
     await user.click(screen.getByRole('button', { name: 'Save as drafts' }))
@@ -249,7 +320,7 @@ describe('KnowledgeExtractionDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Try again' }))
 
     // Then the complete selection is retried
-    await waitFor(() => expect(saveExtractedKnowledge).toHaveBeenNthCalledWith(2, items))
+    await waitFor(() => expect(saveExtractedKnowledge).toHaveBeenNthCalledWith(2, 'batch-1', items))
   })
 
   it('shows a safe message when saving rejects with a non-error value', async () => {
@@ -257,7 +328,12 @@ describe('KnowledgeExtractionDialog', () => {
     vi.mocked(saveExtractedKnowledge).mockRejectedValueOnce('unavailable')
     const user = userEvent.setup()
     render(
-      <KnowledgeExtractionDialog open items={[candidate('1', 'Channels')]} onClose={vi.fn()} />,
+      <KnowledgeExtractionDialog
+        open
+        batchId="batch-1"
+        items={[candidate('1', 'Channels')]}
+        onClose={vi.fn()}
+      />,
     )
 
     // When saving
@@ -273,7 +349,12 @@ describe('KnowledgeExtractionDialog', () => {
     vi.mocked(saveAndApproveExtractedKnowledge).mockRejectedValueOnce('unavailable')
     const user = userEvent.setup()
     render(
-      <KnowledgeExtractionDialog open items={[candidate('1', 'Channels')]} onClose={vi.fn()} />,
+      <KnowledgeExtractionDialog
+        open
+        batchId="batch-1"
+        items={[candidate('1', 'Channels')]}
+        onClose={vi.fn()}
+      />,
     )
 
     // When saving via "Save as knowledge"
@@ -295,14 +376,16 @@ describe('KnowledgeExtractionDialog', () => {
     })
     const onClose = vi.fn()
     const user = userEvent.setup()
-    render(<KnowledgeExtractionDialog open items={items} onClose={onClose} />)
+    render(<KnowledgeExtractionDialog open batchId="batch-1" items={items} onClose={onClose} />)
 
     // When saving via "Save as knowledge"
     await user.click(screen.getByRole('button', { name: 'Save as knowledge' }))
 
     // Then it calls the approve-directly binding (never the draft one) with
     // every selected candidate, and closes the dialog
-    await waitFor(() => expect(saveAndApproveExtractedKnowledge).toHaveBeenCalledWith(items))
+    await waitFor(() =>
+      expect(saveAndApproveExtractedKnowledge).toHaveBeenCalledWith('batch-1', items),
+    )
     expect(saveExtractedKnowledge).not.toHaveBeenCalled()
     expect(onClose).toHaveBeenCalled()
   })
@@ -312,7 +395,12 @@ describe('KnowledgeExtractionDialog', () => {
     vi.mocked(saveAndApproveExtractedKnowledge).mockReturnValueOnce(new Promise<never>(() => {}))
     const user = userEvent.setup()
     render(
-      <KnowledgeExtractionDialog open items={[candidate('1', 'Channels')]} onClose={vi.fn()} />,
+      <KnowledgeExtractionDialog
+        open
+        batchId="batch-1"
+        items={[candidate('1', 'Channels')]}
+        onClose={vi.fn()}
+      />,
     )
 
     // When saving via "Save as knowledge"
@@ -332,7 +420,7 @@ describe('KnowledgeExtractionDialog', () => {
       .mockResolvedValueOnce({ savedIndices: [], error: 'database unavailable' })
       .mockResolvedValueOnce({ savedIndices: [0], error: '' })
     const user = userEvent.setup()
-    render(<KnowledgeExtractionDialog open items={items} onClose={vi.fn()} />)
+    render(<KnowledgeExtractionDialog open batchId="batch-1" items={items} onClose={vi.fn()} />)
     await user.click(screen.getByRole('button', { name: 'Save as knowledge' }))
     expect(await screen.findByText('database unavailable')).toBeInTheDocument()
 
@@ -340,7 +428,9 @@ describe('KnowledgeExtractionDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Try again' }))
 
     // Then the retry goes through the same approve-directly binding, not the draft one
-    await waitFor(() => expect(saveAndApproveExtractedKnowledge).toHaveBeenNthCalledWith(2, items))
+    await waitFor(() =>
+      expect(saveAndApproveExtractedKnowledge).toHaveBeenNthCalledWith(2, 'batch-1', items),
+    )
     expect(saveExtractedKnowledge).not.toHaveBeenCalled()
   })
 })

@@ -53,6 +53,7 @@ export namespace desktop {
 	    }
 	}
 	export class ExtractionResult {
+	    batchId: string;
 	    items: KnowledgeItemResult[];
 	    truncated: boolean;
 	
@@ -62,6 +63,7 @@ export namespace desktop {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.batchId = source["batchId"];
 	        this.items = this.convertValues(source["items"], KnowledgeItemResult);
 	        this.truncated = source["truncated"];
 	    }
@@ -135,6 +137,24 @@ export namespace desktop {
 		    }
 		    return a;
 		}
+	}
+	export class KnowledgeEvidenceResult {
+	    originType: string;
+	    sourceLabel: string;
+	    excerpt: string;
+	    createdAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new KnowledgeEvidenceResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.originType = source["originType"];
+	        this.sourceLabel = source["sourceLabel"];
+	        this.excerpt = source["excerpt"];
+	        this.createdAt = source["createdAt"];
+	    }
 	}
 	export class KnowledgeExtractionSettings {
 	    maxKnowledgeExtractionItems: number;

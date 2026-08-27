@@ -19,6 +19,8 @@ export function DeleteStudySession(arg1:string):Promise<void>;
 
 export function DeprecateKnowledgeItem(arg1:string):Promise<desktop.KnowledgeItemResult>;
 
+export function DiscardExtraction(arg1:string):Promise<void>;
+
 export function ExtractKnowledge(arg1:string,arg2:boolean):Promise<desktop.ExtractionResult>;
 
 export function GetKnowledgeExtractionSettings():Promise<desktop.KnowledgeExtractionSettings>;
@@ -38,6 +40,8 @@ export function ImportFile(arg1:string):Promise<void>;
 export function ImportNotes(arg1:string):Promise<void>;
 
 export function ListFolders():Promise<Array<desktop.FolderResult>>;
+
+export function ListKnowledgeItemEvidence(arg1:string):Promise<Array<desktop.KnowledgeEvidenceResult>>;
 
 export function ListKnowledgeItems(arg1:string,arg2:string):Promise<Array<desktop.KnowledgeItemResult>>;
 
@@ -69,9 +73,9 @@ export function ResumeStudySession(arg1:string):Promise<desktop.StudySessionHist
 
 export function RetryKnowledgeIndex():Promise<desktop.IndexStatusResult>;
 
-export function SaveAndApproveExtractedKnowledge(arg1:Array<desktop.KnowledgeItemInput>):Promise<desktop.KnowledgeSaveResult>;
+export function SaveAndApproveExtractedKnowledge(arg1:string,arg2:Array<desktop.KnowledgeItemInput>):Promise<desktop.KnowledgeSaveResult>;
 
-export function SaveExtractedKnowledge(arg1:Array<desktop.KnowledgeItemInput>):Promise<desktop.KnowledgeSaveResult>;
+export function SaveExtractedKnowledge(arg1:string,arg2:Array<desktop.KnowledgeItemInput>):Promise<desktop.KnowledgeSaveResult>;
 
 export function SaveOpenRouterKey(arg1:string):Promise<void>;
 

@@ -59,6 +59,8 @@ type Service struct {
 	store      domainknowledge.VectorStore
 	index      IndexGuard
 	thresholds domainknowledge.RetrievalThresholds
+	receipts   *receiptStore
+	evidence   domainknowledge.EvidenceRepository
 }
 
 // NewService creates a knowledge extraction and Explorer management service.
@@ -73,11 +75,13 @@ func NewService(
 	store domainknowledge.VectorStore,
 	index IndexGuard,
 	thresholds domainknowledge.RetrievalThresholds,
+	evidence domainknowledge.EvidenceRepository,
 ) *Service {
 	return &Service{
 		items: items, sessions: sessions, messages: messages,
 		llm: llm, configs: configs, chunks: chunks, tx: tx,
 		store: store, index: index, thresholds: thresholds,
+		receipts: newReceiptStore(), evidence: evidence,
 	}
 }
 

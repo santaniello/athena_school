@@ -22,7 +22,7 @@ import {
   type StudyErrorEvent,
   type StudySourcesEvent,
 } from '@/lib/study'
-import { extractKnowledge, saveExtractedKnowledge } from '@/lib/knowledge'
+import { discardExtraction, extractKnowledge, saveExtractedKnowledge } from '@/lib/knowledge'
 import StudyChatScreen from './StudyChatScreen'
 
 vi.mock('@/lib/study', () => ({
@@ -42,6 +42,8 @@ vi.mock('@/lib/study', () => ({
 vi.mock('@/lib/knowledge', () => ({
   extractKnowledge: vi.fn(),
   saveExtractedKnowledge: vi.fn(),
+  saveAndApproveExtractedKnowledge: vi.fn(),
+  discardExtraction: vi.fn(),
 }))
 
 const CONTEXT_NORMAL: StudyContextUsage = {
@@ -761,6 +763,7 @@ describe('StudyChatScreen — knowledge extraction', () => {
 
     // When the candidates arrive
     resolveExtraction({
+      batchId: 'batch-1',
       truncated: false,
       items: [
         {
@@ -805,6 +808,7 @@ describe('StudyChatScreen — knowledge extraction', () => {
     })
     await screen.findByText('Welcome!')
     vi.mocked(extractKnowledge).mockResolvedValueOnce({
+      batchId: 'batch-1',
       truncated: false,
       items: [
         {
@@ -839,8 +843,8 @@ describe('StudyChatScreen — knowledge extraction', () => {
     // Given a settled long session whose first extraction asks for confirmation
     await renderSettledSession()
     vi.mocked(extractKnowledge)
-      .mockResolvedValueOnce({ items: [], truncated: true })
-      .mockResolvedValueOnce({ items: [], truncated: true })
+      .mockResolvedValueOnce({ batchId: 'batch-1', items: [], truncated: true })
+      .mockResolvedValueOnce({ batchId: 'batch-1', items: [], truncated: true })
     const user = userEvent.setup()
 
     // When starting extraction
@@ -862,7 +866,11 @@ describe('StudyChatScreen — knowledge extraction', () => {
   it('stops after the user declines truncated transcript processing', async () => {
     // Given a settled long session whose extraction needs confirmation
     await renderSettledSession()
-    vi.mocked(extractKnowledge).mockResolvedValueOnce({ items: [], truncated: true })
+    vi.mocked(extractKnowledge).mockResolvedValueOnce({
+      batchId: 'batch-1',
+      items: [],
+      truncated: true,
+    })
     const user = userEvent.setup()
     await user.click(screen.getByRole('button', { name: 'Extract knowledge' }))
     expect(await screen.findByText(/this session is long/i)).toBeInTheDocument()
@@ -878,7 +886,11 @@ describe('StudyChatScreen — knowledge extraction', () => {
   it('closes extracted candidate review when ignored', async () => {
     // Given an extraction review with no new candidates
     await renderSettledSession()
-    vi.mocked(extractKnowledge).mockResolvedValueOnce({ items: [], truncated: false })
+    vi.mocked(extractKnowledge).mockResolvedValueOnce({
+      batchId: 'batch-1',
+      items: [],
+      truncated: false,
+    })
     const user = userEvent.setup()
     await user.click(screen.getByRole('button', { name: 'Extract knowledge' }))
     expect(await screen.findByText('No new knowledge found')).toBeInTheDocument()
@@ -886,10 +898,11 @@ describe('StudyChatScreen — knowledge extraction', () => {
     // When ignoring the result
     await user.click(screen.getByRole('button', { name: 'Dismiss' }))
 
-    // Then review closes
+    // Then review closes and the backend receipt is discarded
     await waitFor(() =>
       expect(screen.queryByText('No new knowledge found')).not.toBeInTheDocument(),
     )
+    expect(discardExtraction).toHaveBeenCalledWith('batch-1')
   })
 
   it('shows a genuine extraction failure as an inline error', async () => {
@@ -911,7 +924,7 @@ describe('StudyChatScreen — knowledge extraction', () => {
     await renderSettledSession()
     vi.mocked(extractKnowledge)
       .mockRejectedValueOnce(new Error('temporary failure'))
-      .mockResolvedValueOnce({ items: [], truncated: false })
+      .mockResolvedValueOnce({ batchId: 'batch-1', items: [], truncated: false })
     const user = userEvent.setup()
     await user.click(screen.getByRole('button', { name: 'Extract knowledge' }))
     expect(await screen.findByText('temporary failure')).toBeInTheDocument()

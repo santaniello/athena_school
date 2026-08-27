@@ -16,3 +16,10 @@ func (s *Service) ListItems(ctx context.Context, topic, status string) ([]domain
 func (s *Service) ListTopics(ctx context.Context) ([]string, error) {
 	return s.items.ListTopics(ctx)
 }
+
+// ListItemEvidence returns itemID's persisted Evidence snapshots in
+// deterministic order — empty for a legacy or shadow Item that never went
+// through evidence-bearing extraction.
+func (s *Service) ListItemEvidence(ctx context.Context, itemID string) ([]domainknowledge.Evidence, error) {
+	return s.evidence.ListByItem(ctx, itemID)
+}

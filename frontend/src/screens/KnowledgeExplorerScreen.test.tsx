@@ -6,6 +6,7 @@ import {
   countUnindexedKnowledgeItems,
   deleteKnowledgeItem,
   deprecateKnowledgeItem,
+  listKnowledgeItemEvidence,
   listKnowledgeItems,
   onReindexDone,
   reindexKnowledgeItems,
@@ -28,6 +29,9 @@ vi.mock('@/lib/knowledge', async (importOriginal) => {
     // Defaults to "nothing unindexed" so the backfill Alert stays out of
     // every test that isn't specifically about it.
     countUnindexedKnowledgeItems: vi.fn().mockResolvedValue(0),
+    // Defaults to "no evidence" so the empty state stays out of every test
+    // that isn't specifically about the Extraction Evidence section.
+    listKnowledgeItemEvidence: vi.fn().mockResolvedValue([]),
     // The reindex dialog's own event flow is covered by
     // ingest-progress-dialog.test.tsx; here it only needs to stay inert
     // (never resolving) so opening it doesn't drive real backend calls.
@@ -1082,5 +1086,88 @@ describe('KnowledgeExplorerScreen', () => {
 
     // Then no "Index now" action is offered
     expect(screen.queryByRole('button', { name: 'Index now' })).not.toBeInTheDocument()
+  })
+
+  it('shows the extraction evidence for a selected item, with its meaning-preserving warning', async () => {
+    // Given a selected item with one persisted Evidence snapshot
+    stubIngestDone()
+    vi.mocked(listKnowledgeItems).mockResolvedValueOnce([testItem()])
+    vi.mocked(listKnowledgeItemEvidence).mockResolvedValueOnce([
+      {
+        originType: 'session_message',
+        sourceLabel: 'Distributed systems',
+        excerpt: 'CAP describes trade-offs.',
+        createdAt: '2026-08-26T10:00:00Z',
+      },
+    ])
+    const user = userEvent.setup()
+    render(
+      <KnowledgeExplorerScreen selectedTopic={null} mode="explorer" mutationsDisabled={false} />,
+    )
+
+    // When selecting the item
+    await user.click(await screen.findByText('Channels'))
+
+    // Then the source label and exact excerpt are shown, alongside the
+    // warning that later edits may no longer be supported by it
+    expect(listKnowledgeItemEvidence).toHaveBeenCalledWith('item-1')
+    expect(await screen.findByText('Extraction Evidence')).toBeInTheDocument()
+    expect(screen.getByText('Distributed systems')).toBeInTheDocument()
+    expect(screen.getByText('“CAP describes trade-offs.”')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Evidence captured during extraction. Later edits may no longer be supported by this excerpt.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('shows an empty state for a legacy or shadow item with no extraction evidence', async () => {
+    // Given a selected item with no persisted Evidence (the default mock)
+    stubIngestDone()
+    vi.mocked(listKnowledgeItems).mockResolvedValueOnce([testItem()])
+    const user = userEvent.setup()
+    render(
+      <KnowledgeExplorerScreen selectedTopic={null} mode="explorer" mutationsDisabled={false} />,
+    )
+
+    // When selecting the item
+    await user.click(await screen.findByText('Channels'))
+
+    // Then the empty state is shown instead of any snapshot
+    expect(await screen.findByText('No extraction evidence for this item.')).toBeInTheDocument()
+  })
+
+  it('shows a retryable error, not the empty state, when extraction evidence fails to load', async () => {
+    // Given a selected item whose evidence query fails
+    stubIngestDone()
+    vi.mocked(listKnowledgeItems).mockResolvedValueOnce([testItem()])
+    vi.mocked(listKnowledgeItemEvidence).mockRejectedValueOnce(new Error('boom'))
+    const user = userEvent.setup()
+    render(
+      <KnowledgeExplorerScreen selectedTopic={null} mode="explorer" mutationsDisabled={false} />,
+    )
+
+    // When selecting the item
+    await user.click(await screen.findByText('Channels'))
+
+    // Then a retryable error is shown instead of the empty state — a real
+    // failure must never look identical to "this item legitimately has no evidence"
+    expect(await screen.findByText('Failed to load extraction evidence.')).toBeInTheDocument()
+    expect(screen.queryByText('No extraction evidence for this item.')).not.toBeInTheDocument()
+
+    // When retrying after the backend recovers
+    vi.mocked(listKnowledgeItemEvidence).mockResolvedValueOnce([
+      {
+        originType: 'session_message',
+        sourceLabel: 'Distributed systems',
+        excerpt: 'CAP describes trade-offs.',
+        createdAt: '2026-08-26T10:00:00Z',
+      },
+    ])
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+
+    // Then the snapshot loads and the error clears
+    expect(await screen.findByText('Distributed systems')).toBeInTheDocument()
+    expect(screen.queryByText('Failed to load extraction evidence.')).not.toBeInTheDocument()
   })
 })

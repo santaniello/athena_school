@@ -17,6 +17,10 @@ func newTestSessionRepository(t *testing.T) *SessionRepository {
 	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
+	_, err = db.Exec(`INSERT INTO folders (id, name, is_default, created_at) VALUES
+		('folder-a', 'Folder A', 0, CURRENT_TIMESTAMP),
+		('folder-b', 'Folder B', 0, CURRENT_TIMESTAMP)`)
+	require.NoError(t, err)
 	return NewSessionRepository(db)
 }
 

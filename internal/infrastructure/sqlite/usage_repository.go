@@ -22,9 +22,10 @@ func NewUsageRepository(db *sql.DB) *UsageRepository {
 
 // Record inserts a new usage entry.
 func (r *UsageRepository) Record(ctx context.Context, entry domainllm.UsageEntry) error {
+	sessionID := sql.NullString{String: entry.SessionID, Valid: entry.SessionID != ""}
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO usage (id, session_id, model, input_tokens, output_tokens, cost, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		entry.ID, entry.SessionID, entry.Model, entry.InputTokens, entry.OutputTokens, entry.Cost, entry.CreatedAt,
+		entry.ID, sessionID, entry.Model, entry.InputTokens, entry.OutputTokens, entry.Cost, entry.CreatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("sqlite: recording usage: %w", err)

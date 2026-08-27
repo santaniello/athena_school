@@ -18,6 +18,10 @@ func newTestUsageRepository(t *testing.T) (*UsageRepository, *sql.DB) {
 	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
+	_, err = db.Exec(`INSERT INTO sessions (id, topic, mode, folder_id, started_at) VALUES
+		('sess-1', 'Go', 'socratic', 'default', CURRENT_TIMESTAMP),
+		('sess-2', 'Rust', 'socratic', 'default', CURRENT_TIMESTAMP)`)
+	require.NoError(t, err)
 	return NewUsageRepository(db), db
 }
 
@@ -58,6 +62,25 @@ func TestUsageRepository_Record_insertsRow_readableViaRawQuery(t *testing.T) {
 	assert.Equal(t, entry.OutputTokens, outputTokens)
 	assert.Equal(t, entry.Cost, cost)
 	assert.True(t, entry.CreatedAt.Equal(createdAt))
+}
+
+func TestUsageRepository_Record_withoutSessionStoresNullSessionID(t *testing.T) {
+	// Given a usage entry produced outside a study session
+	repo, db := newTestUsageRepository(t)
+	ctx := context.Background()
+	entry := domainllm.UsageEntry{
+		ID: "usage-1", Model: "anthropic/claude-sonnet-4.5",
+		InputTokens: 10, OutputTokens: 5, Cost: 0.001,
+	}
+
+	// When recording the usage
+	err := repo.Record(ctx, entry)
+
+	// Then it is stored without a foreign-key value, not as an empty ID
+	require.NoError(t, err)
+	var sessionID sql.NullString
+	require.NoError(t, db.QueryRow(`SELECT session_id FROM usage WHERE id = ?`, entry.ID).Scan(&sessionID))
+	assert.False(t, sessionID.Valid)
 }
 
 func TestUsageRepository_Record_returnsError_whenIDAlreadyExists(t *testing.T) {

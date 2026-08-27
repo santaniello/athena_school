@@ -7,31 +7,36 @@ import (
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 )
 
-const maxTranscriptChars = 24000
+const (
+	maxTranscriptChars    = 24000
+	maxEvidencePerItem    = 5
+	maxEvidenceQuoteChars = 1000
+)
 
-func buildExtractionPrompt(history []domainstudy.Message, maxItems int) (string, bool, error) {
-	transcript, truncated := renderTranscript(history, maxTranscriptChars)
+func buildExtractionPrompt(history []domainstudy.Message, maxItems int) (string, []domainstudy.Message, bool, error) {
+	transcript, includedMessages, truncated := renderTranscript(history, maxTranscriptChars)
 	if transcript == "" {
-		return "", truncated, ErrTranscriptTooLarge
+		return "", nil, truncated, ErrTranscriptTooLarge
 	}
 	prompt := fmt.Sprintf(`You extract durable study concepts from a transcript.
 Return only valid JSON, with no markdown fences or commentary, using exactly this envelope schema:
-{"items":[{"concept":"string","definition":"string","properties":["string"],"trade_offs":["string"],"related_concepts":["string"]}]}
+{"items":[{"concept":"string","definition":"string","properties":["string"],"trade_offs":["string"],"related_concepts":["string"],"evidence":[{"message_id":"string","quote":"string"}]}]}
 Return at most %d items. Each definition must be self-contained and must not merely restate a question.
+Each item must contain at least one and at most %d evidence references. Each quote must be copied verbatim from its referenced message and contain at most %d Unicode characters.
 
 Transcript:
-%s`, maxItems, transcript)
-	return prompt, truncated, nil
+%s`, maxItems, maxEvidencePerItem, maxEvidenceQuoteChars, transcript)
+	return prompt, includedMessages, truncated, nil
 }
 
-func renderTranscript(history []domainstudy.Message, maxChars int) (string, bool) {
+func renderTranscript(history []domainstudy.Message, maxChars int) (string, []domainstudy.Message, bool) {
 	rendered := make([]string, len(history))
 	for index, message := range history {
 		role := "Assistant"
 		if message.Role == domainstudy.RoleUser {
 			role = "User"
 		}
-		rendered[index] = role + ": " + strings.TrimSpace(message.Content)
+		rendered[index] = "[message:" + message.ID + "] " + role + ":\n" + strings.TrimSpace(message.Content)
 	}
 
 	start := len(rendered)
@@ -42,5 +47,5 @@ func renderTranscript(history []domainstudy.Message, maxChars int) (string, bool
 		}
 		start = index
 	}
-	return strings.Join(rendered[start:], "\n"), start > 0
+	return strings.Join(rendered[start:], "\n"), history[start:], start > 0
 }

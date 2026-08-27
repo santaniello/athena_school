@@ -57,12 +57,3 @@ func (r *MessageRepository) ListBySession(ctx context.Context, sessionID string)
 	}
 	return messages, nil
 }
-
-// DeleteBySession permanently removes every message for sessionID.
-func (r *MessageRepository) DeleteBySession(ctx context.Context, sessionID string) error {
-	_, err := execer(ctx, r.db).ExecContext(ctx, `DELETE FROM messages WHERE session_id = ?`, sessionID)
-	if err != nil {
-		return fmt.Errorf("sqlite: deleting messages by session: %w", err)
-	}
-	return nil
-}

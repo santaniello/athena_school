@@ -38,7 +38,7 @@ func TestApprove_transitionsDraftToApproved_andReconcilesChunkMetadata(t *testin
 	store.EXPECT().Add(mock.Anything, updatedChunks).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
+	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil)
 
 	// When approving it
 	updated, err := service.Approve(ctx, "item-1")
@@ -57,7 +57,7 @@ func TestApprove_returnsInvalidTransition_whenItemIsAlreadyApproved(t *testing.T
 	}, nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, nil, tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
+	service := NewService(repository, nil, nil, nil, nil, nil, tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil)
 
 	// When approving it again
 	_, err := service.Approve(ctx, "item-1")
@@ -74,7 +74,7 @@ func TestApprove_propagatesNotFound_whenItemDoesNotExist(t *testing.T) {
 	repository.EXPECT().GetByID(ctx, "missing").Return(domainknowledge.Item{}, domainknowledge.ErrItemNotFound).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, nil, tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
+	service := NewService(repository, nil, nil, nil, nil, nil, tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil)
 
 	// When approving it
 	_, err := service.Approve(ctx, "missing")
@@ -89,7 +89,7 @@ func TestApprove_returnsErrIndexLoading_whenIndexIsLoading_andNeverTouchesTheRep
 	repository := knowledgemocks.NewMockRepository(t)
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(ErrIndexLoading).Once()
-	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, guard, domainknowledge.RetrievalThresholds{})
+	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, guard, domainknowledge.RetrievalThresholds{}, nil)
 
 	// When approving an item
 	_, err := service.Approve(ctx, "item-1")
@@ -129,7 +129,7 @@ func TestApprove_reindexes_whenTheItemOwnsNoChunkYet(t *testing.T) {
 	})).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
+	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil)
 
 	// When approving it
 	updated, err := service.Approve(ctx, "item-1")
@@ -156,7 +156,7 @@ func TestApprove_returnsErrIndexingFailed_whenRecoveryReindexingFails_butKeepsTh
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Channels\n\nTyped conduits."}).Return(domainllm.EmbeddingResponse{}, boom).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, llm, nil, chunks, tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
+	service := NewService(repository, nil, nil, llm, nil, chunks, tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil)
 
 	// When approving it and the recovery re-indexing fails
 	updated, err := service.Approve(ctx, "item-1")
@@ -184,7 +184,7 @@ func TestApprove_returnsIndexingWarning_whenPostCommitReconciliationFails_butKee
 	store.EXPECT().Add(mock.Anything, updatedChunks).Return(boom).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{})
+	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil)
 
 	// When approving it and the post-commit reconciliation fails
 	updated, err := service.Approve(ctx, "item-1")

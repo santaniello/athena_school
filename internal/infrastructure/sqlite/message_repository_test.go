@@ -17,6 +17,10 @@ func newTestMessageRepository(t *testing.T) *MessageRepository {
 	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
+	_, err = db.Exec(`INSERT INTO sessions (id, topic, mode, folder_id, started_at) VALUES
+		('session-1', 'Go', 'socratic', 'default', CURRENT_TIMESTAMP),
+		('session-2', 'Rust', 'socratic', 'default', CURRENT_TIMESTAMP)`)
+	require.NoError(t, err)
 	return NewMessageRepository(db)
 }
 
@@ -60,41 +64,14 @@ func TestMessageRepository_ListBySession_returnsEmptyForUnknownSession(t *testin
 	assert.Empty(t, messages)
 }
 
-func TestMessageRepository_DeleteBySession_removesEveryMessageForThatSession(t *testing.T) {
-	// Given two messages in session-1 and one in session-2
-	repo := newTestMessageRepository(t)
-	ctx := context.Background()
-	require.NoError(t, repo.Append(ctx, study.Message{
-		ID: "msg-1", SessionID: "session-1", Role: study.RoleUser,
-		Content: "Hi", CreatedAt: time.Now().UTC(),
-	}))
-	require.NoError(t, repo.Append(ctx, study.Message{
-		ID: "msg-2", SessionID: "session-1", Role: study.RoleAssistant,
-		Content: "Hello!", CreatedAt: time.Now().UTC(),
-	}))
-	require.NoError(t, repo.Append(ctx, study.Message{
-		ID: "msg-3", SessionID: "session-2", Role: study.RoleUser,
-		Content: "Still here", CreatedAt: time.Now().UTC(),
-	}))
-
-	// When deleting session-1's messages
-	err := repo.DeleteBySession(ctx, "session-1")
-
-	// Then only session-2's message remains
-	require.NoError(t, err)
-	remaining, listErr := repo.ListBySession(ctx, "session-1")
-	require.NoError(t, listErr)
-	assert.Empty(t, remaining)
-	other, listErr := repo.ListBySession(ctx, "session-2")
-	require.NoError(t, listErr)
-	assert.Len(t, other, 1)
-}
-
 func TestMessageRepository_Append_participatesInTransaction(t *testing.T) {
 	// Given a repository and a transactor sharing the same *sql.DB
 	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
+	_, err = db.Exec(`INSERT INTO sessions (id, topic, mode, folder_id, started_at)
+		VALUES ('session-1', 'Go', 'socratic', 'default', CURRENT_TIMESTAMP)`)
+	require.NoError(t, err)
 	repo := NewMessageRepository(db)
 	transactor := NewSQLTransactor(db)
 	ctx := context.Background()

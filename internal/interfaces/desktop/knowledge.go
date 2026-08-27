@@ -42,6 +42,7 @@ type KnowledgeItemInput struct {
 
 // ExtractionResult carries candidates and the transcript truncation signal.
 type ExtractionResult struct {
+	BatchID   string                `json:"batchId"`
 	Items     []KnowledgeItemResult `json:"items"`
 	Truncated bool                  `json:"truncated"`
 }
@@ -54,7 +55,7 @@ type KnowledgeSaveResult struct {
 
 // ExtractKnowledge extracts unpersisted knowledge candidates for review.
 func (a *App) ExtractKnowledge(sessionID string, confirmedTruncation bool) (ExtractionResult, error) {
-	items, truncated, err := a.knowledge.ExtractFromSession(a.ctx, sessionID, confirmedTruncation)
+	batch, truncated, err := a.knowledge.ExtractFromSession(a.ctx, sessionID, confirmedTruncation)
 	if errors.Is(err, applicationknowledge.ErrMalformedExtraction) {
 		log.Printf("knowledge extraction returned malformed JSON: %v", err)
 		return ExtractionResult{Items: []KnowledgeItemResult{}}, nil
@@ -62,15 +63,18 @@ func (a *App) ExtractKnowledge(sessionID string, confirmedTruncation bool) (Extr
 	if err != nil {
 		return ExtractionResult{}, err
 	}
-	results := make([]KnowledgeItemResult, len(items))
-	for index, item := range items {
+	results := make([]KnowledgeItemResult, len(batch.Items))
+	for index, item := range batch.Items {
 		results[index] = toKnowledgeItemResult(item)
 	}
-	return ExtractionResult{Items: results, Truncated: truncated}, nil
+	return ExtractionResult{BatchID: batch.ID, Items: results, Truncated: truncated}, nil
 }
 
 // SaveExtractedKnowledge persists only the candidates confirmed by the user.
-func (a *App) SaveExtractedKnowledge(inputs []KnowledgeItemInput) KnowledgeSaveResult {
+// batchID identifies the backend extraction receipt (see ExtractKnowledge);
+// each input's ID is used only as an opaque lookup key into that receipt —
+// the frontend is never trusted for provenance.
+func (a *App) SaveExtractedKnowledge(batchID string, inputs []KnowledgeItemInput) KnowledgeSaveResult {
 	items := make([]domainknowledge.Item, len(inputs))
 	for index, input := range inputs {
 		items[index] = domainknowledge.Item{
@@ -79,7 +83,7 @@ func (a *App) SaveExtractedKnowledge(inputs []KnowledgeItemInput) KnowledgeSaveR
 			Source: input.Source, Status: input.Status,
 		}
 	}
-	savedIndices, err := a.knowledge.SaveDrafts(a.ctx, items)
+	savedIndices, err := a.knowledge.SaveDrafts(a.ctx, batchID, items)
 	if errors.Is(err, applicationknowledge.ErrIndexingFailed) {
 		logIndexingFailure("saving drafts", err)
 		return KnowledgeSaveResult{SavedIndices: savedIndices}
@@ -89,6 +93,13 @@ func (a *App) SaveExtractedKnowledge(inputs []KnowledgeItemInput) KnowledgeSaveR
 		result.Error = fmt.Sprintf("knowledge save failed: %v", err)
 	}
 	return result
+}
+
+// DiscardExtraction drops every unsaved candidate in batchID — called when
+// the user dismisses an extraction batch. It must never be called after a
+// partial save error, so unsaved or failed candidates stay retryable.
+func (a *App) DiscardExtraction(batchID string) {
+	a.knowledge.DiscardExtraction(batchID)
 }
 
 // ListKnowledgeItems returns every Item matching topic/status. An empty
@@ -101,6 +112,32 @@ func (a *App) ListKnowledgeItems(topic, status string) ([]KnowledgeItemResult, e
 	results := make([]KnowledgeItemResult, len(items))
 	for index, item := range items {
 		results[index] = toKnowledgeItemResult(item)
+	}
+	return results, nil
+}
+
+// KnowledgeEvidenceResult is an immutable Evidence snapshot shown in the
+// Knowledge Explorer's Evidence section.
+type KnowledgeEvidenceResult struct {
+	OriginType  string `json:"originType"`
+	SourceLabel string `json:"sourceLabel"`
+	Excerpt     string `json:"excerpt"`
+	CreatedAt   string `json:"createdAt"`
+}
+
+// ListKnowledgeItemEvidence returns id's persisted Evidence snapshots, in
+// deterministic order — empty for a legacy or shadow Item.
+func (a *App) ListKnowledgeItemEvidence(id string) ([]KnowledgeEvidenceResult, error) {
+	evidence, err := a.knowledge.ListItemEvidence(a.ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]KnowledgeEvidenceResult, len(evidence))
+	for index, e := range evidence {
+		results[index] = KnowledgeEvidenceResult{
+			OriginType: e.OriginType, SourceLabel: e.SourceLabel, Excerpt: e.Excerpt,
+			CreatedAt: e.CreatedAt.Format(time.RFC3339Nano),
+		}
 	}
 	return results, nil
 }
@@ -190,8 +227,10 @@ func logIndexingFailure(op string, err error) {
 // SaveAndApproveExtractedKnowledge persists only the confirmed candidates,
 // directly as approved — the "Save as knowledge" option from
 // specs/Athena.md §12, skipping the draft review stage SaveExtractedKnowledge
-// (SaveDrafts) leaves candidates in.
-func (a *App) SaveAndApproveExtractedKnowledge(inputs []KnowledgeItemInput) KnowledgeSaveResult {
+// (SaveDrafts) leaves candidates in. batchID identifies the backend
+// extraction receipt (see ExtractKnowledge); each input's ID is used only
+// as an opaque lookup key into that receipt.
+func (a *App) SaveAndApproveExtractedKnowledge(batchID string, inputs []KnowledgeItemInput) KnowledgeSaveResult {
 	items := make([]domainknowledge.Item, len(inputs))
 	for index, input := range inputs {
 		items[index] = domainknowledge.Item{
@@ -200,7 +239,7 @@ func (a *App) SaveAndApproveExtractedKnowledge(inputs []KnowledgeItemInput) Know
 			Source: input.Source, Status: input.Status,
 		}
 	}
-	savedIndices, err := a.knowledge.SaveAndApprove(a.ctx, items)
+	savedIndices, err := a.knowledge.SaveAndApprove(a.ctx, batchID, items)
 	if errors.Is(err, applicationknowledge.ErrIndexingFailed) {
 		logIndexingFailure("saving and approving drafts", err)
 		return KnowledgeSaveResult{SavedIndices: savedIndices}
