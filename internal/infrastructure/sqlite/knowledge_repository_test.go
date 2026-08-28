@@ -440,10 +440,19 @@ func TestKnowledgeRepository_FindByNormalizedConceptThenSave_insideOneTransactio
 	const attempts = 15
 	errs := make(chan error, attempts)
 	var wg sync.WaitGroup
+	// ready/start hold every goroutine at the same starting line, so the
+	// race actually begins with every attempt contending at once instead
+	// of however the scheduler happened to interleave goroutine launch
+	// with each attempt's own DB round trip.
+	var ready sync.WaitGroup
+	start := make(chan struct{})
 	for i := range attempts {
 		wg.Add(1)
+		ready.Add(1)
 		go func(i int) {
 			defer wg.Done()
+			ready.Done()
+			<-start
 			errs <- tx.WithinTx(ctx, func(ctx context.Context) error {
 				existing, err := repo.FindByNormalizedConcept(ctx, "System Design", "load balancer")
 				if err != nil {
@@ -459,7 +468,9 @@ func TestKnowledgeRepository_FindByNormalizedConceptThenSave_insideOneTransactio
 		}(i)
 	}
 
-	// When they all race concurrently
+	// When every attempt begins racing at once
+	ready.Wait()
+	close(start)
 	wg.Wait()
 	close(errs)
 
