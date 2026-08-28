@@ -117,9 +117,15 @@ var migrations = []func(*sql.DB) error{
 }
 
 // addSessionsFolderIDColumn adds sessions.folder_id if it does not already
-// exist (SQLite has no "ADD COLUMN IF NOT EXISTS") and backfills any
-// existing rows to the default folder, so folder_id is always populated
-// even though it cannot be declared NOT NULL on an ALTER TABLE.
+// exist (SQLite has no "ADD COLUMN IF NOT EXISTS") and repairs any row
+// whose folder_id is missing, empty, or points at a folder that no longer
+// exists, reassigning it to the default folder — so folder_id is always
+// populated and valid even though it cannot be declared NOT NULL/FK-checked
+// on an ALTER TABLE. This repair runs unconditionally on every Open, not
+// gated behind migrateSessionForeignKeyActions's own readiness check:
+// that migration only rebuilds messages/usage once, so a session that goes
+// stale afterward (e.g. a partial restore of just the sessions table from
+// an older backup) would never be repaired if this lived there instead.
 func addSessionsFolderIDColumn(db *sql.DB) error {
 	hasFolderID, err := sessionsHasFolderIDColumn(db)
 	if err != nil {
@@ -132,7 +138,10 @@ func addSessionsFolderIDColumn(db *sql.DB) error {
 		}
 	}
 
-	_, err = db.Exec(`UPDATE sessions SET folder_id = 'default' WHERE folder_id IS NULL`)
+	_, err = db.Exec(`UPDATE sessions SET folder_id = 'default'
+		WHERE folder_id IS NULL
+		   OR folder_id = ''
+		   OR NOT EXISTS (SELECT 1 FROM folders WHERE folders.id = sessions.folder_id)`)
 	return err
 }
 
@@ -273,8 +282,9 @@ func migrateIngestedFilesToSourcePathSchema(db *sql.DB) error {
 // migrateSessionForeignKeyActions upgrades the two pre-enforcement session
 // relationships to their ownership semantics: messages are owned by their
 // session, while usage remains as an unattributed financial record after a
-// session is deleted. Rows that cannot satisfy the new relationships are
-// pre-release test data and are removed before the tables are rebuilt.
+// session is deleted. Only a message or usage row with no owning session at
+// all is removed, before the tables are rebuilt; sessions.folder_id itself
+// is repaired separately, unconditionally, by addSessionsFolderIDColumn.
 func migrateSessionForeignKeyActions(db *sql.DB) error {
 	messagesReady, err := hasForeignKeyDeleteAction(db, "messages", "session_id", "sessions", "CASCADE")
 	if err != nil {
@@ -300,9 +310,6 @@ func migrateSessionForeignKeyActions(db *sql.DB) error {
 	}()
 
 	statements := []string{
-		`DELETE FROM sessions
-		 WHERE folder_id IS NULL
-		    OR NOT EXISTS (SELECT 1 FROM folders WHERE folders.id = sessions.folder_id)`,
 		`DELETE FROM messages
 		 WHERE session_id IS NULL
 		    OR session_id = ''
