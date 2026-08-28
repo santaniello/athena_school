@@ -25,6 +25,7 @@ func TestSaveAndApprove_revalidatesAgainstTheReceiptAndPersistsDirectlyAsApprove
 	ctx := context.Background()
 	var savedItemID string
 	repository := knowledgemocks.NewMockRepository(t)
+	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", "channels").Return(nil, nil).Once()
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.ID != "candidate-1" && item.ID != "" &&
 			item.Topic == "Go" && item.Concept == "Channels" && item.Definition == "Typed conduits." &&
@@ -49,7 +50,7 @@ func TestSaveAndApprove_revalidatesAgainstTheReceiptAndPersistsDirectlyAsApprove
 	store := knowledgemocks.NewMockVectorStore(t)
 	tx := txmocks.NewMockTransactor(t)
 	expectSuccessfulIndexing(ctx, llm, chunks, store, tx, 1)
-	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llm, configmocks.NewMockStore(t), chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, evidenceRepo)
+	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llm, configmocks.NewMockStore(t), chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, evidenceRepo, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	batchID := service.receipts.Create("session-1", "Go", []parsedCandidate{
 		{Item: domainknowledge.Item{ID: "candidate-1"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-1", Quote: "Channels are typed conduits."}}},
 	})
@@ -70,6 +71,7 @@ func TestSaveAndApprove_stopsAtTransactionFailureAndKeepsThatReceiptForRetry(t *
 	ctx := context.Background()
 	var savedItemID string
 	repository := knowledgemocks.NewMockRepository(t)
+	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", mock.Anything).Return(nil, nil).Times(2)
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool { return item.Concept == "first" })).
 		Run(func(_ context.Context, item domainknowledge.Item) { savedItemID = item.ID }).Return(nil).Once()
 	saveErr := errors.New("database locked")
@@ -92,7 +94,7 @@ func TestSaveAndApprove_stopsAtTransactionFailureAndKeepsThatReceiptForRetry(t *
 	store := knowledgemocks.NewMockVectorStore(t)
 	tx := txmocks.NewMockTransactor(t)
 	expectSuccessfulIndexing(ctx, llm, chunks, store, tx, 1)
-	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llm, configmocks.NewMockStore(t), chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, evidenceRepo)
+	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llm, configmocks.NewMockStore(t), chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, evidenceRepo, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	batchID := service.receipts.Create("session-1", "Go", []parsedCandidate{
 		{Item: domainknowledge.Item{ID: "candidate-1"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-1", Quote: "shared evidence quote"}}},
 		{Item: domainknowledge.Item{ID: "candidate-2"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-1", Quote: "shared evidence quote"}}},

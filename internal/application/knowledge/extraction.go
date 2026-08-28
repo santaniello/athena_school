@@ -14,7 +14,19 @@ import (
 // ExtractionBatch contains transient candidates tied to server-side receipts.
 type ExtractionBatch struct {
 	ID    string
-	Items []domainknowledge.Item
+	Items []ExtractionCandidate
+}
+
+// ExtractionCandidate pairs one unpersisted candidate Item with the
+// duplicate matches found for it. Duplicates is empty both when nothing
+// matched and when SemanticCheckUnavailable is true — the two are
+// distinguished only by that flag, never by an error, since a candidate
+// with an incomplete check must still be usable. See
+// specs/phases/phase-02-knowledge-engine/10-duplicate-detection.md.
+type ExtractionCandidate struct {
+	Item                     domainknowledge.Item
+	Duplicates               []domainknowledge.DuplicateMatch
+	SemanticCheckUnavailable bool
 }
 
 // ExtractFromSession returns unpersisted candidates extracted from a session.
@@ -62,10 +74,52 @@ func (s *Service) ExtractFromSession(ctx context.Context, sessionID string, conf
 		items[index] = candidate.Item
 	}
 	if len(items) == 0 {
-		return ExtractionBatch{Items: items}, truncated, nil
+		return ExtractionBatch{Items: []ExtractionCandidate{}}, truncated, nil
+	}
+	results, err := s.attachDuplicateMatches(ctx, items)
+	if err != nil {
+		return ExtractionBatch{}, truncated, err
 	}
 	batchID := s.receipts.Create(sessionID, session.Topic, candidates)
-	return ExtractionBatch{ID: batchID, Items: items}, truncated, nil
+	return ExtractionBatch{ID: batchID, Items: results}, truncated, nil
+}
+
+// attachDuplicateMatches runs duplicate detection for every candidate,
+// short-circuiting the semantic stage only, for every candidate after the
+// first one whose own semantic check fails in this batch — avoiding N
+// further embedding calls that would very likely fail the same way,
+// mirroring saveCandidates' own indexing short-circuit. The exact stage
+// never short-circuits: it is a plain, inexpensive database lookup, run
+// independently for every candidate regardless of this state. See
+// specs/phases/phase-02-knowledge-engine/10-01-duplicate-detection-decisions.md
+// Decision 2.
+func (s *Service) attachDuplicateMatches(ctx context.Context, items []domainknowledge.Item) ([]ExtractionCandidate, error) {
+	results := make([]ExtractionCandidate, len(items))
+	semanticCheckUnavailable := false
+	for index, item := range items {
+		exactMatches, err := s.findExactDuplicates(ctx, item)
+		if err != nil {
+			return nil, err
+		}
+
+		result := ExtractionCandidate{Item: item}
+		switch {
+		case len(exactMatches) > 0:
+			result.Duplicates = exactMatches
+		case semanticCheckUnavailable:
+			result.SemanticCheckUnavailable = true
+		default:
+			semanticMatches, semErr := s.findSemanticDuplicates(ctx, item, s.duplicateTopK, s.duplicateMinScore)
+			if semErr != nil {
+				semanticCheckUnavailable = true
+				result.SemanticCheckUnavailable = true
+			} else {
+				result.Duplicates = semanticMatches
+			}
+		}
+		results[index] = result
+	}
+	return results, nil
 }
 
 // SaveDrafts revalidates and persists confirmed candidates sequentially, as drafts.
@@ -160,6 +214,21 @@ func (s *Service) saveCandidates(ctx context.Context, batchID string, items []do
 			UpdatedAt:       now,
 		}
 		if item.Validate() != nil {
+			s.receipts.Restore(batchID, input.ID, receipt)
+			continue
+		}
+
+		exactMatches, dupErr := s.findExactDuplicates(ctx, item)
+		if dupErr != nil {
+			s.receipts.Restore(batchID, input.ID, receipt)
+			return savedIndices, dupErr
+		}
+		if len(exactMatches) > 0 {
+			// A crafted or stale frontend cannot bypass the save policy: this
+			// repeats extraction's exact-match check server-side. Skipped
+			// silently, the same as invalid evidence above — see
+			// specs/phases/phase-02-knowledge-engine/10-01-duplicate-detection-decisions.md
+			// Decision 3.
 			s.receipts.Restore(batchID, input.ID, receipt)
 			continue
 		}

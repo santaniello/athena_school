@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -15,10 +16,19 @@ import (
 
 func newTestKnowledgeRepository(t *testing.T) *KnowledgeRepository {
 	t.Helper()
+	repo, _ := newTestKnowledgeRepositoryWithDB(t)
+	return repo
+}
+
+// newTestKnowledgeRepositoryWithDB also returns the raw *sql.DB, for tests
+// that need to inspect normalized_concept — a column Item does not expose,
+// since it is derived storage the domain layer never reads directly.
+func newTestKnowledgeRepositoryWithDB(t *testing.T) (*KnowledgeRepository, *sql.DB) {
+	t.Helper()
 	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
-	return NewKnowledgeRepository(db)
+	return NewKnowledgeRepository(db), db
 }
 
 func testItem(id, topic, status string) knowledge.Item {
@@ -312,6 +322,101 @@ func TestKnowledgeRepository_Update_persistsChanges(t *testing.T) {
 	require.NoError(t, getErr)
 	assert.Equal(t, "A new definition", stored.Definition)
 	assert.Equal(t, knowledge.StatusApproved, stored.Status)
+}
+
+func TestKnowledgeRepository_Save_persistsNormalizedConcept(t *testing.T) {
+	// Given an item whose concept needs normalizing
+	repo, db := newTestKnowledgeRepositoryWithDB(t)
+	ctx := context.Background()
+	item := testItem("item-1", "System Design", knowledge.StatusDraft)
+	item.Concept = " Cache-Aside  Pattern "
+
+	// When saving it
+	require.NoError(t, repo.Save(ctx, item))
+
+	// Then normalized_concept holds the normalized form
+	var normalizedConcept string
+	queryErr := db.QueryRow(
+		`SELECT normalized_concept FROM knowledge_items WHERE id = ?`, "item-1",
+	).Scan(&normalizedConcept)
+	require.NoError(t, queryErr)
+	assert.Equal(t, "cache aside pattern", normalizedConcept)
+}
+
+func TestKnowledgeRepository_Update_recomputesNormalizedConceptWhenConceptChanges(t *testing.T) {
+	// Given a saved item
+	repo, db := newTestKnowledgeRepositoryWithDB(t)
+	ctx := context.Background()
+	item := testItem("item-1", "System Design", knowledge.StatusDraft)
+	require.NoError(t, repo.Save(ctx, item))
+
+	// When updating its concept
+	item.Concept = "Circuit Breaker"
+	require.NoError(t, repo.Update(ctx, item))
+
+	// Then normalized_concept is recomputed to match
+	var normalizedConcept string
+	queryErr := db.QueryRow(
+		`SELECT normalized_concept FROM knowledge_items WHERE id = ?`, "item-1",
+	).Scan(&normalizedConcept)
+	require.NoError(t, queryErr)
+	assert.Equal(t, "circuit breaker", normalizedConcept)
+}
+
+func TestKnowledgeRepository_FindByNormalizedConcept_returnsMatchesAcrossStatuses(t *testing.T) {
+	// Given items sharing the same normalized concept and topic, across
+	// every lifecycle status
+	repo := newTestKnowledgeRepository(t)
+	ctx := context.Background()
+	draft := testItem("item-draft", "System Design", knowledge.StatusDraft)
+	draft.Concept = "Load Balancer"
+	approved := testItem("item-approved", "System Design", knowledge.StatusApproved)
+	approved.Concept = "load balancer"
+	deprecated := testItem("item-deprecated", "System Design", knowledge.StatusDeprecated)
+	deprecated.Concept = "Load-Balancer"
+	require.NoError(t, repo.Save(ctx, draft))
+	require.NoError(t, repo.Save(ctx, approved))
+	require.NoError(t, repo.Save(ctx, deprecated))
+
+	// When looking up that normalized concept in that topic
+	matches, err := repo.FindByNormalizedConcept(ctx, "System Design", knowledge.NormalizeConcept("Load Balancer"))
+
+	// Then every status is returned
+	require.NoError(t, err)
+	ids := make([]string, len(matches))
+	for i, m := range matches {
+		ids[i] = m.ID
+	}
+	assert.ElementsMatch(t, []string{"item-draft", "item-approved", "item-deprecated"}, ids)
+}
+
+func TestKnowledgeRepository_FindByNormalizedConcept_excludesADifferentTopic(t *testing.T) {
+	// Given a matching concept saved under a different topic
+	repo := newTestKnowledgeRepository(t)
+	ctx := context.Background()
+	item := testItem("item-1", "Databases", knowledge.StatusApproved)
+	item.Concept = "Load Balancer"
+	require.NoError(t, repo.Save(ctx, item))
+
+	// When looking it up under a different topic
+	matches, err := repo.FindByNormalizedConcept(ctx, "System Design", knowledge.NormalizeConcept("Load Balancer"))
+
+	// Then it is not returned
+	require.NoError(t, err)
+	assert.Empty(t, matches)
+}
+
+func TestKnowledgeRepository_FindByNormalizedConcept_returnsEmpty_whenNoMatch(t *testing.T) {
+	// Given a repository with no matching item
+	repo := newTestKnowledgeRepository(t)
+	ctx := context.Background()
+
+	// When looking up a concept nothing matches
+	matches, err := repo.FindByNormalizedConcept(ctx, "System Design", knowledge.NormalizeConcept("Load Balancer"))
+
+	// Then an empty, non-nil result is returned
+	require.NoError(t, err)
+	assert.Empty(t, matches)
 }
 
 func TestKnowledgeRepository_Update_returnsErrItemNotFound_whenMissing(t *testing.T) {

@@ -101,6 +101,7 @@ func main() {
 	knowledgeService := applicationknowledge.NewService(
 		knowledgeItems, studySessions, studyMessages, llmClient, configStore, knowledgeChunks, transactor,
 		vectorStore, indexLoader, retrievalThresholds, knowledgeEvidence,
+		domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity,
 	)
 	catalogService := modelcatalog.NewService(llmClient)
 	studyService := study.NewService(

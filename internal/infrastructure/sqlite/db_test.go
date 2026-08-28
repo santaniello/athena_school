@@ -485,6 +485,81 @@ func TestOpen_isIdempotentOnSecondOpen_forKnowledgeItems(t *testing.T) {
 	defer func() { _ = second.Close() }()
 }
 
+func TestOpen_addsNormalizedConceptColumnToKnowledgeItems(t *testing.T) {
+	// Given a path to a database file that does not exist yet
+	path := filepath.Join(t.TempDir(), "athena.db")
+
+	// When opening the database
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Then the knowledge_items table has a normalized_concept column
+	rows, queryErr := db.Query(`PRAGMA table_info(knowledge_items)`)
+	require.NoError(t, queryErr)
+	defer func() { _ = rows.Close() }()
+
+	hasNormalizedConcept := false
+	for rows.Next() {
+		var cid, notNull, pk int
+		var name, colType string
+		var dfltValue sql.NullString
+		require.NoError(t, rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk))
+		if name == "normalized_concept" {
+			hasNormalizedConcept = true
+		}
+	}
+	require.NoError(t, rows.Err())
+	assert.True(t, hasNormalizedConcept)
+}
+
+func TestOpen_backfillsNormalizedConceptForPreExistingKnowledgeItems(t *testing.T) {
+	// Given a knowledge item inserted directly, as if it predated this
+	// migration — normalized_concept is left NULL
+	path := filepath.Join(t.TempDir(), "athena.db")
+	db, err := Open(path)
+	require.NoError(t, err)
+	_, execErr := db.Exec(
+		`INSERT INTO knowledge_items (id, topic, concept, definition, source, status, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		"item-1", "System Design", " Cache-Aside  Pattern ", "A caching strategy.", "athena", "draft", "2024-01-01", "2024-01-01",
+	)
+	require.NoError(t, execErr)
+	require.NoError(t, db.Close())
+
+	// When reopening the database (re-running migrations)
+	second, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = second.Close() }()
+
+	// Then the pre-existing item is backfilled to its normalized concept
+	var normalizedConcept string
+	queryErr := second.QueryRow(
+		`SELECT normalized_concept FROM knowledge_items WHERE id = ?`, "item-1",
+	).Scan(&normalizedConcept)
+	require.NoError(t, queryErr)
+	assert.Equal(t, "cache aside pattern", normalizedConcept)
+}
+
+func TestOpen_createsKnowledgeItemsNormalizedConceptIndex(t *testing.T) {
+	// Given a path to a database file that does not exist yet
+	path := filepath.Join(t.TempDir(), "athena.db")
+
+	// When opening the database
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Then the composite topic/normalized_concept index exists
+	var name string
+	queryErr := db.QueryRow(
+		`SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?`,
+		"idx_knowledge_items_topic_normalized_concept",
+	).Scan(&name)
+	require.NoError(t, queryErr)
+	assert.Equal(t, "idx_knowledge_items_topic_normalized_concept", name)
+}
+
 func TestOpen_createsKnowledgeChunksTable(t *testing.T) {
 	// Given a path to a database file that does not exist yet
 	path := filepath.Join(t.TempDir(), "athena.db")

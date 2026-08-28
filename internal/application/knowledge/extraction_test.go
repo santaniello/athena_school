@@ -2,6 +2,7 @@ package knowledge
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -39,6 +40,8 @@ func TestExtractFromSession_returnsNoCandidatesWithoutCallingLLMWhenHistoryIsEmp
 		nil,
 		domainknowledge.RetrievalThresholds{},
 		nil,
+		domainknowledge.DefaultDuplicateTopK,
+		domainknowledge.DefaultDuplicateSimilarity,
 	)
 
 	// When extracting knowledge
@@ -76,7 +79,11 @@ func TestExtractFromSession_returnsValidatedServerStampedCandidates(t *testing.T
 			strings.Contains(prompt.Content, "[message:message-user] User:\nExplain CAP.") &&
 			strings.Contains(prompt.Content, "[message:message-assistant] Assistant:\nCAP describes trade-offs.")
 	})).Return(domainllm.ChatResponse{Content: "```json\n" + `{"items":[{"topic":"hostile","concept":" CAP theorem ","definition":" A self-contained definition. ","properties":[" partition tolerance "," "],"trade_offs":[" consistency vs availability "],"related_concepts":[" PACELC "],"evidence":[{"message_id":"message-assistant","quote":"CAP describes trade-offs."}]},{"concept":"invalid"}]}` + "\n```"}, nil).Once()
-	service := NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil)
+	repo := knowledgemocks.NewMockRepository(t)
+	repo.EXPECT().FindByNormalizedConcept(ctx, "Distributed systems", "cap theorem").Return(nil, nil)
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Len().Return(0)
+	service := NewService(repo, sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil, store, nil, domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When extracting knowledge
 	batch, truncated, err := service.ExtractFromSession(ctx, "session-1", false)
@@ -86,9 +93,9 @@ func TestExtractFromSession_returnsValidatedServerStampedCandidates(t *testing.T
 	require.NoError(t, err)
 	assert.False(t, truncated)
 	assert.NotEmpty(t, batch.ID)
-	items := batch.Items
-	require.Len(t, items, 1)
-	item := items[0]
+	candidates := batch.Items
+	require.Len(t, candidates, 1)
+	item := candidates[0].Item
 	assert.NotEmpty(t, item.ID)
 	assert.Equal(t, "Distributed systems", item.Topic)
 	assert.Equal(t, "CAP theorem", item.Concept)
@@ -100,11 +107,87 @@ func TestExtractFromSession_returnsValidatedServerStampedCandidates(t *testing.T
 	assert.Equal(t, domainknowledge.StatusDraft, item.Status)
 	assert.WithinDuration(t, time.Now().UTC(), item.CreatedAt, time.Second)
 	assert.Equal(t, item.CreatedAt, item.UpdatedAt)
+	assert.Empty(t, candidates[0].Duplicates)
+	assert.False(t, candidates[0].SemanticCheckUnavailable)
 	receipt, found := service.receipts.Get(batch.ID, item.ID)
 	require.True(t, found)
 	assert.Equal(t, "session-1", receipt.SessionID)
 	assert.Equal(t, "Distributed systems", receipt.SourceLabel)
 	assert.Equal(t, []domainknowledge.EvidenceRef{{MessageID: "message-assistant", Quote: "CAP describes trade-offs."}}, receipt.EvidenceRefs)
+}
+
+func TestExtractFromSession_attachesExactDuplicateMatch_withoutEmbeddingCall(t *testing.T) {
+	// Given a candidate whose normalized concept already exists in its topic
+	ctx := context.Background()
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	configs := configmocks.NewMockStore(t)
+	sessions.EXPECT().GetByID(ctx, "session-1").Return(domainstudy.Session{ID: "session-1", Topic: "System Design"}, nil).Once()
+	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{
+		{ID: "message-1", Role: domainstudy.RoleAssistant, Content: "A load balancer distributes traffic."},
+	}, nil).Once()
+	configs.EXPECT().Load().Return(domainconfig.Config{MaxKnowledgeExtractionItems: 8}, nil).Once()
+	llm.EXPECT().Chat(ctx, mock.Anything).Return(domainllm.ChatResponse{
+		Content: `{"items":[{"concept":"Load Balancer","definition":"Distributes traffic.","evidence":[{"message_id":"message-1","quote":"A load balancer distributes traffic."}]}]}`,
+	}, nil).Once()
+	repo := knowledgemocks.NewMockRepository(t)
+	repo.EXPECT().FindByNormalizedConcept(ctx, "System Design", "load balancer").
+		Return([]domainknowledge.Item{{ID: "item-1", Concept: "Load Balancer", Status: domainknowledge.StatusApproved}}, nil)
+	service := NewService(repo, sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+
+	// When extracting knowledge
+	batch, _, err := service.ExtractFromSession(ctx, "session-1", false)
+
+	// Then the candidate carries the exact match — llm has no .EXPECT() for
+	// Embeddings, so no embedding call happened
+	require.NoError(t, err)
+	require.Len(t, batch.Items, 1)
+	assert.Equal(t, []domainknowledge.DuplicateMatch{
+		{ItemID: "item-1", Concept: "Load Balancer", Status: domainknowledge.StatusApproved, MatchType: domainknowledge.MatchExact, Score: 1},
+	}, batch.Items[0].Duplicates)
+	assert.False(t, batch.Items[0].SemanticCheckUnavailable)
+}
+
+func TestExtractFromSession_shortCircuitsSemanticCheck_afterFirstEmbeddingFailureInTheBatch(t *testing.T) {
+	// Given two candidates, neither with an exact match, in one extraction batch
+	ctx := context.Background()
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	configs := configmocks.NewMockStore(t)
+	sessions.EXPECT().GetByID(ctx, "session-1").Return(domainstudy.Session{ID: "session-1", Topic: "System Design"}, nil).Once()
+	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{
+		{ID: "message-1", Role: domainstudy.RoleAssistant, Content: "Cache-aside loads data lazily. A circuit breaker stops cascading failures."},
+	}, nil).Once()
+	configs.EXPECT().Load().Return(domainconfig.Config{MaxKnowledgeExtractionItems: 8}, nil).Once()
+	llm.EXPECT().Chat(ctx, mock.Anything).Return(domainllm.ChatResponse{
+		Content: `{"items":[` +
+			`{"concept":"Cache-Aside","definition":"Loads data lazily.","evidence":[{"message_id":"message-1","quote":"Cache-aside loads data lazily."}]},` +
+			`{"concept":"Circuit Breaker","definition":"Stops cascading failures.","evidence":[{"message_id":"message-1","quote":"A circuit breaker stops cascading failures."}]}` +
+			`]}`,
+	}, nil).Once()
+	repo := knowledgemocks.NewMockRepository(t)
+	repo.EXPECT().FindByNormalizedConcept(ctx, "System Design", "cache aside").Return(nil, nil)
+	repo.EXPECT().FindByNormalizedConcept(ctx, "System Design", "circuit breaker").Return(nil, nil)
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Len().Return(3).Once()
+	llm.EXPECT().Embeddings(ctx, mock.Anything).
+		Return(domainllm.EmbeddingResponse{}, errors.New("openrouter: unauthorized")).Once()
+	service := NewService(repo, sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil, store, nil, domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+
+	// When extracting knowledge
+	batch, _, err := service.ExtractFromSession(ctx, "session-1", false)
+
+	// Then both candidates report the semantic check as unavailable, but
+	// store.Len()/llm.Embeddings ran only once total — mockery's .Once()
+	// fails the test if the second candidate had attempted its own call
+	require.NoError(t, err)
+	require.Len(t, batch.Items, 2)
+	assert.Empty(t, batch.Items[0].Duplicates)
+	assert.True(t, batch.Items[0].SemanticCheckUnavailable)
+	assert.Empty(t, batch.Items[1].Duplicates)
+	assert.True(t, batch.Items[1].SemanticCheckUnavailable)
 }
 
 func TestExtractFromSession_requiresConfirmationBeforeCallingLLMForTruncatedTranscript(t *testing.T) {
@@ -126,7 +209,7 @@ func TestExtractFromSession_requiresConfirmationBeforeCallingLLMForTruncatedTran
 		return !strings.Contains(prompt, strings.Repeat("o", 100)) &&
 			strings.Contains(prompt, strings.Repeat("n", 100))
 	})).Return(domainllm.ChatResponse{Content: `{"items":[]}`}, nil).Once()
-	service := NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil)
+	service := NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When extracting before and after the user confirms truncation
 	firstBatch, firstTruncated, firstErr := service.ExtractFromSession(ctx, "session-1", false)
@@ -171,7 +254,7 @@ func TestExtractFromSession_rejectsEvidenceFromMessageOutsideCappedTranscript(t 
 		prompt := req.Messages[0].Content
 		return !strings.Contains(prompt, "outside quote") && strings.Contains(prompt, "included quote")
 	})).Return(domainllm.ChatResponse{Content: `{"items":[{"concept":"Outside","definition":"Not sent.","evidence":[{"message_id":"message-outside","quote":"outside quote"}]}]}`}, nil).Once()
-	service := NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil)
+	service := NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When extracting after the user confirms transcript truncation
 	batch, truncated, err := service.ExtractFromSession(ctx, "session-1", true)
@@ -208,6 +291,8 @@ func TestExtractFromSession_returnsErrorWithoutCallingLLMWhenNoCompleteMessageFi
 		nil,
 		domainknowledge.RetrievalThresholds{},
 		nil,
+		domainknowledge.DefaultDuplicateTopK,
+		domainknowledge.DefaultDuplicateSimilarity,
 	)
 
 	// When extraction is invoked before and after truncation is confirmed
@@ -241,7 +326,7 @@ func TestExtractFromSession_returnsMalformedExtractionForUnparseablePayload(t *t
 			req.Messages[0].Role == "system" &&
 			strings.Contains(req.Messages[0].Content, "[message:message-1] User:\nExplain channels")
 	})).Return(domainllm.ChatResponse{Content: "not json"}, nil).Once()
-	service := NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil)
+	service := NewService(knowledgemocks.NewMockRepository(t), sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When extracting knowledge
 	batch, truncated, err := service.ExtractFromSession(ctx, "session-1", false)
@@ -255,7 +340,7 @@ func TestExtractFromSession_returnsMalformedExtractionForUnparseablePayload(t *t
 
 func TestDiscardExtraction_removesEveryPendingReceiptInTheBatch(t *testing.T) {
 	// Given a batch with two pending candidate receipts
-	service := NewService(nil, nil, nil, nil, nil, nil, nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil)
+	service := NewService(nil, nil, nil, nil, nil, nil, nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	batchID := service.receipts.Create("session-1", "Go", []parsedCandidate{
 		{Item: domainknowledge.Item{ID: "candidate-1"}},
 		{Item: domainknowledge.Item{ID: "candidate-2"}},

@@ -70,13 +70,17 @@ The extraction dialog shows the existing concept, status, similarity reason, and
 
 ## Tasks
 
-- [ ] `internal/domain/knowledge/duplicate.go` — match types, `DuplicateMatch`, defaults, typed partial-check warning
-- [ ] `internal/application/knowledge/normalize.go` — pure `NormalizeConcept`
-- [ ] `internal/application/knowledge/duplicates.go` — exact repository lookup + semantic shortlist
-- [ ] `internal/domain/knowledge/repository.go` — normalized-concept lookup within a topic
-- [ ] `internal/application/knowledge/extraction.go` — attach duplicate matches to every candidate
-- [ ] `internal/interfaces/desktop/knowledge.go` — expose matches and enforce the save policy
-- [ ] Extraction dialog — duplicate warning, existing-item preview, and explicit “Create separately” for semantic matches
+See [10-01-duplicate-detection-decisions.md](10-01-duplicate-detection-decisions.md) for the
+implementation decisions behind the deviations below (exact-match storage, batch short-circuit,
+save-time recheck signaling).
+
+- [x] `internal/domain/knowledge/duplicate.go` — match types, `DuplicateMatch`, defaults, typed partial-check warning
+- [x] `internal/domain/knowledge/normalize.go` — pure `NormalizeConcept` (moved from application to domain — see Decision 1; infrastructure needs it too, and infra may depend on domain but never application)
+- [x] `internal/application/knowledge/duplicates.go` — exact repository lookup + semantic shortlist
+- [x] `internal/domain/knowledge/repository.go` — `FindByNormalizedConcept`, backed by a persisted, indexed `normalized_concept` column
+- [x] `internal/application/knowledge/extraction.go` — attach duplicate matches to every candidate
+- [x] `internal/interfaces/desktop/knowledge.go` — expose matches; the save policy itself is enforced by `saveCandidates` (application layer), which the desktop bindings already call
+- [x] Extraction dialog — duplicate warning, existing-item preview, and explicit “Create separately” for semantic matches
 
 ## Acceptance Criteria
 

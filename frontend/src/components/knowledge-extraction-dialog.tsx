@@ -11,10 +11,25 @@ import {
 } from '@/components/ui/dialog'
 import {
   discardExtraction,
+  MATCH_EXACT,
+  MATCH_SEMANTIC,
   saveAndApproveExtractedKnowledge,
   saveExtractedKnowledge,
+  type DuplicateMatch,
   type KnowledgeItem,
 } from '@/lib/knowledge'
+
+// exactDuplicate returns item's exact match, if any — 10-duplicate-detection.md
+// disables direct Create whenever one exists, whatever its status.
+function exactDuplicate(item: KnowledgeItem): DuplicateMatch | undefined {
+  return (item.duplicates ?? []).find((match) => match.matchType === MATCH_EXACT)
+}
+
+// semanticMatches returns item's semantic matches — warnings, never a block;
+// the user opts in explicitly by checking the candidate ("Create separately").
+function semanticMatches(item: KnowledgeItem): DuplicateMatch[] {
+  return (item.duplicates ?? []).filter((match) => match.matchType === MATCH_SEMANTIC)
+}
 
 interface KnowledgeExtractionDialogProps {
   open: boolean
@@ -40,8 +55,21 @@ export function KnowledgeExtractionDialog({
   onClose,
   onKnowledgeChanged,
 }: KnowledgeExtractionDialogProps) {
+  // An exact-duplicate candidate can never be selected (Create is disabled —
+  // the user must reconcile with the existing item instead). A candidate
+  // with only a semantic match starts unselected: creating it separately is
+  // an explicit opt-in, not a default. Everything else keeps today's
+  // default of starting selected, including a candidate whose semantic
+  // check was unavailable — an incomplete check is not a match.
   const [selected, setSelected] = useState<Set<number>>(
-    () => new Set(items.map((_, index) => index)),
+    () =>
+      new Set(
+        items
+          .map((_, index) => index)
+          .filter(
+            (index) => !exactDuplicate(items[index]) && semanticMatches(items[index]).length === 0,
+          ),
+      ),
   )
   const [saved, setSaved] = useState<Set<number>>(new Set())
   const [isSaving, setIsSaving] = useState(false)
@@ -137,27 +165,49 @@ export function KnowledgeExtractionDialog({
           <p className="py-4 text-sm text-muted-foreground">No new knowledge found</p>
         ) : (
           <div className="thin-scroll max-h-[50vh] space-y-3 overflow-y-auto">
-            {items.map((item, index) => (
-              <label key={item.id || index} className="flex gap-3 rounded-lg border p-3">
-                <input
-                  type="checkbox"
-                  aria-label={`Select ${item.concept}`}
-                  checked={selected.has(index)}
-                  disabled={saved.has(index) || isSaving}
-                  onChange={() => toggle(index)}
-                  className="mt-1 size-4 accent-primary"
-                />
-                <span className="min-w-0">
-                  <span className="block font-medium text-foreground">{item.concept}</span>
-                  <span className="mt-1 block text-sm text-muted-foreground">
-                    {item.definition}
+            {items.map((item, index) => {
+              const exactMatch = exactDuplicate(item)
+              const semantic = semanticMatches(item)
+              return (
+                <label key={item.id || index} className="flex gap-3 rounded-lg border p-3">
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${item.concept}`}
+                    checked={selected.has(index)}
+                    disabled={Boolean(exactMatch) || saved.has(index) || isSaving}
+                    onChange={() => toggle(index)}
+                    className="mt-1 size-4 accent-primary"
+                  />
+                  <span className="min-w-0">
+                    <span className="block font-medium text-foreground">{item.concept}</span>
+                    <span className="mt-1 block text-sm text-muted-foreground">
+                      {item.definition}
+                    </span>
+                    {exactMatch && (
+                      <span className="mt-1 block text-xs text-destructive">
+                        Already exists as &ldquo;{exactMatch.concept}&rdquo; ({exactMatch.status}).
+                        Edit the existing item instead of creating a duplicate.
+                      </span>
+                    )}
+                    {!exactMatch && semantic.length > 0 && (
+                      <span className="mt-1 block text-xs text-amber-600 dark:text-amber-500">
+                        Similar to &ldquo;{semantic[0].concept}&rdquo; ({semantic[0].status},{' '}
+                        {Math.round(semantic[0].score * 100)}% match).
+                        {!selected.has(index) && ' Check the box to create it separately anyway.'}
+                      </span>
+                    )}
+                    {!exactMatch && item.semanticCheckUnavailable && (
+                      <span className="mt-1 block text-xs text-muted-foreground">
+                        Semantic duplicate check unavailable — only exact matches were checked.
+                      </span>
+                    )}
+                    {saved.has(index) && (
+                      <span className="mt-1 block text-xs text-primary">Saved</span>
+                    )}
                   </span>
-                  {saved.has(index) && (
-                    <span className="mt-1 block text-xs text-primary">Saved</span>
-                  )}
-                </span>
-              </label>
-            ))}
+                </label>
+              )
+            })}
           </div>
         )}
 

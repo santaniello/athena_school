@@ -21,4 +21,12 @@ unleash:
     - ".*_test\\.go$"
     # Mockery-generated mocks (see ADR-003) — gremlins recurses into
     # subpackages regardless of directory scoping, so this must be explicit.
-    - ".*/mocks/.*\\.go$"
+    # The path gremlins matches against is relative to the target passed on
+    # the CLI: unleash ./internal/domain reports "knowledge/mocks/x.go" (a
+    # "/" before "mocks/"), but unleash ./internal/domain/knowledge — one
+    # directory closer — reports plain "mocks/x.go" with nothing before it.
+    # A bare ".*/mocks/..." only matches the first shape, so mocks silently
+    # stop being excluded (and drag mutant-coverage below threshold) the
+    # moment someone scopes a run to a leaf package instead of the whole
+    # tree. The optional leading group matches both.
+    - "^(.*/)?mocks/.*\\.go$"

@@ -3,6 +3,8 @@ package sqlite
 import (
 	"database/sql"
 	"fmt"
+
+	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 )
 
 // migrations are idempotent DDL/DML steps applied in order on every Open
@@ -67,6 +69,9 @@ var migrations = []func(*sql.DB) error{
 		ON knowledge_items(status, created_at)`),
 	execSQL(`CREATE INDEX IF NOT EXISTS idx_knowledge_items_topic
 		ON knowledge_items(topic)`),
+	addKnowledgeItemsNormalizedConceptColumn,
+	execSQL(`CREATE INDEX IF NOT EXISTS idx_knowledge_items_topic_normalized_concept
+		ON knowledge_items(topic, normalized_concept)`),
 	execSQL(`CREATE TABLE IF NOT EXISTS knowledge_evidence (
 		id           TEXT PRIMARY KEY,
 		origin_type  TEXT NOT NULL,
@@ -209,6 +214,79 @@ func tableIsEmpty(db *sql.DB, table string) (bool, error) {
 		return false, err
 	}
 	return count == 0, nil
+}
+
+// addKnowledgeItemsNormalizedConceptColumn adds
+// knowledge_items.normalized_concept if it does not already exist, then
+// backfills every row whose value is still NULL — every pre-existing item,
+// or one inserted through a path that predates this column — computing it
+// from Concept via domainknowledge.NormalizeConcept, the exact function
+// FindByNormalizedConcept's application-layer caller uses to normalize a
+// candidate before comparing. This repair runs unconditionally on every
+// Open, mirroring addSessionsFolderIDColumn, rather than gating it behind a
+// one-time "table was empty" check: normalized_concept must always match
+// Concept for exact-match duplicate detection to be trustworthy, and a plain
+// SQL UPDATE cannot compute NormalizeConcept's Unicode-aware result itself.
+// See specs/phases/phase-02-knowledge-engine/10-01-duplicate-detection-decisions.md
+// Decision 1.
+func addKnowledgeItemsNormalizedConceptColumn(db *sql.DB) error {
+	hasNormalizedConcept, err := hasColumn(db, "knowledge_items", "normalized_concept")
+	if err != nil {
+		return err
+	}
+	if !hasNormalizedConcept {
+		if _, err := db.Exec(`ALTER TABLE knowledge_items ADD COLUMN normalized_concept TEXT`); err != nil {
+			return err
+		}
+	}
+	return backfillKnowledgeItemsNormalizedConcept(db)
+}
+
+// knowledgeItemConceptRow is one row pendingNormalizedConceptBackfills reads.
+type knowledgeItemConceptRow struct{ id, concept string }
+
+// backfillKnowledgeItemsNormalizedConcept computes normalized_concept in Go
+// for every row where it is still NULL, since the normalization rule cannot
+// be expressed as a single SQL statement. The SELECT runs, and its Rows are
+// fully closed, inside pendingNormalizedConceptBackfills before any UPDATE
+// below runs — db.SetMaxOpenConns(1) means an UPDATE issued while those Rows
+// were still open here would block forever waiting for the very connection
+// they're holding.
+func backfillKnowledgeItemsNormalizedConcept(db *sql.DB) error {
+	pending, err := pendingNormalizedConceptBackfills(db)
+	if err != nil {
+		return err
+	}
+	for _, item := range pending {
+		normalized := domainknowledge.NormalizeConcept(item.concept)
+		if _, err := db.Exec(
+			`UPDATE knowledge_items SET normalized_concept = ? WHERE id = ?`, normalized, item.id,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func pendingNormalizedConceptBackfills(db *sql.DB) ([]knowledgeItemConceptRow, error) {
+	rows, err := db.Query(`SELECT id, concept FROM knowledge_items WHERE normalized_concept IS NULL`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var pending []knowledgeItemConceptRow
+	for rows.Next() {
+		var item knowledgeItemConceptRow
+		if scanErr := rows.Scan(&item.id, &item.concept); scanErr != nil {
+			return nil, scanErr
+		}
+		pending = append(pending, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return pending, nil
 }
 
 // addKnowledgeChunksSourcePathColumn adds knowledge_chunks.source_path when

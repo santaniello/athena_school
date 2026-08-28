@@ -18,6 +18,18 @@ import {
 } from '../../wailsjs/go/desktop/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 
+// MatchExact/MatchSemantic mirror domainknowledge.MatchExact/MatchSemantic.
+export const MATCH_EXACT = 'exact'
+export const MATCH_SEMANTIC = 'semantic'
+
+export interface DuplicateMatch {
+  itemId: string
+  concept: string
+  status: string
+  matchType: string
+  score: number
+}
+
 export interface KnowledgeItem {
   id: string
   topic: string
@@ -30,6 +42,13 @@ export interface KnowledgeItem {
   status: string
   createdAt: string
   updatedAt: string
+  // duplicates/semanticCheckUnavailable are only ever populated by
+  // extractKnowledge — every other producer of a KnowledgeItem (list,
+  // approve, deprecate, update) omits them, since duplicate detection runs
+  // at extraction time only. Optional (rather than required null/false) so
+  // every other screen's fixtures don't need to know about this field.
+  duplicates?: DuplicateMatch[] | null
+  semanticCheckUnavailable?: boolean
 }
 
 export interface ExtractionResult {
