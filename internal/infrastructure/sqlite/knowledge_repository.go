@@ -37,10 +37,11 @@ func (r *KnowledgeRepository) Save(ctx context.Context, item knowledge.Item) err
 		return err
 	}
 	_, err = execer(ctx, r.db).ExecContext(ctx,
-		`INSERT INTO knowledge_items (`+knowledgeItemColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO knowledge_items (`+knowledgeItemColumns+`, normalized_concept) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		item.ID, item.Topic, item.Concept, item.Definition,
 		properties, tradeOffs, relatedConcepts,
 		item.Source, item.Status, item.CreatedAt, item.UpdatedAt,
+		knowledge.NormalizeConcept(item.Concept),
 	)
 	if err != nil {
 		return fmt.Errorf("sqlite: saving knowledge item: %w", err)
@@ -90,6 +91,20 @@ func (r *KnowledgeRepository) FindByTopic(ctx context.Context, topic string) ([]
 	)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: finding knowledge items by topic: %w", err)
+	}
+	return scanItems(rows)
+}
+
+// FindByNormalizedConcept returns every item in topic whose persisted
+// normalized_concept equals normalizedConcept, oldest first — draft,
+// approved, and deprecated alike.
+func (r *KnowledgeRepository) FindByNormalizedConcept(ctx context.Context, topic, normalizedConcept string) ([]knowledge.Item, error) {
+	rows, err := execer(ctx, r.db).QueryContext(ctx,
+		`SELECT `+knowledgeItemSelectColumns+` FROM knowledge_items WHERE topic = ? AND normalized_concept = ? ORDER BY created_at ASC, id ASC`,
+		topic, normalizedConcept,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: finding knowledge items by normalized concept: %w", err)
 	}
 	return scanItems(rows)
 }
@@ -165,10 +180,11 @@ func (r *KnowledgeRepository) Update(ctx context.Context, item knowledge.Item) e
 		return err
 	}
 	result, err := execer(ctx, r.db).ExecContext(ctx,
-		`UPDATE knowledge_items SET topic = ?, concept = ?, definition = ?, properties = ?, trade_offs = ?, related_concepts = ?, source = ?, status = ?, created_at = ?, updated_at = ? WHERE id = ?`,
+		`UPDATE knowledge_items SET topic = ?, concept = ?, definition = ?, properties = ?, trade_offs = ?, related_concepts = ?, source = ?, status = ?, created_at = ?, updated_at = ?, normalized_concept = ? WHERE id = ?`,
 		item.Topic, item.Concept, item.Definition,
 		properties, tradeOffs, relatedConcepts,
-		item.Source, item.Status, item.CreatedAt, item.UpdatedAt, item.ID,
+		item.Source, item.Status, item.CreatedAt, item.UpdatedAt,
+		knowledge.NormalizeConcept(item.Concept), item.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("sqlite: updating knowledge item: %w", err)

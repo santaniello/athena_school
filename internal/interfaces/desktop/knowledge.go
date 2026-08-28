@@ -23,6 +23,22 @@ type KnowledgeItemResult struct {
 	Status          string   `json:"status"`
 	CreatedAt       string   `json:"createdAt"`
 	UpdatedAt       string   `json:"updatedAt"`
+	// Duplicates and SemanticCheckUnavailable are only ever populated by
+	// ExtractKnowledge — every other KnowledgeItemResult producer (List,
+	// Approve, Deprecate, Update) leaves them at their zero value, since
+	// duplicate detection runs at extraction time only. See
+	// specs/phases/phase-02-knowledge-engine/10-duplicate-detection.md.
+	Duplicates               []DuplicateMatchResult `json:"duplicates"`
+	SemanticCheckUnavailable bool                   `json:"semanticCheckUnavailable"`
+}
+
+// DuplicateMatchResult is the desktop-facing DTO for a domainknowledge.DuplicateMatch.
+type DuplicateMatchResult struct {
+	ItemID    string  `json:"itemId"`
+	Concept   string  `json:"concept"`
+	Status    string  `json:"status"`
+	MatchType string  `json:"matchType"`
+	Score     float64 `json:"score"`
 }
 
 // KnowledgeItemInput mirrors the full candidate returned by ExtractKnowledge.
@@ -64,10 +80,25 @@ func (a *App) ExtractKnowledge(sessionID string, confirmedTruncation bool) (Extr
 		return ExtractionResult{}, err
 	}
 	results := make([]KnowledgeItemResult, len(batch.Items))
-	for index, item := range batch.Items {
-		results[index] = toKnowledgeItemResult(item)
+	for index, candidate := range batch.Items {
+		results[index] = toExtractionCandidateResult(candidate)
 	}
 	return ExtractionResult{BatchID: batch.ID, Items: results, Truncated: truncated}, nil
+}
+
+// toExtractionCandidateResult extends toKnowledgeItemResult with the
+// candidate's duplicate-detection outcome.
+func toExtractionCandidateResult(candidate applicationknowledge.ExtractionCandidate) KnowledgeItemResult {
+	result := toKnowledgeItemResult(candidate.Item)
+	result.Duplicates = make([]DuplicateMatchResult, len(candidate.Duplicates))
+	for index, match := range candidate.Duplicates {
+		result.Duplicates[index] = DuplicateMatchResult{
+			ItemID: match.ItemID, Concept: match.Concept, Status: match.Status,
+			MatchType: match.MatchType, Score: match.Score,
+		}
+	}
+	result.SemanticCheckUnavailable = candidate.SemanticCheckUnavailable
+	return result
 }
 
 // SaveExtractedKnowledge persists only the candidates confirmed by the user.

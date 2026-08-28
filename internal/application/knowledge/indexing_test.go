@@ -67,7 +67,7 @@ func TestIndexKnowledgeItem_embedsRendersAndSavesOneChunk_thenAddsItToTheStore(t
 	store.EXPECT().Add(mock.Anything, mock.MatchedBy(matchesIndexedChunk(item, 2))).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(nil, nil, nil, llm, nil, chunks, tx, store, nil, domainknowledge.RetrievalThresholds{}, nil)
+	service := NewService(nil, nil, nil, llm, nil, chunks, tx, store, nil, domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When indexing it
 	err := service.indexKnowledgeItem(ctx, item)
@@ -91,7 +91,7 @@ func TestIndexKnowledgeItem_deletesAndEvictsExistingChunk_whenOneAlreadyExists(t
 	store.EXPECT().Add(mock.Anything, mock.MatchedBy(matchesIndexedChunk(item, 1))).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(nil, nil, nil, llm, nil, chunks, tx, store, nil, domainknowledge.RetrievalThresholds{}, nil)
+	service := NewService(nil, nil, nil, llm, nil, chunks, tx, store, nil, domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When re-indexing it
 	err := service.indexKnowledgeItem(ctx, item)
@@ -108,7 +108,7 @@ func TestIndexKnowledgeItem_returnsErrIndexingFailed_whenEmbeddingFails_andNever
 	llm := llmmocks.NewMockProvider(t)
 	llm.EXPECT().Embeddings(ctx, testItemForIndexingEmbeddingRequest).Return(domainllm.EmbeddingResponse{}, boom).Once()
 	chunks := knowledgemocks.NewMockChunkRepository(t)
-	service := NewService(nil, nil, nil, llm, nil, chunks, nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil)
+	service := NewService(nil, nil, nil, llm, nil, chunks, nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When indexing it
 	err := service.indexKnowledgeItem(ctx, item)
@@ -131,7 +131,7 @@ func TestIndexKnowledgeItem_returnsErrIndexingFailed_whenPersistingTheChunkFails
 	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(matchesIndexedChunk(item, 1))).Return(boom).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(nil, nil, nil, llm, nil, chunks, tx, nil, nil, domainknowledge.RetrievalThresholds{}, nil)
+	service := NewService(nil, nil, nil, llm, nil, chunks, tx, nil, nil, domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When indexing it
 	err := service.indexKnowledgeItem(ctx, item)
@@ -157,7 +157,7 @@ func TestIndexKnowledgeItem_returnsErrIndexingFailed_whenStoreReconciliationFail
 	store.EXPECT().Add(mock.Anything, mock.MatchedBy(matchesIndexedChunk(item, 1))).Return(boom).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(nil, nil, nil, llm, nil, chunks, tx, store, nil, domainknowledge.RetrievalThresholds{}, nil)
+	service := NewService(nil, nil, nil, llm, nil, chunks, tx, store, nil, domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When indexing it
 	err := service.indexKnowledgeItem(ctx, item)

@@ -32,6 +32,8 @@ function candidate(id: string, concept: string): KnowledgeItem {
     status: 'draft',
     createdAt: '2026-08-18T10:00:00Z',
     updatedAt: '2026-08-18T10:00:00Z',
+    duplicates: [],
+    semanticCheckUnavailable: false,
   }
 }
 
@@ -432,5 +434,179 @@ describe('KnowledgeExtractionDialog', () => {
       expect(saveAndApproveExtractedKnowledge).toHaveBeenNthCalledWith(2, 'batch-1', items),
     )
     expect(saveExtractedKnowledge).not.toHaveBeenCalled()
+  })
+
+  it('disables and deselects a candidate with an exact duplicate, showing the existing item', () => {
+    // Given a candidate whose concept already exists in the knowledge base
+    const items = [
+      {
+        ...candidate('1', 'Channels'),
+        duplicates: [
+          {
+            itemId: 'existing-1',
+            concept: 'Channels',
+            status: 'approved',
+            matchType: 'exact',
+            score: 1,
+          },
+        ],
+      },
+    ]
+
+    // When opening the dialog
+    render(<KnowledgeExtractionDialog open batchId="batch-1" items={items} onClose={vi.fn()} />)
+
+    // Then the candidate is shown unchecked and disabled, with the existing
+    // item's concept and status visible
+    const checkbox = screen.getByLabelText('Select Channels')
+    expect(checkbox).not.toBeChecked()
+    expect(checkbox).toBeDisabled()
+    expect(screen.getByText(/already exists/i)).toBeInTheDocument()
+    expect(screen.getByText(/approved/i)).toBeInTheDocument()
+  })
+
+  it('excludes an exact-duplicate candidate from the saved payload', async () => {
+    // Given one clean candidate and one exact duplicate
+    const items = [
+      candidate('1', 'Goroutines'),
+      {
+        ...candidate('2', 'Channels'),
+        duplicates: [
+          {
+            itemId: 'existing-1',
+            concept: 'Channels',
+            status: 'approved',
+            matchType: 'exact',
+            score: 1,
+          },
+        ],
+      },
+    ]
+    vi.mocked(saveExtractedKnowledge).mockResolvedValueOnce({ savedIndices: [0], error: '' })
+    const user = userEvent.setup()
+    render(<KnowledgeExtractionDialog open batchId="batch-1" items={items} onClose={vi.fn()} />)
+
+    // When saving as drafts without ever being able to check the duplicate
+    await user.click(screen.getByRole('button', { name: 'Save as drafts' }))
+
+    // Then only the clean candidate is sent
+    await waitFor(() => expect(saveExtractedKnowledge).toHaveBeenCalledWith('batch-1', [items[0]]))
+  })
+
+  it('leaves a semantic-match candidate unselected by default and shows the similarity warning', () => {
+    // Given a candidate with only a semantic match
+    const items = [
+      {
+        ...candidate('1', 'Cache-Aside'),
+        duplicates: [
+          {
+            itemId: 'existing-1',
+            concept: 'Cache Aside Pattern',
+            status: 'approved',
+            matchType: 'semantic',
+            score: 0.93,
+          },
+        ],
+      },
+    ]
+
+    // When opening the dialog
+    render(<KnowledgeExtractionDialog open batchId="batch-1" items={items} onClose={vi.fn()} />)
+
+    // Then the candidate starts unselected (not disabled) and the warning is shown
+    const checkbox = screen.getByLabelText('Select Cache-Aside')
+    expect(checkbox).not.toBeChecked()
+    expect(checkbox).toBeEnabled()
+    expect(screen.getByText(/similar to/i)).toBeInTheDocument()
+    expect(screen.getByText(/Cache Aside Pattern/)).toBeInTheDocument()
+  })
+
+  it('includes a semantic-match candidate once explicitly selected ("Create separately")', async () => {
+    // Given a candidate with only a semantic match
+    const items = [
+      {
+        ...candidate('1', 'Cache-Aside'),
+        duplicates: [
+          {
+            itemId: 'existing-1',
+            concept: 'Cache Aside Pattern',
+            status: 'approved',
+            matchType: 'semantic',
+            score: 0.93,
+          },
+        ],
+      },
+    ]
+    vi.mocked(saveExtractedKnowledge).mockResolvedValueOnce({ savedIndices: [0], error: '' })
+    const user = userEvent.setup()
+    render(<KnowledgeExtractionDialog open batchId="batch-1" items={items} onClose={vi.fn()} />)
+
+    // When explicitly checking it and saving
+    await user.click(screen.getByLabelText('Select Cache-Aside'))
+    await user.click(screen.getByRole('button', { name: 'Save as drafts' }))
+
+    // Then it is sent like any other confirmed candidate
+    await waitFor(() => expect(saveExtractedKnowledge).toHaveBeenCalledWith('batch-1', items))
+  })
+
+  it('shows a notice and keeps the candidate selected when the semantic check was unavailable', () => {
+    // Given a candidate whose semantic duplicate check could not run
+    const items = [{ ...candidate('1', 'Channels'), semanticCheckUnavailable: true }]
+
+    // When opening the dialog
+    render(<KnowledgeExtractionDialog open batchId="batch-1" items={items} onClose={vi.fn()} />)
+
+    // Then it stays usable (selected, enabled) with a visible incomplete-check notice
+    const checkbox = screen.getByLabelText('Select Channels')
+    expect(checkbox).toBeChecked()
+    expect(checkbox).toBeEnabled()
+    expect(screen.getByText(/duplicate check unavailable/i)).toBeInTheDocument()
+  })
+
+  it('resets selection for a new batch even if the component stays mounted', async () => {
+    // Given a dialog open on one batch, with its single candidate manually
+    // deselected
+    const firstBatch = [candidate('1', 'Channels')]
+    const user = userEvent.setup()
+    const { rerender } = render(
+      <KnowledgeExtractionDialog open batchId="batch-1" items={firstBatch} onClose={vi.fn()} />,
+    )
+    await user.click(screen.getByLabelText('Select Channels'))
+    expect(screen.getByLabelText('Select Channels')).not.toBeChecked()
+
+    // When a new batch arrives with a different batchId, carrying a
+    // semantic-match candidate, without the component ever unmounting
+    const secondBatch = [
+      {
+        ...candidate('2', 'Cache-Aside'),
+        duplicates: [
+          {
+            itemId: 'existing-1',
+            concept: 'Cache Aside Pattern',
+            status: 'approved',
+            matchType: 'semantic',
+            score: 0.93,
+          },
+        ],
+      },
+      candidate('3', 'Goroutines'),
+    ]
+    rerender(
+      <KnowledgeExtractionDialog open batchId="batch-2" items={secondBatch} onClose={vi.fn()} />,
+    )
+
+    // Then the semantic-match candidate starts unselected on its own merits
+    // (not carrying over the prior batch's manual deselection by accident),
+    // while the plain candidate starts selected as usual
+    expect(screen.getByLabelText('Select Cache-Aside')).not.toBeChecked()
+    expect(screen.getByLabelText('Select Goroutines')).toBeChecked()
+
+    // And saving only sends the plain candidate — the semantic match never
+    // entered the payload without an explicit "Create separately" check
+    vi.mocked(saveExtractedKnowledge).mockResolvedValueOnce({ savedIndices: [0], error: '' })
+    await user.click(screen.getByRole('button', { name: 'Save as drafts' }))
+    await waitFor(() =>
+      expect(saveExtractedKnowledge).toHaveBeenCalledWith('batch-2', [secondBatch[1]]),
+    )
   })
 })

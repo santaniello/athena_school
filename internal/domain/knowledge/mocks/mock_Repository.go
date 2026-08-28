@@ -183,6 +183,66 @@ func (_c *MockRepository_Delete_Call) RunAndReturn(run func(context.Context, str
 	return _c
 }
 
+// FindByNormalizedConcept provides a mock function with given fields: ctx, topic, normalizedConcept
+func (_m *MockRepository) FindByNormalizedConcept(ctx context.Context, topic string, normalizedConcept string) ([]knowledge.Item, error) {
+	ret := _m.Called(ctx, topic, normalizedConcept)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindByNormalizedConcept")
+	}
+
+	var r0 []knowledge.Item
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) ([]knowledge.Item, error)); ok {
+		return rf(ctx, topic, normalizedConcept)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) []knowledge.Item); ok {
+		r0 = rf(ctx, topic, normalizedConcept)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]knowledge.Item)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = rf(ctx, topic, normalizedConcept)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockRepository_FindByNormalizedConcept_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindByNormalizedConcept'
+type MockRepository_FindByNormalizedConcept_Call struct {
+	*mock.Call
+}
+
+// FindByNormalizedConcept is a helper method to define mock.On call
+//   - ctx context.Context
+//   - topic string
+//   - normalizedConcept string
+func (_e *MockRepository_Expecter) FindByNormalizedConcept(ctx interface{}, topic interface{}, normalizedConcept interface{}) *MockRepository_FindByNormalizedConcept_Call {
+	return &MockRepository_FindByNormalizedConcept_Call{Call: _e.mock.On("FindByNormalizedConcept", ctx, topic, normalizedConcept)}
+}
+
+func (_c *MockRepository_FindByNormalizedConcept_Call) Run(run func(ctx context.Context, topic string, normalizedConcept string)) *MockRepository_FindByNormalizedConcept_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *MockRepository_FindByNormalizedConcept_Call) Return(_a0 []knowledge.Item, _a1 error) *MockRepository_FindByNormalizedConcept_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockRepository_FindByNormalizedConcept_Call) RunAndReturn(run func(context.Context, string, string) ([]knowledge.Item, error)) *MockRepository_FindByNormalizedConcept_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // FindByTopic provides a mock function with given fields: ctx, topic
 func (_m *MockRepository) FindByTopic(ctx context.Context, topic string) ([]knowledge.Item, error) {
 	ret := _m.Called(ctx, topic)

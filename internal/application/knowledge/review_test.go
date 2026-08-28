@@ -17,7 +17,7 @@ func TestCountDrafts_returnsRepositoryCountForDraftStatus(t *testing.T) {
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
 	repository.EXPECT().CountByStatus(ctx, domainknowledge.StatusDraft).Return(3, nil).Once()
-	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil)
+	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When counting drafts
 	count, err := service.CountDrafts(ctx)
@@ -32,7 +32,7 @@ func TestCountDrafts_propagatesRepositoryError(t *testing.T) {
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
 	repository.EXPECT().CountByStatus(ctx, domainknowledge.StatusDraft).Return(0, errors.New("db unavailable")).Once()
-	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil)
+	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When counting drafts
 	_, err := service.CountDrafts(ctx)

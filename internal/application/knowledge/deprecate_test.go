@@ -36,7 +36,7 @@ func TestDeprecate_transitionsApprovedToDeprecated_andReconcilesChunkMetadata(t 
 	store.EXPECT().Add(mock.Anything, updatedChunks).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil)
+	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When deprecating it
 	updated, err := service.Deprecate(ctx, "item-1")
@@ -55,7 +55,7 @@ func TestDeprecate_returnsInvalidTransition_whenItemIsStillADraft(t *testing.T) 
 	}, nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, nil, tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil)
+	service := NewService(repository, nil, nil, nil, nil, nil, tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When deprecating it
 	_, err := service.Deprecate(ctx, "item-1")
@@ -71,7 +71,7 @@ func TestDeprecate_returnsErrIndexLoading_whenIndexIsLoading_andNeverTouchesTheR
 	repository := knowledgemocks.NewMockRepository(t)
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(ErrIndexLoading).Once()
-	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, guard, domainknowledge.RetrievalThresholds{}, nil)
+	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, guard, domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When deprecating an item
 	_, err := service.Deprecate(ctx, "item-1")
@@ -108,7 +108,7 @@ func TestDeprecate_reindexes_whenTheItemOwnsNoChunkYet(t *testing.T) {
 	})).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil)
+	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When deprecating it
 	updated, err := service.Deprecate(ctx, "item-1")
@@ -135,7 +135,7 @@ func TestDeprecate_returnsErrIndexingFailed_whenRecoveryReindexingFails_butKeeps
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Channels\n\nTyped conduits."}).Return(domainllm.EmbeddingResponse{}, boom).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, llm, nil, chunks, tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil)
+	service := NewService(repository, nil, nil, llm, nil, chunks, tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When deprecating it and the recovery re-indexing fails
 	updated, err := service.Deprecate(ctx, "item-1")
@@ -162,7 +162,7 @@ func TestDeprecate_returnsIndexingWarning_whenPostCommitReconciliationFails_butK
 	store.EXPECT().Add(mock.Anything, updatedChunks).Return(boom).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil)
+	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When deprecating it and the post-commit reconciliation fails
 	updated, err := service.Deprecate(ctx, "item-1")

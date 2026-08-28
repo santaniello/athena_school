@@ -61,6 +61,12 @@ type Service struct {
 	thresholds domainknowledge.RetrievalThresholds
 	receipts   *receiptStore
 	evidence   domainknowledge.EvidenceRepository
+	// duplicateTopK and duplicateMinScore are FindDuplicates' constructor-
+	// injected defaults for its own callers (ExtractFromSession); a direct
+	// caller may still override them per call. See
+	// specs/phases/phase-02-knowledge-engine/10-duplicate-detection.md.
+	duplicateTopK     int
+	duplicateMinScore float64
 }
 
 // NewService creates a knowledge extraction and Explorer management service.
@@ -76,12 +82,15 @@ func NewService(
 	index IndexGuard,
 	thresholds domainknowledge.RetrievalThresholds,
 	evidence domainknowledge.EvidenceRepository,
+	duplicateTopK int,
+	duplicateMinScore float64,
 ) *Service {
 	return &Service{
 		items: items, sessions: sessions, messages: messages,
 		llm: llm, configs: configs, chunks: chunks, tx: tx,
 		store: store, index: index, thresholds: thresholds,
 		receipts: newReceiptStore(), evidence: evidence,
+		duplicateTopK: duplicateTopK, duplicateMinScore: duplicateMinScore,
 	}
 }
 
