@@ -562,4 +562,51 @@ describe('KnowledgeExtractionDialog', () => {
     expect(checkbox).toBeEnabled()
     expect(screen.getByText(/duplicate check unavailable/i)).toBeInTheDocument()
   })
+
+  it('resets selection for a new batch even if the component stays mounted', async () => {
+    // Given a dialog open on one batch, with its single candidate manually
+    // deselected
+    const firstBatch = [candidate('1', 'Channels')]
+    const user = userEvent.setup()
+    const { rerender } = render(
+      <KnowledgeExtractionDialog open batchId="batch-1" items={firstBatch} onClose={vi.fn()} />,
+    )
+    await user.click(screen.getByLabelText('Select Channels'))
+    expect(screen.getByLabelText('Select Channels')).not.toBeChecked()
+
+    // When a new batch arrives with a different batchId, carrying a
+    // semantic-match candidate, without the component ever unmounting
+    const secondBatch = [
+      {
+        ...candidate('2', 'Cache-Aside'),
+        duplicates: [
+          {
+            itemId: 'existing-1',
+            concept: 'Cache Aside Pattern',
+            status: 'approved',
+            matchType: 'semantic',
+            score: 0.93,
+          },
+        ],
+      },
+      candidate('3', 'Goroutines'),
+    ]
+    rerender(
+      <KnowledgeExtractionDialog open batchId="batch-2" items={secondBatch} onClose={vi.fn()} />,
+    )
+
+    // Then the semantic-match candidate starts unselected on its own merits
+    // (not carrying over the prior batch's manual deselection by accident),
+    // while the plain candidate starts selected as usual
+    expect(screen.getByLabelText('Select Cache-Aside')).not.toBeChecked()
+    expect(screen.getByLabelText('Select Goroutines')).toBeChecked()
+
+    // And saving only sends the plain candidate — the semantic match never
+    // entered the payload without an explicit "Create separately" check
+    vi.mocked(saveExtractedKnowledge).mockResolvedValueOnce({ savedIndices: [0], error: '' })
+    await user.click(screen.getByRole('button', { name: 'Save as drafts' }))
+    await waitFor(() =>
+      expect(saveExtractedKnowledge).toHaveBeenCalledWith('batch-2', [secondBatch[1]]),
+    )
+  })
 })

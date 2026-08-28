@@ -187,7 +187,8 @@ func TestApp_SaveExtractedKnowledge_returnsExactIndicesAlongsidePartialFailure(t
 	// repository failure among two candidates from a real extraction batch
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
-	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", mock.Anything).Return(nil, nil).Times(4)
+	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", "saved").Return(nil, nil).Twice()
+	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", "failed").Return(nil, nil).Twice()
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.Concept == "saved"
 	})).Return(nil).Once()

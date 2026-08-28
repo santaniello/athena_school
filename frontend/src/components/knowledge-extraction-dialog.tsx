@@ -31,6 +31,19 @@ function semanticMatches(item: KnowledgeItem): DuplicateMatch[] {
   return (item.duplicates ?? []).filter((match) => match.matchType === MATCH_SEMANTIC)
 }
 
+// defaultSelected is which candidate indices start checked: everything
+// except an exact duplicate (Create disabled) or a semantic-only match
+// (creating it separately is an explicit opt-in, not a default).
+function defaultSelected(items: KnowledgeItem[]): Set<number> {
+  return new Set(
+    items
+      .map((_, index) => index)
+      .filter(
+        (index) => !exactDuplicate(items[index]) && semanticMatches(items[index]).length === 0,
+      ),
+  )
+}
+
 interface KnowledgeExtractionDialogProps {
   open: boolean
   batchId: string
@@ -55,28 +68,39 @@ export function KnowledgeExtractionDialog({
   onClose,
   onKnowledgeChanged,
 }: KnowledgeExtractionDialogProps) {
-  // An exact-duplicate candidate can never be selected (Create is disabled —
-  // the user must reconcile with the existing item instead). A candidate
-  // with only a semantic match starts unselected: creating it separately is
-  // an explicit opt-in, not a default. Everything else keeps today's
-  // default of starting selected, including a candidate whose semantic
-  // check was unavailable — an incomplete check is not a match.
-  const [selected, setSelected] = useState<Set<number>>(
-    () =>
-      new Set(
-        items
-          .map((_, index) => index)
-          .filter(
-            (index) => !exactDuplicate(items[index]) && semanticMatches(items[index]).length === 0,
-          ),
-      ),
-  )
+  const [selected, setSelected] = useState<Set<number>>(() => defaultSelected(items))
   const [saved, setSaved] = useState<Set<number>>(new Set())
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   // Tracks which button triggered the in-flight/last-failed save, so retry
   // re-attempts the same mode and the other button stays at its default label.
   const [lastMode, setLastMode] = useState<SaveMode | null>(null)
+
+  // The caller currently remounts this component fresh per batch (see
+  // StudyChatScreen's `{showExtractionDialog && <KnowledgeExtractionDialog
+  // .../>}`), so useState's initializers above already run once per batch in
+  // practice. Adjusting state during render on a batchId change (React's own
+  // documented pattern for this — see "Resetting all state when a prop
+  // changes" — rather than a useEffect, which would cost an extra render and
+  // trips react-hooks/set-state-in-effect) makes that a guarantee of the
+  // component itself rather than an assumption about how any given caller
+  // renders it: if a future caller instead kept one instance mounted and
+  // only toggled `open` (the pattern `open` as a prop invites, and the one
+  // TranscriptTruncationDialog already uses), a new batchId with a stale
+  // `selected` set could carry an old selection into a new batch — e.g.
+  // silently including a semantic-match candidate that was never explicitly
+  // re-confirmed for this batch ("Create separately" is supposed to be a
+  // per-batch, explicit choice). batchId, not items, is the actual "this is
+  // a new batch" signal — items is a fresh array reference most renders
+  // regardless.
+  const [resetForBatchId, setResetForBatchId] = useState(batchId)
+  if (batchId !== resetForBatchId) {
+    setResetForBatchId(batchId)
+    setSelected(defaultSelected(items))
+    setSaved(new Set())
+    setSaveError('')
+    setLastMode(null)
+  }
 
   const pendingIndices = useMemo(
     () => [...selected].filter((index) => !saved.has(index)).sort((a, b) => a - b),

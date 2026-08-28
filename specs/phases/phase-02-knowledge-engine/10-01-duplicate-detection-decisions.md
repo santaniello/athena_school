@@ -120,6 +120,30 @@ today for the "invalid evidence" skip case. Fixing it is out of scope for
 this increment; Option A is consistent with an already-accepted gap, not a
 new one.
 
+**Post-review correction — the recheck runs inside the same transaction as
+the write, not before it.** The implementation initially ran
+`findExactDuplicates` before calling `s.tx.WithinTx`, as two separate
+connection checkouts. Since `FindByNormalizedConcept` and `Save` each only
+hold `db.go`'s single pooled connection (`SetMaxOpenConns(1)`) for their own
+call, not across both, two concurrent `SaveDrafts`/`SaveAndApprove` calls for
+the same `(topic, normalized_concept)` could interleave: both see "no match"
+before either commits, and both insert. A real-SQLite regression test (15
+goroutines racing to create the first item for one concept) reproduced this
+directly — 7 of 15 succeeded instead of 1 — before the fix.
+
+The fix moves the recheck inside `WithinTx`'s closure, using a local sentinel
+error (`errExactDuplicateAtSave`) to signal "skip silently" versus a genuine
+failure once the transaction returns. With both steps sharing one
+transaction, the single-connection pool that already makes "wrap read then
+write in one transaction" the established pattern for this class of race
+(see `Transactor`'s own doc comment, covering `Approve`/`Deprecate`/
+`UpdateItem`/`DeleteItem`) closes it here too — proven against real SQLite,
+not just asserted. A DB-level `UNIQUE` constraint on `(topic,
+normalized_concept)` was considered and rejected: `10-duplicate-detection.md`
+and `11-knowledge-reconciliation.md` both anticipate a deprecated item and
+its reconciliation successor sharing that same pair, which a `UNIQUE`
+constraint would make impossible to persist.
+
 ## Test plan implications
 
 - A migration test seeding a pre-migration row (not just an empty database)

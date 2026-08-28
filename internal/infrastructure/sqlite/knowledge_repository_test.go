@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -417,6 +419,65 @@ func TestKnowledgeRepository_FindByNormalizedConcept_returnsEmpty_whenNoMatch(t 
 	// Then an empty, non-nil result is returned
 	require.NoError(t, err)
 	assert.Empty(t, matches)
+}
+
+func TestKnowledgeRepository_FindByNormalizedConceptThenSave_insideOneTransaction_closesTheConcurrentDuplicateRace(t *testing.T) {
+	// Given many goroutines racing to be the first to create an item for the
+	// same normalized concept in the same topic, each checking then
+	// inserting inside its own transaction — this is the exact
+	// check-then-act sequence internal/application/knowledge.saveCandidates
+	// runs. A separate, pre-transaction check (the original implementation)
+	// would let two goroutines both observe "no match" before either
+	// commits; running both steps inside one WithinTx instead relies on
+	// db.go's single-connection pool (SetMaxOpenConns(1)) to serialize
+	// them — this proves that guarantee against a real database, not a
+	// mock. See specs/phases/phase-02-knowledge-engine/10-01-duplicate-detection-decisions.md.
+	repo, db := newTestKnowledgeRepositoryWithDB(t)
+	tx := NewSQLTransactor(db)
+	ctx := context.Background()
+	errAlreadyExists := errors.New("already exists")
+
+	const attempts = 15
+	errs := make(chan error, attempts)
+	var wg sync.WaitGroup
+	for i := range attempts {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			errs <- tx.WithinTx(ctx, func(ctx context.Context) error {
+				existing, err := repo.FindByNormalizedConcept(ctx, "System Design", "load balancer")
+				if err != nil {
+					return err
+				}
+				if len(existing) > 0 {
+					return errAlreadyExists
+				}
+				item := testItem(fmt.Sprintf("item-%d", i), "System Design", knowledge.StatusDraft)
+				item.Concept = "Load Balancer"
+				return repo.Save(ctx, item)
+			})
+		}(i)
+	}
+
+	// When they all race concurrently
+	wg.Wait()
+	close(errs)
+
+	// Then exactly one attempt actually created the item — every other
+	// attempt's own check, inside its own transaction, saw it already there
+	succeeded := 0
+	for err := range errs {
+		if err == nil {
+			succeeded++
+			continue
+		}
+		assert.ErrorIs(t, err, errAlreadyExists)
+	}
+	assert.Equal(t, 1, succeeded)
+
+	matches, err := repo.FindByNormalizedConcept(ctx, "System Design", "load balancer")
+	require.NoError(t, err)
+	assert.Len(t, matches, 1)
 }
 
 func TestKnowledgeRepository_Update_returnsErrItemNotFound_whenMissing(t *testing.T) {

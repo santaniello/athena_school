@@ -14,6 +14,16 @@ var ErrTranscriptTooLarge = errors.New("no complete transcript message fits with
 // mutation can never race a snapshot publish.
 var ErrIndexLoading = errors.New("knowledge index is loading")
 
+// errExactDuplicateAtSave signals saveCandidates' transaction closure that
+// this candidate's exact-match recheck found a duplicate. It is caught right
+// outside WithinTx and translated into the same silent skip/restore as an
+// invalid-evidence candidate — never returned to a caller. See
+// specs/phases/phase-02-knowledge-engine/10-01-duplicate-detection-decisions.md
+// Decision 3, and its addendum on running the recheck inside the same
+// transaction as the write to close the check-then-act race a separate,
+// pre-transaction lookup would leave open.
+var errExactDuplicateAtSave = errors.New("knowledge: exact duplicate at save time")
+
 // ErrIndexingFailed is the sentinel every knowledge-indexing failure wraps
 // — embedding, chunk persistence, or VectorStore reconciliation alike — so
 // every caller can distinguish "item saved but not indexed" from a real

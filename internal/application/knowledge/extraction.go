@@ -2,6 +2,7 @@ package knowledge
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -218,22 +219,27 @@ func (s *Service) saveCandidates(ctx context.Context, batchID string, items []do
 			continue
 		}
 
-		exactMatches, dupErr := s.findExactDuplicates(ctx, item)
-		if dupErr != nil {
-			s.receipts.Restore(batchID, input.ID, receipt)
-			return savedIndices, dupErr
-		}
-		if len(exactMatches) > 0 {
-			// A crafted or stale frontend cannot bypass the save policy: this
-			// repeats extraction's exact-match check server-side. Skipped
-			// silently, the same as invalid evidence above — see
-			// specs/phases/phase-02-knowledge-engine/10-01-duplicate-detection-decisions.md
-			// Decision 3.
-			s.receipts.Restore(batchID, input.ID, receipt)
-			continue
-		}
-
 		err := s.tx.WithinTx(ctx, func(ctx context.Context) error {
+			// The exact-match recheck runs inside this same transaction,
+			// not before it: db.go's single-connection pool means the
+			// connection this transaction holds from here to Commit is the
+			// only one in the process, so no concurrent save can observe
+			// "no match" and insert between this check and this Save —
+			// mirroring the read-then-write pattern Transactor's own doc
+			// comment already establishes for Approve/Deprecate/UpdateItem/
+			// DeleteItem. A crafted or stale frontend still cannot bypass
+			// the save policy this way either.
+			exactMatches, dupErr := s.findExactDuplicates(ctx, item)
+			if dupErr != nil {
+				return dupErr
+			}
+			if len(exactMatches) > 0 {
+				// Skipped silently, the same as invalid evidence above —
+				// see specs/phases/phase-02-knowledge-engine/10-01-duplicate-detection-decisions.md
+				// Decision 3.
+				return errExactDuplicateAtSave
+			}
+
 			if err := s.items.Save(ctx, item); err != nil {
 				return err
 			}
@@ -255,6 +261,10 @@ func (s *Service) saveCandidates(ctx context.Context, batchID string, items []do
 			}
 			return nil
 		})
+		if errors.Is(err, errExactDuplicateAtSave) {
+			s.receipts.Restore(batchID, input.ID, receipt)
+			continue
+		}
 		if err != nil {
 			s.receipts.Restore(batchID, input.ID, receipt)
 			return savedIndices, err

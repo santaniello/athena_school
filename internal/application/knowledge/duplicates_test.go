@@ -106,12 +106,13 @@ func TestFindDuplicates_excludesSemanticMatchesBelowThreshold(t *testing.T) {
 	items.EXPECT().FindByNormalizedConcept(mock.Anything, "System Design", "circuit breaker").Return(nil, nil)
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(3)
-	store.EXPECT().Search(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+	store.EXPECT().Search(mock.Anything, []float32{0.1}, domainknowledge.DefaultDuplicateTopK,
+		domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena}).
 		Return([]domainknowledge.ScoredChunk{
 			{Chunk: domainknowledge.Chunk{ID: "chunk-1", ItemID: "item-1"}, Score: 0.80},
 		}, nil)
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
+	llm.EXPECT().Embeddings(mock.Anything, domainllm.EmbeddingRequest{Input: "Circuit Breaker\n\nA resiliency pattern."}).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
 	service := NewService(items, nil, nil, llm, nil, nil, nil, store, nil, domainknowledge.RetrievalThresholds{}, nil,
 		domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	candidate := duplicateCandidate("System Design", "Circuit Breaker", "A resiliency pattern.")
@@ -133,12 +134,13 @@ func TestFindDuplicates_raisingTheThreshold_changesWhichMatchesSurvive(t *testin
 		Return(domainknowledge.Item{ID: "item-1", Concept: "Circuit Breaking", Status: domainknowledge.StatusApproved}, nil)
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(3)
-	store.EXPECT().Search(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+	store.EXPECT().Search(mock.Anything, []float32{0.1}, domainknowledge.DefaultDuplicateTopK,
+		domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena}).
 		Return([]domainknowledge.ScoredChunk{
 			{Chunk: domainknowledge.Chunk{ID: "chunk-1", ItemID: "item-1"}, Score: 0.80},
 		}, nil)
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
+	llm.EXPECT().Embeddings(mock.Anything, domainllm.EmbeddingRequest{Input: "Circuit Breaker\n\nA resiliency pattern."}).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
 	service := NewService(items, nil, nil, llm, nil, nil, nil, store, nil, domainknowledge.RetrievalThresholds{}, nil,
 		domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	candidate := duplicateCandidate("System Design", "Circuit Breaker", "A resiliency pattern.")
@@ -162,13 +164,14 @@ func TestFindDuplicates_dedupsMultipleChunksOfTheSameItem_keepingTheHighestScore
 		Return(domainknowledge.Item{ID: "item-1", Concept: "Circuit Breaking", Status: domainknowledge.StatusApproved}, nil)
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(3)
-	store.EXPECT().Search(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+	store.EXPECT().Search(mock.Anything, []float32{0.1}, domainknowledge.DefaultDuplicateTopK,
+		domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena}).
 		Return([]domainknowledge.ScoredChunk{
 			{Chunk: domainknowledge.Chunk{ID: "chunk-1", ItemID: "item-1"}, Score: 0.96875},
 			{Chunk: domainknowledge.Chunk{ID: "chunk-2", ItemID: "item-1"}, Score: 0.90625},
 		}, nil)
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
+	llm.EXPECT().Embeddings(mock.Anything, domainllm.EmbeddingRequest{Input: "Circuit Breaker\n\nA resiliency pattern."}).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
 	service := NewService(items, nil, nil, llm, nil, nil, nil, store, nil, domainknowledge.RetrievalThresholds{}, nil,
 		domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	candidate := duplicateCandidate("System Design", "Circuit Breaker", "A resiliency pattern.")
@@ -193,12 +196,13 @@ func TestFindDuplicates_includesASemanticMatchExactlyAtTheThreshold(t *testing.T
 		Return(domainknowledge.Item{ID: "item-1", Concept: "Circuit Breaking", Status: domainknowledge.StatusApproved}, nil)
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(3)
-	store.EXPECT().Search(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+	store.EXPECT().Search(mock.Anything, []float32{0.1}, domainknowledge.DefaultDuplicateTopK,
+		domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena}).
 		Return([]domainknowledge.ScoredChunk{
 			{Chunk: domainknowledge.Chunk{ID: "chunk-1", ItemID: "item-1"}, Score: 0.9375},
 		}, nil)
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
+	llm.EXPECT().Embeddings(mock.Anything, domainllm.EmbeddingRequest{Input: "Circuit Breaker\n\nA resiliency pattern."}).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
 	service := NewService(items, nil, nil, llm, nil, nil, nil, store, nil, domainknowledge.RetrievalThresholds{}, nil,
 		domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	candidate := duplicateCandidate("System Design", "Circuit Breaker", "A resiliency pattern.")
@@ -223,13 +227,14 @@ func TestFindDuplicates_ordersSemanticMatchesByScoreDescending(t *testing.T) {
 		Return(domainknowledge.Item{ID: "item-higher", Concept: "Higher", Status: domainknowledge.StatusApproved}, nil)
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(3)
-	store.EXPECT().Search(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+	store.EXPECT().Search(mock.Anything, []float32{0.1}, domainknowledge.DefaultDuplicateTopK,
+		domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena}).
 		Return([]domainknowledge.ScoredChunk{
 			{Chunk: domainknowledge.Chunk{ID: "chunk-lower", ItemID: "item-lower"}, Score: 0.90625},
 			{Chunk: domainknowledge.Chunk{ID: "chunk-higher", ItemID: "item-higher"}, Score: 0.96875},
 		}, nil)
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
+	llm.EXPECT().Embeddings(mock.Anything, domainllm.EmbeddingRequest{Input: "Circuit Breaker\n\nA resiliency pattern."}).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
 	service := NewService(items, nil, nil, llm, nil, nil, nil, store, nil, domainknowledge.RetrievalThresholds{}, nil,
 		domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	candidate := duplicateCandidate("System Design", "Circuit Breaker", "A resiliency pattern.")
@@ -255,13 +260,14 @@ func TestFindDuplicates_breaksSemanticScoreTiesByItemIDAscending(t *testing.T) {
 		Return(domainknowledge.Item{ID: "item-a", Concept: "A", Status: domainknowledge.StatusApproved}, nil)
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(3)
-	store.EXPECT().Search(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+	store.EXPECT().Search(mock.Anything, []float32{0.1}, domainknowledge.DefaultDuplicateTopK,
+		domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena}).
 		Return([]domainknowledge.ScoredChunk{
 			{Chunk: domainknowledge.Chunk{ID: "chunk-b", ItemID: "item-b"}, Score: 0.9375},
 			{Chunk: domainknowledge.Chunk{ID: "chunk-a", ItemID: "item-a"}, Score: 0.9375},
 		}, nil)
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
+	llm.EXPECT().Embeddings(mock.Anything, domainllm.EmbeddingRequest{Input: "Circuit Breaker\n\nA resiliency pattern."}).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
 	service := NewService(items, nil, nil, llm, nil, nil, nil, store, nil, domainknowledge.RetrievalThresholds{}, nil,
 		domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	candidate := duplicateCandidate("System Design", "Circuit Breaker", "A resiliency pattern.")
@@ -284,12 +290,13 @@ func TestFindDuplicates_dropsAnOrphanedChunk_whoseOwningItemNoLongerExists(t *te
 	items.EXPECT().GetByID(mock.Anything, "item-1").Return(domainknowledge.Item{}, domainknowledge.ErrItemNotFound)
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(3)
-	store.EXPECT().Search(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+	store.EXPECT().Search(mock.Anything, []float32{0.1}, domainknowledge.DefaultDuplicateTopK,
+		domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena}).
 		Return([]domainknowledge.ScoredChunk{
 			{Chunk: domainknowledge.Chunk{ID: "chunk-1", ItemID: "item-1"}, Score: 0.95},
 		}, nil)
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
+	llm.EXPECT().Embeddings(mock.Anything, domainllm.EmbeddingRequest{Input: "Circuit Breaker\n\nA resiliency pattern."}).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
 	service := NewService(items, nil, nil, llm, nil, nil, nil, store, nil, domainknowledge.RetrievalThresholds{}, nil,
 		domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	candidate := duplicateCandidate("System Design", "Circuit Breaker", "A resiliency pattern.")
@@ -309,7 +316,7 @@ func TestFindDuplicates_returnsErrSemanticDuplicateCheckUnavailable_whenEmbeddin
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(3)
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{}, errors.New("openrouter: unauthorized"))
+	llm.EXPECT().Embeddings(mock.Anything, domainllm.EmbeddingRequest{Input: "Circuit Breaker\n\nA resiliency pattern."}).Return(domainllm.EmbeddingResponse{}, errors.New("openrouter: unauthorized"))
 	service := NewService(items, nil, nil, llm, nil, nil, nil, store, nil, domainknowledge.RetrievalThresholds{}, nil,
 		domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	candidate := duplicateCandidate("System Design", "Circuit Breaker", "A resiliency pattern.")
@@ -329,10 +336,11 @@ func TestFindDuplicates_returnsErrSemanticDuplicateCheckUnavailable_whenSearchFa
 	items.EXPECT().FindByNormalizedConcept(mock.Anything, "System Design", "circuit breaker").Return(nil, nil)
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(3)
-	store.EXPECT().Search(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+	store.EXPECT().Search(mock.Anything, []float32{0.1}, domainknowledge.DefaultDuplicateTopK,
+		domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena}).
 		Return(nil, errors.New("vectorstore: search failed"))
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
+	llm.EXPECT().Embeddings(mock.Anything, domainllm.EmbeddingRequest{Input: "Circuit Breaker\n\nA resiliency pattern."}).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
 	service := NewService(items, nil, nil, llm, nil, nil, nil, store, nil, domainknowledge.RetrievalThresholds{}, nil,
 		domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	candidate := duplicateCandidate("System Design", "Circuit Breaker", "A resiliency pattern.")

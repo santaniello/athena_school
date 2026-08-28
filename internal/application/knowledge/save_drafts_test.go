@@ -155,7 +155,9 @@ func TestSaveDrafts_skipsCandidateThatIsAnExactDuplicateAtSaveTime(t *testing.T)
 	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{
 		{ID: "message-1", Content: "Channels are typed conduits."},
 	}, nil).Once()
-	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, knowledgemocks.NewMockEvidenceRepository(t), domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	tx := txmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, knowledgemocks.NewMockEvidenceRepository(t), domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	batchID := receiptFixture(service, "session-1", "Go", "candidate-1",
 		domainknowledge.EvidenceRef{MessageID: "message-1", Quote: "Channels are typed conduits."})
 	input := []domainknowledge.Item{
@@ -183,7 +185,9 @@ func TestSaveDrafts_stopsWhenTheDuplicateRecheckFails(t *testing.T) {
 	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{
 		{ID: "message-1", Content: "Channels are typed conduits."},
 	}, nil).Once()
-	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, knowledgemocks.NewMockEvidenceRepository(t), domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	tx := txmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, knowledgemocks.NewMockEvidenceRepository(t), domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	batchID := receiptFixture(service, "session-1", "Go", "candidate-1",
 		domainknowledge.EvidenceRef{MessageID: "message-1", Quote: "Channels are typed conduits."})
 	input := []domainknowledge.Item{
@@ -293,7 +297,8 @@ func TestSaveDrafts_stopsAtTransactionFailureAndKeepsThatReceiptForRetry(t *test
 	ctx := context.Background()
 	var savedItemID string
 	repository := knowledgemocks.NewMockRepository(t)
-	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", mock.Anything).Return(nil, nil).Times(2)
+	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", "first").Return(nil, nil).Once()
+	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", "second").Return(nil, nil).Once()
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool { return item.Concept == "first" })).
 		Run(func(_ context.Context, item domainknowledge.Item) { savedItemID = item.ID }).Return(nil).Once()
 	saveErr := errors.New("database locked")
@@ -347,7 +352,9 @@ func TestSaveDrafts_savesEveryItemAndConsumesEveryReceipt_butStopsAttemptingInde
 	ctx := context.Background()
 	savedItemIDByConcept := map[string]string{}
 	repository := knowledgemocks.NewMockRepository(t)
-	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", mock.Anything).Return(nil, nil).Times(3)
+	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", "first").Return(nil, nil).Once()
+	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", "second").Return(nil, nil).Once()
+	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", "third").Return(nil, nil).Once()
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.ID != "" && item.Topic == "Go" &&
 			(item.Concept == "first" || item.Concept == "second" || item.Concept == "third")
