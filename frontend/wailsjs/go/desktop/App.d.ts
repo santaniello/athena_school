@@ -3,6 +3,14 @@
 import {desktop} from '../models';
 import {context} from '../models';
 
+export function AcknowledgeReconciliationNoChange(arg1:string,arg2:string,arg3:desktop.KnowledgeItemInput):Promise<void>;
+
+export function ApplyReconciliationCreate(arg1:string,arg2:string,arg3:desktop.KnowledgeItemInput,arg4:string):Promise<desktop.KnowledgeItemResult>;
+
+export function ApplyReconciliationRelate(arg1:string,arg2:string,arg3:desktop.KnowledgeItemInput):Promise<desktop.KnowledgeItemResult>;
+
+export function ApplyReconciliationUpdate(arg1:string,arg2:string,arg3:desktop.KnowledgeItemInput):Promise<desktop.KnowledgeItemResult>;
+
 export function ApproveKnowledgeItem(arg1:string):Promise<desktop.KnowledgeItemResult>;
 
 export function CountDraftKnowledgeItems():Promise<number>;
@@ -69,6 +77,8 @@ export function RequestOpeningTurn(arg1:string,arg2:string):Promise<void>;
 
 export function ResetLocalAccount(arg1:string):Promise<void>;
 
+export function ResolveReconciliationConflict(arg1:string,arg2:string,arg3:desktop.KnowledgeItemInput,arg4:string):Promise<desktop.KnowledgeItemResult>;
+
 export function ResumeStudySession(arg1:string):Promise<desktop.StudySessionHistoryResult>;
 
 export function RetryKnowledgeIndex():Promise<desktop.IndexStatusResult>;
@@ -80,6 +90,8 @@ export function SaveExtractedKnowledge(arg1:string,arg2:Array<desktop.KnowledgeI
 export function SaveOpenRouterKey(arg1:string):Promise<void>;
 
 export function SaveProfile(arg1:desktop.UserProfileInput):Promise<void>;
+
+export function SaveReconciliationForReview(arg1:string,arg2:string,arg3:desktop.KnowledgeItemInput):Promise<void>;
 
 export function SendStudyMessage(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 

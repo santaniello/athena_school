@@ -26,11 +26,11 @@ export namespace desktop {
 	    status: string;
 	    matchType: string;
 	    score: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new DuplicateMatchResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.itemId = source["itemId"];
@@ -39,6 +39,60 @@ export namespace desktop {
 	        this.matchType = source["matchType"];
 	        this.score = source["score"];
 	    }
+	}
+	export class ItemChangesResult {
+	    definition?: string;
+	    properties: string[];
+	    tradeOffs: string[];
+	    relatedConcepts: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ItemChangesResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.definition = source["definition"];
+	        this.properties = source["properties"];
+	        this.tradeOffs = source["tradeOffs"];
+	        this.relatedConcepts = source["relatedConcepts"];
+	    }
+	}
+	export class ReconciliationSuggestionResult {
+	    action: string;
+	    targetItemId: string;
+	    reason: string;
+	    changes: ItemChangesResult;
+	
+	    static createFrom(source: any = {}) {
+	        return new ReconciliationSuggestionResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.action = source["action"];
+	        this.targetItemId = source["targetItemId"];
+	        this.reason = source["reason"];
+	        this.changes = this.convertValues(source["changes"], ItemChangesResult);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class KnowledgeItemResult {
 	    id: string;
@@ -54,11 +108,13 @@ export namespace desktop {
 	    updatedAt: string;
 	    duplicates: DuplicateMatchResult[];
 	    semanticCheckUnavailable: boolean;
-
+	    reconciliation?: ReconciliationSuggestionResult;
+	    reconciliationFailed: boolean;
+	
 	    static createFrom(source: any = {}) {
 	        return new KnowledgeItemResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -74,8 +130,10 @@ export namespace desktop {
 	        this.updatedAt = source["updatedAt"];
 	        this.duplicates = this.convertValues(source["duplicates"], DuplicateMatchResult);
 	        this.semanticCheckUnavailable = source["semanticCheckUnavailable"];
+	        this.reconciliation = this.convertValues(source["reconciliation"], ReconciliationSuggestionResult);
+	        this.reconciliationFailed = source["reconciliationFailed"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -180,6 +238,7 @@ export namespace desktop {
 		    return a;
 		}
 	}
+	
 	export class KnowledgeEvidenceResult {
 	    originType: string;
 	    sourceLabel: string;
@@ -271,6 +330,7 @@ export namespace desktop {
 	        this.email = source["email"];
 	    }
 	}
+	
 	export class StudyContextResult {
 	    state: string;
 	    model: string;

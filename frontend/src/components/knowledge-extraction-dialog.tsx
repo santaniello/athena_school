@@ -1,5 +1,4 @@
-import { useMemo, useState } from 'react'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -10,56 +9,68 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {
+  acknowledgeReconciliationNoChange,
+  applyReconciliationCreate,
+  applyReconciliationRelate,
+  applyReconciliationUpdate,
+  CONFLICT_CREATE_SEPARATELY,
+  CONFLICT_KEEP_EXISTING,
+  CONFLICT_UPDATE_EXISTING,
   discardExtraction,
-  MATCH_EXACT,
-  MATCH_SEMANTIC,
-  saveAndApproveExtractedKnowledge,
-  saveExtractedKnowledge,
-  type DuplicateMatch,
+  RECONCILE_CONFLICT,
+  RECONCILE_NO_CHANGE,
+  RECONCILE_RELATE,
+  RECONCILE_UPDATE,
+  resolveReconciliationConflict,
   type KnowledgeItem,
 } from '@/lib/knowledge'
 
-// exactDuplicate returns item's exact match, if any — 10-duplicate-detection.md
-// disables direct Create whenever one exists, whatever its status.
-function exactDuplicate(item: KnowledgeItem): DuplicateMatch | undefined {
-  return (item.duplicates ?? []).find((match) => match.matchType === MATCH_EXACT)
+// needsIndividualDecision reports whether item's classified action touches
+// or links an existing item — update/relate/conflict — the three actions
+// 11-knowledge-reconciliation.md requires the user to review individually
+// rather than batch-approve. create and no_change stay in the batch zone:
+// neither one ever mutates an existing item, so approving several of them
+// at once carries none of that risk. A candidate whose classification is
+// still missing (should not normally happen — see Service.classifyCandidates)
+// is treated like create, the safe default.
+function needsIndividualDecision(item: KnowledgeItem): boolean {
+  const action = item.reconciliation?.action
+  return action === RECONCILE_UPDATE || action === RECONCILE_RELATE || action === RECONCILE_CONFLICT
 }
 
-// semanticMatches returns item's semantic matches — warnings, never a block;
-// the user opts in explicitly by checking the candidate ("Create separately").
-function semanticMatches(item: KnowledgeItem): DuplicateMatch[] {
-  return (item.duplicates ?? []).filter((match) => match.matchType === MATCH_SEMANTIC)
+// targetMatch resolves item's classified target within its own duplicate
+// shortlist, for its concept/status — the reconciliation suggestion itself
+// only carries the target's id, never duplicating fields already present
+// in `duplicates`.
+function targetMatch(item: KnowledgeItem) {
+  const targetId = item.reconciliation?.targetItemId
+  if (!targetId) return undefined
+  return (item.duplicates ?? []).find((match) => match.itemId === targetId)
 }
 
-// defaultSelected is which candidate indices start checked: everything
-// except an exact duplicate (Create disabled) or a semantic-only match
-// (creating it separately is an explicit opt-in, not a default).
-function defaultSelected(items: KnowledgeItem[]): Set<number> {
-  return new Set(
-    items
-      .map((_, index) => index)
-      .filter(
-        (index) => !exactDuplicate(items[index]) && semanticMatches(items[index]).length === 0,
-      ),
-  )
+interface DecisionState {
+  pending: boolean
+  done: boolean
+  doneLabel: string
+  error: string
 }
+
+const idleDecision: DecisionState = { pending: false, done: false, doneLabel: '', error: '' }
 
 interface KnowledgeExtractionDialogProps {
   open: boolean
   batchId: string
   items: KnowledgeItem[]
   onClose: () => void
-  // Fired after a successful "Save as drafts" that actually persisted at
-  // least one candidate — the only save mode that adds to the review queue.
-  // Lets AppShell refresh the sidebar/Review-tab badge without a reload. See
+  // Fired after a decision that adds a new draft Knowledge Item — a create
+  // saved as draft, a relate (always draft), or a conflict resolved as
+  // "create separately" (always draft). Lets AppShell refresh the
+  // sidebar/Review-tab badge without a reload. See
   // specs/phases/phase-02-knowledge-engine/07-knowledge-review.md.
   onKnowledgeChanged?: () => void
 }
 
-// The three options from specs/Athena.md §12 ("Knowledge Promotion"):
-// "Save as knowledge" (save directly as approved), "Save as drafts" (save
-// as draft, the default review flow), "Dismiss" (discard).
-type SaveMode = 'draft' | 'approve'
+type BatchMode = 'draft' | 'approve'
 
 export function KnowledgeExtractionDialog({
   open,
@@ -68,60 +79,45 @@ export function KnowledgeExtractionDialog({
   onClose,
   onKnowledgeChanged,
 }: KnowledgeExtractionDialogProps) {
-  const [selected, setSelected] = useState<Set<number>>(() => defaultSelected(items))
-  const [saved, setSaved] = useState<Set<number>>(new Set())
-  const [isSaving, setIsSaving] = useState(false)
-  const [saveError, setSaveError] = useState('')
-  // Tracks which button triggered the in-flight/last-failed save, so retry
-  // re-attempts the same mode and the other button stays at its default label.
-  const [lastMode, setLastMode] = useState<SaveMode | null>(null)
+  const decisionItems = items.filter(needsIndividualDecision)
+  const batchItems = items.filter((item) => !needsIndividualDecision(item))
 
-  // The caller currently remounts this component fresh per batch (see
-  // StudyChatScreen's `{showExtractionDialog && <KnowledgeExtractionDialog
-  // .../>}`), so useState's initializers above already run once per batch in
-  // practice. Adjusting state during render on a batchId change (React's own
-  // documented pattern for this — see "Resetting all state when a prop
-  // changes" — rather than a useEffect, which would cost an extra render and
-  // trips react-hooks/set-state-in-effect) makes that a guarantee of the
-  // component itself rather than an assumption about how any given caller
-  // renders it: if a future caller instead kept one instance mounted and
-  // only toggled `open` (the pattern `open` as a prop invites, and the one
-  // TranscriptTruncationDialog already uses), a new batchId with a stale
-  // `selected` set could carry an old selection into a new batch — e.g.
-  // silently including a semantic-match candidate that was never explicitly
-  // re-confirmed for this batch ("Create separately" is supposed to be a
-  // per-batch, explicit choice). batchId, not items, is the actual "this is
-  // a new batch" signal — items is a fresh array reference most renders
-  // regardless.
+  const [decisions, setDecisions] = useState<Record<string, DecisionState>>({})
+  const [batchSelected, setBatchSelected] = useState<Set<string>>(
+    () => new Set(batchItems.map((item) => item.id)),
+  )
+  const [batchSaving, setBatchSaving] = useState<BatchMode | null>(null)
+  const [batchError, setBatchError] = useState('')
+  const [lastBatchMode, setLastBatchMode] = useState<BatchMode | null>(null)
+
+  // batchId, not items, is the actual "this is a new batch" signal — items
+  // is a fresh array reference most renders regardless, and this component
+  // is remounted fresh per batch by its caller today, but resetting on
+  // batchId keeps that a guarantee of the component itself rather than an
+  // assumption about how any given caller renders it.
   const [resetForBatchId, setResetForBatchId] = useState(batchId)
   if (batchId !== resetForBatchId) {
     setResetForBatchId(batchId)
-    setSelected(defaultSelected(items))
-    setSaved(new Set())
-    setSaveError('')
-    setLastMode(null)
+    setDecisions({})
+    setBatchSelected(new Set(batchItems.map((item) => item.id)))
+    setBatchSaving(null)
+    setBatchError('')
+    setLastBatchMode(null)
   }
 
-  const pendingIndices = useMemo(
-    () => [...selected].filter((index) => !saved.has(index)).sort((a, b) => a - b),
-    [saved, selected],
-  )
+  function decisionFor(id: string): DecisionState {
+    return decisions[id] ?? idleDecision
+  }
 
-  function toggle(index: number) {
-    setSelected((previous) => {
+  function toggleBatchSelected(id: string) {
+    setBatchSelected((previous) => {
       const next = new Set(previous)
-      if (next.has(index)) next.delete(index)
-      else next.add(index)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
   }
 
-  // handleClose covers every true dialog-close path — the explicit Dismiss
-  // button, clicking outside, Escape, and closing right after a fully
-  // successful save — and discards whatever candidates in this batch were
-  // never attempted (deselected, or not yet reached). It is never called
-  // from handleSave's error branch, so a partial-save failure always leaves
-  // the remaining receipts retryable.
   async function handleClose() {
     if (batchId) {
       try {
@@ -135,45 +131,98 @@ export function KnowledgeExtractionDialog({
     onClose()
   }
 
-  async function handleSave(mode: SaveMode) {
-    if (pendingIndices.length === 0) return
-    setIsSaving(true)
-    setSaveError('')
-    setLastMode(mode)
+  async function runDecision(
+    item: KnowledgeItem,
+    addsDraft: boolean,
+    action: () => Promise<unknown>,
+  ) {
+    setDecisions((previous) => ({ ...previous, [item.id]: { ...idleDecision, pending: true } }))
     try {
-      const save = mode === 'approve' ? saveAndApproveExtractedKnowledge : saveExtractedKnowledge
-      const result = await save(
-        batchId,
-        pendingIndices.map((index) => items[index]),
-      )
-      const persistedIndices = result.savedIndices
-        .map((index) => pendingIndices[index])
-        .filter((index): index is number => index !== undefined)
-      if (persistedIndices.length > 0) {
-        setSaved((previous) => new Set([...previous, ...persistedIndices]))
-        if (mode === 'draft') onKnowledgeChanged?.()
-      }
-      if (result.error) {
-        setSaveError(result.error)
-        return
-      }
-      void handleClose()
+      await action()
+      setDecisions((previous) => ({
+        ...previous,
+        [item.id]: { pending: false, done: true, doneLabel: 'Applied', error: '' },
+      }))
+      if (addsDraft) onKnowledgeChanged?.()
     } catch (caught) {
-      const fallbackMessage =
-        mode === 'approve' ? 'Failed to save as knowledge.' : 'Failed to save drafts.'
-      const error = caught instanceof Error ? caught : new Error(fallbackMessage)
-      setSaveError(error.message)
-    } finally {
-      setIsSaving(false)
+      const message = caught instanceof Error ? caught.message : 'Something went wrong. Try again.'
+      setDecisions((previous) => ({ ...previous, [item.id]: { ...idleDecision, error: message } }))
     }
   }
 
-  function saveButtonLabel(mode: SaveMode, idleLabel: string) {
-    if (lastMode !== mode) return idleLabel
-    if (isSaving) return 'Saving...'
-    if (saveError) return 'Try again'
+  function handleApplyUpdate(item: KnowledgeItem) {
+    void runDecision(item, false, () => applyReconciliationUpdate(batchId, item.id, item))
+  }
+
+  function handleApplyRelate(item: KnowledgeItem) {
+    void runDecision(item, true, () => applyReconciliationRelate(batchId, item.id, item))
+  }
+
+  function handleResolveConflict(item: KnowledgeItem, resolution: string) {
+    const addsDraft = resolution === CONFLICT_CREATE_SEPARATELY
+    void runDecision(item, addsDraft, () =>
+      resolveReconciliationConflict(batchId, item.id, item, resolution),
+    )
+  }
+
+  async function handleBatchSave(mode: BatchMode) {
+    const pending = batchItems.filter(
+      (item) => batchSelected.has(item.id) && !decisionFor(item.id).done,
+    )
+    if (pending.length === 0) return
+    setBatchSaving(mode)
+    setBatchError('')
+    setLastBatchMode(mode)
+
+    for (const item of pending) {
+      setDecisions((previous) => ({ ...previous, [item.id]: { ...idleDecision, pending: true } }))
+      try {
+        const isNoChange = item.reconciliation?.action === RECONCILE_NO_CHANGE
+        if (isNoChange) {
+          await acknowledgeReconciliationNoChange(batchId, item.id, item)
+        } else {
+          await applyReconciliationCreate(
+            batchId,
+            item.id,
+            item,
+            mode === 'approve' ? 'approved' : 'draft',
+          )
+        }
+        setDecisions((previous) => ({
+          ...previous,
+          [item.id]: {
+            pending: false,
+            done: true,
+            doneLabel: isNoChange ? 'Acknowledged' : 'Saved',
+            error: '',
+          },
+        }))
+        if (!isNoChange && mode === 'draft') onKnowledgeChanged?.()
+      } catch (caught) {
+        const message = caught instanceof Error ? caught.message : 'Something went wrong.'
+        setDecisions((previous) => ({
+          ...previous,
+          [item.id]: { ...idleDecision, error: message },
+        }))
+        setBatchError(message)
+        setBatchSaving(null)
+        return
+      }
+    }
+    setBatchSaving(null)
+  }
+
+  function batchSaveLabel(mode: BatchMode, idleLabel: string) {
+    if (lastBatchMode !== mode) return idleLabel
+    if (batchSaving === mode) return 'Saving...'
+    if (batchError) return 'Try again'
     return idleLabel
   }
+
+  const pendingBatchCount = batchItems.filter(
+    (item) => batchSelected.has(item.id) && !decisionFor(item.id).done,
+  ).length
+  const isSaving = batchSaving !== null
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && void handleClose()}>
@@ -181,89 +230,201 @@ export function KnowledgeExtractionDialog({
         <DialogHeader>
           <DialogTitle>New knowledge found</DialogTitle>
           <DialogDescription>
-            Review the concepts and choose which ones to save as drafts.
+            {decisionItems.length > 0
+              ? 'Review how each concept relates to what you already know, then choose which new concepts to save.'
+              : 'Review the concepts and choose which ones to save.'}
           </DialogDescription>
         </DialogHeader>
 
         {items.length === 0 ? (
           <p className="py-4 text-sm text-muted-foreground">No new knowledge found</p>
         ) : (
-          <div className="thin-scroll max-h-[50vh] space-y-3 overflow-y-auto">
-            {items.map((item, index) => {
-              const exactMatch = exactDuplicate(item)
-              const semantic = semanticMatches(item)
-              return (
-                <label key={item.id || index} className="flex gap-3 rounded-lg border p-3">
-                  <input
-                    type="checkbox"
-                    aria-label={`Select ${item.concept}`}
-                    checked={selected.has(index)}
-                    disabled={Boolean(exactMatch) || saved.has(index) || isSaving}
-                    onChange={() => toggle(index)}
-                    className="mt-1 size-4 accent-primary"
+          <div className="thin-scroll max-h-[60vh] space-y-4 overflow-y-auto">
+            {decisionItems.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-bold tracking-wide text-muted-foreground uppercase">
+                  Needs your decision
+                </p>
+                {decisionItems.map((item) => (
+                  <DecisionRow
+                    key={item.id}
+                    item={item}
+                    state={decisionFor(item.id)}
+                    onApplyUpdate={() => handleApplyUpdate(item)}
+                    onApplyRelate={() => handleApplyRelate(item)}
+                    onResolveConflict={(resolution) => handleResolveConflict(item, resolution)}
                   />
-                  <span className="min-w-0">
-                    <span className="block font-medium text-foreground">{item.concept}</span>
-                    <span className="mt-1 block text-sm text-muted-foreground">
-                      {item.definition}
-                    </span>
-                    {exactMatch && (
-                      <span className="mt-1 block text-xs text-destructive">
-                        Already exists as &ldquo;{exactMatch.concept}&rdquo; ({exactMatch.status}).
-                        Edit the existing item instead of creating a duplicate.
-                      </span>
-                    )}
-                    {!exactMatch && semantic.length > 0 && (
-                      <span className="mt-1 block text-xs text-amber-600 dark:text-amber-500">
-                        Similar to &ldquo;{semantic[0].concept}&rdquo; ({semantic[0].status},{' '}
-                        {Math.round(semantic[0].score * 100)}% match).
-                        {!selected.has(index) && ' Check the box to create it separately anyway.'}
-                      </span>
-                    )}
-                    {!exactMatch && item.semanticCheckUnavailable && (
-                      <span className="mt-1 block text-xs text-muted-foreground">
-                        Semantic duplicate check unavailable — only exact matches were checked.
-                      </span>
-                    )}
-                    {saved.has(index) && (
-                      <span className="mt-1 block text-xs text-primary">Saved</span>
-                    )}
-                  </span>
-                </label>
-              )
-            })}
-          </div>
-        )}
+                ))}
+              </div>
+            )}
 
-        {saveError && (
-          <Alert variant="destructive">
-            <AlertDescription>{saveError}</AlertDescription>
-          </Alert>
+            {batchItems.length > 0 && (
+              <div className="space-y-2">
+                {decisionItems.length > 0 && (
+                  <p className="text-xs font-bold tracking-wide text-muted-foreground uppercase">
+                    Ready for batch save
+                  </p>
+                )}
+                {batchItems.map((item) => {
+                  const state = decisionFor(item.id)
+                  const isNoChange = item.reconciliation?.action === RECONCILE_NO_CHANGE
+                  const match = targetMatch(item)
+                  return (
+                    <label key={item.id} className="flex gap-3 rounded-lg border p-3">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${item.concept}`}
+                        checked={batchSelected.has(item.id)}
+                        disabled={state.done || isSaving}
+                        onChange={() => toggleBatchSelected(item.id)}
+                        className="mt-1 size-4 accent-primary"
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-medium text-foreground">{item.concept}</span>
+                        <span className="mt-1 block text-sm text-muted-foreground">
+                          {item.definition}
+                        </span>
+                        {isNoChange && match && (
+                          <span className="mt-1 block text-xs text-muted-foreground">
+                            Already captured by &ldquo;{match.concept}&rdquo; ({match.status}) —
+                            nothing new to save.
+                          </span>
+                        )}
+                        {item.reconciliationFailed && (
+                          <span className="mt-1 block text-xs text-muted-foreground">
+                            Comparison against existing knowledge was unavailable — showing as new.
+                          </span>
+                        )}
+                        {state.error && (
+                          <span className="mt-1 block text-xs text-destructive">{state.error}</span>
+                        )}
+                        {state.done && (
+                          <span className="mt-1 block text-xs text-primary">{state.doneLabel}</span>
+                        )}
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         )}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => void handleClose()} disabled={isSaving}>
             Dismiss
           </Button>
-          {items.length > 0 && (
+          {batchItems.length > 0 && (
             <>
               <Button
                 variant="outline"
-                onClick={() => void handleSave('draft')}
-                disabled={pendingIndices.length === 0 || isSaving}
+                onClick={() => void handleBatchSave('draft')}
+                disabled={pendingBatchCount === 0 || isSaving}
               >
-                {saveButtonLabel('draft', 'Save as drafts')}
+                {batchSaveLabel('draft', 'Save as drafts')}
               </Button>
               <Button
-                onClick={() => void handleSave('approve')}
-                disabled={pendingIndices.length === 0 || isSaving}
+                onClick={() => void handleBatchSave('approve')}
+                disabled={pendingBatchCount === 0 || isSaving}
               >
-                {saveButtonLabel('approve', 'Save as knowledge')}
+                {batchSaveLabel('approve', 'Save as knowledge')}
               </Button>
             </>
           )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+const actionLabel: Record<string, string> = {
+  [RECONCILE_UPDATE]: 'Update',
+  [RECONCILE_RELATE]: 'Relate',
+  [RECONCILE_CONFLICT]: 'Conflict',
+}
+
+function DecisionRow({
+  item,
+  state,
+  onApplyUpdate,
+  onApplyRelate,
+  onResolveConflict,
+}: {
+  item: KnowledgeItem
+  state: DecisionState
+  onApplyUpdate: () => void
+  onApplyRelate: () => void
+  onResolveConflict: (resolution: string) => void
+}) {
+  const action = item.reconciliation?.action ?? ''
+  const match = targetMatch(item)
+  const changes = item.reconciliation?.changes
+
+  return (
+    <div className="rounded-lg border p-3">
+      <div className="flex items-center gap-2">
+        <span className="font-medium text-foreground">{item.concept}</span>
+        <span className="rounded-full border px-2 py-0.5 text-[0.65rem] font-bold tracking-wide text-muted-foreground uppercase">
+          {actionLabel[action] ?? action}
+        </span>
+      </div>
+      <p className="mt-1 text-sm text-muted-foreground">{item.definition}</p>
+      {match && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          Compares with &ldquo;{match.concept}&rdquo; ({match.status})
+        </p>
+      )}
+      {item.reconciliation?.reason && (
+        <p className="mt-1 text-xs text-muted-foreground italic">{item.reconciliation.reason}</p>
+      )}
+      {changes?.definition && (
+        <p className="mt-1 text-xs text-foreground">New definition: {changes.definition}</p>
+      )}
+
+      {state.error && <p className="mt-2 text-xs text-destructive">{state.error}</p>}
+      {state.done ? (
+        <p className="mt-2 text-xs text-primary">{state.doneLabel}</p>
+      ) : (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {action === RECONCILE_UPDATE && (
+            <Button size="sm" onClick={onApplyUpdate} disabled={state.pending}>
+              {state.pending ? 'Applying...' : state.error ? 'Try again' : 'Apply update'}
+            </Button>
+          )}
+          {action === RECONCILE_RELATE && (
+            <Button size="sm" onClick={onApplyRelate} disabled={state.pending}>
+              {state.pending ? 'Applying...' : state.error ? 'Try again' : 'Create & relate'}
+            </Button>
+          )}
+          {action === RECONCILE_CONFLICT && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onResolveConflict(CONFLICT_KEEP_EXISTING)}
+                disabled={state.pending}
+              >
+                Keep existing
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onResolveConflict(CONFLICT_UPDATE_EXISTING)}
+                disabled={state.pending}
+              >
+                Update existing
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => onResolveConflict(CONFLICT_CREATE_SEPARATELY)}
+                disabled={state.pending}
+              >
+                Create separately
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
