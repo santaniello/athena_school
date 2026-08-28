@@ -442,7 +442,13 @@ describe('KnowledgeExtractionDialog', () => {
       {
         ...candidate('1', 'Channels'),
         duplicates: [
-          { itemId: 'existing-1', concept: 'Channels', status: 'approved', matchType: 'exact', score: 1 },
+          {
+            itemId: 'existing-1',
+            concept: 'Channels',
+            status: 'approved',
+            matchType: 'exact',
+            score: 1,
+          },
         ],
       },
     ]
@@ -466,7 +472,13 @@ describe('KnowledgeExtractionDialog', () => {
       {
         ...candidate('2', 'Channels'),
         duplicates: [
-          { itemId: 'existing-1', concept: 'Channels', status: 'approved', matchType: 'exact', score: 1 },
+          {
+            itemId: 'existing-1',
+            concept: 'Channels',
+            status: 'approved',
+            matchType: 'exact',
+            score: 1,
+          },
         ],
       },
     ]
@@ -487,7 +499,13 @@ describe('KnowledgeExtractionDialog', () => {
       {
         ...candidate('1', 'Cache-Aside'),
         duplicates: [
-          { itemId: 'existing-1', concept: 'Cache Aside Pattern', status: 'approved', matchType: 'semantic', score: 0.93 },
+          {
+            itemId: 'existing-1',
+            concept: 'Cache Aside Pattern',
+            status: 'approved',
+            matchType: 'semantic',
+            score: 0.93,
+          },
         ],
       },
     ]
@@ -509,7 +527,13 @@ describe('KnowledgeExtractionDialog', () => {
       {
         ...candidate('1', 'Cache-Aside'),
         duplicates: [
-          { itemId: 'existing-1', concept: 'Cache Aside Pattern', status: 'approved', matchType: 'semantic', score: 0.93 },
+          {
+            itemId: 'existing-1',
+            concept: 'Cache Aside Pattern',
+            status: 'approved',
+            matchType: 'semantic',
+            score: 0.93,
+          },
         ],
       },
     ]
