@@ -122,11 +122,18 @@ Increment 1 — reconciliation engine + extraction-dialog decisions (complete):
 - [x] `internal/interfaces/desktop/knowledge.go` — apply/resolve/acknowledge/save-for-review bindings
 - [x] Extraction dialog — action preview and immediate decisions
 
-Increment 2 — Knowledge Review (not started):
+Increment 2a — Knowledge Review, pending proposals (complete):
 
-- [ ] Knowledge Review — pending reconciliation rows, conflict choices, stale-state recovery
-- [ ] `reviewCount = draftCount + pendingProposalCount` combined badge (see [07-knowledge-review.md](07-knowledge-review.md))
-- [ ] `SaveReconciliationForReview`'s "Save for review" affordance in the extraction dialog — the backend call exists (Increment 1) but stays unexposed in the UI until there is somewhere to act on what it saves
+- [x] `ReconciliationRepository` gains `GetByID`, `ListByStatus`, `UpdateStatus`, `CountByStatus`
+- [x] `internal/application/knowledge/reconcile_pending.go` — list (with eager per-proposal staleness check), apply/resolve/acknowledge/reject against a persisted proposal, never a transient receipt
+- [x] `internal/interfaces/desktop/reconcile_pending.go` — list/count/apply/resolve/acknowledge/reject bindings
+- [x] Knowledge Review — pending reconciliation rows (own section, own badge, never counted as a draft), conflict choices, reject
+- [x] `reviewCount = draftCount + pendingProposalCount` combined sidebar badge (see [07-knowledge-review.md](07-knowledge-review.md)) — the Review tab's own badge stays draft-only
+- [x] `SaveReconciliationForReview`'s "Save for review" affordance in the extraction dialog — unhidden now that Knowledge Review can show what it saves
+
+Increment 2b — stale-state recovery (not started):
+
+- [ ] Reclassifying a stale pending proposal against its target's current content (a new LLM call, not a data read) — 2a can only reject a stale proposal, never repair it
 
 ## Acceptance Criteria
 
@@ -145,9 +152,19 @@ Increment 1:
 - [x] Every created or updated item retains the proposal's evidence
 - [x] Bulk draft approval does not silently apply reconciliation proposals — the extraction dialog's batch buttons only ever reach `create`/`no_change` candidates; `update`/`relate`/`conflict` candidates are never selectable there
 
-Increment 2 (not yet applicable): pending-proposal listing, conflict choices resumed from Knowledge Review, and stale-state recovery outside the extraction dialog's own session.
+Increment 2a:
 
-## Implementation handoff — 2026-08-28
+- [x] Pending reconciliation proposals appear in Knowledge Review, separate from drafts, with their own action badge, and never count as a draft Knowledge Item
+- [x] Opening Knowledge Review checks every pending proposal's target eagerly; a stale one shows as stale without blocking the rest of the list from loading
+- [x] Applying a pending proposal never re-verifies its evidence against the original study session — it uses exactly the candidate snapshot and evidence already persisted at "Save for review" time
+- [x] Applying a stale proposal is refused
+- [x] Rejecting a pending proposal transitions it to `rejected` without creating or changing any item, and never checks target freshness first
+- [x] The sidebar badge sums `draftCount + pendingProposalCount`; the Review tab's own badge stays draft-only
+- [x] The extraction dialog's decision-zone rows offer "Save for review" alongside their immediate action
+
+Increment 2b (not yet applicable): reclassifying/repairing a stale pending proposal.
+
+## Implementation handoff — 2026-08-28 (Increment 1)
 
 Designed via `/grilling-design`: the spec was decomposed into two increments before implementation began, mirroring how [09-persistent-provenance.md](09-persistent-provenance.md) split its own scope. Increment 1 (this handoff) is complete; Increment 2 (Knowledge Review) has not been designed or authorized yet.
 
@@ -179,4 +196,36 @@ Designed via `/grilling-design`: the spec was decomposed into two increments bef
 - The combined `reviewCount` badge
 - Exposing `SaveReconciliationForReview` in the extraction dialog
 - A true old-vs-new diff for `update`/`conflict` previews (would need the target's full content on the DTO, not just its id)
+- Directional `prerequisite`/`extends` relations (Phase 7)
+
+## Implementation handoff — 2026-08-30 (Increment 2a)
+
+Designed via `/grilling-design`, continuing the same session: Increment 2 was further split into 2a (pending-proposal listing and resolution — this handoff) and 2b (stale-state recovery, a reclassification flow, not started).
+
+### Approved design decisions
+
+- Knowledge Review checks every pending proposal's target **eagerly**, when the list loads — not lazily, on click. Reconsulting a target is a cheap local SQLite read here (no network), and showing a proposal as actionable when it is not would let the user click into a surprise failure; a per-proposal check that fails (target deleted) marks only that row stale without failing the whole list, mirroring how `retrieval.go` already drops an orphaned chunk rather than failing a whole search.
+- Applying a pending proposal reads exclusively from what was already persisted at "Save for review" time — the `candidate_snapshot` and the evidence already linked via `knowledge_reconciliation_evidence` — and never reloads or re-verifies against the original study session. The session may no longer exist days later, and the evidence was already verified once; re-checking it again would only add a new, unrelated way to fail, contradicting the immutable-evidence-snapshot principle 2.9 already established.
+- Rejecting a pending proposal never checks target freshness — rejecting applies nothing, so a target that changed since classification has no bearing on whether the reject itself is safe.
+- A conflict's resolution note is appended to `Reason` the same way Increment 1 does it — `ReconciliationRepository.UpdateStatus` was extended to take and overwrite `Reason` alongside `Status`/`resolved_at` so this stays true for a proposal resolved from Knowledge Review, not just an immediate decision.
+- The Review screen's pending rows reuse the exact same `ReconciliationDecisionRow` component the extraction dialog's decision zone already uses (extracted into `frontend/src/components/reconciliation-decision-row.tsx`), so both surfaces present the identical action vocabulary and visual treatment; only Knowledge Review passes `onReject`, and only the extraction dialog passes `onSaveForReview`.
+- The combined badge lives only on the sidebar nav item; the Review tab's own badge (inside `KnowledgeSection`) stays `draftCount`-only, matching [07-knowledge-review.md](07-knowledge-review.md)'s original design.
+
+### Implemented (complete)
+
+- `internal/domain/knowledge/reconciliation.go` — `ReconciliationRepository` gains `GetByID`, `ListByStatus`, `UpdateStatus` (now reason-aware), `CountByStatus`; `ErrProposalNotFound`
+- `internal/infrastructure/sqlite/reconciliation_repository.go` — the four methods above, decoding `candidate_snapshot`/`changes` and joining `knowledge_reconciliation_evidence` for `GetByID`
+- `internal/application/knowledge/reconcile.go` — `checkReconciliationTargetFresh` generalized to take `(targetItemID, targetUpdatedAt)` directly so both the receipt-based (Increment 1) and persisted-proposal (2a) paths share one staleness check; `reasonWithResolution` extracted and reused by both
+- `internal/application/knowledge/reconcile_pending.go` — `PendingReconciliation`, `ListPendingReconciliations` (eager per-row staleness), `CountPendingReconciliations`, `ApplyPendingReconciliationCreate/Update/Relate`, `ResolvePendingReconciliationConflict`, `AcknowledgePendingReconciliationNoChange`, `RejectPendingReconciliationProposal`
+- `internal/interfaces/desktop/reconcile_pending.go` — bindings for every entry point above, plus `PendingReconciliationResult`
+- `frontend/src/components/reconciliation-decision-row.tsx` — the shared row component (extracted from the extraction dialog), now with `stale`/`onReject`/`onSaveForReview`
+- `frontend/src/components/pending-reconciliation-section.tsx` — the Review tab's pending-proposal list, mounted inside `KnowledgeSection` above the existing draft list
+- `frontend/src/components/app-shell.tsx` — `pendingProposalCount` alongside `draftCount`; `refreshReviewCounts` refetches both together; the sidebar badge sums them
+- `frontend/src/components/knowledge-extraction-dialog.tsx` — the "Save for review" button un-hidden on decision-zone rows
+- Quality gates: `go test ./...`, `golangci-lint run` (0 issues), `govulncheck ./...` (0 vulnerabilities in this code), `gremlins unleash` against `internal/domain` and `internal/application` with every mutant in changed code killed (one boolean-switch coverage-granularity false negative in `reconcile_pending.go` resolved by restructuring to nested `if`, not by weakening a test); `npx tsc --noEmit`, `npx eslint .`, `npx prettier --check`, and `npx vitest run` (561 passed) on the frontend
+
+### Still out of scope for this increment
+
+- Reclassifying/repairing a stale pending proposal (Increment 2b)
+- A true old-vs-new diff for `update`/`conflict` previews
 - Directional `prerequisite`/`extends` relations (Phase 7)

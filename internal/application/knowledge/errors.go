@@ -52,6 +52,11 @@ var ErrReconciliationTargetStale = errors.New("knowledge: reconciliation target 
 // or ConflictCreateSeparately.
 var ErrReconciliationResolutionInvalid = errors.New("knowledge: unknown conflict resolution")
 
+// ErrReconciliationProposalNotPending is returned when an action from
+// Knowledge Review targets a proposal that has already been applied,
+// rejected, or marked stale.
+var ErrReconciliationProposalNotPending = errors.New("knowledge: reconciliation proposal is not pending")
+
 // ErrIndexingFailed is the sentinel every knowledge-indexing failure wraps
 // — embedding, chunk persistence, or VectorStore reconciliation alike — so
 // every caller can distinguish "item saved but not indexed" from a real

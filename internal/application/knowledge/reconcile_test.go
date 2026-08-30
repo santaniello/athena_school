@@ -113,6 +113,20 @@ func TestBuildReconciliationPrompt_rendersPropertiesTradeOffsAndRelatedConceptsW
 	assert.Contains(t, prompt, "[id:item-target status:approved]")
 }
 
+func TestBuildReconciliationPrompt_omitsPropertiesTradeOffsAndRelatedConceptsWhenAbsent(t *testing.T) {
+	// Given a candidate and a target with none of the optional fields set
+	candidate := domainknowledge.Item{Concept: "Idempotency key", Definition: "Retries produce the same effect."}
+	target := domainknowledge.Item{ID: "item-target", Status: domainknowledge.StatusApproved, Concept: "Idempotency key", Definition: "Retries produce the same effect."}
+
+	// When building the comparison prompt
+	prompt := buildReconciliationPrompt(candidate, []domainknowledge.Item{target})
+
+	// Then none of the optional field labels render at all — not even empty
+	assert.NotContains(t, prompt, "Properties:")
+	assert.NotContains(t, prompt, "Trade-offs:")
+	assert.NotContains(t, prompt, "Related concepts:")
+}
+
 func TestClassifyCandidates_skipsTheLLMWhenACandidateHasNoDuplicateShortlist(t *testing.T) {
 	// Given a candidate with an empty duplicate shortlist
 	ctx := context.Background()

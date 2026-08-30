@@ -7,7 +7,15 @@ import { KnowledgeSection } from './knowledge-section'
 
 vi.mock('@/lib/knowledge', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/knowledge')>()
-  return { ...original, listKnowledgeItems: vi.fn(), approveKnowledgeItem: vi.fn() }
+  return {
+    ...original,
+    listKnowledgeItems: vi.fn(),
+    approveKnowledgeItem: vi.fn(),
+    // Defaults to empty so every existing test below — none of which cares
+    // about pending reconciliation proposals — can switch to the Review tab
+    // without also needing to stub this out itself.
+    listPendingReconciliations: vi.fn().mockResolvedValue([]),
+  }
 })
 
 vi.mock('@/lib/ingest', async (importOriginal) => {

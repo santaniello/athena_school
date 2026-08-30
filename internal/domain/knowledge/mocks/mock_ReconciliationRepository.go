@@ -4,6 +4,7 @@ package mocks
 
 import (
 	context "context"
+	time "time"
 
 	knowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	mock "github.com/stretchr/testify/mock"
@@ -20,6 +21,120 @@ type MockReconciliationRepository_Expecter struct {
 
 func (_m *MockReconciliationRepository) EXPECT() *MockReconciliationRepository_Expecter {
 	return &MockReconciliationRepository_Expecter{mock: &_m.Mock}
+}
+
+// CountByStatus provides a mock function with given fields: ctx, status
+func (_m *MockReconciliationRepository) CountByStatus(ctx context.Context, status string) (int, error) {
+	ret := _m.Called(ctx, status)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CountByStatus")
+	}
+
+	var r0 int
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) (int, error)); ok {
+		return rf(ctx, status)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) int); ok {
+		r0 = rf(ctx, status)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, status)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockReconciliationRepository_CountByStatus_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountByStatus'
+type MockReconciliationRepository_CountByStatus_Call struct {
+	*mock.Call
+}
+
+// CountByStatus is a helper method to define mock.On call
+//   - ctx context.Context
+//   - status string
+func (_e *MockReconciliationRepository_Expecter) CountByStatus(ctx interface{}, status interface{}) *MockReconciliationRepository_CountByStatus_Call {
+	return &MockReconciliationRepository_CountByStatus_Call{Call: _e.mock.On("CountByStatus", ctx, status)}
+}
+
+func (_c *MockReconciliationRepository_CountByStatus_Call) Run(run func(ctx context.Context, status string)) *MockReconciliationRepository_CountByStatus_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockReconciliationRepository_CountByStatus_Call) Return(_a0 int, _a1 error) *MockReconciliationRepository_CountByStatus_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockReconciliationRepository_CountByStatus_Call) RunAndReturn(run func(context.Context, string) (int, error)) *MockReconciliationRepository_CountByStatus_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetByID provides a mock function with given fields: ctx, id
+func (_m *MockReconciliationRepository) GetByID(ctx context.Context, id string) (knowledge.ReconciliationProposal, error) {
+	ret := _m.Called(ctx, id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetByID")
+	}
+
+	var r0 knowledge.ReconciliationProposal
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) (knowledge.ReconciliationProposal, error)); ok {
+		return rf(ctx, id)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) knowledge.ReconciliationProposal); ok {
+		r0 = rf(ctx, id)
+	} else {
+		r0 = ret.Get(0).(knowledge.ReconciliationProposal)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, id)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockReconciliationRepository_GetByID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetByID'
+type MockReconciliationRepository_GetByID_Call struct {
+	*mock.Call
+}
+
+// GetByID is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id string
+func (_e *MockReconciliationRepository_Expecter) GetByID(ctx interface{}, id interface{}) *MockReconciliationRepository_GetByID_Call {
+	return &MockReconciliationRepository_GetByID_Call{Call: _e.mock.On("GetByID", ctx, id)}
+}
+
+func (_c *MockReconciliationRepository_GetByID_Call) Run(run func(ctx context.Context, id string)) *MockReconciliationRepository_GetByID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockReconciliationRepository_GetByID_Call) Return(_a0 knowledge.ReconciliationProposal, _a1 error) *MockReconciliationRepository_GetByID_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockReconciliationRepository_GetByID_Call) RunAndReturn(run func(context.Context, string) (knowledge.ReconciliationProposal, error)) *MockReconciliationRepository_GetByID_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // LinkEvidence provides a mock function with given fields: ctx, proposalID, evidenceID
@@ -70,6 +185,65 @@ func (_c *MockReconciliationRepository_LinkEvidence_Call) RunAndReturn(run func(
 	return _c
 }
 
+// ListByStatus provides a mock function with given fields: ctx, status
+func (_m *MockReconciliationRepository) ListByStatus(ctx context.Context, status string) ([]knowledge.ReconciliationProposal, error) {
+	ret := _m.Called(ctx, status)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListByStatus")
+	}
+
+	var r0 []knowledge.ReconciliationProposal
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) ([]knowledge.ReconciliationProposal, error)); ok {
+		return rf(ctx, status)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) []knowledge.ReconciliationProposal); ok {
+		r0 = rf(ctx, status)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]knowledge.ReconciliationProposal)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, status)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockReconciliationRepository_ListByStatus_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListByStatus'
+type MockReconciliationRepository_ListByStatus_Call struct {
+	*mock.Call
+}
+
+// ListByStatus is a helper method to define mock.On call
+//   - ctx context.Context
+//   - status string
+func (_e *MockReconciliationRepository_Expecter) ListByStatus(ctx interface{}, status interface{}) *MockReconciliationRepository_ListByStatus_Call {
+	return &MockReconciliationRepository_ListByStatus_Call{Call: _e.mock.On("ListByStatus", ctx, status)}
+}
+
+func (_c *MockReconciliationRepository_ListByStatus_Call) Run(run func(ctx context.Context, status string)) *MockReconciliationRepository_ListByStatus_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockReconciliationRepository_ListByStatus_Call) Return(_a0 []knowledge.ReconciliationProposal, _a1 error) *MockReconciliationRepository_ListByStatus_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockReconciliationRepository_ListByStatus_Call) RunAndReturn(run func(context.Context, string) ([]knowledge.ReconciliationProposal, error)) *MockReconciliationRepository_ListByStatus_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Save provides a mock function with given fields: ctx, proposal
 func (_m *MockReconciliationRepository) Save(ctx context.Context, proposal knowledge.ReconciliationProposal) error {
 	ret := _m.Called(ctx, proposal)
@@ -113,6 +287,56 @@ func (_c *MockReconciliationRepository_Save_Call) Return(_a0 error) *MockReconci
 }
 
 func (_c *MockReconciliationRepository_Save_Call) RunAndReturn(run func(context.Context, knowledge.ReconciliationProposal) error) *MockReconciliationRepository_Save_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// UpdateStatus provides a mock function with given fields: ctx, id, status, reason, resolvedAt
+func (_m *MockReconciliationRepository) UpdateStatus(ctx context.Context, id string, status string, reason string, resolvedAt time.Time) error {
+	ret := _m.Called(ctx, id, status, reason, resolvedAt)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateStatus")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, time.Time) error); ok {
+		r0 = rf(ctx, id, status, reason, resolvedAt)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockReconciliationRepository_UpdateStatus_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateStatus'
+type MockReconciliationRepository_UpdateStatus_Call struct {
+	*mock.Call
+}
+
+// UpdateStatus is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id string
+//   - status string
+//   - reason string
+//   - resolvedAt time.Time
+func (_e *MockReconciliationRepository_Expecter) UpdateStatus(ctx interface{}, id interface{}, status interface{}, reason interface{}, resolvedAt interface{}) *MockReconciliationRepository_UpdateStatus_Call {
+	return &MockReconciliationRepository_UpdateStatus_Call{Call: _e.mock.On("UpdateStatus", ctx, id, status, reason, resolvedAt)}
+}
+
+func (_c *MockReconciliationRepository_UpdateStatus_Call) Run(run func(ctx context.Context, id string, status string, reason string, resolvedAt time.Time)) *MockReconciliationRepository_UpdateStatus_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(string), args[4].(time.Time))
+	})
+	return _c
+}
+
+func (_c *MockReconciliationRepository_UpdateStatus_Call) Return(_a0 error) *MockReconciliationRepository_UpdateStatus_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockReconciliationRepository_UpdateStatus_Call) RunAndReturn(run func(context.Context, string, string, string, time.Time) error) *MockReconciliationRepository_UpdateStatus_Call {
 	_c.Call.Return(run)
 	return _c
 }

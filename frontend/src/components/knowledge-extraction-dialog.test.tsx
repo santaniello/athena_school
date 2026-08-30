@@ -16,6 +16,7 @@ import {
   RECONCILE_RELATE,
   RECONCILE_UPDATE,
   resolveReconciliationConflict,
+  saveReconciliationForReview,
   type KnowledgeItem,
 } from '@/lib/knowledge'
 import { KnowledgeExtractionDialog } from './knowledge-extraction-dialog'
@@ -29,6 +30,7 @@ vi.mock('@/lib/knowledge', async (importOriginal) => {
     applyReconciliationRelate: vi.fn(),
     resolveReconciliationConflict: vi.fn(),
     acknowledgeReconciliationNoChange: vi.fn(),
+    saveReconciliationForReview: vi.fn(),
     discardExtraction: vi.fn(),
   }
 })
@@ -388,6 +390,35 @@ describe('KnowledgeExtractionDialog', () => {
     )
     expect(await screen.findByText('Applied')).toBeInTheDocument()
     expect(applyReconciliationCreate).not.toHaveBeenCalled()
+  })
+
+  it('saves a decision-zone candidate for review instead of applying it immediately', async () => {
+    // Given an update candidate
+    const items = [updateCandidate('1', 'Eventual consistency')]
+    vi.mocked(saveReconciliationForReview).mockResolvedValueOnce(undefined)
+    const onKnowledgeChanged = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <KnowledgeExtractionDialog
+        open
+        batchId="batch-1"
+        items={items}
+        onClose={vi.fn()}
+        onKnowledgeChanged={onKnowledgeChanged}
+      />,
+    )
+
+    // When saving it for review instead of applying it
+    await user.click(screen.getByRole('button', { name: 'Save for review' }))
+
+    // Then it is saved for later, never applied immediately, and the draft
+    // badge callback never fires — nothing was actually created yet
+    await waitFor(() =>
+      expect(saveReconciliationForReview).toHaveBeenCalledWith('batch-1', '1', items[0]),
+    )
+    expect(applyReconciliationUpdate).not.toHaveBeenCalled()
+    expect(await screen.findByText('Saved for review')).toBeInTheDocument()
+    expect(onKnowledgeChanged).not.toHaveBeenCalled()
   })
 
   it('does not call onKnowledgeChanged after applying an update — the target keeps its own status', async () => {

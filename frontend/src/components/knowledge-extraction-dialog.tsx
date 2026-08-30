@@ -9,19 +9,23 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {
+  idleDecision,
+  ReconciliationDecisionRow,
+  type DecisionState,
+} from '@/components/reconciliation-decision-row'
+import {
   acknowledgeReconciliationNoChange,
   applyReconciliationCreate,
   applyReconciliationRelate,
   applyReconciliationUpdate,
   CONFLICT_CREATE_SEPARATELY,
-  CONFLICT_KEEP_EXISTING,
-  CONFLICT_UPDATE_EXISTING,
   discardExtraction,
   RECONCILE_CONFLICT,
   RECONCILE_NO_CHANGE,
   RECONCILE_RELATE,
   RECONCILE_UPDATE,
   resolveReconciliationConflict,
+  saveReconciliationForReview,
   type KnowledgeItem,
 } from '@/lib/knowledge'
 
@@ -47,15 +51,6 @@ function targetMatch(item: KnowledgeItem) {
   if (!targetId) return undefined
   return (item.duplicates ?? []).find((match) => match.itemId === targetId)
 }
-
-interface DecisionState {
-  pending: boolean
-  done: boolean
-  doneLabel: string
-  error: string
-}
-
-const idleDecision: DecisionState = { pending: false, done: false, doneLabel: '', error: '' }
 
 interface KnowledgeExtractionDialogProps {
   open: boolean
@@ -135,13 +130,14 @@ export function KnowledgeExtractionDialog({
     item: KnowledgeItem,
     addsDraft: boolean,
     action: () => Promise<unknown>,
+    doneLabel = 'Applied',
   ) {
     setDecisions((previous) => ({ ...previous, [item.id]: { ...idleDecision, pending: true } }))
     try {
       await action()
       setDecisions((previous) => ({
         ...previous,
-        [item.id]: { pending: false, done: true, doneLabel: 'Applied', error: '' },
+        [item.id]: { pending: false, done: true, doneLabel, error: '' },
       }))
       if (addsDraft) onKnowledgeChanged?.()
     } catch (caught) {
@@ -162,6 +158,15 @@ export function KnowledgeExtractionDialog({
     const addsDraft = resolution === CONFLICT_CREATE_SEPARATELY
     void runDecision(item, addsDraft, () =>
       resolveReconciliationConflict(batchId, item.id, item, resolution),
+    )
+  }
+
+  function handleSaveForReview(item: KnowledgeItem) {
+    void runDecision(
+      item,
+      false,
+      () => saveReconciliationForReview(batchId, item.id, item),
+      'Saved for review',
     )
   }
 
@@ -245,16 +250,26 @@ export function KnowledgeExtractionDialog({
                 <p className="text-xs font-bold tracking-wide text-muted-foreground uppercase">
                   Needs your decision
                 </p>
-                {decisionItems.map((item) => (
-                  <DecisionRow
-                    key={item.id}
-                    item={item}
-                    state={decisionFor(item.id)}
-                    onApplyUpdate={() => handleApplyUpdate(item)}
-                    onApplyRelate={() => handleApplyRelate(item)}
-                    onResolveConflict={(resolution) => handleResolveConflict(item, resolution)}
-                  />
-                ))}
+                {decisionItems.map((item) => {
+                  const match = targetMatch(item)
+                  return (
+                    <ReconciliationDecisionRow
+                      key={item.id}
+                      concept={item.concept}
+                      definition={item.definition}
+                      action={item.reconciliation?.action ?? ''}
+                      targetConcept={match?.concept}
+                      targetStatus={match?.status}
+                      reason={item.reconciliation?.reason}
+                      newDefinition={item.reconciliation?.changes.definition}
+                      state={decisionFor(item.id)}
+                      onApplyUpdate={() => handleApplyUpdate(item)}
+                      onApplyRelate={() => handleApplyRelate(item)}
+                      onResolveConflict={(resolution) => handleResolveConflict(item, resolution)}
+                      onSaveForReview={() => handleSaveForReview(item)}
+                    />
+                  )
+                })}
               </div>
             )}
 
@@ -334,97 +349,5 @@ export function KnowledgeExtractionDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
-}
-
-const actionLabel: Record<string, string> = {
-  [RECONCILE_UPDATE]: 'Update',
-  [RECONCILE_RELATE]: 'Relate',
-  [RECONCILE_CONFLICT]: 'Conflict',
-}
-
-function DecisionRow({
-  item,
-  state,
-  onApplyUpdate,
-  onApplyRelate,
-  onResolveConflict,
-}: {
-  item: KnowledgeItem
-  state: DecisionState
-  onApplyUpdate: () => void
-  onApplyRelate: () => void
-  onResolveConflict: (resolution: string) => void
-}) {
-  const action = item.reconciliation?.action ?? ''
-  const match = targetMatch(item)
-  const changes = item.reconciliation?.changes
-
-  return (
-    <div className="rounded-lg border p-3">
-      <div className="flex items-center gap-2">
-        <span className="font-medium text-foreground">{item.concept}</span>
-        <span className="rounded-full border px-2 py-0.5 text-[0.65rem] font-bold tracking-wide text-muted-foreground uppercase">
-          {actionLabel[action] ?? action}
-        </span>
-      </div>
-      <p className="mt-1 text-sm text-muted-foreground">{item.definition}</p>
-      {match && (
-        <p className="mt-1 text-xs text-muted-foreground">
-          Compares with &ldquo;{match.concept}&rdquo; ({match.status})
-        </p>
-      )}
-      {item.reconciliation?.reason && (
-        <p className="mt-1 text-xs text-muted-foreground italic">{item.reconciliation.reason}</p>
-      )}
-      {changes?.definition && (
-        <p className="mt-1 text-xs text-foreground">New definition: {changes.definition}</p>
-      )}
-
-      {state.error && <p className="mt-2 text-xs text-destructive">{state.error}</p>}
-      {state.done ? (
-        <p className="mt-2 text-xs text-primary">{state.doneLabel}</p>
-      ) : (
-        <div className="mt-2 flex flex-wrap gap-2">
-          {action === RECONCILE_UPDATE && (
-            <Button size="sm" onClick={onApplyUpdate} disabled={state.pending}>
-              {state.pending ? 'Applying...' : state.error ? 'Try again' : 'Apply update'}
-            </Button>
-          )}
-          {action === RECONCILE_RELATE && (
-            <Button size="sm" onClick={onApplyRelate} disabled={state.pending}>
-              {state.pending ? 'Applying...' : state.error ? 'Try again' : 'Create & relate'}
-            </Button>
-          )}
-          {action === RECONCILE_CONFLICT && (
-            <>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onResolveConflict(CONFLICT_KEEP_EXISTING)}
-                disabled={state.pending}
-              >
-                Keep existing
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onResolveConflict(CONFLICT_UPDATE_EXISTING)}
-                disabled={state.pending}
-              >
-                Update existing
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => onResolveConflict(CONFLICT_CREATE_SEPARATELY)}
-                disabled={state.pending}
-              >
-                Create separately
-              </Button>
-            </>
-          )}
-        </div>
-      )}
-    </div>
   )
 }

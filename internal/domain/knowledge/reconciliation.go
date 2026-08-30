@@ -38,6 +38,10 @@ var (
 	ErrProposalCreatedAtRequired = errors.New("reconciliation proposal created at is required")
 )
 
+// ErrProposalNotFound is returned when no reconciliation proposal matches
+// the given ID.
+var ErrProposalNotFound = errors.New("reconciliation proposal not found")
+
 // ItemChanges contains optional replacements for an existing Item's
 // user-editable content fields — never its server-owned ID, Topic, Source,
 // Status, or timestamps. A nil Definition, or a nil list field, means
@@ -127,4 +131,23 @@ type ReconciliationRepository interface {
 	// LinkEvidence records that evidenceID (already persisted via
 	// EvidenceRepository.GetOrCreate) supports proposalID.
 	LinkEvidence(ctx context.Context, proposalID, evidenceID string) error
+	// GetByID returns the proposal with the given id, its EvidenceIDs
+	// populated from its evidence links, or ErrProposalNotFound if it does
+	// not exist.
+	GetByID(ctx context.Context, id string) (ReconciliationProposal, error)
+	// ListByStatus returns every proposal currently at status, oldest first.
+	// EvidenceIDs is left empty — a caller that needs it for one proposal
+	// uses GetByID instead of paying for every list entry's evidence join.
+	ListByStatus(ctx context.Context, status string) ([]ReconciliationProposal, error)
+	// UpdateStatus transitions id to status, stamping resolvedAt and
+	// overwriting Reason — a conflict's resolution (e.g. "kept existing
+	// item") is recorded there, appended to the classifier's original
+	// reason, the same way Increment 1 records it for an immediately
+	// applied decision. A caller with nothing to add re-passes the
+	// proposal's existing Reason unchanged. Returns ErrProposalNotFound if
+	// id does not exist.
+	UpdateStatus(ctx context.Context, id, status, reason string, resolvedAt time.Time) error
+	// CountByStatus returns how many proposals currently have the given
+	// status — the pending count backs the Review badge.
+	CountByStatus(ctx context.Context, status string) (int, error)
 }

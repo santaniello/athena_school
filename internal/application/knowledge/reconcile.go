@@ -368,7 +368,7 @@ func (s *Service) applyReconciliationMutation(
 		var target domainknowledge.Item
 		if receipt.Reconciliation.TargetItemID != "" {
 			var err error
-			target, err = s.checkReconciliationTargetFresh(ctx, receipt.Reconciliation)
+			target, err = s.checkReconciliationTargetFresh(ctx, receipt.Reconciliation.TargetItemID, receipt.Reconciliation.TargetUpdatedAt)
 			if err != nil {
 				return err
 			}
@@ -419,7 +419,7 @@ func (s *Service) resolveReconciliationNoMutation(
 
 	txErr := s.tx.WithinTx(ctx, func(ctx context.Context) error {
 		if checkStale && receipt.Reconciliation.TargetItemID != "" {
-			if _, err := s.checkReconciliationTargetFresh(ctx, receipt.Reconciliation); err != nil {
+			if _, err := s.checkReconciliationTargetFresh(ctx, receipt.Reconciliation.TargetItemID, receipt.Reconciliation.TargetUpdatedAt); err != nil {
 				return err
 			}
 		}
@@ -432,19 +432,22 @@ func (s *Service) resolveReconciliationNoMutation(
 	return nil
 }
 
-// checkReconciliationTargetFresh reloads classification's target and
-// returns ErrReconciliationTargetStale if it was removed or edited since
-// classification — the optimistic concurrency check every action with a
-// target must pass before it may proceed.
-func (s *Service) checkReconciliationTargetFresh(ctx context.Context, classification reconciliationClassification) (domainknowledge.Item, error) {
-	target, err := s.items.GetByID(ctx, classification.TargetItemID)
+// checkReconciliationTargetFresh reloads targetItemID and returns
+// ErrReconciliationTargetStale if it was removed or no longer has
+// targetUpdatedAt — the optimistic concurrency check every action with a
+// target must pass before it may proceed, whether the classification is
+// still in a transient receipt (see applyReconciliationMutation) or was
+// reloaded from a persisted, pending ReconciliationProposal (see
+// applyPendingReconciliationMutation in reconcile_pending.go).
+func (s *Service) checkReconciliationTargetFresh(ctx context.Context, targetItemID string, targetUpdatedAt time.Time) (domainknowledge.Item, error) {
+	target, err := s.items.GetByID(ctx, targetItemID)
 	if errors.Is(err, domainknowledge.ErrItemNotFound) {
 		return domainknowledge.Item{}, ErrReconciliationTargetStale
 	}
 	if err != nil {
 		return domainknowledge.Item{}, err
 	}
-	if !target.UpdatedAt.Equal(classification.TargetUpdatedAt) {
+	if !target.UpdatedAt.Equal(targetUpdatedAt) {
 		return domainknowledge.Item{}, ErrReconciliationTargetStale
 	}
 	return target, nil
@@ -526,10 +529,7 @@ func (s *Service) persistReconciliationDecision(
 	status string, validRefs []domainknowledge.EvidenceRef, resolutionNote string,
 ) error {
 	now := time.Now().UTC()
-	reason := receipt.Reconciliation.Reason
-	if resolutionNote != "" {
-		reason = reason + "; " + resolutionNote
-	}
+	reason := reasonWithResolution(receipt.Reconciliation.Reason, resolutionNote)
 	proposal := domainknowledge.ReconciliationProposal{
 		ID: uuid.NewString(), Action: receipt.Reconciliation.Action, Status: status,
 		Candidate: candidate, TargetItemID: receipt.Reconciliation.TargetItemID,

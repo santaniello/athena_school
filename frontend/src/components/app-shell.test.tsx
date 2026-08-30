@@ -18,7 +18,12 @@ import {
   retryKnowledgeIndex,
 } from '@/lib/knowledge-index'
 import type { IndexStatus } from '@/lib/knowledge-index'
-import { approveKnowledgeItem, countDraftKnowledgeItems, listKnowledgeItems } from '@/lib/knowledge'
+import {
+  approveKnowledgeItem,
+  countDraftKnowledgeItems,
+  countPendingReconciliations,
+  listKnowledgeItems,
+} from '@/lib/knowledge'
 import { AppShell } from './app-shell'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
@@ -71,6 +76,8 @@ vi.mock('@/lib/knowledge', async (importOriginal) => {
     listKnowledgeItems: vi.fn().mockResolvedValue([]),
     listKnowledgeTopics: vi.fn().mockResolvedValue([]),
     countDraftKnowledgeItems: vi.fn().mockResolvedValue(0),
+    countPendingReconciliations: vi.fn().mockResolvedValue(0),
+    listPendingReconciliations: vi.fn().mockResolvedValue([]),
     approveKnowledgeItem: vi.fn(),
     deprecateKnowledgeItem: vi.fn(),
     updateKnowledgeItem: vi.fn(),
@@ -207,6 +214,19 @@ describe('AppShell', () => {
 
     // Then the Knowledge nav row carries the count
     expect(await screen.findByRole('button', { name: 'Knowledge3' })).toBeInTheDocument()
+  })
+
+  it('sums drafts and pending reconciliation proposals into one nav badge', async () => {
+    // Given two drafts and three pending reconciliation proposals
+    vi.mocked(countDraftKnowledgeItems).mockResolvedValueOnce(2)
+    vi.mocked(countPendingReconciliations).mockResolvedValueOnce(3)
+
+    // When the app shell mounts
+    renderShell()
+    await screen.findByText(/Felipe\./)
+
+    // Then the Knowledge nav row carries their sum, not either count alone
+    expect(await screen.findByRole('button', { name: 'Knowledge5' })).toBeInTheDocument()
   })
 
   it('shows no badge on the Knowledge nav item when there are no drafts', async () => {

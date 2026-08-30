@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { IngestProgressDialog } from '@/components/ingest-progress-dialog'
+import { PendingReconciliationSection } from '@/components/pending-reconciliation-section'
 import { cn } from '@/lib/utils'
 import { pickNotesFile, pickNotesFolder } from '@/lib/ingest'
 import KnowledgeExplorerScreen from '@/screens/KnowledgeExplorerScreen'
@@ -127,6 +128,10 @@ function KnowledgeSection({
       </div>
 
       {pickerError && <p className="text-sm text-destructive">{pickerError}</p>}
+
+      {activeTab === 'review' && (
+        <PendingReconciliationSection onKnowledgeChanged={onKnowledgeChanged} />
+      )}
 
       <div className="min-h-0 flex-1">
         <KnowledgeExplorerScreen

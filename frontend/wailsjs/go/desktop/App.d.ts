@@ -3,7 +3,15 @@
 import {desktop} from '../models';
 import {context} from '../models';
 
+export function AcknowledgePendingReconciliationNoChange(arg1:string):Promise<void>;
+
 export function AcknowledgeReconciliationNoChange(arg1:string,arg2:string,arg3:desktop.KnowledgeItemInput):Promise<void>;
+
+export function ApplyPendingReconciliationCreate(arg1:string,arg2:string):Promise<desktop.KnowledgeItemResult>;
+
+export function ApplyPendingReconciliationRelate(arg1:string):Promise<desktop.KnowledgeItemResult>;
+
+export function ApplyPendingReconciliationUpdate(arg1:string):Promise<desktop.KnowledgeItemResult>;
 
 export function ApplyReconciliationCreate(arg1:string,arg2:string,arg3:desktop.KnowledgeItemInput,arg4:string):Promise<desktop.KnowledgeItemResult>;
 
@@ -14,6 +22,8 @@ export function ApplyReconciliationUpdate(arg1:string,arg2:string,arg3:desktop.K
 export function ApproveKnowledgeItem(arg1:string):Promise<desktop.KnowledgeItemResult>;
 
 export function CountDraftKnowledgeItems():Promise<number>;
+
+export function CountPendingReconciliations():Promise<number>;
 
 export function CountUnindexedKnowledgeItems():Promise<number>;
 
@@ -55,6 +65,8 @@ export function ListKnowledgeItems(arg1:string,arg2:string):Promise<Array<deskto
 
 export function ListKnowledgeTopics():Promise<Array<string>>;
 
+export function ListPendingReconciliations():Promise<Array<desktop.PendingReconciliationResult>>;
+
 export function ListStudySessionsByFolder(arg1:string):Promise<Array<desktop.StudySessionResult>>;
 
 export function Login(arg1:string,arg2:string):Promise<desktop.LoginResult>;
@@ -71,11 +83,15 @@ export function Register(arg1:string,arg2:string):Promise<void>;
 
 export function ReindexKnowledgeItems():Promise<void>;
 
+export function RejectPendingReconciliationProposal(arg1:string):Promise<void>;
+
 export function RenameFolder(arg1:string,arg2:string):Promise<void>;
 
 export function RequestOpeningTurn(arg1:string,arg2:string):Promise<void>;
 
 export function ResetLocalAccount(arg1:string):Promise<void>;
+
+export function ResolvePendingReconciliationConflict(arg1:string,arg2:string):Promise<desktop.KnowledgeItemResult>;
 
 export function ResolveReconciliationConflict(arg1:string,arg2:string,arg3:desktop.KnowledgeItemInput,arg4:string):Promise<desktop.KnowledgeItemResult>;
 

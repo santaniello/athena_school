@@ -1,10 +1,15 @@
 import {
+  AcknowledgePendingReconciliationNoChange,
   AcknowledgeReconciliationNoChange,
+  ApplyPendingReconciliationCreate,
+  ApplyPendingReconciliationRelate,
+  ApplyPendingReconciliationUpdate,
   ApplyReconciliationCreate,
   ApplyReconciliationRelate,
   ApplyReconciliationUpdate,
   ApproveKnowledgeItem,
   CountDraftKnowledgeItems,
+  CountPendingReconciliations,
   CountUnindexedKnowledgeItems,
   DeleteKnowledgeItem,
   DeprecateKnowledgeItem,
@@ -14,7 +19,10 @@ import {
   ListKnowledgeItemEvidence,
   ListKnowledgeItems,
   ListKnowledgeTopics,
+  ListPendingReconciliations,
+  RejectPendingReconciliationProposal,
   ReindexKnowledgeItems,
+  ResolvePendingReconciliationConflict,
   ResolveReconciliationConflict,
   SaveAndApproveExtractedKnowledge,
   SaveExtractedKnowledge,
@@ -209,6 +217,81 @@ export async function saveReconciliationForReview(
   candidate: KnowledgeItem,
 ): Promise<void> {
   await SaveReconciliationForReview(batchId, candidateId, candidate)
+}
+
+// PendingReconciliation is one proposal saved for later review — see
+// listPendingReconciliations. Its target's staleness was already checked
+// when the list loaded: a stale row's targetConcept/targetStatus are
+// empty, since the target that comparison used is no longer current.
+export interface PendingReconciliation {
+  id: string
+  action: string
+  candidate: KnowledgeItem
+  targetItemId: string
+  targetConcept: string
+  targetStatus: string
+  reason: string
+  changes: ItemChanges
+  stale: boolean
+  createdAt: string
+}
+
+// listPendingReconciliations lists every proposal currently saved for
+// review, each already checked for staleness against its target's current
+// state.
+export async function listPendingReconciliations(): Promise<PendingReconciliation[]> {
+  return ListPendingReconciliations()
+}
+
+// countPendingReconciliations returns how many proposals currently sit
+// pending, for the combined Review badge (draftCount + this count).
+export async function countPendingReconciliations(): Promise<number> {
+  return CountPendingReconciliations()
+}
+
+// applyPendingReconciliationCreate persists proposalId's classified
+// candidate as a brand-new Knowledge Item at status ('draft' | 'approved'),
+// using exactly the content and evidence already saved when it was set
+// aside for review.
+export async function applyPendingReconciliationCreate(
+  proposalId: string,
+  status: string,
+): Promise<KnowledgeItem> {
+  return ApplyPendingReconciliationCreate(proposalId, status)
+}
+
+// applyPendingReconciliationUpdate applies proposalId's classified changes
+// to its target, preserving its identity and lifecycle.
+export async function applyPendingReconciliationUpdate(proposalId: string): Promise<KnowledgeItem> {
+  return ApplyPendingReconciliationUpdate(proposalId)
+}
+
+// applyPendingReconciliationRelate creates proposalId's candidate as a new
+// draft Knowledge Item and links it to the classified target.
+export async function applyPendingReconciliationRelate(proposalId: string): Promise<KnowledgeItem> {
+  return ApplyPendingReconciliationRelate(proposalId)
+}
+
+// resolvePendingReconciliationConflict applies one of the three explicit
+// conflict outcomes to proposalId — see CONFLICT_KEEP_EXISTING/
+// CONFLICT_UPDATE_EXISTING/CONFLICT_CREATE_SEPARATELY.
+export async function resolvePendingReconciliationConflict(
+  proposalId: string,
+  resolution: string,
+): Promise<KnowledgeItem> {
+  return ResolvePendingReconciliationConflict(proposalId, resolution)
+}
+
+// acknowledgePendingReconciliationNoChange marks proposalId's classified
+// no_change proposal resolved without creating or changing any item.
+export async function acknowledgePendingReconciliationNoChange(proposalId: string): Promise<void> {
+  await AcknowledgePendingReconciliationNoChange(proposalId)
+}
+
+// rejectPendingReconciliationProposal marks proposalId rejected without
+// creating or changing any item.
+export async function rejectPendingReconciliationProposal(proposalId: string): Promise<void> {
+  await RejectPendingReconciliationProposal(proposalId)
 }
 
 export async function getKnowledgeExtractionSettings(): Promise<KnowledgeExtractionSettings> {

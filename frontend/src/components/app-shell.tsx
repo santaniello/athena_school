@@ -19,7 +19,7 @@ import DocumentationScreen from '@/screens/DocumentationScreen'
 import { NAVIGATION, type AppSection } from '@/lib/navigation'
 import { getUserProfile, type ProfileDraft } from '@/lib/profile'
 import { startStudySession, type StudySession } from '@/lib/study'
-import { countDraftKnowledgeItems } from '@/lib/knowledge'
+import { countDraftKnowledgeItems, countPendingReconciliations } from '@/lib/knowledge'
 import {
   getKnowledgeIndexStatus,
   onKnowledgeIndexStatus,
@@ -74,22 +74,26 @@ function AppShell({ onLogout }: AppShellProps) {
   const [startingNewSession, setStartingNewSession] = useState(false)
   const [newSessionError, setNewSessionError] = useState<string | null>(null)
   const [draftCount, setDraftCount] = useState(0)
+  const [pendingProposalCount, setPendingProposalCount] = useState(0)
   const studyFolderTreeRef = useRef<StudyFolderTreeHandle>(null)
-  // refreshDraftCount fires from several independent call sites (mount,
-  // approve, reject, save-as-drafts); their responses can arrive out of
-  // order, so only the reply to the most recently *started* call is ever
-  // applied — same requestVersion guard KnowledgeExplorerScreen uses for its
-  // own list fetch.
+  // refreshDraftCount/refreshPendingProposalCount each fire from several
+  // independent call sites (mount, approve, reject, save-as-drafts, a
+  // reconciliation decision); their responses can arrive out of order, so
+  // only the reply to the most recently *started* call is ever applied —
+  // same requestVersion guard KnowledgeExplorerScreen uses for its own list
+  // fetch.
   const draftCountRequestRef = useRef(0)
+  const pendingProposalCountRequestRef = useRef(0)
 
   useEffect(() => {
     void getUserProfile().then(setProfile)
   }, [])
 
-  // draftCount is lifted here (alongside profile/activeSession) rather than
-  // fetched locally by KnowledgeSection, so the sidebar badge and the
-  // Review tab's own badge always agree — see
-  // specs/phases/phase-02-knowledge-engine/07-knowledge-review.md.
+  // draftCount/pendingProposalCount are lifted here (alongside profile/
+  // activeSession) rather than fetched locally by KnowledgeSection, so the
+  // sidebar badge (their sum) and the Review tab's own draft-only badge
+  // always agree — see specs/phases/phase-02-knowledge-engine/07-knowledge-review.md
+  // and 11-knowledge-reconciliation.md.
   function refreshDraftCount() {
     const requestId = ++draftCountRequestRef.current
     void countDraftKnowledgeItems()
@@ -99,8 +103,26 @@ function AppShell({ onLogout }: AppShellProps) {
       .catch(() => {})
   }
 
-  useEffect(() => {
+  function refreshPendingProposalCount() {
+    const requestId = ++pendingProposalCountRequestRef.current
+    void countPendingReconciliations()
+      .then((count) => {
+        if (pendingProposalCountRequestRef.current === requestId) setPendingProposalCount(count)
+      })
+      .catch(() => {})
+  }
+
+  // refreshReviewCounts is what every knowledge-changing action actually
+  // triggers — a single decision (approve, reject, save-as-drafts, applying
+  // or rejecting a reconciliation proposal) can move either count, so both
+  // refetch together rather than each call site guessing which one to ask for.
+  function refreshReviewCounts() {
     refreshDraftCount()
+    refreshPendingProposalCount()
+  }
+
+  useEffect(() => {
+    refreshReviewCounts()
   }, [])
 
   // The listener is registered before the initial query fires, closing the
@@ -278,7 +300,7 @@ function AppShell({ onLogout }: AppShellProps) {
                     item={item}
                     active={item.id === section}
                     onSelect={setSection}
-                    badge={item.id === 'knowledge' ? draftCount : undefined}
+                    badge={item.id === 'knowledge' ? draftCount + pendingProposalCount : undefined}
                   />
                   {item.id === 'study' && section === 'study' && (
                     <StudyFolderTree
@@ -384,7 +406,7 @@ function AppShell({ onLogout }: AppShellProps) {
                   onTopicResolved={handleTopicResolved}
                   onStartNewSession={handleStartNewSession}
                   startingNewSession={startingNewSession}
-                  onKnowledgeChanged={refreshDraftCount}
+                  onKnowledgeChanged={refreshReviewCounts}
                 />
               ) : (
                 <div className="m-auto flex flex-col items-center gap-2 text-center">
@@ -400,7 +422,7 @@ function AppShell({ onLogout }: AppShellProps) {
                 selectedTopic={selectedTopic}
                 mutationsDisabled={retryingIndex}
                 draftCount={draftCount}
-                onKnowledgeChanged={refreshDraftCount}
+                onKnowledgeChanged={refreshReviewCounts}
               />
             ) : section === 'documentation' ? (
               <DocumentationScreen />
