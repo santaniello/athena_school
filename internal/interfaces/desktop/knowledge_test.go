@@ -3,6 +3,7 @@ package desktop
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"os"
@@ -802,4 +803,28 @@ func TestApp_ReindexKnowledgeItems_emitsError_whenTheRunFails(t *testing.T) {
 	require.Len(t, captured.errors, 1)
 	assert.Contains(t, captured.errors[0], listErr.Error())
 	assert.Nil(t, captured.done)
+}
+
+func TestToItemChangesResult_omitsUnchangedFields_butKeepsAnExplicitEmptyList(t *testing.T) {
+	// Given a change that only touches Definition — leaving Properties,
+	// TradeOffs and RelatedConcepts nil, meaning "unchanged" — alongside a
+	// second change that explicitly clears RelatedConcepts to an empty
+	// (non-nil) list
+	definition := "Converges eventually."
+	unchanged := domainknowledge.ItemChanges{Definition: &definition}
+	explicitlyCleared := domainknowledge.ItemChanges{RelatedConcepts: []string{}}
+
+	// When mapping each to its desktop DTO and marshaling to JSON
+	unchangedJSON, err := json.Marshal(toItemChangesResult(unchanged))
+	require.NoError(t, err)
+	clearedJSON, err := json.Marshal(toItemChangesResult(explicitlyCleared))
+	require.NoError(t, err)
+
+	// Then an unchanged list is omitted from the wire format entirely —
+	// never serialized as null, which the frontend's optional-field
+	// contract can never represent — while an explicit (non-nil) empty
+	// list still serializes as `[]`, preserving the distinction between
+	// "leave this field alone" and "set it to nothing"
+	assert.JSONEq(t, `{"definition":"Converges eventually."}`, string(unchangedJSON))
+	assert.JSONEq(t, `{"relatedConcepts":[]}`, string(clearedJSON))
 }

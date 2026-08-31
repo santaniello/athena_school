@@ -4,6 +4,8 @@ import {
   CONFLICT_KEEP_EXISTING,
   CONFLICT_UPDATE_EXISTING,
   RECONCILE_CONFLICT,
+  RECONCILE_CREATE,
+  RECONCILE_NO_CHANGE,
   RECONCILE_RELATE,
   RECONCILE_UPDATE,
 } from '@/lib/knowledge'
@@ -21,9 +23,11 @@ export interface DecisionState {
 export const idleDecision: DecisionState = { pending: false, done: false, doneLabel: '', error: '' }
 
 const actionLabel: Record<string, string> = {
+  [RECONCILE_CREATE]: 'Create',
   [RECONCILE_UPDATE]: 'Update',
   [RECONCILE_RELATE]: 'Relate',
   [RECONCILE_CONFLICT]: 'Conflict',
+  [RECONCILE_NO_CHANGE]: 'No change',
 }
 
 export interface ReconciliationDecisionRowProps {
@@ -39,9 +43,11 @@ export interface ReconciliationDecisionRowProps {
   // has had time to change since classification ran moments earlier.
   stale?: boolean
   state: DecisionState
+  onApplyCreate?: (status: string) => void
   onApplyUpdate?: () => void
   onApplyRelate?: () => void
   onResolveConflict?: (resolution: string) => void
+  onAcknowledgeNoChange?: () => void
   // onReject is only offered from Knowledge Review — the extraction
   // dialog's "do nothing" is simply not clicking anything, then Dismiss.
   onReject?: () => void
@@ -66,9 +72,11 @@ export function ReconciliationDecisionRow({
   newDefinition,
   stale,
   state,
+  onApplyCreate,
   onApplyUpdate,
   onApplyRelate,
   onResolveConflict,
+  onAcknowledgeNoChange,
   onReject,
   onSaveForReview,
 }: ReconciliationDecisionRowProps) {
@@ -112,6 +120,31 @@ export function ReconciliationDecisionRow({
         </div>
       ) : (
         <div className="mt-2 flex flex-wrap gap-2">
+          {action === RECONCILE_CREATE && onApplyCreate && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onApplyCreate('draft')}
+                disabled={state.pending}
+              >
+                Save as draft
+              </Button>
+              <Button size="sm" onClick={() => onApplyCreate('approved')} disabled={state.pending}>
+                Save as approved
+              </Button>
+            </>
+          )}
+          {action === RECONCILE_NO_CHANGE && onAcknowledgeNoChange && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onAcknowledgeNoChange}
+              disabled={state.pending}
+            >
+              Acknowledge
+            </Button>
+          )}
           {action === RECONCILE_UPDATE && onApplyUpdate && (
             <Button size="sm" onClick={onApplyUpdate} disabled={state.pending}>
               {state.pending ? 'Applying...' : state.error ? 'Try again' : 'Apply update'}

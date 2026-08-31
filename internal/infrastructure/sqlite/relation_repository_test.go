@@ -49,3 +49,31 @@ func TestRelationRepository_SaveIsIdempotentForTheSameCanonicalRelation(t *testi
 	assert.Equal(t, "item-a", fromItemID)
 	assert.Equal(t, "item-b", toItemID)
 }
+
+func TestRelationRepository_SaveNormalizesAReversedRelationToTheCanonicalOrder(t *testing.T) {
+	// Given a relation built directly with FromItemID/ToItemID reversed —
+	// bypassing CanonicalRelation, as a caller could mistakenly do
+	repository, db := newTestRelationRepository(t)
+	ctx := context.Background()
+	createdAt := time.Date(2026, 8, 28, 10, 0, 0, 0, time.UTC)
+	reversed := domainknowledge.Relation{
+		FromItemID: "item-b", ToItemID: "item-a", Type: domainknowledge.RelationRelated, CreatedAt: createdAt,
+	}
+	canonical := domainknowledge.CanonicalRelation("item-a", "item-b", domainknowledge.RelationRelated, createdAt)
+
+	// When saving the reversed relation, then the canonical one
+	err1 := repository.Save(ctx, reversed)
+	err2 := repository.Save(ctx, canonical)
+
+	// Then only one row exists, canonically ordered — Save itself
+	// normalizes the composite key, regardless of what the caller passed
+	require.NoError(t, err1)
+	require.NoError(t, err2)
+	var count int
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM knowledge_item_relations`).Scan(&count))
+	assert.Equal(t, 1, count)
+	var fromItemID, toItemID string
+	require.NoError(t, db.QueryRow(`SELECT from_item_id, to_item_id FROM knowledge_item_relations`).Scan(&fromItemID, &toItemID))
+	assert.Equal(t, "item-a", fromItemID)
+	assert.Equal(t, "item-b", toItemID)
+}

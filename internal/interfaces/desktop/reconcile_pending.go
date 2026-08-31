@@ -56,6 +56,12 @@ func (a *App) CountPendingReconciliations() (int, error) {
 // ApplyPendingReconciliationCreate persists proposalID's classified
 // candidate as a brand-new Knowledge Item at status (draft or approved).
 func (a *App) ApplyPendingReconciliationCreate(proposalID, status string) (KnowledgeItemResult, error) {
+	if err := validateReconciliationProposalID(proposalID); err != nil {
+		return KnowledgeItemResult{}, err
+	}
+	if err := validateKnowledgeStatus(status); err != nil {
+		return KnowledgeItemResult{}, err
+	}
 	item, err := a.knowledge.ApplyPendingReconciliationCreate(a.ctx, proposalID, status)
 	if errors.Is(err, applicationknowledge.ErrIndexingFailed) {
 		logIndexingFailure("applying pending reconciliation create for proposal "+proposalID, err)
@@ -70,6 +76,9 @@ func (a *App) ApplyPendingReconciliationCreate(proposalID, status string) (Knowl
 // ApplyPendingReconciliationUpdate applies proposalID's classified changes
 // to its target, preserving its identity and lifecycle.
 func (a *App) ApplyPendingReconciliationUpdate(proposalID string) (KnowledgeItemResult, error) {
+	if err := validateReconciliationProposalID(proposalID); err != nil {
+		return KnowledgeItemResult{}, err
+	}
 	item, err := a.knowledge.ApplyPendingReconciliationUpdate(a.ctx, proposalID)
 	if errors.Is(err, applicationknowledge.ErrIndexingFailed) {
 		logIndexingFailure("applying pending reconciliation update for proposal "+proposalID, err)
@@ -84,6 +93,9 @@ func (a *App) ApplyPendingReconciliationUpdate(proposalID string) (KnowledgeItem
 // ApplyPendingReconciliationRelate creates proposalID's candidate as a new
 // draft Knowledge Item and links it to the classified target.
 func (a *App) ApplyPendingReconciliationRelate(proposalID string) (KnowledgeItemResult, error) {
+	if err := validateReconciliationProposalID(proposalID); err != nil {
+		return KnowledgeItemResult{}, err
+	}
 	item, err := a.knowledge.ApplyPendingReconciliationRelate(a.ctx, proposalID)
 	if errors.Is(err, applicationknowledge.ErrIndexingFailed) {
 		logIndexingFailure("applying pending reconciliation relate for proposal "+proposalID, err)
@@ -99,6 +111,12 @@ func (a *App) ApplyPendingReconciliationRelate(proposalID string) (KnowledgeItem
 // conflict outcomes for proposalID: "keep_existing", "update_existing", or
 // "create_separately".
 func (a *App) ResolvePendingReconciliationConflict(proposalID, resolution string) (KnowledgeItemResult, error) {
+	if err := validateReconciliationProposalID(proposalID); err != nil {
+		return KnowledgeItemResult{}, err
+	}
+	if err := validateConflictResolution(resolution); err != nil {
+		return KnowledgeItemResult{}, err
+	}
 	item, err := a.knowledge.ResolvePendingReconciliationConflict(a.ctx, proposalID, resolution)
 	if errors.Is(err, applicationknowledge.ErrIndexingFailed) {
 		logIndexingFailure("resolving pending reconciliation conflict for proposal "+proposalID, err)
@@ -113,11 +131,17 @@ func (a *App) ResolvePendingReconciliationConflict(proposalID, resolution string
 // AcknowledgePendingReconciliationNoChange marks proposalID's classified
 // no_change proposal resolved without creating or changing any Item.
 func (a *App) AcknowledgePendingReconciliationNoChange(proposalID string) error {
+	if err := validateReconciliationProposalID(proposalID); err != nil {
+		return err
+	}
 	return a.knowledge.AcknowledgePendingReconciliationNoChange(a.ctx, proposalID)
 }
 
 // RejectPendingReconciliationProposal marks proposalID rejected without
 // creating or changing any Item.
 func (a *App) RejectPendingReconciliationProposal(proposalID string) error {
+	if err := validateReconciliationProposalID(proposalID); err != nil {
+		return err
+	}
 	return a.knowledge.RejectPendingReconciliationProposal(a.ctx, proposalID)
 }

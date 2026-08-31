@@ -57,14 +57,17 @@ export interface DuplicateMatch {
   score: number
 }
 
-// ItemChanges mirrors domainknowledge.ItemChanges — optional replacements
-// for an existing item's content fields. An absent field means "leave this
-// field unchanged" when applying an update.
+// ItemChanges mirrors the desktop ItemChangesResult DTO — optional
+// replacements for an existing item's content fields. Every field is
+// omitted from the wire format, and so undefined here, when it means
+// "leave this field unchanged" — including the list fields, where an
+// explicit empty list (`[]`) is a real, present value distinct from an
+// absent (unchanged) one.
 export interface ItemChanges {
   definition?: string
-  properties: string[]
-  tradeOffs: string[]
-  relatedConcepts: string[]
+  properties?: string[]
+  tradeOffs?: string[]
+  relatedConcepts?: string[]
 }
 
 // ReconciliationSuggestion is the classifier's suggested action for one
@@ -456,11 +459,10 @@ export function definitionPreview(text: string, max: number): string {
   if (max <= 0) {
     return ''
   }
-  if (max === 1) {
-    return '…'
-  }
   // Reserve one character for the ellipsis so a truncated result never
-  // exceeds max characters total.
+  // exceeds max characters total. At max === 1 this reserves the entire
+  // budget, cutting to an empty string — so the general path already
+  // returns a bare ellipsis without a dedicated max === 1 case.
   const cut = text.slice(0, max - 1)
   const lastSpace = cut.lastIndexOf(' ')
   const trimmed = lastSpace > 0 ? cut.slice(0, lastSpace) : cut

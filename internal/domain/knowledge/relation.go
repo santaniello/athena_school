@@ -19,6 +19,7 @@ var (
 	ErrRelationToItemIDRequired   = errors.New("relation to item id is required")
 	ErrRelationSameItem           = errors.New("relation from and to item must be different items")
 	ErrRelationTypeRequired       = errors.New("relation type is required")
+	ErrRelationTypeUnsupported    = errors.New("relation type is not supported in this phase")
 	ErrRelationCreatedAtRequired  = errors.New("relation created at is required")
 )
 
@@ -57,6 +58,9 @@ func (r Relation) Validate() error {
 	}
 	if strings.TrimSpace(r.Type) == "" {
 		return ErrRelationTypeRequired
+	}
+	if r.Type != RelationRelated {
+		return ErrRelationTypeUnsupported
 	}
 	if r.CreatedAt.IsZero() {
 		return ErrRelationCreatedAtRequired

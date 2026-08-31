@@ -4,11 +4,67 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 )
+
+// Sentinel errors from the reconciliation bindings' own input validation,
+// checked before ever calling the knowledge service — batchID/candidateID/
+// proposalID as opaque non-empty tokens, and status/resolution against
+// their known enums. Keeps these Wails bindings thin adapters: validate
+// input, call the use case, return the result (see AGENTS.md).
+var (
+	ErrReconciliationBatchIDRequired     = errors.New("desktop: reconciliation batch id is required")
+	ErrReconciliationCandidateIDRequired = errors.New("desktop: reconciliation candidate id is required")
+	ErrReconciliationProposalIDRequired  = errors.New("desktop: reconciliation proposal id is required")
+	ErrReconciliationStatusInvalid       = errors.New("desktop: status must be draft or approved")
+	ErrReconciliationResolutionInvalid   = errors.New("desktop: resolution must be keep_existing, update_existing, or create_separately")
+)
+
+// validateReconciliationCandidate checks the batchID/candidateID pair
+// shared by every immediate (non-pending) reconciliation binding.
+func validateReconciliationCandidate(batchID, candidateID string) error {
+	if strings.TrimSpace(batchID) == "" {
+		return ErrReconciliationBatchIDRequired
+	}
+	if strings.TrimSpace(candidateID) == "" {
+		return ErrReconciliationCandidateIDRequired
+	}
+	return nil
+}
+
+// validateReconciliationProposalID checks the single id every pending
+// reconciliation binding takes.
+func validateReconciliationProposalID(proposalID string) error {
+	if strings.TrimSpace(proposalID) == "" {
+		return ErrReconciliationProposalIDRequired
+	}
+	return nil
+}
+
+// validateKnowledgeStatus checks a target Knowledge Item status against
+// the only two a reconciliation "create" action may persist at.
+func validateKnowledgeStatus(status string) error {
+	if status != domainknowledge.StatusDraft && status != domainknowledge.StatusApproved {
+		return ErrReconciliationStatusInvalid
+	}
+	return nil
+}
+
+// validateConflictResolution checks a conflict resolution against the
+// three explicit outcomes ResolveReconciliationConflict/
+// ResolvePendingReconciliationConflict accept.
+func validateConflictResolution(resolution string) error {
+	switch resolution {
+	case applicationknowledge.ConflictKeepExisting, applicationknowledge.ConflictUpdateExisting, applicationknowledge.ConflictCreateSeparately:
+		return nil
+	default:
+		return ErrReconciliationResolutionInvalid
+	}
+}
 
 // KnowledgeItemResult is an unpersisted extraction candidate returned to the UI.
 type KnowledgeItemResult struct {
@@ -59,20 +115,34 @@ type ReconciliationSuggestionResult struct {
 
 // ItemChangesResult is the desktop-facing DTO for a
 // domainknowledge.ItemChanges — optional replacements for an existing
-// Item's user-editable content fields. A nil Definition, or a nil list
-// field, means "unchanged".
+// Item's user-editable content fields. Every field uses `omitempty` on a
+// pointer (never on the slice itself, which would also drop an explicit
+// empty list): a nil Definition/list means "unchanged" and is omitted
+// from the wire format entirely, while a non-nil list — even an empty one
+// — means "set to this" and is always serialized, distinguishing "leave
+// this field alone" from "clear it".
 type ItemChangesResult struct {
-	Definition      *string  `json:"definition"`
-	Properties      []string `json:"properties"`
-	TradeOffs       []string `json:"tradeOffs"`
-	RelatedConcepts []string `json:"relatedConcepts"`
+	Definition      *string   `json:"definition,omitempty"`
+	Properties      *[]string `json:"properties,omitempty"`
+	TradeOffs       *[]string `json:"tradeOffs,omitempty"`
+	RelatedConcepts *[]string `json:"relatedConcepts,omitempty"`
 }
 
 func toItemChangesResult(changes domainknowledge.ItemChanges) ItemChangesResult {
 	return ItemChangesResult{
-		Definition: changes.Definition, Properties: changes.Properties,
-		TradeOffs: changes.TradeOffs, RelatedConcepts: changes.RelatedConcepts,
+		Definition: changes.Definition, Properties: listPointer(changes.Properties),
+		TradeOffs: listPointer(changes.TradeOffs), RelatedConcepts: listPointer(changes.RelatedConcepts),
 	}
+}
+
+// listPointer returns nil for a nil list — "unchanged" — and otherwise a
+// pointer to list itself, even when it is empty, so `omitempty` never
+// mistakes an explicit empty list for an absent one.
+func listPointer(list []string) *[]string {
+	if list == nil {
+		return nil
+	}
+	return &list
 }
 
 // KnowledgeItemInput mirrors the full candidate returned by ExtractKnowledge.
@@ -159,6 +229,12 @@ func toDomainItemFromInput(input KnowledgeItemInput) domainknowledge.Item {
 // ApplyReconciliationCreate persists batchID/candidateID's classified
 // candidate as a brand-new Knowledge Item at status (draft or approved).
 func (a *App) ApplyReconciliationCreate(batchID, candidateID string, candidate KnowledgeItemInput, status string) (KnowledgeItemResult, error) {
+	if err := validateReconciliationCandidate(batchID, candidateID); err != nil {
+		return KnowledgeItemResult{}, err
+	}
+	if err := validateKnowledgeStatus(status); err != nil {
+		return KnowledgeItemResult{}, err
+	}
 	item, err := a.knowledge.ApplyReconciliationCreate(a.ctx, batchID, candidateID, toDomainItemFromInput(candidate), status)
 	if errors.Is(err, applicationknowledge.ErrIndexingFailed) {
 		logIndexingFailure("applying reconciliation create for candidate "+candidateID, err)
@@ -173,6 +249,9 @@ func (a *App) ApplyReconciliationCreate(batchID, candidateID string, candidate K
 // ApplyReconciliationUpdate applies the classified changes to
 // batchID/candidateID's target, preserving its identity and lifecycle.
 func (a *App) ApplyReconciliationUpdate(batchID, candidateID string, candidate KnowledgeItemInput) (KnowledgeItemResult, error) {
+	if err := validateReconciliationCandidate(batchID, candidateID); err != nil {
+		return KnowledgeItemResult{}, err
+	}
 	item, err := a.knowledge.ApplyReconciliationUpdate(a.ctx, batchID, candidateID, toDomainItemFromInput(candidate))
 	if errors.Is(err, applicationknowledge.ErrIndexingFailed) {
 		logIndexingFailure("applying reconciliation update for candidate "+candidateID, err)
@@ -188,6 +267,9 @@ func (a *App) ApplyReconciliationUpdate(batchID, candidateID string, candidate K
 // new draft Knowledge Item and links it to the classified target via a
 // `related` relation.
 func (a *App) ApplyReconciliationRelate(batchID, candidateID string, candidate KnowledgeItemInput) (KnowledgeItemResult, error) {
+	if err := validateReconciliationCandidate(batchID, candidateID); err != nil {
+		return KnowledgeItemResult{}, err
+	}
 	item, err := a.knowledge.ApplyReconciliationRelate(a.ctx, batchID, candidateID, toDomainItemFromInput(candidate))
 	if errors.Is(err, applicationknowledge.ErrIndexingFailed) {
 		logIndexingFailure("applying reconciliation relate for candidate "+candidateID, err)
@@ -203,6 +285,12 @@ func (a *App) ApplyReconciliationRelate(batchID, candidateID string, candidate K
 // outcomes for batchID/candidateID: "keep_existing", "update_existing", or
 // "create_separately".
 func (a *App) ResolveReconciliationConflict(batchID, candidateID string, candidate KnowledgeItemInput, resolution string) (KnowledgeItemResult, error) {
+	if err := validateReconciliationCandidate(batchID, candidateID); err != nil {
+		return KnowledgeItemResult{}, err
+	}
+	if err := validateConflictResolution(resolution); err != nil {
+		return KnowledgeItemResult{}, err
+	}
 	item, err := a.knowledge.ResolveReconciliationConflict(a.ctx, batchID, candidateID, toDomainItemFromInput(candidate), resolution)
 	if errors.Is(err, applicationknowledge.ErrIndexingFailed) {
 		logIndexingFailure("resolving reconciliation conflict for candidate "+candidateID, err)
@@ -217,12 +305,18 @@ func (a *App) ResolveReconciliationConflict(batchID, candidateID string, candida
 // AcknowledgeReconciliationNoChange marks batchID/candidateID's classified
 // no_change proposal resolved without creating or changing any Item.
 func (a *App) AcknowledgeReconciliationNoChange(batchID, candidateID string, candidate KnowledgeItemInput) error {
+	if err := validateReconciliationCandidate(batchID, candidateID); err != nil {
+		return err
+	}
 	return a.knowledge.AcknowledgeReconciliationNoChange(a.ctx, batchID, candidateID, toDomainItemFromInput(candidate))
 }
 
 // SaveReconciliationForReview persists batchID/candidateID's classified
 // proposal as pending, changing neither the candidate nor its target.
 func (a *App) SaveReconciliationForReview(batchID, candidateID string, candidate KnowledgeItemInput) error {
+	if err := validateReconciliationCandidate(batchID, candidateID); err != nil {
+		return err
+	}
 	return a.knowledge.SaveReconciliationForReview(a.ctx, batchID, candidateID, toDomainItemFromInput(candidate))
 }
 

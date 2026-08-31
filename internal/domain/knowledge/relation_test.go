@@ -9,13 +9,13 @@ import (
 )
 
 func TestCanonicalRelation_OrdersByLexicographicallySmallerID(t *testing.T) {
+	// Given two item IDs in either order
 	now := time.Date(2026, 8, 28, 10, 0, 0, 0, time.UTC)
 
-	// Given two item IDs in either order
+	// When building the canonical relation between them, in both orders
 	fromFirst := CanonicalRelation("item-b", "item-a", RelationRelated, now)
 	fromSecond := CanonicalRelation("item-a", "item-b", RelationRelated, now)
 
-	// When building the canonical relation between them
 	// Then both orders produce the exact same row — the smaller ID always
 	// ends up in FromItemID — so applying the same undirected relation
 	// twice never creates two different rows.
@@ -39,6 +39,8 @@ func TestRelation_Validate_acceptsACompleteRelation(t *testing.T) {
 }
 
 func TestRelation_Validate_rejectsInvalidFields(t *testing.T) {
+	// Given a complete, valid relation, and a set of single-field mutations
+	// away from it
 	valid := Relation{
 		FromItemID: "item-a", ToItemID: "item-b",
 		Type: RelationRelated, CreatedAt: time.Date(2026, 8, 28, 10, 0, 0, 0, time.UTC),
@@ -52,14 +54,16 @@ func TestRelation_Validate_rejectsInvalidFields(t *testing.T) {
 		{name: "to item id", mutate: func(r *Relation) { r.ToItemID = " " }, expected: ErrRelationToItemIDRequired},
 		{name: "same item", mutate: func(r *Relation) { r.ToItemID = r.FromItemID }, expected: ErrRelationSameItem},
 		{name: "type", mutate: func(r *Relation) { r.Type = " " }, expected: ErrRelationTypeRequired},
+		{name: "unsupported type", mutate: func(r *Relation) { r.Type = "prerequisite" }, expected: ErrRelationTypeUnsupported},
 		{name: "created at", mutate: func(r *Relation) { r.CreatedAt = time.Time{} }, expected: ErrRelationCreatedAtRequired},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			// Given the valid relation with one field mutated to be invalid
 			candidate := valid
 			test.mutate(&candidate)
 
-			// When validating the invalid relation
+			// When validating it
 			err := candidate.Validate()
 
 			// Then the matching domain error is returned
