@@ -319,6 +319,53 @@ describe('AppShell', () => {
     expect(within(sidebar).queryByText('5')).not.toBeInTheDocument()
   })
 
+  it('applies only the most recently started pending-proposal-count response, ignoring a stale one that resolves later', async () => {
+    // Given the mount fetch left pending, and a second fetch (triggered by
+    // approving a draft, which refreshes both counts together) that
+    // resolves before it does
+    let resolveMountFetch: (count: number) => void = () => {}
+    vi.mocked(countPendingReconciliations).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveMountFetch = resolve
+      }),
+    )
+    const draftItem = {
+      id: 'item-1',
+      topic: 'Go',
+      concept: 'Channels',
+      definition: 'Typed conduits.',
+      properties: [],
+      tradeOffs: [],
+      relatedConcepts: [],
+      source: 'athena',
+      status: 'draft',
+      createdAt: '2026-08-18T10:00:00Z',
+      updatedAt: '2026-08-18T10:00:00Z',
+    }
+    vi.mocked(listKnowledgeItems).mockResolvedValue([draftItem])
+    vi.mocked(approveKnowledgeItem).mockResolvedValueOnce({ ...draftItem, status: 'approved' })
+    vi.mocked(countPendingReconciliations).mockResolvedValueOnce(4)
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+
+    // When the approval's own count refetch resolves first...
+    await user.click(screen.getByRole('button', { name: 'Knowledge' }))
+    await user.click(screen.getByRole('tab', { name: /Review/ }))
+    await user.click(await screen.findByText('Channels'))
+    await user.click(screen.getByRole('button', { name: 'Approve' }))
+    const sidebar = screen.getByRole('navigation')
+    const navBadge = await within(sidebar).findByText('4')
+
+    // ...and only afterwards the stale mount fetch resolves
+    act(() => resolveMountFetch(9))
+
+    // Then the stale response never overwrites the newer count
+    await waitFor(() => expect(countPendingReconciliations).toHaveBeenCalledTimes(2))
+    expect(navBadge).toBeInTheDocument()
+    expect(within(sidebar).queryByText('9')).not.toBeInTheDocument()
+  })
+
   it('routes the Home CTA to the Study screen, same as the Study nav row', async () => {
     // Given the app shell mounts on Home
     const user = userEvent.setup()
@@ -692,6 +739,117 @@ describe('AppShell', () => {
     )
   })
 
+  it('shows the fallback error, re-enables the button, and clears the error on retry when starting a new session fails', async () => {
+    // Given a session open in Study, already reporting a warning-level
+    // context usage — same setup as the success path above
+    let contextWarningHandler: ((event: StudyContextEvent) => void) | undefined
+    vi.mocked(onStudyContextWarning).mockImplementationOnce((handler) => {
+      contextWarningHandler = handler
+      return vi.fn()
+    })
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+    await user.click(screen.getByRole('button', { name: 'Study' }))
+    await screen.findByText('General')
+
+    vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([])
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-original',
+      topic: 'Distributed systems',
+      folderId: 'default',
+      startedAt: '2026-08-17T10:00:00Z',
+      context: CONTEXT_NORMAL,
+    })
+    vi.mocked(requestOpeningTurn).mockResolvedValueOnce()
+    await user.click(screen.getByText('General'))
+    await user.click(await screen.findByText('New session'))
+    await user.type(
+      screen.getByPlaceholderText('What do you want to study?'),
+      'Distributed systems{Enter}',
+    )
+    expect(await screen.findByText('Study / General')).toBeInTheDocument()
+
+    act(() => {
+      contextWarningHandler?.({
+        sessionId: 'session-original',
+        usedTokens: 8000,
+        contextLength: 10000,
+        estimated: false,
+      })
+    })
+
+    // When starting a new session fails with a non-Error rejection
+    vi.mocked(startStudySession).mockRejectedValueOnce('boom')
+    const startButton = await screen.findByRole('button', { name: 'Start new session' })
+    await user.click(startButton)
+
+    // Then the generic fallback message is shown, not the raw rejection
+    // value, and the button is re-enabled for a retry
+    expect(await screen.findByText('Failed to start a new session.')).toBeInTheDocument()
+    expect(startButton).not.toBeDisabled()
+
+    // When retrying, and the retry stays pending
+    vi.mocked(startStudySession).mockReturnValueOnce(new Promise(() => {}))
+    await user.click(startButton)
+
+    // Then the stale error is cleared immediately, and the button disables
+    // itself again while the retry is in flight
+    expect(screen.queryByText('Failed to start a new session.')).not.toBeInTheDocument()
+    expect(startButton).toBeDisabled()
+  })
+
+  it('hides the new-session error banner once the user navigates away from Study', async () => {
+    // Given a session open in Study, reporting a warning-level context
+    // usage, whose "Start new session" attempt failed
+    let contextWarningHandler: ((event: StudyContextEvent) => void) | undefined
+    vi.mocked(onStudyContextWarning).mockImplementationOnce((handler) => {
+      contextWarningHandler = handler
+      return vi.fn()
+    })
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+    await user.click(screen.getByRole('button', { name: 'Study' }))
+    await screen.findByText('General')
+
+    vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([])
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-original',
+      topic: 'Distributed systems',
+      folderId: 'default',
+      startedAt: '2026-08-17T10:00:00Z',
+      context: CONTEXT_NORMAL,
+    })
+    vi.mocked(requestOpeningTurn).mockResolvedValueOnce()
+    await user.click(screen.getByText('General'))
+    await user.click(await screen.findByText('New session'))
+    await user.type(
+      screen.getByPlaceholderText('What do you want to study?'),
+      'Distributed systems{Enter}',
+    )
+    expect(await screen.findByText('Study / General')).toBeInTheDocument()
+
+    act(() => {
+      contextWarningHandler?.({
+        sessionId: 'session-original',
+        usedTokens: 8000,
+        contextLength: 10000,
+        estimated: false,
+      })
+    })
+    vi.mocked(startStudySession).mockRejectedValueOnce(new Error('disk full'))
+    await user.click(await screen.findByRole('button', { name: 'Start new session' }))
+    expect(await screen.findByText('disk full')).toBeInTheDocument()
+
+    // When navigating away from Study
+    await user.click(screen.getByRole('button', { name: 'Home' }))
+
+    // Then the stale banner is gone, even though newSessionError itself was
+    // never cleared — it is scoped to the Study section only
+    expect(screen.queryByText('disk full')).not.toBeInTheDocument()
+  })
+
   it('applies the required inline layout styles to the resizable panels and the sidebar scroll container', async () => {
     // Given the app shell mounts
     const { container } = renderShell()
@@ -1062,8 +1220,43 @@ describe('AppShell knowledge index lifecycle', () => {
     renderShell()
 
     // Then the app falls back to the failure screen instead of hanging
-    // behind IndexLoadingScreen forever
+    // behind IndexLoadingScreen forever, with its own fallback message
     expect(await screen.findByText('Knowledge index could not be loaded.')).toBeInTheDocument()
+    expect(screen.getByText('Could not load the knowledge index.')).toBeInTheDocument()
+  })
+
+  it('ignores a rejected initial response that arrives after a newer status event already resolved things', async () => {
+    // Given the initial query stays pending, with its rejecter captured
+    let rejectInitial: (err: unknown) => void = () => {}
+    vi.mocked(getKnowledgeIndexStatus).mockReturnValueOnce(
+      new Promise((_, reject) => {
+        rejectInitial = reject
+      }),
+    )
+    let statusHandler: (status: IndexStatus) => void = () => {}
+    vi.mocked(onKnowledgeIndexStatus).mockImplementationOnce((handler) => {
+      statusHandler = handler
+      return vi.fn()
+    })
+    renderShell()
+    expect(screen.getByText('Loading knowledge index...')).toBeInTheDocument()
+
+    // When a newer status event arrives first
+    act(() => {
+      statusHandler({ state: 'ready', hasSnapshot: true, issues: [], lastError: '' })
+    })
+    expect(await screen.findByRole('button', { name: 'Home' })).toBeInTheDocument()
+
+    // And the stale initial query only rejects afterward
+    await act(async () => {
+      rejectInitial(new Error('boom'))
+      await Promise.resolve()
+    })
+
+    // Then the newer event's ready state stands — the stale rejection does
+    // not fall the app back to the failure screen
+    expect(screen.queryByText('Knowledge index could not be loaded.')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument()
   })
 
   it('ignores a delayed initial response that resolves after a newer status event already arrived', async () => {

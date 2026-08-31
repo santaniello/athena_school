@@ -84,6 +84,15 @@ function KnowledgeSection({
     )
   }
 
+  // Stryker disable StringLiteral: only read when importTarget is null, i.e.
+  // IngestProgressDialog's own `open` prop is false — its effect bails via
+  // `if (!open) return` before kind/path ever drive anything observable, so
+  // these fallbacks exist purely to satisfy the required (non-optional) prop
+  // types.
+  const importDialogKind = importTarget?.kind ?? 'folder'
+  const importDialogPath = importTarget?.path ?? ''
+  // Stryker restore StringLiteral
+
   return (
     <div className="flex h-full w-full flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
@@ -144,8 +153,8 @@ function KnowledgeSection({
 
       <IngestProgressDialog
         open={importTarget !== null}
-        kind={importTarget?.kind ?? 'folder'}
-        path={importTarget?.path ?? ''}
+        kind={importDialogKind}
+        path={importDialogPath}
         onClose={() => setImportTarget(null)}
       />
     </div>

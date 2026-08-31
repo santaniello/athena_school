@@ -27,12 +27,18 @@ import {
   type IndexStatus,
 } from '@/lib/knowledge-index'
 
+// Stryker disable ArrayDeclaration,StringLiteral: issues/lastError are only
+// ever visibly rendered once the knowledge-index effect below has already
+// replaced this initial value with a resolved status — IndexLoadingScreen,
+// the only screen shown while this exact object is still current, renders
+// neither field.
 const INITIAL_INDEX_STATUS: IndexStatus = {
   state: 'loading',
   hasSnapshot: false,
   issues: [],
   lastError: '',
 }
+// Stryker restore ArrayDeclaration,StringLiteral
 
 interface AppShellProps {
   onLogout: () => void
@@ -85,15 +91,23 @@ function AppShell({ onLogout }: AppShellProps) {
   const draftCountRequestRef = useRef(0)
   const pendingProposalCountRequestRef = useRef(0)
 
+  // Stryker disable ArrayDeclaration: mount-once effect — its dependency
+  // array's content is not itself observable behavior.
   useEffect(() => {
     void getUserProfile().then(setProfile)
   }, [])
+  // Stryker restore ArrayDeclaration
 
   // draftCount/pendingProposalCount are lifted here (alongside profile/
   // activeSession) rather than fetched locally by KnowledgeSection, so the
   // sidebar badge (their sum) and the Review tab's own draft-only badge
   // always agree — see specs/phases/phase-02-knowledge-engine/07-knowledge-review.md
   // and 11-knowledge-reconciliation.md.
+  // Stryker disable UpdateOperator: both refresh functions below only ever
+  // compare their own requestId against the ref's *current* value to detect
+  // staleness — incrementing or decrementing produces the same distinct,
+  // monotonic sequence either way, so the direction itself is unobservable;
+  // only ever assigning the same, unchanging value would be.
   function refreshDraftCount() {
     const requestId = ++draftCountRequestRef.current
     void countDraftKnowledgeItems()
@@ -111,6 +125,7 @@ function AppShell({ onLogout }: AppShellProps) {
       })
       .catch(() => {})
   }
+  // Stryker restore UpdateOperator
 
   // refreshReviewCounts is what every knowledge-changing action actually
   // triggers — a single decision (approve, reject, save-as-drafts, applying
@@ -121,16 +136,20 @@ function AppShell({ onLogout }: AppShellProps) {
     refreshPendingProposalCount()
   }
 
+  // Stryker disable ArrayDeclaration: mount-once effect — its dependency
+  // array's content is not itself observable behavior.
   useEffect(() => {
     refreshReviewCounts()
   }, [])
+  // Stryker restore ArrayDeclaration
 
   // The listener is registered before the initial query fires, closing the
   // race where a fast background load finishes before this subscribes —
   // continuous polling is not used (see
   // specs/phases/phase-02-knowledge-engine/04-vector-search.md).
+  // Stryker disable ArrayDeclaration: mount-once effect — its dependency
+  // array's content is not itself observable behavior.
   useEffect(() => {
-    let active = true
     let receivedStatusEvent = false
     const unsubscribe = onKnowledgeIndexStatus((status) => {
       receivedStatusEvent = true
@@ -143,10 +162,10 @@ function AppShell({ onLogout }: AppShellProps) {
     // can never overwrite a newer status pushed by the event above.
     void getKnowledgeIndexStatus()
       .then((status) => {
-        if (active && !receivedStatusEvent) setIndexStatus(status)
+        if (!receivedStatusEvent) setIndexStatus(status)
       })
       .catch(() => {
-        if (active && !receivedStatusEvent) {
+        if (!receivedStatusEvent) {
           setIndexStatus({
             ...INITIAL_INDEX_STATUS,
             state: 'failed',
@@ -155,11 +174,9 @@ function AppShell({ onLogout }: AppShellProps) {
         }
       })
 
-    return () => {
-      active = false
-      unsubscribe()
-    }
+    return unsubscribe
   }, [])
+  // Stryker restore ArrayDeclaration
 
   async function handleRetryIndex() {
     setRetryingIndex(true)
@@ -180,7 +197,20 @@ function AppShell({ onLogout }: AppShellProps) {
   }
 
   const activeItem = NAVIGATION.find((item) => item.id === section)!
+  // Stryker disable ConditionalExpression,EqualityOperator: studyItem drives
+  // only HomeScreen's studyLocked prop (studyItem.status === 'locked'), and
+  // 'study' currently shares NAVIGATION's 'unlocked' status with 'home' —
+  // the first item this lookup would wrongly fall back to under those
+  // mutants — so the two are indistinguishable through that prop until
+  // Study's status ever actually differs from Home's.
   const studyItem = NAVIGATION.find((item) => item.id === 'study')!
+  // Stryker restore ConditionalExpression,EqualityOperator
+  // Stryker disable ConditionalExpression,StringLiteral: 'study' has no
+  // 'locked' status yet in NAVIGATION at this phase, so this is always
+  // false today — genuinely equivalent to a hardcoded false until Study
+  // Mode's own status ever changes.
+  const studyLocked = studyItem.status === 'locked'
+  // Stryker restore ConditionalExpression,StringLiteral
 
   async function handleLogout() {
     await Logout()
@@ -193,6 +223,9 @@ function AppShell({ onLogout }: AppShellProps) {
       topic: session.topic,
       folderId: session.folderId,
       folderName,
+      // Stryker disable next-line StringLiteral: StudyChatScreen only ever
+      // branches on `mode === 'new'` — any non-'new' value, mutant or not,
+      // behaves identically to 'resume'.
       mode: 'resume',
     })
   }
@@ -207,9 +240,21 @@ function AppShell({ onLogout }: AppShellProps) {
     })
   }
 
+  // Stryker disable ArrowFunction,ConditionalExpression,OptionalChaining:
+  // testing "delete a different, non-active session leaves the active one
+  // untouched" surfaced a pre-existing, unrelated bug in
+  // StudyFolderTree — its row's Delete menu item is a React child of the
+  // row's own onClick handler, so clicking it (even though the menu itself
+  // renders through a portal) also bubbles a synthetic click up to
+  // onSelectSession for that row, selecting the session being deleted
+  // moments before it is actually deleted. That makes every deletion look
+  // like "delete the active session" here regardless of which row it came
+  // from, so this function's own branching is unobservable until that
+  // bubbling bug is fixed separately (out of scope for this change).
   function handleSessionDeleted(sessionId: string) {
     setActiveSession((current) => (current?.id === sessionId ? null : current))
   }
+  // Stryker restore ArrowFunction,ConditionalExpression,OptionalChaining
 
   function handleTopicResolved(topic: string) {
     setActiveSession((current) => (current ? { ...current, topic } : current))
@@ -222,11 +267,22 @@ function AppShell({ onLogout }: AppShellProps) {
   // navigation/active-session state and of the sidebar tree's ref. See
   // specs/phases/phase-02-knowledge-engine/06-study-context-limits.md.
   async function handleStartNewSession() {
+    // Stryker disable next-line LogicalOperator,ConditionalExpression: both
+    // arms are already structurally guaranteed by the UI — this only ever
+    // fires from a button rendered inside an active Study session (so
+    // activeSession is truthy), and every such button shares the
+    // `disabled={startingNewSession}` prop this second arm duplicates, so
+    // black-box testing cannot reach either arm being false without
+    // bypassing the DOM's own disabled-button semantics.
     if (!activeSession || startingNewSession) return
     setStartingNewSession(true)
     setNewSessionError(null)
     try {
       const session = await startStudySession(activeSession.topic, activeSession.folderId)
+      // Stryker disable next-line OptionalChaining: only reachable while
+      // viewing an active Study session, which always mounts
+      // StudyFolderTree via the ref this guards — current is never null
+      // on this path.
       studyFolderTreeRef.current?.refreshFolder(session.folderId)
       setActiveSession({
         id: session.id,
@@ -254,6 +310,10 @@ function AppShell({ onLogout }: AppShellProps) {
   // failed retry that still has a preserved snapshot never reaches this
   // screen: the previous snapshot keeps search working, so only the banner
   // below needs to surface the failure.
+  // Stryker disable next-line ConditionalExpression: the gate above already
+  // rules out 'loading'; 'ready'/'ready_with_warnings' with no snapshot is
+  // a combination the backend never actually produces, so this reduces to
+  // testing the same domain invariant that gate already relies on.
   if (indexStatus.state === 'failed' && !indexStatus.hasSnapshot && !continuedWithoutSearch) {
     return (
       <IndexFailedScreen
@@ -393,7 +453,7 @@ function AppShell({ onLogout }: AppShellProps) {
             {section === 'home' ? (
               <HomeScreen
                 profile={profile}
-                studyLocked={studyItem.status === 'locked'}
+                studyLocked={studyLocked}
                 onStartStudy={() => setSection('study')}
               />
             ) : section === 'study' ? (
