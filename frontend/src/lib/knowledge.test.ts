@@ -1,7 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  AcknowledgePendingReconciliationNoChange,
+  AcknowledgeReconciliationNoChange,
+  ApplyPendingReconciliationCreate,
+  ApplyPendingReconciliationRelate,
+  ApplyPendingReconciliationUpdate,
+  ApplyReconciliationCreate,
+  ApplyReconciliationRelate,
+  ApplyReconciliationUpdate,
   ApproveKnowledgeItem,
   CountDraftKnowledgeItems,
+  CountPendingReconciliations,
   CountUnindexedKnowledgeItems,
   DeleteKnowledgeItem,
   DeprecateKnowledgeItem,
@@ -11,16 +20,33 @@ import {
   ListKnowledgeItemEvidence,
   ListKnowledgeItems,
   ListKnowledgeTopics,
+  ListPendingReconciliations,
+  RejectPendingReconciliationProposal,
   ReindexKnowledgeItems,
+  ResolvePendingReconciliationConflict,
+  ResolveReconciliationConflict,
   SaveAndApproveExtractedKnowledge,
   SaveExtractedKnowledge,
+  SaveReconciliationForReview,
   UpdateKnowledgeExtractionSettings,
   UpdateKnowledgeItem,
 } from '../../wailsjs/go/desktop/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import {
+  acknowledgePendingReconciliationNoChange,
+  acknowledgeReconciliationNoChange,
+  applyPendingReconciliationCreate,
+  applyPendingReconciliationRelate,
+  applyPendingReconciliationUpdate,
+  applyReconciliationCreate,
+  applyReconciliationRelate,
+  applyReconciliationUpdate,
   approveKnowledgeItem,
+  CONFLICT_CREATE_SEPARATELY,
+  CONFLICT_KEEP_EXISTING,
+  CONFLICT_UPDATE_EXISTING,
   countDraftKnowledgeItems,
+  countPendingReconciliations,
   countUnindexedKnowledgeItems,
   definitionPreview,
   deleteKnowledgeItem,
@@ -32,12 +58,21 @@ import {
   listKnowledgeItemEvidence,
   listKnowledgeItems,
   listKnowledgeTopics,
+  listPendingReconciliations,
+  MATCH_EXACT,
+  MATCH_SEMANTIC,
   onReindexDone,
   onReindexError,
   onReindexProgress,
+  RECONCILE_CREATE,
+  RECONCILE_NO_CHANGE,
   reindexKnowledgeItems,
+  rejectPendingReconciliationProposal,
+  resolvePendingReconciliationConflict,
+  resolveReconciliationConflict,
   saveAndApproveExtractedKnowledge,
   saveExtractedKnowledge,
+  saveReconciliationForReview,
   updateKnowledgeExtractionSettings,
   updateKnowledgeItem,
   type KnowledgeItem,
@@ -60,6 +95,20 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   DeprecateKnowledgeItem: vi.fn(),
   UpdateKnowledgeItem: vi.fn(),
   DeleteKnowledgeItem: vi.fn(),
+  ApplyReconciliationCreate: vi.fn(),
+  ApplyReconciliationUpdate: vi.fn(),
+  ApplyReconciliationRelate: vi.fn(),
+  ResolveReconciliationConflict: vi.fn(),
+  AcknowledgeReconciliationNoChange: vi.fn(),
+  SaveReconciliationForReview: vi.fn(),
+  ListPendingReconciliations: vi.fn(),
+  CountPendingReconciliations: vi.fn(),
+  ApplyPendingReconciliationCreate: vi.fn(),
+  ApplyPendingReconciliationUpdate: vi.fn(),
+  ApplyPendingReconciliationRelate: vi.fn(),
+  ResolvePendingReconciliationConflict: vi.fn(),
+  AcknowledgePendingReconciliationNoChange: vi.fn(),
+  RejectPendingReconciliationProposal: vi.fn(),
 }))
 
 vi.mock('../../wailsjs/runtime/runtime', () => ({
@@ -382,6 +431,235 @@ describe('deleteKnowledgeItem', () => {
 
     // Then the id was forwarded
     expect(DeleteKnowledgeItem).toHaveBeenCalledWith('item-1')
+  })
+})
+
+describe('reconciliation constants', () => {
+  it('matches the domain and application layer values they mirror', () => {
+    expect(RECONCILE_CREATE).toBe('create')
+    expect(RECONCILE_NO_CHANGE).toBe('no_change')
+    expect(CONFLICT_KEEP_EXISTING).toBe('keep_existing')
+    expect(CONFLICT_UPDATE_EXISTING).toBe('update_existing')
+    expect(CONFLICT_CREATE_SEPARATELY).toBe('create_separately')
+    expect(MATCH_EXACT).toBe('exact')
+    expect(MATCH_SEMANTIC).toBe('semantic')
+  })
+})
+
+describe('immediate reconciliation bindings', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('applies a create decision at the given status and returns the new item', async () => {
+    // Given a backend create result
+    const item = testItem({ id: 'new-item' })
+    vi.mocked(ApplyReconciliationCreate).mockResolvedValueOnce(item as never)
+
+    // When applying create
+    const result = await applyReconciliationCreate('batch-1', 'candidate-1', testItem(), 'draft')
+
+    // Then every argument is forwarded and the new item returned
+    expect(ApplyReconciliationCreate).toHaveBeenCalledWith(
+      'batch-1',
+      'candidate-1',
+      testItem(),
+      'draft',
+    )
+    expect(result).toEqual(item)
+  })
+
+  it('applies an update decision and returns the updated item', async () => {
+    // Given a backend update result
+    const item = testItem({ concept: 'Updated' })
+    vi.mocked(ApplyReconciliationUpdate).mockResolvedValueOnce(item as never)
+
+    // When applying update
+    const result = await applyReconciliationUpdate('batch-1', 'candidate-1', testItem())
+
+    // Then every argument is forwarded and the updated item returned
+    expect(ApplyReconciliationUpdate).toHaveBeenCalledWith('batch-1', 'candidate-1', testItem())
+    expect(result).toEqual(item)
+  })
+
+  it('applies a relate decision and returns the new item', async () => {
+    // Given a backend relate result
+    const item = testItem({ id: 'new-item' })
+    vi.mocked(ApplyReconciliationRelate).mockResolvedValueOnce(item as never)
+
+    // When applying relate
+    const result = await applyReconciliationRelate('batch-1', 'candidate-1', testItem())
+
+    // Then every argument is forwarded and the new item returned
+    expect(ApplyReconciliationRelate).toHaveBeenCalledWith('batch-1', 'candidate-1', testItem())
+    expect(result).toEqual(item)
+  })
+
+  it('resolves a conflict with the given resolution and returns the result item', async () => {
+    // Given a backend conflict resolution result
+    const item = testItem({ concept: 'Resolved' })
+    vi.mocked(ResolveReconciliationConflict).mockResolvedValueOnce(item as never)
+
+    // When resolving the conflict
+    const result = await resolveReconciliationConflict(
+      'batch-1',
+      'candidate-1',
+      testItem(),
+      CONFLICT_KEEP_EXISTING,
+    )
+
+    // Then every argument is forwarded and the result item returned
+    expect(ResolveReconciliationConflict).toHaveBeenCalledWith(
+      'batch-1',
+      'candidate-1',
+      testItem(),
+      CONFLICT_KEEP_EXISTING,
+    )
+    expect(result).toEqual(item)
+  })
+
+  it('acknowledges a no_change decision', async () => {
+    // Given a backend that accepts the acknowledgement
+    vi.mocked(AcknowledgeReconciliationNoChange).mockResolvedValueOnce()
+
+    // When acknowledging it
+    await acknowledgeReconciliationNoChange('batch-1', 'candidate-1', testItem())
+
+    // Then every argument was forwarded
+    expect(AcknowledgeReconciliationNoChange).toHaveBeenCalledWith(
+      'batch-1',
+      'candidate-1',
+      testItem(),
+    )
+  })
+
+  it('saves a decision for later review', async () => {
+    // Given a backend that accepts the save
+    vi.mocked(SaveReconciliationForReview).mockResolvedValueOnce()
+
+    // When saving it for review
+    await saveReconciliationForReview('batch-1', 'candidate-1', testItem())
+
+    // Then every argument was forwarded
+    expect(SaveReconciliationForReview).toHaveBeenCalledWith('batch-1', 'candidate-1', testItem())
+  })
+})
+
+describe('pending reconciliation bindings', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('lists pending proposals as-is', async () => {
+    // Given a backend list of pending proposals
+    const proposals = [
+      {
+        id: 'proposal-1',
+        action: 'update',
+        candidate: testItem(),
+        targetItemId: 'item-target',
+        targetConcept: 'Channels',
+        targetStatus: 'approved',
+        reason: 'extends the existing definition',
+        changes: {},
+        stale: false,
+        createdAt: '2026-08-28T09:00:00Z',
+      },
+    ]
+    vi.mocked(ListPendingReconciliations).mockResolvedValueOnce(proposals as never)
+
+    // When listing them
+    const result = await listPendingReconciliations()
+
+    // Then they are returned as-is
+    expect(result).toEqual(proposals)
+  })
+
+  it('returns the pending count', async () => {
+    // Given a backend pending count
+    vi.mocked(CountPendingReconciliations).mockResolvedValueOnce(4)
+
+    // When counting pending proposals
+    const count = await countPendingReconciliations()
+
+    // Then it is returned as-is
+    expect(count).toBe(4)
+  })
+
+  it('applies a pending create decision at the given status', async () => {
+    // Given a backend create result
+    const item = testItem({ id: 'new-item' })
+    vi.mocked(ApplyPendingReconciliationCreate).mockResolvedValueOnce(item as never)
+
+    // When applying it
+    const result = await applyPendingReconciliationCreate('proposal-1', 'approved')
+
+    // Then the proposal id and status are forwarded and the item returned
+    expect(ApplyPendingReconciliationCreate).toHaveBeenCalledWith('proposal-1', 'approved')
+    expect(result).toEqual(item)
+  })
+
+  it('applies a pending update decision', async () => {
+    // Given a backend update result
+    const item = testItem({ concept: 'Updated' })
+    vi.mocked(ApplyPendingReconciliationUpdate).mockResolvedValueOnce(item as never)
+
+    // When applying it
+    const result = await applyPendingReconciliationUpdate('proposal-1')
+
+    // Then the proposal id is forwarded and the item returned
+    expect(ApplyPendingReconciliationUpdate).toHaveBeenCalledWith('proposal-1')
+    expect(result).toEqual(item)
+  })
+
+  it('applies a pending relate decision', async () => {
+    // Given a backend relate result
+    const item = testItem({ id: 'new-item' })
+    vi.mocked(ApplyPendingReconciliationRelate).mockResolvedValueOnce(item as never)
+
+    // When applying it
+    const result = await applyPendingReconciliationRelate('proposal-1')
+
+    // Then the proposal id is forwarded and the item returned
+    expect(ApplyPendingReconciliationRelate).toHaveBeenCalledWith('proposal-1')
+    expect(result).toEqual(item)
+  })
+
+  it('resolves a pending conflict with the given resolution', async () => {
+    // Given a backend conflict resolution result
+    const item = testItem({ concept: 'Resolved' })
+    vi.mocked(ResolvePendingReconciliationConflict).mockResolvedValueOnce(item as never)
+
+    // When resolving it
+    const result = await resolvePendingReconciliationConflict(
+      'proposal-1',
+      CONFLICT_UPDATE_EXISTING,
+    )
+
+    // Then the proposal id and resolution are forwarded and the item returned
+    expect(ResolvePendingReconciliationConflict).toHaveBeenCalledWith(
+      'proposal-1',
+      CONFLICT_UPDATE_EXISTING,
+    )
+    expect(result).toEqual(item)
+  })
+
+  it('acknowledges a pending no_change proposal', async () => {
+    // Given a backend that accepts the acknowledgement
+    vi.mocked(AcknowledgePendingReconciliationNoChange).mockResolvedValueOnce()
+
+    // When acknowledging it
+    await acknowledgePendingReconciliationNoChange('proposal-1')
+
+    // Then the proposal id was forwarded
+    expect(AcknowledgePendingReconciliationNoChange).toHaveBeenCalledWith('proposal-1')
+  })
+
+  it('rejects a pending proposal', async () => {
+    // Given a backend that accepts the rejection
+    vi.mocked(RejectPendingReconciliationProposal).mockResolvedValueOnce()
+
+    // When rejecting it
+    await rejectPendingReconciliationProposal('proposal-1')
+
+    // Then the proposal id was forwarded
+    expect(RejectPendingReconciliationProposal).toHaveBeenCalledWith('proposal-1')
   })
 })
 

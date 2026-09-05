@@ -50,10 +50,10 @@ func TestSaveAndApprove_revalidatesAgainstTheReceiptAndPersistsDirectlyAsApprove
 	store := knowledgemocks.NewMockVectorStore(t)
 	tx := txmocks.NewMockTransactor(t)
 	expectSuccessfulIndexing(ctx, llm, chunks, store, tx, 1)
-	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llm, configmocks.NewMockStore(t), chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, evidenceRepo, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llm, configmocks.NewMockStore(t), chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, evidenceRepo, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	batchID := service.receipts.Create("session-1", "Go", []parsedCandidate{
 		{Item: domainknowledge.Item{ID: "candidate-1"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-1", Quote: "Channels are typed conduits."}}},
-	})
+	}, make([]reconciliationClassification, 1))
 	input := []domainknowledge.Item{
 		{ID: "candidate-1", Topic: " Go ", Concept: " Channels ", Definition: " Typed conduits. ", Source: domainknowledge.SourceImportedDoc, Status: domainknowledge.StatusDraft},
 	}
@@ -95,11 +95,11 @@ func TestSaveAndApprove_stopsAtTransactionFailureAndKeepsThatReceiptForRetry(t *
 	store := knowledgemocks.NewMockVectorStore(t)
 	tx := txmocks.NewMockTransactor(t)
 	expectSuccessfulIndexing(ctx, llm, chunks, store, tx, 1)
-	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llm, configmocks.NewMockStore(t), chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, evidenceRepo, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llm, configmocks.NewMockStore(t), chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, evidenceRepo, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	batchID := service.receipts.Create("session-1", "Go", []parsedCandidate{
 		{Item: domainknowledge.Item{ID: "candidate-1"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-1", Quote: "shared evidence quote"}}},
 		{Item: domainknowledge.Item{ID: "candidate-2"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-1", Quote: "shared evidence quote"}}},
-	})
+	}, make([]reconciliationClassification, 2))
 	input := []domainknowledge.Item{
 		{ID: "candidate-1", Topic: "Go", Concept: "first", Definition: "one"},
 		{ID: "candidate-2", Topic: "Go", Concept: "second", Definition: "two"},

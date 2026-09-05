@@ -26,6 +26,16 @@ func TestTierFor_returnsCheap_forKnowledgeExtractionTask(t *testing.T) {
 	assert.Equal(t, TierCheap, tier)
 }
 
+func TestTierFor_returnsCheap_forKnowledgeReconciliationTask(t *testing.T) {
+	// Given the knowledge reconciliation task type
+
+	// When resolving its tier
+	tier := TierFor(TaskKnowledgeReconciliation)
+
+	// Then it is cheap
+	assert.Equal(t, TierCheap, tier)
+}
+
 func TestTierFor_returnsMedium_forStudyTask(t *testing.T) {
 	// Given the study task type
 
@@ -82,6 +92,16 @@ func TestModelFor_returnsGPT4oMini_forACheapTierTask(t *testing.T) {
 
 	// When resolving its model
 	model := ModelFor(TaskOnboarding)
+
+	// Then it is the cheap tier default
+	assert.Equal(t, "openai/gpt-4o-mini", model)
+}
+
+func TestModelFor_returnsGPT4oMini_forKnowledgeReconciliationTask(t *testing.T) {
+	// Given the knowledge reconciliation task, routed to the cheap tier
+
+	// When resolving its model
+	model := ModelFor(TaskKnowledgeReconciliation)
 
 	// Then it is the cheap tier default
 	assert.Equal(t, "openai/gpt-4o-mini", model)

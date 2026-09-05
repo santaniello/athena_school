@@ -63,7 +63,7 @@ func TestRetrieve_returnsErrVectorStoreUnavailable_whenNoSnapshot(t *testing.T) 
 	store := knowledgemocks.NewMockVectorStore(t)
 	llm := llmmocks.NewMockProvider(t)
 	items := knowledgemocks.NewMockRepository(t)
-	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When retrieving
 	_, err := service.Retrieve(context.Background(), "session-1", "Topic: Go\n\nMessage: what is a channel?")
@@ -80,7 +80,7 @@ func TestRetrieve_returnsEmptyResult_whenSnapshotValidButStoreEmpty(t *testing.T
 	store.EXPECT().Len().Return(0)
 	llm := llmmocks.NewMockProvider(t)
 	items := knowledgemocks.NewMockRepository(t)
-	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When retrieving
 	result, err := service.Retrieve(context.Background(), "session-1", "Topic: Go\n\nMessage: what is a channel?")
@@ -107,7 +107,7 @@ func TestRetrieve_embedsQueryWithSessionAttribution_andSearchesApprovedOnlyWithD
 		Once()
 	items := knowledgemocks.NewMockRepository(t)
 	items.EXPECT().GetByID(context.Background(), "item-1").Return(domainknowledge.Item{ID: "item-1", Concept: "Channels"}, nil).Once()
-	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When retrieving
 	result, err := service.Retrieve(context.Background(), "session-1", "Topic: Go\n\nMessage: what is a channel?")
@@ -135,7 +135,7 @@ func TestRetrieve_filtersChunksBelowMinScore(t *testing.T) {
 	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
 	items := knowledgemocks.NewMockRepository(t)
 	items.EXPECT().GetByID(context.Background(), "item-1").Return(domainknowledge.Item{ID: "item-1", Concept: "Channels"}, nil).Once()
-	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When retrieving
 	result, err := service.Retrieve(context.Background(), "session-1", "query")
@@ -158,7 +158,7 @@ func TestRetrieve_includesChunkAtExactlyMinScore(t *testing.T) {
 	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
 	items := knowledgemocks.NewMockRepository(t)
 	items.EXPECT().GetByID(mock.Anything, "item-1").Return(domainknowledge.Item{ID: "item-1", Concept: "Channels"}, nil).Once()
-	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, cleanThresholds(t, 0.5, 0.9), nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, cleanThresholds(t, 0.5, 0.9), nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When retrieving
 	result, err := service.Retrieve(context.Background(), "session-1", "query")
@@ -182,7 +182,7 @@ func TestRetrieve_resolvesConceptOncePerDistinctItemID(t *testing.T) {
 	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
 	items := knowledgemocks.NewMockRepository(t)
 	items.EXPECT().GetByID(mock.Anything, "item-1").Return(domainknowledge.Item{ID: "item-1", Concept: "Channels"}, nil).Once()
-	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When retrieving
 	result, err := service.Retrieve(context.Background(), "session-1", "query")
@@ -208,7 +208,7 @@ func TestRetrieve_dropsSoleChunk_whenOwningItemMissing_yieldingNoMatch(t *testin
 	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
 	items := knowledgemocks.NewMockRepository(t)
 	items.EXPECT().GetByID(mock.Anything, "item-missing").Return(domainknowledge.Item{}, domainknowledge.ErrItemNotFound).Once()
-	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When retrieving
 	result, err := service.Retrieve(context.Background(), "session-1", "query")
@@ -235,7 +235,7 @@ func TestRetrieve_dropsOrphanedChunk_keepingOtherSurvivors(t *testing.T) {
 	items := knowledgemocks.NewMockRepository(t)
 	items.EXPECT().GetByID(mock.Anything, "item-1").Return(domainknowledge.Item{ID: "item-1", Concept: "Channels"}, nil).Once()
 	items.EXPECT().GetByID(mock.Anything, "item-missing").Return(domainknowledge.Item{}, domainknowledge.ErrItemNotFound).Once()
-	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When retrieving
 	result, err := service.Retrieve(context.Background(), "session-1", "query")
@@ -278,7 +278,7 @@ func TestRetrieve_propagatesNonNotFoundError_whenResolvingOwningItem(t *testing.
 	items := knowledgemocks.NewMockRepository(t)
 	dbErr := errors.New("database unavailable")
 	items.EXPECT().GetByID(mock.Anything, "item-1").Return(domainknowledge.Item{}, dbErr).Once()
-	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When retrieving
 	_, err := service.Retrieve(context.Background(), "session-1", "query")
@@ -304,7 +304,7 @@ func TestRetrieve_preservesScoreDescendingIDAscendingOrder_acrossChunksSourcesAn
 	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
 	items := knowledgemocks.NewMockRepository(t)
 	items.EXPECT().GetByID(mock.Anything, mock.Anything).Return(domainknowledge.Item{Concept: "C"}, nil)
-	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When retrieving
 	result, err := service.Retrieve(context.Background(), "session-1", "query")
@@ -330,7 +330,7 @@ func TestRetrieve_excludesEmbeddingAndScoreFromRenderedJSON(t *testing.T) {
 	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
 	items := knowledgemocks.NewMockRepository(t)
 	items.EXPECT().GetByID(mock.Anything, "item-1").Return(domainknowledge.Item{Concept: "Channels"}, nil).Once()
-	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When retrieving
 	result, err := service.Retrieve(context.Background(), "session-1", "query")
@@ -359,7 +359,7 @@ func TestRetrieve_capsContext_removingLowestScoreChunksWholeUntilUnderBudget(t *
 	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
 	items := knowledgemocks.NewMockRepository(t)
 	items.EXPECT().GetByID(mock.Anything, mock.Anything).Return(domainknowledge.Item{Concept: "C"}, nil)
-	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When retrieving
 	result, err := service.Retrieve(context.Background(), "session-1", "query")
@@ -387,7 +387,7 @@ func TestRetrieve_dropsSoleOversizedChunk_yieldingNoMatch(t *testing.T) {
 	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
 	items := knowledgemocks.NewMockRepository(t)
 	items.EXPECT().GetByID(mock.Anything, "item-1").Return(domainknowledge.Item{Concept: "C"}, nil).Once()
-	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When retrieving
 	result, err := service.Retrieve(context.Background(), "session-1", "query")
@@ -419,7 +419,7 @@ func TestRetrieve_includesChunkAtExactlyTheCapBoundary(t *testing.T) {
 	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
 	items := knowledgemocks.NewMockRepository(t)
 	items.EXPECT().GetByID(mock.Anything, "item-1").Return(domainknowledge.Item{Concept: "C"}, nil).Once()
-	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When retrieving
 	result, retrieveErr := service.Retrieve(context.Background(), "session-1", "query")
@@ -451,7 +451,7 @@ func TestRetrieve_dropsSoleChunk_whenRenderedJSONIsOneCodePointOverTheCap(t *tes
 	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
 	items := knowledgemocks.NewMockRepository(t)
 	items.EXPECT().GetByID(mock.Anything, "item-1").Return(domainknowledge.Item{Concept: "C"}, nil).Once()
-	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When retrieving
 	result, retrieveErr := service.Retrieve(context.Background(), "session-1", "query")
@@ -477,7 +477,7 @@ func TestRetrieve_sufficientIsBasedOnlyOnPostCapSurvivors(t *testing.T) {
 	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
 	items := knowledgemocks.NewMockRepository(t)
 	items.EXPECT().GetByID(mock.Anything, mock.Anything).Return(domainknowledge.Item{Concept: "C"}, nil)
-	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, cleanThresholds(t, 0.5, 0.75), nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, cleanThresholds(t, 0.5, 0.75), nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When retrieving
 	result, err := service.Retrieve(context.Background(), "session-1", "query")
@@ -502,7 +502,7 @@ func TestRetrieve_sufficientTrue_whenAnyPostCapSurvivorMeetsOrExceedsThreshold(t
 	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
 	items := knowledgemocks.NewMockRepository(t)
 	items.EXPECT().GetByID(mock.Anything, "item-1").Return(domainknowledge.Item{Concept: "C"}, nil).Once()
-	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, cleanThresholds(t, 0.5, 0.75), nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, cleanThresholds(t, 0.5, 0.75), nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When retrieving
 	result, err := service.Retrieve(context.Background(), "session-1", "query")
@@ -521,7 +521,7 @@ func TestRetrieve_propagatesEmbeddingsError(t *testing.T) {
 	embedErr := errors.New("embedding provider unavailable")
 	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{}, embedErr).Once()
 	items := knowledgemocks.NewMockRepository(t)
-	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When retrieving
 	_, err := service.Retrieve(context.Background(), "session-1", "query")
@@ -540,7 +540,7 @@ func TestRetrieve_propagatesSearchError(t *testing.T) {
 	llm := llmmocks.NewMockProvider(t)
 	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
 	items := knowledgemocks.NewMockRepository(t)
-	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(items, nil, nil, llm, nil, nil, nil, store, guard, defaultThresholds(t), nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When retrieving
 	_, err := service.Retrieve(context.Background(), "session-1", "query")

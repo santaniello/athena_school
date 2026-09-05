@@ -18,7 +18,7 @@ func TestListItems_forwardsTopicAndStatusFilter(t *testing.T) {
 	expected := []domainknowledge.Item{{ID: "item-1", Topic: "Go", Status: domainknowledge.StatusApproved}}
 	repository.EXPECT().List(ctx, domainknowledge.Filter{Topic: "Go", Status: domainknowledge.StatusApproved}).
 		Return(expected, nil).Once()
-	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When listing items by topic and status
 	items, err := service.ListItems(ctx, "Go", domainknowledge.StatusApproved)
@@ -33,7 +33,7 @@ func TestListTopics_returnsRepositoryTopics(t *testing.T) {
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
 	repository.EXPECT().ListTopics(ctx).Return([]string{"Go", "Kubernetes"}, nil).Once()
-	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When listing topics
 	topics, err := service.ListTopics(ctx)
@@ -52,7 +52,7 @@ func TestListItemEvidence_returnsRepositorySnapshotsForTheItem(t *testing.T) {
 	}
 	evidenceRepo := knowledgemocks.NewMockEvidenceRepository(t)
 	evidenceRepo.EXPECT().ListByItem(ctx, "item-1").Return(expected, nil).Once()
-	service := NewService(nil, nil, nil, nil, nil, nil, nil, nil, nil, domainknowledge.RetrievalThresholds{}, evidenceRepo, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(nil, nil, nil, nil, nil, nil, nil, nil, nil, domainknowledge.RetrievalThresholds{}, evidenceRepo, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When listing that item's evidence
 	evidence, err := service.ListItemEvidence(ctx, "item-1")

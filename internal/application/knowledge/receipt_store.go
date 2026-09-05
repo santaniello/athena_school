@@ -2,16 +2,31 @@ package knowledge
 
 import (
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 )
 
+// reconciliationClassification is the transient result of comparing one
+// extraction candidate against its duplicate shortlist (see
+// Service.classifyCandidates) — everything Apply/Resolve/Acknowledge/
+// SaveForReview need to act on the user's eventual decision. It lives only
+// in the candidate's receipt until then, mirroring EvidenceRefs.
+type reconciliationClassification struct {
+	Action          string
+	TargetItemID    string
+	TargetUpdatedAt time.Time
+	Reason          string
+	Changes         domainknowledge.ItemChanges
+}
+
 type candidateReceipt struct {
-	SessionID    string
-	SourceLabel  string
-	EvidenceRefs []domainknowledge.EvidenceRef
+	SessionID      string
+	SourceLabel    string
+	EvidenceRefs   []domainknowledge.EvidenceRef
+	Reconciliation reconciliationClassification
 }
 
 type receiptStore struct {
@@ -32,17 +47,22 @@ func newReceiptStore() *receiptStore {
 	}
 }
 
-func (s *receiptStore) Create(sessionID, sourceLabel string, candidates []parsedCandidate) string {
+// Create stores one receipt per candidate, pairing each with its
+// classification at the same index (see Service.classifyCandidates) —
+// classifications must be the same length as candidates, in the same
+// order.
+func (s *receiptStore) Create(sessionID, sourceLabel string, candidates []parsedCandidate, classifications []reconciliationClassification) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	batchID := uuid.NewString()
 	receipts := make(map[string]candidateReceipt, len(candidates))
-	for _, candidate := range candidates {
+	for index, candidate := range candidates {
 		receipts[candidate.ID] = candidateReceipt{
-			SessionID:    sessionID,
-			SourceLabel:  sourceLabel,
-			EvidenceRefs: append([]domainknowledge.EvidenceRef(nil), candidate.EvidenceRefs...),
+			SessionID:      sessionID,
+			SourceLabel:    sourceLabel,
+			EvidenceRefs:   append([]domainknowledge.EvidenceRef(nil), candidate.EvidenceRefs...),
+			Reconciliation: classifications[index],
 		}
 	}
 	s.batches[batchID] = receipts

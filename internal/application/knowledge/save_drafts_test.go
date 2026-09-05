@@ -26,7 +26,7 @@ import (
 func receiptFixture(service *Service, sessionID, sourceLabel, candidateID string, refs ...domainknowledge.EvidenceRef) string {
 	return service.receipts.Create(sessionID, sourceLabel, []parsedCandidate{
 		{Item: domainknowledge.Item{ID: candidateID}, EvidenceRefs: refs},
-	})
+	}, make([]reconciliationClassification, 1))
 }
 
 func TestSaveDrafts_revalidatesAgainstTheReceiptAndPersistsItemWithEvidence(t *testing.T) {
@@ -59,7 +59,7 @@ func TestSaveDrafts_revalidatesAgainstTheReceiptAndPersistsItemWithEvidence(t *t
 	store := knowledgemocks.NewMockVectorStore(t)
 	tx := txmocks.NewMockTransactor(t)
 	expectSuccessfulIndexing(ctx, llm, chunks, store, tx, 1)
-	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llm, configmocks.NewMockStore(t), chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, evidenceRepo, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llm, configmocks.NewMockStore(t), chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, evidenceRepo, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	batchID := receiptFixture(service, "session-1", "Distributed systems", "candidate-1",
 		domainknowledge.EvidenceRef{MessageID: "message-1", Quote: "CAP describes trade-offs."})
 	input := []domainknowledge.Item{
@@ -82,7 +82,7 @@ func TestSaveDrafts_skipsCandidateWithNoMatchingReceipt(t *testing.T) {
 	// a fabricated ID, a foreign batch, or simply an ID outside the extraction
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
-	service := NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, knowledgemocks.NewMockEvidenceRepository(t), domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, knowledgemocks.NewMockEvidenceRepository(t), nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	input := []domainknowledge.Item{
 		{ID: "unknown-candidate", Topic: "Go", Concept: "Channels", Definition: "Typed conduits."},
 	}
@@ -102,7 +102,7 @@ func TestSaveDrafts_skipsCandidateWhenReceiptMessageWasDeleted(t *testing.T) {
 	repository := knowledgemocks.NewMockRepository(t)
 	messages := studymocks.NewMockMessageRepository(t)
 	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{}, nil).Once()
-	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, knowledgemocks.NewMockEvidenceRepository(t), domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, knowledgemocks.NewMockEvidenceRepository(t), nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	batchID := receiptFixture(service, "session-1", "Go", "candidate-1",
 		domainknowledge.EvidenceRef{MessageID: "message-1", Quote: "Channels are typed conduits."})
 	input := []domainknowledge.Item{
@@ -128,7 +128,7 @@ func TestSaveDrafts_skipsCandidateWhenTheMessageNoLongerContainsTheQuote(t *test
 	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{
 		{ID: "message-1", Content: "Completely rewritten content."},
 	}, nil).Once()
-	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, knowledgemocks.NewMockEvidenceRepository(t), domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, knowledgemocks.NewMockEvidenceRepository(t), nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	batchID := receiptFixture(service, "session-1", "Go", "candidate-1",
 		domainknowledge.EvidenceRef{MessageID: "message-1", Quote: "Channels are typed conduits."})
 	input := []domainknowledge.Item{
@@ -157,7 +157,7 @@ func TestSaveDrafts_skipsCandidateThatIsAnExactDuplicateAtSaveTime(t *testing.T)
 	}, nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, knowledgemocks.NewMockEvidenceRepository(t), domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, knowledgemocks.NewMockEvidenceRepository(t), nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	batchID := receiptFixture(service, "session-1", "Go", "candidate-1",
 		domainknowledge.EvidenceRef{MessageID: "message-1", Quote: "Channels are typed conduits."})
 	input := []domainknowledge.Item{
@@ -187,7 +187,7 @@ func TestSaveDrafts_stopsWhenTheDuplicateRecheckFails(t *testing.T) {
 	}, nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, knowledgemocks.NewMockEvidenceRepository(t), domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, knowledgemocks.NewMockEvidenceRepository(t), nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	batchID := receiptFixture(service, "session-1", "Go", "candidate-1",
 		domainknowledge.EvidenceRef{MessageID: "message-1", Quote: "Channels are typed conduits."})
 	input := []domainknowledge.Item{
@@ -232,7 +232,7 @@ func TestSaveDrafts_savesCandidateWhenTheMessageWasEditedAroundTheQuote(t *testi
 	store := knowledgemocks.NewMockVectorStore(t)
 	tx := txmocks.NewMockTransactor(t)
 	expectSuccessfulIndexing(ctx, llm, chunks, store, tx, 1)
-	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llm, configmocks.NewMockStore(t), chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, evidenceRepo, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llm, configmocks.NewMockStore(t), chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, evidenceRepo, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	batchID := receiptFixture(service, "session-1", "Go", "candidate-1",
 		domainknowledge.EvidenceRef{MessageID: "message-1", Quote: "Channels are typed conduits."})
 	input := []domainknowledge.Item{
@@ -273,7 +273,7 @@ func TestSaveDrafts_stopsWhenLinkingEvidenceToTheItemFails(t *testing.T) {
 	})).Return(linkErr).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, evidenceRepo, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, evidenceRepo, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	batchID := receiptFixture(service, "session-1", "Go", "candidate-1",
 		domainknowledge.EvidenceRef{MessageID: "message-1", Quote: "shared evidence quote"})
 	input := []domainknowledge.Item{
@@ -321,11 +321,11 @@ func TestSaveDrafts_stopsAtTransactionFailureAndKeepsThatReceiptForRetry(t *test
 	store := knowledgemocks.NewMockVectorStore(t)
 	tx := txmocks.NewMockTransactor(t)
 	expectSuccessfulIndexing(ctx, llm, chunks, store, tx, 1)
-	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llm, configmocks.NewMockStore(t), chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, evidenceRepo, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llm, configmocks.NewMockStore(t), chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, evidenceRepo, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	batchID := service.receipts.Create("session-1", "Go", []parsedCandidate{
 		{Item: domainknowledge.Item{ID: "candidate-1"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-1", Quote: "shared evidence quote"}}},
 		{Item: domainknowledge.Item{ID: "candidate-2"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-1", Quote: "shared evidence quote"}}},
-	})
+	}, make([]reconciliationClassification, 2))
 	input := []domainknowledge.Item{
 		{ID: "candidate-1", Topic: "Go", Concept: "first", Definition: "one"},
 		{ID: "candidate-2", Topic: "Go", Concept: "second", Definition: "two"},
@@ -395,12 +395,12 @@ func TestSaveDrafts_savesEveryItemAndConsumesEveryReceipt_butStopsAttemptingInde
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llm, configmocks.NewMockStore(t), chunks, tx, knowledgemocks.NewMockVectorStore(t), passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, evidenceRepo, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, studymocks.NewMockSessionRepository(t), messages, llm, configmocks.NewMockStore(t), chunks, tx, knowledgemocks.NewMockVectorStore(t), passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, evidenceRepo, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	batchID := service.receipts.Create("session-1", "Go", []parsedCandidate{
 		{Item: domainknowledge.Item{ID: "candidate-1"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-1", Quote: "shared evidence quote"}}},
 		{Item: domainknowledge.Item{ID: "candidate-2"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-1", Quote: "shared evidence quote"}}},
 		{Item: domainknowledge.Item{ID: "candidate-3"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-1", Quote: "shared evidence quote"}}},
-	})
+	}, make([]reconciliationClassification, 3))
 	input := []domainknowledge.Item{
 		{ID: "candidate-1", Topic: "Go", Concept: "first", Definition: "one"},
 		{ID: "candidate-2", Topic: "Go", Concept: "second", Definition: "two"},

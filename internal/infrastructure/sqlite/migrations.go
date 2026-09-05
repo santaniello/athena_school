@@ -119,6 +119,31 @@ var migrations = []func(*sql.DB) error{
 	migrateIngestedFilesToSourcePathSchema,
 	addSessionsContextColumns,
 	migrateSessionForeignKeyActions,
+	execSQL(`CREATE TABLE IF NOT EXISTS knowledge_reconciliation_proposals (
+		id                 TEXT PRIMARY KEY,
+		action             TEXT NOT NULL,
+		status             TEXT NOT NULL,
+		candidate_snapshot TEXT NOT NULL, -- validated JSON Item snapshot
+		target_item_id     TEXT,
+		target_updated_at  DATETIME,
+		reason             TEXT NOT NULL,
+		changes            TEXT NOT NULL, -- validated JSON ItemChanges
+		created_at         DATETIME NOT NULL,
+		resolved_at        DATETIME
+	)`),
+	execSQL(`CREATE TABLE IF NOT EXISTS knowledge_reconciliation_evidence (
+		proposal_id TEXT NOT NULL REFERENCES knowledge_reconciliation_proposals(id) ON DELETE CASCADE,
+		evidence_id TEXT NOT NULL REFERENCES knowledge_evidence(id),
+		PRIMARY KEY (proposal_id, evidence_id)
+	)`),
+	execSQL(`CREATE TABLE IF NOT EXISTS knowledge_item_relations (
+		from_item_id  TEXT NOT NULL REFERENCES knowledge_items(id) ON DELETE CASCADE,
+		to_item_id    TEXT NOT NULL REFERENCES knowledge_items(id) ON DELETE CASCADE,
+		relation_type TEXT NOT NULL,
+		created_at    DATETIME NOT NULL,
+		PRIMARY KEY (from_item_id, to_item_id, relation_type),
+		CHECK (from_item_id <> to_item_id)
+	)`),
 }
 
 // addSessionsFolderIDColumn adds sessions.folder_id if it does not already
