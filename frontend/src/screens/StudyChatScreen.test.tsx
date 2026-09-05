@@ -44,6 +44,19 @@ vi.mock('@/lib/knowledge', () => ({
   saveExtractedKnowledge: vi.fn(),
   saveAndApproveExtractedKnowledge: vi.fn(),
   discardExtraction: vi.fn(),
+  applyReconciliationCreate: vi.fn(),
+  applyReconciliationUpdate: vi.fn(),
+  applyReconciliationRelate: vi.fn(),
+  resolveReconciliationConflict: vi.fn(),
+  acknowledgeReconciliationNoChange: vi.fn(),
+  RECONCILE_CREATE: 'create',
+  RECONCILE_UPDATE: 'update',
+  RECONCILE_RELATE: 'relate',
+  RECONCILE_CONFLICT: 'conflict',
+  RECONCILE_NO_CHANGE: 'no_change',
+  CONFLICT_KEEP_EXISTING: 'keep_existing',
+  CONFLICT_UPDATE_EXISTING: 'update_existing',
+  CONFLICT_CREATE_SEPARATELY: 'create_separately',
 }))
 
 const CONTEXT_NORMAL: StudyContextUsage = {

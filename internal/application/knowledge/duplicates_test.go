@@ -32,7 +32,7 @@ func TestFindDuplicates_returnsExactMatch_withoutEmbeddingCall(t *testing.T) {
 	llm := llmmocks.NewMockProvider(t)
 	store := knowledgemocks.NewMockVectorStore(t)
 	service := NewService(items, nil, nil, llm, nil, nil, nil, store, nil, domainknowledge.RetrievalThresholds{}, nil,
-		domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+		nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	candidate := duplicateCandidate("System Design", " Cache-Aside  Pattern ", "A caching strategy.")
 
 	// When finding duplicates
@@ -57,7 +57,7 @@ func TestFindDuplicates_returnsNil_whenVectorStoreIsEmpty_withoutEmbeddingCall(t
 	store.EXPECT().Len().Return(0)
 	llm := llmmocks.NewMockProvider(t)
 	service := NewService(items, nil, nil, llm, nil, nil, nil, store, nil, domainknowledge.RetrievalThresholds{}, nil,
-		domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+		nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	candidate := duplicateCandidate("System Design", "Circuit Breaker", "A resiliency pattern.")
 
 	// When finding duplicates
@@ -88,7 +88,7 @@ func TestFindDuplicates_embedsConceptAndDefinition_andSearchesTopicScopedAthenaC
 		Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Circuit Breaker\n\nA resiliency pattern."}).
 		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1, 0.2, 0.3}}, nil)
 	service := NewService(items, nil, nil, llm, nil, nil, nil, store, nil, domainknowledge.RetrievalThresholds{}, nil,
-		domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+		nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	candidate := duplicateCandidate("System Design", "Circuit Breaker", "A resiliency pattern.")
 
 	// When finding duplicates
@@ -117,7 +117,7 @@ func TestFindDuplicates_excludesSemanticMatchesBelowThreshold(t *testing.T) {
 	llm := llmmocks.NewMockProvider(t)
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Circuit Breaker\n\nA resiliency pattern."}).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
 	service := NewService(items, nil, nil, llm, nil, nil, nil, store, nil, domainknowledge.RetrievalThresholds{}, nil,
-		domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+		nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	candidate := duplicateCandidate("System Design", "Circuit Breaker", "A resiliency pattern.")
 
 	// When finding duplicates with the default 0.90 threshold
@@ -146,7 +146,7 @@ func TestFindDuplicates_raisingTheThreshold_changesWhichMatchesSurvive(t *testin
 	llm := llmmocks.NewMockProvider(t)
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Circuit Breaker\n\nA resiliency pattern."}).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
 	service := NewService(items, nil, nil, llm, nil, nil, nil, store, nil, domainknowledge.RetrievalThresholds{}, nil,
-		domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+		nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	candidate := duplicateCandidate("System Design", "Circuit Breaker", "A resiliency pattern.")
 
 	// When finding duplicates with a lower, explicitly injected threshold
@@ -178,7 +178,7 @@ func TestFindDuplicates_dedupsMultipleChunksOfTheSameItem_keepingTheHighestScore
 	llm := llmmocks.NewMockProvider(t)
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Circuit Breaker\n\nA resiliency pattern."}).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
 	service := NewService(items, nil, nil, llm, nil, nil, nil, store, nil, domainknowledge.RetrievalThresholds{}, nil,
-		domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+		nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	candidate := duplicateCandidate("System Design", "Circuit Breaker", "A resiliency pattern.")
 
 	// When finding duplicates
@@ -210,7 +210,7 @@ func TestFindDuplicates_includesASemanticMatchExactlyAtTheThreshold(t *testing.T
 	llm := llmmocks.NewMockProvider(t)
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Circuit Breaker\n\nA resiliency pattern."}).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
 	service := NewService(items, nil, nil, llm, nil, nil, nil, store, nil, domainknowledge.RetrievalThresholds{}, nil,
-		domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+		nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	candidate := duplicateCandidate("System Design", "Circuit Breaker", "A resiliency pattern.")
 
 	// When finding duplicates with minScore exactly equal to the match's score
@@ -243,7 +243,7 @@ func TestFindDuplicates_ordersSemanticMatchesByScoreDescending(t *testing.T) {
 	llm := llmmocks.NewMockProvider(t)
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Circuit Breaker\n\nA resiliency pattern."}).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
 	service := NewService(items, nil, nil, llm, nil, nil, nil, store, nil, domainknowledge.RetrievalThresholds{}, nil,
-		domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+		nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	candidate := duplicateCandidate("System Design", "Circuit Breaker", "A resiliency pattern.")
 
 	// When finding duplicates
@@ -277,7 +277,7 @@ func TestFindDuplicates_breaksSemanticScoreTiesByItemIDAscending(t *testing.T) {
 	llm := llmmocks.NewMockProvider(t)
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Circuit Breaker\n\nA resiliency pattern."}).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
 	service := NewService(items, nil, nil, llm, nil, nil, nil, store, nil, domainknowledge.RetrievalThresholds{}, nil,
-		domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+		nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	candidate := duplicateCandidate("System Design", "Circuit Breaker", "A resiliency pattern.")
 
 	// When finding duplicates
@@ -307,7 +307,7 @@ func TestFindDuplicates_dropsAnOrphanedChunk_whoseOwningItemNoLongerExists(t *te
 	llm := llmmocks.NewMockProvider(t)
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Circuit Breaker\n\nA resiliency pattern."}).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
 	service := NewService(items, nil, nil, llm, nil, nil, nil, store, nil, domainknowledge.RetrievalThresholds{}, nil,
-		domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+		nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	candidate := duplicateCandidate("System Design", "Circuit Breaker", "A resiliency pattern.")
 
 	// When finding duplicates
@@ -328,7 +328,7 @@ func TestFindDuplicates_returnsErrSemanticDuplicateCheckUnavailable_whenEmbeddin
 	llm := llmmocks.NewMockProvider(t)
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Circuit Breaker\n\nA resiliency pattern."}).Return(domainllm.EmbeddingResponse{}, errors.New("openrouter: unauthorized"))
 	service := NewService(items, nil, nil, llm, nil, nil, nil, store, nil, domainknowledge.RetrievalThresholds{}, nil,
-		domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+		nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	candidate := duplicateCandidate("System Design", "Circuit Breaker", "A resiliency pattern.")
 
 	// When finding duplicates
@@ -353,7 +353,7 @@ func TestFindDuplicates_returnsErrSemanticDuplicateCheckUnavailable_whenSearchFa
 	llm := llmmocks.NewMockProvider(t)
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Circuit Breaker\n\nA resiliency pattern."}).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
 	service := NewService(items, nil, nil, llm, nil, nil, nil, store, nil, domainknowledge.RetrievalThresholds{}, nil,
-		domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+		nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	candidate := duplicateCandidate("System Design", "Circuit Breaker", "A resiliency pattern.")
 
 	// When finding duplicates
@@ -372,7 +372,7 @@ func TestFindDuplicates_returnsError_whenExactLookupFails(t *testing.T) {
 		Return(nil, errors.New("sqlite: database is locked"))
 	llm := llmmocks.NewMockProvider(t)
 	service := NewService(items, nil, nil, llm, nil, nil, nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil,
-		domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+		nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 	candidate := duplicateCandidate("System Design", "Circuit Breaker", "A resiliency pattern.")
 
 	// When finding duplicates

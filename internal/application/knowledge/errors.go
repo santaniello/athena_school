@@ -24,6 +24,39 @@ var ErrIndexLoading = errors.New("knowledge index is loading")
 // pre-transaction lookup would leave open.
 var errExactDuplicateAtSave = errors.New("knowledge: exact duplicate at save time")
 
+// ErrMalformedReconciliation is returned when the reconciliation
+// classifier's response has no valid JSON envelope, targets an item
+// outside the supplied shortlist, or is otherwise structurally invalid.
+// The caller falls back to a deterministic create classification rather
+// than guessing at a target. See
+// specs/phases/phase-02-knowledge-engine/11-knowledge-reconciliation.md.
+var ErrMalformedReconciliation = errors.New("malformed knowledge reconciliation response")
+
+// ErrReconciliationCandidateNotFound is returned when batchID/candidateID
+// no longer has a claimable receipt — already decided, discarded, or never
+// classified.
+var ErrReconciliationCandidateNotFound = errors.New("knowledge: reconciliation candidate not found or already decided")
+
+// ErrReconciliationEvidenceInvalid is returned when none of a
+// reconciliation candidate's evidence references still hold against its
+// source session's current Messages.
+var ErrReconciliationEvidenceInvalid = errors.New("knowledge: reconciliation candidate has no valid evidence")
+
+// ErrReconciliationTargetStale is returned when a proposal's classified
+// target was edited or removed since classification. The receipt is
+// restored for retry; the caller must run reconciliation again.
+var ErrReconciliationTargetStale = errors.New("knowledge: reconciliation target changed since comparison; run reconciliation again")
+
+// ErrReconciliationResolutionInvalid is returned when a conflict
+// resolution is not one of ConflictKeepExisting, ConflictUpdateExisting,
+// or ConflictCreateSeparately.
+var ErrReconciliationResolutionInvalid = errors.New("knowledge: unknown conflict resolution")
+
+// ErrReconciliationProposalNotPending is returned when an action from
+// Knowledge Review targets a proposal that has already been applied,
+// rejected, or marked stale.
+var ErrReconciliationProposalNotPending = errors.New("knowledge: reconciliation proposal is not pending")
+
 // ErrIndexingFailed is the sentinel every knowledge-indexing failure wraps
 // — embedding, chunk persistence, or VectorStore reconciliation alike — so
 // every caller can distinguish "item saved but not indexed" from a real

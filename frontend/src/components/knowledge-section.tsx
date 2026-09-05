@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { IngestProgressDialog } from '@/components/ingest-progress-dialog'
+import { PendingReconciliationSection } from '@/components/pending-reconciliation-section'
 import { cn } from '@/lib/utils'
 import { pickNotesFile, pickNotesFolder } from '@/lib/ingest'
 import KnowledgeExplorerScreen from '@/screens/KnowledgeExplorerScreen'
@@ -83,6 +84,15 @@ function KnowledgeSection({
     )
   }
 
+  // Stryker disable StringLiteral: only read when importTarget is null, i.e.
+  // IngestProgressDialog's own `open` prop is false — its effect bails via
+  // `if (!open) return` before kind/path ever drive anything observable, so
+  // these fallbacks exist purely to satisfy the required (non-optional) prop
+  // types.
+  const importDialogKind = importTarget?.kind ?? 'folder'
+  const importDialogPath = importTarget?.path ?? ''
+  // Stryker restore StringLiteral
+
   return (
     <div className="flex h-full w-full flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
@@ -128,6 +138,10 @@ function KnowledgeSection({
 
       {pickerError && <p className="text-sm text-destructive">{pickerError}</p>}
 
+      {activeTab === 'review' && (
+        <PendingReconciliationSection onKnowledgeChanged={onKnowledgeChanged} />
+      )}
+
       <div className="min-h-0 flex-1">
         <KnowledgeExplorerScreen
           selectedTopic={selectedTopic}
@@ -139,8 +153,8 @@ function KnowledgeSection({
 
       <IngestProgressDialog
         open={importTarget !== null}
-        kind={importTarget?.kind ?? 'folder'}
-        path={importTarget?.path ?? ''}
+        kind={importDialogKind}
+        path={importDialogPath}
         onClose={() => setImportTarget(null)}
       />
     </div>

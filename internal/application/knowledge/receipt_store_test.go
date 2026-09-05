@@ -17,7 +17,7 @@ func TestReceiptStore_claimAtomicallyRemovesOnlyThatCandidateAndKeepsPendingSibl
 		{Item: domainknowledge.Item{ID: "candidate-a"}, EvidenceRefs: refsA},
 		{Item: domainknowledge.Item{ID: "candidate-b"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-b", Quote: "quote b"}}},
 		{Item: domainknowledge.Item{ID: "candidate-c"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-c", Quote: "quote c"}}},
-	})
+	}, make([]reconciliationClassification, 3))
 	// Mutating the input slice after Create must not reach the stored receipt
 	refsA[0].Quote = "tampered after create"
 
@@ -53,7 +53,7 @@ func TestReceiptStore_restorePutsAClaimedReceiptBackUnchangedForRetry(t *testing
 	batchID := store.Create("session-1", "Concurrency", []parsedCandidate{
 		{Item: domainknowledge.Item{ID: "candidate-a"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-a", Quote: "quote a"}}},
 		{Item: domainknowledge.Item{ID: "candidate-b"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-b", Quote: "quote b"}}},
-	})
+	}, make([]reconciliationClassification, 2))
 	receiptA, claimed := store.Claim(batchID, "candidate-a")
 	require.True(t, claimed)
 
@@ -74,7 +74,7 @@ func TestReceiptStore_restoreRecreatesTheBatchWhenItsOnlyCandidateWasSimplyClaim
 	store := newReceiptStore()
 	batchID := store.Create("session-1", "Concurrency", []parsedCandidate{
 		{Item: domainknowledge.Item{ID: "candidate-a"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-a", Quote: "quote a"}}},
-	})
+	}, make([]reconciliationClassification, 1))
 	receiptA, claimed := store.Claim(batchID, "candidate-a")
 	require.True(t, claimed)
 
@@ -93,7 +93,7 @@ func TestReceiptStore_restoreIsANoOpForABatchTheUserAlreadyDiscarded(t *testing.
 	store := newReceiptStore()
 	batchID := store.Create("session-1", "Concurrency", []parsedCandidate{
 		{Item: domainknowledge.Item{ID: "candidate-a"}, EvidenceRefs: []domainknowledge.EvidenceRef{{MessageID: "message-a", Quote: "quote a"}}},
-	})
+	}, make([]reconciliationClassification, 1))
 	receiptA, claimed := store.Claim(batchID, "candidate-a")
 	require.True(t, claimed)
 	store.Discard(batchID)
@@ -113,7 +113,7 @@ func TestReceiptStore_discardRemovesEveryPendingCandidateInBatch(t *testing.T) {
 	batchID := store.Create("session-1", "Concurrency", []parsedCandidate{
 		{Item: domainknowledge.Item{ID: "candidate-a"}},
 		{Item: domainknowledge.Item{ID: "candidate-b"}},
-	})
+	}, make([]reconciliationClassification, 2))
 
 	// When the user dismisses the batch
 	store.Discard(batchID)

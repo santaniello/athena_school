@@ -1,13 +1,27 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { approveKnowledgeItem, listKnowledgeItems, type KnowledgeItem } from '@/lib/knowledge'
+import {
+  approveKnowledgeItem,
+  listKnowledgeItems,
+  listPendingReconciliations,
+  type KnowledgeItem,
+  type PendingReconciliation,
+} from '@/lib/knowledge'
 import { importFile, importNotes, pickNotesFile, pickNotesFolder } from '@/lib/ingest'
 import { KnowledgeSection } from './knowledge-section'
 
 vi.mock('@/lib/knowledge', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/knowledge')>()
-  return { ...original, listKnowledgeItems: vi.fn(), approveKnowledgeItem: vi.fn() }
+  return {
+    ...original,
+    listKnowledgeItems: vi.fn(),
+    approveKnowledgeItem: vi.fn(),
+    // Defaults to empty so every existing test below — none of which cares
+    // about pending reconciliation proposals — can switch to the Review tab
+    // without also needing to stub this out itself.
+    listPendingReconciliations: vi.fn().mockResolvedValue([]),
+  }
 })
 
 vi.mock('@/lib/ingest', async (importOriginal) => {
@@ -46,7 +60,68 @@ function draftItem(id: string): KnowledgeItem {
   }
 }
 
+function pendingProposal(): PendingReconciliation {
+  return {
+    id: 'proposal-1',
+    action: 'update',
+    candidate: draftItem('candidate-1'),
+    targetItemId: 'item-target',
+    targetConcept: 'Eventual consistency',
+    targetStatus: 'approved',
+    reason: 'extends the existing definition',
+    changes: { properties: [], tradeOffs: [], relatedConcepts: [] },
+    stale: false,
+    createdAt: '2026-08-28T09:00:00Z',
+  }
+}
+
 describe('KnowledgeSection', () => {
+  it('shows no picker error initially', () => {
+    // Given a freshly rendered section — no picker has run yet
+    vi.mocked(listKnowledgeItems).mockResolvedValue([])
+
+    // When it mounts
+    const { container } = render(
+      <KnowledgeSection
+        selectedTopic={null}
+        mutationsDisabled={false}
+        draftCount={0}
+        onKnowledgeChanged={vi.fn()}
+      />,
+    )
+
+    // Then no error paragraph is rendered — not even an empty one
+    expect(container.querySelector('p.text-destructive')).not.toBeInTheDocument()
+  })
+
+  it('shows the pending reconciliation queue only on the Review tab', async () => {
+    // Given a pending proposal
+    vi.mocked(listKnowledgeItems).mockResolvedValue([])
+    vi.mocked(listPendingReconciliations).mockResolvedValueOnce([pendingProposal()])
+    const user = userEvent.setup()
+    render(
+      <KnowledgeSection
+        selectedTopic={null}
+        mutationsDisabled={false}
+        draftCount={0}
+        onKnowledgeChanged={vi.fn()}
+      />,
+    )
+
+    // When switching to Review
+    await user.click(screen.getByRole('tab', { name: 'Review' }))
+
+    // Then the pending reconciliation queue appears
+    expect(await screen.findByText('Pending reconciliation')).toBeInTheDocument()
+
+    // When switching back to Explorer
+    await user.click(screen.getByRole('tab', { name: 'Explorer' }))
+
+    // Then it is gone — unmounted, not merely hidden, so a stale fetch from
+    // its first mount cannot leave it visible regardless of the active tab
+    expect(screen.queryByText('Pending reconciliation')).not.toBeInTheDocument()
+  })
+
   it('starts on the Explorer tab, querying all statuses', async () => {
     // Given no draft items
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
@@ -405,7 +480,7 @@ describe('KnowledgeSection', () => {
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
     vi.mocked(pickNotesFolder).mockRejectedValueOnce(new Error('dialog unavailable'))
     const user = userEvent.setup()
-    render(
+    const { container } = render(
       <KnowledgeSection
         selectedTopic={null}
         mutationsDisabled={false}
@@ -422,11 +497,40 @@ describe('KnowledgeSection', () => {
     vi.mocked(pickNotesFile).mockResolvedValueOnce('')
     await openImportMenu(user, 'Import file...')
 
-    // Then the stale error is cleared
+    // Then the stale error is cleared — with no error paragraph left behind
+    // at all, not just the specific old message text
     await waitFor(() => expect(pickNotesFile).toHaveBeenCalled())
     expect(
       screen.queryByText('Failed to open the notes picker. Please try again.'),
     ).not.toBeInTheDocument()
+    expect(container.querySelector('p.text-destructive')).not.toBeInTheDocument()
+  })
+
+  it('clears a previous picker error when retrying the same picker', async () => {
+    // Given a prior folder-picker failure already shown
+    vi.mocked(listKnowledgeItems).mockResolvedValue([])
+    vi.mocked(pickNotesFolder).mockRejectedValueOnce(new Error('dialog unavailable'))
+    const user = userEvent.setup()
+    const { container } = render(
+      <KnowledgeSection
+        selectedTopic={null}
+        mutationsDisabled={false}
+        draftCount={0}
+        onKnowledgeChanged={vi.fn()}
+      />,
+    )
+    await openImportMenu(user, 'Import folder...')
+    expect(
+      await screen.findByText('Failed to open the notes picker. Please try again.'),
+    ).toBeInTheDocument()
+
+    // When retrying the folder picker, which resolves cleanly this time
+    vi.mocked(pickNotesFolder).mockResolvedValueOnce('')
+    await openImportMenu(user, 'Import folder...')
+
+    // Then the stale error is cleared — with no error paragraph left behind
+    await waitFor(() => expect(pickNotesFolder).toHaveBeenCalledTimes(2))
+    expect(container.querySelector('p.text-destructive')).not.toBeInTheDocument()
   })
 
   it('disables both menu items while mutations are disabled', () => {

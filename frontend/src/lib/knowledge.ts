@@ -1,6 +1,15 @@
 import {
+  AcknowledgePendingReconciliationNoChange,
+  AcknowledgeReconciliationNoChange,
+  ApplyPendingReconciliationCreate,
+  ApplyPendingReconciliationRelate,
+  ApplyPendingReconciliationUpdate,
+  ApplyReconciliationCreate,
+  ApplyReconciliationRelate,
+  ApplyReconciliationUpdate,
   ApproveKnowledgeItem,
   CountDraftKnowledgeItems,
+  CountPendingReconciliations,
   CountUnindexedKnowledgeItems,
   DeleteKnowledgeItem,
   DeprecateKnowledgeItem,
@@ -10,13 +19,31 @@ import {
   ListKnowledgeItemEvidence,
   ListKnowledgeItems,
   ListKnowledgeTopics,
+  ListPendingReconciliations,
+  RejectPendingReconciliationProposal,
   ReindexKnowledgeItems,
+  ResolvePendingReconciliationConflict,
+  ResolveReconciliationConflict,
   SaveAndApproveExtractedKnowledge,
   SaveExtractedKnowledge,
+  SaveReconciliationForReview,
   UpdateKnowledgeExtractionSettings,
   UpdateKnowledgeItem,
 } from '../../wailsjs/go/desktop/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
+
+// The five reconciliation actions the classifier can propose, and the
+// three explicit outcomes a conflict can resolve to — mirror
+// domainknowledge.Reconcile*/applicationknowledge.Conflict* respectively.
+export const RECONCILE_CREATE = 'create'
+export const RECONCILE_UPDATE = 'update'
+export const RECONCILE_RELATE = 'relate'
+export const RECONCILE_CONFLICT = 'conflict'
+export const RECONCILE_NO_CHANGE = 'no_change'
+
+export const CONFLICT_KEEP_EXISTING = 'keep_existing'
+export const CONFLICT_UPDATE_EXISTING = 'update_existing'
+export const CONFLICT_CREATE_SEPARATELY = 'create_separately'
 
 // MatchExact/MatchSemantic mirror domainknowledge.MatchExact/MatchSemantic.
 export const MATCH_EXACT = 'exact'
@@ -28,6 +55,31 @@ export interface DuplicateMatch {
   status: string
   matchType: string
   score: number
+}
+
+// ItemChanges mirrors the desktop ItemChangesResult DTO — optional
+// replacements for an existing item's content fields. Every field is
+// omitted from the wire format, and so undefined here, when it means
+// "leave this field unchanged" — including the list fields, where an
+// explicit empty list (`[]`) is a real, present value distinct from an
+// absent (unchanged) one.
+export interface ItemChanges {
+  definition?: string
+  properties?: string[]
+  tradeOffs?: string[]
+  relatedConcepts?: string[]
+}
+
+// ReconciliationSuggestion is the classifier's suggested action for one
+// extraction candidate — see RECONCILE_* for the possible action values.
+// targetItemId, when set, is always one of the candidate's own duplicates
+// entries; look it up there for the target's concept/status rather than
+// duplicating those fields here.
+export interface ReconciliationSuggestion {
+  action: string
+  targetItemId: string
+  reason: string
+  changes: ItemChanges
 }
 
 export interface KnowledgeItem {
@@ -42,13 +94,16 @@ export interface KnowledgeItem {
   status: string
   createdAt: string
   updatedAt: string
-  // duplicates/semanticCheckUnavailable are only ever populated by
-  // extractKnowledge — every other producer of a KnowledgeItem (list,
-  // approve, deprecate, update) omits them, since duplicate detection runs
-  // at extraction time only. Optional (rather than required null/false) so
-  // every other screen's fixtures don't need to know about this field.
+  // duplicates/semanticCheckUnavailable/reconciliation/reconciliationFailed
+  // are only ever populated by extractKnowledge — every other producer of a
+  // KnowledgeItem (list, approve, deprecate, update) omits them, since
+  // duplicate detection and reconciliation classification both run at
+  // extraction time only. Optional (rather than required null/false) so
+  // every other screen's fixtures don't need to know about these fields.
   duplicates?: DuplicateMatch[] | null
   semanticCheckUnavailable?: boolean
+  reconciliation?: ReconciliationSuggestion | null
+  reconciliationFailed?: boolean
 }
 
 export interface ExtractionResult {
@@ -97,6 +152,149 @@ export async function saveAndApproveExtractedKnowledge(
 // error, so unsaved or failed candidates stay retryable.
 export async function discardExtraction(batchId: string): Promise<void> {
   await DiscardExtraction(batchId)
+}
+
+// applyReconciliationCreate persists candidate as a brand-new Knowledge
+// Item at status ('draft' | 'approved'), ignoring its client id — the
+// backend regenerates it server-side. batchId/candidateId identify the
+// backend's own classification receipt; the frontend is never trusted for
+// provenance.
+export async function applyReconciliationCreate(
+  batchId: string,
+  candidateId: string,
+  candidate: KnowledgeItem,
+  status: string,
+): Promise<KnowledgeItem> {
+  return ApplyReconciliationCreate(batchId, candidateId, candidate, status)
+}
+
+// applyReconciliationUpdate applies the classified changes to the
+// candidate's target, preserving its identity and lifecycle.
+export async function applyReconciliationUpdate(
+  batchId: string,
+  candidateId: string,
+  candidate: KnowledgeItem,
+): Promise<KnowledgeItem> {
+  return ApplyReconciliationUpdate(batchId, candidateId, candidate)
+}
+
+// applyReconciliationRelate creates candidate as a new draft Knowledge Item
+// and links it to the classified target via a `related` relation.
+export async function applyReconciliationRelate(
+  batchId: string,
+  candidateId: string,
+  candidate: KnowledgeItem,
+): Promise<KnowledgeItem> {
+  return ApplyReconciliationRelate(batchId, candidateId, candidate)
+}
+
+// resolveReconciliationConflict applies one of the three explicit conflict
+// outcomes — see CONFLICT_KEEP_EXISTING/CONFLICT_UPDATE_EXISTING/
+// CONFLICT_CREATE_SEPARATELY. The resolved item is empty for
+// CONFLICT_KEEP_EXISTING, which never creates or changes anything.
+export async function resolveReconciliationConflict(
+  batchId: string,
+  candidateId: string,
+  candidate: KnowledgeItem,
+  resolution: string,
+): Promise<KnowledgeItem> {
+  return ResolveReconciliationConflict(batchId, candidateId, candidate, resolution)
+}
+
+// acknowledgeReconciliationNoChange marks the candidate's classified
+// no_change proposal resolved without creating or changing any item.
+export async function acknowledgeReconciliationNoChange(
+  batchId: string,
+  candidateId: string,
+  candidate: KnowledgeItem,
+): Promise<void> {
+  await AcknowledgeReconciliationNoChange(batchId, candidateId, candidate)
+}
+
+// saveReconciliationForReview persists the candidate's classified proposal
+// as pending, changing neither the candidate nor its target — Knowledge
+// Review is where it is later decided.
+export async function saveReconciliationForReview(
+  batchId: string,
+  candidateId: string,
+  candidate: KnowledgeItem,
+): Promise<void> {
+  await SaveReconciliationForReview(batchId, candidateId, candidate)
+}
+
+// PendingReconciliation is one proposal saved for later review — see
+// listPendingReconciliations. Its target's staleness was already checked
+// when the list loaded: a stale row's targetConcept/targetStatus are
+// empty, since the target that comparison used is no longer current.
+export interface PendingReconciliation {
+  id: string
+  action: string
+  candidate: KnowledgeItem
+  targetItemId: string
+  targetConcept: string
+  targetStatus: string
+  reason: string
+  changes: ItemChanges
+  stale: boolean
+  createdAt: string
+}
+
+// listPendingReconciliations lists every proposal currently saved for
+// review, each already checked for staleness against its target's current
+// state.
+export async function listPendingReconciliations(): Promise<PendingReconciliation[]> {
+  return ListPendingReconciliations()
+}
+
+// countPendingReconciliations returns how many proposals currently sit
+// pending, for the combined Review badge (draftCount + this count).
+export async function countPendingReconciliations(): Promise<number> {
+  return CountPendingReconciliations()
+}
+
+// applyPendingReconciliationCreate persists proposalId's classified
+// candidate as a brand-new Knowledge Item at status ('draft' | 'approved'),
+// using exactly the content and evidence already saved when it was set
+// aside for review.
+export async function applyPendingReconciliationCreate(
+  proposalId: string,
+  status: string,
+): Promise<KnowledgeItem> {
+  return ApplyPendingReconciliationCreate(proposalId, status)
+}
+
+// applyPendingReconciliationUpdate applies proposalId's classified changes
+// to its target, preserving its identity and lifecycle.
+export async function applyPendingReconciliationUpdate(proposalId: string): Promise<KnowledgeItem> {
+  return ApplyPendingReconciliationUpdate(proposalId)
+}
+
+// applyPendingReconciliationRelate creates proposalId's candidate as a new
+// draft Knowledge Item and links it to the classified target.
+export async function applyPendingReconciliationRelate(proposalId: string): Promise<KnowledgeItem> {
+  return ApplyPendingReconciliationRelate(proposalId)
+}
+
+// resolvePendingReconciliationConflict applies one of the three explicit
+// conflict outcomes to proposalId — see CONFLICT_KEEP_EXISTING/
+// CONFLICT_UPDATE_EXISTING/CONFLICT_CREATE_SEPARATELY.
+export async function resolvePendingReconciliationConflict(
+  proposalId: string,
+  resolution: string,
+): Promise<KnowledgeItem> {
+  return ResolvePendingReconciliationConflict(proposalId, resolution)
+}
+
+// acknowledgePendingReconciliationNoChange marks proposalId's classified
+// no_change proposal resolved without creating or changing any item.
+export async function acknowledgePendingReconciliationNoChange(proposalId: string): Promise<void> {
+  await AcknowledgePendingReconciliationNoChange(proposalId)
+}
+
+// rejectPendingReconciliationProposal marks proposalId rejected without
+// creating or changing any item.
+export async function rejectPendingReconciliationProposal(proposalId: string): Promise<void> {
+  await RejectPendingReconciliationProposal(proposalId)
 }
 
 export async function getKnowledgeExtractionSettings(): Promise<KnowledgeExtractionSettings> {
@@ -261,11 +459,10 @@ export function definitionPreview(text: string, max: number): string {
   if (max <= 0) {
     return ''
   }
-  if (max === 1) {
-    return '…'
-  }
   // Reserve one character for the ellipsis so a truncated result never
-  // exceeds max characters total.
+  // exceeds max characters total. At max === 1 this reserves the entire
+  // budget, cutting to an empty string — so the general path already
+  // returns a bare ellipsis without a dedicated max === 1 case.
   const cut = text.slice(0, max - 1)
   const lastSpace = cut.lastIndexOf(' ')
   const trimmed = lastSpace > 0 ? cut.slice(0, lastSpace) : cut
