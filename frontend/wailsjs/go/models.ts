@@ -42,9 +42,9 @@ export namespace desktop {
 	}
 	export class ItemChangesResult {
 	    definition?: string;
-	    properties: string[];
-	    tradeOffs: string[];
-	    relatedConcepts: string[];
+	    properties?: string[];
+	    tradeOffs?: string[];
+	    relatedConcepts?: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new ItemChangesResult(source);
@@ -314,20 +314,6 @@ export namespace desktop {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.savedIndices = source["savedIndices"];
 	        this.error = source["error"];
-	    }
-	}
-	export class LoginResult {
-	    accountId: string;
-	    email: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new LoginResult(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.accountId = source["accountId"];
-	        this.email = source["email"];
 	    }
 	}
 	export class PendingReconciliationResult {

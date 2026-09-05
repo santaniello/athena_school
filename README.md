@@ -217,7 +217,6 @@ All user data is stored on-device at rest:
 ~/.athena/
 ├── config.yaml        # OpenRouter key and knowledge-extraction limit
 ├── profile.json       # User profile (name, area, level, goals)
-├── session.json       # Auth token cache
 ├── athena.db          # SQLite (sessions, knowledge, flashcards, progress, embeddings)
 └── logs/              # Structured execution logs
 ```

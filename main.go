@@ -14,7 +14,6 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"github.com/santaniello/athena/internal/application/auth"
 	"github.com/santaniello/athena/internal/application/folder"
 	applicationingest "github.com/santaniello/athena/internal/application/ingest"
 	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
@@ -27,7 +26,6 @@ import (
 	"github.com/santaniello/athena/internal/infrastructure/configfile"
 	"github.com/santaniello/athena/internal/infrastructure/openrouter"
 	"github.com/santaniello/athena/internal/infrastructure/profilefile"
-	"github.com/santaniello/athena/internal/infrastructure/session"
 	"github.com/santaniello/athena/internal/infrastructure/sqlite"
 	"github.com/santaniello/athena/internal/infrastructure/vectorstore"
 	"github.com/santaniello/athena/internal/interfaces/desktop"
@@ -45,10 +43,6 @@ func main() {
 	dbPath, err := athenahome.File("athena.db")
 	if err != nil {
 		log.Fatalf("resolving database path: %v", err)
-	}
-	sessionPath, err := athenahome.File("session.json")
-	if err != nil {
-		log.Fatalf("resolving session path: %v", err)
 	}
 	profilePath, err := athenahome.File("profile.json")
 	if err != nil {
@@ -73,10 +67,6 @@ func main() {
 			log.Printf("closing database: %v", err)
 		}
 	}()
-
-	accounts := sqlite.NewAccountRepository(db)
-	sessions := session.NewStore(sessionPath)
-	authService := auth.NewService(accounts, sessions)
 
 	profiles := profilefile.NewStore(profilePath)
 	configStore := configfile.NewStore(configPath)
@@ -116,7 +106,7 @@ func main() {
 		knowledgeChunks, ingestedFiles, knowledgeItems, llmClient, transactor, vectorStore, indexLoader,
 	)
 
-	app := desktop.NewApp(authService, sessions, onboardingService, profiles, configStore, studyService, folderService, knowledgeService, ingestService, llmClient, indexLoader)
+	app := desktop.NewApp(onboardingService, profiles, configStore, studyService, folderService, knowledgeService, ingestService, llmClient, indexLoader)
 
 	err = wails.Run(&options.App{
 		Title:            "Athena",

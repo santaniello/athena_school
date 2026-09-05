@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { BookOpen, LogOut } from 'lucide-react'
-import { Logout } from '../../wailsjs/go/desktop/App'
+import { BookOpen } from 'lucide-react'
 import { AthenaLogo } from '@/components/athena-logo'
 import { NavItem } from '@/components/nav-item'
 import { ComingSoonPanel } from '@/components/coming-soon-panel'
@@ -40,10 +39,6 @@ const INITIAL_INDEX_STATUS: IndexStatus = {
 }
 // Stryker restore ArrayDeclaration,StringLiteral
 
-interface AppShellProps {
-  onLogout: () => void
-}
-
 interface ActiveStudySession {
   id: string
   topic: string
@@ -68,7 +63,7 @@ const FOOTER_ITEMS = NAVIGATION.filter((item) => item.group === 'footer')
 // this component owns which session is open so the tree (rail) and the chat
 // view (main pane) can stay in sync. See
 // specs/phases/phase-01-desktop-mvp/10-study-folders.md.
-function AppShell({ onLogout }: AppShellProps) {
+function AppShell() {
   const [section, setSection] = useState<AppSection>('home')
   const [profile, setProfile] = useState<ProfileDraft | null>(null)
   const [activeSession, setActiveSession] = useState<ActiveStudySession | null>(null)
@@ -211,11 +206,6 @@ function AppShell({ onLogout }: AppShellProps) {
   // Mode's own status ever changes.
   const studyLocked = studyItem.status === 'locked'
   // Stryker restore ConditionalExpression,StringLiteral
-
-  async function handleLogout() {
-    await Logout()
-    onLogout()
-  }
 
   function handleSelectSession(session: StudySession, folderName: string) {
     setActiveSession({
@@ -399,14 +389,6 @@ function AppShell({ onLogout }: AppShellProps) {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-foreground">{profile?.name}</p>
               </div>
-              <button
-                type="button"
-                aria-label="Log out"
-                onClick={() => void handleLogout()}
-                className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
-              >
-                <LogOut className="size-4" aria-hidden="true" />
-              </button>
             </div>
           </nav>
         </ResizablePanel>

@@ -1,5 +1,12 @@
 # Phase 1.1 — Local Auth Core
 
+> **Removed.** The local login/account system described here was removed —
+> Athena is a single-user local install with no data owned by an account
+> (no other table ever referenced `accounts` by foreign key), so the
+> account layer added complexity without protecting anything. See
+> [12-remove-local-login.md](12-remove-local-login.md) for the removal
+> and rationale. Kept here for history; do not implement against this spec.
+
 ## Goal
 
 Account creation and login run entirely on-device — no remote server in this phase. The design is a hexagonal port so a remote implementation can replace the local one later without touching use cases or UI.

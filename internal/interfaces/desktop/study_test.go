@@ -62,7 +62,7 @@ func newTestStudyApp(t *testing.T, sessions domainstudy.SessionRepository, messa
 	catalog := llmmocks.NewMockModelContextResolver(t)
 	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog)
 	folderService := folder.NewService(folders, sessions)
-	app := NewApp(nil, nil, nil, nil, nil, studyService, folderService, nil, nil, nil, nil)
+	app := NewApp(nil, nil, nil, studyService, folderService, nil, nil, nil, nil)
 	app.Startup(context.Background())
 
 	captured := &capturedEvents{}
@@ -346,7 +346,7 @@ func TestApp_SendStudyMessage_emitsPostCapSourcesEvent_notes(t *testing.T) {
 
 	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog)
 	folderService := folder.NewService(folders, sessions)
-	app := NewApp(nil, nil, nil, nil, nil, studyService, folderService, nil, nil, nil, nil)
+	app := NewApp(nil, nil, nil, studyService, folderService, nil, nil, nil, nil)
 	app.Startup(context.Background())
 	captured := &capturedEvents{}
 	app.emit = func(_ context.Context, eventName string, data ...interface{}) {

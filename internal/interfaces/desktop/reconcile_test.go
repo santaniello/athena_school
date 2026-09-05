@@ -65,7 +65,7 @@ func TestApp_ApplyReconciliationCreate_createsANewDraftItem(t *testing.T) {
 	})).Return(nil).Once()
 	reconciliations.EXPECT().LinkEvidence(ctx, mock.Anything, "evidence-1").Return(nil).Once()
 	service := applicationknowledge.NewService(repository, sessions, messages, llm, configs, chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, evidenceRepo, reconciliations, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 	extracted, err := app.ExtractKnowledge("session-1", false)
 	require.NoError(t, err)
@@ -117,7 +117,7 @@ func TestApp_SaveReconciliationForReview_succeedsWithoutPersistingAnyItem(t *tes
 	// touches the IndexGuard at all — only ExtractKnowledge's own
 	// classification runs here, and that doesn't index anything either
 	service := applicationknowledge.NewService(repository, sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), tx, store, nil, domainknowledge.RetrievalThresholds{}, evidenceRepo, reconciliations, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 	extracted, err := app.ExtractKnowledge("session-1", false)
 	require.NoError(t, err)
@@ -134,7 +134,7 @@ func TestApp_ApplyReconciliationUpdate_returnsErrorForAnAlreadyDecidedCandidate(
 	// Given a knowledge service with no receipt for the candidate at all
 	ctx := context.Background()
 	service := applicationknowledge.NewService(nil, nil, nil, nil, nil, nil, nil, nil, passingDesktopIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, nil, nil, 0, 0)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
 	// When applying update through the desktop adapter anyway

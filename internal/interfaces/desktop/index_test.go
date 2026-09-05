@@ -29,7 +29,7 @@ func TestApp_GetKnowledgeIndexStatus_startsLoading_beforeTheInitialLoadRuns(t *t
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	store := knowledgemocks.NewMockVectorStore(t)
 	loader := applicationknowledge.NewIndexLoader(chunks, store, testEmbeddingModel)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, loader)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, loader)
 	app.Startup(context.Background())
 
 	// When querying its status
@@ -51,7 +51,7 @@ func TestApp_StartKnowledgeIndex_loadsThenEmitsStatus(t *testing.T) {
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().ReplaceAll(ctx, valid).Return(nil).Once()
 	loader := applicationknowledge.NewIndexLoader(chunks, store, testEmbeddingModel)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, loader)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, loader)
 	app.Startup(ctx)
 
 	var emitted []IndexStatusResult
@@ -86,7 +86,7 @@ func TestApp_GetKnowledgeIndexStatus_reportsIssues_afterAPartiallyValidLoad(t *t
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().ReplaceAll(ctx, valid).Return(nil).Once()
 	loader := applicationknowledge.NewIndexLoader(chunks, store, testEmbeddingModel)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, loader)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, loader)
 	app.Startup(ctx)
 	app.emit = func(context.Context, string, ...interface{}) {}
 
@@ -112,7 +112,7 @@ func TestApp_RetryKnowledgeIndex_publishesANewSnapshot_andEmitsStatus(t *testing
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().ReplaceAll(ctx, first).Return(nil).Once()
 	loader := applicationknowledge.NewIndexLoader(chunks, store, testEmbeddingModel)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, loader)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, loader)
 	app.Startup(ctx)
 	app.emit = func(context.Context, string, ...interface{}) {}
 	app.StartKnowledgeIndex(ctx)
@@ -145,7 +145,7 @@ func TestApp_RetryKnowledgeIndex_keepsThePreviousSnapshot_whenTheRetryFails(t *t
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().ReplaceAll(ctx, first).Return(nil).Once()
 	loader := applicationknowledge.NewIndexLoader(chunks, store, testEmbeddingModel)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, loader)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, loader)
 	app.Startup(ctx)
 	app.emit = func(context.Context, string, ...interface{}) {}
 	app.StartKnowledgeIndex(ctx)

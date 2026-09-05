@@ -45,7 +45,7 @@ func TestApp_ListPendingReconciliations_mapsStalenessAndTargetInfo(t *testing.T)
 		Return(domainknowledge.Item{ID: "item-fresh", Concept: "Eventual consistency", Status: domainknowledge.StatusApproved, UpdatedAt: freshUpdatedAt}, nil).Once()
 	repo.EXPECT().GetByID(ctx, "item-gone").Return(domainknowledge.Item{}, domainknowledge.ErrItemNotFound).Once()
 	service := applicationknowledge.NewService(repo, nil, nil, nil, nil, nil, nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil, reconciliations, nil, 0, 0)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
 	// When listing pending reconciliations through the desktop adapter
@@ -79,7 +79,7 @@ func TestApp_ApplyPendingReconciliationCreate_createsANewDraftItem(t *testing.T)
 	tx := txmocks.NewMockTransactor(t)
 	expectDesktopSuccessfulIndexing(ctx, llm, chunks, store, tx, 1)
 	service := applicationknowledge.NewService(repo, nil, nil, llm, nil, chunks, tx, store, passingDesktopIndexGuard(t), domainknowledge.RetrievalThresholds{}, evidenceRepo, reconciliations, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
 	// When applying it through the desktop adapter
@@ -99,7 +99,7 @@ func TestApp_RejectPendingReconciliationProposal_returnsErrorForAnAlreadyResolve
 	reconciliations := knowledgemocks.NewMockReconciliationRepository(t)
 	reconciliations.EXPECT().GetByID(ctx, "proposal-1").Return(proposal, nil).Once()
 	service := applicationknowledge.NewService(nil, nil, nil, nil, nil, nil, nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil, reconciliations, nil, 0, 0)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
 	// When rejecting it through the desktop adapter
@@ -115,7 +115,7 @@ func TestApp_CountPendingReconciliations_returnsTheRepositoryCount(t *testing.T)
 	reconciliations := knowledgemocks.NewMockReconciliationRepository(t)
 	reconciliations.EXPECT().CountByStatus(ctx, domainknowledge.ProposalPending).Return(2, nil).Once()
 	service := applicationknowledge.NewService(nil, nil, nil, nil, nil, nil, nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil, reconciliations, nil, 0, 0)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, service, nil, nil, nil)
 	app.Startup(ctx)
 
 	// When counting them through the desktop adapter
