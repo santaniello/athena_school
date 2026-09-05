@@ -49,18 +49,20 @@ type IndexGuard interface {
 // Service implements knowledge extraction and Explorer management against
 // the application's ports.
 type Service struct {
-	items      domainknowledge.Repository
-	sessions   domainstudy.SessionRepository
-	messages   domainstudy.MessageRepository
-	llm        domainllm.Provider
-	configs    domainconfig.Store
-	chunks     domainknowledge.ChunkRepository
-	tx         Transactor
-	store      domainknowledge.VectorStore
-	index      IndexGuard
-	thresholds domainknowledge.RetrievalThresholds
-	receipts   *receiptStore
-	evidence   domainknowledge.EvidenceRepository
+	items           domainknowledge.Repository
+	sessions        domainstudy.SessionRepository
+	messages        domainstudy.MessageRepository
+	llm             domainllm.Provider
+	configs         domainconfig.Store
+	chunks          domainknowledge.ChunkRepository
+	tx              Transactor
+	store           domainknowledge.VectorStore
+	index           IndexGuard
+	thresholds      domainknowledge.RetrievalThresholds
+	receipts        *receiptStore
+	evidence        domainknowledge.EvidenceRepository
+	reconciliations domainknowledge.ReconciliationRepository
+	relations       domainknowledge.RelationRepository
 	// duplicateTopK and duplicateMinScore are FindDuplicates' constructor-
 	// injected defaults for its own callers (ExtractFromSession); a direct
 	// caller may still override them per call. See
@@ -82,6 +84,8 @@ func NewService(
 	index IndexGuard,
 	thresholds domainknowledge.RetrievalThresholds,
 	evidence domainknowledge.EvidenceRepository,
+	reconciliations domainknowledge.ReconciliationRepository,
+	relations domainknowledge.RelationRepository,
 	duplicateTopK int,
 	duplicateMinScore float64,
 ) *Service {
@@ -90,6 +94,7 @@ func NewService(
 		llm: llm, configs: configs, chunks: chunks, tx: tx,
 		store: store, index: index, thresholds: thresholds,
 		receipts: newReceiptStore(), evidence: evidence,
+		reconciliations: reconciliations, relations: relations,
 		duplicateTopK: duplicateTopK, duplicateMinScore: duplicateMinScore,
 	}
 }

@@ -54,7 +54,7 @@ func TestUpdateItem_reindexesTheChunk_whenConceptOrDefinitionChanges(t *testing.
 	})).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When updating its concept and definition
 	updated, err := service.UpdateItem(ctx, "item-1", ItemFields{
@@ -99,7 +99,7 @@ func TestUpdateItem_reindexesTheChunk_whenOnlyPropertiesChange(t *testing.T) {
 	})).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When updating with a new Properties list, same Concept/Definition
 	updated, err := service.UpdateItem(ctx, "item-1", ItemFields{
@@ -133,7 +133,7 @@ func TestUpdateItem_staysOnTheMetadataOnlyPath_whenOnlyTopicChanges(t *testing.T
 	llm := llmmocks.NewMockProvider(t)
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When updating with only the topic changed (padded with whitespace)
 	updated, err := service.UpdateItem(ctx, "item-1", ItemFields{
@@ -168,7 +168,7 @@ func TestUpdateItem_staysOnTheMetadataOnlyPath_whenPropertiesGoFromNilToAnEmptyS
 	llm := llmmocks.NewMockProvider(t)
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When updating with Properties/TradeOffs submitted as empty slices
 	updated, err := service.UpdateItem(ctx, "item-1", ItemFields{
@@ -193,7 +193,7 @@ func TestUpdateItem_returnsValidationError_whenConceptIsCleared_andNeverCallsUpd
 	}, nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, nil, tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, nil, nil, nil, nil, nil, tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When updating with a blank concept
 	_, err := service.UpdateItem(ctx, "item-1", ItemFields{Topic: "Go", Concept: "", Definition: "Old def."})
@@ -212,7 +212,7 @@ func TestUpdateItem_returnsTopicRequired_whenTopicIsBlank_andNeverCallsUpdate(t 
 	}, nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, nil, tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, nil, nil, nil, nil, nil, tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When updating with a whitespace-only topic
 	_, err := service.UpdateItem(ctx, "item-1", ItemFields{Topic: "   ", Concept: "New", Definition: "New def."})
@@ -229,7 +229,7 @@ func TestUpdateItem_propagatesNotFound_whenItemDoesNotExist(t *testing.T) {
 	repository.EXPECT().GetByID(ctx, "missing").Return(domainknowledge.Item{}, domainknowledge.ErrItemNotFound).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, nil, tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, nil, nil, nil, nil, nil, tx, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When updating it
 	_, err := service.UpdateItem(ctx, "missing", ItemFields{Topic: "Go", Concept: "X", Definition: "Y"})
@@ -244,7 +244,7 @@ func TestUpdateItem_returnsErrIndexLoading_whenIndexIsLoading_andNeverTouchesThe
 	repository := knowledgemocks.NewMockRepository(t)
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(ErrIndexLoading).Once()
-	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, guard, domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, guard, domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When updating an item
 	_, err := service.UpdateItem(ctx, "item-1", ItemFields{Topic: "Go", Concept: "X", Definition: "Y"})
@@ -271,7 +271,7 @@ func TestUpdateItem_returnsIndexingWarning_whenPostCommitReconciliationFails_onT
 	store.EXPECT().Add(mock.Anything, updatedChunks).Return(boom).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, nil, nil, nil, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When updating it (topic only) and the post-commit reconciliation fails
 	updated, err := service.UpdateItem(ctx, "item-1", ItemFields{
@@ -303,7 +303,7 @@ func TestUpdateItem_returnsErrIndexingFailed_whenReindexingFails_afterEvictingTh
 	store.EXPECT().Remove(mock.Anything, []string{"chunk-1"}).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When updating it and the re-embed fails
 	updated, err := service.UpdateItem(ctx, "item-1", ItemFields{Topic: "Go", Concept: "New", Definition: "New def."})
@@ -333,7 +333,7 @@ func TestUpdateItem_returnsErrIndexingFailed_whenEvictingTheStaleChunkFails(t *t
 	llm := llmmocks.NewMockProvider(t)
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When updating it and eviction itself fails
 	updated, err := service.UpdateItem(ctx, "item-1", ItemFields{Topic: "Go", Concept: "New", Definition: "New def."})
@@ -378,7 +378,7 @@ func TestUpdateItem_selfHealsTheOrphanedChunk_whenLaterReindexed(t *testing.T) {
 		ID: "chunk-1", ItemID: "item-1", Source: domainknowledge.SourceAthena,
 		Topic: "Go", Status: domainknowledge.StatusApproved, Embedding: []float32{1, 0},
 	}}))
-	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When updating it and eviction itself fails
 	updated, err := service.UpdateItem(ctx, "item-1", ItemFields{Topic: "Go", Concept: "New", Definition: "New def."})

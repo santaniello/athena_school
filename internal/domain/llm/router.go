@@ -7,12 +7,13 @@ type TaskType string
 // Task types recognized by TierFor. Future specs (challenge, interview,
 // knowledge extraction) add their own use of these as they are built.
 const (
-	TaskOnboarding          TaskType = "onboarding"
-	TaskKnowledgeExtraction TaskType = "knowledge_extraction"
-	TaskStudy               TaskType = "study"
-	TaskChallengeFeedback   TaskType = "challenge_feedback"
-	TaskInterviewEvaluation TaskType = "interview_evaluation"
-	TaskComplexReasoning    TaskType = "complex_reasoning"
+	TaskOnboarding              TaskType = "onboarding"
+	TaskKnowledgeExtraction     TaskType = "knowledge_extraction"
+	TaskKnowledgeReconciliation TaskType = "knowledge_reconciliation"
+	TaskStudy                   TaskType = "study"
+	TaskChallengeFeedback       TaskType = "challenge_feedback"
+	TaskInterviewEvaluation     TaskType = "interview_evaluation"
+	TaskComplexReasoning        TaskType = "complex_reasoning"
 )
 
 // Tier is a cost/capability class of model.
@@ -44,7 +45,7 @@ var tierModels = map[Tier]string{
 // defaults to TierMedium rather than leaving it unrouted.
 func TierFor(task TaskType) Tier {
 	switch task {
-	case TaskOnboarding, TaskKnowledgeExtraction:
+	case TaskOnboarding, TaskKnowledgeExtraction, TaskKnowledgeReconciliation:
 		return TierCheap
 	case TaskStudy, TaskChallengeFeedback:
 		return TierMedium

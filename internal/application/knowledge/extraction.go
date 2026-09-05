@@ -28,6 +28,32 @@ type ExtractionCandidate struct {
 	Item                     domainknowledge.Item
 	Duplicates               []domainknowledge.DuplicateMatch
 	SemanticCheckUnavailable bool
+	// Reconciliation is the classifier's suggested action for this
+	// candidate — always set, never nil: a candidate with no duplicate
+	// shortlist gets a deterministic Reconciliation{Action: ReconcileCreate}
+	// without spending an LLM call. See
+	// specs/phases/phase-02-knowledge-engine/11-knowledge-reconciliation.md.
+	Reconciliation *ReconciliationSuggestion
+	// ReconciliationFailed reports that a non-empty shortlist's comparison
+	// LLM call failed or returned malformed output. Reconciliation still
+	// falls back to a deterministic create suggestion in this case — this
+	// flag is what tells the caller the comparison itself is what failed,
+	// not that no existing knowledge was found.
+	ReconciliationFailed bool
+}
+
+// ReconciliationSuggestion is the classifier's suggested action for one
+// extraction candidate, before the user has decided anything — never a
+// domainknowledge.ReconciliationProposal, which only exists once a
+// decision has actually been made (applied, saved for review, or
+// resolved). TargetItemID, when set, is always one of Duplicates' items —
+// the frontend cross-references it there for the target's Concept/Status
+// rather than duplicating those fields here.
+type ReconciliationSuggestion struct {
+	Action       string
+	TargetItemID string
+	Reason       string
+	Changes      domainknowledge.ItemChanges
 }
 
 // ExtractFromSession returns unpersisted candidates extracted from a session.
@@ -81,7 +107,8 @@ func (s *Service) ExtractFromSession(ctx context.Context, sessionID string, conf
 	if err != nil {
 		return ExtractionBatch{}, truncated, err
 	}
-	batchID := s.receipts.Create(sessionID, session.Topic, candidates)
+	classifications := s.classifyCandidates(ctx, results)
+	batchID := s.receipts.Create(sessionID, session.Topic, candidates, classifications)
 	return ExtractionBatch{ID: batchID, Items: results}, truncated, nil
 }
 

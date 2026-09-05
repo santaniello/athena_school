@@ -95,12 +95,14 @@ func main() {
 	knowledgeItems := sqlite.NewKnowledgeRepository(db)
 	knowledgeChunks := sqlite.NewChunkRepository(db)
 	knowledgeEvidence := sqlite.NewEvidenceRepository(db)
+	knowledgeReconciliations := sqlite.NewReconciliationRepository(db)
+	knowledgeRelations := sqlite.NewRelationRepository(db)
 	transactor := sqlite.NewSQLTransactor(db)
 	vectorStore := vectorstore.New()
 	indexLoader := applicationknowledge.NewIndexLoader(knowledgeChunks, vectorStore, domainllm.EmbeddingModel)
 	knowledgeService := applicationknowledge.NewService(
 		knowledgeItems, studySessions, studyMessages, llmClient, configStore, knowledgeChunks, transactor,
-		vectorStore, indexLoader, retrievalThresholds, knowledgeEvidence,
+		vectorStore, indexLoader, retrievalThresholds, knowledgeEvidence, knowledgeReconciliations, knowledgeRelations,
 		domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity,
 	)
 	catalogService := modelcatalog.NewService(llmClient)

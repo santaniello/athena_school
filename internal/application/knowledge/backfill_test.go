@@ -21,7 +21,7 @@ func TestCountUnindexedItems_delegatesToTheRepositoryWithTheCurrentEmbeddingMode
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
 	repository.EXPECT().CountUnindexed(ctx, domainllm.EmbeddingModel).Return(3, nil).Once()
-	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When counting unindexed items
 	count, err := service.CountUnindexedItems(ctx)
@@ -56,7 +56,7 @@ func TestReindexKnowledgeItems_indexesEveryItem_andReportsProgressForEach(t *tes
 	store.EXPECT().Add(mock.Anything, mock.MatchedBy(matchesIndexedChunk(items[1], 1))).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	var progressCalls []ReindexProgress
 	onProgress := func(p ReindexProgress) error {
@@ -99,7 +99,7 @@ func TestReindexKnowledgeItems_continuesPastAFailure_ratherThanStoppingEarly(t *
 	store.EXPECT().Add(mock.Anything, mock.MatchedBy(matchesIndexedChunk(items[1], 1))).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When reindexing the backlog
 	summary, err := service.ReindexKnowledgeItems(ctx, nil)
@@ -134,7 +134,7 @@ func TestReindexKnowledgeItems_stopsImmediately_whenOnProgressReturnsAnError(t *
 	store.EXPECT().Add(mock.Anything, mock.MatchedBy(matchesIndexedChunk(items[0], 1))).Return(nil).Once()
 	tx := txmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, nil, nil, llm, nil, chunks, tx, store, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	abortErr := errors.New("dialog closed")
 	onProgress := func(ReindexProgress) error { return abortErr }
@@ -153,7 +153,7 @@ func TestReindexKnowledgeItems_propagatesTheListError(t *testing.T) {
 	repository := knowledgemocks.NewMockRepository(t)
 	listErr := errors.New("database locked")
 	repository.EXPECT().ListUnindexed(ctx, domainllm.EmbeddingModel).Return(nil, listErr).Once()
-	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, passingIndexGuard(t), domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When reindexing the backlog
 	_, err := service.ReindexKnowledgeItems(ctx, nil)
@@ -168,7 +168,7 @@ func TestReindexKnowledgeItems_returnsErrIndexLoading_whenIndexIsLoading_andNeve
 	repository := knowledgemocks.NewMockRepository(t)
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(ErrIndexLoading).Once()
-	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, guard, domainknowledge.RetrievalThresholds{}, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := NewService(repository, nil, nil, nil, nil, nil, nil, nil, guard, domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
 
 	// When reindexing the backlog
 	_, err := service.ReindexKnowledgeItems(ctx, nil)
