@@ -158,6 +158,10 @@ export function RequestOpeningTurn(arg1, arg2) {
   return window['go']['desktop']['App']['RequestOpeningTurn'](arg1, arg2);
 }
 
+export function ResetLocalData() {
+  return window['go']['desktop']['App']['ResetLocalData']();
+}
+
 export function ResolvePendingReconciliationConflict(arg1, arg2) {
   return window['go']['desktop']['App']['ResolvePendingReconciliationConflict'](arg1, arg2);
 }

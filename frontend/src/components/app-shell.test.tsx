@@ -515,6 +515,11 @@ describe('AppShell', () => {
       .getByText('Existing topic', { selector: 'span.truncate' })
       .closest('div')
     expect(sessionRow).toHaveClass('bg-secondary')
+
+    // And the source-mode selector renders in the topbar, next to the
+    // session title, not floating over the composer
+    const topbar = screen.getByRole('banner')
+    expect(within(topbar).getByRole('combobox', { name: 'Source mode' })).toBeInTheDocument()
   })
 
   it('clears the active session and reverts the topbar/main pane when that same session is deleted from the tree', async () => {

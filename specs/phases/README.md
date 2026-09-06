@@ -78,6 +78,7 @@ Payments         Paddle
 | [10-study-folders.md](phase-01-desktop-mvp/10-study-folders.md) | Folder tree for study sessions in the sidebar |
 | [11-documentation.md](phase-01-desktop-mvp/11-documentation.md) | In-app manual: purpose, study sessions, Knowledge Engine |
 | [12-remove-local-login.md](phase-01-desktop-mvp/12-remove-local-login.md) | Removes local account/login — single-user install, no data was ever account-owned |
+| [13-reset-local-data.md](phase-01-desktop-mvp/13-reset-local-data.md) | Settings action to permanently clear study sessions, folders, and knowledge, live, without closing the app |
 
 ---
 

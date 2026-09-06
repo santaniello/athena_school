@@ -28,7 +28,7 @@ func TestDeleteSession_deletesSessionThroughItsRepositoryOwnership(t *testing.T)
 		Return(nil).
 		Once()
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil)
 
 	// When deleting the session
 	err := service.DeleteSession(context.Background(), "session-1")
@@ -47,7 +47,7 @@ func TestDeleteSession_propagatesSessionNotFound(t *testing.T) {
 	folders := foldermocks.NewMockRepository(t)
 	sessions.EXPECT().Delete(context.Background(), "missing").Return(domainstudy.ErrSessionNotFound).Once()
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil)
 
 	// When deleting a session that does not exist
 	err := service.DeleteSession(context.Background(), "missing")

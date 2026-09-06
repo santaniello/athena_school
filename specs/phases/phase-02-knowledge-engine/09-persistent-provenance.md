@@ -176,12 +176,23 @@ Knowledge Item Evidence (increment 1 — complete):
 - [x] `internal/interfaces/desktop/knowledge.go` — `ListKnowledgeItemEvidence(id)`
 - [x] Knowledge Item detail — an **Evidence** section with source label and excerpt
 
-Persisted answer sources (increment 2 — not started):
+Persisted answer sources (increment 2 — complete):
 
-- [ ] `internal/domain/study/repository.go` — extend the 2.6 atomic completed-assistant-message/context update with sources
-- [ ] `internal/infrastructure/sqlite/message_source_repository.go` and the `message_sources` table
-- [ ] `internal/application/study/send_message.go` — persist the final sources with the completed assistant message
-- [ ] Resume-session result and frontend message model — attach historical sources by assistant message ID
+- [x] `internal/domain/knowledge/message_sources.go` — `MessageSourceRepository` port (kept in `domain/knowledge`,
+      not `domain/study`: `domain/study` stays free of any `domain/knowledge` dependency; the message+Sources join
+      happens in `application/study.MessageWithSources` instead — see the decision below)
+- [x] `internal/infrastructure/sqlite/message_source_repository.go` and the `message_sources` table
+- [x] `internal/application/study/stream.go` — `streamAndPersist` persists sources atomically with the assistant
+      message and its context-state update (same transaction)
+- [x] `internal/application/study/resume.go` — `Resume` returns `[]MessageWithSources`, joining persisted sources
+      by message ID
+- [x] `internal/interfaces/desktop/study.go` — `StudyMessageResult.Sources`, populated on `ResumeStudySession`
+- [x] Frontend (`lib/study.ts`, `StudyChatScreen.tsx`) — resumed messages carry `sources`; `LocalSourcesStrip`
+      renders them exactly as it already does for a live turn
+
+Decision (deviates from this spec's original increment-2 task list): the original draft proposed extending
+`domain/study`'s own repository with sources directly. Implemented instead with domain/study kept free of any
+domain/knowledge dependency — see `internal/application/study/resume.go`'s `MessageWithSources` doc comment.
 
 ## Acceptance Criteria
 
@@ -203,10 +214,10 @@ Persisted answer sources (increment 2 — not started):
 
 The spec was decomposed into two independently deliverable increments:
 
-1. **Knowledge Item Evidence** — the active, approved increment documented below.
+1. **Knowledge Item Evidence** — complete, documented below.
 2. **Persisted answer sources** — `message_sources`, atomic assistant-message source persistence,
-   resume restoration, and historical RAG source UI. This has not been designed or authorized for
-   implementation yet.
+   resume restoration, and historical RAG source UI. Complete — see the increment's task list above
+   and its own decision note (domain/study stays free of any domain/knowledge dependency).
 
 Before starting Knowledge Item Evidence, the required global SQLite foreign-key prerequisite was
 completed and committed as `0970781 fix(sqlite): enforce foreign key integrity`. It enables foreign

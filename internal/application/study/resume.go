@@ -4,8 +4,22 @@ import (
 	"context"
 	"fmt"
 
+	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 )
+
+// MessageWithSources pairs a persisted domainstudy.Message with the local
+// knowledge Sources that backed it, if any — attached here in the
+// application layer rather than on domainstudy.Message itself, since
+// domain/study has no dependency on domain/knowledge (see
+// specs/phases/phase-02-knowledge-engine/09-persistent-provenance.md). A
+// user message, or an assistant message that used no local knowledge
+// (SourceModeWeb, a strict-notes miss, the opening turn), carries a nil
+// Sources.
+type MessageWithSources struct {
+	domainstudy.Message
+	Sources []domainknowledge.Source
+}
 
 // Resume returns sessionID's full message history, so the user can keep
 // chatting in it. Never makes an LLM call and never waits on catalog I/O:
@@ -22,7 +36,7 @@ import (
 func (s *Service) Resume(
 	ctx context.Context, sessionID string,
 	onContext ContextCallback, onContextUnavailable ContextUnavailableCallback,
-) (domainstudy.Session, []domainstudy.Message, error) {
+) (domainstudy.Session, []MessageWithSources, error) {
 	session, err := s.sessions.GetByID(ctx, sessionID)
 	if err != nil {
 		return domainstudy.Session{}, nil, fmt.Errorf("study: finding session: %w", err)
@@ -31,6 +45,14 @@ func (s *Service) Resume(
 	history, err := s.messages.ListBySession(ctx, sessionID)
 	if err != nil {
 		return domainstudy.Session{}, nil, fmt.Errorf("study: loading history: %w", err)
+	}
+	sourcesByMessage, err := s.messageSources.ListBySession(ctx, sessionID)
+	if err != nil {
+		return domainstudy.Session{}, nil, fmt.Errorf("study: loading message sources: %w", err)
+	}
+	historyWithSources := make([]MessageWithSources, len(history))
+	for i, message := range history {
+		historyWithSources[i] = MessageWithSources{Message: message, Sources: sourcesByMessage[message.ID]}
 	}
 
 	if session.Context.ContextLength == 0 {
@@ -59,5 +81,5 @@ func (s *Service) Resume(
 		}
 	}
 
-	return session, history, nil
+	return session, historyWithSources, nil
 }

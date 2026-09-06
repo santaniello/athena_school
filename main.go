@@ -19,6 +19,7 @@ import (
 	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
 	"github.com/santaniello/athena/internal/application/modelcatalog"
 	"github.com/santaniello/athena/internal/application/onboarding"
+	applicationreset "github.com/santaniello/athena/internal/application/reset"
 	"github.com/santaniello/athena/internal/application/study"
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
@@ -87,6 +88,7 @@ func main() {
 	knowledgeEvidence := sqlite.NewEvidenceRepository(db)
 	knowledgeReconciliations := sqlite.NewReconciliationRepository(db)
 	knowledgeRelations := sqlite.NewRelationRepository(db)
+	messageSources := sqlite.NewMessageSourceRepository(db)
 	transactor := sqlite.NewSQLTransactor(db)
 	vectorStore := vectorstore.New()
 	indexLoader := applicationknowledge.NewIndexLoader(knowledgeChunks, vectorStore, domainllm.EmbeddingModel)
@@ -98,6 +100,7 @@ func main() {
 	catalogService := modelcatalog.NewService(llmClient)
 	studyService := study.NewService(
 		studySessions, studyMessages, llmClient, profiles, folders, knowledgeService, transactor, catalogService,
+		messageSources,
 	)
 	folderService := folder.NewService(folders, studySessions)
 
@@ -106,7 +109,13 @@ func main() {
 		knowledgeChunks, ingestedFiles, knowledgeItems, llmClient, transactor, vectorStore, indexLoader,
 	)
 
-	app := desktop.NewApp(onboardingService, profiles, configStore, studyService, folderService, knowledgeService, ingestService, llmClient, indexLoader)
+	resetter := sqlite.NewResetter(db)
+	resetService := applicationreset.NewService(resetter, vectorStore)
+
+	app := desktop.NewApp(
+		onboardingService, profiles, configStore, studyService, folderService, knowledgeService,
+		ingestService, llmClient, indexLoader, resetService,
+	)
 
 	err = wails.Run(&options.App{
 		Title:            "Athena",

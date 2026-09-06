@@ -67,6 +67,12 @@ function AppShell() {
   const [section, setSection] = useState<AppSection>('home')
   const [profile, setProfile] = useState<ProfileDraft | null>(null)
   const [activeSession, setActiveSession] = useState<ActiveStudySession | null>(null)
+  // Holds the header's slot DOM node once mounted, so StudyChatScreen can
+  // portal its source-mode selector there instead of floating over its own
+  // composer textarea. A plain state setter as the ref callback fires with
+  // the node on mount and with null on unmount/section change — no portal
+  // while this is null, which is exactly the "not in Study" state.
+  const [sourceModeSlot, setSourceModeSlot] = useState<HTMLDivElement | null>(null)
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
   const [indexStatus, setIndexStatus] = useState<IndexStatus>(INITIAL_INDEX_STATUS)
   const [continuedWithoutSearch, setContinuedWithoutSearch] = useState(false)
@@ -400,16 +406,21 @@ function AppShell() {
           className="flex h-full w-full flex-col"
           style={{ overflow: 'hidden' }}
         >
-          <header className="flex min-h-11 shrink-0 items-center border-b border-border px-6 py-2">
+          <header className="flex min-h-11 shrink-0 items-center justify-between gap-3 border-b border-border px-6 py-2">
             {section === 'study' && activeSession ? (
-              <div className="min-w-0">
-                <p className="truncate text-[11px] text-muted-foreground">
-                  Study / {activeSession.folderName}
-                </p>
-                <h1 className="font-heading truncate text-base font-bold text-foreground">
-                  {activeSession.topic}
-                </h1>
-              </div>
+              <>
+                <div className="min-w-0">
+                  <p className="truncate text-[11px] text-muted-foreground">
+                    Study / {activeSession.folderName}
+                  </p>
+                  <h1 className="font-heading truncate text-base font-bold text-foreground">
+                    {activeSession.topic}
+                  </h1>
+                </div>
+                {/* StudyChatScreen portals its source-mode selector into
+                    this node — see the sourceModeSlot state above. */}
+                <div ref={setSourceModeSlot} />
+              </>
             ) : (
               <h1 className="font-heading text-xs font-bold tracking-[0.14em] text-foreground uppercase">
                 {activeItem.label}
@@ -449,6 +460,7 @@ function AppShell() {
                   onStartNewSession={handleStartNewSession}
                   startingNewSession={startingNewSession}
                   onKnowledgeChanged={refreshReviewCounts}
+                  sourceModeSlot={sourceModeSlot}
                 />
               ) : (
                 <div className="m-auto flex flex-col items-center gap-2 text-center">

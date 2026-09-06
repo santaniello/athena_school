@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
 	domainprofile "github.com/santaniello/athena/internal/domain/profile"
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
@@ -68,10 +69,15 @@ func TestRequestOpeningTurn_streamsAndPersistsAssistantReply(t *testing.T) {
 		Return(nil).
 		Once()
 	sessions.EXPECT().UpdateContext(context.Background(), "session-1", mock.Anything).Return(nil).Once()
+	messageSources := knowledgemocks.NewMockMessageSourceRepository(t)
+	messageSources.EXPECT().
+		Save(context.Background(), mock.AnythingOfType("string"), []domainknowledge.Source(nil)).
+		Return(nil).
+		Once()
 
 	var received []string
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, messageSources)
 
 	// When requesting the opening turn for an already-created session
 	err := service.RequestOpeningTurn(context.Background(), "session-1", "Distributed systems", func(chunk string) error {
@@ -97,7 +103,7 @@ func TestRequestOpeningTurn_propagatesProfileLoadError(t *testing.T) {
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{}, loadErr)
 
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil)
 
 	// When requesting the opening turn
 	err := service.RequestOpeningTurn(context.Background(), "session-1", "Distributed systems", noopChunkHandler, nil, nil)
@@ -124,7 +130,7 @@ func TestRequestOpeningTurn_propagatesStreamError_withoutPersistingAssistantMess
 		Once()
 
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil)
 
 	// When requesting the opening turn
 	err := service.RequestOpeningTurn(context.Background(), "session-1", "Distributed systems", noopChunkHandler, nil, nil)
@@ -151,7 +157,7 @@ func TestRequestOpeningTurn_replaysExistingMessageInsteadOfGeneratingASecondOne(
 
 	var received []string
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil)
 
 	// When requesting the opening turn again
 	err := service.RequestOpeningTurn(context.Background(), "session-1", "Distributed systems", func(chunk string) error {
@@ -181,7 +187,7 @@ func TestRequestOpeningTurn_blockedSession_returnsErrSessionContextLimitReached_
 		Once()
 
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil)
 
 	// When requesting the opening turn
 	err := service.RequestOpeningTurn(context.Background(), "session-1", "Distributed systems", noopChunkHandler, nil, nil)
@@ -216,7 +222,7 @@ func TestRequestOpeningTurn_concurrentCallsForSameSession_secondReturnsErrStudyT
 		Once()
 
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil)
 
 	errCh := make(chan error, 1)
 	go func() {

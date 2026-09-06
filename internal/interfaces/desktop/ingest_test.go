@@ -64,7 +64,7 @@ func newTestIngestApp(
 	guard.EXPECT().BeginMutation().Return(nil).Maybe()
 	guard.EXPECT().EndMutation().Maybe()
 	ingestService := applicationingest.NewService(chunks, ingestedFiles, items, llm, tx, store, guard)
-	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
 	app.Startup(context.Background())
 
 	captured := &capturedIngestEvents{}
@@ -227,7 +227,7 @@ func TestApp_ImportNotes_emitsError_whenImportFolderFails(t *testing.T) {
 
 func TestApp_PickNotesFolder_returnsThePathChosenByTheDialog(t *testing.T) {
 	// Given an App whose folder-picker dialog is stubbed to return a path
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	app.Startup(context.Background())
 	app.openDirectory = func(context.Context, wailsruntime.OpenDialogOptions) (string, error) {
 		return "/home/user/notes", nil
@@ -243,7 +243,7 @@ func TestApp_PickNotesFolder_returnsThePathChosenByTheDialog(t *testing.T) {
 
 func TestApp_PickNotesFolder_returnsError_whenDialogFails(t *testing.T) {
 	// Given a folder-picker dialog that fails
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	app.Startup(context.Background())
 	boom := errors.New("dialog unavailable")
 	app.openDirectory = func(context.Context, wailsruntime.OpenDialogOptions) (string, error) {
@@ -259,7 +259,7 @@ func TestApp_PickNotesFolder_returnsError_whenDialogFails(t *testing.T) {
 
 func TestApp_PickNotesFile_usesTheExactTitleAndCaseCompleteFilter(t *testing.T) {
 	// Given an App whose file-picker dialog captures the options it was called with
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	app.Startup(context.Background())
 	var captured wailsruntime.OpenDialogOptions
 	app.openFile = func(_ context.Context, options wailsruntime.OpenDialogOptions) (string, error) {
@@ -283,7 +283,7 @@ func TestApp_PickNotesFile_usesTheExactTitleAndCaseCompleteFilter(t *testing.T) 
 
 func TestApp_PickNotesFile_returnsError_whenDialogFails(t *testing.T) {
 	// Given a file-picker dialog that fails
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	app.Startup(context.Background())
 	boom := errors.New("dialog unavailable")
 	app.openFile = func(context.Context, wailsruntime.OpenDialogOptions) (string, error) {
@@ -299,7 +299,7 @@ func TestApp_PickNotesFile_returnsError_whenDialogFails(t *testing.T) {
 
 func TestApp_PickNotesFile_returnsEmptyPath_onCancellation(t *testing.T) {
 	// Given a file-picker dialog the user cancelled
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	app.Startup(context.Background())
 	app.openFile = func(context.Context, wailsruntime.OpenDialogOptions) (string, error) {
 		return "", nil

@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 )
@@ -25,10 +26,15 @@ const unavailableContextMessage = "Unable to determine this session's context li
 // (the user's turn it replied to, if any, is already safely persisted).
 // priorContext is the session's ContextUsage going into this call, used both
 // to seed the monotonicity check in domainstudy.NextContextUsage and to
-// detect whether the resolved model/context length changed.
+// detect whether the resolved model/context length changed. sources are the
+// local-knowledge Sources (if any) that backed this reply — persisted
+// atomically with the message itself so they survive a resume (see
+// specs/phases/phase-02-knowledge-engine/09-persistent-provenance.md); an
+// empty/nil slice is a valid no-op (SourceModeWeb, or the opening turn,
+// which never retrieves).
 func (s *Service) streamAndPersist(
 	ctx context.Context, sessionID string, priorContext domainstudy.ContextUsage,
-	messages []domainllm.Message, onChunk func(chunk string) error,
+	messages []domainllm.Message, sources []domainknowledge.Source, onChunk func(chunk string) error,
 	onContext ContextCallback, onContextUnavailable ContextUnavailableCallback,
 ) (string, error) {
 	var buf strings.Builder
@@ -58,6 +64,9 @@ func (s *Service) streamAndPersist(
 	var newUsage domainstudy.ContextUsage
 	err = s.tx.WithinTx(ctx, func(ctx context.Context) error {
 		if err := s.messages.Append(ctx, assistantMessage); err != nil {
+			return err
+		}
+		if err := s.messageSources.Save(ctx, assistantMessage.ID, sources); err != nil {
 			return err
 		}
 		length := 0

@@ -81,6 +81,8 @@ export function RenameFolder(arg1:string,arg2:string):Promise<void>;
 
 export function RequestOpeningTurn(arg1:string,arg2:string):Promise<void>;
 
+export function ResetLocalData():Promise<void>;
+
 export function ResolvePendingReconciliationConflict(arg1:string,arg2:string):Promise<desktop.KnowledgeItemResult>;
 
 export function ResolveReconciliationConflict(arg1:string,arg2:string,arg3:desktop.KnowledgeItemInput,arg4:string):Promise<desktop.KnowledgeItemResult>;

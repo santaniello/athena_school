@@ -11,6 +11,7 @@ import (
 	applicationingest "github.com/santaniello/athena/internal/application/ingest"
 	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
 	"github.com/santaniello/athena/internal/application/onboarding"
+	applicationreset "github.com/santaniello/athena/internal/application/reset"
 	"github.com/santaniello/athena/internal/application/study"
 	domainconfig "github.com/santaniello/athena/internal/domain/config"
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
@@ -29,6 +30,7 @@ type App struct {
 	ingest        *applicationingest.Service
 	index         *applicationknowledge.IndexLoader
 	apiKeyUpdater domainllm.APIKeyUpdater
+	reset         *applicationreset.Service
 	// emit defaults to wailsruntime.EventsEmit, which calls log.Fatal (i.e.
 	// os.Exit) when a.ctx was never produced by the real Wails runtime —
 	// exactly the case in tests, which use context.Background(). Tests
@@ -42,12 +44,18 @@ type App struct {
 	// real-runtime requirement as emit above. Tests override it with a
 	// fake to drive PickNotesFile without a real OS dialog.
 	openFile func(ctx context.Context, options wailsruntime.OpenDialogOptions) (string, error)
+	// reloadApp defaults to wailsruntime.WindowReloadApp, which has the
+	// same real-runtime requirement as emit above. Tests override it with
+	// a fake to observe that ResetLocalData triggers a reload without a
+	// real Wails runtime.
+	reloadApp func(ctx context.Context)
 }
 
 // NewApp creates a new App instance backed by the given onboarding
 // service, profile store, config store, study service, folder service,
 // knowledge service, notes-import service, the knowledge vector index
-// coordinator, and the live LLM client's key updater.
+// coordinator, the live LLM client's key updater, and the local-data reset
+// service.
 func NewApp(
 	onboardingService *onboarding.Service,
 	profiles domainprofile.Store,
@@ -58,6 +66,7 @@ func NewApp(
 	ingestService *applicationingest.Service,
 	apiKeyUpdater domainllm.APIKeyUpdater,
 	indexLoader *applicationknowledge.IndexLoader,
+	resetService *applicationreset.Service,
 ) *App {
 	return &App{
 		onboarding:    onboardingService,
@@ -69,9 +78,11 @@ func NewApp(
 		ingest:        ingestService,
 		apiKeyUpdater: apiKeyUpdater,
 		index:         indexLoader,
+		reset:         resetService,
 		emit:          wailsruntime.EventsEmit,
 		openDirectory: wailsruntime.OpenDirectoryDialog,
 		openFile:      wailsruntime.OpenFileDialog,
+		reloadApp:     wailsruntime.WindowReloadApp,
 	}
 }
 
