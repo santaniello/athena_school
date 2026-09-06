@@ -357,7 +357,7 @@ function StudyChatScreen({
         onScroll={handleTranscriptScroll}
         role="log"
         aria-label="Conversation"
-        className="thin-scroll flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-2"
+        className="thin-scroll flex min-h-0 flex-1 transform-gpu flex-col gap-3 overflow-y-auto pr-2"
       >
         {messages.map((message, index) =>
           message.role === 'assistant' && message.sources && message.sources.length > 0 ? (
