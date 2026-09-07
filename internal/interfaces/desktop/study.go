@@ -161,11 +161,14 @@ type StudySessionResult struct {
 }
 
 // StudyMessageResult is the desktop-facing DTO for a single message in a
-// study session's history.
+// study session's history. Sources is only ever non-empty for an assistant
+// message that used local knowledge — see
+// specs/phases/phase-02-knowledge-engine/09-persistent-provenance.md.
 type StudyMessageResult struct {
-	Role      string `json:"role"`
-	Content   string `json:"content"`
-	CreatedAt string `json:"createdAt"`
+	Role      string              `json:"role"`
+	Content   string              `json:"content"`
+	CreatedAt string              `json:"createdAt"`
+	Sources   []StudySourceResult `json:"sources"`
 }
 
 // StudySessionHistoryResult is returned by ResumeStudySession: the session
@@ -223,6 +226,7 @@ func (a *App) ResumeStudySession(sessionID string) (StudySessionHistoryResult, e
 			Role:      m.Role,
 			Content:   m.Content,
 			CreatedAt: m.CreatedAt.Format(time.RFC3339),
+			Sources:   toStudySourceResults(m.Sources),
 		}
 	}
 	return StudySessionHistoryResult{Session: toStudySessionResult(session), Messages: messages}, nil

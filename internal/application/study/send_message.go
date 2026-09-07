@@ -88,6 +88,7 @@ func (s *Service) SendMessage(
 	emitContextTransition(priorContext, newContext, onContext)
 
 	var knowledgeMessage *domainllm.Message
+	var sources []domainknowledge.Source
 	if sourceMode == domainknowledge.SourceModeWeb {
 		if err := emitSources(onSources, nil); err != nil {
 			return err
@@ -107,6 +108,7 @@ func (s *Service) SendMessage(
 		} else {
 			message := buildKnowledgeContext(result, sourceMode)
 			knowledgeMessage = &message
+			sources = result.Sources
 		}
 	}
 
@@ -129,7 +131,7 @@ func (s *Service) SendMessage(
 		llmMessages = append(llmMessages, domainllm.Message{Role: message.Role, Content: message.Content})
 	}
 
-	if _, err := s.streamAndPersist(ctx, sessionID, newContext, llmMessages, onChunk, onContext, onContextUnavailable); err != nil {
+	if _, err := s.streamAndPersist(ctx, sessionID, newContext, llmMessages, sources, onChunk, onContext, onContextUnavailable); err != nil {
 		return fmt.Errorf("study: sending message: %w", err)
 	}
 	return nil

@@ -36,6 +36,17 @@ func mockNormalSession(t *testing.T, sessions *studymocks.MockSessionRepository,
 	return tx
 }
 
+// mockMessageSourceSave returns a MockMessageSourceRepository expecting
+// exactly one Save call, for any generated message ID, with sources —
+// every test whose stream completes and persists an assistant message
+// needs one, since streamAndPersist always calls Save alongside Append.
+func mockMessageSourceSave(t *testing.T, sources []domainknowledge.Source) *knowledgemocks.MockMessageSourceRepository {
+	t.Helper()
+	messageSources := knowledgemocks.NewMockMessageSourceRepository(t)
+	messageSources.EXPECT().Save(context.Background(), mock.AnythingOfType("string"), sources).Return(nil).Once()
+	return messageSources
+}
+
 func TestSendMessage_returnsErrInvalidSourceMode_forUnknownMode(t *testing.T) {
 	// Given a service and an unknown source mode; no mock has any .EXPECT()
 	// set, so any provider/store/repository call would fail the test
@@ -45,7 +56,7 @@ func TestSendMessage_returnsErrInvalidSourceMode_forUnknownMode(t *testing.T) {
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil)
 
 	// When sending a message with an unrecognized source mode
 	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", "bogus-mode", noopSourcesHandler, noopChunkHandler, nil, nil)
@@ -63,7 +74,7 @@ func TestSendMessage_returnsErrInvalidSourceMode_beforeBlankContentCheck(t *test
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil)
 
 	// When sending a message with both problems
 	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "   ", "bogus-mode", noopSourcesHandler, noopChunkHandler, nil, nil)
@@ -81,7 +92,7 @@ func TestSendMessage_returnsMessageRequired_whenContentIsBlank(t *testing.T) {
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil)
 
 	// When sending a whitespace-only message
 	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "   ", domainknowledge.SourceModeWeb, noopSourcesHandler, noopChunkHandler, nil, nil)
@@ -105,7 +116,7 @@ func TestSendMessage_blockedSession_returnsErrSessionContextLimitReached_without
 		Return(domainstudy.Session{ID: "session-1", Context: domainstudy.ContextUsage{State: domainstudy.ContextStateBlocked}}, nil).
 		Once()
 
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, nil)
 
 	// When sending a message
 	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeWeb, noopSourcesHandler, noopChunkHandler, nil, nil)
@@ -141,7 +152,7 @@ func TestSendMessage_concurrentCallsForSameSession_secondReturnsErrStudyTurnInPr
 		Return(domainllm.StreamResponse{}, errors.New("stream never completes in this test")).
 		Once()
 
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, nil)
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -198,8 +209,9 @@ func TestSendMessage_persistsUserMessageBeforeCallingLLM(t *testing.T) {
 		Run(func(context.Context, domainstudy.Message) { callOrder = append(callOrder, "append-assistant") }).
 		Return(nil).
 		Once()
+	messageSources := mockMessageSourceSave(t, nil)
 
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, messageSources)
 
 	// When sending a message
 	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeWeb, noopSourcesHandler, noopChunkHandler, nil, nil)
@@ -248,7 +260,8 @@ func TestSendMessage_provisionalIncrement_reachingBlocked_emitsContextImmediatel
 		Once()
 
 	var contextEvents []ContextEvent
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil)
+	messageSources := mockMessageSourceSave(t, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, messageSources)
 
 	// When sending a message whose provisional estimate alone pushes the
 	// session's context usage past the blocked (95%) boundary
@@ -307,7 +320,8 @@ func TestSendMessage_sendsHistoryAndFreshSystemPromptToLLM(t *testing.T) {
 		Once()
 
 	var received []string
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil)
+	messageSources := mockMessageSourceSave(t, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, messageSources)
 
 	// When sending a message
 	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeWeb, noopSourcesHandler, func(chunk string) error {
@@ -342,7 +356,7 @@ func TestSendMessage_propagatesStreamError_withoutPersistingAssistantMessage(t *
 		Return(domainllm.StreamResponse{}, streamErr).
 		Once()
 
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, nil)
 
 	// When sending a message
 	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeWeb, noopSourcesHandler, noopChunkHandler, nil, nil)
@@ -377,7 +391,8 @@ func TestSendMessage_web_callsOnSourcesOnceWithEmptySlice_beforeAnyChunk(t *test
 		Return(domainllm.StreamResponse{}, nil).
 		Once()
 
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil)
+	messageSources := mockMessageSourceSave(t, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, messageSources)
 
 	// When sending a message
 	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeWeb,
@@ -418,7 +433,7 @@ func TestSendMessage_notes_returnsErrVectorStoreUnavailable_preservingUserMessag
 		Return(domainknowledge.RetrievalResult{}, domainknowledge.ErrVectorStoreUnavailable).Once()
 
 	sourcesCalled := false
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, nil)
 
 	// When sending a message in notes mode
 	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeNotes,
@@ -450,7 +465,7 @@ func TestSendMessage_strictNotes_returnsErrVectorStoreUnavailable_sameGuarantees
 		Return(domainknowledge.RetrievalResult{}, domainknowledge.ErrVectorStoreUnavailable).Once()
 
 	sourcesCalled := false
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, nil)
 
 	// When sending a message in strict-notes mode
 	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeStrictNotes,
@@ -483,7 +498,8 @@ func TestSendMessage_buildsQueryFromTopicAndTrimmedMessage_excludingHistory_carr
 		Once()
 	llm.EXPECT().ChatStream(context.Background(), mock.AnythingOfType("llm.ChatRequest"), mock.AnythingOfType("func(string) error")).Return(domainllm.StreamResponse{}, nil).Once()
 
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil)
+	messageSources := mockMessageSourceSave(t, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, messageSources)
 
 	// When sending a message with leading/trailing whitespace
 	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "  What is CAP theorem?  ", domainknowledge.SourceModeNotes, noopSourcesHandler, noopChunkHandler, nil, nil)
@@ -519,7 +535,8 @@ func TestSendMessage_notes_fallsThroughToPlainChat_onValidEmptyOrMissRetrieval(t
 		Return(domainllm.StreamResponse{}, nil).
 		Once()
 
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil)
+	messageSources := mockMessageSourceSave(t, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, messageSources)
 
 	// When sending a message in notes mode
 	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeNotes,
@@ -553,7 +570,7 @@ func TestSendMessage_strictNotes_persistsFixedMessage_onValidEmptyOrMissRetrieva
 	var callOrder []string
 	var receivedSources []domainknowledge.Source
 	var receivedChunks []string
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, nil)
 
 	// When sending a message in strict-notes mode; llm/profiles/folders have
 	// no .EXPECT() set, so no chat/completion call and no history/profile
@@ -600,7 +617,7 @@ func TestSendMessage_local_propagatesGenericRetrievalError_persistingOnlyUserMes
 				Return(domainknowledge.RetrievalResult{}, retrievalErr).Once()
 
 			sourcesCalled := false
-			service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil)
+			service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, nil)
 
 			// When sending a message
 			err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", mode,
@@ -659,7 +676,8 @@ func TestSendMessage_localMode_withSurvivingChunks_sendsKnowledgeContextAsSecond
 				Once()
 
 			var receivedSources []domainknowledge.Source
-			service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil)
+			messageSources := mockMessageSourceSave(t, sources)
+			service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, messageSources)
 
 			// When sending a message
 			err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", c.mode,

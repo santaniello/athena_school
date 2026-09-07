@@ -20,7 +20,7 @@ import (
 func unreachableReconciliationApp(t *testing.T) *App {
 	t.Helper()
 	service := applicationknowledge.NewService(nil, nil, nil, nil, nil, nil, nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil, nil, nil, 0, 0)
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, service, nil, nil, nil)
+	app := NewApp(nil, nil, nil, nil, nil, service, nil, nil, nil, nil)
 	app.Startup(context.Background())
 	return app
 }

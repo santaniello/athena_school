@@ -17,19 +17,25 @@ import (
 // (used to fall back to the default folder and validate a chosen one
 // exists before creating a session), a domainknowledge.Retriever (used by
 // SendMessage's local source modes; never called for SourceModeWeb), a
-// Transactor (atomic message + ContextUsage writes), and a
+// Transactor (atomic message + ContextUsage writes), a
 // domainllm.ModelContextResolver (resolves a stream's model to its context
-// window; see specs/phases/phase-02-knowledge-engine/06-study-context-limits.md).
+// window; see specs/phases/phase-02-knowledge-engine/06-study-context-limits.md),
+// and a domainknowledge.MessageSourceRepository (persists the Sources
+// behind a completed assistant message, so they survive a resume — see
+// specs/phases/phase-02-knowledge-engine/09-persistent-provenance.md).
+// domain/study never imports domain/knowledge itself; this is the layer
+// that composes the two, both here and in Resume's MessageWithSources.
 type Service struct {
-	sessions  domainstudy.SessionRepository
-	messages  domainstudy.MessageRepository
-	llm       domainllm.Provider
-	profiles  domainprofile.Store
-	folders   domainfolder.Repository
-	retriever domainknowledge.Retriever
-	tx        Transactor
-	catalog   domainllm.ModelContextResolver
-	inFlight  *inFlightCoordinator
+	sessions       domainstudy.SessionRepository
+	messages       domainstudy.MessageRepository
+	llm            domainllm.Provider
+	profiles       domainprofile.Store
+	folders        domainfolder.Repository
+	retriever      domainknowledge.Retriever
+	tx             Transactor
+	catalog        domainllm.ModelContextResolver
+	messageSources domainknowledge.MessageSourceRepository
+	inFlight       *inFlightCoordinator
 }
 
 // NewService creates a Service backed by the given ports.
@@ -42,10 +48,12 @@ func NewService(
 	retriever domainknowledge.Retriever,
 	tx Transactor,
 	catalog domainllm.ModelContextResolver,
+	messageSources domainknowledge.MessageSourceRepository,
 ) *Service {
 	return &Service{
 		sessions: sessions, messages: messages, llm: llm,
 		profiles: profiles, folders: folders, retriever: retriever,
-		tx: tx, catalog: catalog, inFlight: newInFlightCoordinator(),
+		tx: tx, catalog: catalog, messageSources: messageSources,
+		inFlight: newInFlightCoordinator(),
 	}
 }

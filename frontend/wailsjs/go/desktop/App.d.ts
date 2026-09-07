@@ -47,8 +47,6 @@ export function GetKnowledgeIndexStatus():Promise<desktop.IndexStatusResult>;
 
 export function GetProfile():Promise<desktop.UserProfileInput>;
 
-export function HasLocalSession():Promise<boolean>;
-
 export function HasOpenRouterKey():Promise<boolean>;
 
 export function HasUserProfile():Promise<boolean>;
@@ -69,17 +67,11 @@ export function ListPendingReconciliations():Promise<Array<desktop.PendingReconc
 
 export function ListStudySessionsByFolder(arg1:string):Promise<Array<desktop.StudySessionResult>>;
 
-export function Login(arg1:string,arg2:string):Promise<desktop.LoginResult>;
-
-export function Logout():Promise<void>;
-
 export function MoveStudySession(arg1:string,arg2:string):Promise<void>;
 
 export function PickNotesFile():Promise<string>;
 
 export function PickNotesFolder():Promise<string>;
-
-export function Register(arg1:string,arg2:string):Promise<void>;
 
 export function ReindexKnowledgeItems():Promise<void>;
 
@@ -89,7 +81,7 @@ export function RenameFolder(arg1:string,arg2:string):Promise<void>;
 
 export function RequestOpeningTurn(arg1:string,arg2:string):Promise<void>;
 
-export function ResetLocalAccount(arg1:string):Promise<void>;
+export function ResetLocalData():Promise<void>;
 
 export function ResolvePendingReconciliationConflict(arg1:string,arg2:string):Promise<desktop.KnowledgeItemResult>;
 

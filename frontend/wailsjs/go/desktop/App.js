@@ -90,10 +90,6 @@ export function GetProfile() {
   return window['go']['desktop']['App']['GetProfile']();
 }
 
-export function HasLocalSession() {
-  return window['go']['desktop']['App']['HasLocalSession']();
-}
-
 export function HasOpenRouterKey() {
   return window['go']['desktop']['App']['HasOpenRouterKey']();
 }
@@ -134,14 +130,6 @@ export function ListStudySessionsByFolder(arg1) {
   return window['go']['desktop']['App']['ListStudySessionsByFolder'](arg1);
 }
 
-export function Login(arg1, arg2) {
-  return window['go']['desktop']['App']['Login'](arg1, arg2);
-}
-
-export function Logout() {
-  return window['go']['desktop']['App']['Logout']();
-}
-
 export function MoveStudySession(arg1, arg2) {
   return window['go']['desktop']['App']['MoveStudySession'](arg1, arg2);
 }
@@ -152,10 +140,6 @@ export function PickNotesFile() {
 
 export function PickNotesFolder() {
   return window['go']['desktop']['App']['PickNotesFolder']();
-}
-
-export function Register(arg1, arg2) {
-  return window['go']['desktop']['App']['Register'](arg1, arg2);
 }
 
 export function ReindexKnowledgeItems() {
@@ -174,8 +158,8 @@ export function RequestOpeningTurn(arg1, arg2) {
   return window['go']['desktop']['App']['RequestOpeningTurn'](arg1, arg2);
 }
 
-export function ResetLocalAccount(arg1) {
-  return window['go']['desktop']['App']['ResetLocalAccount'](arg1);
+export function ResetLocalData() {
+  return window['go']['desktop']['App']['ResetLocalData']();
 }
 
 export function ResolvePendingReconciliationConflict(arg1, arg2) {

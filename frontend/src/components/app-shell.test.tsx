@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { GetProfile, Logout, UpdateProfile } from '../../wailsjs/go/desktop/App'
+import { GetProfile, UpdateProfile } from '../../wailsjs/go/desktop/App'
 import {
   deleteStudySession,
   listStudySessionsByFolder,
@@ -28,7 +28,6 @@ import { AppShell } from './app-shell'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
   GetProfile: vi.fn(),
-  Logout: vi.fn(),
   UpdateProfile: vi.fn(),
   SaveOpenRouterKey: vi.fn(),
   HasOpenRouterKey: vi.fn().mockResolvedValue(true),
@@ -124,9 +123,7 @@ const CONTEXT_NORMAL: StudyContextUsage = {
 
 function renderShell() {
   vi.mocked(GetProfile).mockResolvedValueOnce(profileResult)
-  const onLogout = vi.fn()
-  const utils = render(<AppShell onLogout={onLogout} />)
-  return { ...utils, onLogout }
+  return render(<AppShell />)
 }
 
 describe('AppShell', () => {
@@ -483,21 +480,6 @@ describe('AppShell', () => {
     expect(GetProfile).toHaveBeenCalledOnce()
   })
 
-  it('clears the session and calls onLogout when logging out', async () => {
-    // Given the app shell mounts
-    vi.mocked(Logout).mockResolvedValueOnce()
-    const user = userEvent.setup()
-    const { onLogout } = renderShell()
-    await screen.findByText(/Felipe\./)
-
-    // When logging out
-    await user.click(screen.getByRole('button', { name: 'Log out' }))
-
-    // Then the local session is cleared and the caller is notified
-    await waitFor(() => expect(onLogout).toHaveBeenCalledOnce())
-    expect(Logout).toHaveBeenCalledOnce()
-  })
-
   it('opens an existing session picked from the sidebar tree in resume mode, wiring it into the topbar immediately and highlighting it in the tree', async () => {
     // Given Study is open, with a folder holding one previously-created
     // session
@@ -533,6 +515,11 @@ describe('AppShell', () => {
       .getByText('Existing topic', { selector: 'span.truncate' })
       .closest('div')
     expect(sessionRow).toHaveClass('bg-secondary')
+
+    // And the source-mode selector renders in the topbar, next to the
+    // session title, not floating over the composer
+    const topbar = screen.getByRole('banner')
+    expect(within(topbar).getByRole('combobox', { name: 'Source mode' })).toBeInTheDocument()
   })
 
   it('clears the active session and reverts the topbar/main pane when that same session is deleted from the tree', async () => {
@@ -921,7 +908,7 @@ describe('AppShell', () => {
   it('renders the sidebar safely, with no name shown yet, before the profile has loaded', async () => {
     // Given the profile fetch never resolves during this assertion
     vi.mocked(GetProfile).mockReturnValueOnce(new Promise(() => {}))
-    const { container } = render(<AppShell onLogout={vi.fn()} />)
+    const { container } = render(<AppShell />)
 
     // Then the shell still renders past the knowledge-index gate, with an
     // empty avatar/name instead of crashing on the missing profile

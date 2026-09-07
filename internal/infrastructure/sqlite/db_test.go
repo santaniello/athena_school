@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestOpen_createsAccountsTable(t *testing.T) {
+func TestOpen_doesNotCreateAccountsTable(t *testing.T) {
 	// Given a path to a database file that does not exist yet
 	path := filepath.Join(t.TempDir(), "athena.db")
 
@@ -21,13 +21,41 @@ func TestOpen_createsAccountsTable(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 
-	// Then the accounts table exists
+	// Then no accounts table is created — local login was removed, see
+	// specs/phases/phase-01-desktop-mvp/12-remove-local-login.md
 	var tableName string
 	queryErr := db.QueryRow(
 		`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'accounts'`,
 	).Scan(&tableName)
-	require.NoError(t, queryErr)
-	assert.Equal(t, "accounts", tableName)
+	assert.ErrorIs(t, queryErr, sql.ErrNoRows)
+}
+
+func TestOpen_dropsAccountsTable_fromAPriorInstall(t *testing.T) {
+	// Given a legacy database that still has the accounts table from before
+	// local login was removed
+	path := filepath.Join(t.TempDir(), "athena.db")
+	legacy, err := sql.Open("sqlite", path)
+	require.NoError(t, err)
+	_, err = legacy.Exec(`
+		CREATE TABLE accounts (
+			id TEXT PRIMARY KEY, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, created_at DATETIME
+		);
+		INSERT INTO accounts (id, email, password_hash) VALUES ('acc-1', 'user@example.com', 'hash');
+	`)
+	require.NoError(t, err)
+	require.NoError(t, legacy.Close())
+
+	// When opening it through the current migration path
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Then the accounts table, and the row in it, are gone
+	var tableName string
+	queryErr := db.QueryRow(
+		`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'accounts'`,
+	).Scan(&tableName)
+	assert.ErrorIs(t, queryErr, sql.ErrNoRows)
 }
 
 func TestOpen_createsUsageTable(t *testing.T) {
@@ -850,8 +878,8 @@ func TestOpen_isNoOpOnSecondOpenAndKeepsExistingData(t *testing.T) {
 	first, err := Open(path)
 	require.NoError(t, err)
 	_, execErr := first.Exec(
-		`INSERT INTO accounts (id, email, password_hash) VALUES (?, ?, ?)`,
-		"acc-1", "user@example.com", "hash",
+		`INSERT INTO folders (id, name, is_default) VALUES (?, ?, ?)`,
+		"folder-1", "Custom", 0,
 	)
 	require.NoError(t, execErr)
 	require.NoError(t, first.Close())
@@ -863,10 +891,10 @@ func TestOpen_isNoOpOnSecondOpenAndKeepsExistingData(t *testing.T) {
 	// existing row is still there
 	require.NoError(t, err)
 	defer func() { _ = second.Close() }()
-	var email string
-	queryErr := second.QueryRow(`SELECT email FROM accounts WHERE id = ?`, "acc-1").Scan(&email)
+	var name string
+	queryErr := second.QueryRow(`SELECT name FROM folders WHERE id = ?`, "folder-1").Scan(&name)
 	require.NoError(t, queryErr)
-	assert.Equal(t, "user@example.com", email)
+	assert.Equal(t, "Custom", name)
 }
 
 func TestOpen_serializesConcurrentWrites_withoutDatabaseLockedErrors(t *testing.T) {
@@ -888,8 +916,8 @@ func TestOpen_serializesConcurrentWrites_withoutDatabaseLockedErrors(t *testing.
 		go func(i int) {
 			defer wg.Done()
 			_, execErr := db.Exec(
-				`INSERT INTO accounts (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)`,
-				fmt.Sprintf("acc-%d", i), fmt.Sprintf("user%d@example.com", i), "hash", time.Now().UTC(),
+				`INSERT INTO folders (id, name, is_default, created_at) VALUES (?, ?, ?, ?)`,
+				fmt.Sprintf("folder-%d", i), fmt.Sprintf("Folder %d", i), 0, time.Now().UTC(),
 			)
 			errs <- execErr
 		}(i)

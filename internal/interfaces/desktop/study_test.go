@@ -60,9 +60,12 @@ func newTestStudyApp(t *testing.T, sessions domainstudy.SessionRepository, messa
 	t.Helper()
 	retriever := knowledgemocks.NewMockRetriever(t)
 	catalog := llmmocks.NewMockModelContextResolver(t)
-	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog)
+	messageSources := knowledgemocks.NewMockMessageSourceRepository(t)
+	messageSources.EXPECT().Save(context.Background(), mock.Anything, mock.Anything).Return(nil).Maybe()
+	messageSources.EXPECT().ListBySession(context.Background(), mock.Anything).Return(map[string][]domainknowledge.Source{}, nil).Maybe()
+	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog, messageSources)
 	folderService := folder.NewService(folders, sessions)
-	app := NewApp(nil, nil, nil, nil, nil, studyService, folderService, nil, nil, nil, nil)
+	app := NewApp(nil, nil, nil, studyService, folderService, nil, nil, nil, nil, nil)
 	app.Startup(context.Background())
 
 	captured := &capturedEvents{}
@@ -344,9 +347,11 @@ func TestApp_SendStudyMessage_emitsPostCapSourcesEvent_notes(t *testing.T) {
 	llm.EXPECT().ChatStream(mock.Anything, mock.AnythingOfType("llm.ChatRequest"), mock.AnythingOfType("func(string) error")).
 		Return(domainllm.StreamResponse{}, nil).Once()
 
-	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog)
+	messageSources := knowledgemocks.NewMockMessageSourceRepository(t)
+	messageSources.EXPECT().Save(context.Background(), mock.Anything, mock.Anything).Return(nil).Maybe()
+	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog, messageSources)
 	folderService := folder.NewService(folders, sessions)
-	app := NewApp(nil, nil, nil, nil, nil, studyService, folderService, nil, nil, nil, nil)
+	app := NewApp(nil, nil, nil, studyService, folderService, nil, nil, nil, nil, nil)
 	app.Startup(context.Background())
 	captured := &capturedEvents{}
 	app.emit = func(_ context.Context, eventName string, data ...interface{}) {
@@ -452,6 +457,44 @@ func TestApp_ResumeStudySession_returnsSessionAndHistory(t *testing.T) {
 	assert.Equal(t, "Hi", result.Messages[0].Content)
 	require.Len(t, captured.contextUnavailable, 1)
 	assert.Equal(t, "session-1", captured.contextUnavailable[0].SessionID)
+}
+
+func TestApp_ResumeStudySession_attachesPersistedSourcesToTheirMessage(t *testing.T) {
+	// Given a session with one assistant message that has persisted sources
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
+	retriever := knowledgemocks.NewMockRetriever(t)
+	catalog := llmmocks.NewMockModelContextResolver(t)
+	session := domainstudy.Session{ID: "session-1", Topic: "Go", FolderID: "default", Context: domainstudy.ContextUsage{State: domainstudy.ContextStateNormal}}
+	sessions.EXPECT().GetByID(mock.Anything, "session-1").Return(session, nil).Once()
+	messages.EXPECT().
+		ListBySession(mock.Anything, "session-1").
+		Return([]domainstudy.Message{{ID: "message-1", Role: domainstudy.RoleAssistant, Content: "Goroutines are cheap."}}, nil).
+		Once()
+	messageSources := knowledgemocks.NewMockMessageSourceRepository(t)
+	messageSources.EXPECT().
+		ListBySession(context.Background(), "session-1").
+		Return(map[string][]domainknowledge.Source{
+			"message-1": {{ChunkID: "chunk-1", SourceType: domainknowledge.SourceAthena, Concept: "Goroutines", Score: 0.9}},
+		}, nil).
+		Once()
+	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog, messageSources)
+	folderService := folder.NewService(folders, sessions)
+	app := NewApp(nil, nil, nil, studyService, folderService, nil, nil, nil, nil, nil)
+	app.Startup(context.Background())
+	app.emit = func(context.Context, string, ...interface{}) {}
+
+	// When resuming the session
+	result, err := app.ResumeStudySession("session-1")
+
+	// Then the message carries its persisted source
+	require.NoError(t, err)
+	require.Len(t, result.Messages, 1)
+	require.Len(t, result.Messages[0].Sources, 1)
+	assert.Equal(t, "Goroutines", result.Messages[0].Sources[0].Concept)
 }
 
 func TestApp_MoveStudySession_movesTheSession(t *testing.T) {

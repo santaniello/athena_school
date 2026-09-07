@@ -303,8 +303,8 @@ describe('StudyChatScreen — resuming a session', () => {
         context: CONTEXT_NORMAL,
       },
       messages: [
-        { role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z' },
-        { role: 'assistant', content: 'Hello!', createdAt: '2026-08-16T10:00:01Z' },
+        { role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z', sources: [] },
+        { role: 'assistant', content: 'Hello!', createdAt: '2026-08-16T10:00:01Z', sources: [] },
       ],
     })
 
@@ -326,6 +326,82 @@ describe('StudyChatScreen — resuming a session', () => {
     expect(screen.getByText('Hello!')).toBeInTheDocument()
     expect(onTopicResolved).toHaveBeenCalledWith('Cache invalidation')
     expect(requestOpeningTurn).not.toHaveBeenCalled()
+  })
+
+  it('shows the Local sources strip for a resumed message with persisted sources', async () => {
+    // Given a resumed session whose assistant message already has sources
+    // persisted from when it was first answered
+    setupSubscriptions()
+    vi.mocked(resumeStudySession).mockResolvedValueOnce({
+      session: {
+        id: 'session-1',
+        topic: 'Cache invalidation',
+        folderId: 'folder-1',
+        startedAt: '2026-08-16T10:00:00Z',
+        context: CONTEXT_NORMAL,
+      },
+      messages: [
+        {
+          role: 'user',
+          content: 'What is CAP theorem?',
+          createdAt: '2026-08-16T10:00:00Z',
+          sources: [],
+        },
+        {
+          role: 'assistant',
+          content: 'It stands for...',
+          createdAt: '2026-08-16T10:00:01Z',
+          sources: [
+            { sourceType: 'athena', filePath: '', heading: '', concept: 'CAP theorem', score: 0.9 },
+          ],
+        },
+      ],
+    })
+
+    // When the chat screen mounts in "resume" mode
+    render(
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic=""
+        mode="resume"
+        {...newSessionActionProps()}
+      />,
+    )
+
+    // Then the strip shows up without any live stream ever happening
+    expect(await screen.findByText('It stands for...')).toBeInTheDocument()
+    expect(screen.getByText('Local sources (1)')).toBeInTheDocument()
+  })
+
+  it('shows no Local sources strip for a resumed message with no persisted sources', async () => {
+    // Given a resumed conversation created before sources were persisted
+    setupSubscriptions()
+    vi.mocked(resumeStudySession).mockResolvedValueOnce({
+      session: {
+        id: 'session-1',
+        topic: 'Cache invalidation',
+        folderId: 'folder-1',
+        startedAt: '2026-08-16T10:00:00Z',
+        context: CONTEXT_NORMAL,
+      },
+      messages: [
+        { role: 'assistant', content: 'Hello!', createdAt: '2026-08-16T10:00:01Z', sources: [] },
+      ],
+    })
+
+    // When the chat screen mounts in "resume" mode
+    render(
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic=""
+        mode="resume"
+        {...newSessionActionProps()}
+      />,
+    )
+
+    // Then the message shows with no strip, and no error
+    expect(await screen.findByText('Hello!')).toBeInTheDocument()
+    expect(screen.queryByText(/Local sources/)).not.toBeInTheDocument()
   })
 
   it('shows an inline error when resuming fails', async () => {
@@ -399,7 +475,7 @@ describe('StudyChatScreen — resuming a session', () => {
         startedAt: '2026-08-16T10:00:00Z',
         context: CONTEXT_NORMAL,
       },
-      messages: [{ role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z' }],
+      messages: [{ role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z', sources: [] }],
     })
 
     // When the chat screen mounts in "resume" mode
@@ -427,7 +503,7 @@ describe('StudyChatScreen — resuming a session', () => {
         startedAt: '2026-08-16T10:00:00Z',
         context: CONTEXT_NORMAL,
       },
-      messages: [{ role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z' }],
+      messages: [{ role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z', sources: [] }],
     })
     const { rerender } = render(
       <StudyChatScreen
@@ -450,7 +526,9 @@ describe('StudyChatScreen — resuming a session', () => {
         startedAt: '2026-08-16T11:00:00Z',
         context: CONTEXT_NORMAL,
       },
-      messages: [{ role: 'user', content: 'Hello again', createdAt: '2026-08-16T11:00:00Z' }],
+      messages: [
+        { role: 'user', content: 'Hello again', createdAt: '2026-08-16T11:00:00Z', sources: [] },
+      ],
     })
     rerender(
       <StudyChatScreen

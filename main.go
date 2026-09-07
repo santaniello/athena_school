@@ -14,12 +14,12 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"github.com/santaniello/athena/internal/application/auth"
 	"github.com/santaniello/athena/internal/application/folder"
 	applicationingest "github.com/santaniello/athena/internal/application/ingest"
 	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
 	"github.com/santaniello/athena/internal/application/modelcatalog"
 	"github.com/santaniello/athena/internal/application/onboarding"
+	applicationreset "github.com/santaniello/athena/internal/application/reset"
 	"github.com/santaniello/athena/internal/application/study"
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
@@ -27,7 +27,6 @@ import (
 	"github.com/santaniello/athena/internal/infrastructure/configfile"
 	"github.com/santaniello/athena/internal/infrastructure/openrouter"
 	"github.com/santaniello/athena/internal/infrastructure/profilefile"
-	"github.com/santaniello/athena/internal/infrastructure/session"
 	"github.com/santaniello/athena/internal/infrastructure/sqlite"
 	"github.com/santaniello/athena/internal/infrastructure/vectorstore"
 	"github.com/santaniello/athena/internal/interfaces/desktop"
@@ -45,10 +44,6 @@ func main() {
 	dbPath, err := athenahome.File("athena.db")
 	if err != nil {
 		log.Fatalf("resolving database path: %v", err)
-	}
-	sessionPath, err := athenahome.File("session.json")
-	if err != nil {
-		log.Fatalf("resolving session path: %v", err)
 	}
 	profilePath, err := athenahome.File("profile.json")
 	if err != nil {
@@ -74,10 +69,6 @@ func main() {
 		}
 	}()
 
-	accounts := sqlite.NewAccountRepository(db)
-	sessions := session.NewStore(sessionPath)
-	authService := auth.NewService(accounts, sessions)
-
 	profiles := profilefile.NewStore(profilePath)
 	configStore := configfile.NewStore(configPath)
 	keyValidator := openrouter.NewValidator("")
@@ -97,6 +88,7 @@ func main() {
 	knowledgeEvidence := sqlite.NewEvidenceRepository(db)
 	knowledgeReconciliations := sqlite.NewReconciliationRepository(db)
 	knowledgeRelations := sqlite.NewRelationRepository(db)
+	messageSources := sqlite.NewMessageSourceRepository(db)
 	transactor := sqlite.NewSQLTransactor(db)
 	vectorStore := vectorstore.New()
 	indexLoader := applicationknowledge.NewIndexLoader(knowledgeChunks, vectorStore, domainllm.EmbeddingModel)
@@ -108,6 +100,7 @@ func main() {
 	catalogService := modelcatalog.NewService(llmClient)
 	studyService := study.NewService(
 		studySessions, studyMessages, llmClient, profiles, folders, knowledgeService, transactor, catalogService,
+		messageSources,
 	)
 	folderService := folder.NewService(folders, studySessions)
 
@@ -116,7 +109,13 @@ func main() {
 		knowledgeChunks, ingestedFiles, knowledgeItems, llmClient, transactor, vectorStore, indexLoader,
 	)
 
-	app := desktop.NewApp(authService, sessions, onboardingService, profiles, configStore, studyService, folderService, knowledgeService, ingestService, llmClient, indexLoader)
+	resetter := sqlite.NewResetter(db)
+	resetService := applicationreset.NewService(resetter, vectorStore)
+
+	app := desktop.NewApp(
+		onboardingService, profiles, configStore, studyService, folderService, knowledgeService,
+		ingestService, llmClient, indexLoader, resetService,
+	)
 
 	err = wails.Run(&options.App{
 		Title:            "Athena",
