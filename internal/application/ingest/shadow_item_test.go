@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBuildShadowItem_concept_usesFilesH1_whenPresent(t *testing.T) {
@@ -69,6 +70,25 @@ func TestBuildShadowItem_definition_isReturnedAsIs_whenUnder300Chars(t *testing.
 	// Then the full body is kept, with no truncation ellipsis, and the
 	// redundant "# Título" heading line is not repeated inside it
 	assert.Equal(t, "Uma nota curta.", definition)
+}
+
+func TestBuildShadowItem_definition_skipsLeadingHeadinglessFrontMatter_whenARealSectionFollows(t *testing.T) {
+	// Given a note whose front matter (before its first real heading) is
+	// long enough to survive mergeUndersized as its own headingless chunk —
+	// e.g. a template block of "Topic:/Status:" lines exactly at the merge
+	// threshold — followed by a real, non-trivial section
+	frontMatter := exactlyNChars(minChunkChars)
+	body := strings.TrimSpace(strings.Repeat("nota real ", 25))
+	content := frontMatter + "\n\n## Real Section\n\n" + body
+	chunks := ChunkMarkdown(content)
+	require.Equal(t, "", chunks[0].Heading, "front matter must stay its own headingless leading chunk for this case to be meaningful")
+
+	// When building the shadow item
+	_, _, definition := BuildShadowItem("notes/example.md", content, chunks)
+
+	// Then the definition reflects the first real section's prose, not the
+	// leading, heading-less front matter
+	assert.Equal(t, body, definition)
 }
 
 func TestBuildShadowItem_definition_fallsBackToAPlaceholder_whenThereAreNoChunks(t *testing.T) {
