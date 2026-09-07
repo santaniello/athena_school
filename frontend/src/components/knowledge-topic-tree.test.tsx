@@ -1,9 +1,10 @@
+import { createRef } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { listKnowledgeTopics } from '@/lib/knowledge'
 import { onIngestDone, type IngestSummary } from '@/lib/ingest'
-import { KnowledgeTopicTree } from './knowledge-topic-tree'
+import { KnowledgeTopicTree, type KnowledgeTopicTreeHandle } from './knowledge-topic-tree'
 
 vi.mock('@/lib/knowledge', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/knowledge')>()
@@ -137,6 +138,26 @@ describe('KnowledgeTopicTree', () => {
 
     // Then the newly-imported topic appears without a remount
     expect(await screen.findByRole('button', { name: 'Kubernetes' })).toBeInTheDocument()
+  })
+
+  it('reloads topics when the imperative handle\'s reload() is called', async () => {
+    // Given a tree that has already loaded its initial topics, and no
+    // notes import in progress — the only trigger before this handle
+    // existed
+    vi.mocked(listKnowledgeTopics)
+      .mockResolvedValueOnce(['Go'])
+      .mockResolvedValueOnce([])
+    stubOnIngestDone()
+    const ref = createRef<KnowledgeTopicTreeHandle>()
+    render(<KnowledgeTopicTree ref={ref} selectedTopic={null} onSelectTopic={vi.fn()} />)
+    await screen.findByRole('button', { name: 'Go' })
+
+    // When a caller outside the tree (AppShell, after deleting the last
+    // item under "Go") invokes reload()
+    act(() => ref.current?.reload())
+
+    // Then the now-empty topic list replaces the stale "Go" row
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Go' })).not.toBeInTheDocument())
   })
 
   it('ignores a stale response from the initial load when ingest:done triggers a second load first', async () => {

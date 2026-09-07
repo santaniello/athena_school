@@ -29,6 +29,10 @@ interface KnowledgeSectionProps {
   // Fired after an action inside the Explorer/Review screen changes the
   // draft count, so AppShell can refresh both badges without a reload.
   onKnowledgeChanged: () => void
+  // Fired after an Explorer action that can change which topics exist
+  // (delete, or an edit that changes the topic field), so AppShell can
+  // refresh the sidebar's KnowledgeTopicTree without a reload.
+  onTopicsChanged?: () => void
 }
 
 type Tab = 'explorer' | 'review'
@@ -52,6 +56,7 @@ function KnowledgeSection({
   mutationsDisabled,
   draftCount,
   onKnowledgeChanged,
+  onTopicsChanged,
 }: KnowledgeSectionProps) {
   const [activeTab, setActiveTab] = useState<Tab>('explorer')
   const [importTarget, setImportTarget] = useState<ImportTarget | null>(null)
@@ -148,6 +153,7 @@ function KnowledgeSection({
           mode={activeTab}
           mutationsDisabled={mutationsDisabled}
           onKnowledgeChanged={onKnowledgeChanged}
+          onTopicsChanged={onTopicsChanged}
         />
       </div>
 

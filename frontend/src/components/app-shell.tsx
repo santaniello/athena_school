@@ -4,7 +4,7 @@ import { AthenaLogo } from '@/components/athena-logo'
 import { NavItem } from '@/components/nav-item'
 import { ComingSoonPanel } from '@/components/coming-soon-panel'
 import { StudyFolderTree, type StudyFolderTreeHandle } from '@/components/study-folder-tree'
-import { KnowledgeTopicTree } from '@/components/knowledge-topic-tree'
+import { KnowledgeTopicTree, type KnowledgeTopicTreeHandle } from '@/components/knowledge-topic-tree'
 import { KnowledgeSection } from '@/components/knowledge-section'
 import { IndexLoadingScreen } from '@/components/index-loading-screen'
 import { IndexFailedScreen } from '@/components/index-failed-screen'
@@ -83,6 +83,7 @@ function AppShell() {
   const [draftCount, setDraftCount] = useState(0)
   const [pendingProposalCount, setPendingProposalCount] = useState(0)
   const studyFolderTreeRef = useRef<StudyFolderTreeHandle>(null)
+  const knowledgeTopicTreeRef = useRef<KnowledgeTopicTreeHandle>(null)
   // refreshDraftCount/refreshPendingProposalCount each fire from several
   // independent call sites (mount, approve, reject, save-as-drafts, a
   // reconciliation decision); their responses can arrive out of order, so
@@ -135,6 +136,18 @@ function AppShell() {
   function refreshReviewCounts() {
     refreshDraftCount()
     refreshPendingProposalCount()
+  }
+
+  // Fired after a Knowledge Explorer delete or a topic-changing edit — the
+  // only two actions that can add or remove a topic outside of an import.
+  // KnowledgeTopicTree otherwise only refetches on ingest:done, so without
+  // this a removed or renamed topic would linger in the sidebar until the
+  // next import or a full app restart.
+  // Stryker disable next-line OptionalChaining: only reachable while
+  // viewing the Knowledge section, which always mounts KnowledgeTopicTree
+  // via the ref this guards — current is never null on this path.
+  function refreshKnowledgeTopics() {
+    knowledgeTopicTreeRef.current?.reload()
   }
 
   // Stryker disable ArrayDeclaration: mount-once effect — its dependency
@@ -369,6 +382,7 @@ function AppShell() {
                   )}
                   {item.id === 'knowledge' && section === 'knowledge' && (
                     <KnowledgeTopicTree
+                      ref={knowledgeTopicTreeRef}
                       selectedTopic={selectedTopic}
                       onSelectTopic={setSelectedTopic}
                     />
@@ -477,6 +491,7 @@ function AppShell() {
                 mutationsDisabled={retryingIndex}
                 draftCount={draftCount}
                 onKnowledgeChanged={refreshReviewCounts}
+                onTopicsChanged={refreshKnowledgeTopics}
               />
             ) : section === 'documentation' ? (
               <DocumentationScreen />

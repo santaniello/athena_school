@@ -22,7 +22,10 @@ import {
   approveKnowledgeItem,
   countDraftKnowledgeItems,
   countPendingReconciliations,
+  deleteKnowledgeItem,
   listKnowledgeItems,
+  listKnowledgeTopics,
+  type KnowledgeItem,
 } from '@/lib/knowledge'
 import { AppShell } from './app-shell'
 
@@ -903,6 +906,41 @@ describe('AppShell', () => {
 
     // Then the tree is gone again
     expect(screen.queryByText('All topics')).not.toBeInTheDocument()
+  })
+
+  it('reloads the sidebar topic list after deleting a Knowledge Item', async () => {
+    // Given a single item, the only one under its topic
+    const item: KnowledgeItem = {
+      id: 'item-1',
+      topic: 'Go',
+      concept: 'Channels',
+      definition: 'Typed conduits for goroutine communication.',
+      properties: [],
+      tradeOffs: [],
+      relatedConcepts: [],
+      source: 'athena',
+      status: 'approved',
+      createdAt: '2026-08-18T10:00:00Z',
+      updatedAt: '2026-08-18T10:00:00Z',
+    }
+    vi.mocked(listKnowledgeItems).mockResolvedValue([item])
+    vi.mocked(deleteKnowledgeItem).mockResolvedValueOnce(undefined)
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+    await user.click(screen.getByRole('button', { name: 'Knowledge' }))
+    await screen.findAllByText('All topics')
+    await waitFor(() => expect(listKnowledgeTopics).toHaveBeenCalledTimes(1))
+
+    // When deleting that item
+    await user.click(await screen.findByText('Channels'))
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
+
+    // Then the sidebar's topic list refetches — without this, "Go" would
+    // otherwise linger in the sidebar until a full app restart
+    await waitFor(() => expect(listKnowledgeTopics).toHaveBeenCalledTimes(2))
   })
 
   it('renders the sidebar safely, with no name shown yet, before the profile has loaded', async () => {

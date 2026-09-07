@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
   approveKnowledgeItem,
+  deleteKnowledgeItem,
   listKnowledgeItems,
   listPendingReconciliations,
   type KnowledgeItem,
@@ -17,6 +18,7 @@ vi.mock('@/lib/knowledge', async (importOriginal) => {
     ...original,
     listKnowledgeItems: vi.fn(),
     approveKnowledgeItem: vi.fn(),
+    deleteKnowledgeItem: vi.fn(),
     // Defaults to empty so every existing test below — none of which cares
     // about pending reconciliation proposals — can switch to the Review tab
     // without also needing to stub this out itself.
@@ -285,6 +287,34 @@ describe('KnowledgeSection', () => {
 
     // Then AppShell's badge-freshness callback fires
     await waitFor(() => expect(onKnowledgeChanged).toHaveBeenCalledTimes(1))
+  })
+
+  it('threads onTopicsChanged into the Explorer tab, firing it after deleting an item', async () => {
+    // Given a single item on the Explorer tab
+    const item = draftItem('1')
+    vi.mocked(listKnowledgeItems).mockResolvedValue([item])
+    vi.mocked(deleteKnowledgeItem).mockResolvedValue(undefined)
+    const onTopicsChanged = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <KnowledgeSection
+        selectedTopic={null}
+        mutationsDisabled={false}
+        draftCount={1}
+        onKnowledgeChanged={vi.fn()}
+        onTopicsChanged={onTopicsChanged}
+      />,
+    )
+    await user.click(await screen.findByText('Concept 1'))
+
+    // When deleting it
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
+
+    // Then AppShell's topic-refresh callback fires — deleting an item can
+    // remove the last one under its topic
+    await waitFor(() => expect(onTopicsChanged).toHaveBeenCalledTimes(1))
   })
 
   it('offers "Import folder..." and "Import file..." from the Import notes dropdown', async () => {
