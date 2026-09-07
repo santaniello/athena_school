@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { HasOpenRouterKey, UpdateProfile } from '../../wailsjs/go/desktop/App'
+import { HasOpenRouterKey, ResetLocalData, UpdateProfile } from '../../wailsjs/go/desktop/App'
 import SettingsScreen from './SettingsScreen'
 import type { ProfileDraft } from '@/lib/profile'
 import { getKnowledgeExtractionSettings, updateKnowledgeExtractionSettings } from '@/lib/knowledge'
@@ -10,6 +10,7 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   UpdateProfile: vi.fn(),
   SaveOpenRouterKey: vi.fn(),
   HasOpenRouterKey: vi.fn(),
+  ResetLocalData: vi.fn(),
 }))
 
 vi.mock('@/lib/knowledge', () => ({
@@ -293,5 +294,65 @@ describe('SettingsScreen', () => {
     expect(screen.queryByText('Setting saved.')).not.toBeInTheDocument()
     resolveSave()
     expect(await screen.findByText('Setting saved.')).toBeInTheDocument()
+  })
+
+  it('opens the reset confirmation dialog from the Danger zone button', async () => {
+    // Given the settings screen
+    const user = userEvent.setup()
+    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
+
+    // When clicking "Reset local data"
+    await user.click(screen.getByRole('button', { name: 'Reset local data' }))
+
+    // Then the confirmation dialog appears
+    expect(await screen.findByText('Reset local data?')).toBeInTheDocument()
+  })
+
+  it('calls the reset binding when the dialog is confirmed', async () => {
+    // Given the confirmation dialog is open, and the binding never resolves
+    // during this assertion
+    vi.mocked(ResetLocalData).mockReturnValueOnce(new Promise(() => {}))
+    const user = userEvent.setup()
+    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
+    await user.click(screen.getByRole('button', { name: 'Reset local data' }))
+    await screen.findByText('Reset local data?')
+
+    // When confirming inside the dialog
+    await user.click(screen.getByRole('button', { name: 'Yes, reset local data' }))
+
+    // Then the binding is called and the dialog reports progress
+    expect(ResetLocalData).toHaveBeenCalledOnce()
+    expect(await screen.findByRole('button', { name: 'Resetting...' })).toBeDisabled()
+  })
+
+  it('shows an inline error and re-enables the dialog when the reset binding rejects', async () => {
+    // Given a rejected reset
+    vi.mocked(ResetLocalData).mockRejectedValueOnce(new Error('sqlite: resetting local data: boom'))
+    const user = userEvent.setup()
+    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
+    await user.click(screen.getByRole('button', { name: 'Reset local data' }))
+    await screen.findByText('Reset local data?')
+
+    // When confirming
+    await user.click(screen.getByRole('button', { name: 'Yes, reset local data' }))
+
+    // Then the error is shown and the dialog's action is usable again
+    expect(await screen.findByText('sqlite: resetting local data: boom')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Yes, reset local data' })).toBeEnabled()
+  })
+
+  it('closes the reset dialog when Cancel is clicked', async () => {
+    // Given the confirmation dialog is open
+    const user = userEvent.setup()
+    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
+    await user.click(screen.getByRole('button', { name: 'Reset local data' }))
+    await screen.findByText('Reset local data?')
+
+    // When cancelling
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    // Then the dialog closes without calling the binding
+    expect(screen.queryByText('Reset local data?')).not.toBeInTheDocument()
+    expect(ResetLocalData).not.toHaveBeenCalled()
   })
 })

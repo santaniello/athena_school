@@ -50,8 +50,8 @@ function KnowledgeTopicTree({ selectedTopic, onSelectTopic }: KnowledgeTopicTree
 
   function rowClassName(active: boolean) {
     return cn(
-      'flex cursor-pointer items-center gap-1.5 truncate rounded-md py-1 pr-3 pl-6 text-left text-xs hover:bg-accent',
-      active && 'bg-secondary text-foreground',
+      'flex cursor-pointer items-center gap-1.5 rounded-md py-1 pr-3 pl-10 text-left text-xs hover:bg-accent',
+      active && 'bg-secondary',
     )
   }
 
@@ -59,22 +59,32 @@ function KnowledgeTopicTree({ selectedTopic, onSelectTopic }: KnowledgeTopicTree
     <div className="flex flex-col gap-0.5 py-0.5">
       <button
         type="button"
-        className={rowClassName(selectedTopic === null)}
+        className="flex cursor-pointer items-center gap-1.5 rounded-md py-1 pr-3 pl-6 text-left text-xs hover:bg-accent"
         onClick={() => onSelectTopic(null)}
       >
         <FolderTree className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
-        All topics
+        <span className="flex-1 truncate font-medium text-foreground">All topics</span>
       </button>
-      {topics.map((topic) => (
-        <button
-          key={topic}
-          type="button"
-          className={rowClassName(selectedTopic === topic)}
-          onClick={() => onSelectTopic(topic)}
-        >
-          <span className="truncate">{topic}</span>
-        </button>
-      ))}
+      {topics.map((topic) => {
+        const selected = selectedTopic === topic
+        return (
+          <button
+            key={topic}
+            type="button"
+            className={rowClassName(selected)}
+            onClick={() => onSelectTopic(topic)}
+          >
+            <span
+              className={cn(
+                'size-1.5 shrink-0 rounded-full',
+                selected ? 'bg-primary shadow-[0_0_6px_1px_var(--primary)]' : 'bg-muted-foreground',
+              )}
+              aria-hidden="true"
+            />
+            <span className="min-w-0 flex-1 truncate text-foreground">{topic}</span>
+          </button>
+        )
+      })}
       {error && <p className="px-3 py-1 text-xs text-destructive">{error}</p>}
     </div>
   )

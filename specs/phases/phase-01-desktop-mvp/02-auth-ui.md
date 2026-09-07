@@ -1,5 +1,10 @@
 # Phase 1.2 — Auth UI (Desktop)
 
+> **Removed.** See [01-auth-backend.md](01-auth-backend.md) and
+> [12-remove-local-login.md](12-remove-local-login.md) — there is no
+> login/register/reset-account screen anymore. Kept here for history; do
+> not implement against this spec.
+
 ## Goal
 
 User can create a local account and log in from the desktop app. Everything runs on-device (see [01-auth-backend.md](01-auth-backend.md)) — no email confirmation, no network call.

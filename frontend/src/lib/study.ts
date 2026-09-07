@@ -31,6 +31,7 @@ export interface StudyMessage {
   role: string
   content: string
   createdAt: string
+  sources: StudySource[]
 }
 
 export interface StudySessionHistory {
@@ -152,6 +153,7 @@ export async function resumeStudySession(sessionId: string): Promise<StudySessio
       role: message.role,
       content: message.content,
       createdAt: message.createdAt,
+      sources: message.sources,
     })),
   }
 }

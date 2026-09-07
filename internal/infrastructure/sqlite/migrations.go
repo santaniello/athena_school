@@ -15,12 +15,6 @@ import (
 // EXISTS" and re-running one unconditionally would error on the second
 // Open.
 var migrations = []func(*sql.DB) error{
-	execSQL(`CREATE TABLE IF NOT EXISTS accounts (
-		id            TEXT PRIMARY KEY,
-		email         TEXT UNIQUE NOT NULL,
-		password_hash TEXT NOT NULL,
-		created_at    DATETIME
-	)`),
 	execSQL(`CREATE TABLE IF NOT EXISTS usage (
 		id            TEXT PRIMARY KEY,
 		session_id    TEXT REFERENCES sessions(id) ON DELETE SET NULL,
@@ -143,6 +137,32 @@ var migrations = []func(*sql.DB) error{
 		created_at    DATETIME NOT NULL,
 		PRIMARY KEY (from_item_id, to_item_id, relation_type),
 		CHECK (from_item_id <> to_item_id)
+	)`),
+	// dropAccountsTable removes the local login/account table: no other
+	// table ever referenced it by foreign key, and the app is now a
+	// single-user local install identified by ~/.athena/profile.json, not
+	// by an account row. IF EXISTS keeps this safe to re-run on every Open
+	// (a fresh install never created the table in the first place). See
+	// specs/phases/phase-01-desktop-mvp/12-remove-local-login.md.
+	execSQL(`DROP TABLE IF EXISTS accounts`),
+	// message_sources persists the local-knowledge Sources that backed one
+	// completed assistant message, so they survive a resume instead of
+	// only existing as the transient "study:sources" event. chunk_id/
+	// item_id are NOT NULL — retrieval.go never produces a Source with
+	// either blank. See
+	// specs/phases/phase-02-knowledge-engine/09-persistent-provenance.md.
+	execSQL(`CREATE TABLE IF NOT EXISTS message_sources (
+		message_id  TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+		position    INTEGER NOT NULL,
+		chunk_id    TEXT NOT NULL,
+		item_id     TEXT NOT NULL,
+		source_type TEXT NOT NULL,
+		file_path   TEXT NOT NULL DEFAULT '',
+		heading     TEXT NOT NULL DEFAULT '',
+		concept     TEXT NOT NULL DEFAULT '',
+		score       REAL NOT NULL,
+		excerpt     TEXT NOT NULL,
+		PRIMARY KEY (message_id, position)
 	)`),
 }
 

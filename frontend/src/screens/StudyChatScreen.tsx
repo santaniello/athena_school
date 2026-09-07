@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { ChangeEvent, KeyboardEvent, UIEvent } from 'react'
 import { ArrowUp } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -57,6 +58,10 @@ interface StudyChatScreenProps {
   // refresh the sidebar/Review-tab badge without a reload. See
   // specs/phases/phase-02-knowledge-engine/07-knowledge-review.md.
   onKnowledgeChanged?: () => void
+  // AppShell's topbar node the source-mode selector portals into, keeping
+  // it out of the composer's textarea. Undefined/null (e.g. a standalone
+  // render in tests) falls back to rendering it inline over the composer.
+  sourceModeSlot?: HTMLElement | null
 }
 
 // ContextState mirrors the persisted study.ContextState the backend tracks
@@ -95,6 +100,7 @@ function StudyChatScreen({
   onStartNewSession,
   startingNewSession,
   onKnowledgeChanged,
+  sourceModeSlot,
 }: StudyChatScreenProps) {
   const [sessionTopic, setSessionTopic] = useState(initialTopic)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -175,6 +181,7 @@ function StudyChatScreen({
           history.messages.map((message) => ({
             role: message.role as ChatMessage['role'],
             content: message.content,
+            sources: message.sources,
           })),
         )
       })
@@ -335,6 +342,14 @@ function StudyChatScreen({
     void handleSend()
   }
 
+  const sourceModeSelect = (
+    <SourceModeSelect
+      value={sourceMode}
+      onValueChange={setSourceMode}
+      disabled={isStreaming || contextState === 'blocked'}
+    />
+  )
+
   return (
     <div className="flex h-full w-full flex-col gap-3">
       <div
@@ -342,7 +357,7 @@ function StudyChatScreen({
         onScroll={handleTranscriptScroll}
         role="log"
         aria-label="Conversation"
-        className="thin-scroll flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-2"
+        className="thin-scroll flex min-h-0 flex-1 transform-gpu flex-col gap-3 overflow-y-auto pr-2"
       >
         {messages.map((message, index) =>
           message.role === 'assistant' && message.sources && message.sources.length > 0 ? (
@@ -415,6 +430,11 @@ function StudyChatScreen({
           </AlertDescription>
         </Alert>
       )}
+      {/* Prefers AppShell's topbar slot (see its sourceModeSlot state) so the
+          selector sits at the top of the page instead of floating over the
+          composer; falls back to the composer when no slot is given (e.g.
+          this screen rendered standalone, as in its own tests). */}
+      {sourceModeSlot && createPortal(sourceModeSelect, sourceModeSlot)}
       <div className="relative">
         <Textarea
           ref={textareaRef}
@@ -425,13 +445,7 @@ function StudyChatScreen({
           placeholder="Type your answer..."
           className="min-h-24 max-h-[200px] resize-none overflow-y-auto pb-11"
         />
-        <div className="absolute bottom-2 left-2">
-          <SourceModeSelect
-            value={sourceMode}
-            onValueChange={setSourceMode}
-            disabled={isStreaming || contextState === 'blocked'}
-          />
-        </div>
+        {!sourceModeSlot && <div className="absolute bottom-2 left-2">{sourceModeSelect}</div>}
         <div className="absolute right-2 bottom-2 flex items-center gap-2">
           <Button
             size="sm"

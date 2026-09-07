@@ -104,7 +104,7 @@ describe('KnowledgeTopicTree', () => {
     )
   })
 
-  it('marks "All topics" as active when no topic is selected', async () => {
+  it('never gives "All topics" the active fill, like a Study folder header', async () => {
     // Given no topic is currently selected
     vi.mocked(listKnowledgeTopics).mockResolvedValueOnce(['Go'])
     stubOnIngestDone()
@@ -112,8 +112,12 @@ describe('KnowledgeTopicTree', () => {
     // When rendering the tree
     render(<KnowledgeTopicTree selectedTopic={null} onSelectTopic={vi.fn()} />)
 
-    // Then "All topics" carries the active styling and "Go" does not
-    expect(screen.getByRole('button', { name: /All topics/ }).className).toContain('bg-secondary')
+    // Then "All topics" stays unfilled — only individual topic rows (the
+    // session-row equivalent) carry the active background — and "Go" is
+    // unaffected since it isn't selected
+    expect(screen.getByRole('button', { name: /All topics/ }).className).not.toContain(
+      'bg-secondary',
+    )
     expect((await screen.findByRole('button', { name: 'Go' })).className).not.toContain(
       'bg-secondary',
     )

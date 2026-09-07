@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { BookOpen, LogOut } from 'lucide-react'
-import { Logout } from '../../wailsjs/go/desktop/App'
+import { BookOpen } from 'lucide-react'
 import { AthenaLogo } from '@/components/athena-logo'
 import { NavItem } from '@/components/nav-item'
 import { ComingSoonPanel } from '@/components/coming-soon-panel'
@@ -40,10 +39,6 @@ const INITIAL_INDEX_STATUS: IndexStatus = {
 }
 // Stryker restore ArrayDeclaration,StringLiteral
 
-interface AppShellProps {
-  onLogout: () => void
-}
-
 interface ActiveStudySession {
   id: string
   topic: string
@@ -68,10 +63,16 @@ const FOOTER_ITEMS = NAVIGATION.filter((item) => item.group === 'footer')
 // this component owns which session is open so the tree (rail) and the chat
 // view (main pane) can stay in sync. See
 // specs/phases/phase-01-desktop-mvp/10-study-folders.md.
-function AppShell({ onLogout }: AppShellProps) {
+function AppShell() {
   const [section, setSection] = useState<AppSection>('home')
   const [profile, setProfile] = useState<ProfileDraft | null>(null)
   const [activeSession, setActiveSession] = useState<ActiveStudySession | null>(null)
+  // Holds the header's slot DOM node once mounted, so StudyChatScreen can
+  // portal its source-mode selector there instead of floating over its own
+  // composer textarea. A plain state setter as the ref callback fires with
+  // the node on mount and with null on unmount/section change — no portal
+  // while this is null, which is exactly the "not in Study" state.
+  const [sourceModeSlot, setSourceModeSlot] = useState<HTMLDivElement | null>(null)
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
   const [indexStatus, setIndexStatus] = useState<IndexStatus>(INITIAL_INDEX_STATUS)
   const [continuedWithoutSearch, setContinuedWithoutSearch] = useState(false)
@@ -211,11 +212,6 @@ function AppShell({ onLogout }: AppShellProps) {
   // Mode's own status ever changes.
   const studyLocked = studyItem.status === 'locked'
   // Stryker restore ConditionalExpression,StringLiteral
-
-  async function handleLogout() {
-    await Logout()
-    onLogout()
-  }
 
   function handleSelectSession(session: StudySession, folderName: string) {
     setActiveSession({
@@ -399,14 +395,6 @@ function AppShell({ onLogout }: AppShellProps) {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-foreground">{profile?.name}</p>
               </div>
-              <button
-                type="button"
-                aria-label="Log out"
-                onClick={() => void handleLogout()}
-                className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
-              >
-                <LogOut className="size-4" aria-hidden="true" />
-              </button>
             </div>
           </nav>
         </ResizablePanel>
@@ -418,16 +406,21 @@ function AppShell({ onLogout }: AppShellProps) {
           className="flex h-full w-full flex-col"
           style={{ overflow: 'hidden' }}
         >
-          <header className="flex min-h-11 shrink-0 items-center border-b border-border px-6 py-2">
+          <header className="flex min-h-11 shrink-0 items-center justify-between gap-3 border-b border-border px-6 py-2">
             {section === 'study' && activeSession ? (
-              <div className="min-w-0">
-                <p className="truncate text-[11px] text-muted-foreground">
-                  Study / {activeSession.folderName}
-                </p>
-                <h1 className="font-heading truncate text-base font-bold text-foreground">
-                  {activeSession.topic}
-                </h1>
-              </div>
+              <>
+                <div className="min-w-0">
+                  <p className="truncate text-[11px] text-muted-foreground">
+                    Study / {activeSession.folderName}
+                  </p>
+                  <h1 className="font-heading truncate text-base font-bold text-foreground">
+                    {activeSession.topic}
+                  </h1>
+                </div>
+                {/* StudyChatScreen portals its source-mode selector into
+                    this node — see the sourceModeSlot state above. */}
+                <div ref={setSourceModeSlot} />
+              </>
             ) : (
               <h1 className="font-heading text-xs font-bold tracking-[0.14em] text-foreground uppercase">
                 {activeItem.label}
@@ -467,6 +460,7 @@ function AppShell({ onLogout }: AppShellProps) {
                   onStartNewSession={handleStartNewSession}
                   startingNewSession={startingNewSession}
                   onKnowledgeChanged={refreshReviewCounts}
+                  sourceModeSlot={sourceModeSlot}
                 />
               ) : (
                 <div className="m-auto flex flex-col items-center gap-2 text-center">
