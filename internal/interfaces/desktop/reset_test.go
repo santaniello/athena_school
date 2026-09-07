@@ -43,6 +43,24 @@ func TestApp_ResetLocalData_resetsStorageThenReloadsTheApp(t *testing.T) {
 	assert.True(t, *reloaded)
 }
 
+func TestApp_ResetLocalData_reloadsTheAppEvenWhenTheVectorIndexFailsToClear(t *testing.T) {
+	// Given an App whose resetter succeeds but whose vector store fails to
+	// clear, after the durable delete has already happened
+	resetter := resetmocks.NewMockResetter(t)
+	resetter.EXPECT().Reset(context.Background()).Return(nil).Once()
+	vectorStore := knowledgemocks.NewMockVectorStore(t)
+	vectorStore.EXPECT().ReplaceAll(context.Background(), []knowledge.Chunk(nil)).Return(assert.AnError).Once()
+	app, reloaded := newTestResetApp(t, resetter, vectorStore)
+
+	// When resetting local data
+	err := app.ResetLocalData()
+
+	// Then it still succeeds and reloads — SQLite is already durably empty,
+	// so a stale UI would be worse than a briefly stale in-memory index
+	require.NoError(t, err)
+	assert.True(t, *reloaded)
+}
+
 func TestApp_ResetLocalData_propagatesError_withoutReloadingTheApp(t *testing.T) {
 	// Given an App backed by a resetter that fails
 	resetter := resetmocks.NewMockResetter(t)

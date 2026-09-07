@@ -61,8 +61,8 @@ func newTestStudyApp(t *testing.T, sessions domainstudy.SessionRepository, messa
 	retriever := knowledgemocks.NewMockRetriever(t)
 	catalog := llmmocks.NewMockModelContextResolver(t)
 	messageSources := knowledgemocks.NewMockMessageSourceRepository(t)
-	messageSources.EXPECT().Save(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
-	messageSources.EXPECT().ListBySession(mock.Anything, mock.Anything).Return(map[string][]domainknowledge.Source{}, nil).Maybe()
+	messageSources.EXPECT().Save(context.Background(), mock.Anything, mock.Anything).Return(nil).Maybe()
+	messageSources.EXPECT().ListBySession(context.Background(), mock.Anything).Return(map[string][]domainknowledge.Source{}, nil).Maybe()
 	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog, messageSources)
 	folderService := folder.NewService(folders, sessions)
 	app := NewApp(nil, nil, nil, studyService, folderService, nil, nil, nil, nil, nil)
@@ -348,7 +348,7 @@ func TestApp_SendStudyMessage_emitsPostCapSourcesEvent_notes(t *testing.T) {
 		Return(domainllm.StreamResponse{}, nil).Once()
 
 	messageSources := knowledgemocks.NewMockMessageSourceRepository(t)
-	messageSources.EXPECT().Save(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+	messageSources.EXPECT().Save(context.Background(), mock.Anything, mock.Anything).Return(nil).Maybe()
 	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog, messageSources)
 	folderService := folder.NewService(folders, sessions)
 	app := NewApp(nil, nil, nil, studyService, folderService, nil, nil, nil, nil, nil)
@@ -476,7 +476,7 @@ func TestApp_ResumeStudySession_attachesPersistedSourcesToTheirMessage(t *testin
 		Once()
 	messageSources := knowledgemocks.NewMockMessageSourceRepository(t)
 	messageSources.EXPECT().
-		ListBySession(mock.Anything, "session-1").
+		ListBySession(context.Background(), "session-1").
 		Return(map[string][]domainknowledge.Source{
 			"message-1": {{ChunkID: "chunk-1", SourceType: domainknowledge.SourceAthena, Concept: "Goroutines", Score: 0.9}},
 		}, nil).

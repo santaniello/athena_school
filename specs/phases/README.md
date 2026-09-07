@@ -37,7 +37,7 @@ Payments         Paddle
 | Phase | Name | Goal | Depends on |
 |---|---|---|---|
 | [0](phase-00-foundation/) | Foundation | Repo, tooling, CI/CD | — |
-| [1](phase-01-desktop-mvp/) | Desktop MVP | Login, onboarding, study | Phase 0 |
+| [1](phase-01-desktop-mvp/) | Desktop MVP | OpenRouter key gate, onboarding, study | Phase 0 |
 | [2](phase-02-knowledge-engine/) | Knowledge Engine | Knowledge Base + RAG + notes | Phase 1 |
 | [3](phase-03-learning-intelligence/) | Learning Intelligence | Challenge + Gap Detection + Flashcards | Phase 2 |
 | [4](phase-04-interview-mode/) | Interview Mode | Full interview simulation | Phase 3 |

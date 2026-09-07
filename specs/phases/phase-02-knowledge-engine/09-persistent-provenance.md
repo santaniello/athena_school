@@ -319,7 +319,6 @@ were closed by strengthening the test suite, not by weakening the mutation run).
 
 ### Still out of scope for this increment
 
-- `message_sources`, persisted RAG answer sources, resume restoration, and their frontend rendering.
 - The close-app warning for unsaved candidates. It remains a separate follow-up increment; ordinary
   `Dismiss` cleanup is in scope here.
 - Persisting receipts/candidates across restarts.
