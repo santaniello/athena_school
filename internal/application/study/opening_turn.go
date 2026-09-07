@@ -55,7 +55,7 @@ func (s *Service) RequestOpeningTurn(
 
 	systemPrompt := buildSystemPrompt(profile, topic)
 	openingTurn := []domainllm.Message{{Role: "system", Content: systemPrompt}}
-	if _, err := s.streamAndPersist(ctx, sessionID, session.Context, openingTurn, onChunk, onContext, onContextUnavailable); err != nil {
+	if _, err := s.streamAndPersist(ctx, sessionID, session.Context, openingTurn, nil, onChunk, onContext, onContextUnavailable); err != nil {
 		return fmt.Errorf("study: requesting opening turn: %w", err)
 	}
 	return nil

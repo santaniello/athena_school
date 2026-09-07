@@ -1,3 +1,4 @@
+import { CircleHelp } from 'lucide-react'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -6,6 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { SourceMode } from '@/lib/study'
 
 interface SourceModeOption {
@@ -46,10 +48,11 @@ interface SourceModeSelectProps {
 
 // The composer's source-mode selector: Notes, Strict notes, or Web,
 // defaulting to Notes on every new or resumed chat. Disabled while a
-// response streams.
+// response streams. The dropdown lists plain labels only — what each mode
+// means lives in the "?" tooltip beside it, not stacked under every item.
 function SourceModeSelect({ value, onValueChange, disabled }: SourceModeSelectProps) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex items-center gap-1.5">
       <Label htmlFor="source-mode-select" className="sr-only">
         Source mode
       </Label>
@@ -64,14 +67,23 @@ function SourceModeSelect({ value, onValueChange, disabled }: SourceModeSelectPr
         <SelectContent>
           {SOURCE_MODE_OPTIONS.map((option) => (
             <SelectItem key={option.value} value={option.value}>
-              <div className="flex flex-col py-0.5">
-                <span>{option.label}</span>
-                <span className="text-xs text-muted-foreground">{option.description}</span>
-              </div>
+              {option.label}
             </SelectItem>
           ))}
         </SelectContent>
       </Select>
+      <Tooltip>
+        <TooltipTrigger aria-label="What do the source modes mean?">
+          <CircleHelp className="size-4 text-muted-foreground" aria-hidden="true" />
+        </TooltipTrigger>
+        <TooltipContent className="flex flex-col gap-1.5 py-2">
+          {SOURCE_MODE_OPTIONS.map((option) => (
+            <p key={option.value}>
+              <span className="font-semibold">{option.label}:</span> {option.description}
+            </p>
+          ))}
+        </TooltipContent>
+      </Tooltip>
     </div>
   )
 }

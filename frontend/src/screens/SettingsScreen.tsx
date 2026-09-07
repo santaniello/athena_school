@@ -13,11 +13,13 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { OpenRouterKeyForm } from '@/components/openrouter-key-form'
+import { ResetLocalDataDialog } from '@/components/reset-local-data-dialog'
 import { hasOpenRouterKey } from '@/lib/openrouterKey'
 import { updateUserProfile, type ProfileDraft } from '@/lib/profile'
 import { profileErrorMessage } from '@/lib/onboardingErrors'
 import { ASSISTANT_LANGUAGES, EXPERIENCE_LEVELS, STUDY_STYLES } from '@/lib/profileOptions'
 import { getKnowledgeExtractionSettings, updateKnowledgeExtractionSettings } from '@/lib/knowledge'
+import { ResetLocalData } from '../../wailsjs/go/desktop/App'
 
 interface SettingsScreenProps {
   profile: ProfileDraft
@@ -47,6 +49,9 @@ function SettingsScreen({ profile, onProfileUpdated }: SettingsScreenProps) {
   const [extractionSettingsError, setExtractionSettingsError] = useState('')
   const [extractionSettingsSaved, setExtractionSettingsSaved] = useState(false)
   const [isSavingExtractionSettings, setIsSavingExtractionSettings] = useState(false)
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false)
+  const [isResetting, setIsResetting] = useState(false)
+  const [resetError, setResetError] = useState('')
 
   useEffect(() => {
     void hasOpenRouterKey().then(setHasKey)
@@ -89,8 +94,22 @@ function SettingsScreen({ profile, onProfileUpdated }: SettingsScreenProps) {
     }
   }
 
+  async function handleResetLocalData() {
+    setResetError('')
+    setIsResetting(true)
+    try {
+      // On success the app reloads (see ResetLocalData in
+      // internal/interfaces/desktop/reset.go), so there is nothing to
+      // update here — this component is about to be torn down.
+      await ResetLocalData()
+    } catch (err) {
+      setResetError(err instanceof Error ? err.message : 'Failed to reset local data.')
+      setIsResetting(false)
+    }
+  }
+
   return (
-    <div className="mx-auto flex w-full max-w-lg flex-col gap-8">
+    <div className="thin-scroll mx-auto flex w-full max-w-lg flex-col gap-8 overflow-y-auto pr-2">
       <div className="flex flex-col gap-4">
         <h2 className="font-heading text-sm font-bold tracking-[0.14em] text-foreground uppercase">
           Profile
@@ -258,6 +277,36 @@ function SettingsScreen({ profile, onProfileUpdated }: SettingsScreenProps) {
         )}
         <OpenRouterKeyForm onSaved={() => setHasKey(true)} />
       </div>
+
+      <div className="flex flex-col gap-4 border-t border-border pt-8">
+        <h2 className="font-heading text-sm font-bold tracking-[0.14em] text-destructive uppercase">
+          Danger zone
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Permanently delete every study session, every folder you created, and your entire
+          knowledge base. Your OpenRouter key and profile are not affected.
+        </p>
+        {resetError && (
+          <Alert variant="destructive">
+            <AlertDescription>{resetError}</AlertDescription>
+          </Alert>
+        )}
+        <Button
+          type="button"
+          variant="destructive"
+          className="self-start"
+          onClick={() => setIsResetDialogOpen(true)}
+        >
+          Reset local data
+        </Button>
+      </div>
+
+      <ResetLocalDataDialog
+        open={isResetDialogOpen}
+        pending={isResetting}
+        onCancel={() => setIsResetDialogOpen(false)}
+        onConfirm={() => void handleResetLocalData()}
+      />
     </div>
   )
 }

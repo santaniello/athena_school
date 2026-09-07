@@ -55,7 +55,7 @@ Pagamentos       Paddle
 | Fase | Nome | Objetivo | Dependências |
 |---|---|---|---|
 | 0 | Foundation | Repositório, tooling, CI/CD | — |
-| 1 | Desktop MVP | App funcional com login, onboarding e estudo | Fase 0 |
+| 1 | Desktop MVP | App funcional com gate de chave OpenRouter, onboarding e estudo | Fase 0 |
 | 2 | Knowledge Engine | Knowledge Base + RAG + notas | Fase 1 |
 | 3 | Learning Intelligence | Challenge + Gap Detection + Flashcards | Fase 2 |
 | 4 | Interview Mode | Simulação de entrevista completa | Fase 3 |

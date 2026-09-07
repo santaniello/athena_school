@@ -7,13 +7,12 @@ import (
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"github.com/santaniello/athena/internal/application/auth"
 	"github.com/santaniello/athena/internal/application/folder"
 	applicationingest "github.com/santaniello/athena/internal/application/ingest"
 	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
 	"github.com/santaniello/athena/internal/application/onboarding"
+	applicationreset "github.com/santaniello/athena/internal/application/reset"
 	"github.com/santaniello/athena/internal/application/study"
-	domainauth "github.com/santaniello/athena/internal/domain/auth"
 	domainconfig "github.com/santaniello/athena/internal/domain/config"
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
 	domainprofile "github.com/santaniello/athena/internal/domain/profile"
@@ -22,8 +21,6 @@ import (
 // App is the Wails-bound struct exposed to the frontend.
 type App struct {
 	ctx           context.Context
-	auth          *auth.Service
-	sessions      domainauth.SessionStore
 	onboarding    *onboarding.Service
 	profiles      domainprofile.Store
 	config        domainconfig.Store
@@ -33,6 +30,7 @@ type App struct {
 	ingest        *applicationingest.Service
 	index         *applicationknowledge.IndexLoader
 	apiKeyUpdater domainllm.APIKeyUpdater
+	reset         *applicationreset.Service
 	// emit defaults to wailsruntime.EventsEmit, which calls log.Fatal (i.e.
 	// os.Exit) when a.ctx was never produced by the real Wails runtime —
 	// exactly the case in tests, which use context.Background(). Tests
@@ -46,15 +44,19 @@ type App struct {
 	// real-runtime requirement as emit above. Tests override it with a
 	// fake to drive PickNotesFile without a real OS dialog.
 	openFile func(ctx context.Context, options wailsruntime.OpenDialogOptions) (string, error)
+	// reloadApp defaults to wailsruntime.WindowReloadApp, which has the
+	// same real-runtime requirement as emit above. Tests override it with
+	// a fake to observe that ResetLocalData triggers a reload without a
+	// real Wails runtime.
+	reloadApp func(ctx context.Context)
 }
 
-// NewApp creates a new App instance backed by the given auth service,
-// session store, onboarding service, profile store, config store, study
-// service, folder service, knowledge service, notes-import service, the
-// knowledge vector index coordinator, and the live LLM client's key updater.
+// NewApp creates a new App instance backed by the given onboarding
+// service, profile store, config store, study service, folder service,
+// knowledge service, notes-import service, the knowledge vector index
+// coordinator, the live LLM client's key updater, and the local-data reset
+// service.
 func NewApp(
-	authService *auth.Service,
-	sessions domainauth.SessionStore,
 	onboardingService *onboarding.Service,
 	profiles domainprofile.Store,
 	config domainconfig.Store,
@@ -64,10 +66,9 @@ func NewApp(
 	ingestService *applicationingest.Service,
 	apiKeyUpdater domainllm.APIKeyUpdater,
 	indexLoader *applicationknowledge.IndexLoader,
+	resetService *applicationreset.Service,
 ) *App {
 	return &App{
-		auth:          authService,
-		sessions:      sessions,
 		onboarding:    onboardingService,
 		profiles:      profiles,
 		config:        config,
@@ -77,9 +78,11 @@ func NewApp(
 		ingest:        ingestService,
 		apiKeyUpdater: apiKeyUpdater,
 		index:         indexLoader,
+		reset:         resetService,
 		emit:          wailsruntime.EventsEmit,
 		openDirectory: wailsruntime.OpenDirectoryDialog,
 		openFile:      wailsruntime.OpenFileDialog,
+		reloadApp:     wailsruntime.WindowReloadApp,
 	}
 }
 

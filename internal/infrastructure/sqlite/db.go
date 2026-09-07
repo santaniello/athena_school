@@ -1,5 +1,5 @@
 // Package sqlite provides the local SQLite-backed infrastructure adapters
-// (internal/domain/auth.AccountRepository today; more ports as later specs
+// (internal/domain/study.SessionRepository today; more ports as later specs
 // add tables — see specs/phases/phase-01-desktop-mvp/07-sqlite.md).
 package sqlite
 

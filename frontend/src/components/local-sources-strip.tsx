@@ -41,7 +41,7 @@ function LocalSourcesStrip({ sources }: LocalSourcesStripProps) {
         type="button"
         onClick={() => setExpanded((previous) => !previous)}
         aria-expanded={expanded}
-        className="flex cursor-pointer items-center gap-1 text-muted-foreground hover:text-foreground"
+        className="flex w-full cursor-pointer items-center gap-1 py-0.5 text-left text-muted-foreground hover:text-foreground"
       >
         {expanded ? (
           <ChevronUp className="size-3" aria-hidden="true" />

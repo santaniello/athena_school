@@ -15,7 +15,6 @@ Core             Go (Clean/Hexagonal)
 Local DB         SQLite (modernc.org/sqlite — pure Go, no CGO)
 Vector store     Local (initial phase)
 LLM              OpenRouter API
-Auth backend     Local (SQLite), remote-ready port (see phase 1.1)
 CI/CD            GitHub Actions
 Payments         Paddle
 ```
@@ -38,7 +37,7 @@ Payments         Paddle
 | Phase | Name | Goal | Depends on |
 |---|---|---|---|
 | [0](phase-00-foundation/) | Foundation | Repo, tooling, CI/CD | — |
-| [1](phase-01-desktop-mvp/) | Desktop MVP | Login, onboarding, study | Phase 0 |
+| [1](phase-01-desktop-mvp/) | Desktop MVP | OpenRouter key gate, onboarding, study | Phase 0 |
 | [2](phase-02-knowledge-engine/) | Knowledge Engine | Knowledge Base + RAG + notes | Phase 1 |
 | [3](phase-03-learning-intelligence/) | Learning Intelligence | Challenge + Gap Detection + Flashcards | Phase 2 |
 | [4](phase-04-interview-mode/) | Interview Mode | Full interview simulation | Phase 3 |
@@ -63,12 +62,12 @@ Payments         Paddle
 
 ## Phase 1 — Desktop MVP
 
-**Done when:** User installs on Windows or Linux, creates a local account, connects an OpenRouter key, completes conversational onboarding, opens the main screen, and runs a full study session with streaming personalized response.
+**Done when:** User installs on Windows or Linux, connects an OpenRouter key, completes conversational onboarding, opens the main screen, and runs a full study session with streaming personalized response.
 
 | Spec | Description |
 |---|---|
-| [01-auth-backend.md](phase-01-desktop-mvp/01-auth-backend.md) | Local auth core: Account, AccountRepository port, local session |
-| [02-auth-ui.md](phase-01-desktop-mvp/02-auth-ui.md) | Login/register/local-reset screens + Wails bindings |
+| ~~[01-auth-backend.md](phase-01-desktop-mvp/01-auth-backend.md)~~ | Removed — see [12-remove-local-login.md](phase-01-desktop-mvp/12-remove-local-login.md) |
+| ~~[02-auth-ui.md](phase-01-desktop-mvp/02-auth-ui.md)~~ | Removed — see [12-remove-local-login.md](phase-01-desktop-mvp/12-remove-local-login.md) |
 | [03-home-screen.md](phase-01-desktop-mvp/03-home-screen.md) | Navigation shell (sidebar + topbar) + Home screen |
 | [04-onboarding.md](phase-01-desktop-mvp/04-onboarding.md) | OpenRouter key gate + conversational onboarding → UserProfile |
 | [05-llm-service.md](phase-01-desktop-mvp/05-llm-service.md) | OpenRouter: LLMProvider, streaming, model router, budget |
@@ -78,6 +77,8 @@ Payments         Paddle
 | [09-auto-update.md](phase-01-desktop-mvp/09-auto-update.md) | GitHub Releases check + silent update notification |
 | [10-study-folders.md](phase-01-desktop-mvp/10-study-folders.md) | Folder tree for study sessions in the sidebar |
 | [11-documentation.md](phase-01-desktop-mvp/11-documentation.md) | In-app manual: purpose, study sessions, Knowledge Engine |
+| [12-remove-local-login.md](phase-01-desktop-mvp/12-remove-local-login.md) | Removes local account/login — single-user install, no data was ever account-owned |
+| [13-reset-local-data.md](phase-01-desktop-mvp/13-reset-local-data.md) | Settings action to permanently clear study sessions, folders, and knowledge, live, without closing the app |
 
 ---
 

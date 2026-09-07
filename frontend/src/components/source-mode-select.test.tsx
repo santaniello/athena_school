@@ -46,4 +46,28 @@ describe('SourceModeSelect', () => {
     // Then the trigger is disabled
     expect(screen.getByRole('combobox', { name: 'Source mode' })).toBeDisabled()
   })
+
+  it('does not show a mode description inside the closed dropdown list', async () => {
+    // Given the select is open
+    const user = userEvent.setup()
+    render(<SourceModeSelect value="notes" onValueChange={vi.fn()} />)
+    await user.click(screen.getByRole('combobox', { name: 'Source mode' }))
+
+    // Then the options show only their labels, not their descriptions
+    expect(screen.queryByText(/Uses your approved local knowledge/)).not.toBeInTheDocument()
+  })
+
+  it('shows every mode description in the help tooltip on hover', async () => {
+    // Given the select and its help icon
+    const user = userEvent.setup()
+    render(<SourceModeSelect value="notes" onValueChange={vi.fn()} />)
+
+    // When hovering the help icon
+    await user.hover(screen.getByRole('button', { name: 'What do the source modes mean?' }))
+
+    // Then the tooltip lists every mode's description
+    expect(await screen.findByText(/Uses your approved local knowledge/)).toBeInTheDocument()
+    expect(screen.getByText(/Answers only from your approved local knowledge/)).toBeInTheDocument()
+    expect(screen.getByText(/Ignores local sources/)).toBeInTheDocument()
+  })
 })
