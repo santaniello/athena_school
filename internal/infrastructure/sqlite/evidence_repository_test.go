@@ -94,6 +94,38 @@ func TestEvidenceRepository_DeleteUnreferencedPreservesSharedEvidenceUntilLastIt
 	assert.Zero(t, evidenceCount)
 }
 
+func TestEvidenceRepository_DeleteUnreferencedPreservesEvidenceStillLinkedToAReconciliationProposal(t *testing.T) {
+	// Given an Evidence snapshot with no Knowledge Item link at all, but
+	// still linked to a reconciliation proposal's own evidence trail — the
+	// state left behind once every Item citing it has been deleted (or a
+	// "Save for review" proposal was classified against evidence that was
+	// never itself linked to an Item)
+	repository, db := newTestEvidenceRepository(t)
+	ctx := context.Background()
+	evidence, err := repository.GetOrCreate(ctx, domainknowledge.Evidence{
+		ID: "evidence-recon", OriginType: domainknowledge.OriginSessionMessage,
+		OriginID: "message-1", SourceLabel: "Concurrency", Excerpt: "literal quote",
+		CreatedAt: time.Date(2026, 8, 26, 10, 0, 0, 0, time.UTC),
+	})
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO knowledge_reconciliation_proposals
+		(id, action, status, candidate_snapshot, reason, changes, created_at)
+		VALUES ('proposal-1', 'create', 'pending', '{}', 'because', '{}', CURRENT_TIMESTAMP)`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO knowledge_reconciliation_evidence (proposal_id, evidence_id) VALUES ('proposal-1', ?)`, evidence.ID)
+	require.NoError(t, err)
+
+	// When cleaning up unreferenced Evidence
+	cleanupErr := repository.DeleteUnreferenced(ctx)
+
+	// Then it succeeds without a foreign-key violation, and the snapshot
+	// survives since the reconciliation proposal still needs it
+	require.NoError(t, cleanupErr)
+	var evidenceCount int
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM knowledge_evidence WHERE id = ?`, evidence.ID).Scan(&evidenceCount))
+	assert.Equal(t, 1, evidenceCount)
+}
+
 func TestEvidenceRepository_SavingAnItemWithItsEvidenceIsAtomic_aFailureLeavesNeitherBehind(t *testing.T) {
 	// Given a Knowledge Item repository and an Evidence repository sharing
 	// one real transaction, and a trigger forcing the item-evidence link to

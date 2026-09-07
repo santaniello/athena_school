@@ -82,12 +82,20 @@ func (r *EvidenceRepository) ListByItem(ctx context.Context, itemID string) ([]k
 	return evidence, nil
 }
 
-// DeleteUnreferenced removes snapshots that no Knowledge Item uses.
+// DeleteUnreferenced removes snapshots that no Knowledge Item uses and no
+// reconciliation proposal's own evidence trail (knowledge_reconciliation_evidence)
+// still cites — the latter has no ON DELETE CASCADE back to knowledge_evidence,
+// so leaving it unchecked would trip a foreign-key violation the moment a
+// proposal outlives every Item link its evidence ever had.
 func (r *EvidenceRepository) DeleteUnreferenced(ctx context.Context) error {
 	_, err := execer(ctx, r.db).ExecContext(ctx, `DELETE FROM knowledge_evidence
 		WHERE NOT EXISTS (
 			SELECT 1 FROM knowledge_item_evidence ie
 			WHERE ie.evidence_id = knowledge_evidence.id
+		)
+		AND NOT EXISTS (
+			SELECT 1 FROM knowledge_reconciliation_evidence re
+			WHERE re.evidence_id = knowledge_evidence.id
 		)`)
 	if err != nil {
 		return fmt.Errorf("sqlite: deleting unreferenced knowledge evidence: %w", err)
