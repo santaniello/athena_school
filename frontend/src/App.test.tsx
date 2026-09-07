@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { HasOpenRouterKey, HasUserProfile, SaveOpenRouterKey, SaveProfile } from '../wailsjs/go/desktop/App'
+import {
+  HasOpenRouterKey,
+  HasUserProfile,
+  SaveOpenRouterKey,
+  SaveProfile,
+} from '../wailsjs/go/desktop/App'
 import App from './App'
 
 // Opening a Radix Select makes it pull focus into its listbox. When a text

@@ -341,19 +341,31 @@ describe('StudyChatScreen — resuming a session', () => {
         context: CONTEXT_NORMAL,
       },
       messages: [
-        { role: 'user', content: 'What is CAP theorem?', createdAt: '2026-08-16T10:00:00Z', sources: [] },
+        {
+          role: 'user',
+          content: 'What is CAP theorem?',
+          createdAt: '2026-08-16T10:00:00Z',
+          sources: [],
+        },
         {
           role: 'assistant',
           content: 'It stands for...',
           createdAt: '2026-08-16T10:00:01Z',
-          sources: [{ sourceType: 'athena', filePath: '', heading: '', concept: 'CAP theorem', score: 0.9 }],
+          sources: [
+            { sourceType: 'athena', filePath: '', heading: '', concept: 'CAP theorem', score: 0.9 },
+          ],
         },
       ],
     })
 
     // When the chat screen mounts in "resume" mode
     render(
-      <StudyChatScreen sessionId="session-1" initialTopic="" mode="resume" {...newSessionActionProps()} />,
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic=""
+        mode="resume"
+        {...newSessionActionProps()}
+      />,
     )
 
     // Then the strip shows up without any live stream ever happening
@@ -379,7 +391,12 @@ describe('StudyChatScreen — resuming a session', () => {
 
     // When the chat screen mounts in "resume" mode
     render(
-      <StudyChatScreen sessionId="session-1" initialTopic="" mode="resume" {...newSessionActionProps()} />,
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic=""
+        mode="resume"
+        {...newSessionActionProps()}
+      />,
     )
 
     // Then the message shows with no strip, and no error
@@ -509,7 +526,9 @@ describe('StudyChatScreen — resuming a session', () => {
         startedAt: '2026-08-16T11:00:00Z',
         context: CONTEXT_NORMAL,
       },
-      messages: [{ role: 'user', content: 'Hello again', createdAt: '2026-08-16T11:00:00Z', sources: [] }],
+      messages: [
+        { role: 'user', content: 'Hello again', createdAt: '2026-08-16T11:00:00Z', sources: [] },
+      ],
     })
     rerender(
       <StudyChatScreen

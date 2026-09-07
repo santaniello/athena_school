@@ -41,9 +41,7 @@ function App() {
   return (
     <>
       {view === 'checking' && <SplashScreen />}
-      {view === 'key-gate' && (
-        <KeyGateScreen onSaved={() => void resolveView().then(setView)} />
-      )}
+      {view === 'key-gate' && <KeyGateScreen onSaved={() => void resolveView().then(setView)} />}
       {view === 'onboarding' && <OnboardingScreen onComplete={() => setView('app')} />}
       {view === 'app' && <AppShell />}
     </>

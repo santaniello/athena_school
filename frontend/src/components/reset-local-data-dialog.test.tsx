@@ -6,7 +6,9 @@ import { ResetLocalDataDialog } from './reset-local-data-dialog'
 describe('ResetLocalDataDialog', () => {
   it('is closed when open is false', () => {
     // Given the dialog is closed
-    render(<ResetLocalDataDialog open={false} pending={false} onCancel={vi.fn()} onConfirm={vi.fn()} />)
+    render(
+      <ResetLocalDataDialog open={false} pending={false} onCancel={vi.fn()} onConfirm={vi.fn()} />,
+    )
 
     // Then no dialog content is shown
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
