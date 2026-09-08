@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	domainprofile "github.com/santaniello/athena/internal/domain/profile"
 )
 
@@ -50,4 +51,21 @@ func languageInstruction(assistantLanguage string) string {
 	default:
 		return ""
 	}
+}
+
+// noLocalKnowledgeMessagePortuguese is domainknowledge.NoLocalKnowledgeMessage's
+// Brazilian Portuguese counterpart. The strict-notes miss response bypasses
+// the LLM entirely (that's the point — no chat/completion call), so it
+// cannot be localized by a system-prompt instruction like every other reply;
+// it must carry each supported language's text directly.
+const noLocalKnowledgeMessagePortuguese = "Nenhum conhecimento local foi encontrado para esta pergunta."
+
+// noLocalKnowledgeMessageFor returns the strict-notes miss message in
+// assistantLanguage, falling back to domainknowledge.NoLocalKnowledgeMessage's
+// English text for an empty or unrecognized value.
+func noLocalKnowledgeMessageFor(assistantLanguage string) string {
+	if assistantLanguage == domainprofile.AssistantLanguagePortuguese {
+		return noLocalKnowledgeMessagePortuguese
+	}
+	return domainknowledge.NoLocalKnowledgeMessage
 }

@@ -30,7 +30,7 @@ const SOURCE_MODE_OPTIONS: SourceModeOption[] = [
     value: 'strict-notes',
     label: 'Strict notes',
     description:
-      'Answers only from your approved local knowledge, and says so when it cannot fully answer.',
+      'Answers only from your approved local knowledge, and says so when it finds nothing relevant.',
   },
   {
     value: 'web',

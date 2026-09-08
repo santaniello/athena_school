@@ -30,12 +30,17 @@ selected.
 | `notes` | insufficient but non-empty | LLM call with the related local context; general knowledge may fill the gaps |
 | `strict-notes` | none | No chat/completion call. Persist and return `NoLocalKnowledgeMessage` |
 | `strict-notes` | sufficient | LLM call instructed to answer exclusively from the local context |
-| `strict-notes` | insufficient but non-empty | LLM call restricted to what the local context supports and instructed to state that the local material cannot support a complete answer |
+| `strict-notes` | insufficient but non-empty | Treated exactly like "none": no chat/completion call, persist and return `NoLocalKnowledgeMessage`, emit an empty source list |
 
 `strict-notes` restricts the LLM's information source; it does not replace the
-tutor with raw chunk text. With matching chunks, the LLM still organizes and
-explains them. The only no-chat branch is `strict-notes` with no surviving
-chunks.
+tutor with raw chunk text. With matching (sufficient) chunks, the LLM still
+organizes and explains them. `strict-notes` never calls the LLM unless
+`Sufficient == true` — a chunk that merely cleared `MinSimilarity` without
+reaching `Sufficiency` (e.g. a same-domain but off-topic note) must never be
+answered from or cited: it is not real support for the question, and citing
+it as a "Local source" would misrepresent an ungrounded answer as grounded.
+The only two branches, both no-chat, are collapsed into one: `strict-notes`
+with `Sufficient == false`, whether zero chunks survived or some did.
 
 Despite its name, `web` means today's plain model call and does not promise a
 live internet search. Its UI description must say that it ignores local sources
@@ -76,11 +81,12 @@ Search approved local knowledge, top-K
     ↓
 Filter by minScore → cap rendered context → compute Sufficient
     ↓
-No surviving chunks?
-    ├── notes        → plain LLM call
-    └── strict-notes → persist and emit NoLocalKnowledgeMessage; no chat call
-    ↓ chunks survive
-LLM call with a second system message containing the local context
+mode = strict-notes and not Sufficient? ─→ persist and emit NoLocalKnowledgeMessage;
+    ↓ no                                   emit empty sources; no chat call
+No surviving chunks? (notes only, by construction — reaching here in
+strict-notes implies Sufficient, which implies chunks survived)
+    ├── notes (none)    → plain LLM call
+    └── otherwise       → LLM call with a second system message containing the local context
 ```
 
 A successful embedding against a non-empty store records embedding usage for the
@@ -176,12 +182,12 @@ score descending, then chunk ID ascending for equal scores.
 
 ### Thresholds
 
-The defaults remain:
+The defaults:
 
 ```go
 const (
-    DefaultMinSimilarity = 0.35
-    DefaultSufficiency   = 0.55
+    DefaultMinSimilarity = 0.45
+    DefaultSufficiency   = 0.68
 )
 ```
 
@@ -195,8 +201,17 @@ Chunks below `minScore` are discarded. After context capping,
 `Score >= sufficiencyScore`. Equality counts as sufficient; a result discarded
 by the cap cannot make the context sufficient.
 
-The defaults are calibrated for `text-embedding-3-small`. Surfacing them in
-Settings is outside this phase.
+The defaults are calibrated for `text-embedding-3-small`, whose cosine
+similarity is anisotropic: even topically unrelated short texts commonly score
+in the 0.1-0.4 range, so a naively "low" cutoff like the original 0.35/0.55
+lets a same-domain-but-off-topic chunk (sharing vocabulary with the query
+without answering it) survive and, in `strict-notes`, be presented as a
+misleading "Local source" for an answer it never actually supported. Both
+values sit further above that noise floor: `MinSimilarity` so such a chunk is
+dropped before it ever reaches context or the sources list, and `Sufficiency`
+so `strict-notes` only answers (and only cites) when a chunk is genuinely
+likely to support the question, not merely nearby in embedding space.
+Surfacing them in Settings is outside this phase.
 
 ## Context rendering and cap
 
@@ -241,7 +256,16 @@ The fixed response remains one exported constant:
 const NoLocalKnowledgeMessage = "No local knowledge found for this question."
 ```
 
-For a successful `strict-notes` retrieval with no surviving chunks:
+This branch never calls the LLM, so nothing renders `buildSystemPrompt`'s
+`languageInstruction` line for it — the fixed text must therefore carry each
+supported `UserProfile.AssistantLanguage` itself
+(`application/study.noLocalKnowledgeMessageFor`), loading the profile in this
+branch to pick it. An empty or unrecognized language falls back to
+`NoLocalKnowledgeMessage`'s English text.
+
+For a successful `strict-notes` retrieval where `Sufficient == false` — whether
+no chunk survived `MinSimilarity` at all, or some did but none reached
+`Sufficiency`:
 
 1. emit an empty source list;
 2. persist `NoLocalKnowledgeMessage` as an assistant message;
@@ -257,8 +281,10 @@ the session is resumed.
 `study.Service.SendMessage` gains both `sourceMode` and an `onSources` callback.
 For every user-submitted turn it invokes `onSources` exactly once before any
 response chunk: with the post-cap sources, or `[]` for `web`, a local miss, or a
-strict fixed response. Empty emission clears pending state and prevents sources
-from leaking from the previous turn.
+strict fixed response — including a `strict-notes` retrieval that found chunks
+but none reached `Sufficiency`, which emits `[]` rather than those chunks'
+sources, since they never actually supported the answer. Empty emission clears
+pending state and prevents sources from leaking from the previous turn.
 
 All study events become session-scoped structured payloads, including the
 existing opening-turn events:
@@ -331,12 +357,12 @@ sources but does not necessarily perform live internet search.
 - Retrieval searches all topics and local source types with `StatusApproved`; after 2.8, approved `athena` items are available in both local modes.
 - The embedded query contains the topic and current message, excludes earlier history, and carries the study session ID.
 - Raised `minScore` demonstrably filters a low-similarity chunk; equality at either threshold follows the documented inclusive rule.
-- `Sufficient` is based only on post-cap survivors and selects the documented prompt variant without skipping the model when chunks exist.
+- `Sufficient` is based only on post-cap survivors. In `notes`, it selects the documented prompt variant without skipping the model when chunks exist. In `strict-notes`, `Sufficient == false` always skips the model — even when chunks survived `MinSimilarity` — and is handled identically to no chunks at all.
 - The rendered JSON data block never exceeds 8,000 Unicode code points; metadata counts, chunks are removed whole lowest-score-first, and a lone oversized chunk becomes no match.
 - JSON content is escaped and the second system message instructs the model to treat it as untrusted reference data rather than commands.
 - `Chunks`, JSON entries, and `Sources` contain exactly the same post-cap chunks in the same score-descending/ID-tiebreak order.
 - Concepts are loaded once per distinct item ID; a missing owning item returns an integrity error.
-- `strict-notes` with chunks calls the LLM and constrains it to local context; with no chunks it persists the fixed assistant response and delivers it through the normal chunk/done lifecycle.
+- `strict-notes` with a sufficient chunk calls the LLM and constrains it to local context; without one — no chunks, or chunks that never reach `Sufficiency` — it persists the fixed assistant response, emits an empty source list, and delivers it through the normal chunk/done lifecycle.
 - `study:sources` is emitted exactly once before response chunks, including `[]` on no-source paths.
 - Every study event carries `sessionId`; the frontend ignores other sessions and attaches pending sources only to the completed assistant message.
 - Empty sources render no strip; non-empty sources render a collapsed `Local sources (N)` strip with source-appropriate labels and decimal scores.

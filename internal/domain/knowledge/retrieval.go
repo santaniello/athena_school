@@ -22,21 +22,28 @@ const (
 var ErrInvalidSourceMode = errors.New("unknown source mode")
 
 // NoLocalKnowledgeMessage is the fixed assistant response persisted and
-// streamed back when strict-notes retrieval succeeds but no chunk survives
-// filtering — the only local mode with no surviving chunks that makes no
-// chat/completion call.
+// streamed back when strict-notes retrieval succeeds but no chunk reaches
+// Sufficiency — whether none survive MinSimilarity at all, or some do but
+// none meet Sufficiency (e.g. a same-domain but off-topic note). Either way
+// makes no chat/completion call.
 const NoLocalKnowledgeMessage = "No local knowledge found for this question."
 
-// Defaults calibrated for text-embedding-3-small. Surfacing them in Settings
-// is outside this phase.
+// Defaults calibrated for text-embedding-3-small. Cosine similarity in this
+// embedding space is anisotropic: even topically unrelated short texts often
+// score in the 0.1-0.4 range, so both cutoffs sit well above that noise
+// floor rather than at a naively "low" value — MinSimilarity to keep
+// same-vocabulary-but-off-topic chunks out of context and off the sources
+// list entirely, Sufficiency to keep strict-notes from treating a
+// loosely-related chunk as real support for an answer. Surfacing them in
+// Settings is outside this phase.
 const (
 	// DefaultTopK is the number of chunks requested from VectorStore.Search.
 	DefaultTopK = 8
 	// DefaultMinSimilarity discards chunks scoring below it.
-	DefaultMinSimilarity = 0.35
+	DefaultMinSimilarity = 0.45
 	// DefaultSufficiency is the score a surviving chunk must meet or exceed
 	// for a RetrievalResult to be considered Sufficient.
-	DefaultSufficiency = 0.55
+	DefaultSufficiency = 0.68
 )
 
 // ErrInvalidThresholds is returned by NewRetrievalThresholds when either

@@ -566,15 +566,17 @@ func TestSendMessage_strictNotes_persistsFixedMessage_onValidEmptyOrMissRetrieva
 	})).Return(nil).Once()
 	retriever.EXPECT().Retrieve(context.Background(), "session-1", mock.AnythingOfType("string")).
 		Return(domainknowledge.RetrievalResult{}, nil).Once()
+	profiles.EXPECT().Load().Return(domainprofile.UserProfile{AssistantLanguage: domainprofile.AssistantLanguageEnglish}, nil).Once()
 
 	var callOrder []string
 	var receivedSources []domainknowledge.Source
 	var receivedChunks []string
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, nil)
 
-	// When sending a message in strict-notes mode; llm/profiles/folders have
-	// no .EXPECT() set, so no chat/completion call and no history/profile
-	// load happen on this branch
+	// When sending a message in strict-notes mode; llm/folders have no
+	// .EXPECT() set, so no chat/completion call and no history load happen
+	// on this branch — the profile is still loaded, to pick the fixed
+	// message's language
 	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeStrictNotes,
 		func(sources []domainknowledge.Source) error {
 			callOrder = append(callOrder, "sources")
@@ -595,6 +597,112 @@ func TestSendMessage_strictNotes_persistsFixedMessage_onValidEmptyOrMissRetrieva
 	require.Equal(t, []string{"sources", "chunk"}, callOrder)
 	require.Equal(t, []domainknowledge.Source{}, receivedSources)
 	require.Equal(t, []string{domainknowledge.NoLocalKnowledgeMessage}, receivedChunks)
+}
+
+func TestSendMessage_strictNotes_persistsFixedMessage_onInsufficientNonEmptyRetrieval_emptyingSourcesAndNoChatCall(t *testing.T) {
+	// Given a strict-notes retrieval that found chunks, but none reaches the
+	// sufficiency threshold — e.g. a same-domain but off-topic note
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
+	retriever := knowledgemocks.NewMockRetriever(t)
+	tx := mockNormalSession(t, sessions, "session-1")
+
+	messages.EXPECT().Append(context.Background(), mock.MatchedBy(func(m domainstudy.Message) bool {
+		return m.Role == domainstudy.RoleUser
+	})).Return(nil).Once()
+	messages.EXPECT().Append(context.Background(), mock.MatchedBy(func(m domainstudy.Message) bool {
+		return m.Role == domainstudy.RoleAssistant && m.Content == domainknowledge.NoLocalKnowledgeMessage
+	})).Return(nil).Once()
+	insufficientResult := domainknowledge.RetrievalResult{
+		Chunks:     []domainknowledge.ScoredChunk{{Chunk: domainknowledge.Chunk{ID: "chunk-1"}, Score: 0.4}},
+		Sufficient: false,
+		Context:    `[{"heading":"H"}]`,
+		Sources:    []domainknowledge.Source{{ChunkID: "chunk-1", Score: 0.4}},
+	}
+	retriever.EXPECT().Retrieve(context.Background(), "session-1", mock.AnythingOfType("string")).
+		Return(insufficientResult, nil).Once()
+	profiles.EXPECT().Load().Return(domainprofile.UserProfile{AssistantLanguage: domainprofile.AssistantLanguageEnglish}, nil).Once()
+
+	var callOrder []string
+	var receivedSources []domainknowledge.Source
+	var receivedChunks []string
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, nil)
+
+	// When sending a message in strict-notes mode; llm/folders have no
+	// .EXPECT() set, so this off-topic chunk never reaches a chat call
+	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeStrictNotes,
+		func(sources []domainknowledge.Source) error {
+			callOrder = append(callOrder, "sources")
+			receivedSources = sources
+			return nil
+		},
+		func(chunk string) error {
+			callOrder = append(callOrder, "chunk")
+			receivedChunks = append(receivedChunks, chunk)
+			return nil
+		},
+		nil, nil,
+	)
+
+	// Then it behaves exactly like a no-chunk miss: empty sources are
+	// emitted despite the retriever finding one (irrelevant) chunk, the
+	// fixed message is delivered, and no chat/completion call is made
+	require.NoError(t, err)
+	require.Equal(t, []string{"sources", "chunk"}, callOrder)
+	require.Equal(t, []domainknowledge.Source{}, receivedSources)
+	require.Equal(t, []string{domainknowledge.NoLocalKnowledgeMessage}, receivedChunks)
+}
+
+func TestSendMessage_strictNotes_missResponse_localizedToProfileAssistantLanguage(t *testing.T) {
+	cases := []struct {
+		name     string
+		language string
+		want     string
+	}{
+		{"portuguese", domainprofile.AssistantLanguagePortuguese, noLocalKnowledgeMessagePortuguese},
+		{"english", domainprofile.AssistantLanguageEnglish, domainknowledge.NoLocalKnowledgeMessage},
+		{"unset_fallsBackToEnglish", "", domainknowledge.NoLocalKnowledgeMessage},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			// Given a strict-notes miss and a profile with c.language configured
+			sessions := studymocks.NewMockSessionRepository(t)
+			messages := studymocks.NewMockMessageRepository(t)
+			llm := llmmocks.NewMockProvider(t)
+			profiles := profilemocks.NewMockStore(t)
+			folders := foldermocks.NewMockRepository(t)
+			retriever := knowledgemocks.NewMockRetriever(t)
+			tx := mockNormalSession(t, sessions, "session-1")
+
+			messages.EXPECT().Append(context.Background(), mock.MatchedBy(func(m domainstudy.Message) bool {
+				return m.Role == domainstudy.RoleUser
+			})).Return(nil).Once()
+			messages.EXPECT().Append(context.Background(), mock.MatchedBy(func(m domainstudy.Message) bool {
+				return m.Role == domainstudy.RoleAssistant && m.Content == c.want
+			})).Return(nil).Once()
+			retriever.EXPECT().Retrieve(context.Background(), "session-1", mock.AnythingOfType("string")).
+				Return(domainknowledge.RetrievalResult{}, nil).Once()
+			profiles.EXPECT().Load().Return(domainprofile.UserProfile{AssistantLanguage: c.language}, nil).Once()
+
+			var receivedChunks []string
+			service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, nil)
+
+			// When sending a message in strict-notes mode
+			err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeStrictNotes,
+				noopSourcesHandler,
+				func(chunk string) error { receivedChunks = append(receivedChunks, chunk); return nil },
+				nil, nil,
+			)
+
+			// Then the fixed miss message is delivered in the profile's
+			// configured assistant language
+			require.NoError(t, err)
+			require.Equal(t, []string{c.want}, receivedChunks)
+		})
+	}
 }
 
 func TestSendMessage_local_propagatesGenericRetrievalError_persistingOnlyUserMessage(t *testing.T) {
@@ -641,7 +749,6 @@ func TestSendMessage_localMode_withSurvivingChunks_sendsKnowledgeContextAsSecond
 		{"notes_sufficient", domainknowledge.SourceModeNotes, true},
 		{"notes_insufficientButNonEmpty", domainknowledge.SourceModeNotes, false},
 		{"strictNotes_sufficient", domainknowledge.SourceModeStrictNotes, true},
-		{"strictNotes_insufficientButNonEmpty", domainknowledge.SourceModeStrictNotes, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

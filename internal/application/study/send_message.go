@@ -20,10 +20,12 @@ import (
 // turn, since the system prompt itself is never persisted as a message row.
 //
 // onSources is invoked exactly once per call, before any onChunk delivery:
-// with the post-cap sources for a local mode that found chunks, an empty
-// slice for SourceModeWeb or a local miss, or not at all if a technical
-// error (invalid mode, blank content, or a retrieval failure) stops the
-// turn before a response is produced.
+// with the post-cap sources for a local mode that answers from them (chunks
+// found, and — for strict-notes — Sufficient), an empty slice for
+// SourceModeWeb or a local miss (including a strict-notes retrieval that
+// found chunks but none reach Sufficiency, which is treated as a miss), or
+// not at all if a technical error (invalid mode, blank content, or a
+// retrieval failure) stops the turn before a response is produced.
 //
 // Checks run in this order: source mode, then content, then the per-session
 // in-flight reservation, then — inside one transaction with the user
@@ -98,14 +100,25 @@ func (s *Service) SendMessage(
 		if err != nil {
 			return fmt.Errorf("study: retrieving local knowledge: %w", err)
 		}
+		if sourceMode == domainknowledge.SourceModeStrictNotes && !result.Sufficient {
+			// Chunks may still exist here (e.g. an off-topic note that
+			// cleared MinSimilarity but not Sufficiency) — strict-notes
+			// treats that exactly like no chunks at all: it must never
+			// answer from, or cite, material that doesn't really support
+			// the question.
+			if err := emitSources(onSources, nil); err != nil {
+				return err
+			}
+			profile, err := s.profiles.Load()
+			if err != nil {
+				return fmt.Errorf("study: loading profile: %w", err)
+			}
+			return s.persistFixedStrictMissResponse(ctx, sessionID, newContext, onChunk, onContext, profile.AssistantLanguage)
+		}
 		if err := emitSources(onSources, result.Sources); err != nil {
 			return err
 		}
-		if len(result.Chunks) == 0 {
-			if sourceMode == domainknowledge.SourceModeStrictNotes {
-				return s.persistFixedStrictMissResponse(ctx, sessionID, newContext, onChunk, onContext)
-			}
-		} else {
+		if len(result.Chunks) > 0 {
 			message := buildKnowledgeContext(result, sourceMode)
 			knowledgeMessage = &message
 			sources = result.Sources
@@ -166,20 +179,23 @@ func emitSources(onSources func([]domainknowledge.Source) error, sources []domai
 }
 
 // persistFixedStrictMissResponse is strict-notes' only no-chat-call
-// branch: a successful retrieval with no surviving chunks. It persists
-// domainknowledge.NoLocalKnowledgeMessage as the assistant reply — atomically
-// with its own estimated ContextUsage increment on top of priorContext — and
-// delivers it through the normal chunk callback as one complete chunk, so
-// the user question and this fixed response reappear together on resume.
+// branch: a successful retrieval where no chunk reaches Sufficiency, be it
+// because none survived MinSimilarity or because the survivors just aren't
+// good enough. It persists the fixed miss message — in assistantLanguage,
+// since bypassing the LLM means no system-prompt instruction can localize it
+// — as the assistant reply — atomically with its own estimated ContextUsage
+// increment on top of priorContext — and delivers it through the normal
+// chunk callback as one complete chunk, so the user question and this fixed
+// response reappear together on resume.
 func (s *Service) persistFixedStrictMissResponse(
 	ctx context.Context, sessionID string, priorContext domainstudy.ContextUsage,
-	onChunk func(chunk string) error, onContext ContextCallback,
+	onChunk func(chunk string) error, onContext ContextCallback, assistantLanguage string,
 ) error {
 	assistantMessage := domainstudy.Message{
 		ID:        uuid.NewString(),
 		SessionID: sessionID,
 		Role:      domainstudy.RoleAssistant,
-		Content:   domainknowledge.NoLocalKnowledgeMessage,
+		Content:   noLocalKnowledgeMessageFor(assistantLanguage),
 		CreatedAt: time.Now().UTC(),
 	}
 
