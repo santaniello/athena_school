@@ -42,7 +42,7 @@ export interface StudySessionHistory {
 // SourceMode controls whether and how a study turn consults local
 // knowledge before answering. It is transient — passed per call, never
 // stored or inferred from prior messages.
-export type SourceMode = 'notes' | 'strict-notes' | 'web'
+export type SourceMode = 'notes' | 'strict-notes'
 
 export interface StudySource {
   sourceType: string

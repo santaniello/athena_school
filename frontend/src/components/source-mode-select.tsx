@@ -16,8 +16,7 @@ interface SourceModeOption {
   description: string
 }
 
-// Descriptions spell out each policy, and Web's explicitly disclaims live
-// internet search — see
+// Descriptions spell out each policy — see
 // specs/phases/phase-02-knowledge-engine/05-rag-integration.md.
 const SOURCE_MODE_OPTIONS: SourceModeOption[] = [
   {
@@ -32,12 +31,6 @@ const SOURCE_MODE_OPTIONS: SourceModeOption[] = [
     description:
       'Answers only from your approved local knowledge, and says so when it finds nothing relevant.',
   },
-  {
-    value: 'web',
-    label: 'Web',
-    description:
-      "Ignores local sources. May use the model's general knowledge — not necessarily a live internet search.",
-  },
 ]
 
 interface SourceModeSelectProps {
@@ -46,8 +39,8 @@ interface SourceModeSelectProps {
   disabled?: boolean
 }
 
-// The composer's source-mode selector: Notes, Strict notes, or Web,
-// defaulting to Notes on every new or resumed chat. Disabled while a
+// The composer's source-mode selector: Notes or Strict notes, defaulting
+// to Notes on every new or resumed chat. Disabled while a
 // response streams. The dropdown lists plain labels only — what each mode
 // means lives in the "?" tooltip beside it, not stacked under every item.
 function SourceModeSelect({ value, onValueChange, disabled }: SourceModeSelectProps) {

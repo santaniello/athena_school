@@ -20,12 +20,12 @@ import (
 // turn, since the system prompt itself is never persisted as a message row.
 //
 // onSources is invoked exactly once per call, before any onChunk delivery:
-// with the post-cap sources for a local mode that answers from them (chunks
-// found, and — for strict-notes — Sufficient), an empty slice for
-// SourceModeWeb or a local miss (including a strict-notes retrieval that
-// found chunks but none reach Sufficiency, which is treated as a miss), or
-// not at all if a technical error (invalid mode, blank content, or a
-// retrieval failure) stops the turn before a response is produced.
+// with the post-cap sources for a mode that answers from them (chunks found,
+// and — for strict-notes — Sufficient), an empty slice for a local miss
+// (including a strict-notes retrieval that found chunks but none reach
+// Sufficiency, which is treated as a miss), or not at all if a technical
+// error (invalid mode, blank content, or a retrieval failure) stops the turn
+// before a response is produced.
 //
 // Checks run in this order: source mode, then content, then the per-session
 // in-flight reservation, then — inside one transaction with the user
@@ -91,38 +91,32 @@ func (s *Service) SendMessage(
 
 	var knowledgeMessage *domainllm.Message
 	var sources []domainknowledge.Source
-	if sourceMode == domainknowledge.SourceModeWeb {
+	result, err := s.retriever.Retrieve(ctx, sessionID, buildRetrievalQuery(topic, content))
+	if err != nil {
+		return fmt.Errorf("study: retrieving local knowledge: %w", err)
+	}
+	if sourceMode == domainknowledge.SourceModeStrictNotes && !result.Sufficient {
+		// Chunks may still exist here (e.g. an off-topic note that
+		// cleared MinSimilarity but not Sufficiency) — strict-notes
+		// treats that exactly like no chunks at all: it must never
+		// answer from, or cite, material that doesn't really support
+		// the question.
 		if err := emitSources(onSources, nil); err != nil {
 			return err
 		}
-	} else {
-		result, err := s.retriever.Retrieve(ctx, sessionID, buildRetrievalQuery(topic, content))
+		profile, err := s.profiles.Load()
 		if err != nil {
-			return fmt.Errorf("study: retrieving local knowledge: %w", err)
+			return fmt.Errorf("study: loading profile: %w", err)
 		}
-		if sourceMode == domainknowledge.SourceModeStrictNotes && !result.Sufficient {
-			// Chunks may still exist here (e.g. an off-topic note that
-			// cleared MinSimilarity but not Sufficiency) — strict-notes
-			// treats that exactly like no chunks at all: it must never
-			// answer from, or cite, material that doesn't really support
-			// the question.
-			if err := emitSources(onSources, nil); err != nil {
-				return err
-			}
-			profile, err := s.profiles.Load()
-			if err != nil {
-				return fmt.Errorf("study: loading profile: %w", err)
-			}
-			return s.persistFixedStrictMissResponse(ctx, sessionID, newContext, onChunk, onContext, profile.AssistantLanguage)
-		}
-		if err := emitSources(onSources, result.Sources); err != nil {
-			return err
-		}
-		if len(result.Chunks) > 0 {
-			message := buildKnowledgeContext(result, sourceMode)
-			knowledgeMessage = &message
-			sources = result.Sources
-		}
+		return s.persistFixedStrictMissResponse(ctx, sessionID, newContext, onChunk, onContext, profile.AssistantLanguage)
+	}
+	if err := emitSources(onSources, result.Sources); err != nil {
+		return err
+	}
+	if len(result.Chunks) > 0 {
+		message := buildKnowledgeContext(result, sourceMode)
+		knowledgeMessage = &message
+		sources = result.Sources
 	}
 
 	history, err := s.messages.ListBySession(ctx, sessionID)
@@ -150,11 +144,11 @@ func (s *Service) SendMessage(
 	return nil
 }
 
-// isValidSourceMode reports whether mode is one of the three exported
+// isValidSourceMode reports whether mode is one of the two exported
 // SourceMode constants.
 func isValidSourceMode(mode string) bool {
 	switch mode {
-	case domainknowledge.SourceModeNotes, domainknowledge.SourceModeStrictNotes, domainknowledge.SourceModeWeb:
+	case domainknowledge.SourceModeNotes, domainknowledge.SourceModeStrictNotes:
 		return true
 	default:
 		return false

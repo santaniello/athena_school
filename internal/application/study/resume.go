@@ -14,8 +14,7 @@ import (
 // domain/study has no dependency on domain/knowledge (see
 // specs/phases/phase-02-knowledge-engine/09-persistent-provenance.md). A
 // user message, or an assistant message that used no local knowledge
-// (SourceModeWeb, a strict-notes miss, the opening turn), carries a nil
-// Sources.
+// (a strict-notes miss, the opening turn), carries a nil Sources.
 type MessageWithSources struct {
 	domainstudy.Message
 	Sources []domainknowledge.Source

@@ -12,13 +12,11 @@ import (
 const (
 	SourceModeNotes       = "notes"
 	SourceModeStrictNotes = "strict-notes"
-	SourceModeWeb         = "web"
 )
 
 // ErrInvalidSourceMode is returned when a caller passes a source mode other
-// than SourceModeNotes, SourceModeStrictNotes, or SourceModeWeb, before the
-// user message is persisted and before any embedding, retrieval, or chat
-// call.
+// than SourceModeNotes or SourceModeStrictNotes, before the user message is
+// persisted and before any embedding, retrieval, or chat call.
 var ErrInvalidSourceMode = errors.New("unknown source mode")
 
 // NoLocalKnowledgeMessage is the fixed assistant response persisted and
@@ -105,8 +103,8 @@ type RetrievalResult struct {
 }
 
 // Retriever performs one local-knowledge-base retrieval for a study
-// session's query. study.Service owns source-mode policy and does not call
-// Retriever at all for SourceModeWeb, so Retriever needs no mode parameter.
+// session's query. study.Service owns source-mode policy; every SourceMode
+// calls Retriever, so Retriever needs no mode parameter.
 type Retriever interface {
 	Retrieve(ctx context.Context, sessionID, query string) (RetrievalResult, error)
 }

@@ -3,9 +3,14 @@
 ## Goal
 
 Every user-submitted study turn follows the selected source policy. `notes` and
-`strict-notes` retrieve approved local knowledge before answering; `web`
-bypasses local retrieval. Retrieved chunks are supplied to the LLM as reference
-data, and the UI shows the exact local sources the model received.
+`strict-notes` retrieve approved local knowledge before answering. Retrieved
+chunks are supplied to the LLM as reference data, and the UI shows the exact
+local sources the model received.
+
+> **Note:** the original design included a third `web` mode that skipped local
+> retrieval entirely and made a plain LLM call, without ever performing a live
+> internet search despite its name. It was removed; the rest of this document
+> describes the current two-mode design.
 
 The automatic opening turn remains unchanged: it has no user question or source
 mode, performs no retrieval, and emits no source event.
@@ -24,7 +29,6 @@ selected.
 
 | Mode | Local chunks | Behavior |
 |---|---|---|
-| `web` | not searched | Plain LLM call. No retriever, embedding, or vector search call |
 | `notes` | none | Plain LLM call |
 | `notes` | sufficient | LLM call with local context as the primary source; supplement only when necessary |
 | `notes` | insufficient but non-empty | LLM call with the related local context; general knowledge may fill the gaps |
@@ -42,17 +46,12 @@ it as a "Local source" would misrepresent an ungrounded answer as grounded.
 The only two branches, both no-chat, are collapsed into one: `strict-notes`
 with `Sufficient == false`, whether zero chunks survived or some did.
 
-Despite its name, `web` means today's plain model call and does not promise a
-live internet search. Its UI description must say that it ignores local sources
-and may use the model's general knowledge.
-
-The three exported values are:
+The two exported values are:
 
 ```go
 const (
     SourceModeNotes       = "notes"
     SourceModeStrictNotes = "strict-notes"
-    SourceModeWeb         = "web"
 )
 ```
 
@@ -66,8 +65,6 @@ Validate content and source mode
     ↓
 Persist the user message
     ↓
-mode = web? ─────────────────────────────→ plain LLM call
-    ↓ no
 Index has a valid snapshot?
     ├── no  → ErrVectorStoreUnavailable; no embedding or chat call
     ↓ yes
@@ -101,8 +98,8 @@ persisted user message remains in history and no assistant message is added.
 
 ## Retrieval contract
 
-`study.Service` owns source-mode policy. It does not call the retriever at all in
-`web`, so the retriever needs no mode parameter:
+`study.Service` owns source-mode policy. It calls the retriever for every
+source mode, so the retriever needs no mode parameter:
 
 ```go
 type Source struct {
@@ -280,7 +277,7 @@ the session is resumed.
 
 `study.Service.SendMessage` gains both `sourceMode` and an `onSources` callback.
 For every user-submitted turn it invokes `onSources` exactly once before any
-response chunk: with the post-cap sources, or `[]` for `web`, a local miss, or a
+response chunk: with the post-cap sources, or `[]` for a local miss or a
 strict fixed response — including a `strict-notes` retrieval that found chunks
 but none reached `Sufficiency`, which emits `[]` rather than those chunks'
 sources, since they never actually supported the answer. Empty emission clears
@@ -325,14 +322,13 @@ with the completed assistant message and restores it on resume.
 
 ## Source-mode selector
 
-The composer gains a labeled, accessible select with `Notes`, `Strict notes`,
-and `Web`, defaulting to `Notes` whenever a chat is opened or resumed. Changing
+The composer gains a labeled, accessible select with `Notes` and `Strict
+notes`, defaulting to `Notes` whenever a chat is opened or resumed. Changing
 it affects only subsequent messages. It is disabled while a response streams.
 Phase 2.6 additionally disables it when the session reaches its hard context
 limit.
 
-Descriptions explain the policies and explicitly state that `Web` ignores local
-sources but does not necessarily perform live internet search.
+Descriptions explain each policy.
 
 ## Tasks
 
@@ -340,7 +336,7 @@ sources but does not necessarily perform live internet search.
 - [ ] `internal/application/knowledge/retrieval.go` — readiness, query embedding, approved-only search, thresholding, item resolution, JSON rendering and whole-chunk cap
 - [ ] generated knowledge/study mocks — regenerate with Mockery after port changes
 - [ ] `internal/application/study/prompt_context.go` — untrusted-data wrapper and four mode/sufficiency instruction variants
-- [ ] `internal/application/study/send_message.go` — validate mode, build query, bypass `web`, retrieve local context, notify sources, strict miss persistence, and context injection
+- [ ] `internal/application/study/send_message.go` — validate mode, build query, retrieve local context, notify sources, strict miss persistence, and context injection
 - [ ] `internal/interfaces/desktop/study.go` — fourth `SendStudyMessage` argument and session-scoped event payloads
 - [ ] `main.go` — construct retrieval with default thresholds and inject the port into study
 - [ ] `frontend/src/lib/study.ts` — fourth argument, structured event types, and `onStudySources`
@@ -350,7 +346,6 @@ sources but does not necessarily perform live internet search.
 ## Acceptance criteria
 
 - An invalid source mode returns `ErrInvalidSourceMode` before persisting or making any provider/store call.
-- `web` never calls `Retriever`, embeddings, or vector search and makes a plain chat call.
 - A local mode with `HasSnapshot == false` returns `ErrVectorStoreUnavailable`, preserves the user message, and makes no embedding or chat call.
 - A valid empty snapshot makes no embedding call. `notes` falls through to plain chat; `strict-notes` persists and emits `NoLocalKnowledgeMessage` without chat/completion usage.
 - A non-empty-store miss may record one session-attributed embedding usage row. In `strict-notes` it records no chat/completion usage row.

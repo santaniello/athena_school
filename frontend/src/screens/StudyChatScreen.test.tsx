@@ -1162,12 +1162,12 @@ describe('StudyChatScreen — source modes and local sources', () => {
   })
 
   it('resets to Notes when a different session mounts', async () => {
-    // Given a settled session with Web picked
+    // Given a settled session with Strict notes picked
     await renderSettledSession()
     const user = userEvent.setup()
     await user.click(screen.getByRole('combobox', { name: 'Source mode' }))
-    await user.click(within(screen.getByRole('listbox')).getByText('Web'))
-    expect(screen.getByRole('combobox', { name: 'Source mode' })).toHaveTextContent('Web')
+    await user.click(within(screen.getByRole('listbox')).getByText('Strict notes'))
+    expect(screen.getByRole('combobox', { name: 'Source mode' })).toHaveTextContent('Strict notes')
 
     // When a different session mounts as a fresh instance (AppShell keys
     // StudyChatScreen by session id, so every session gets its own mount)

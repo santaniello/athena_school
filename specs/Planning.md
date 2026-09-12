@@ -489,8 +489,6 @@ CREATE TABLE ingested_files (
 ```text
 Pergunta do usuário
     ↓
-modo = web? → LLM sem retrieval local
-    ↓ não
 Snapshot válido? → erro se o índice nunca carregou
     ↓ sim
 Store vazio? → nenhum chunk, sem gastar embedding
@@ -506,7 +504,7 @@ strict-notes: LLM usa exclusivamente contexto local
 strict-notes sem chunks: resposta fixa sem chat/completion
 ```
 
-- [ ] Source modes `notes` / `strict-notes` / `web`: transientes por chamada; `study.Service` valida e não chama o Retriever em `web`
+- [ ] Source modes `notes` / `strict-notes`: transientes por chamada; `study.Service` valida o modo antes de qualquer retrieval
 - [ ] Busca em todos os tópicos/fontes locais com `status = approved`; query determinística combina tópico + mensagem atual
 - [ ] `Retriever.Retrieve(ctx, sessionID, query)` atribui o embedding à sessão; erro técnico nunca vira fallback silencioso
 - [ ] Prontidão usa `IndexStatus.HasSnapshot`: sem snapshot é `ErrVectorStoreUnavailable`; snapshot válido vazio pula embedding

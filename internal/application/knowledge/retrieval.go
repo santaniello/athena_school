@@ -32,8 +32,7 @@ type contextEntry struct {
 // Retrieve implements domainknowledge.Retriever: it embeds query with
 // sessionID attribution, searches approved local knowledge, filters and
 // caps the result, and resolves each surviving chunk's owning item's
-// concept. study.Service calls this only for its local source modes —
-// never for SourceModeWeb.
+// concept. study.Service calls this for every SourceMode.
 //
 // A survivor whose owning item no longer exists — e.g. a chunk orphaned in
 // the VectorStore by a failed post-commit Remove (see

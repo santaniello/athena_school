@@ -30,8 +30,8 @@ const unavailableContextMessage = "Unable to determine this session's context li
 // local-knowledge Sources (if any) that backed this reply — persisted
 // atomically with the message itself so they survive a resume (see
 // specs/phases/phase-02-knowledge-engine/09-persistent-provenance.md); an
-// empty/nil slice is a valid no-op (SourceModeWeb, or the opening turn,
-// which never retrieves).
+// empty/nil slice is a valid no-op (a strict-notes miss, or the opening
+// turn, which never retrieves).
 func (s *Service) streamAndPersist(
 	ctx context.Context, sessionID string, priorContext domainstudy.ContextUsage,
 	messages []domainllm.Message, sources []domainknowledge.Source, onChunk func(chunk string) error,

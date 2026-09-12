@@ -59,6 +59,8 @@ type capturedEvents struct {
 func newTestStudyApp(t *testing.T, sessions domainstudy.SessionRepository, messages domainstudy.MessageRepository, llm domainllm.Provider, profiles domainprofile.Store, folders domainfolder.Repository) (*App, *capturedEvents) {
 	t.Helper()
 	retriever := knowledgemocks.NewMockRetriever(t)
+	retriever.EXPECT().Retrieve(mock.Anything, mock.Anything, mock.Anything).
+		Return(domainknowledge.RetrievalResult{}, nil).Maybe()
 	catalog := llmmocks.NewMockModelContextResolver(t)
 	messageSources := knowledgemocks.NewMockMessageSourceRepository(t)
 	messageSources.EXPECT().Save(context.Background(), mock.Anything, mock.Anything).Return(nil).Maybe()
@@ -235,7 +237,7 @@ func TestApp_RequestOpeningTurn_blockedSession_emitsContextLimitReachedCode(t *t
 }
 
 func TestApp_SendStudyMessage_streamsReplyAndSignalsDone(t *testing.T) {
-	// Given an App backed by a study service that streams a reply in web mode
+	// Given an App backed by a study service that streams a reply
 	sessions := studymocks.NewMockSessionRepository(t)
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
@@ -255,8 +257,8 @@ func TestApp_SendStudyMessage_streamsReplyAndSignalsDone(t *testing.T) {
 		Once()
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
-	// When sending a message in web mode
-	err := app.SendStudyMessage("session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeWeb)
+	// When sending a message in notes mode
+	err := app.SendStudyMessage("session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeNotes)
 
 	// Then it succeeds, forwarded the chunk and signaled done, both
 	// session-scoped, and emitted an empty sources event first
@@ -310,7 +312,7 @@ func TestApp_SendStudyMessage_blockedSession_emitsContextLimitReachedCode_withou
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
 	// When sending a message
-	err := app.SendStudyMessage("session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeWeb)
+	err := app.SendStudyMessage("session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeNotes)
 
 	// Then it fails with the domain sentinel before persisting the message,
 	// surfaced with the stable "context_limit_reached" code
@@ -381,7 +383,7 @@ func TestApp_SendStudyMessage_emitsPostCapSourcesEvent_notes(t *testing.T) {
 }
 
 func TestApp_SendStudyMessage_emitsErrorEvent_onFailure(t *testing.T) {
-	// Given an App backed by a study service whose LLM call fails, in web mode
+	// Given an App backed by a study service whose LLM call fails
 	sessions := studymocks.NewMockSessionRepository(t)
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
@@ -399,7 +401,7 @@ func TestApp_SendStudyMessage_emitsErrorEvent_onFailure(t *testing.T) {
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
 	// When sending a message and the LLM call fails
-	err := app.SendStudyMessage("session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeWeb)
+	err := app.SendStudyMessage("session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeNotes)
 
 	// Then the error propagates and a session-scoped error event was
 	// emitted, with no done event and no stable code (this happens after
