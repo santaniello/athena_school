@@ -417,6 +417,7 @@ describe('AppShell', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       folderId: 'default',
+      goal: 'Ace the SQL interview',
       startedAt: '2026-08-17T10:00:00Z',
       context: CONTEXT_NORMAL,
     }
@@ -424,9 +425,10 @@ describe('AppShell', () => {
     vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
     await user.click(screen.getByText('General'))
     await user.click(await screen.findByText('New session'))
+    await user.type(screen.getByPlaceholderText('What do you want to study?'), 'Distributed systems')
     await user.type(
-      screen.getByPlaceholderText('What do you want to study?'),
-      'Distributed systems{Enter}',
+      screen.getByPlaceholderText('e.g. Pass the SQL interview'),
+      'Ace the SQL interview{Enter}',
     )
 
     // Then the topbar swaps the section label for the session's breadcrumb
@@ -496,6 +498,7 @@ describe('AppShell', () => {
       id: 'session-existing',
       topic: 'Existing topic',
       folderId: 'default',
+      goal: 'Ace the SQL interview',
       startedAt: '2026-08-10T10:00:00Z',
       context: CONTEXT_NORMAL,
     }
@@ -537,6 +540,7 @@ describe('AppShell', () => {
       id: 'session-a',
       topic: 'Session A',
       folderId: 'default',
+      goal: 'Ace the SQL interview',
       startedAt: '2026-08-10T10:00:00Z',
       context: CONTEXT_NORMAL,
     }
@@ -573,6 +577,7 @@ describe('AppShell', () => {
       id: 'session-orphan',
       topic: 'Orphan session',
       folderId: 'default',
+      goal: 'Ace the SQL interview',
       startedAt: '2026-08-10T10:00:00Z',
       context: CONTEXT_NORMAL,
     }
@@ -607,6 +612,7 @@ describe('AppShell', () => {
       id: 'session-stale',
       topic: 'Cached topic',
       folderId: 'default',
+      goal: 'Ace the SQL interview',
       startedAt: '2026-08-10T10:00:00Z',
       context: CONTEXT_NORMAL,
     }
@@ -641,6 +647,7 @@ describe('AppShell', () => {
       id: 'session-nav',
       topic: 'Nav test topic',
       folderId: 'default',
+      goal: 'Ace the SQL interview',
       startedAt: '2026-08-17T10:00:00Z',
       context: CONTEXT_NORMAL,
     }
@@ -648,9 +655,10 @@ describe('AppShell', () => {
     vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
     await user.click(screen.getByText('General'))
     await user.click(await screen.findByText('New session'))
+    await user.type(screen.getByPlaceholderText('What do you want to study?'), 'Nav test topic')
     await user.type(
-      screen.getByPlaceholderText('What do you want to study?'),
-      'Nav test topic{Enter}',
+      screen.getByPlaceholderText('e.g. Pass the SQL interview'),
+      'Ace the SQL interview{Enter}',
     )
     expect(await screen.findByText('Study / General')).toBeInTheDocument()
 
@@ -683,6 +691,7 @@ describe('AppShell', () => {
       id: 'session-original',
       topic: 'Distributed systems',
       folderId: 'default',
+      goal: 'Ace the SQL interview',
       startedAt: '2026-08-17T10:00:00Z',
       context: CONTEXT_NORMAL,
     }
@@ -691,9 +700,10 @@ describe('AppShell', () => {
     vi.mocked(requestOpeningTurn).mockResolvedValueOnce()
     await user.click(screen.getByText('General'))
     await user.click(await screen.findByText('New session'))
+    await user.type(screen.getByPlaceholderText('What do you want to study?'), 'Distributed systems')
     await user.type(
-      screen.getByPlaceholderText('What do you want to study?'),
-      'Distributed systems{Enter}',
+      screen.getByPlaceholderText('e.g. Pass the SQL interview'),
+      'Ace the SQL interview{Enter}',
     )
     expect(await screen.findByText('Study / General')).toBeInTheDocument()
 
@@ -711,6 +721,7 @@ describe('AppShell', () => {
       id: 'session-continued',
       topic: 'Distributed systems',
       folderId: 'default',
+      goal: 'Ace the SQL interview',
       startedAt: '2026-08-17T10:05:00Z',
       context: CONTEXT_NORMAL,
     }
@@ -722,7 +733,11 @@ describe('AppShell', () => {
     // Then it started a session on the same topic/folder as the one that
     // was open, the sidebar tree refreshed to include it, and the chat view
     // switched to it
-    expect(startStudySession).toHaveBeenCalledWith('Distributed systems', 'default')
+    expect(startStudySession).toHaveBeenCalledWith(
+      'Distributed systems',
+      'Ace the SQL interview',
+      'default',
+    )
     await waitFor(() => expect(listStudySessionsByFolder).toHaveBeenCalledWith('default'))
     await waitFor(() =>
       expect(requestOpeningTurn).toHaveBeenCalledWith('session-continued', 'Distributed systems'),
@@ -748,15 +763,17 @@ describe('AppShell', () => {
       id: 'session-original',
       topic: 'Distributed systems',
       folderId: 'default',
+      goal: 'Ace the SQL interview',
       startedAt: '2026-08-17T10:00:00Z',
       context: CONTEXT_NORMAL,
     })
     vi.mocked(requestOpeningTurn).mockResolvedValueOnce()
     await user.click(screen.getByText('General'))
     await user.click(await screen.findByText('New session'))
+    await user.type(screen.getByPlaceholderText('What do you want to study?'), 'Distributed systems')
     await user.type(
-      screen.getByPlaceholderText('What do you want to study?'),
-      'Distributed systems{Enter}',
+      screen.getByPlaceholderText('e.g. Pass the SQL interview'),
+      'Ace the SQL interview{Enter}',
     )
     expect(await screen.findByText('Study / General')).toBeInTheDocument()
 
@@ -808,15 +825,17 @@ describe('AppShell', () => {
       id: 'session-original',
       topic: 'Distributed systems',
       folderId: 'default',
+      goal: 'Ace the SQL interview',
       startedAt: '2026-08-17T10:00:00Z',
       context: CONTEXT_NORMAL,
     })
     vi.mocked(requestOpeningTurn).mockResolvedValueOnce()
     await user.click(screen.getByText('General'))
     await user.click(await screen.findByText('New session'))
+    await user.type(screen.getByPlaceholderText('What do you want to study?'), 'Distributed systems')
     await user.type(
-      screen.getByPlaceholderText('What do you want to study?'),
-      'Distributed systems{Enter}',
+      screen.getByPlaceholderText('e.g. Pass the SQL interview'),
+      'Ace the SQL interview{Enter}',
     )
     expect(await screen.findByText('Study / General')).toBeInTheDocument()
 

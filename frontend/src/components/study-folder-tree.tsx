@@ -46,6 +46,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { createFolder, deleteFolder, listFolders, renameFolder, type Folder } from '@/lib/folder'
 import {
@@ -141,6 +142,7 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
     const [folders, setFolders] = useState<FolderNode[]>([])
     const [newSessionFolderId, setNewSessionFolderId] = useState<string | null>(null)
     const [newSessionTopic, setNewSessionTopic] = useState('')
+    const [newSessionGoal, setNewSessionGoal] = useState('')
     const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null)
     const [renameValue, setRenameValue] = useState('')
     const [deletingFolder, setDeletingFolder] = useState<Folder | null>(null)
@@ -215,10 +217,12 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
 
     async function handleStartSession(folderId: string) {
       const topic = newSessionTopic.trim()
-      if (!topic) return
+      const goal = newSessionGoal.trim()
+      if (!topic || !goal) return
       setNewSessionFolderId(null)
       setNewSessionTopic('')
-      const session = await startStudySession(topic, folderId)
+      setNewSessionGoal('')
+      const session = await startStudySession(topic, goal, folderId)
       setFolders((previous) =>
         previous.map((folder) =>
           folder.id === folderId
@@ -406,38 +410,18 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
                     .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
                     .map((session) => renderSessionRow(session, folder))}
 
-                  {newSessionFolderId === folder.id ? (
-                    <form
-                      className="flex items-center gap-1 py-1 pr-1 pl-10"
-                      onSubmit={(event) => {
-                        event.preventDefault()
-                        void handleStartSession(folder.id)
-                      }}
-                    >
-                      <Input
-                        autoFocus
-                        value={newSessionTopic}
-                        onChange={(event) => setNewSessionTopic(event.target.value)}
-                        placeholder="What do you want to study?"
-                        className="h-6 flex-1 text-xs"
-                        onKeyDown={(event) => {
-                          if (event.key === 'Escape') setNewSessionFolderId(null)
-                        }}
-                      />
-                    </form>
-                  ) : (
-                    <button
-                      type="button"
-                      className="flex cursor-pointer items-center gap-1.5 py-1 pr-1 pl-10 text-xs text-muted-foreground hover:text-primary"
-                      onClick={() => {
-                        setNewSessionFolderId(folder.id)
-                        setNewSessionTopic('')
-                      }}
-                    >
-                      <Plus className="size-3" aria-hidden="true" />
-                      New session
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="flex cursor-pointer items-center gap-1.5 py-1 pr-1 pl-10 text-xs text-muted-foreground hover:text-primary"
+                    onClick={() => {
+                      setNewSessionFolderId(folder.id)
+                      setNewSessionTopic('')
+                      setNewSessionGoal('')
+                    }}
+                  >
+                    <Plus className="size-3" aria-hidden="true" />
+                    New session
+                  </button>
                 </div>
               )}
             </div>
@@ -476,6 +460,51 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
                 />
                 <DialogFooter>
                   <Button type="submit" disabled={!newFolderName.trim()}>
+                    Create
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog
+            open={newSessionFolderId !== null}
+            onOpenChange={(open) => !open && setNewSessionFolderId(null)}
+          >
+            <DialogContent>
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  if (newSessionFolderId) void handleStartSession(newSessionFolderId)
+                }}
+              >
+                <DialogHeader>
+                  <DialogTitle>New session</DialogTitle>
+                  <DialogDescription>
+                    Set a goal for this session — it shapes how the assistant guides it.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="mt-2 flex flex-col gap-1.5">
+                  <Label htmlFor="new-session-topic">Session name</Label>
+                  <Input
+                    id="new-session-topic"
+                    autoFocus
+                    value={newSessionTopic}
+                    onChange={(event) => setNewSessionTopic(event.target.value)}
+                    placeholder="What do you want to study?"
+                  />
+                </div>
+                <div className="mt-5 mb-4 flex flex-col gap-1.5">
+                  <Label htmlFor="new-session-goal">Goal</Label>
+                  <Input
+                    id="new-session-goal"
+                    value={newSessionGoal}
+                    onChange={(event) => setNewSessionGoal(event.target.value)}
+                    placeholder="e.g. Pass the SQL interview"
+                  />
+                </div>
+                <DialogFooter>
+                  <Button type="submit" disabled={!newSessionTopic.trim() || !newSessionGoal.trim()}>
                     Create
                   </Button>
                 </DialogFooter>

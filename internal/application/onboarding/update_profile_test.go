@@ -42,13 +42,13 @@ func TestUpdateProfile_preservesOriginalCreatedAt_whenProfileIsValid(t *testing.
 }
 
 func TestUpdateProfile_returnsValidationError_andNeverSaves_whenProfileIsInvalid(t *testing.T) {
-	// Given an existing profile and an invalid edit (no goals)
+	// Given an existing profile and an invalid edit (bad experience level)
 	store := mocks.NewMockStore(t)
 	existing := validInput()
 	existing.CreatedAt = time.Now().UTC()
 
 	edit := validInput()
-	edit.Goals = nil
+	edit.ExperienceLevel = "expert"
 
 	store.EXPECT().Load().Return(existing, nil).Once()
 
@@ -58,7 +58,7 @@ func TestUpdateProfile_returnsValidationError_andNeverSaves_whenProfileIsInvalid
 	_, err := service.UpdateProfile(edit)
 
 	// Then it fails with the domain validation error, without saving
-	assert.ErrorIs(t, err, domainprofile.ErrGoalsRequired)
+	assert.ErrorIs(t, err, domainprofile.ErrInvalidExperienceLevel)
 }
 
 func TestUpdateProfile_propagatesLoadError_whenNoExistingProfile(t *testing.T) {

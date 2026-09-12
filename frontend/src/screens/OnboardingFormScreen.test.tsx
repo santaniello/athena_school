@@ -10,7 +10,6 @@ function emptyDraft(): ProfileDraft {
     assistantName: '',
     area: '',
     experienceLevel: '',
-    goals: [],
     studyStyle: '',
     assistantLanguage: '',
   }
@@ -22,7 +21,6 @@ function completeDraft(): ProfileDraft {
     assistantName: 'Atena',
     area: 'Engenharia de Software',
     experienceLevel: 'intermediate',
-    goals: ['SQL', 'System Design'],
     studyStyle: 'practical_examples',
     assistantLanguage: 'en',
   }
@@ -43,7 +41,6 @@ describe('OnboardingFormScreen', () => {
     ['assistantName', { ...completeDraft(), assistantName: '' }],
     ['area', { ...completeDraft(), area: '' }],
     ['experienceLevel', { ...completeDraft(), experienceLevel: '' }],
-    ['goals', { ...completeDraft(), goals: [] }],
     ['studyStyle', { ...completeDraft(), studyStyle: '' }],
     ['assistantLanguage', { ...completeDraft(), assistantLanguage: '' }],
   ] as Array<[string, ProfileDraft]>)(
@@ -125,24 +122,5 @@ describe('OnboardingFormScreen', () => {
 
     // Then onChange is called with that style
     expect(onChange).toHaveBeenCalledWith({ ...emptyDraft(), studyStyle: 'step_by_step' })
-  })
-
-  it('adds a goal through the tag input', async () => {
-    // Given a draft with no goals
-    const onChange = vi.fn()
-    const user = userEvent.setup()
-    render(
-      <OnboardingFormScreen
-        draft={{ ...emptyDraft(), goals: [] }}
-        onChange={onChange}
-        onNext={vi.fn()}
-      />,
-    )
-
-    // When typing a goal and pressing Enter in the goals field
-    await user.type(screen.getByLabelText('Goals'), 'SQL{Enter}')
-
-    // Then onChange is called with the goal appended
-    expect(onChange).toHaveBeenCalledWith({ ...emptyDraft(), goals: ['SQL'] })
   })
 })

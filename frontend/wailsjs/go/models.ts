@@ -445,6 +445,7 @@ export namespace desktop {
 	    id: string;
 	    topic: string;
 	    folderId: string;
+	    goal: string;
 	    startedAt: string;
 	    context: StudyContextResult;
 	
@@ -457,6 +458,7 @@ export namespace desktop {
 	        this.id = source["id"];
 	        this.topic = source["topic"];
 	        this.folderId = source["folderId"];
+	        this.goal = source["goal"];
 	        this.startedAt = source["startedAt"];
 	        this.context = this.convertValues(source["context"], StudyContextResult);
 	    }
@@ -518,7 +520,6 @@ export namespace desktop {
 	    assistantName: string;
 	    area: string;
 	    experienceLevel: string;
-	    goals: string[];
 	    studyStyle: string;
 	    assistantLanguage: string;
 	
@@ -532,7 +533,6 @@ export namespace desktop {
 	        this.assistantName = source["assistantName"];
 	        this.area = source["area"];
 	        this.experienceLevel = source["experienceLevel"];
-	        this.goals = source["goals"];
 	        this.studyStyle = source["studyStyle"];
 	        this.assistantLanguage = source["assistantLanguage"];
 	    }

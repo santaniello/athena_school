@@ -140,7 +140,6 @@ func validProfileInput() UserProfileInput {
 		AssistantName:     "Atena",
 		Area:              "Engenharia de Software",
 		ExperienceLevel:   domainprofile.ExperienceLevelIntermediate,
-		Goals:             []string{"SQL", "System Design"},
 		StudyStyle:        domainprofile.StudyStylePracticalExamples,
 		AssistantLanguage: domainprofile.AssistantLanguageEnglish,
 	}
@@ -168,7 +167,6 @@ func TestApp_GetProfile_returnsProfile_whenItExists(t *testing.T) {
 		AssistantName:     input.AssistantName,
 		Area:              input.Area,
 		ExperienceLevel:   input.ExperienceLevel,
-		Goals:             input.Goals,
 		StudyStyle:        input.StudyStyle,
 		AssistantLanguage: input.AssistantLanguage,
 	}
@@ -197,16 +195,16 @@ func TestApp_GetProfile_propagatesLoadError_whenNoProfileExists(t *testing.T) {
 	assert.Equal(t, UserProfileInput{}, got)
 }
 
-func TestApp_SaveProfile_propagatesValidationError_whenGoalsIsMissing(t *testing.T) {
+func TestApp_SaveProfile_propagatesValidationError_whenExperienceLevelIsInvalid(t *testing.T) {
 	// Given an App backed by a profile store that must never be called
 	profiles := profilemocks.NewMockStore(t)
 	app := newTestOnboardingApp(t, profiles, configmocks.NewMockStore(t), configmocks.NewMockKeyValidator(t))
 	input := validProfileInput()
-	input.Goals = nil
+	input.ExperienceLevel = "expert"
 
-	// When saving a profile with no goals
+	// When saving a profile with an invalid experience level
 	err := app.SaveProfile(input)
 
 	// Then the domain validation error is surfaced unchanged
-	assert.ErrorIs(t, err, domainprofile.ErrGoalsRequired)
+	assert.ErrorIs(t, err, domainprofile.ErrInvalidExperienceLevel)
 }

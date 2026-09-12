@@ -101,7 +101,7 @@ export function SendStudyMessage(arg1:string,arg2:string,arg3:string,arg4:string
 
 export function StartKnowledgeIndex(arg1:context.Context):Promise<void>;
 
-export function StartStudySession(arg1:string,arg2:string):Promise<desktop.StudySessionResult>;
+export function StartStudySession(arg1:string,arg2:string,arg3:string):Promise<desktop.StudySessionResult>;
 
 export function Startup(arg1:context.Context):Promise<void>;
 

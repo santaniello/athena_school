@@ -57,19 +57,29 @@ describe('startStudySession', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       folderId: 'folder-1',
+      goal: 'Ace the SQL interview',
       startedAt: '2026-08-16T10:00:00Z',
       context: CONTEXT_NORMAL,
     } as never)
 
     // When starting a study session in a folder
-    const session = await startStudySession('Distributed systems', 'folder-1')
+    const session = await startStudySession(
+      'Distributed systems',
+      'Ace the SQL interview',
+      'folder-1',
+    )
 
-    // Then it forwarded the topic and folder id, and returned the session
-    expect(StartStudySession).toHaveBeenCalledWith('Distributed systems', 'folder-1')
+    // Then it forwarded the topic, folder id, and goal, and returned the session
+    expect(StartStudySession).toHaveBeenCalledWith(
+      'Distributed systems',
+      'folder-1',
+      'Ace the SQL interview',
+    )
     expect(session).toEqual({
       id: 'session-1',
       topic: 'Distributed systems',
       folderId: 'folder-1',
+      goal: 'Ace the SQL interview',
       startedAt: '2026-08-16T10:00:00Z',
       context: CONTEXT_NORMAL,
     })
@@ -81,16 +91,21 @@ describe('startStudySession', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       folderId: 'default',
+      goal: 'Ace the SQL interview',
       startedAt: '2026-08-16T10:00:00Z',
       context: CONTEXT_NORMAL,
     } as never)
 
     // When starting a session without specifying a folder
-    await startStudySession('Distributed systems')
+    await startStudySession('Distributed systems', 'Ace the SQL interview')
 
     // Then it forwarded an empty folder id, letting the backend fall back
     // to the default folder
-    expect(StartStudySession).toHaveBeenCalledWith('Distributed systems', '')
+    expect(StartStudySession).toHaveBeenCalledWith(
+      'Distributed systems',
+      '',
+      'Ace the SQL interview',
+    )
   })
 })
 

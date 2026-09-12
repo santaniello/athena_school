@@ -9,7 +9,6 @@ const profile: ProfileDraft = {
   assistantName: 'Athena',
   area: 'Software Engineering',
   experienceLevel: 'intermediate',
-  goals: ['System Design'],
   studyStyle: 'practical_examples',
   assistantLanguage: 'en',
 }

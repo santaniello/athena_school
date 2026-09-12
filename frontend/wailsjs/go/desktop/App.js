@@ -198,8 +198,8 @@ export function StartKnowledgeIndex(arg1) {
   return window['go']['desktop']['App']['StartKnowledgeIndex'](arg1);
 }
 
-export function StartStudySession(arg1, arg2) {
-  return window['go']['desktop']['App']['StartStudySession'](arg1, arg2);
+export function StartStudySession(arg1, arg2, arg3) {
+  return window['go']['desktop']['App']['StartStudySession'](arg1, arg2, arg3);
 }
 
 export function Startup(arg1) {

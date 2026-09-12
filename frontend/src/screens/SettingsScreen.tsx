@@ -4,7 +4,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { TagInput } from '@/components/tag-input'
 import {
   Select,
   SelectContent,
@@ -181,19 +180,6 @@ function SettingsScreen({ profile, onProfileUpdated }: SettingsScreenProps) {
                 ))}
               </SelectContent>
             </Select>
-          </div>
-
-          <div className="flex flex-col gap-1.5 text-left">
-            <Label htmlFor="settings-goals">Goals</Label>
-            <TagInput
-              id="settings-goals"
-              value={draft.goals}
-              onChange={(goals) => updateField('goals', goals)}
-              placeholder="Type a goal and press Enter"
-            />
-            <p className="text-xs text-muted-foreground">
-              Press Enter or comma after each goal to add it.
-            </p>
           </div>
 
           <div className="flex flex-col gap-1.5 text-left">

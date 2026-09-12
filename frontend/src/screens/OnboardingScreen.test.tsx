@@ -32,7 +32,7 @@ async function pickOption(
 // Free-text fields are filled by pasting rather than typing: per-character
 // typing spends a macrotask and a React render on every keystroke for no
 // added coverage, since the controlled inputs see the same change events
-// either way. Goals keeps type(), since its TagInput commits on {Enter}.
+// either way.
 async function fillForm(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByLabelText('Name'))
   await user.paste('Ana')
@@ -42,7 +42,6 @@ async function fillForm(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByLabelText('Area of study or work'))
   await user.paste('Software Engineering')
   await pickOption(user, 'Experience level', 'Intermediate')
-  await user.type(screen.getByLabelText('Goals'), 'SQL{Enter}')
   await pickOption(user, 'Preferred study style', 'Lots of practical examples')
 }
 
@@ -75,7 +74,7 @@ describe('OnboardingScreen', () => {
 
     // Then the profile is saved and onComplete fires
     expect(SaveProfile).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'Ana', experienceLevel: 'intermediate', goals: ['SQL'] }),
+      expect.objectContaining({ name: 'Ana', experienceLevel: 'intermediate' }),
     )
     await waitFor(() => expect(onComplete).toHaveBeenCalledOnce())
   })

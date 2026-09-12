@@ -35,7 +35,6 @@ var (
 	ErrAssistantNameRequired    = errors.New("assistant name is required")
 	ErrAreaRequired             = errors.New("area is required")
 	ErrInvalidExperienceLevel   = errors.New("experience level must be beginner, intermediate or advanced")
-	ErrGoalsRequired            = errors.New("at least one goal is required")
 	ErrInvalidStudyStyle        = errors.New("study style must be direct, practical_examples or step_by_step")
 	ErrInvalidAssistantLanguage = errors.New("assistant language must be pt or en")
 )
@@ -47,7 +46,6 @@ type UserProfile struct {
 	AssistantName     string    `json:"assistant_name"`
 	Area              string    `json:"area"`
 	ExperienceLevel   string    `json:"experience_level"` // beginner | intermediate | advanced
-	Goals             []string  `json:"goals"`
 	StudyStyle        string    `json:"study_style"`
 	AssistantLanguage string    `json:"assistant_language"` // pt | en
 	CreatedAt         time.Time `json:"created_at"`
@@ -71,9 +69,6 @@ func (p UserProfile) Validate() error {
 	default:
 		return ErrInvalidExperienceLevel
 	}
-	if !hasNonBlankGoal(p.Goals) {
-		return ErrGoalsRequired
-	}
 	switch p.StudyStyle {
 	case StudyStyleDirect, StudyStylePracticalExamples, StudyStyleStepByStep:
 	default:
@@ -85,13 +80,4 @@ func (p UserProfile) Validate() error {
 		return ErrInvalidAssistantLanguage
 	}
 	return nil
-}
-
-func hasNonBlankGoal(goals []string) bool {
-	for _, goal := range goals {
-		if strings.TrimSpace(goal) != "" {
-			return true
-		}
-	}
-	return false
 }

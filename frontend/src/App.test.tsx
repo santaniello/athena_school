@@ -41,7 +41,6 @@ vi.mock('../wailsjs/go/desktop/App', () => ({
     assistantName: 'Athena',
     area: '',
     experienceLevel: '',
-    goals: [],
     studyStyle: '',
     assistantLanguage: '',
   }),
@@ -128,7 +127,7 @@ describe('App', () => {
     // the longest test in the suite, and per-character typing spends a
     // macrotask and a React render on every keystroke for no added
     // coverage — the controlled inputs see the same change events either
-    // way. Goals keeps type(), since its TagInput commits on {Enter}.
+    // way.
     await user.click(screen.getByLabelText('OpenRouter key'))
     await user.paste('sk-or-valid')
     await user.click(screen.getByRole('button', { name: 'Connect' }))
@@ -141,7 +140,6 @@ describe('App', () => {
     await user.click(screen.getByLabelText('Area of study or work'))
     await user.paste('Software Engineering')
     await pickOption(user, 'Experience level', 'Intermediate')
-    await user.type(screen.getByLabelText('Goals'), 'SQL{Enter}')
     await pickOption(user, 'Preferred study style', 'Lots of practical examples')
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     await screen.findByRole('heading', { name: 'Confirm your profile' })

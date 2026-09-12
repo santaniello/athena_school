@@ -23,7 +23,6 @@ func TestApp_UpdateProfile_savesProfile_andReturnsSavedFields_whenValid(t *testi
 		AssistantName:     "Atena",
 		Area:              "Engenharia de Software",
 		ExperienceLevel:   domainprofile.ExperienceLevelIntermediate,
-		Goals:             []string{"SQL"},
 		StudyStyle:        domainprofile.StudyStylePracticalExamples,
 		AssistantLanguage: domainprofile.AssistantLanguageEnglish,
 		CreatedAt:         originalCreatedAt,
@@ -102,7 +101,7 @@ func TestApp_UpdateKnowledgeExtractionSettings_rejectsFractionalMaximum(t *testi
 	assert.EqualError(t, err, "maximum knowledge extraction items must be an integer between 1 and 20")
 }
 
-func TestApp_UpdateProfile_propagatesValidationError_whenGoalsIsMissing(t *testing.T) {
+func TestApp_UpdateProfile_propagatesValidationError_whenExperienceLevelIsInvalid(t *testing.T) {
 	// Given an App backed by a profile store with an existing profile, and a
 	// store that must never be called to save
 	profiles := profilemocks.NewMockStore(t)
@@ -110,13 +109,13 @@ func TestApp_UpdateProfile_propagatesValidationError_whenGoalsIsMissing(t *testi
 	app := newTestOnboardingApp(t, profiles, configmocks.NewMockStore(t), configmocks.NewMockKeyValidator(t))
 
 	input := validProfileInput()
-	input.Goals = nil
+	input.ExperienceLevel = "expert"
 
-	// When updating the profile with no goals
+	// When updating the profile with an invalid experience level
 	_, err := app.UpdateProfile(input)
 
 	// Then the domain validation error is surfaced unchanged
-	assert.ErrorIs(t, err, domainprofile.ErrGoalsRequired)
+	assert.ErrorIs(t, err, domainprofile.ErrInvalidExperienceLevel)
 }
 
 func TestApp_UpdateProfile_propagatesLoadError_whenNoExistingProfile(t *testing.T) {

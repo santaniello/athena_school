@@ -2,26 +2,26 @@ package study
 
 import (
 	"fmt"
-	"strings"
 
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	domainprofile "github.com/santaniello/athena/internal/domain/profile"
 )
 
-// buildSystemPrompt renders the study-mode system prompt from profile and
-// topic, per specs/phases/phase-01-desktop-mvp/06-study-mode.md. Specialty
-// is intentionally omitted: UserProfile has no such field.
+// buildSystemPrompt renders the study-mode system prompt from profile,
+// topic, and the session's own goal, per
+// specs/phases/phase-01-desktop-mvp/14-session-goal.md. Specialty is
+// intentionally omitted: UserProfile has no such field.
 //
 // Without explicit instructions, an unguided model tends to answer a bare
 // "topic for this session" line with a long unsolicited lecture instead of
 // starting a dialogue, so the behavioral rules below spell out the intended
 // Socratic flow (open with one short question, wait for the answer, then
 // give feedback and ask a follow-up) and cap response length by default.
-func buildSystemPrompt(profile domainprofile.UserProfile, topic string) string {
+func buildSystemPrompt(profile domainprofile.UserProfile, topic, sessionGoal string) string {
 	return fmt.Sprintf(
 		"You are %s, the learning assistant of %s.\n"+
 			"Area: %s. Level: %s.\n"+
-			"Style: %s. Goal: %s.\n"+
+			"Style: %s.%s\n"+
 			"Topic for this session: %s.\n"+
 			"%s"+
 			"Adapt all explanations to the user's context.\n\n"+
@@ -32,10 +32,21 @@ func buildSystemPrompt(profile domainprofile.UserProfile, topic string) string {
 			"- After each answer, give brief feedback, then ask a follow-up question that builds on it.",
 		profile.AssistantName, profile.Name,
 		profile.Area, profile.ExperienceLevel,
-		profile.StudyStyle, strings.Join(profile.Goals, ", "),
+		profile.StudyStyle, goalFragment(sessionGoal),
 		topic,
 		languageInstruction(profile.AssistantLanguage),
 	)
+}
+
+// goalFragment renders the " Goal: ...." fragment appended to the Style
+// line, or "" for a session predating the Goal field (see
+// specs/phases/phase-01-desktop-mvp/14-session-goal.md) — there is no
+// profile-level fallback left to render instead.
+func goalFragment(sessionGoal string) string {
+	if sessionGoal == "" {
+		return ""
+	}
+	return fmt.Sprintf(" Goal: %s.", sessionGoal)
 }
 
 // languageInstruction returns a system-prompt line telling the model which

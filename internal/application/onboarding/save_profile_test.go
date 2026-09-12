@@ -18,7 +18,6 @@ func validInput() domainprofile.UserProfile {
 		AssistantName:     "Atena",
 		Area:              "Engenharia de Software",
 		ExperienceLevel:   domainprofile.ExperienceLevelIntermediate,
-		Goals:             []string{"SQL", "System Design"},
 		StudyStyle:        domainprofile.StudyStylePracticalExamples,
 		AssistantLanguage: domainprofile.AssistantLanguageEnglish,
 	}
@@ -47,10 +46,10 @@ func TestSaveProfile_savesProfileWithCreatedAt_whenProfileIsValid(t *testing.T) 
 }
 
 func TestSaveProfile_returnsValidationError_andNeverSaves_whenProfileIsInvalid(t *testing.T) {
-	// Given a profile store that must never be called and an invalid profile (no goals)
+	// Given a profile store that must never be called and an invalid profile (bad experience level)
 	store := mocks.NewMockStore(t)
 	input := validInput()
-	input.Goals = nil
+	input.ExperienceLevel = "expert"
 
 	service := NewService(store, nil, nil)
 
@@ -58,7 +57,7 @@ func TestSaveProfile_returnsValidationError_andNeverSaves_whenProfileIsInvalid(t
 	_, err := service.SaveProfile(input)
 
 	// Then it fails with the domain validation error, without saving
-	assert.ErrorIs(t, err, domainprofile.ErrGoalsRequired)
+	assert.ErrorIs(t, err, domainprofile.ErrInvalidExperienceLevel)
 }
 
 func TestSaveProfile_propagatesStoreError(t *testing.T) {

@@ -64,6 +64,7 @@ func (s *Service) SendMessage(
 	}
 
 	var priorContext, newContext domainstudy.ContextUsage
+	var sessionGoal string
 	err := s.tx.WithinTx(ctx, func(ctx context.Context) error {
 		session, err := s.sessions.GetByID(ctx, sessionID)
 		if err != nil {
@@ -73,6 +74,7 @@ func (s *Service) SendMessage(
 			return domainstudy.ErrSessionContextLimitReached
 		}
 		priorContext = session.Context
+		sessionGoal = session.Goal
 
 		if err := s.messages.Append(ctx, userMessage); err != nil {
 			return err
@@ -130,7 +132,7 @@ func (s *Service) SendMessage(
 	}
 
 	llmMessages := make([]domainllm.Message, 0, len(history)+2)
-	llmMessages = append(llmMessages, domainllm.Message{Role: "system", Content: buildSystemPrompt(profile, topic)})
+	llmMessages = append(llmMessages, domainllm.Message{Role: "system", Content: buildSystemPrompt(profile, topic, sessionGoal)})
 	if knowledgeMessage != nil {
 		llmMessages = append(llmMessages, *knowledgeMessage)
 	}

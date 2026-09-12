@@ -28,10 +28,10 @@ func (r *SessionRepository) Create(ctx context.Context, session study.Session) e
 	}
 	_, err := execer(ctx, r.db).ExecContext(ctx,
 		`INSERT INTO sessions (
-			id, topic, mode, folder_id, started_at,
+			id, topic, mode, folder_id, goal, started_at,
 			context_state, context_model, context_used_tokens, context_length, context_estimated
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		session.ID, session.Topic, session.Mode, session.FolderID, session.StartedAt,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		session.ID, session.Topic, session.Mode, session.FolderID, session.Goal, session.StartedAt,
 		string(session.Context.State), session.Context.Model, session.Context.UsedTokens,
 		session.Context.ContextLength, boolToInt(session.Context.Estimated),
 	)
@@ -48,11 +48,11 @@ func (r *SessionRepository) GetByID(ctx context.Context, id string) (study.Sessi
 	var contextState string
 	var estimated int
 	err := execer(ctx, r.db).QueryRowContext(ctx,
-		`SELECT id, topic, mode, folder_id, started_at,
+		`SELECT id, topic, mode, folder_id, goal, started_at,
 			context_state, context_model, context_used_tokens, context_length, context_estimated
 		FROM sessions WHERE id = ?`, id,
 	).Scan(
-		&s.ID, &s.Topic, &s.Mode, &s.FolderID, &s.StartedAt,
+		&s.ID, &s.Topic, &s.Mode, &s.FolderID, &s.Goal, &s.StartedAt,
 		&contextState, &s.Context.Model, &s.Context.UsedTokens, &s.Context.ContextLength, &estimated,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -70,7 +70,7 @@ func (r *SessionRepository) GetByID(ctx context.Context, id string) (study.Sessi
 // ListByFolder returns every session in the given folder.
 func (r *SessionRepository) ListByFolder(ctx context.Context, folderID string) ([]study.Session, error) {
 	rows, err := execer(ctx, r.db).QueryContext(ctx,
-		`SELECT id, topic, mode, folder_id, started_at,
+		`SELECT id, topic, mode, folder_id, goal, started_at,
 			context_state, context_model, context_used_tokens, context_length, context_estimated
 		FROM sessions WHERE folder_id = ?`, folderID,
 	)
@@ -85,7 +85,7 @@ func (r *SessionRepository) ListByFolder(ctx context.Context, folderID string) (
 		var contextState string
 		var estimated int
 		if err := rows.Scan(
-			&s.ID, &s.Topic, &s.Mode, &s.FolderID, &s.StartedAt,
+			&s.ID, &s.Topic, &s.Mode, &s.FolderID, &s.Goal, &s.StartedAt,
 			&contextState, &s.Context.Model, &s.Context.UsedTokens, &s.Context.ContextLength, &estimated,
 		); err != nil {
 			return nil, fmt.Errorf("sqlite: scanning session: %w", err)

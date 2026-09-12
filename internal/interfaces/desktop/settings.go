@@ -52,7 +52,6 @@ func (a *App) UpdateProfile(input UserProfileInput) (UserProfileInput, error) {
 		AssistantName:     input.AssistantName,
 		Area:              input.Area,
 		ExperienceLevel:   input.ExperienceLevel,
-		Goals:             input.Goals,
 		StudyStyle:        input.StudyStyle,
 		AssistantLanguage: input.AssistantLanguage,
 	})
@@ -64,7 +63,6 @@ func (a *App) UpdateProfile(input UserProfileInput) (UserProfileInput, error) {
 		AssistantName:     saved.AssistantName,
 		Area:              saved.Area,
 		ExperienceLevel:   saved.ExperienceLevel,
-		Goals:             saved.Goals,
 		StudyStyle:        saved.StudyStyle,
 		AssistantLanguage: saved.AssistantLanguage,
 	}, nil

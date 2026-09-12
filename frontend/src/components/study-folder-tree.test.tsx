@@ -52,6 +52,7 @@ const CACHE_SESSION: StudySession = {
   id: 'session-1',
   topic: 'Cache invalidation',
   folderId: 'folder-1',
+  goal: 'Ace the SQL interview',
   startedAt: '2026-08-16T10:00:00Z',
   context: CONTEXT_NORMAL,
 }
@@ -59,6 +60,7 @@ const LOAD_BALANCING_SESSION: StudySession = {
   id: 'session-3',
   topic: 'Load balancing',
   folderId: 'folder-1',
+  goal: 'Ace the SQL interview',
   startedAt: '2026-08-16T09:00:00Z',
   context: CONTEXT_NORMAL,
 }
@@ -622,7 +624,7 @@ describe('StudyFolderTree', () => {
     expect(listStudySessionsByFolder).not.toHaveBeenCalledWith('default')
   })
 
-  it('starts a new session inline inside a folder, trimming the topic', async () => {
+  it('starts a new session via the dialog, trimming the topic and goal', async () => {
     // Given an expanded, empty folder and a session start that succeeds
     vi.mocked(listFolders).mockResolvedValueOnce([SYSTEM_DESIGN])
     vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([])
@@ -633,24 +635,29 @@ describe('StudyFolderTree', () => {
     await user.click(screen.getByText('System Design'))
     await screen.findByText('New session')
 
-    // When starting a session with a padded topic
+    // When starting a session with a padded topic and goal
     await user.click(screen.getByText('New session'))
+    await user.type(screen.getByPlaceholderText('What do you want to study?'), '  Cache invalidation  ')
     await user.type(
-      screen.getByPlaceholderText('What do you want to study?'),
-      '  Cache invalidation  {Enter}',
+      screen.getByPlaceholderText('e.g. Pass the SQL interview'),
+      '  Ace the SQL interview  {Enter}',
     )
 
-    // Then it was started with the trimmed topic, in this folder, and
-    // reported to the parent, along with its folder's name
-    expect(startStudySession).toHaveBeenCalledWith('Cache invalidation', 'folder-1')
+    // Then it was started with the trimmed topic and goal, in this folder,
+    // and reported to the parent, along with its folder's name
+    expect(startStudySession).toHaveBeenCalledWith(
+      'Cache invalidation',
+      'Ace the SQL interview',
+      'folder-1',
+    )
     await waitFor(() =>
       expect(onSessionStarted).toHaveBeenCalledWith(CACHE_SESSION, 'System Design'),
     )
     expect(await screen.findByText('Cache invalidation')).toBeInTheDocument()
   })
 
-  it('does not start a session from an empty or whitespace-only topic, keeping the form open', async () => {
-    // Given an expanded, empty folder with the new-session form open
+  it('does not start a session from an empty or whitespace-only topic or goal, keeping the dialog open', async () => {
+    // Given an expanded, empty folder with the new-session dialog open
     vi.mocked(listFolders).mockResolvedValueOnce([SYSTEM_DESIGN])
     vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([])
     const user = userEvent.setup()
@@ -659,18 +666,16 @@ describe('StudyFolderTree', () => {
     await user.click(screen.getByText('System Design'))
     await screen.findByText('New session')
     await user.click(screen.getByText('New session'))
-    const input = screen.getByPlaceholderText('What do you want to study?')
+    await user.type(screen.getByPlaceholderText('What do you want to study?'), '   ')
+    await user.type(screen.getByPlaceholderText('e.g. Pass the SQL interview'), '   {Enter}')
 
-    // When submitting a whitespace-only topic
-    await user.type(input, '   {Enter}')
-
-    // Then no session was started, and the form is still open for retry
+    // Then no session was started, and the dialog is still open for retry
     expect(startStudySession).not.toHaveBeenCalled()
     expect(screen.getByPlaceholderText('What do you want to study?')).toBeInTheDocument()
   })
 
   it('cancels starting a new session with Escape', async () => {
-    // Given an expanded, empty folder with the new-session form open and a
+    // Given an expanded, empty folder with the new-session dialog open and a
     // topic typed in
     vi.mocked(listFolders).mockResolvedValueOnce([SYSTEM_DESIGN])
     vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([])
@@ -685,11 +690,11 @@ describe('StudyFolderTree', () => {
     // When pressing Escape
     await user.keyboard('{Escape}')
 
-    // Then no session was started, the form closed, and the "New session"
-    // trigger is back
+    // Then no session was started and the dialog closed
     expect(startStudySession).not.toHaveBeenCalled()
-    expect(screen.queryByPlaceholderText('What do you want to study?')).not.toBeInTheDocument()
-    expect(await screen.findByText('New session')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.queryByPlaceholderText('What do you want to study?')).not.toBeInTheDocument(),
+    )
   })
 
   it('starts a session in the correct folder among several, reporting that folder’s name', async () => {
@@ -706,9 +711,10 @@ describe('StudyFolderTree', () => {
 
     // When starting a session in System Design
     await user.click(screen.getByText('New session'))
+    await user.type(screen.getByPlaceholderText('What do you want to study?'), 'Cache invalidation')
     await user.type(
-      screen.getByPlaceholderText('What do you want to study?'),
-      'Cache invalidation{Enter}',
+      screen.getByPlaceholderText('e.g. Pass the SQL interview'),
+      'Ace the SQL interview{Enter}',
     )
 
     // Then the parent is notified with System Design's name, not General's
@@ -740,9 +746,10 @@ describe('StudyFolderTree', () => {
 
     // When starting a session before the pending fetch ever resolves
     await user.click(screen.getByText('New session'))
+    await user.type(screen.getByPlaceholderText('What do you want to study?'), 'Cache invalidation')
     await user.type(
-      screen.getByPlaceholderText('What do you want to study?'),
-      'Cache invalidation{Enter}',
+      screen.getByPlaceholderText('e.g. Pass the SQL interview'),
+      'Ace the SQL interview{Enter}',
     )
 
     // Then the new session still shows up, seeded onto a still-null

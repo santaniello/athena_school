@@ -44,6 +44,7 @@ interface ActiveStudySession {
   topic: string
   folderId: string
   folderName: string
+  goal: string
   // 'new' sessions request the opening turn; 'resume' sessions (picked from
   // the sidebar tree) load their prior history instead.
   mode: 'new' | 'resume'
@@ -232,6 +233,7 @@ function AppShell() {
       topic: session.topic,
       folderId: session.folderId,
       folderName,
+      goal: session.goal,
       // Stryker disable next-line StringLiteral: StudyChatScreen only ever
       // branches on `mode === 'new'` — any non-'new' value, mutant or not,
       // behaves identically to 'resume'.
@@ -245,6 +247,7 @@ function AppShell() {
       topic: session.topic,
       folderId: session.folderId,
       folderName,
+      goal: session.goal,
       mode: 'new',
     })
   }
@@ -287,7 +290,11 @@ function AppShell() {
     setStartingNewSession(true)
     setNewSessionError(null)
     try {
-      const session = await startStudySession(activeSession.topic, activeSession.folderId)
+      const session = await startStudySession(
+        activeSession.topic,
+        activeSession.goal,
+        activeSession.folderId,
+      )
       // Stryker disable next-line OptionalChaining: only reachable while
       // viewing an active Study session, which always mounts
       // StudyFolderTree via the ref this guards — current is never null
@@ -298,6 +305,7 @@ function AppShell() {
         topic: session.topic,
         folderId: session.folderId,
         folderName: activeSession.folderName,
+        goal: session.goal,
         mode: 'new',
       })
     } catch (err) {

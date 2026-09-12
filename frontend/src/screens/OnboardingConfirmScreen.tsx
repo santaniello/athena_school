@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { TagInput } from '@/components/tag-input'
 import {
   Select,
   SelectContent,
@@ -31,13 +30,11 @@ const FIELD_LABELS: Record<keyof ProfileDraft, string> = {
   assistantName: 'Assistant name',
   area: 'Area',
   experienceLevel: 'Experience level',
-  goals: 'Goals',
   studyStyle: 'Study style',
   assistantLanguage: 'Assistant language',
 }
 
 function displayValue(field: keyof ProfileDraft, draft: ProfileDraft): string {
-  if (field === 'goals') return draft.goals.join(', ')
   if (field === 'experienceLevel') {
     return labelFor(EXPERIENCE_LEVELS, draft.experienceLevel)
   }
@@ -71,21 +68,6 @@ function OnboardingConfirmScreen({ draft, onChange, onConfirmed }: OnboardingCon
   }
 
   function renderEditor(field: keyof ProfileDraft) {
-    if (field === 'goals') {
-      return (
-        <div className="flex flex-col gap-1.5">
-          <TagInput
-            value={draft.goals}
-            onChange={(goals) => onChange({ ...draft, goals })}
-            placeholder="Type a goal and press Enter"
-            aria-label={FIELD_LABELS.goals}
-          />
-          <p className="text-xs text-muted-foreground">
-            Press Enter or comma after each goal to add it.
-          </p>
-        </div>
-      )
-    }
     if (field === 'experienceLevel') {
       return (
         <Select

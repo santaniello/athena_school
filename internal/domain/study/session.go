@@ -58,6 +58,7 @@ type Session struct {
 	Topic     string
 	Mode      string
 	FolderID  string // always populated; falls back to folder.DefaultFolderID
+	Goal      string // required at creation; "" only for sessions predating this field
 	StartedAt time.Time
 	Context   ContextUsage
 }
