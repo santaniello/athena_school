@@ -88,8 +88,8 @@ vi.mock('@/lib/knowledge', async (importOriginal) => {
 })
 
 vi.mock('@/lib/ingest', () => ({
-  pickNotesFolder: vi.fn(),
-  importNotes: vi.fn(),
+  pickNotesFile: vi.fn(),
+  importFile: vi.fn(),
   onIngestProgress: vi.fn(() => vi.fn()),
   onIngestDone: vi.fn(() => vi.fn()),
   onIngestError: vi.fn(() => vi.fn()),

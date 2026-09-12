@@ -9,7 +9,7 @@ import {
   type KnowledgeItem,
   type PendingReconciliation,
 } from '@/lib/knowledge'
-import { importFile, importNotes, pickNotesFile, pickNotesFolder } from '@/lib/ingest'
+import { importFile, pickNotesFile } from '@/lib/ingest'
 import { KnowledgeSection } from './knowledge-section'
 
 vi.mock('@/lib/knowledge', async (importOriginal) => {
@@ -30,8 +30,6 @@ vi.mock('@/lib/ingest', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/ingest')>()
   return {
     ...original,
-    pickNotesFolder: vi.fn(),
-    importNotes: vi.fn(),
     pickNotesFile: vi.fn(),
     importFile: vi.fn(),
     onIngestProgress: vi.fn(() => vi.fn()),
@@ -40,10 +38,9 @@ vi.mock('@/lib/ingest', async (importOriginal) => {
   }
 })
 
-// Opens the "Import notes" dropdown and clicks the given item.
-async function openImportMenu(user: ReturnType<typeof userEvent.setup>, itemName: string) {
+// Clicks the "Import notes" toolbar button, which opens the file picker.
+async function clickImportButton(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'Import notes' }))
-  await user.click(await screen.findByRole('menuitem', { name: itemName }))
 }
 
 function draftItem(id: string): KnowledgeItem {
@@ -317,51 +314,7 @@ describe('KnowledgeSection', () => {
     await waitFor(() => expect(onTopicsChanged).toHaveBeenCalledTimes(1))
   })
 
-  it('offers "Import folder..." and "Import file..." from the Import notes dropdown', async () => {
-    // Given the section rendered
-    vi.mocked(listKnowledgeItems).mockResolvedValue([])
-    const user = userEvent.setup()
-    render(
-      <KnowledgeSection
-        selectedTopic={null}
-        mutationsDisabled={false}
-        draftCount={0}
-        onKnowledgeChanged={vi.fn()}
-      />,
-    )
-
-    // When opening the dropdown
-    await user.click(screen.getByRole('button', { name: 'Import notes' }))
-
-    // Then both menu actions are present
-    expect(await screen.findByRole('menuitem', { name: 'Import folder...' })).toBeInTheDocument()
-    expect(screen.getByRole('menuitem', { name: 'Import file...' })).toBeInTheDocument()
-  })
-
-  it('opens the progress dialog and starts the import once a folder is picked', async () => {
-    // Given a folder picker that resolves to a chosen path
-    vi.mocked(listKnowledgeItems).mockResolvedValue([])
-    vi.mocked(pickNotesFolder).mockResolvedValueOnce('/home/user/notes')
-    vi.mocked(importNotes).mockReturnValueOnce(new Promise<void>(() => {}))
-    const user = userEvent.setup()
-    render(
-      <KnowledgeSection
-        selectedTopic={null}
-        mutationsDisabled={false}
-        draftCount={0}
-        onKnowledgeChanged={vi.fn()}
-      />,
-    )
-
-    // When picking "Import folder..." from the dropdown
-    await openImportMenu(user, 'Import folder...')
-
-    // Then the progress dialog opens and the import starts for that path
-    expect(await screen.findByText('Importing notes')).toBeInTheDocument()
-    await waitFor(() => expect(importNotes).toHaveBeenCalledWith('/home/user/notes'))
-  })
-
-  it('opens the progress dialog and starts the import once a single file is picked', async () => {
+  it('opens the progress dialog and starts the import once a file is picked', async () => {
     // Given a file picker that resolves to a chosen path
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
     vi.mocked(pickNotesFile).mockResolvedValueOnce('/home/user/notes/go.md')
@@ -376,8 +329,8 @@ describe('KnowledgeSection', () => {
       />,
     )
 
-    // When picking "Import file..." from the dropdown
-    await openImportMenu(user, 'Import file...')
+    // When clicking "Import notes"
+    await clickImportButton(user)
 
     // Then the progress dialog opens and the import starts for that file
     expect(await screen.findByText('Importing notes')).toBeInTheDocument()
@@ -388,10 +341,10 @@ describe('KnowledgeSection', () => {
   it('closes the import dialog when Close is clicked after the import fails', async () => {
     // Given an import that fails outright
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
-    vi.mocked(pickNotesFolder).mockResolvedValueOnce('/home/user/notes')
+    vi.mocked(pickNotesFile).mockResolvedValueOnce('/home/user/notes/go.md')
     const failedImport = Promise.reject(new Error('IPC failure'))
     failedImport.catch(() => {}) // avoid an unhandled-rejection warning from this local reference
-    vi.mocked(importNotes).mockReturnValueOnce(failedImport)
+    vi.mocked(importFile).mockReturnValueOnce(failedImport)
     const user = userEvent.setup()
     render(
       <KnowledgeSection
@@ -401,7 +354,7 @@ describe('KnowledgeSection', () => {
         onKnowledgeChanged={vi.fn()}
       />,
     )
-    await openImportMenu(user, 'Import folder...')
+    await clickImportButton(user)
     const [closeButton] = await screen.findAllByRole('button', { name: 'Close' })
 
     // When closing it
@@ -409,29 +362,6 @@ describe('KnowledgeSection', () => {
 
     // Then the dialog is gone
     expect(screen.queryByText('Importing notes')).not.toBeInTheDocument()
-  })
-
-  it('does nothing when the folder picker is cancelled', async () => {
-    // Given a folder picker that returns an empty path (cancelled)
-    vi.mocked(listKnowledgeItems).mockResolvedValue([])
-    vi.mocked(pickNotesFolder).mockResolvedValueOnce('')
-    const user = userEvent.setup()
-    render(
-      <KnowledgeSection
-        selectedTopic={null}
-        mutationsDisabled={false}
-        draftCount={0}
-        onKnowledgeChanged={vi.fn()}
-      />,
-    )
-
-    // When picking "Import folder..." from the dropdown
-    await openImportMenu(user, 'Import folder...')
-
-    // Then no progress dialog opens and no import starts
-    await waitFor(() => expect(pickNotesFolder).toHaveBeenCalled())
-    expect(screen.queryByText('Importing notes')).not.toBeInTheDocument()
-    expect(importNotes).not.toHaveBeenCalled()
   })
 
   it('does nothing when the file picker is cancelled', async () => {
@@ -448,37 +378,13 @@ describe('KnowledgeSection', () => {
       />,
     )
 
-    // When picking "Import file..." from the dropdown
-    await openImportMenu(user, 'Import file...')
+    // When clicking "Import notes"
+    await clickImportButton(user)
 
     // Then no progress dialog opens and no import starts
     await waitFor(() => expect(pickNotesFile).toHaveBeenCalled())
     expect(screen.queryByText('Importing notes')).not.toBeInTheDocument()
     expect(importFile).not.toHaveBeenCalled()
-  })
-
-  it('shows an inline error when the folder picker rejects', async () => {
-    // Given a folder picker that rejects
-    vi.mocked(listKnowledgeItems).mockResolvedValue([])
-    vi.mocked(pickNotesFolder).mockRejectedValueOnce(new Error('dialog unavailable'))
-    const user = userEvent.setup()
-    render(
-      <KnowledgeSection
-        selectedTopic={null}
-        mutationsDisabled={false}
-        draftCount={0}
-        onKnowledgeChanged={vi.fn()}
-      />,
-    )
-
-    // When picking "Import folder..." from the dropdown
-    await openImportMenu(user, 'Import folder...')
-
-    // Then the shared inline error is shown, and no import dialog opens
-    expect(
-      await screen.findByText('Failed to open the notes picker. Please try again.'),
-    ).toBeInTheDocument()
-    expect(screen.queryByText('Importing notes')).not.toBeInTheDocument()
   })
 
   it('shows an inline error when the file picker rejects', async () => {
@@ -495,8 +401,8 @@ describe('KnowledgeSection', () => {
       />,
     )
 
-    // When picking "Import file..." from the dropdown
-    await openImportMenu(user, 'Import file...')
+    // When clicking "Import notes"
+    await clickImportButton(user)
 
     // Then the shared inline error is shown, and no import dialog opens
     expect(
@@ -505,10 +411,10 @@ describe('KnowledgeSection', () => {
     expect(screen.queryByText('Importing notes')).not.toBeInTheDocument()
   })
 
-  it('clears a previous picker error when starting either picker again', async () => {
+  it('clears a previous picker error when retrying the picker', async () => {
     // Given a prior picker failure already shown
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
-    vi.mocked(pickNotesFolder).mockRejectedValueOnce(new Error('dialog unavailable'))
+    vi.mocked(pickNotesFile).mockRejectedValueOnce(new Error('dialog unavailable'))
     const user = userEvent.setup()
     const { container } = render(
       <KnowledgeSection
@@ -518,52 +424,21 @@ describe('KnowledgeSection', () => {
         onKnowledgeChanged={vi.fn()}
       />,
     )
-    await openImportMenu(user, 'Import folder...')
+    await clickImportButton(user)
     expect(
       await screen.findByText('Failed to open the notes picker. Please try again.'),
     ).toBeInTheDocument()
 
-    // When starting the file picker, which resolves cleanly this time
+    // When retrying the picker, which resolves cleanly this time
     vi.mocked(pickNotesFile).mockResolvedValueOnce('')
-    await openImportMenu(user, 'Import file...')
+    await clickImportButton(user)
 
     // Then the stale error is cleared — with no error paragraph left behind
-    // at all, not just the specific old message text
-    await waitFor(() => expect(pickNotesFile).toHaveBeenCalled())
-    expect(
-      screen.queryByText('Failed to open the notes picker. Please try again.'),
-    ).not.toBeInTheDocument()
+    await waitFor(() => expect(pickNotesFile).toHaveBeenCalledTimes(2))
     expect(container.querySelector('p.text-destructive')).not.toBeInTheDocument()
   })
 
-  it('clears a previous picker error when retrying the same picker', async () => {
-    // Given a prior folder-picker failure already shown
-    vi.mocked(listKnowledgeItems).mockResolvedValue([])
-    vi.mocked(pickNotesFolder).mockRejectedValueOnce(new Error('dialog unavailable'))
-    const user = userEvent.setup()
-    const { container } = render(
-      <KnowledgeSection
-        selectedTopic={null}
-        mutationsDisabled={false}
-        draftCount={0}
-        onKnowledgeChanged={vi.fn()}
-      />,
-    )
-    await openImportMenu(user, 'Import folder...')
-    expect(
-      await screen.findByText('Failed to open the notes picker. Please try again.'),
-    ).toBeInTheDocument()
-
-    // When retrying the folder picker, which resolves cleanly this time
-    vi.mocked(pickNotesFolder).mockResolvedValueOnce('')
-    await openImportMenu(user, 'Import folder...')
-
-    // Then the stale error is cleared — with no error paragraph left behind
-    await waitFor(() => expect(pickNotesFolder).toHaveBeenCalledTimes(2))
-    expect(container.querySelector('p.text-destructive')).not.toBeInTheDocument()
-  })
-
-  it('disables both menu items while mutations are disabled', () => {
+  it('disables the import button while mutations are disabled', () => {
     // Given the section rendered with mutations disabled
     vi.mocked(listKnowledgeItems).mockResolvedValue([])
     render(

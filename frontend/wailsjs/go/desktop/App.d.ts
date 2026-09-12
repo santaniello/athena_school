@@ -53,8 +53,6 @@ export function HasUserProfile():Promise<boolean>;
 
 export function ImportFile(arg1:string):Promise<void>;
 
-export function ImportNotes(arg1:string):Promise<void>;
-
 export function ListFolders():Promise<Array<desktop.FolderResult>>;
 
 export function ListKnowledgeItemEvidence(arg1:string):Promise<Array<desktop.KnowledgeEvidenceResult>>;
@@ -70,8 +68,6 @@ export function ListStudySessionsByFolder(arg1:string):Promise<Array<desktop.Stu
 export function MoveStudySession(arg1:string,arg2:string):Promise<void>;
 
 export function PickNotesFile():Promise<string>;
-
-export function PickNotesFolder():Promise<string>;
 
 export function ReindexKnowledgeItems():Promise<void>;
 

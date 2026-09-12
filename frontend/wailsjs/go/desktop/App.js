@@ -102,10 +102,6 @@ export function ImportFile(arg1) {
   return window['go']['desktop']['App']['ImportFile'](arg1);
 }
 
-export function ImportNotes(arg1) {
-  return window['go']['desktop']['App']['ImportNotes'](arg1);
-}
-
 export function ListFolders() {
   return window['go']['desktop']['App']['ListFolders']();
 }
@@ -136,10 +132,6 @@ export function MoveStudySession(arg1, arg2) {
 
 export function PickNotesFile() {
   return window['go']['desktop']['App']['PickNotesFile']();
-}
-
-export function PickNotesFolder() {
-  return window['go']['desktop']['App']['PickNotesFolder']();
 }
 
 export function ReindexKnowledgeItems() {

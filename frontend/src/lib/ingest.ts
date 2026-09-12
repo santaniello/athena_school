@@ -1,9 +1,4 @@
-import {
-  ImportFile,
-  ImportNotes,
-  PickNotesFile,
-  PickNotesFolder,
-} from '../../wailsjs/go/desktop/App'
+import { ImportFile, PickNotesFile } from '../../wailsjs/go/desktop/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 
 export interface IngestProgress {
@@ -31,29 +26,16 @@ export interface IngestSummary {
   indexWarnings: IngestFailure[]
 }
 
-// pickNotesFolder opens the OS folder picker and returns the chosen path,
-// or "" if the user cancelled.
-export async function pickNotesFolder(): Promise<string> {
-  return PickNotesFolder()
-}
-
-// importNotes starts importing path. It resolves once the import has
-// finished (successfully or not) — progress and the final summary arrive
-// separately via onIngestProgress/onIngestDone/onIngestError, so callers
-// should subscribe to those before calling this.
-export async function importNotes(path: string): Promise<void> {
-  await ImportNotes(path)
-}
-
 // pickNotesFile opens the OS file picker restricted to .md/.txt files and
 // returns the chosen path, or "" if the user cancelled.
 export async function pickNotesFile(): Promise<string> {
   return PickNotesFile()
 }
 
-// importFile starts importing exactly one file at path. Same resolution
-// contract as importNotes: progress/summary arrive via the shared
-// onIngestProgress/onIngestDone/onIngestError events.
+// importFile starts importing exactly one file at path. It resolves once
+// the import has finished (successfully or not) — progress and the final
+// summary arrive separately via onIngestProgress/onIngestDone/
+// onIngestError, so callers should subscribe to those before calling this.
 export async function importFile(path: string): Promise<void> {
   await ImportFile(path)
 }

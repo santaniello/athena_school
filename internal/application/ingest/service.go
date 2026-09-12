@@ -9,7 +9,7 @@ import (
 )
 
 // Transactor runs fn inside a single atomic unit of work, so the chunk/
-// item/ingested-file replace in ImportFolder either all lands or none of
+// item/ingested-file replace in ImportFile either all lands or none of
 // it does. Defined here (consumer side) per Go convention; implemented by
 // internal/infrastructure/sqlite.SQLTransactor.
 type Transactor interface {
@@ -21,10 +21,10 @@ type Transactor interface {
 // flight. Defined here (consumer side) per Go convention; implemented by
 // *applicationknowledge.IndexLoader.
 //
-// CheckMutationAllowed is a point-in-time read. ImportFolder instead holds
-// BeginMutation/EndMutation for its entire walk — a point-in-time check
-// alone would let a retry started mid-import interleave its
-// ListCurrent/ReplaceAll with individual files' transaction commits and
+// CheckMutationAllowed is a point-in-time read. ImportFile instead holds
+// BeginMutation/EndMutation for its entire operation — a point-in-time
+// check alone would let a retry started mid-import interleave its
+// ListCurrent/ReplaceAll with the file's transaction commit and
 // VectorStore reconciliation.
 type IndexGuard interface {
 	CheckMutationAllowed() error
@@ -61,9 +61,9 @@ func NewService(
 }
 
 // IndexingWarning wraps a post-commit VectorStore reconciliation failure —
-// ImportFolder's Remove(old chunk IDs)/Add(new chunks) calls after its
+// ImportFile's Remove(old chunk IDs)/Add(new chunks) calls after its
 // SQLite transaction has already committed. The durable import is never
-// rolled back for this; ImportFolder reports it as an ingest.FileFailure
+// rolled back for this; ImportFile reports it as an ingest.FileFailure
 // under Summary.IndexWarnings rather than Summary.Failures, since
 // ingested_files now legitimately records the new mtime/model and a
 // repeated import would correctly skip the file.
