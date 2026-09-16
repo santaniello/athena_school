@@ -69,7 +69,7 @@ See [ADR-001](specs/decisions/ADR-001-hexagonal-architecture.md) for the full ra
 ### Prerequisites
 
 - [Go 1.22+](https://golang.org/dl/)
-- [Node.js 20+](https://nodejs.org/)
+- [Node.js 24+](https://nodejs.org/)
 - [Wails v2](https://wails.io/docs/gettingstarted/installation)
 - An [OpenRouter](https://openrouter.ai/) API key
 - On Linux: `wmctrl` (e.g. `apt install wmctrl`) — optional, but without it the app window may open behind other windows or unfocused on GNOME/Cinnamon-family window managers; see `main.go`'s `activateLinuxWindow`
