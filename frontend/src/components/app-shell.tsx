@@ -4,7 +4,10 @@ import { AthenaLogo } from '@/components/athena-logo'
 import { NavItem } from '@/components/nav-item'
 import { ComingSoonPanel } from '@/components/coming-soon-panel'
 import { StudyFolderTree, type StudyFolderTreeHandle } from '@/components/study-folder-tree'
-import { KnowledgeTopicTree, type KnowledgeTopicTreeHandle } from '@/components/knowledge-topic-tree'
+import {
+  KnowledgeTopicTree,
+  type KnowledgeTopicTreeHandle,
+} from '@/components/knowledge-topic-tree'
 import { KnowledgeSection } from '@/components/knowledge-section'
 import { IndexLoadingScreen } from '@/components/index-loading-screen'
 import { IndexFailedScreen } from '@/components/index-failed-screen'
@@ -155,6 +158,7 @@ function AppShell() {
   // array's content is not itself observable behavior.
   useEffect(() => {
     refreshReviewCounts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   // Stryker restore ArrayDeclaration
 

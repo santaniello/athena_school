@@ -10,11 +10,8 @@ import {
   RECONCILE_RELATE,
   RECONCILE_UPDATE,
 } from '@/lib/knowledge'
-import {
-  idleDecision,
-  ReconciliationDecisionRow,
-  type DecisionState,
-} from './reconciliation-decision-row'
+import { ReconciliationDecisionRow } from './reconciliation-decision-row'
+import { idleDecision, type DecisionState } from '@/lib/reconciliation-decision'
 
 function allHandlers() {
   return {

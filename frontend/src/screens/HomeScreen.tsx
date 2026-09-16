@@ -51,4 +51,3 @@ function HomeScreen({ profile, studyLocked, onStartStudy, now = new Date() }: Ho
 }
 
 export default HomeScreen
-export { timeOfDayGreeting }

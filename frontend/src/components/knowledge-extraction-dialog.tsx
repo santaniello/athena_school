@@ -8,11 +8,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  idleDecision,
-  ReconciliationDecisionRow,
-  type DecisionState,
-} from '@/components/reconciliation-decision-row'
+import { ReconciliationDecisionRow } from '@/components/reconciliation-decision-row'
+import { idleDecision, type DecisionState } from '@/lib/reconciliation-decision'
 import {
   acknowledgeReconciliationNoChange,
   applyReconciliationCreate,
