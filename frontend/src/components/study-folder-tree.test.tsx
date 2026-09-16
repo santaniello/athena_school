@@ -637,7 +637,10 @@ describe('StudyFolderTree', () => {
 
     // When starting a session with a padded topic and goal
     await user.click(screen.getByText('New session'))
-    await user.type(screen.getByPlaceholderText('What do you want to study?'), '  Cache invalidation  ')
+    await user.type(
+      screen.getByPlaceholderText('What do you want to study?'),
+      '  Cache invalidation  ',
+    )
     await user.type(
       screen.getByPlaceholderText('e.g. Pass the SQL interview'),
       '  Ace the SQL interview  {Enter}',

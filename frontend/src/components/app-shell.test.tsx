@@ -425,7 +425,10 @@ describe('AppShell', () => {
     vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
     await user.click(screen.getByText('General'))
     await user.click(await screen.findByText('New session'))
-    await user.type(screen.getByPlaceholderText('What do you want to study?'), 'Distributed systems')
+    await user.type(
+      screen.getByPlaceholderText('What do you want to study?'),
+      'Distributed systems',
+    )
     await user.type(
       screen.getByPlaceholderText('e.g. Pass the SQL interview'),
       'Ace the SQL interview{Enter}',
@@ -700,7 +703,10 @@ describe('AppShell', () => {
     vi.mocked(requestOpeningTurn).mockResolvedValueOnce()
     await user.click(screen.getByText('General'))
     await user.click(await screen.findByText('New session'))
-    await user.type(screen.getByPlaceholderText('What do you want to study?'), 'Distributed systems')
+    await user.type(
+      screen.getByPlaceholderText('What do you want to study?'),
+      'Distributed systems',
+    )
     await user.type(
       screen.getByPlaceholderText('e.g. Pass the SQL interview'),
       'Ace the SQL interview{Enter}',
@@ -770,7 +776,10 @@ describe('AppShell', () => {
     vi.mocked(requestOpeningTurn).mockResolvedValueOnce()
     await user.click(screen.getByText('General'))
     await user.click(await screen.findByText('New session'))
-    await user.type(screen.getByPlaceholderText('What do you want to study?'), 'Distributed systems')
+    await user.type(
+      screen.getByPlaceholderText('What do you want to study?'),
+      'Distributed systems',
+    )
     await user.type(
       screen.getByPlaceholderText('e.g. Pass the SQL interview'),
       'Ace the SQL interview{Enter}',
@@ -832,7 +841,10 @@ describe('AppShell', () => {
     vi.mocked(requestOpeningTurn).mockResolvedValueOnce()
     await user.click(screen.getByText('General'))
     await user.click(await screen.findByText('New session'))
-    await user.type(screen.getByPlaceholderText('What do you want to study?'), 'Distributed systems')
+    await user.type(
+      screen.getByPlaceholderText('What do you want to study?'),
+      'Distributed systems',
+    )
     await user.type(
       screen.getByPlaceholderText('e.g. Pass the SQL interview'),
       'Ace the SQL interview{Enter}',

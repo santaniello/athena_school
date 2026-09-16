@@ -504,7 +504,10 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
                   />
                 </div>
                 <DialogFooter>
-                  <Button type="submit" disabled={!newSessionTopic.trim() || !newSessionGoal.trim()}>
+                  <Button
+                    type="submit"
+                    disabled={!newSessionTopic.trim() || !newSessionGoal.trim()}
+                  >
                     Create
                   </Button>
                 </DialogFooter>

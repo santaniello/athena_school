@@ -140,13 +140,11 @@ describe('KnowledgeTopicTree', () => {
     expect(await screen.findByRole('button', { name: 'Kubernetes' })).toBeInTheDocument()
   })
 
-  it('reloads topics when the imperative handle\'s reload() is called', async () => {
+  it("reloads topics when the imperative handle's reload() is called", async () => {
     // Given a tree that has already loaded its initial topics, and no
     // notes import in progress — the only trigger before this handle
     // existed
-    vi.mocked(listKnowledgeTopics)
-      .mockResolvedValueOnce(['Go'])
-      .mockResolvedValueOnce([])
+    vi.mocked(listKnowledgeTopics).mockResolvedValueOnce(['Go']).mockResolvedValueOnce([])
     stubOnIngestDone()
     const ref = createRef<KnowledgeTopicTreeHandle>()
     render(<KnowledgeTopicTree ref={ref} selectedTopic={null} onSelectTopic={vi.fn()} />)
@@ -157,7 +155,9 @@ describe('KnowledgeTopicTree', () => {
     act(() => ref.current?.reload())
 
     // Then the now-empty topic list replaces the stale "Go" row
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Go' })).not.toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Go' })).not.toBeInTheDocument(),
+    )
   })
 
   it('ignores a stale response from the initial load when ingest:done triggers a second load first', async () => {

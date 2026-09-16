@@ -1,11 +1,4 @@
-import {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-  useState,
-} from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { FolderTree } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { listKnowledgeTopics } from '@/lib/knowledge'
@@ -101,7 +94,9 @@ const KnowledgeTopicTree = forwardRef<KnowledgeTopicTreeHandle, KnowledgeTopicTr
               <span
                 className={cn(
                   'size-1.5 shrink-0 rounded-full',
-                  selected ? 'bg-primary shadow-[0_0_6px_1px_var(--primary)]' : 'bg-muted-foreground',
+                  selected
+                    ? 'bg-primary shadow-[0_0_6px_1px_var(--primary)]'
+                    : 'bg-muted-foreground',
                 )}
                 aria-hidden="true"
               />
