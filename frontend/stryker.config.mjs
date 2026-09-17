@@ -3,6 +3,14 @@
 export default {
   packageManager: 'npm',
   testRunner: 'vitest',
+  // vitest and @vitest/coverage-v8 are pinned below 5.0.0 in package.json —
+  // do not bump either past that until
+  // https://github.com/stryker-mutator/stryker-js/issues/6210 is fixed.
+  // Vitest 5 changed testNamePattern's separator to ' > ', but this runner
+  // still joins it with a space, so the per-mutant test filter matches
+  // nothing: every covered mutant runs 0 tests and is reported Survived
+  // (mutation score collapsed to ~4% here). Confirmed locally: reverting to
+  // vitest 4.1.11 restored a 100% score on the same file/tests.
   vitest: {
     configFile: 'vite.config.ts',
   },
