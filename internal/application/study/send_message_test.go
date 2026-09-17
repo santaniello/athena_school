@@ -140,7 +140,8 @@ func TestSendMessage_concurrentCallsForSameSession_secondReturnsErrStudyTurnInPr
 	messages.EXPECT().Append(context.Background(), mock.AnythingOfType("study.Message")).Return(nil)
 	messages.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil)
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}, nil)
-	retriever.EXPECT().Retrieve(context.Background(), "session-1", mock.AnythingOfType("string")).
+	retriever.EXPECT().
+		Retrieve(context.Background(), "session-1", "Topic: Distributed systems\n\nMessage: What is CAP theorem?").
 		Return(domainknowledge.RetrievalResult{}, nil).Once()
 
 	release := make(chan struct{})
