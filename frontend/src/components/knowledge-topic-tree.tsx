@@ -36,6 +36,14 @@ const KnowledgeTopicTree = forwardRef<KnowledgeTopicTreeHandle, KnowledgeTopicTr
     // started it.
     const requestVersionRef = useRef(0)
     const mountedRef = useRef(true)
+    // loadTopics is a stable useCallback([]) shared across mount,
+    // onIngestDone, and reload() — reading selectedTopic/onSelectTopic
+    // through refs (kept current on every render below) instead of
+    // closing over them directly avoids acting on a stale selection.
+    const selectedTopicRef = useRef(selectedTopic)
+    const onSelectTopicRef = useRef(onSelectTopic)
+    selectedTopicRef.current = selectedTopic
+    onSelectTopicRef.current = onSelectTopic
 
     const loadTopics = useCallback(() => {
       const version = ++requestVersionRef.current
@@ -44,6 +52,13 @@ const KnowledgeTopicTree = forwardRef<KnowledgeTopicTreeHandle, KnowledgeTopicTr
           if (mountedRef.current && version === requestVersionRef.current) {
             setError('')
             setTopics(result)
+            // The selected topic can vanish from this list after a delete
+            // or a topic-changing edit — fall back to "All topics" instead
+            // of leaving the explorer filtered on one that no longer
+            // exists, with no row left highlighted to explain why.
+            if (selectedTopicRef.current !== null && !result.includes(selectedTopicRef.current)) {
+              onSelectTopicRef.current(null)
+            }
           }
         })
         .catch(() => {
