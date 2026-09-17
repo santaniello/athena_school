@@ -872,6 +872,32 @@ func TestOpen_backfillsExistingSessionsToDefaultFolder(t *testing.T) {
 	assert.Equal(t, "default", folderID)
 }
 
+func TestOpen_backfillsExistingSessionsWithEmptyGoal(t *testing.T) {
+	// Given a session row inserted with no goal, as if it predated this
+	// migration
+	path := filepath.Join(t.TempDir(), "athena.db")
+	db, err := Open(path)
+	require.NoError(t, err)
+	_, execErr := db.Exec(
+		`INSERT INTO sessions (id, topic, mode, started_at) VALUES (?, ?, ?, ?)`,
+		"session-1", "Topic", "study", "2024-01-01",
+	)
+	require.NoError(t, execErr)
+	require.NoError(t, db.Close())
+
+	// When reopening the database (re-running migrations)
+	second, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = second.Close() }()
+
+	// Then the pre-existing session is backfilled to an empty goal, not
+	// left NULL or some other placeholder
+	var goal string
+	queryErr := second.QueryRow(`SELECT goal FROM sessions WHERE id = ?`, "session-1").Scan(&goal)
+	require.NoError(t, queryErr)
+	assert.Empty(t, goal)
+}
+
 func TestOpen_isNoOpOnSecondOpenAndKeepsExistingData(t *testing.T) {
 	// Given a database that was already opened once and has a row in it
 	path := filepath.Join(t.TempDir(), "athena.db")
