@@ -68,3 +68,12 @@ The pre-commit hook already re-runs the full Go quality gate (tests, coverage, l
 - Two more required CI jobs; total PR feedback time increases, though scoping and coverage-guided execution keep this bounded while the codebase is small.
 - CI must handle the empty-package case gracefully (`internal/domain`/`internal/application` have no `.go` files yet) — a skip check was added to `mutation-go` for this transitional period.
 - Thresholds are static config values today; if the team lets them go stale (never ratcheted up as the domain grows), mutation testing loses value over time in the same way an un-raised coverage threshold would — this needs the same periodic-review discipline as the 80% coverage gate.
+
+---
+
+## Amendments
+
+**2026-09-16 — vitest pinned below 5.0.0.**
+A Dependabot PR bumped `vitest`/`@vitest/coverage-v8` to `5.0.0` and was merged, then reverted the same day after `mutation-frontend` collapsed to a ~4% mutation score across unrelated files. Root cause: [stryker-mutator/stryker-js#6210](https://github.com/stryker-mutator/stryker-js/issues/6210) — Vitest 5 changed `testNamePattern`'s separator to `' > '`, but `@stryker-mutator/vitest-runner@10.0.0` still joins it with a space, so the per-mutant test filter matches nothing: every covered mutant runs 0 tests and is reported Survived. Confirmed locally by mutating a single file on both versions — 100% score on vitest 4.1.11, ~0% on 5.0.1 with identical tests.
+
+Do not merge a Dependabot PR bumping `vitest` or `@vitest/coverage-v8` past `4.x` until that upstream issue is closed and a release including the fix is out. When it reopens, re-verify with the same single-file mutation check (`npx stryker run --mutate "src/screens/HomeScreen.tsx"`, or any file with existing tests) before merging — a passing `mutation-frontend` CI run alone isn't proof, since a bugged filter can still report a false 100% on a PR that touches no mutation-relevant files.
