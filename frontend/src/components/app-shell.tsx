@@ -273,6 +273,15 @@ function AppShell() {
   }
   // Stryker restore ArrowFunction,ConditionalExpression,OptionalChaining
 
+  // Deleting a folder deletes every session inside it (cascade, on the
+  // backend) — clear the active session by folderId rather than relying on
+  // StudyFolderTree's per-session onSessionDeleted loop, which only knows
+  // about sessions its own (possibly stale, e.g. after a remount) local
+  // cache had already loaded.
+  function handleFolderDeleted(folderId: string) {
+    setActiveSession((current) => (current?.folderId === folderId ? null : current))
+  }
+
   function handleTopicResolved(topic: string) {
     setActiveSession((current) => (current ? { ...current, topic } : current))
   }
@@ -391,6 +400,7 @@ function AppShell() {
                       onSelectSession={handleSelectSession}
                       onSessionStarted={handleSessionStarted}
                       onSessionDeleted={handleSessionDeleted}
+                      onFolderDeleted={handleFolderDeleted}
                       onFolderCountChange={setStudyFolderCount}
                     />
                   )}

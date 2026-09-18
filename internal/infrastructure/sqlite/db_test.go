@@ -496,6 +496,23 @@ func TestOpen_configuresFolderDeletionToCascadeSessions(t *testing.T) {
 	assert.Zero(t, sessionCount)
 }
 
+func TestOpen_rejectsSessionsWithNoFolder(t *testing.T) {
+	// Given a freshly migrated database
+	path := filepath.Join(t.TempDir(), "athena.db")
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// When inserting a session with no folder_id at all
+	_, execErr := db.Exec(
+		`INSERT INTO sessions (id, topic, mode, started_at) VALUES (?, ?, ?, ?)`,
+		"session-1", "Topic", "study", "2024-01-01",
+	)
+
+	// Then it is rejected at the schema level, not just by application code
+	require.Error(t, execErr)
+}
+
 func TestOpen_createsKnowledgeItemsTable(t *testing.T) {
 	// Given a path to a database file that does not exist yet
 	path := filepath.Join(t.TempDir(), "athena.db")
@@ -864,19 +881,22 @@ func TestOpen_addsFolderIDColumnToSessions(t *testing.T) {
 }
 
 func TestOpen_deletesExistingSessionsWithNoFolder(t *testing.T) {
-	// Given a session row inserted with no folder_id, as if it predated
-	// this migration — there is no fallback folder to backfill it to
+	// Given a legacy database predating the folder_id column entirely, with
+	// a session row already in it — sessions.folder_id is NOT NULL once
+	// migrated, so this can only be simulated on a database that never went
+	// through Open() yet, not by inserting through an already-migrated one
 	path := filepath.Join(t.TempDir(), "athena.db")
-	db, err := Open(path)
+	legacy, err := sql.Open("sqlite", path)
 	require.NoError(t, err)
-	_, execErr := db.Exec(
-		`INSERT INTO sessions (id, topic, mode, started_at) VALUES (?, ?, ?, ?)`,
-		"session-1", "Topic", "study", "2024-01-01",
-	)
-	require.NoError(t, execErr)
-	require.NoError(t, db.Close())
+	_, err = legacy.Exec(`
+		CREATE TABLE sessions (id TEXT PRIMARY KEY, topic TEXT, mode TEXT, started_at DATETIME);
+		INSERT INTO sessions (id, topic, mode, started_at) VALUES ('session-1', 'Topic', 'study', '2024-01-01');
+	`)
+	require.NoError(t, err)
+	require.NoError(t, legacy.Close())
 
-	// When reopening the database (re-running migrations)
+	// When opening it through the current migration path — there is no
+	// fallback folder to backfill it to
 	second, err := Open(path)
 	require.NoError(t, err)
 	defer func() { _ = second.Close() }()

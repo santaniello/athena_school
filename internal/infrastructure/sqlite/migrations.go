@@ -186,10 +186,11 @@ func addSessionsFolderIDColumn(db *sql.DB) error {
 }
 
 // repairSessionsWithInvalidFolder deletes any session whose folder_id is
-// missing, empty, or points at a folder that no longer exists (and its
-// messages, ahead of the cascade sessions itself declares) — there is no
+// missing, empty, or points at a folder that no longer exists — there is no
 // fallback folder left to reassign it to, so folder_id is always either
-// populated and valid or the row is gone. This repair runs unconditionally
+// populated and valid or the row is gone. Its messages go with it via the
+// ON DELETE CASCADE already declared on messages.session_id by this point
+// (see below for why it's positioned here). This repair runs unconditionally
 // on every Open, not gated behind migrateSessionForeignKeyActions's own
 // readiness check: that migration only rebuilds messages/usage once, so a
 // session that goes stale afterward (e.g. a partial restore of just the
@@ -204,14 +205,14 @@ func addSessionsFolderIDColumn(db *sql.DB) error {
 // entirely under foreign_keys=ON. Running after that upgrade guarantees
 // usage.session_id already detaches instead of blocking.
 func repairSessionsWithInvalidFolder(db *sql.DB) error {
-	const staleSessions = `folder_id IS NULL
-		   OR folder_id = ''
-		   OR NOT EXISTS (SELECT 1 FROM folders WHERE folders.id = sessions.folder_id)`
-	if _, err := db.Exec(`DELETE FROM messages WHERE session_id IN (
-		SELECT id FROM sessions WHERE ` + staleSessions + `)`); err != nil {
-		return err
-	}
-	_, err := db.Exec(`DELETE FROM sessions WHERE ` + staleSessions)
+	// Only sessions are deleted explicitly — messages.session_id already
+	// declares ON DELETE CASCADE by this point (this runs right after
+	// migrateSessionForeignKeyActions, which guarantees it), so the
+	// database removes their messages in the same operation.
+	_, err := db.Exec(`DELETE FROM sessions WHERE
+		folder_id IS NULL
+		OR folder_id = ''
+		OR NOT EXISTS (SELECT 1 FROM folders WHERE folders.id = sessions.folder_id)`)
 	return err
 }
 
@@ -282,10 +283,16 @@ func dropFoldersIsDefaultColumn(db *sql.DB) error {
 }
 
 // addSessionsFolderIDCascade upgrades sessions.folder_id to
-// ON DELETE CASCADE against folders(id): deleting a folder now deletes its
-// sessions (see application/folder.DeleteFolder), so the schema must agree
-// instead of leaving that invariant to application code alone. Guarded by
-// hasForeignKeyDeleteAction so an already-migrated database is a no-op.
+// NOT NULL ... ON DELETE CASCADE against folders(id): deleting a folder now
+// deletes its sessions (see application/folder.DeleteFolder), so the schema
+// must agree instead of leaving that invariant to application code alone.
+// NOT NULL was never declarable when the column was first added via a plain
+// ALTER TABLE ADD COLUMN (see addSessionsFolderIDColumn) — SQLite only
+// allows that with a table rebuild, which this migration already is. Safe
+// because repairSessionsWithInvalidFolder, positioned earlier in the
+// migrations slice, has already deleted every session with a missing
+// folder_id by the time this runs. Guarded by hasForeignKeyDeleteAction so
+// an already-migrated database is a no-op.
 //
 // Rebuilt via create-under-a-temporary-name/copy/drop-old/rename-into-place
 // — see dropFoldersIsDefaultColumn's comment for why, applied here to
@@ -327,7 +334,7 @@ func addSessionsFolderIDCascade(db *sql.DB) error {
 			topic                TEXT,
 			mode                 TEXT,
 			started_at           DATETIME,
-			folder_id            TEXT REFERENCES folders(id) ON DELETE CASCADE,
+			folder_id            TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
 			context_state        TEXT NOT NULL DEFAULT 'normal',
 			context_model        TEXT NOT NULL DEFAULT '',
 			context_used_tokens  INTEGER NOT NULL DEFAULT 0,

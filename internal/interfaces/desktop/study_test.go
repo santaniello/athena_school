@@ -106,7 +106,7 @@ func TestApp_StartStudySession_createsAndReturnsSession(t *testing.T) {
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
-	folders.EXPECT().GetByID(mock.Anything, "folder-1").Return(domainfolder.Folder{ID: "folder-1"}, nil).Once()
+	folders.EXPECT().GetByID(context.Background(), "folder-1").Return(domainfolder.Folder{ID: "folder-1"}, nil).Once()
 	sessions.EXPECT().Create(mock.Anything, mock.AnythingOfType("study.Session")).Return(nil).Once()
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 

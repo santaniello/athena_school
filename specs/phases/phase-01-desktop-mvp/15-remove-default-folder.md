@@ -36,6 +36,13 @@ otherwise — there is no fallback folder to default into.
   folders yet" apart from "folders exist but nothing is selected."
 - **Deleting the last folder uses the same confirmation dialog as any other folder** — no
   extra warning for the destructive edge case of losing every session at once.
+- **A deleted folder's active session is cleared by folder id, not just by session id.**
+  `StudyFolderTree` remounts (and loses its own sessions cache) whenever the user navigates away
+  from and back to Study, so a session it never reloaded can still be the one open in `AppShell`.
+  `onFolderDeleted(folderId)` lets `AppShell` clear `activeSession` by comparing `folderId`
+  directly, independent of whatever `StudyFolderTree`'s local cache currently holds; the
+  per-session `onSessionDeleted` loop (over whatever sessions happen to be loaded) stays as a
+  secondary signal.
 - **No destructive migration for existing installs.** The migration that seeded `('default',
   'General', 1, ...)` is removed outright; nothing replaces it. If a `folders.is_default` column
   and a `default` row already exist from before this change, `dropFoldersIsDefaultColumn` only
@@ -61,7 +68,15 @@ it can otherwise block the migration outright or silently cascade-delete unrelat
 `repairSessionsWithInvalidFolder` (the deletion equivalent of the old reassign-to-default
 repair) was moved to run after `migrateSessionForeignKeyActions` rather than staying next to
 `addSessionsFolderIDColumn`: deleting a session whose `usage` row still predates the SET NULL
-foreign-key upgrade would otherwise fail the same way.
+foreign-key upgrade would otherwise fail the same way. Its cascade to `messages` is left to the
+`ON DELETE CASCADE` already declared by that point, rather than a second explicit `DELETE`.
+
+`sessions.folder_id` also picks up `NOT NULL` as part of the `addSessionsFolderIDCascade`
+rebuild — the original [10-study-folders.md](10-study-folders.md) left it nullable only because
+SQLite can't add a `NOT NULL` column via a plain `ALTER TABLE ADD COLUMN`, and this migration
+already rebuilds the table for the cascade anyway. Safe because
+`repairSessionsWithInvalidFolder` runs earlier in the migrations slice and has already deleted
+every session with a missing `folder_id` by the time this rebuild copies the surviving rows.
 
 ## Acceptance Criteria
 

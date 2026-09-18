@@ -41,16 +41,17 @@ func TestDeleteFolder_doesNotDeleteFolder_whenDeletingSessionsFails(t *testing.T
 	// Given a service whose session deletion fails
 	folders := foldermocks.NewMockRepository(t)
 	sessions := studymocks.NewMockSessionRepository(t)
+	deleteSessionsErr := errors.New("boom")
 	sessions.EXPECT().
 		DeleteByFolder(context.Background(), "f-1").
-		Return(errors.New("boom")).
+		Return(deleteSessionsErr).
 		Once()
 	service := NewService(folders, sessions)
 
 	// When deleting the folder
 	err := service.DeleteFolder(context.Background(), "f-1")
 
-	// Then the error propagates; folders.Delete has no .EXPECT(), so an
-	// unexpected call would fail the test
-	require.Error(t, err)
+	// Then the DeleteByFolder error propagates, wrapped; folders.Delete has
+	// no .EXPECT(), so an unexpected call would fail the test
+	require.ErrorIs(t, err, deleteSessionsErr)
 }

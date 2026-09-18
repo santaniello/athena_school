@@ -67,6 +67,13 @@ interface StudyFolderTreeProps {
   onSelectSession: (session: StudySession, folderName: string) => void
   onSessionStarted: (session: StudySession, folderName: string) => void
   onSessionDeleted: (sessionId: string) => void
+  // Reports a folder's id right after it's deleted, independent of whether
+  // this tree had that folder's sessions loaded — unlike the per-session
+  // onSessionDeleted loop in handleDeleteFolder, this never misses a
+  // currently active session because it doesn't depend on this tree's own
+  // (possibly stale, e.g. after a remount) sessions cache. A parent like
+  // AppShell should clear an active session whose folderId matches.
+  onFolderDeleted?: (folderId: string) => void
   // Reports the folder count after every load/create/delete, so a parent
   // like AppShell can tell "no folders exist yet" apart from "folders
   // exist but none is selected" without owning this tree's own state.
@@ -140,7 +147,14 @@ function DroppableFolderHeader({
 // separate list screen. See specs/phases/phase-01-desktop-mvp/10-study-folders.md.
 const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
   function StudyFolderTree(
-    { selectedSessionId, onSelectSession, onSessionStarted, onSessionDeleted, onFolderCountChange },
+    {
+      selectedSessionId,
+      onSelectSession,
+      onSessionStarted,
+      onSessionDeleted,
+      onFolderDeleted,
+      onFolderCountChange,
+    },
     ref,
   ) {
     const [folders, setFolders] = useState<FolderNode[]>([])
@@ -160,15 +174,23 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
       useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     )
 
+    const [foldersLoaded, setFoldersLoaded] = useState(false)
+
     useEffect(() => {
-      void listFolders().then((loaded) =>
-        setFolders(loaded.map((folder) => ({ ...folder, open: false, sessions: null }))),
-      )
+      void listFolders().then((loaded) => {
+        setFolders(loaded.map((folder) => ({ ...folder, open: false, sessions: null })))
+        setFoldersLoaded(true)
+      })
     }, [])
 
     useEffect(() => {
+      // Skipped until the initial listFolders() resolves — folders starts
+      // at [] on every mount, so reporting unconditionally would tell a
+      // parent "zero folders" for a moment even when the real list isn't
+      // empty, flashing the wrong empty state.
+      if (!foldersLoaded) return
       onFolderCountChange?.(folders.length)
-    }, [folders.length, onFolderCountChange])
+    }, [foldersLoaded, folders.length, onFolderCountChange])
 
     async function loadSessions(folderId: string) {
       const sessions = await listStudySessionsByFolder(folderId)
@@ -221,11 +243,13 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
       // some point, even if since collapsed) are known here; report each
       // one deleted so a parent tracking an active session — e.g. AppShell —
       // clears it instead of trying to resume a session that no longer
-      // exists.
+      // exists. onFolderDeleted covers the same need independent of this
+      // tree's own (possibly stale after a remount) sessions cache.
       const deletedSessionIds = folders.find((folder) => folder.id === id)?.sessions ?? []
       setDeletingFolder(null)
       await deleteFolder(id)
       setFolders((previous) => previous.filter((folder) => folder.id !== id))
+      onFolderDeleted?.(id)
       for (const session of deletedSessionIds) onSessionDeleted(session.id)
     }
 

@@ -70,19 +70,31 @@ function renderTree(props?: {
   onSelectSession?: (session: StudySession, folderName: string) => void
   onSessionStarted?: (session: StudySession, folderName: string) => void
   onSessionDeleted?: (sessionId: string) => void
+  onFolderDeleted?: (folderId: string) => void
+  onFolderCountChange?: (count: number) => void
 }) {
   const onSelectSession = props?.onSelectSession ?? vi.fn()
   const onSessionStarted = props?.onSessionStarted ?? vi.fn()
   const onSessionDeleted = props?.onSessionDeleted ?? vi.fn()
+  const onFolderDeleted = props?.onFolderDeleted ?? vi.fn()
+  const onFolderCountChange = props?.onFolderCountChange ?? vi.fn()
   render(
     <StudyFolderTree
       selectedSessionId={props?.selectedSessionId ?? null}
       onSelectSession={onSelectSession}
       onSessionStarted={onSessionStarted}
       onSessionDeleted={onSessionDeleted}
+      onFolderDeleted={onFolderDeleted}
+      onFolderCountChange={onFolderCountChange}
     />,
   )
-  return { onSelectSession, onSessionStarted, onSessionDeleted }
+  return {
+    onSelectSession,
+    onSessionStarted,
+    onSessionDeleted,
+    onFolderDeleted,
+    onFolderCountChange,
+  }
 }
 
 // jsdom has no layout engine, so every element's getBoundingClientRect()
@@ -180,6 +192,31 @@ describe('StudyFolderTree', () => {
     // Then no folder row is rendered — the initial state is an empty list,
     // not a placeholder entry
     expect(screen.queryAllByRole('button', { name: /options$/ })).toHaveLength(0)
+  })
+
+  it('does not report a folder count before the initial fetch resolves, even though local state starts empty', async () => {
+    // Given a listFolders call that resolves to two folders, but not
+    // immediately
+    let resolveFolders: (folders: Folder[]) => void = () => {}
+    vi.mocked(listFolders).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveFolders = resolve
+      }),
+    )
+
+    // When the tree mounts — its own folders state starts at []
+    const { onFolderCountChange } = renderTree()
+
+    // Then no count is reported yet, even though [].length === 0 would
+    // otherwise look like a real "zero folders" answer
+    expect(onFolderCountChange).not.toHaveBeenCalled()
+
+    // When the fetch finally resolves with two folders
+    resolveFolders([GENERAL, SYSTEM_DESIGN])
+
+    // Then the real count is reported, never having reported 0 first
+    await waitFor(() => expect(onFolderCountChange).toHaveBeenCalledWith(2))
+    expect(onFolderCountChange).not.toHaveBeenCalledWith(0)
   })
 
   it('lazily loads and shows a folder’s sessions when expanded', async () => {
@@ -562,7 +599,9 @@ describe('StudyFolderTree', () => {
     ])
     vi.mocked(deleteFolder).mockResolvedValueOnce()
     const user = userEvent.setup()
-    const { onSessionDeleted } = renderTree({ selectedSessionId: CACHE_SESSION.id })
+    const { onSessionDeleted, onFolderDeleted } = renderTree({
+      selectedSessionId: CACHE_SESSION.id,
+    })
     await screen.findByText('System Design')
     await user.click(screen.getByText('System Design'))
     await screen.findByText('Cache invalidation')
@@ -574,9 +613,34 @@ describe('StudyFolderTree', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Delete folder' }))
 
     // Then every session that was in the folder is reported deleted,
-    // including the selected one
+    // including the selected one, and the folder itself is reported too
     await waitFor(() => expect(onSessionDeleted).toHaveBeenCalledWith(CACHE_SESSION.id))
     expect(onSessionDeleted).toHaveBeenCalledWith(LOAD_BALANCING_SESSION.id)
+    expect(onFolderDeleted).toHaveBeenCalledWith('folder-1')
+  })
+
+  it('reports a deleted folder’s id even when its sessions were never loaded', async () => {
+    // Given a folder that was never expanded — its sessions are still null,
+    // as happens right after this tree remounts (e.g. navigating away from
+    // and back to Study) and the user deletes the folder without reopening
+    // it first
+    vi.mocked(listFolders).mockResolvedValueOnce([SYSTEM_DESIGN])
+    vi.mocked(deleteFolder).mockResolvedValueOnce()
+    const user = userEvent.setup()
+    const { onFolderDeleted, onSessionDeleted } = renderTree()
+    await screen.findByText('System Design')
+
+    // When deleting it and confirming, without ever expanding it
+    await user.click(screen.getByRole('button', { name: 'System Design options' }))
+    await user.click(await screen.findByText('Delete folder'))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Delete folder' }))
+
+    // Then the folder is still reported deleted — a parent can clear an
+    // active session by folderId without depending on this tree's own
+    // (here, never-populated) sessions cache
+    await waitFor(() => expect(onFolderDeleted).toHaveBeenCalledWith('folder-1'))
+    expect(onSessionDeleted).not.toHaveBeenCalled()
   })
 
   it('does not delete a folder when the confirmation is cancelled', async () => {
