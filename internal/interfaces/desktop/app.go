@@ -36,10 +36,6 @@ type App struct {
 	// exactly the case in tests, which use context.Background(). Tests
 	// override this field with a fake to observe emitted events safely.
 	emit func(ctx context.Context, eventName string, data ...interface{})
-	// openDirectory defaults to wailsruntime.OpenDirectoryDialog, which
-	// has the same real-runtime requirement as emit above. Tests override
-	// it with a fake to drive PickNotesFolder without a real OS dialog.
-	openDirectory func(ctx context.Context, options wailsruntime.OpenDialogOptions) (string, error)
 	// openFile defaults to wailsruntime.OpenFileDialog, which has the same
 	// real-runtime requirement as emit above. Tests override it with a
 	// fake to drive PickNotesFile without a real OS dialog.
@@ -80,7 +76,6 @@ func NewApp(
 		index:         indexLoader,
 		reset:         resetService,
 		emit:          wailsruntime.EventsEmit,
-		openDirectory: wailsruntime.OpenDirectoryDialog,
 		openFile:      wailsruntime.OpenFileDialog,
 		reloadApp:     wailsruntime.WindowReloadApp,
 	}

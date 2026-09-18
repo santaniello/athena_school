@@ -33,12 +33,31 @@ func TestStart_returnsTopicRequired_whenTopicIsBlank(t *testing.T) {
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil)
 
 	// When starting a session with a whitespace-only topic
-	_, err := service.Start(context.Background(), "   ", "")
+	_, err := service.Start(context.Background(), "   ", "", "Ace the SQL interview")
 
 	// Then it fails with ErrTopicRequired; no port received any call since
 	// none of the mocks above have a .EXPECT() set (mockery fails the test
 	// via t.Cleanup if an unexpected call happens).
 	require.ErrorIs(t, err, ErrTopicRequired)
+}
+
+func TestStart_returnsGoalRequired_whenGoalIsBlank(t *testing.T) {
+	// Given a service and a non-blank topic but a whitespace-only goal
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
+	retriever := knowledgemocks.NewMockRetriever(t)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil)
+
+	// When starting a session with a whitespace-only goal
+	_, err := service.Start(context.Background(), "Distributed systems", "", "   ")
+
+	// Then it fails with ErrGoalRequired; no port received any call since
+	// none of the mocks above have a .EXPECT() set (mockery fails the test
+	// via t.Cleanup if an unexpected call happens).
+	require.ErrorIs(t, err, ErrGoalRequired)
 }
 
 func TestStart_createsAndPersistsSession(t *testing.T) {
@@ -56,7 +75,8 @@ func TestStart_createsAndPersistsSession(t *testing.T) {
 	sessions.EXPECT().
 		Create(context.Background(), mock.MatchedBy(func(session domainstudy.Session) bool {
 			return session.ID != "" && session.Topic == "Distributed systems" &&
-				session.Mode == domainstudy.ModeStudy && session.FolderID == "folder-1" && !session.StartedAt.IsZero() &&
+				session.Mode == domainstudy.ModeStudy && session.FolderID == "folder-1" &&
+				session.Goal == "Ace the SQL interview" && !session.StartedAt.IsZero() &&
 				session.Context == (domainstudy.ContextUsage{State: domainstudy.ContextStateNormal})
 		})).
 		Return(nil).
@@ -64,8 +84,8 @@ func TestStart_createsAndPersistsSession(t *testing.T) {
 	retriever := knowledgemocks.NewMockRetriever(t)
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil)
 
-	// When starting a session for a topic in a folder
-	session, err := service.Start(context.Background(), "Distributed systems", "folder-1")
+	// When starting a session for a topic and goal in a folder
+	session, err := service.Start(context.Background(), "Distributed systems", "folder-1", "Ace the SQL interview")
 
 	// Then it succeeds and returns the created session; profiles/llm/messages
 	// were never touched (no .EXPECT() set on those mocks)
@@ -73,6 +93,7 @@ func TestStart_createsAndPersistsSession(t *testing.T) {
 	require.NotEmpty(t, session.ID)
 	require.Equal(t, "Distributed systems", session.Topic)
 	require.Equal(t, "folder-1", session.FolderID)
+	require.Equal(t, "Ace the SQL interview", session.Goal)
 }
 
 func TestStart_fallsBackToDefaultFolder_whenFolderIDIsBlank(t *testing.T) {
@@ -96,7 +117,7 @@ func TestStart_fallsBackToDefaultFolder_whenFolderIDIsBlank(t *testing.T) {
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil)
 
 	// When starting a session without specifying a folder
-	session, err := service.Start(context.Background(), "Distributed systems", "")
+	session, err := service.Start(context.Background(), "Distributed systems", "", "Ace the SQL interview")
 
 	// Then it lands in the default folder
 	require.NoError(t, err)
@@ -115,7 +136,7 @@ func TestStart_propagatesFolderNotFound_whenChosenFolderDoesNotExist(t *testing.
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil)
 
 	// When starting a session in a folder that does not exist
-	_, err := service.Start(context.Background(), "Distributed systems", "missing")
+	_, err := service.Start(context.Background(), "Distributed systems", "missing", "Ace the SQL interview")
 
 	// Then the error propagates; sessions.Create is never called (no
 	// .EXPECT() set)

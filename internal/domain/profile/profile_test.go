@@ -12,7 +12,6 @@ func validProfile() UserProfile {
 		AssistantName:     "Atena",
 		Area:              "Engenharia de Software",
 		ExperienceLevel:   ExperienceLevelIntermediate,
-		Goals:             []string{"SQL", "System Design"},
 		StudyStyle:        StudyStylePracticalExamples,
 		AssistantLanguage: AssistantLanguageEnglish,
 	}
@@ -75,30 +74,6 @@ func TestUserProfile_Validate_returnsError_whenExperienceLevelIsNotOneOfTheAllow
 
 	// Then it fails with the invalid-experience-level error
 	assert.ErrorIs(t, err, ErrInvalidExperienceLevel)
-}
-
-func TestUserProfile_Validate_returnsError_whenGoalsIsEmpty(t *testing.T) {
-	// Given a profile with no goals
-	p := validProfile()
-	p.Goals = nil
-
-	// When validating it
-	err := p.Validate()
-
-	// Then it fails with the goals-required error
-	assert.ErrorIs(t, err, ErrGoalsRequired)
-}
-
-func TestUserProfile_Validate_returnsError_whenGoalsOnlyContainsBlankEntries(t *testing.T) {
-	// Given a profile whose goals list has entries that are blank after trimming
-	p := validProfile()
-	p.Goals = []string{"   ", ""}
-
-	// When validating it
-	err := p.Validate()
-
-	// Then it fails with the goals-required error
-	assert.ErrorIs(t, err, ErrGoalsRequired)
 }
 
 func TestUserProfile_Validate_returnsError_whenStudyStyleIsNotOneOfTheAllowedValues(t *testing.T) {

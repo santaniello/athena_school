@@ -85,7 +85,7 @@ func TestSendMessage_returnsErrInvalidSourceMode_beforeBlankContentCheck(t *test
 }
 
 func TestSendMessage_returnsMessageRequired_whenContentIsBlank(t *testing.T) {
-	// Given a service and blank message content in web mode
+	// Given a service and blank message content
 	sessions := studymocks.NewMockSessionRepository(t)
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
@@ -95,7 +95,7 @@ func TestSendMessage_returnsMessageRequired_whenContentIsBlank(t *testing.T) {
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil)
 
 	// When sending a whitespace-only message
-	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "   ", domainknowledge.SourceModeWeb, noopSourcesHandler, noopChunkHandler, nil, nil)
+	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "   ", domainknowledge.SourceModeNotes, noopSourcesHandler, noopChunkHandler, nil, nil)
 
 	// Then it fails with ErrMessageRequired; no port received any call
 	require.ErrorIs(t, err, ErrMessageRequired)
@@ -119,7 +119,7 @@ func TestSendMessage_blockedSession_returnsErrSessionContextLimitReached_without
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, nil)
 
 	// When sending a message
-	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeWeb, noopSourcesHandler, noopChunkHandler, nil, nil)
+	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeNotes, noopSourcesHandler, noopChunkHandler, nil, nil)
 
 	// Then it's rejected before appending the user message, updating
 	// context, or touching retrieval/the LLM (no .EXPECT() set on any of
@@ -140,6 +140,9 @@ func TestSendMessage_concurrentCallsForSameSession_secondReturnsErrStudyTurnInPr
 	messages.EXPECT().Append(context.Background(), mock.AnythingOfType("study.Message")).Return(nil)
 	messages.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil)
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}, nil)
+	retriever.EXPECT().
+		Retrieve(context.Background(), "session-1", "Topic: Distributed systems\n\nMessage: What is CAP theorem?").
+		Return(domainknowledge.RetrievalResult{}, nil).Once()
 
 	release := make(chan struct{})
 	started := make(chan struct{})
@@ -156,13 +159,13 @@ func TestSendMessage_concurrentCallsForSameSession_secondReturnsErrStudyTurnInPr
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeWeb, noopSourcesHandler, noopChunkHandler, nil, nil)
+		errCh <- service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeNotes, noopSourcesHandler, noopChunkHandler, nil, nil)
 	}()
 	<-started
 
 	// When a second message is sent for the same session while the first is
 	// still in flight
-	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "Another question", domainknowledge.SourceModeWeb, noopSourcesHandler, noopChunkHandler, nil, nil)
+	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "Another question", domainknowledge.SourceModeNotes, noopSourcesHandler, noopChunkHandler, nil, nil)
 
 	// Then it's rejected immediately with ErrStudyTurnInProgress
 	require.ErrorIs(t, err, ErrStudyTurnInProgress)
@@ -172,7 +175,7 @@ func TestSendMessage_concurrentCallsForSameSession_secondReturnsErrStudyTurnInPr
 }
 
 func TestSendMessage_persistsUserMessageBeforeCallingLLM(t *testing.T) {
-	// Given a service tracking the order ports are called in, in web mode
+	// Given a service tracking the order ports are called in
 	sessions := studymocks.NewMockSessionRepository(t)
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
@@ -180,6 +183,8 @@ func TestSendMessage_persistsUserMessageBeforeCallingLLM(t *testing.T) {
 	folders := foldermocks.NewMockRepository(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	tx := mockNormalSession(t, sessions, "session-1")
+	retriever.EXPECT().Retrieve(context.Background(), "session-1", mock.AnythingOfType("string")).
+		Return(domainknowledge.RetrievalResult{}, nil).Once()
 
 	var callOrder []string
 	messages.EXPECT().
@@ -214,11 +219,10 @@ func TestSendMessage_persistsUserMessageBeforeCallingLLM(t *testing.T) {
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, messageSources)
 
 	// When sending a message
-	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeWeb, noopSourcesHandler, noopChunkHandler, nil, nil)
+	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeNotes, noopSourcesHandler, noopChunkHandler, nil, nil)
 
 	// Then the user message is persisted before the LLM is ever called, and
-	// the assistant reply is persisted only after the stream completes;
-	// retriever has no .EXPECT() set — web never touches it
+	// the assistant reply is persisted only after the stream completes
 	require.NoError(t, err)
 	require.Equal(t, []string{"append-user", "list-history", "chat-stream", "append-assistant"}, callOrder)
 }
@@ -254,6 +258,8 @@ func TestSendMessage_provisionalIncrement_reachingBlocked_emitsContextImmediatel
 	messages.EXPECT().Append(context.Background(), mock.AnythingOfType("study.Message")).Return(nil).Twice()
 	messages.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil).Once()
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}, nil)
+	retriever.EXPECT().Retrieve(context.Background(), "session-1", mock.AnythingOfType("string")).
+		Return(domainknowledge.RetrievalResult{}, nil).Once()
 	llm.EXPECT().
 		ChatStream(context.Background(), mock.AnythingOfType("llm.ChatRequest"), mock.AnythingOfType("func(string) error")).
 		Return(domainllm.StreamResponse{}, nil).
@@ -265,7 +271,7 @@ func TestSendMessage_provisionalIncrement_reachingBlocked_emitsContextImmediatel
 
 	// When sending a message whose provisional estimate alone pushes the
 	// session's context usage past the blocked (95%) boundary
-	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeWeb, noopSourcesHandler, noopChunkHandler,
+	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeNotes, noopSourcesHandler, noopChunkHandler,
 		func(e ContextEvent) { contextEvents = append(contextEvents, e) }, nil)
 
 	// Then the turn is still accepted and completes (blocked only prevents
@@ -279,7 +285,7 @@ func TestSendMessage_provisionalIncrement_reachingBlocked_emitsContextImmediatel
 }
 
 func TestSendMessage_sendsHistoryAndFreshSystemPromptToLLM(t *testing.T) {
-	// Given a service with two prior turns in history, in web mode
+	// Given a service with two prior turns in history
 	sessions := studymocks.NewMockSessionRepository(t)
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
@@ -287,6 +293,8 @@ func TestSendMessage_sendsHistoryAndFreshSystemPromptToLLM(t *testing.T) {
 	folders := foldermocks.NewMockRepository(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	tx := mockNormalSession(t, sessions, "session-1")
+	retriever.EXPECT().Retrieve(context.Background(), "session-1", mock.AnythingOfType("string")).
+		Return(domainknowledge.RetrievalResult{}, nil).Once()
 
 	messages.EXPECT().Append(context.Background(), mock.AnythingOfType("study.Message")).Return(nil).Once()
 	messages.EXPECT().
@@ -324,7 +332,7 @@ func TestSendMessage_sendsHistoryAndFreshSystemPromptToLLM(t *testing.T) {
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, messageSources)
 
 	// When sending a message
-	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeWeb, noopSourcesHandler, func(chunk string) error {
+	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeNotes, noopSourcesHandler, func(chunk string) error {
 		received = append(received, chunk)
 		return nil
 	}, nil, nil)
@@ -336,7 +344,7 @@ func TestSendMessage_sendsHistoryAndFreshSystemPromptToLLM(t *testing.T) {
 
 func TestSendMessage_propagatesStreamError_withoutPersistingAssistantMessage(t *testing.T) {
 	// Given a service whose LLM call fails mid-stream, after the user
-	// message has already been persisted, in web mode
+	// message has already been persisted
 	sessions := studymocks.NewMockSessionRepository(t)
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
@@ -350,6 +358,8 @@ func TestSendMessage_propagatesStreamError_withoutPersistingAssistantMessage(t *
 	})).Return(nil).Once()
 	messages.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil).Once()
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}, nil)
+	retriever.EXPECT().Retrieve(context.Background(), "session-1", mock.AnythingOfType("string")).
+		Return(domainknowledge.RetrievalResult{}, nil).Once()
 	streamErr := errors.New("upstream failure")
 	llm.EXPECT().
 		ChatStream(context.Background(), mock.AnythingOfType("llm.ChatRequest"), mock.AnythingOfType("func(string) error")).
@@ -359,60 +369,11 @@ func TestSendMessage_propagatesStreamError_withoutPersistingAssistantMessage(t *
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, nil)
 
 	// When sending a message
-	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeWeb, noopSourcesHandler, noopChunkHandler, nil, nil)
+	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeNotes, noopSourcesHandler, noopChunkHandler, nil, nil)
 
 	// Then the error propagates; the "assistant" Append above has no
 	// .EXPECT(), so an unexpected call would fail the test
 	require.ErrorIs(t, err, streamErr)
-}
-
-func TestSendMessage_web_callsOnSourcesOnceWithEmptySlice_beforeAnyChunk(t *testing.T) {
-	// Given a service in web mode
-	sessions := studymocks.NewMockSessionRepository(t)
-	messages := studymocks.NewMockMessageRepository(t)
-	llm := llmmocks.NewMockProvider(t)
-	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
-	retriever := knowledgemocks.NewMockRetriever(t)
-	tx := mockNormalSession(t, sessions, "session-1")
-
-	messages.EXPECT().Append(context.Background(), mock.AnythingOfType("study.Message")).Return(nil).Twice()
-	messages.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil).Once()
-	profiles.EXPECT().Load().Return(domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}, nil)
-
-	var callOrder []string
-	var receivedSources []domainknowledge.Source
-	llm.EXPECT().
-		ChatStream(context.Background(), mock.AnythingOfType("llm.ChatRequest"), mock.AnythingOfType("func(string) error")).
-		Run(func(_ context.Context, _ domainllm.ChatRequest, handler func(string) error) {
-			callOrder = append(callOrder, "chat-stream")
-			require.NoError(t, handler("chunk"))
-		}).
-		Return(domainllm.StreamResponse{}, nil).
-		Once()
-
-	messageSources := mockMessageSourceSave(t, nil)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, messageSources)
-
-	// When sending a message
-	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeWeb,
-		func(sources []domainknowledge.Source) error {
-			callOrder = append(callOrder, "sources")
-			receivedSources = sources
-			return nil
-		},
-		func(string) error {
-			callOrder = append(callOrder, "chunk")
-			return nil
-		},
-		nil, nil,
-	)
-
-	// Then onSources fired exactly once, with an empty (non-nil) slice,
-	// before the chat call and before any chunk
-	require.NoError(t, err)
-	require.Equal(t, []string{"sources", "chat-stream", "chunk"}, callOrder)
-	require.Equal(t, []domainknowledge.Source{}, receivedSources)
 }
 
 func TestSendMessage_notes_returnsErrVectorStoreUnavailable_preservingUserMessage_noEmbeddingOrChatCall(t *testing.T) {
@@ -529,7 +490,7 @@ func TestSendMessage_notes_fallsThroughToPlainChat_onValidEmptyOrMissRetrieval(t
 	var receivedSources []domainknowledge.Source
 	llm.EXPECT().
 		ChatStream(context.Background(), mock.MatchedBy(func(req domainllm.ChatRequest) bool {
-			// Same shape as web: just the system prompt, no second system message
+			// Just the system prompt, no second system message
 			return len(req.Messages) == 1 && req.Messages[0].Role == "system"
 		}), mock.AnythingOfType("func(string) error")).
 		Return(domainllm.StreamResponse{}, nil).
@@ -566,15 +527,17 @@ func TestSendMessage_strictNotes_persistsFixedMessage_onValidEmptyOrMissRetrieva
 	})).Return(nil).Once()
 	retriever.EXPECT().Retrieve(context.Background(), "session-1", mock.AnythingOfType("string")).
 		Return(domainknowledge.RetrievalResult{}, nil).Once()
+	profiles.EXPECT().Load().Return(domainprofile.UserProfile{AssistantLanguage: domainprofile.AssistantLanguageEnglish}, nil).Once()
 
 	var callOrder []string
 	var receivedSources []domainknowledge.Source
 	var receivedChunks []string
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, nil)
 
-	// When sending a message in strict-notes mode; llm/profiles/folders have
-	// no .EXPECT() set, so no chat/completion call and no history/profile
-	// load happen on this branch
+	// When sending a message in strict-notes mode; llm/folders have no
+	// .EXPECT() set, so no chat/completion call and no history load happen
+	// on this branch — the profile is still loaded, to pick the fixed
+	// message's language
 	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeStrictNotes,
 		func(sources []domainknowledge.Source) error {
 			callOrder = append(callOrder, "sources")
@@ -595,6 +558,112 @@ func TestSendMessage_strictNotes_persistsFixedMessage_onValidEmptyOrMissRetrieva
 	require.Equal(t, []string{"sources", "chunk"}, callOrder)
 	require.Equal(t, []domainknowledge.Source{}, receivedSources)
 	require.Equal(t, []string{domainknowledge.NoLocalKnowledgeMessage}, receivedChunks)
+}
+
+func TestSendMessage_strictNotes_persistsFixedMessage_onInsufficientNonEmptyRetrieval_emptyingSourcesAndNoChatCall(t *testing.T) {
+	// Given a strict-notes retrieval that found chunks, but none reaches the
+	// sufficiency threshold — e.g. a same-domain but off-topic note
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
+	retriever := knowledgemocks.NewMockRetriever(t)
+	tx := mockNormalSession(t, sessions, "session-1")
+
+	messages.EXPECT().Append(context.Background(), mock.MatchedBy(func(m domainstudy.Message) bool {
+		return m.Role == domainstudy.RoleUser
+	})).Return(nil).Once()
+	messages.EXPECT().Append(context.Background(), mock.MatchedBy(func(m domainstudy.Message) bool {
+		return m.Role == domainstudy.RoleAssistant && m.Content == domainknowledge.NoLocalKnowledgeMessage
+	})).Return(nil).Once()
+	insufficientResult := domainknowledge.RetrievalResult{
+		Chunks:     []domainknowledge.ScoredChunk{{Chunk: domainknowledge.Chunk{ID: "chunk-1"}, Score: 0.4}},
+		Sufficient: false,
+		Context:    `[{"heading":"H"}]`,
+		Sources:    []domainknowledge.Source{{ChunkID: "chunk-1", Score: 0.4}},
+	}
+	retriever.EXPECT().Retrieve(context.Background(), "session-1", mock.AnythingOfType("string")).
+		Return(insufficientResult, nil).Once()
+	profiles.EXPECT().Load().Return(domainprofile.UserProfile{AssistantLanguage: domainprofile.AssistantLanguageEnglish}, nil).Once()
+
+	var callOrder []string
+	var receivedSources []domainknowledge.Source
+	var receivedChunks []string
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, nil)
+
+	// When sending a message in strict-notes mode; llm/folders have no
+	// .EXPECT() set, so this off-topic chunk never reaches a chat call
+	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeStrictNotes,
+		func(sources []domainknowledge.Source) error {
+			callOrder = append(callOrder, "sources")
+			receivedSources = sources
+			return nil
+		},
+		func(chunk string) error {
+			callOrder = append(callOrder, "chunk")
+			receivedChunks = append(receivedChunks, chunk)
+			return nil
+		},
+		nil, nil,
+	)
+
+	// Then it behaves exactly like a no-chunk miss: empty sources are
+	// emitted despite the retriever finding one (irrelevant) chunk, the
+	// fixed message is delivered, and no chat/completion call is made
+	require.NoError(t, err)
+	require.Equal(t, []string{"sources", "chunk"}, callOrder)
+	require.Equal(t, []domainknowledge.Source{}, receivedSources)
+	require.Equal(t, []string{domainknowledge.NoLocalKnowledgeMessage}, receivedChunks)
+}
+
+func TestSendMessage_strictNotes_missResponse_localizedToProfileAssistantLanguage(t *testing.T) {
+	cases := []struct {
+		name     string
+		language string
+		want     string
+	}{
+		{"portuguese", domainprofile.AssistantLanguagePortuguese, noLocalKnowledgeMessagePortuguese},
+		{"english", domainprofile.AssistantLanguageEnglish, domainknowledge.NoLocalKnowledgeMessage},
+		{"unset_fallsBackToEnglish", "", domainknowledge.NoLocalKnowledgeMessage},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			// Given a strict-notes miss and a profile with c.language configured
+			sessions := studymocks.NewMockSessionRepository(t)
+			messages := studymocks.NewMockMessageRepository(t)
+			llm := llmmocks.NewMockProvider(t)
+			profiles := profilemocks.NewMockStore(t)
+			folders := foldermocks.NewMockRepository(t)
+			retriever := knowledgemocks.NewMockRetriever(t)
+			tx := mockNormalSession(t, sessions, "session-1")
+
+			messages.EXPECT().Append(context.Background(), mock.MatchedBy(func(m domainstudy.Message) bool {
+				return m.Role == domainstudy.RoleUser
+			})).Return(nil).Once()
+			messages.EXPECT().Append(context.Background(), mock.MatchedBy(func(m domainstudy.Message) bool {
+				return m.Role == domainstudy.RoleAssistant && m.Content == c.want
+			})).Return(nil).Once()
+			retriever.EXPECT().Retrieve(context.Background(), "session-1", mock.AnythingOfType("string")).
+				Return(domainknowledge.RetrievalResult{}, nil).Once()
+			profiles.EXPECT().Load().Return(domainprofile.UserProfile{AssistantLanguage: c.language}, nil).Once()
+
+			var receivedChunks []string
+			service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, nil)
+
+			// When sending a message in strict-notes mode
+			err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeStrictNotes,
+				noopSourcesHandler,
+				func(chunk string) error { receivedChunks = append(receivedChunks, chunk); return nil },
+				nil, nil,
+			)
+
+			// Then the fixed miss message is delivered in the profile's
+			// configured assistant language
+			require.NoError(t, err)
+			require.Equal(t, []string{c.want}, receivedChunks)
+		})
+	}
 }
 
 func TestSendMessage_local_propagatesGenericRetrievalError_persistingOnlyUserMessage(t *testing.T) {
@@ -641,7 +710,6 @@ func TestSendMessage_localMode_withSurvivingChunks_sendsKnowledgeContextAsSecond
 		{"notes_sufficient", domainknowledge.SourceModeNotes, true},
 		{"notes_insufficientButNonEmpty", domainknowledge.SourceModeNotes, false},
 		{"strictNotes_sufficient", domainknowledge.SourceModeStrictNotes, true},
-		{"strictNotes_insufficientButNonEmpty", domainknowledge.SourceModeStrictNotes, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

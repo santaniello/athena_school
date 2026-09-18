@@ -299,6 +299,7 @@ describe('StudyChatScreen — resuming a session', () => {
         id: 'session-1',
         topic: 'Cache invalidation',
         folderId: 'folder-1',
+        goal: 'Ace the SQL interview',
         startedAt: '2026-08-16T10:00:00Z',
         context: CONTEXT_NORMAL,
       },
@@ -337,6 +338,7 @@ describe('StudyChatScreen — resuming a session', () => {
         id: 'session-1',
         topic: 'Cache invalidation',
         folderId: 'folder-1',
+        goal: 'Ace the SQL interview',
         startedAt: '2026-08-16T10:00:00Z',
         context: CONTEXT_NORMAL,
       },
@@ -381,6 +383,7 @@ describe('StudyChatScreen — resuming a session', () => {
         id: 'session-1',
         topic: 'Cache invalidation',
         folderId: 'folder-1',
+        goal: 'Ace the SQL interview',
         startedAt: '2026-08-16T10:00:00Z',
         context: CONTEXT_NORMAL,
       },
@@ -472,6 +475,7 @@ describe('StudyChatScreen — resuming a session', () => {
         id: 'session-1',
         topic: 'Cache invalidation',
         folderId: 'folder-1',
+        goal: 'Ace the SQL interview',
         startedAt: '2026-08-16T10:00:00Z',
         context: CONTEXT_NORMAL,
       },
@@ -500,6 +504,7 @@ describe('StudyChatScreen — resuming a session', () => {
         id: 'session-1',
         topic: 'Cache invalidation',
         folderId: 'folder-1',
+        goal: 'Ace the SQL interview',
         startedAt: '2026-08-16T10:00:00Z',
         context: CONTEXT_NORMAL,
       },
@@ -523,6 +528,7 @@ describe('StudyChatScreen — resuming a session', () => {
         id: 'session-2',
         topic: 'Load balancing',
         folderId: 'folder-1',
+        goal: 'Ace the SQL interview',
         startedAt: '2026-08-16T11:00:00Z',
         context: CONTEXT_NORMAL,
       },
@@ -1162,12 +1168,12 @@ describe('StudyChatScreen — source modes and local sources', () => {
   })
 
   it('resets to Notes when a different session mounts', async () => {
-    // Given a settled session with Web picked
+    // Given a settled session with Strict notes picked
     await renderSettledSession()
     const user = userEvent.setup()
     await user.click(screen.getByRole('combobox', { name: 'Source mode' }))
-    await user.click(within(screen.getByRole('listbox')).getByText('Web'))
-    expect(screen.getByRole('combobox', { name: 'Source mode' })).toHaveTextContent('Web')
+    await user.click(within(screen.getByRole('listbox')).getByText('Strict notes'))
+    expect(screen.getByRole('combobox', { name: 'Source mode' })).toHaveTextContent('Strict notes')
 
     // When a different session mounts as a fresh instance (AppShell keys
     // StudyChatScreen by session id, so every session gets its own mount)
@@ -1177,6 +1183,7 @@ describe('StudyChatScreen — source modes and local sources', () => {
         id: 'session-2',
         topic: 'Load balancing',
         folderId: 'folder-1',
+        goal: 'Ace the SQL interview',
         startedAt: '2026-08-16T11:00:00Z',
         context: CONTEXT_NORMAL,
       },
@@ -1340,6 +1347,7 @@ describe('StudyChatScreen — context limits', () => {
         id: 'session-1',
         topic: 'Distributed systems',
         folderId: 'folder-1',
+        goal: 'Ace the SQL interview',
         startedAt: '2026-08-16T10:00:00Z',
         context: {
           state: 'warning',

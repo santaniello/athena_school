@@ -41,7 +41,6 @@ describe('profileErrorMessage', () => {
         'experience level must be beginner, intermediate or advanced',
         'Select a valid experience level.',
       ],
-      ['at least one goal is required', 'Add at least one goal.'],
       [
         'study style must be direct, practical_examples or step_by_step',
         'Select a valid study style.',

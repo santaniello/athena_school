@@ -53,8 +53,6 @@ export function HasUserProfile():Promise<boolean>;
 
 export function ImportFile(arg1:string):Promise<void>;
 
-export function ImportNotes(arg1:string):Promise<void>;
-
 export function ListFolders():Promise<Array<desktop.FolderResult>>;
 
 export function ListKnowledgeItemEvidence(arg1:string):Promise<Array<desktop.KnowledgeEvidenceResult>>;
@@ -70,8 +68,6 @@ export function ListStudySessionsByFolder(arg1:string):Promise<Array<desktop.Stu
 export function MoveStudySession(arg1:string,arg2:string):Promise<void>;
 
 export function PickNotesFile():Promise<string>;
-
-export function PickNotesFolder():Promise<string>;
 
 export function ReindexKnowledgeItems():Promise<void>;
 
@@ -105,7 +101,7 @@ export function SendStudyMessage(arg1:string,arg2:string,arg3:string,arg4:string
 
 export function StartKnowledgeIndex(arg1:context.Context):Promise<void>;
 
-export function StartStudySession(arg1:string,arg2:string):Promise<desktop.StudySessionResult>;
+export function StartStudySession(arg1:string,arg2:string,arg3:string):Promise<desktop.StudySessionResult>;
 
 export function Startup(arg1:context.Context):Promise<void>;
 

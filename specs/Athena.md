@@ -572,16 +572,6 @@ O LLM formula a resposta exclusivamente a partir do contexto local recuperado e
 não deve utilizar conhecimento externo. Sem conteúdo local correspondente, o
 Athena retorna uma mensagem fixa sem chamar o modelo de chat.
 
-## web
-
-Ignora as fontes locais e faz uma chamada normal ao modelo:
-
-```text
-General model knowledge
-```
-
-O nome do modo não promete busca ao vivo na internet nesta fase.
-
 ---
 
 # 18. LLM Architecture

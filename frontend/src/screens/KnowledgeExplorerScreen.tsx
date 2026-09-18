@@ -45,6 +45,12 @@ interface KnowledgeExplorerScreenProps {
   // badge (owned by AppShell) stay live without a reload. See
   // specs/phases/phase-02-knowledge-engine/07-knowledge-review.md.
   onKnowledgeChanged?: () => void
+  // Fired after deleting an item, or after saving an edit — the two
+  // actions that can change which topics exist (an item's topic field is
+  // editable, and deleting a topic's last item removes it). Lets the
+  // sidebar's KnowledgeTopicTree (owned by AppShell) refetch without
+  // requiring a notes import or a full app restart to notice.
+  onTopicsChanged?: () => void
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -152,6 +158,7 @@ function KnowledgeExplorerScreen({
   mode,
   mutationsDisabled,
   onKnowledgeChanged,
+  onTopicsChanged,
 }: KnowledgeExplorerScreenProps) {
   const [items, setItems] = useState<KnowledgeItem[]>([])
   const [statusFilter, setStatusFilter] = useState('')
@@ -318,6 +325,7 @@ function KnowledgeExplorerScreen({
     try {
       patchItem(await updateKnowledgeItem(selectedItem.id, draft))
       setIsEditing(false)
+      onTopicsChanged?.()
     } catch {
       setError(GENERIC_ERROR)
     }
@@ -333,6 +341,7 @@ function KnowledgeExplorerScreen({
       setItems((previous) => previous.filter((item) => item.id !== id))
       setSelectedId((current) => (current === id ? null : current))
       if (wasDraft) onKnowledgeChanged?.()
+      onTopicsChanged?.()
     } catch {
       setError(GENERIC_ERROR)
     }

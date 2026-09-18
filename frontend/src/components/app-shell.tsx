@@ -4,7 +4,10 @@ import { AthenaLogo } from '@/components/athena-logo'
 import { NavItem } from '@/components/nav-item'
 import { ComingSoonPanel } from '@/components/coming-soon-panel'
 import { StudyFolderTree, type StudyFolderTreeHandle } from '@/components/study-folder-tree'
-import { KnowledgeTopicTree } from '@/components/knowledge-topic-tree'
+import {
+  KnowledgeTopicTree,
+  type KnowledgeTopicTreeHandle,
+} from '@/components/knowledge-topic-tree'
 import { KnowledgeSection } from '@/components/knowledge-section'
 import { IndexLoadingScreen } from '@/components/index-loading-screen'
 import { IndexFailedScreen } from '@/components/index-failed-screen'
@@ -44,6 +47,7 @@ interface ActiveStudySession {
   topic: string
   folderId: string
   folderName: string
+  goal: string
   // 'new' sessions request the opening turn; 'resume' sessions (picked from
   // the sidebar tree) load their prior history instead.
   mode: 'new' | 'resume'
@@ -83,6 +87,7 @@ function AppShell() {
   const [draftCount, setDraftCount] = useState(0)
   const [pendingProposalCount, setPendingProposalCount] = useState(0)
   const studyFolderTreeRef = useRef<StudyFolderTreeHandle>(null)
+  const knowledgeTopicTreeRef = useRef<KnowledgeTopicTreeHandle>(null)
   // refreshDraftCount/refreshPendingProposalCount each fire from several
   // independent call sites (mount, approve, reject, save-as-drafts, a
   // reconciliation decision); their responses can arrive out of order, so
@@ -137,10 +142,23 @@ function AppShell() {
     refreshPendingProposalCount()
   }
 
+  // Fired after a Knowledge Explorer delete or a topic-changing edit — the
+  // only two actions that can add or remove a topic outside of an import.
+  // KnowledgeTopicTree otherwise only refetches on ingest:done, so without
+  // this a removed or renamed topic would linger in the sidebar until the
+  // next import or a full app restart.
+  // Stryker disable next-line OptionalChaining: only reachable while
+  // viewing the Knowledge section, which always mounts KnowledgeTopicTree
+  // via the ref this guards — current is never null on this path.
+  function refreshKnowledgeTopics() {
+    knowledgeTopicTreeRef.current?.reload()
+  }
+
   // Stryker disable ArrayDeclaration: mount-once effect — its dependency
   // array's content is not itself observable behavior.
   useEffect(() => {
     refreshReviewCounts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   // Stryker restore ArrayDeclaration
 
@@ -219,6 +237,7 @@ function AppShell() {
       topic: session.topic,
       folderId: session.folderId,
       folderName,
+      goal: session.goal,
       // Stryker disable next-line StringLiteral: StudyChatScreen only ever
       // branches on `mode === 'new'` — any non-'new' value, mutant or not,
       // behaves identically to 'resume'.
@@ -232,6 +251,7 @@ function AppShell() {
       topic: session.topic,
       folderId: session.folderId,
       folderName,
+      goal: session.goal,
       mode: 'new',
     })
   }
@@ -274,7 +294,11 @@ function AppShell() {
     setStartingNewSession(true)
     setNewSessionError(null)
     try {
-      const session = await startStudySession(activeSession.topic, activeSession.folderId)
+      const session = await startStudySession(
+        activeSession.topic,
+        activeSession.goal,
+        activeSession.folderId,
+      )
       // Stryker disable next-line OptionalChaining: only reachable while
       // viewing an active Study session, which always mounts
       // StudyFolderTree via the ref this guards — current is never null
@@ -285,6 +309,7 @@ function AppShell() {
         topic: session.topic,
         folderId: session.folderId,
         folderName: activeSession.folderName,
+        goal: session.goal,
         mode: 'new',
       })
     } catch (err) {
@@ -369,6 +394,7 @@ function AppShell() {
                   )}
                   {item.id === 'knowledge' && section === 'knowledge' && (
                     <KnowledgeTopicTree
+                      ref={knowledgeTopicTreeRef}
                       selectedTopic={selectedTopic}
                       onSelectTopic={setSelectedTopic}
                     />
@@ -477,6 +503,7 @@ function AppShell() {
                 mutationsDisabled={retryingIndex}
                 draftCount={draftCount}
                 onKnowledgeChanged={refreshReviewCounts}
+                onTopicsChanged={refreshKnowledgeTopics}
               />
             ) : section === 'documentation' ? (
               <DocumentationScreen />

@@ -22,7 +22,10 @@ import {
   approveKnowledgeItem,
   countDraftKnowledgeItems,
   countPendingReconciliations,
+  deleteKnowledgeItem,
   listKnowledgeItems,
+  listKnowledgeTopics,
+  type KnowledgeItem,
 } from '@/lib/knowledge'
 import { AppShell } from './app-shell'
 
@@ -85,8 +88,8 @@ vi.mock('@/lib/knowledge', async (importOriginal) => {
 })
 
 vi.mock('@/lib/ingest', () => ({
-  pickNotesFolder: vi.fn(),
-  importNotes: vi.fn(),
+  pickNotesFile: vi.fn(),
+  importFile: vi.fn(),
   onIngestProgress: vi.fn(() => vi.fn()),
   onIngestDone: vi.fn(() => vi.fn()),
   onIngestError: vi.fn(() => vi.fn()),
@@ -414,6 +417,7 @@ describe('AppShell', () => {
       id: 'session-1',
       topic: 'Distributed systems',
       folderId: 'default',
+      goal: 'Ace the SQL interview',
       startedAt: '2026-08-17T10:00:00Z',
       context: CONTEXT_NORMAL,
     }
@@ -423,7 +427,11 @@ describe('AppShell', () => {
     await user.click(await screen.findByText('New session'))
     await user.type(
       screen.getByPlaceholderText('What do you want to study?'),
-      'Distributed systems{Enter}',
+      'Distributed systems',
+    )
+    await user.type(
+      screen.getByPlaceholderText('e.g. Pass the SQL interview'),
+      'Ace the SQL interview{Enter}',
     )
 
     // Then the topbar swaps the section label for the session's breadcrumb
@@ -493,6 +501,7 @@ describe('AppShell', () => {
       id: 'session-existing',
       topic: 'Existing topic',
       folderId: 'default',
+      goal: 'Ace the SQL interview',
       startedAt: '2026-08-10T10:00:00Z',
       context: CONTEXT_NORMAL,
     }
@@ -534,6 +543,7 @@ describe('AppShell', () => {
       id: 'session-a',
       topic: 'Session A',
       folderId: 'default',
+      goal: 'Ace the SQL interview',
       startedAt: '2026-08-10T10:00:00Z',
       context: CONTEXT_NORMAL,
     }
@@ -570,6 +580,7 @@ describe('AppShell', () => {
       id: 'session-orphan',
       topic: 'Orphan session',
       folderId: 'default',
+      goal: 'Ace the SQL interview',
       startedAt: '2026-08-10T10:00:00Z',
       context: CONTEXT_NORMAL,
     }
@@ -604,6 +615,7 @@ describe('AppShell', () => {
       id: 'session-stale',
       topic: 'Cached topic',
       folderId: 'default',
+      goal: 'Ace the SQL interview',
       startedAt: '2026-08-10T10:00:00Z',
       context: CONTEXT_NORMAL,
     }
@@ -638,6 +650,7 @@ describe('AppShell', () => {
       id: 'session-nav',
       topic: 'Nav test topic',
       folderId: 'default',
+      goal: 'Ace the SQL interview',
       startedAt: '2026-08-17T10:00:00Z',
       context: CONTEXT_NORMAL,
     }
@@ -645,9 +658,10 @@ describe('AppShell', () => {
     vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
     await user.click(screen.getByText('General'))
     await user.click(await screen.findByText('New session'))
+    await user.type(screen.getByPlaceholderText('What do you want to study?'), 'Nav test topic')
     await user.type(
-      screen.getByPlaceholderText('What do you want to study?'),
-      'Nav test topic{Enter}',
+      screen.getByPlaceholderText('e.g. Pass the SQL interview'),
+      'Ace the SQL interview{Enter}',
     )
     expect(await screen.findByText('Study / General')).toBeInTheDocument()
 
@@ -680,6 +694,7 @@ describe('AppShell', () => {
       id: 'session-original',
       topic: 'Distributed systems',
       folderId: 'default',
+      goal: 'Ace the SQL interview',
       startedAt: '2026-08-17T10:00:00Z',
       context: CONTEXT_NORMAL,
     }
@@ -690,7 +705,11 @@ describe('AppShell', () => {
     await user.click(await screen.findByText('New session'))
     await user.type(
       screen.getByPlaceholderText('What do you want to study?'),
-      'Distributed systems{Enter}',
+      'Distributed systems',
+    )
+    await user.type(
+      screen.getByPlaceholderText('e.g. Pass the SQL interview'),
+      'Ace the SQL interview{Enter}',
     )
     expect(await screen.findByText('Study / General')).toBeInTheDocument()
 
@@ -708,6 +727,7 @@ describe('AppShell', () => {
       id: 'session-continued',
       topic: 'Distributed systems',
       folderId: 'default',
+      goal: 'Ace the SQL interview',
       startedAt: '2026-08-17T10:05:00Z',
       context: CONTEXT_NORMAL,
     }
@@ -719,7 +739,11 @@ describe('AppShell', () => {
     // Then it started a session on the same topic/folder as the one that
     // was open, the sidebar tree refreshed to include it, and the chat view
     // switched to it
-    expect(startStudySession).toHaveBeenCalledWith('Distributed systems', 'default')
+    expect(startStudySession).toHaveBeenCalledWith(
+      'Distributed systems',
+      'Ace the SQL interview',
+      'default',
+    )
     await waitFor(() => expect(listStudySessionsByFolder).toHaveBeenCalledWith('default'))
     await waitFor(() =>
       expect(requestOpeningTurn).toHaveBeenCalledWith('session-continued', 'Distributed systems'),
@@ -745,6 +769,7 @@ describe('AppShell', () => {
       id: 'session-original',
       topic: 'Distributed systems',
       folderId: 'default',
+      goal: 'Ace the SQL interview',
       startedAt: '2026-08-17T10:00:00Z',
       context: CONTEXT_NORMAL,
     })
@@ -753,7 +778,11 @@ describe('AppShell', () => {
     await user.click(await screen.findByText('New session'))
     await user.type(
       screen.getByPlaceholderText('What do you want to study?'),
-      'Distributed systems{Enter}',
+      'Distributed systems',
+    )
+    await user.type(
+      screen.getByPlaceholderText('e.g. Pass the SQL interview'),
+      'Ace the SQL interview{Enter}',
     )
     expect(await screen.findByText('Study / General')).toBeInTheDocument()
 
@@ -805,6 +834,7 @@ describe('AppShell', () => {
       id: 'session-original',
       topic: 'Distributed systems',
       folderId: 'default',
+      goal: 'Ace the SQL interview',
       startedAt: '2026-08-17T10:00:00Z',
       context: CONTEXT_NORMAL,
     })
@@ -813,7 +843,11 @@ describe('AppShell', () => {
     await user.click(await screen.findByText('New session'))
     await user.type(
       screen.getByPlaceholderText('What do you want to study?'),
-      'Distributed systems{Enter}',
+      'Distributed systems',
+    )
+    await user.type(
+      screen.getByPlaceholderText('e.g. Pass the SQL interview'),
+      'Ace the SQL interview{Enter}',
     )
     expect(await screen.findByText('Study / General')).toBeInTheDocument()
 
@@ -903,6 +937,41 @@ describe('AppShell', () => {
 
     // Then the tree is gone again
     expect(screen.queryByText('All topics')).not.toBeInTheDocument()
+  })
+
+  it('reloads the sidebar topic list after deleting a Knowledge Item', async () => {
+    // Given a single item, the only one under its topic
+    const item: KnowledgeItem = {
+      id: 'item-1',
+      topic: 'Go',
+      concept: 'Channels',
+      definition: 'Typed conduits for goroutine communication.',
+      properties: [],
+      tradeOffs: [],
+      relatedConcepts: [],
+      source: 'athena',
+      status: 'approved',
+      createdAt: '2026-08-18T10:00:00Z',
+      updatedAt: '2026-08-18T10:00:00Z',
+    }
+    vi.mocked(listKnowledgeItems).mockResolvedValue([item])
+    vi.mocked(deleteKnowledgeItem).mockResolvedValueOnce(undefined)
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+    await user.click(screen.getByRole('button', { name: 'Knowledge' }))
+    await screen.findAllByText('All topics')
+    await waitFor(() => expect(listKnowledgeTopics).toHaveBeenCalledTimes(1))
+
+    // When deleting that item
+    await user.click(await screen.findByText('Channels'))
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
+
+    // Then the sidebar's topic list refetches — without this, "Go" would
+    // otherwise linger in the sidebar until a full app restart
+    await waitFor(() => expect(listKnowledgeTopics).toHaveBeenCalledTimes(2))
   })
 
   it('renders the sidebar safely, with no name shown yet, before the profile has loaded', async () => {

@@ -18,7 +18,7 @@ const (
 	eventIngestError    = "ingest:error"
 )
 
-// IngestProgressResult is the desktop-facing DTO for ImportFolder's
+// IngestProgressResult is the desktop-facing DTO for ImportFile's
 // progress callback.
 type IngestProgressResult struct {
 	FilesProcessed int    `json:"filesProcessed"`
@@ -34,7 +34,7 @@ type IngestFailureResult struct {
 	Reason string `json:"reason"`
 }
 
-// IngestSummaryResult is the desktop-facing DTO for ImportFolder's final
+// IngestSummaryResult is the desktop-facing DTO for ImportFile's final
 // report.
 type IngestSummaryResult struct {
 	FilesScanned  int                   `json:"filesScanned"`
@@ -80,14 +80,6 @@ func toIngestSummaryResult(s ingest.Summary) IngestSummaryResult {
 	}
 }
 
-// PickNotesFolder opens the OS folder picker and returns the chosen path,
-// or "" if the user cancelled.
-func (a *App) PickNotesFolder() (string, error) {
-	return a.openDirectory(a.ctx, wailsruntime.OpenDialogOptions{
-		Title: "Select notes folder",
-	})
-}
-
 // PickNotesFile opens the OS file picker restricted to .md/.txt files and
 // returns the chosen path, or "" if the user cancelled. The filter exposes
 // every casing of .md/.txt because GTK glob matching is case-sensitive
@@ -102,39 +94,6 @@ func (a *App) PickNotesFile() (string, error) {
 			},
 		},
 	})
-}
-
-// ImportNotes imports every .md/.txt file under path, streaming progress
-// via "ingest:progress" as each file is processed, then emitting
-// "ingest:done" with the final summary (or "ingest:error" on failure).
-func (a *App) ImportNotes(path string) error {
-	root, err := os.OpenRoot(path)
-	if err != nil {
-		a.emit(a.ctx, eventIngestError, err.Error())
-		return err
-	}
-	defer func() {
-		if closeErr := root.Close(); closeErr != nil {
-			log.Printf("closing notes import root %q: %v", path, closeErr)
-		}
-	}()
-
-	absolutePath, err := filepath.Abs(filepath.Clean(path))
-	if err != nil {
-		a.emit(a.ctx, eventIngestError, err.Error())
-		return err
-	}
-
-	summary, err := a.ingest.ImportFolder(a.ctx, root.FS(), filepath.ToSlash(absolutePath), func(p ingest.Progress) error {
-		a.emit(a.ctx, eventIngestProgress, toIngestProgressResult(p))
-		return nil
-	})
-	if err != nil {
-		a.emit(a.ctx, eventIngestError, err.Error())
-		return err
-	}
-	a.emit(a.ctx, eventIngestDone, toIngestSummaryResult(summary))
-	return nil
 }
 
 // ImportFile imports exactly one .md/.txt file, streaming progress via

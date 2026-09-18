@@ -20,10 +20,12 @@ import (
 // turn, since the system prompt itself is never persisted as a message row.
 //
 // onSources is invoked exactly once per call, before any onChunk delivery:
-// with the post-cap sources for a local mode that found chunks, an empty
-// slice for SourceModeWeb or a local miss, or not at all if a technical
-// error (invalid mode, blank content, or a retrieval failure) stops the
-// turn before a response is produced.
+// with the post-cap sources for a mode that answers from them (chunks found,
+// and — for strict-notes — Sufficient), an empty slice for a local miss
+// (including a strict-notes retrieval that found chunks but none reach
+// Sufficiency, which is treated as a miss), or not at all if a technical
+// error (invalid mode, blank content, or a retrieval failure) stops the turn
+// before a response is produced.
 //
 // Checks run in this order: source mode, then content, then the per-session
 // in-flight reservation, then — inside one transaction with the user
@@ -62,6 +64,7 @@ func (s *Service) SendMessage(
 	}
 
 	var priorContext, newContext domainstudy.ContextUsage
+	var sessionGoal string
 	err := s.tx.WithinTx(ctx, func(ctx context.Context) error {
 		session, err := s.sessions.GetByID(ctx, sessionID)
 		if err != nil {
@@ -71,6 +74,7 @@ func (s *Service) SendMessage(
 			return domainstudy.ErrSessionContextLimitReached
 		}
 		priorContext = session.Context
+		sessionGoal = session.Goal
 
 		if err := s.messages.Append(ctx, userMessage); err != nil {
 			return err
@@ -89,27 +93,32 @@ func (s *Service) SendMessage(
 
 	var knowledgeMessage *domainllm.Message
 	var sources []domainknowledge.Source
-	if sourceMode == domainknowledge.SourceModeWeb {
+	result, err := s.retriever.Retrieve(ctx, sessionID, buildRetrievalQuery(topic, content))
+	if err != nil {
+		return fmt.Errorf("study: retrieving local knowledge: %w", err)
+	}
+	if sourceMode == domainknowledge.SourceModeStrictNotes && !result.Sufficient {
+		// Chunks may still exist here (e.g. an off-topic note that
+		// cleared MinSimilarity but not Sufficiency) — strict-notes
+		// treats that exactly like no chunks at all: it must never
+		// answer from, or cite, material that doesn't really support
+		// the question.
 		if err := emitSources(onSources, nil); err != nil {
 			return err
 		}
-	} else {
-		result, err := s.retriever.Retrieve(ctx, sessionID, buildRetrievalQuery(topic, content))
+		profile, err := s.profiles.Load()
 		if err != nil {
-			return fmt.Errorf("study: retrieving local knowledge: %w", err)
+			return fmt.Errorf("study: loading profile: %w", err)
 		}
-		if err := emitSources(onSources, result.Sources); err != nil {
-			return err
-		}
-		if len(result.Chunks) == 0 {
-			if sourceMode == domainknowledge.SourceModeStrictNotes {
-				return s.persistFixedStrictMissResponse(ctx, sessionID, newContext, onChunk, onContext)
-			}
-		} else {
-			message := buildKnowledgeContext(result, sourceMode)
-			knowledgeMessage = &message
-			sources = result.Sources
-		}
+		return s.persistFixedStrictMissResponse(ctx, sessionID, newContext, onChunk, onContext, profile.AssistantLanguage)
+	}
+	if err := emitSources(onSources, result.Sources); err != nil {
+		return err
+	}
+	if len(result.Chunks) > 0 {
+		message := buildKnowledgeContext(result, sourceMode)
+		knowledgeMessage = &message
+		sources = result.Sources
 	}
 
 	history, err := s.messages.ListBySession(ctx, sessionID)
@@ -123,7 +132,7 @@ func (s *Service) SendMessage(
 	}
 
 	llmMessages := make([]domainllm.Message, 0, len(history)+2)
-	llmMessages = append(llmMessages, domainllm.Message{Role: "system", Content: buildSystemPrompt(profile, topic)})
+	llmMessages = append(llmMessages, domainllm.Message{Role: "system", Content: buildSystemPrompt(profile, topic, sessionGoal)})
 	if knowledgeMessage != nil {
 		llmMessages = append(llmMessages, *knowledgeMessage)
 	}
@@ -137,11 +146,11 @@ func (s *Service) SendMessage(
 	return nil
 }
 
-// isValidSourceMode reports whether mode is one of the three exported
+// isValidSourceMode reports whether mode is one of the two exported
 // SourceMode constants.
 func isValidSourceMode(mode string) bool {
 	switch mode {
-	case domainknowledge.SourceModeNotes, domainknowledge.SourceModeStrictNotes, domainknowledge.SourceModeWeb:
+	case domainknowledge.SourceModeNotes, domainknowledge.SourceModeStrictNotes:
 		return true
 	default:
 		return false
@@ -166,20 +175,23 @@ func emitSources(onSources func([]domainknowledge.Source) error, sources []domai
 }
 
 // persistFixedStrictMissResponse is strict-notes' only no-chat-call
-// branch: a successful retrieval with no surviving chunks. It persists
-// domainknowledge.NoLocalKnowledgeMessage as the assistant reply — atomically
-// with its own estimated ContextUsage increment on top of priorContext — and
-// delivers it through the normal chunk callback as one complete chunk, so
-// the user question and this fixed response reappear together on resume.
+// branch: a successful retrieval where no chunk reaches Sufficiency, be it
+// because none survived MinSimilarity or because the survivors just aren't
+// good enough. It persists the fixed miss message — in assistantLanguage,
+// since bypassing the LLM means no system-prompt instruction can localize it
+// — as the assistant reply — atomically with its own estimated ContextUsage
+// increment on top of priorContext — and delivers it through the normal
+// chunk callback as one complete chunk, so the user question and this fixed
+// response reappear together on resume.
 func (s *Service) persistFixedStrictMissResponse(
 	ctx context.Context, sessionID string, priorContext domainstudy.ContextUsage,
-	onChunk func(chunk string) error, onContext ContextCallback,
+	onChunk func(chunk string) error, onContext ContextCallback, assistantLanguage string,
 ) error {
 	assistantMessage := domainstudy.Message{
 		ID:        uuid.NewString(),
 		SessionID: sessionID,
 		Role:      domainstudy.RoleAssistant,
-		Content:   domainknowledge.NoLocalKnowledgeMessage,
+		Content:   noLocalKnowledgeMessageFor(assistantLanguage),
 		CreatedAt: time.Now().UTC(),
 	}
 

@@ -23,6 +23,7 @@ export interface StudySession {
   id: string
   topic: string
   folderId: string
+  goal: string
   startedAt: string
   context: StudyContextUsage
 }
@@ -42,7 +43,7 @@ export interface StudySessionHistory {
 // SourceMode controls whether and how a study turn consults local
 // knowledge before answering. It is transient — passed per call, never
 // stored or inferred from prior messages.
-export type SourceMode = 'notes' | 'strict-notes' | 'web'
+export type SourceMode = 'notes' | 'strict-notes'
 
 export interface StudySource {
   sourceType: string
@@ -95,6 +96,7 @@ function toStudySession(result: {
   id: string
   topic: string
   folderId: string
+  goal: string
   startedAt: string
   context: {
     state: string
@@ -108,15 +110,20 @@ function toStudySession(result: {
     id: result.id,
     topic: result.topic,
     folderId: result.folderId,
+    goal: result.goal,
     startedAt: result.startedAt,
     context: { ...result.context, state: result.context.state as StudyContextUsage['state'] },
   }
 }
 
 // folderId defaults to an empty string, which the backend falls back to
-// the default folder for.
-export async function startStudySession(topic: string, folderId = ''): Promise<StudySession> {
-  const result = await StartStudySession(topic, folderId)
+// the default folder for. goal is required by the backend.
+export async function startStudySession(
+  topic: string,
+  goal: string,
+  folderId = '',
+): Promise<StudySession> {
+  const result = await StartStudySession(topic, folderId, goal)
   return toStudySession(result)
 }
 

@@ -58,15 +58,38 @@ func topicFor(relPath, h1 string, hasH1 bool) string {
 const emptyFileDefinition = "This file has no content."
 
 // definitionFor is the first definitionPreviewChars characters of the
-// file's leading chunk (chunks[0]), stripped of that chunk's own raw
-// heading-marker line and truncated on a word boundary with a trailing
-// "…" when it runs over budget. Falls back to emptyFileDefinition when
-// the file produced no chunks at all.
+// file's leading chunk, stripped of that chunk's own raw heading-marker
+// line and truncated on a word boundary with a trailing "…" when it runs
+// over budget. When the leading chunk carries no Heading — text before the
+// file's first real section, such as a front-matter/metadata block — and a
+// later chunk does carry one, that first headed chunk is used instead: a
+// headingless lead is prose that precedes the file's real content, not a
+// summary of it. Falls back to emptyFileDefinition when the file produced
+// no chunks at all.
 func definitionFor(chunks []ChunkCandidate) string {
 	if len(chunks) == 0 {
 		return emptyFileDefinition
 	}
-	return truncateAtWordBoundary(stripLeadingHeadingLine(chunks[0].Content), definitionPreviewChars)
+	source := chunks[0]
+	if source.Heading == "" {
+		if headed := firstChunkWithHeading(chunks); headed != nil {
+			source = *headed
+		}
+	}
+	return truncateAtWordBoundary(stripLeadingHeadingLine(source.Content), definitionPreviewChars)
+}
+
+// firstChunkWithHeading returns a pointer to the first chunk carrying a
+// non-empty Heading, or nil when every chunk is headingless — a file with
+// no H1-H3 heading at all falls into ChunkText, whose pieces are all
+// headingless, so there is nothing better to fall back to.
+func firstChunkWithHeading(chunks []ChunkCandidate) *ChunkCandidate {
+	for i := range chunks {
+		if chunks[i].Heading != "" {
+			return &chunks[i]
+		}
+	}
+	return nil
 }
 
 var leadingHeadingLine = regexp.MustCompile(`^#{1,6}[ \t]+[^\n]*\n?`)

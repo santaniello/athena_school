@@ -9,7 +9,6 @@ export interface ProfileDraft {
   assistantName: string
   area: string
   experienceLevel: string
-  goals: string[]
   studyStyle: string
   assistantLanguage: string
 }
@@ -29,7 +28,6 @@ export async function getUserProfile(): Promise<ProfileDraft> {
     assistantName: profile.assistantName,
     area: profile.area,
     experienceLevel: profile.experienceLevel,
-    goals: profile.goals,
     studyStyle: profile.studyStyle,
     assistantLanguage: profile.assistantLanguage,
   }
@@ -46,7 +44,6 @@ export async function updateUserProfile(draft: ProfileDraft): Promise<ProfileDra
     assistantName: saved.assistantName,
     area: saved.area,
     experienceLevel: saved.experienceLevel,
-    goals: saved.goals,
     studyStyle: saved.studyStyle,
     assistantLanguage: saved.assistantLanguage,
   }

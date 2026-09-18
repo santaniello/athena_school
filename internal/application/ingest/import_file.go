@@ -15,8 +15,8 @@ import (
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
 )
 
-// Progress reports ImportFolder/ImportFile's advance after each file,
-// processed or skipped.
+// Progress reports ImportFile's advance after each file, processed or
+// skipped.
 type Progress struct {
 	FilesProcessed int
 	FilesTotal     int
@@ -30,7 +30,7 @@ type FileFailure struct {
 	Reason string
 }
 
-// Summary is ImportFolder/ImportFile's final report.
+// Summary is ImportFile's final report.
 type Summary struct {
 	FilesScanned  int
 	FilesIngested int
@@ -55,45 +55,18 @@ type importCandidate struct {
 	SourcePath string
 }
 
-// ImportFolder walks every .md/.txt file under root (an fs.FS — the
-// desktop binding opens the picked directory via os.OpenRoot(path).FS()
-// and passes it in, so this use case never touches the os package;
-// fstest.MapFS drives it in tests with no temp-dir fixtures), chunking,
-// embedding and persisting each one as knowledge_chunks plus a shadow
-// knowledge.Item. sourceRoot is the picked directory's canonical absolute
-// path (desktop-normalized), combined with each candidate's relative path
-// to form its SourcePath identity.
+// ImportFile imports exactly one .md/.txt file (an fs.FS — the desktop
+// binding opens the picked file's parent directory via
+// os.OpenRoot(dir).FS() and passes it in, so this use case never touches
+// the os package; fstest.MapFS drives it in tests with no temp-dir
+// fixtures), chunking, embedding and persisting it as knowledge_chunks plus
+// a shadow knowledge.Item. sourceRoot is the picked file's parent
+// directory's canonical absolute path (desktop-normalized), combined with
+// filePath to form its SourcePath identity.
 //
-// onProgress is called once per file, processed or skipped. If it returns
-// a non-nil error, the walk stops immediately and ImportFolder returns the
-// Summary accumulated so far alongside that error.
-func (s *Service) ImportFolder(
-	ctx context.Context, root fs.FS, sourceRoot string, onProgress func(Progress) error,
-) (Summary, error) {
-	// Held for the entire walk, not just checked once up front — a retry
-	// starting mid-import must wait for the whole import to finish rather
-	// than interleaving its ListCurrent/ReplaceAll with individual files'
-	// transaction commits and VectorStore reconciliation.
-	if err := s.index.BeginMutation(); err != nil {
-		return Summary{}, err
-	}
-	defer s.index.EndMutation()
-
-	paths, err := collectCandidates(root)
-	if err != nil {
-		return Summary{}, fmt.Errorf("ingest: scanning folder: %w", err)
-	}
-	candidates := makeImportCandidates(sourceRoot, paths)
-	// restoreDeletedItem is false: folder import preserves 2.3 behavior —
-	// an unchanged IngestedFile is skipped without resurrecting a shadow
-	// Item deleted in the Explorer.
-	return s.importCandidates(ctx, root, candidates, false, onProgress)
-}
-
-// ImportFile imports exactly one .md/.txt file, sharing every processing
-// step with ImportFolder except restoreDeletedItem (see importCandidates).
-// filePath is relative to root; sourceRoot is root's canonical absolute
-// path (desktop-normalized).
+// onProgress is called once, processed or skipped. If it returns a non-nil
+// error, ImportFile returns the Summary accumulated so far alongside that
+// error.
 //
 // Input validation deliberately precedes index reservation: an invalid
 // request always reports its own error, even while the index is busy.
@@ -115,9 +88,7 @@ func (s *Service) ImportFile(
 	defer s.index.EndMutation()
 
 	candidate := makeImportCandidate(sourceRoot, filePath)
-	// restoreDeletedItem is true: a direct single-file import is an
-	// explicit restoration request (see importCandidates).
-	return s.importCandidates(ctx, root, []importCandidate{candidate}, true, onProgress)
+	return s.importCandidates(ctx, root, []importCandidate{candidate}, onProgress)
 }
 
 // makeImportCandidate combines sourceRoot with readPath to form one
@@ -126,31 +97,16 @@ func makeImportCandidate(sourceRoot, readPath string) importCandidate {
 	return importCandidate{ReadPath: readPath, SourcePath: path.Join(sourceRoot, readPath)}
 }
 
-// makeImportCandidates applies makeImportCandidate to every path found by
-// collectCandidates.
-func makeImportCandidates(sourceRoot string, paths []string) []importCandidate {
-	candidates := make([]importCandidate, len(paths))
-	for i, p := range paths {
-		candidates[i] = makeImportCandidate(sourceRoot, p)
-	}
-	return candidates
-}
-
-// importCandidates is the processing loop shared by ImportFolder and
-// ImportFile. Its caller must already hold BeginMutation/EndMutation for
-// the whole operation.
+// importCandidates is ImportFile's processing loop. Its caller must
+// already hold BeginMutation/EndMutation for the whole operation.
 //
-// restoreDeletedItem is the one intentional processing difference between
-// the two entry points:
-//   - false (folder import): an unchanged IngestedFile is skipped without
-//     resurrecting a shadow Item deleted in the Explorer;
-//   - true (single-file import): before skipping an unchanged source, it
-//     checks the recorded ItemID. ErrItemNotFound forces the ordinary
-//     ingestFile replacement path, which recreates the Item under the same
-//     ID and rebuilds its chunks. Another repository error is recorded as
-//     that candidate's failure.
+// Before skipping an unchanged source, it checks the recorded ItemID:
+// ErrItemNotFound forces the ordinary ingestFile replacement path, which
+// recreates the Item under the same ID and rebuilds its chunks — a direct
+// single-file import is an explicit restoration request. Another
+// repository error is recorded as that candidate's failure.
 func (s *Service) importCandidates(
-	ctx context.Context, root fs.FS, candidates []importCandidate, restoreDeletedItem bool,
+	ctx context.Context, root fs.FS, candidates []importCandidate,
 	onProgress func(Progress) error,
 ) (Summary, error) {
 	existing, err := s.ingestedFiles.ListAll(ctx)
@@ -185,7 +141,7 @@ func (s *Service) importCandidates(
 		}
 
 		if hasPrev && prev.MTimeUnixNano == mtime && prev.EmbeddingModel == domainllm.EmbeddingModel {
-			skip, failure, checkErr := s.shouldSkipUnchanged(ctx, prev, restoreDeletedItem)
+			skip, failure, checkErr := s.shouldSkipUnchanged(ctx, prev)
 			if checkErr != nil {
 				summary.FilesFailed++
 				summary.Failures = append(summary.Failures, FileFailure{Path: displayPath, Reason: failure})
@@ -244,18 +200,14 @@ func applyIngestOutcome(summary *Summary, progress *Progress, displayPath string
 }
 
 // shouldSkipUnchanged decides whether an unchanged source (matching mtime
-// and embedding model) should be skipped. Folder import (restoreDeletedItem
-// == false) always skips. Single-file import additionally checks that
+// and embedding model) should be skipped. It additionally checks that
 // prev.ItemID's shadow Item still exists: a deleted Item forces the
 // ordinary replacement path instead of skipping, restoring it under the
 // same ID; any other repository error is reported as a failure via a
 // non-nil returned error, whose message is failure.
 func (s *Service) shouldSkipUnchanged(
-	ctx context.Context, prev domainknowledge.IngestedFile, restoreDeletedItem bool,
+	ctx context.Context, prev domainknowledge.IngestedFile,
 ) (skip bool, failure string, err error) {
-	if !restoreDeletedItem {
-		return true, "", nil
-	}
 	_, getErr := s.items.GetByID(ctx, prev.ItemID)
 	if getErr == nil {
 		return true, "", nil
@@ -275,34 +227,6 @@ func modTime(root fs.FS, readPath string) (int64, error) {
 		return 0, err
 	}
 	return info.ModTime().UnixNano(), nil
-}
-
-// collectCandidates pre-walks root for every .md/.txt file (case-
-// insensitive extension), skipping any directory whose name starts with
-// "." entirely — .git, .obsidian and similar tooling directories never
-// contribute candidates.
-func collectCandidates(root fs.FS) ([]string, error) {
-	var candidates []string
-	err := fs.WalkDir(root, ".", func(entryPath string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			if entryPath != "." && strings.HasPrefix(d.Name(), ".") {
-				return fs.SkipDir
-			}
-			return nil
-		}
-		switch strings.ToLower(path.Ext(entryPath)) {
-		case ".md", ".txt":
-			candidates = append(candidates, entryPath)
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return candidates, nil
 }
 
 // ingestFile reads, chunks, embeds and replaces candidate's stored chunks

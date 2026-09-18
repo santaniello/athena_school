@@ -117,7 +117,7 @@ func TestSessionRepository_GetByID_returnsStoredSession(t *testing.T) {
 	ctx := context.Background()
 	session := study.Session{
 		ID: "session-1", Topic: "Topic", Mode: study.ModeStudy, FolderID: "default",
-		StartedAt: time.Now().UTC().Truncate(time.Second), Context: normalContext,
+		Goal: "Ace the SQL interview", StartedAt: time.Now().UTC().Truncate(time.Second), Context: normalContext,
 	}
 	require.NoError(t, repo.Create(ctx, session))
 
@@ -129,7 +129,24 @@ func TestSessionRepository_GetByID_returnsStoredSession(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, session.Topic, stored.Topic)
 	assert.Equal(t, session.FolderID, stored.FolderID)
+	assert.Equal(t, session.Goal, stored.Goal)
 	assert.Equal(t, normalContext, stored.Context)
+}
+
+func TestSessionRepository_Create_defaultsGoalToEmpty_whenNotSet(t *testing.T) {
+	// Given a session created without a Goal (mirrors a pre-migration row)
+	repo := newTestSessionRepository(t)
+	ctx := context.Background()
+	require.NoError(t, repo.Create(ctx, study.Session{
+		ID: "session-1", Mode: study.ModeStudy, FolderID: "default", StartedAt: time.Now().UTC(), Context: normalContext,
+	}))
+
+	// When fetching it back
+	stored, err := repo.GetByID(ctx, "session-1")
+
+	// Then its Goal is empty, not some default placeholder
+	require.NoError(t, err)
+	assert.Empty(t, stored.Goal)
 }
 
 func TestSessionRepository_GetByID_returnsNotFound_whenSessionDoesNotExist(t *testing.T) {

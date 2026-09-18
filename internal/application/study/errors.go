@@ -5,6 +5,9 @@ import "errors"
 // ErrTopicRequired is returned by Start when the topic is blank.
 var ErrTopicRequired = errors.New("topic is required")
 
+// ErrGoalRequired is returned by Start when the goal is blank.
+var ErrGoalRequired = errors.New("goal is required")
+
 // ErrMessageRequired is returned by SendMessage when the content is blank.
 var ErrMessageRequired = errors.New("message content is required")
 

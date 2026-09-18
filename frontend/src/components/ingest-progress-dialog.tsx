@@ -12,7 +12,6 @@ import {
 import { Progress } from '@/components/ui/progress'
 import {
   importFile,
-  importNotes,
   onIngestDone,
   onIngestError,
   onIngestProgress,
@@ -28,31 +27,28 @@ import {
   type ReindexSummary,
 } from '@/lib/knowledge'
 
-type DialogKind = 'folder' | 'file' | 'reindex'
+type DialogKind = 'file' | 'reindex'
 
 interface IngestProgressDialogProps {
   open: boolean
   kind: DialogKind
-  // Required for 'folder'/'file' (the picked path); unused for 'reindex',
-  // which has no path of its own — it processes every unindexed item.
+  // Required for 'file' (the picked path); unused for 'reindex', which has
+  // no path of its own — it processes every unindexed item.
   path?: string
   onClose: () => void
 }
 
 const dialogTitle: Record<DialogKind, string> = {
-  folder: 'Importing notes',
   file: 'Importing notes',
   reindex: 'Indexing knowledge',
 }
 
 const processingDescription: Record<DialogKind, string> = {
-  folder: 'Processing files in the selected folder.',
   file: 'Processing the selected file.',
   reindex: 'Indexing knowledge items for search.',
 }
 
 const completeDescription: Record<DialogKind, string> = {
-  folder: 'Import complete.',
   file: 'Import complete.',
   reindex: 'Indexing complete.',
 }
@@ -62,14 +58,13 @@ const completeDescription: Record<DialogKind, string> = {
 // already an isolated transaction, so worst case the user waits out the
 // run. The dialog only becomes dismissible once ingest:done or
 // ingest:error has fired — see
-// specs/phases/phase-02-knowledge-engine/03-notes-import-and-knowledge-explorer.md,
-// specs/phases/phase-02-knowledge-engine/04-01-import-file.md, and
+// specs/phases/phase-02-knowledge-engine/04-01-import-file.md and
 // specs/phases/phase-02-knowledge-engine/08-knowledge-item-indexing.md.
 //
 // 'reindex' reuses the exact same ingest:progress/ingest:done/ingest:error
-// events 'folder'/'file' already stream — the UI only ever has one such
-// operation active at a time — but with an items-shaped payload instead of
-// a files-shaped one, so its progress/summary state is tracked separately.
+// events 'file' already streams — the UI only ever has one such operation
+// active at a time — but with an items-shaped payload instead of a
+// files-shaped one, so its progress/summary state is tracked separately.
 export function IngestProgressDialog({ open, kind, path, onClose }: IngestProgressDialogProps) {
   const [ingestProgress, setIngestProgress] = useState<IngestProgress | null>(null)
   const [ingestSummary, setIngestSummary] = useState<IngestSummary | null>(null)
@@ -113,14 +108,12 @@ export function IngestProgressDialog({ open, kind, path, onClose }: IngestProgre
     const unsubscribeError = onIngestError(setErrorMessage)
 
     // ingest:error is normally emitted with the details before this
-    // rejects (see App.ImportNotes/App.ImportFile), so the catch is
-    // usually just preventing an unhandled promise rejection. But if the
-    // binding call itself fails before ever reaching that emit — e.g. an
-    // IPC error — no ingest:error ever fires; fall back to a generic
-    // message so the dialog still becomes closable rather than staying
-    // stuck forever.
-    const startImport = kind === 'folder' ? importNotes : importFile
-    void startImport(path ?? '').catch(() => {
+    // rejects (see App.ImportFile), so the catch is usually just
+    // preventing an unhandled promise rejection. But if the binding call
+    // itself fails before ever reaching that emit — e.g. an IPC error —
+    // no ingest:error ever fires; fall back to a generic message so the
+    // dialog still becomes closable rather than staying stuck forever.
+    void importFile(path ?? '').catch(() => {
       if (!active) return
       setErrorMessage((current) => current || 'Failed to import notes. Please try again.')
     })

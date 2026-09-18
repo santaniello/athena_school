@@ -28,13 +28,13 @@ func buildKnowledgeContext(result domainknowledge.RetrievalResult, sourceMode st
 // instructionFor returns the mode- and sufficiency-specific instruction
 // text for the local context, per
 // specs/phases/phase-02-knowledge-engine/05-rag-integration.md's source
-// mode table.
+// mode table. strict-notes ignores sufficient: send_message.go only calls
+// buildKnowledgeContext for strict-notes once the result is already
+// Sufficient — an insufficient result is a miss, handled without a chat
+// call — so strict-notes always gets the same exclusive instruction.
 func instructionFor(sourceMode string, sufficient bool) string {
 	if sourceMode == domainknowledge.SourceModeStrictNotes {
-		if sufficient {
-			return "Answer exclusively using the local context below. Do not rely on outside knowledge."
-		}
-		return "The local context below only partially supports an answer. Answer only using what it supports, and explicitly state that the local material cannot fully support a complete answer."
+		return "Answer exclusively using the local context below. Do not rely on outside knowledge."
 	}
 	if sufficient {
 		return "Use the local context below as your primary source. Only supplement it with your general knowledge when necessary."

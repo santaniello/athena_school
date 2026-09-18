@@ -12,17 +12,16 @@ describe('SourceModeSelect', () => {
     expect(screen.getByRole('combobox', { name: 'Source mode' })).toHaveTextContent('Notes')
   })
 
-  it('offers Notes, Strict notes, and Web', async () => {
+  it('offers Notes and Strict notes', async () => {
     // Given the select is open
     const user = userEvent.setup()
     render(<SourceModeSelect value="notes" onValueChange={vi.fn()} />)
     await user.click(screen.getByRole('combobox', { name: 'Source mode' }))
     const listbox = screen.getByRole('listbox')
 
-    // Then all three modes are offered
+    // Then both modes are offered
     expect(within(listbox).getByText('Notes')).toBeInTheDocument()
     expect(within(listbox).getByText('Strict notes')).toBeInTheDocument()
-    expect(within(listbox).getByText('Web')).toBeInTheDocument()
   })
 
   it('calls onValueChange with the picked mode', async () => {
@@ -32,11 +31,11 @@ describe('SourceModeSelect', () => {
     render(<SourceModeSelect value="notes" onValueChange={onValueChange} />)
     await user.click(screen.getByRole('combobox', { name: 'Source mode' }))
 
-    // When picking "Web"
-    await user.click(within(screen.getByRole('listbox')).getByText('Web'))
+    // When picking "Strict notes"
+    await user.click(within(screen.getByRole('listbox')).getByText('Strict notes'))
 
     // Then the new mode is reported
-    expect(onValueChange).toHaveBeenCalledWith('web')
+    expect(onValueChange).toHaveBeenCalledWith('strict-notes')
   })
 
   it('is disabled when disabled is true', () => {
@@ -68,6 +67,5 @@ describe('SourceModeSelect', () => {
     // Then the tooltip lists every mode's description
     expect(await screen.findByText(/Uses your approved local knowledge/)).toBeInTheDocument()
     expect(screen.getByText(/Answers only from your approved local knowledge/)).toBeInTheDocument()
-    expect(screen.getByText(/Ignores local sources/)).toBeInTheDocument()
   })
 })

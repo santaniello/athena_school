@@ -917,6 +917,66 @@ describe('KnowledgeExplorerScreen', () => {
     await waitFor(() => expect(onKnowledgeChanged).toHaveBeenCalledTimes(1))
   })
 
+  it('calls onTopicsChanged after deleting an item, regardless of its status', async () => {
+    // Given a selected approved item — deleting it can remove the last
+    // item under its topic, unlike onKnowledgeChanged this fires no matter
+    // the item's status
+    stubIngestDone()
+    const item = testItem({ status: 'approved' })
+    vi.mocked(listKnowledgeItems).mockResolvedValueOnce([item])
+    vi.mocked(deleteKnowledgeItem).mockResolvedValueOnce(undefined)
+    const onTopicsChanged = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <KnowledgeExplorerScreen
+        selectedTopic={null}
+        mode="explorer"
+        mutationsDisabled={false}
+        onTopicsChanged={onTopicsChanged}
+      />,
+    )
+    await user.click(await screen.findByText('Channels'))
+
+    // When deleting it
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
+
+    // Then the sidebar's topic list is told to refetch
+    await waitFor(() => expect(deleteKnowledgeItem).toHaveBeenCalledWith('item-1'))
+    await waitFor(() => expect(onTopicsChanged).toHaveBeenCalledTimes(1))
+  })
+
+  it('calls onTopicsChanged after saving an edit, since the topic field itself is editable', async () => {
+    // Given a selected item with its edit form open
+    stubIngestDone()
+    const item = testItem({ status: 'approved' })
+    vi.mocked(listKnowledgeItems).mockResolvedValueOnce([item])
+    vi.mocked(updateKnowledgeItem).mockResolvedValueOnce({ ...item, topic: 'Concurrency' })
+    const onTopicsChanged = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <KnowledgeExplorerScreen
+        selectedTopic={null}
+        mode="explorer"
+        mutationsDisabled={false}
+        onTopicsChanged={onTopicsChanged}
+      />,
+    )
+    await user.click(await screen.findByText('Channels'))
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    const topicInput = screen.getByLabelText('Topic')
+    await user.clear(topicInput)
+    await user.type(topicInput, 'Concurrency')
+
+    // When saving
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    // Then the sidebar's topic list is told to refetch
+    await waitFor(() => expect(updateKnowledgeItem).toHaveBeenCalled())
+    await waitFor(() => expect(onTopicsChanged).toHaveBeenCalledTimes(1))
+  })
+
   it('cancels the delete confirmation without deleting anything', async () => {
     // Given a selected item with the delete confirmation open
     stubIngestDone()

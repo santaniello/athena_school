@@ -1,9 +1,10 @@
+import { createRef } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { listKnowledgeTopics } from '@/lib/knowledge'
 import { onIngestDone, type IngestSummary } from '@/lib/ingest'
-import { KnowledgeTopicTree } from './knowledge-topic-tree'
+import { KnowledgeTopicTree, type KnowledgeTopicTreeHandle } from './knowledge-topic-tree'
 
 vi.mock('@/lib/knowledge', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/knowledge')>()
@@ -137,6 +138,69 @@ describe('KnowledgeTopicTree', () => {
 
     // Then the newly-imported topic appears without a remount
     expect(await screen.findByRole('button', { name: 'Kubernetes' })).toBeInTheDocument()
+  })
+
+  it("reloads topics when the imperative handle's reload() is called", async () => {
+    // Given a tree that has already loaded its initial topics, and no
+    // notes import in progress — the only trigger before this handle
+    // existed
+    vi.mocked(listKnowledgeTopics).mockResolvedValueOnce(['Go']).mockResolvedValueOnce([])
+    stubOnIngestDone()
+    const ref = createRef<KnowledgeTopicTreeHandle>()
+    render(<KnowledgeTopicTree ref={ref} selectedTopic={null} onSelectTopic={vi.fn()} />)
+    await screen.findByRole('button', { name: 'Go' })
+
+    // When a caller outside the tree (AppShell, after deleting the last
+    // item under "Go") invokes reload()
+    act(() => ref.current?.reload())
+
+    // Then the now-empty topic list replaces the stale "Go" row
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Go' })).not.toBeInTheDocument(),
+    )
+  })
+
+  it('clears the selection when the selected topic disappears after a reload', async () => {
+    // Given "Go" is selected, and it's about to vanish from the next load
+    // (the last item under it was deleted or moved to another topic)
+    vi.mocked(listKnowledgeTopics)
+      .mockResolvedValueOnce(['Go'])
+      .mockResolvedValueOnce(['Kubernetes'])
+    stubOnIngestDone()
+    const onSelectTopic = vi.fn()
+    const ref = createRef<KnowledgeTopicTreeHandle>()
+    render(<KnowledgeTopicTree ref={ref} selectedTopic="Go" onSelectTopic={onSelectTopic} />)
+    await screen.findByRole('button', { name: 'Go' })
+
+    // When a caller outside the tree (AppShell, after that delete/edit)
+    // invokes reload()
+    act(() => ref.current?.reload())
+    await screen.findByRole('button', { name: 'Kubernetes' })
+
+    // Then the now-gone selection falls back to "All topics", instead of
+    // leaving the explorer filtered on a topic no row here highlights
+    expect(onSelectTopic).toHaveBeenCalledWith(null)
+  })
+
+  it('leaves the selection alone when the selected topic still exists after a reload', async () => {
+    // Given "Go" is selected, and it's still present in the next load
+    vi.mocked(listKnowledgeTopics)
+      .mockResolvedValueOnce(['Go', 'Kubernetes'])
+      .mockResolvedValueOnce(['Go'])
+    stubOnIngestDone()
+    const onSelectTopic = vi.fn()
+    const ref = createRef<KnowledgeTopicTreeHandle>()
+    render(<KnowledgeTopicTree ref={ref} selectedTopic="Go" onSelectTopic={onSelectTopic} />)
+    await screen.findByRole('button', { name: 'Go' })
+
+    // When reload() runs and "Go" survives it
+    act(() => ref.current?.reload())
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Kubernetes' })).not.toBeInTheDocument(),
+    )
+
+    // Then the selection is left untouched
+    expect(onSelectTopic).not.toHaveBeenCalled()
   })
 
   it('ignores a stale response from the initial load when ingest:done triggers a second load first', async () => {

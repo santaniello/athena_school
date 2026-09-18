@@ -16,8 +16,8 @@ import (
 // domainllm.Provider, a domainprofile.Store, a domainfolder.Repository
 // (used to fall back to the default folder and validate a chosen one
 // exists before creating a session), a domainknowledge.Retriever (used by
-// SendMessage's local source modes; never called for SourceModeWeb), a
-// Transactor (atomic message + ContextUsage writes), a
+// every SendMessage call), a Transactor (atomic message + ContextUsage
+// writes), a
 // domainllm.ModelContextResolver (resolves a stream's model to its context
 // window; see specs/phases/phase-02-knowledge-engine/06-study-context-limits.md),
 // and a domainknowledge.MessageSourceRepository (persists the Sources

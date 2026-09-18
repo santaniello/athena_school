@@ -21,7 +21,6 @@ func TestStore_SaveThenLoad_roundTrips(t *testing.T) {
 		AssistantName:     "Atena",
 		Area:              "Engenharia de Software",
 		ExperienceLevel:   profile.ExperienceLevelIntermediate,
-		Goals:             []string{"SQL", "System Design"},
 		StudyStyle:        profile.StudyStylePracticalExamples,
 		AssistantLanguage: profile.AssistantLanguageEnglish,
 		CreatedAt:         time.Now().UTC().Truncate(time.Second),

@@ -24,7 +24,6 @@ function currentProfile(): ProfileDraft {
     assistantName: 'Atena',
     area: 'Engenharia de Software',
     experienceLevel: 'intermediate',
-    goals: ['SQL', 'System Design'],
     studyStyle: 'practical_examples',
     assistantLanguage: 'en',
   }
@@ -96,7 +95,9 @@ describe('SettingsScreen', () => {
 
   it('shows an inline error and does not report an update on a rejected save', async () => {
     // Given a binding that rejects with a domain validation sentinel
-    vi.mocked(UpdateProfile).mockRejectedValueOnce(new Error('at least one goal is required'))
+    vi.mocked(UpdateProfile).mockRejectedValueOnce(
+      new Error('experience level must be beginner, intermediate or advanced'),
+    )
     const onProfileUpdated = vi.fn()
     const user = userEvent.setup()
     render(<SettingsScreen profile={currentProfile()} onProfileUpdated={onProfileUpdated} />)
@@ -105,7 +106,7 @@ describe('SettingsScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
 
     // Then an inline error is shown and onProfileUpdated never fires
-    expect(await screen.findByText('Add at least one goal.')).toBeInTheDocument()
+    expect(await screen.findByText('Select a valid experience level.')).toBeInTheDocument()
     expect(onProfileUpdated).not.toHaveBeenCalled()
   })
 

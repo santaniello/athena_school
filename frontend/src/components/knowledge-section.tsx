@@ -1,17 +1,10 @@
 import { useState } from 'react'
-import { ChevronDownIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { IngestProgressDialog } from '@/components/ingest-progress-dialog'
 import { PendingReconciliationSection } from '@/components/pending-reconciliation-section'
 import { cn } from '@/lib/utils'
-import { pickNotesFile, pickNotesFolder } from '@/lib/ingest'
+import { pickNotesFile } from '@/lib/ingest'
 import KnowledgeExplorerScreen from '@/screens/KnowledgeExplorerScreen'
 
 interface KnowledgeSectionProps {
@@ -29,49 +22,36 @@ interface KnowledgeSectionProps {
   // Fired after an action inside the Explorer/Review screen changes the
   // draft count, so AppShell can refresh both badges without a reload.
   onKnowledgeChanged: () => void
+  // Fired after an Explorer action that can change which topics exist
+  // (delete, or an edit that changes the topic field), so AppShell can
+  // refresh the sidebar's KnowledgeTopicTree without a reload.
+  onTopicsChanged?: () => void
 }
 
 type Tab = 'explorer' | 'review'
 
-// The single active import target, whichever picker produced it — the
-// progress dialog drives both flows off this one piece of state.
-interface ImportTarget {
-  kind: 'folder' | 'file'
-  path: string
-}
-
 const pickerErrorMessage = 'Failed to open the notes picker. Please try again.'
 
-// Owns the Explorer/Review tab state and the "Import notes" toolbar
-// dropdown (folder or single file) — the main-pane counterpart to
-// KnowledgeTopicTree in the sidebar. See the layout in
-// specs/phases/phase-02-knowledge-engine/03-notes-import-and-knowledge-explorer.md
-// and specs/phases/phase-02-knowledge-engine/04-01-import-file.md.
+// Owns the Explorer/Review tab state and the "Import notes" toolbar action
+// (a single file) — the main-pane counterpart to KnowledgeTopicTree in the
+// sidebar. See the layout in
+// specs/phases/phase-02-knowledge-engine/04-01-import-file.md.
 function KnowledgeSection({
   selectedTopic,
   mutationsDisabled,
   draftCount,
   onKnowledgeChanged,
+  onTopicsChanged,
 }: KnowledgeSectionProps) {
   const [activeTab, setActiveTab] = useState<Tab>('explorer')
-  const [importTarget, setImportTarget] = useState<ImportTarget | null>(null)
+  const [importPath, setImportPath] = useState<string | null>(null)
   const [pickerError, setPickerError] = useState('')
 
-  async function handleImportFolderClick() {
-    setPickerError('')
-    try {
-      const path = await pickNotesFolder()
-      if (path) setImportTarget({ kind: 'folder', path })
-    } catch {
-      setPickerError(pickerErrorMessage)
-    }
-  }
-
-  async function handleImportFileClick() {
+  async function handleImportClick() {
     setPickerError('')
     try {
       const path = await pickNotesFile()
-      if (path) setImportTarget({ kind: 'file', path })
+      if (path) setImportPath(path)
     } catch {
       setPickerError(pickerErrorMessage)
     }
@@ -84,13 +64,12 @@ function KnowledgeSection({
     )
   }
 
-  // Stryker disable StringLiteral: only read when importTarget is null, i.e.
+  // Stryker disable StringLiteral: only read when importPath is null, i.e.
   // IngestProgressDialog's own `open` prop is false — its effect bails via
-  // `if (!open) return` before kind/path ever drive anything observable, so
-  // these fallbacks exist purely to satisfy the required (non-optional) prop
-  // types.
-  const importDialogKind = importTarget?.kind ?? 'folder'
-  const importDialogPath = importTarget?.path ?? ''
+  // `if (!open) return` before path ever drives anything observable, so
+  // this fallback exists purely to satisfy the required (non-optional) prop
+  // type.
+  const importDialogPath = importPath ?? ''
   // Stryker restore StringLiteral
 
   return (
@@ -118,22 +97,9 @@ function KnowledgeSection({
           </button>
         </div>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button disabled={mutationsDisabled}>
-              Import notes
-              <ChevronDownIcon />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => void handleImportFolderClick()}>
-              Import folder...
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => void handleImportFileClick()}>
-              Import file...
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <Button disabled={mutationsDisabled} onClick={() => void handleImportClick()}>
+          Import notes
+        </Button>
       </div>
 
       {pickerError && <p className="text-sm text-destructive">{pickerError}</p>}
@@ -148,14 +114,15 @@ function KnowledgeSection({
           mode={activeTab}
           mutationsDisabled={mutationsDisabled}
           onKnowledgeChanged={onKnowledgeChanged}
+          onTopicsChanged={onTopicsChanged}
         />
       </div>
 
       <IngestProgressDialog
-        open={importTarget !== null}
-        kind={importDialogKind}
+        open={importPath !== null}
+        kind="file"
         path={importDialogPath}
-        onClose={() => setImportTarget(null)}
+        onClose={() => setImportPath(null)}
       />
     </div>
   )

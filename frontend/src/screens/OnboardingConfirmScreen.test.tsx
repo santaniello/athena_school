@@ -34,7 +34,6 @@ function completeDraft(): ProfileDraft {
     assistantName: 'Atena',
     area: 'Engenharia de Software',
     experienceLevel: 'intermediate',
-    goals: ['SQL', 'System Design'],
     studyStyle: 'practical_examples',
     assistantLanguage: 'en',
   }
@@ -51,7 +50,6 @@ describe('OnboardingConfirmScreen', () => {
     // Then every field value is shown as plain text
     expect(screen.getByText('Ana')).toBeInTheDocument()
     expect(screen.getByText('Atena')).toBeInTheDocument()
-    expect(screen.getByText('SQL, System Design')).toBeInTheDocument()
     expect(screen.getByText('Intermediate')).toBeInTheDocument()
     expect(screen.getByText('Lots of practical examples')).toBeInTheDocument()
     expect(screen.getByText('English')).toBeInTheDocument()
@@ -69,7 +67,6 @@ describe('OnboardingConfirmScreen', () => {
       'Assistant name',
       'Area',
       'Experience level',
-      'Goals',
       'Study style',
       'Assistant language',
     ]) {
@@ -110,26 +107,6 @@ describe('OnboardingConfirmScreen', () => {
 
     // Then onChange was last called with the fully edited field
     expect(onChange).toHaveBeenLastCalledWith({ ...completeDraft(), area: 'Design' })
-  })
-
-  it('edits the goals field inline through the tag input', async () => {
-    // Given a filled draft
-    const onChange = vi.fn()
-    const user = userEvent.setup()
-    render(
-      <OnboardingConfirmScreen draft={completeDraft()} onChange={onChange} onConfirmed={vi.fn()} />,
-    )
-    const goalsRow = within(screen.getByTestId('onboarding-confirm-row-goals'))
-
-    // When clicking Edit on the Goals row and adding a goal
-    await user.click(goalsRow.getByRole('button', { name: 'Edit' }))
-    await user.type(goalsRow.getByLabelText('Goals'), 'Java{Enter}')
-
-    // Then onChange is called with the goal appended
-    expect(onChange).toHaveBeenCalledWith({
-      ...completeDraft(),
-      goals: ['SQL', 'System Design', 'Java'],
-    })
   })
 
   it('edits the experience level inline through the dropdown', async () => {
@@ -231,7 +208,9 @@ describe('OnboardingConfirmScreen', () => {
     // Given a first save attempt that fails, followed by one that stays pending during the assertion
     let resolveSecondCall: () => void = () => {}
     vi.mocked(SaveProfile)
-      .mockRejectedValueOnce(new Error('at least one goal is required'))
+      .mockRejectedValueOnce(
+        new Error('experience level must be beginner, intermediate or advanced'),
+      )
       .mockReturnValueOnce(
         new Promise((resolve) => {
           resolveSecondCall = resolve
@@ -244,13 +223,13 @@ describe('OnboardingConfirmScreen', () => {
 
     // When the first attempt fails
     await user.click(screen.getByRole('button', { name: 'Confirm and save' }))
-    expect(await screen.findByText('Add at least one goal.')).toBeInTheDocument()
+    expect(await screen.findByText('Select a valid experience level.')).toBeInTheDocument()
 
     // And a second attempt is submitted
     await user.click(screen.getByRole('button', { name: 'Confirm and save' }))
 
     // Then the previous error is gone and the button shows a saving state
-    expect(screen.queryByText('Add at least one goal.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Select a valid experience level.')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled()
 
     // When the pending save resolves
@@ -264,7 +243,9 @@ describe('OnboardingConfirmScreen', () => {
 
   it('shows an inline error and does not call onConfirmed on failure', async () => {
     // Given a SaveProfile call that rejects
-    vi.mocked(SaveProfile).mockRejectedValueOnce(new Error('at least one goal is required'))
+    vi.mocked(SaveProfile).mockRejectedValueOnce(
+      new Error('experience level must be beginner, intermediate or advanced'),
+    )
     const onConfirmed = vi.fn()
     const user = userEvent.setup()
     render(
@@ -279,7 +260,7 @@ describe('OnboardingConfirmScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm and save' }))
 
     // Then an inline error is shown and onConfirmed never fires
-    expect(await screen.findByText('Add at least one goal.')).toBeInTheDocument()
+    expect(await screen.findByText('Select a valid experience level.')).toBeInTheDocument()
     expect(onConfirmed).not.toHaveBeenCalled()
   })
 })

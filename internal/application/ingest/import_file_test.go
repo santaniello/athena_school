@@ -3,6 +3,9 @@ package ingest
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io/fs"
+	"path"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -17,6 +20,85 @@ import (
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 )
+
+// statFailFS wraps a MapFS so that Stat on failPath fails, simulating a
+// file that vanished between the picker and ImportFile's own stat (e.g. an
+// external delete racing the import). fs.Stat prefers a StatFS
+// implementation over Open+Stat, so overriding Stat here is enough to
+// control modTime's error path.
+type statFailFS struct {
+	fstest.MapFS
+	failPath string
+}
+
+func (f statFailFS) Stat(name string) (fs.FileInfo, error) {
+	if name == f.failPath {
+		return nil, fmt.Errorf("simulated stat failure for %s", name)
+	}
+	return f.MapFS.Stat(name)
+}
+
+var fixedModTime = time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+
+// testSourceRoot is the canonical absolute root every ImportFile test in
+// this file imports through, mirroring the desktop-normalized sourceRoot a
+// real picked file's parent directory would produce.
+const testSourceRoot = "/root"
+
+// srcPath builds the canonical SourcePath a candidate at rel (relative to
+// testSourceRoot) resolves to.
+func srcPath(rel string) string {
+	return path.Join(testSourceRoot, rel)
+}
+
+// runWithinTx makes the mocked Transactor behave like the real one: it
+// just invokes fn immediately against ctx, so the repo mocks set up
+// underneath faithfully observe every call ImportFile makes inside the
+// transactional replace step.
+func runWithinTx(tx *ingestmocks.MockTransactor) {
+	tx.EXPECT().WithinTx(mock.Anything, mock.Anything).
+		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error {
+			return fn(ctx)
+		})
+}
+
+func newTestService(
+	chunks *knowledgemocks.MockChunkRepository,
+	ingestedFiles *knowledgemocks.MockIngestedFileRepository,
+	items *knowledgemocks.MockRepository,
+	llm *llmmocks.MockProvider,
+	tx *ingestmocks.MockTransactor,
+	store *knowledgemocks.MockVectorStore,
+	index IndexGuard,
+) *Service {
+	return NewService(chunks, ingestedFiles, items, llm, tx, store, index)
+}
+
+// passingIndexGuard returns an IndexGuard mock that always allows the
+// mutation — the default for every test that isn't specifically about the
+// guard rejecting one.
+func passingIndexGuard(t *testing.T) *ingestmocks.MockIndexGuard {
+	guard := ingestmocks.NewMockIndexGuard(t)
+	guard.EXPECT().BeginMutation().Return(nil)
+	guard.EXPECT().EndMutation()
+	return guard
+}
+
+// noOpReconciliationStore returns a VectorStore mock whose Remove/Add both
+// succeed as no-ops — the default for tests whose focus is the SQLite/
+// orchestration side of ImportFile, not vector-store reconciliation.
+func noOpReconciliationStore(t *testing.T) *knowledgemocks.MockVectorStore {
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Remove(mock.Anything, mock.Anything).Return(nil)
+	store.EXPECT().Add(mock.Anything, mock.Anything).Return(nil)
+	return store
+}
+
+func embeddingResponse() domainllm.EmbeddingResponse {
+	return domainllm.EmbeddingResponse{Embedding: []float64{0.1, 0.2, 0.3}, Model: domainllm.EmbeddingModel}
+}
+
+func noopProgress(Progress) error { return nil }
 
 func TestImportFile_newFile_ingestsExactlyOneFileWithFilesTotalOne(t *testing.T) {
 	// Given one never-before-seen markdown file
@@ -95,9 +177,8 @@ func TestImportFile_unchangedFile_withExistingItem_isSkipped(t *testing.T) {
 
 func TestImportFile_unchangedFile_withDeletedItem_restoresItUnderTheSameID(t *testing.T) {
 	// Given a file already recorded with its current mtime/model, but
-	// whose shadow Item was deleted from the Knowledge Explorer — direct
-	// single-file import is an explicit restoration request, unlike folder
-	// import which would just skip this
+	// whose shadow Item was deleted from the Knowledge Explorer — a direct
+	// single-file import is an explicit restoration request
 	root := fstest.MapFS{"go.md": {Data: []byte("# Go\nBasics of Go."), ModTime: fixedModTime}}
 	ctx := context.Background()
 	chunks := knowledgemocks.NewMockChunkRepository(t)
@@ -140,35 +221,6 @@ func TestImportFile_unchangedFile_withDeletedItem_restoresItUnderTheSameID(t *te
 	assert.Equal(t, 0, summary.FilesSkipped)
 }
 
-func TestImportFolder_unchangedFile_withDeletedItem_stillSkips(t *testing.T) {
-	// Given the same scenario reached through folder import instead —
-	// restoreDeletedItem is false there, so it continues to skip
-	root := fstest.MapFS{"go.md": {Data: []byte("# Go\nBasics of Go."), ModTime: fixedModTime}}
-	ctx := context.Background()
-	chunks := knowledgemocks.NewMockChunkRepository(t)
-	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
-	items := knowledgemocks.NewMockRepository(t)
-	llm := llmmocks.NewMockProvider(t)
-	tx := ingestmocks.NewMockTransactor(t)
-
-	ingestedFiles.EXPECT().ListAll(ctx).Return(map[string]domainknowledge.IngestedFile{
-		srcPath("go.md"): {
-			SourcePath: srcPath("go.md"), Path: "go.md", MTimeUnixNano: fixedModTime.UnixNano(),
-			EmbeddingModel: domainllm.EmbeddingModel, ChunkCount: 1, ItemID: "item-1",
-		},
-	}, nil).Once()
-
-	service := newTestService(chunks, ingestedFiles, items, llm, tx, nil, passingIndexGuard(t))
-
-	// When importing the folder containing that file
-	summary, err := service.ImportFolder(ctx, root, testSourceRoot, noopProgress)
-
-	// Then it is skipped without ever checking the Item's existence
-	require.NoError(t, err)
-	assert.Equal(t, 1, summary.FilesSkipped)
-	items.AssertNotCalled(t, "GetByID", mock.Anything, mock.Anything)
-}
-
 func TestImportFile_unchangedFile_whenItemLookupFailsForAnotherReason_isRecordedAsFailure(t *testing.T) {
 	// Given a file that would otherwise be skipped, but whose restoration
 	// check hits a genuine repository error (not ErrItemNotFound)
@@ -201,6 +253,76 @@ func TestImportFile_unchangedFile_whenItemLookupFailsForAnotherReason_isRecorded
 	assert.Equal(t, 0, summary.FilesSkipped)
 	require.Len(t, summary.Failures, 1)
 	assert.Contains(t, summary.Failures[0].Reason, boom.Error())
+}
+
+func TestImportFile_unchangedFile_whenItemLookupFailsForAnotherReason_advancesProgressByOneBeforeFailing(t *testing.T) {
+	// Given the same "another repository error" scenario as above, this
+	// time observing the progress callback's exact payload
+	root := fstest.MapFS{"go.md": {Data: []byte("# Go\nBasics of Go."), ModTime: fixedModTime}}
+	ctx := context.Background()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	items := knowledgemocks.NewMockRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	tx := ingestmocks.NewMockTransactor(t)
+
+	ingestedFiles.EXPECT().ListAll(ctx).Return(map[string]domainknowledge.IngestedFile{
+		srcPath("go.md"): {
+			SourcePath: srcPath("go.md"), Path: "go.md", MTimeUnixNano: fixedModTime.UnixNano(),
+			EmbeddingModel: domainllm.EmbeddingModel, ChunkCount: 1, ItemID: "item-1",
+		},
+	}, nil).Once()
+	boom := errors.New("database unavailable")
+	items.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{}, boom).Once()
+
+	var seen []Progress
+	onProgress := func(p Progress) error {
+		seen = append(seen, p)
+		return nil
+	}
+	service := newTestService(chunks, ingestedFiles, items, llm, tx, nil, passingIndexGuard(t))
+
+	// When importing that single file
+	summary, err := service.ImportFile(ctx, root, testSourceRoot, "go.md", onProgress)
+
+	// Then progress advances by exactly one for the failed candidate
+	require.NoError(t, err)
+	assert.Equal(t, 1, summary.FilesFailed)
+	require.Len(t, seen, 1)
+	assert.Equal(t, 1, seen[0].FilesProcessed)
+}
+
+func TestImportFile_unchangedFile_whenItemLookupFailsForAnotherReason_stopsAndPropagatesOnProgressError(t *testing.T) {
+	// Given the same scenario, but this time the progress callback itself
+	// signals that the caller wants to stop
+	root := fstest.MapFS{"go.md": {Data: []byte("# Go\nBasics of Go."), ModTime: fixedModTime}}
+	ctx := context.Background()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	items := knowledgemocks.NewMockRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	tx := ingestmocks.NewMockTransactor(t)
+
+	ingestedFiles.EXPECT().ListAll(ctx).Return(map[string]domainknowledge.IngestedFile{
+		srcPath("go.md"): {
+			SourcePath: srcPath("go.md"), Path: "go.md", MTimeUnixNano: fixedModTime.UnixNano(),
+			EmbeddingModel: domainllm.EmbeddingModel, ChunkCount: 1, ItemID: "item-1",
+		},
+	}, nil).Once()
+	boom := errors.New("database unavailable")
+	items.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{}, boom).Once()
+
+	stopErr := errors.New("cancelled by caller")
+	onProgress := func(Progress) error { return stopErr }
+	service := newTestService(chunks, ingestedFiles, items, llm, tx, nil, passingIndexGuard(t))
+
+	// When importing that single file
+	summary, err := service.ImportFile(ctx, root, testSourceRoot, "go.md", onProgress)
+
+	// Then the callback's error propagates instead of being swallowed by
+	// the loop finishing its only candidate normally
+	assert.ErrorIs(t, err, stopErr)
+	assert.Equal(t, 1, summary.FilesFailed)
 }
 
 func TestImportFile_changedFile_reembedsAndUpdatesInPlace(t *testing.T) {
@@ -358,6 +480,35 @@ func TestImportFile_perFileFailure_isRecordedInSummary_notAsATopLevelError(t *te
 	assert.Contains(t, summary.Failures[0].Reason, boom.Error())
 }
 
+func TestImportFile_statFailure_isRecordedAsFailure(t *testing.T) {
+	// Given a file that can no longer be stat'd once ImportFile reaches it
+	// (e.g. an external delete racing the import)
+	root := statFailFS{
+		MapFS:    fstest.MapFS{"go.md": {Data: []byte("# Go\nBody.")}},
+		failPath: "go.md",
+	}
+	ctx := context.Background()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	items := knowledgemocks.NewMockRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	tx := ingestmocks.NewMockTransactor(t)
+
+	ingestedFiles.EXPECT().ListAll(ctx).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
+
+	service := newTestService(chunks, ingestedFiles, items, llm, tx, nil, passingIndexGuard(t))
+
+	// When importing that single file
+	summary, err := service.ImportFile(ctx, root, testSourceRoot, "go.md", noopProgress)
+
+	// Then the unstat-able file is recorded as a failure instead of the
+	// request itself erroring
+	require.NoError(t, err)
+	assert.Equal(t, 1, summary.FilesFailed)
+	require.Len(t, summary.Failures, 1)
+	assert.Equal(t, "go.md", summary.Failures[0].Path)
+}
+
 func TestImportFile_reportsIndexingWarning_butStillCountsTheFileAsIngested(t *testing.T) {
 	// Given a file whose durable import succeeds but whose store
 	// reconciliation fails
@@ -388,8 +539,7 @@ func TestImportFile_reportsIndexingWarning_butStillCountsTheFileAsIngested(t *te
 	// When importing that single file
 	summary, err := service.ImportFile(ctx, root, testSourceRoot, "go.md", noopProgress)
 
-	// Then the durable import counts as ingested with a warning, matching
-	// ImportFolder's IndexWarnings behavior
+	// Then the durable import counts as ingested with a warning
 	require.NoError(t, err)
 	assert.Equal(t, 1, summary.FilesIngested)
 	assert.Equal(t, 0, summary.FilesFailed)

@@ -113,6 +113,7 @@ var migrations = []func(*sql.DB) error{
 	migrateIngestedFilesToSourcePathSchema,
 	addSessionsContextColumns,
 	migrateSessionForeignKeyActions,
+	addSessionsGoalColumn,
 	execSQL(`CREATE TABLE IF NOT EXISTS knowledge_reconciliation_proposals (
 		id                 TEXT PRIMARY KEY,
 		action             TEXT NOT NULL,
@@ -228,6 +229,25 @@ func addSessionsContextColumns(db *sql.DB) error {
 		}
 	}
 	return nil
+}
+
+// addSessionsGoalColumn adds sessions.goal if it does not already exist. It
+// declares NOT NULL DEFAULT ”, which SQLite backfills onto existing rows as
+// part of ADD COLUMN itself, so a session created before this column existed
+// simply has goal = ” — see
+// specs/phases/phase-01-desktop-mvp/14-session-goal.md for why that renders
+// no "Goal: ..." fragment in the system prompt instead of falling back to
+// anything else.
+func addSessionsGoalColumn(db *sql.DB) error {
+	has, err := hasColumn(db, "sessions", "goal")
+	if err != nil {
+		return err
+	}
+	if has {
+		return nil
+	}
+	_, err = db.Exec(`ALTER TABLE sessions ADD COLUMN goal TEXT NOT NULL DEFAULT ''`)
+	return err
 }
 
 // hasColumn reports whether table already has a column named column.

@@ -12,7 +12,6 @@ const draft: ProfileDraft = {
   assistantName: 'Atena',
   area: 'Engenharia de Software',
   experienceLevel: 'intermediate',
-  goals: ['SQL', 'System Design'],
   studyStyle: 'practical_examples',
   assistantLanguage: 'en',
 }
@@ -31,12 +30,12 @@ describe('saveUserProfile', () => {
 
   it('propagates a rejection from the binding unchanged', async () => {
     // Given a binding that rejects with a domain validation sentinel
-    const err = new Error('at least one goal is required')
+    const err = new Error('experience level must be beginner, intermediate or advanced')
     vi.mocked(SaveProfile).mockRejectedValueOnce(err)
 
     // When saving the draft
     // Then the same error propagates, unmapped
-    await expect(saveUserProfile({ ...draft, goals: [] })).rejects.toThrow(err)
+    await expect(saveUserProfile(draft)).rejects.toThrow(err)
   })
 })
 
@@ -59,11 +58,11 @@ describe('updateUserProfile', () => {
 
   it('propagates a rejection from the binding unchanged', async () => {
     // Given a binding that rejects with a domain validation sentinel
-    const err = new Error('at least one goal is required')
+    const err = new Error('experience level must be beginner, intermediate or advanced')
     vi.mocked(UpdateProfile).mockRejectedValueOnce(err)
 
     // When updating the draft
     // Then the same error propagates, unmapped
-    await expect(updateUserProfile({ ...draft, goals: [] })).rejects.toThrow(err)
+    await expect(updateUserProfile(draft)).rejects.toThrow(err)
   })
 })

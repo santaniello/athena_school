@@ -68,17 +68,21 @@ func TestBuildKnowledgeContext_strictNotes_sufficient(t *testing.T) {
 	assert.Contains(t, message.Content, "exclusively")
 }
 
-func TestBuildKnowledgeContext_strictNotes_insufficientButNonEmpty(t *testing.T) {
-	// Given an insufficient but non-empty retrieval result
-	result := domainknowledge.RetrievalResult{Context: "[]", Sufficient: false}
+func TestBuildKnowledgeContext_strictNotes_ignoresSufficiencyFlag_alwaysExclusive(t *testing.T) {
+	// Given send_message.go only ever calls buildKnowledgeContext for
+	// strict-notes once Sufficient is true (an insufficient result is now a
+	// miss, handled without a chat call) — the instruction must not depend
+	// on the flag regardless
+	for _, sufficient := range []bool{true, false} {
+		result := domainknowledge.RetrievalResult{Context: "[]", Sufficient: sufficient}
 
-	// When building the knowledge context for strict-notes mode
-	message := buildKnowledgeContext(result, domainknowledge.SourceModeStrictNotes)
+		// When building the knowledge context for strict-notes mode
+		message := buildKnowledgeContext(result, domainknowledge.SourceModeStrictNotes)
 
-	// Then it instructs the model to restrict itself to what local material
-	// supports, and to state that it cannot fully answer
-	assert.Contains(t, message.Content, "cannot")
-	assert.Contains(t, message.Content, "support")
+		// Then it always instructs the model to answer exclusively from the
+		// local context
+		assert.Contains(t, message.Content, "exclusively")
+	}
 }
 
 func TestBuildKnowledgeContext_alwaysIncludesUntrustedDataFraming_regardlessOfModeOrSufficiency(t *testing.T) {
