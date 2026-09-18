@@ -189,7 +189,6 @@ export namespace desktop {
 	export class FolderResult {
 	    id: string;
 	    name: string;
-	    isDefault: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new FolderResult(source);
@@ -199,7 +198,6 @@ export namespace desktop {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.name = source["name"];
-	        this.isDefault = source["isDefault"];
 	    }
 	}
 	export class IndexStatusResult {

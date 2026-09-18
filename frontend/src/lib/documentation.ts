@@ -61,7 +61,7 @@ const DOCUMENTATION: DocSection[] = [
     summary: 'The core of the app: a Socratic conversation about a topic you choose.',
     body: [
       'Before your first session Athena asks who you are — your name, what to call the assistant, your field, experience level, goals, preferred study style, and whether the assistant should speak English or Portuguese. That profile is rebuilt into the instructions behind every reply, so the same question gets a different answer depending on who is asking. Change any of it in Settings and the next message reflects it.',
-      'Sessions live in folders in the sidebar, like a file explorer. There is always a General folder as the fallback; you can rename it but not delete it. Drag sessions between folders, and deleting a folder moves its sessions back to General rather than destroying them. Any session reopens at any time with its full history.',
+      'Sessions live in folders in the sidebar, like a file explorer. Create a folder for the topic you want to study before starting a session — there is no catch-all folder, so every session lives somewhere you chose on purpose. Drag sessions between folders, and deleting a folder permanently deletes every session inside it, so double-check before confirming. Any session reopens at any time with its full history.',
       'A session starts with you naming a topic. Athena opens with a short greeting and one focused question — no lecture, no summary. It is finding out where you actually are before deciding what to teach. From there it is a real back-and-forth: you answer, it gives brief feedback, then asks a follow-up that builds on it. Replies stay short by design; ask for the long version and only then does it go deep.',
     ],
     topics: [

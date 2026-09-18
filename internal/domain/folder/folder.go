@@ -6,15 +6,9 @@ package folder
 
 import "time"
 
-// DefaultFolderID is the fixed ID of the default folder every session falls
-// back to when no folder is explicitly chosen. It is seeded by the sqlite
-// migrations and can never be deleted.
-const DefaultFolderID = "default"
-
 // Folder groups related sessions together, like a ChatGPT project.
 type Folder struct {
 	ID        string
 	Name      string
-	IsDefault bool
 	CreatedAt time.Time
 }

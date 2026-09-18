@@ -116,6 +116,53 @@ func (_c *MockSessionRepository_Delete_Call) RunAndReturn(run func(context.Conte
 	return _c
 }
 
+// DeleteByFolder provides a mock function with given fields: ctx, folderID
+func (_m *MockSessionRepository) DeleteByFolder(ctx context.Context, folderID string) error {
+	ret := _m.Called(ctx, folderID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteByFolder")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
+		r0 = rf(ctx, folderID)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockSessionRepository_DeleteByFolder_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteByFolder'
+type MockSessionRepository_DeleteByFolder_Call struct {
+	*mock.Call
+}
+
+// DeleteByFolder is a helper method to define mock.On call
+//   - ctx context.Context
+//   - folderID string
+func (_e *MockSessionRepository_Expecter) DeleteByFolder(ctx interface{}, folderID interface{}) *MockSessionRepository_DeleteByFolder_Call {
+	return &MockSessionRepository_DeleteByFolder_Call{Call: _e.mock.On("DeleteByFolder", ctx, folderID)}
+}
+
+func (_c *MockSessionRepository_DeleteByFolder_Call) Run(run func(ctx context.Context, folderID string)) *MockSessionRepository_DeleteByFolder_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockSessionRepository_DeleteByFolder_Call) Return(_a0 error) *MockSessionRepository_DeleteByFolder_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockSessionRepository_DeleteByFolder_Call) RunAndReturn(run func(context.Context, string) error) *MockSessionRepository_DeleteByFolder_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetByID provides a mock function with given fields: ctx, id
 func (_m *MockSessionRepository) GetByID(ctx context.Context, id string) (study.Session, error) {
 	ret := _m.Called(ctx, id)
@@ -276,54 +323,6 @@ func (_c *MockSessionRepository_MoveToFolder_Call) Return(_a0 error) *MockSessio
 }
 
 func (_c *MockSessionRepository_MoveToFolder_Call) RunAndReturn(run func(context.Context, string, string) error) *MockSessionRepository_MoveToFolder_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// ReassignFolder provides a mock function with given fields: ctx, fromFolderID, toFolderID
-func (_m *MockSessionRepository) ReassignFolder(ctx context.Context, fromFolderID string, toFolderID string) error {
-	ret := _m.Called(ctx, fromFolderID, toFolderID)
-
-	if len(ret) == 0 {
-		panic("no return value specified for ReassignFolder")
-	}
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
-		r0 = rf(ctx, fromFolderID, toFolderID)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// MockSessionRepository_ReassignFolder_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ReassignFolder'
-type MockSessionRepository_ReassignFolder_Call struct {
-	*mock.Call
-}
-
-// ReassignFolder is a helper method to define mock.On call
-//   - ctx context.Context
-//   - fromFolderID string
-//   - toFolderID string
-func (_e *MockSessionRepository_Expecter) ReassignFolder(ctx interface{}, fromFolderID interface{}, toFolderID interface{}) *MockSessionRepository_ReassignFolder_Call {
-	return &MockSessionRepository_ReassignFolder_Call{Call: _e.mock.On("ReassignFolder", ctx, fromFolderID, toFolderID)}
-}
-
-func (_c *MockSessionRepository_ReassignFolder_Call) Run(run func(ctx context.Context, fromFolderID string, toFolderID string)) *MockSessionRepository_ReassignFolder_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(string), args[2].(string))
-	})
-	return _c
-}
-
-func (_c *MockSessionRepository_ReassignFolder_Call) Return(_a0 error) *MockSessionRepository_ReassignFolder_Call {
-	_c.Call.Return(_a0)
-	return _c
-}
-
-func (_c *MockSessionRepository_ReassignFolder_Call) RunAndReturn(run func(context.Context, string, string) error) *MockSessionRepository_ReassignFolder_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -11,10 +11,6 @@ var ErrFolderNotFound = errors.New("folder not found")
 // ErrNameRequired is returned when a folder name is blank.
 var ErrNameRequired = errors.New("folder name is required")
 
-// ErrCannotDeleteDefaultFolder is returned when trying to delete the
-// default folder, which must always exist as the fallback for sessions.
-var ErrCannotDeleteDefaultFolder = errors.New("the default folder cannot be deleted")
-
 // Repository persists Folders. Today the only implementation is
 // SQLite-backed (internal/infrastructure/sqlite).
 type Repository interface {

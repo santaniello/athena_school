@@ -4,8 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-
-	domainfolder "github.com/santaniello/athena/internal/domain/folder"
 )
 
 // Resetter is the SQLite-backed implementation of reset.Resetter.
@@ -19,9 +17,9 @@ func NewResetter(db *sql.DB) *Resetter {
 	return &Resetter{db: db}
 }
 
-// Reset permanently deletes every study session (and its messages),
-// every non-default folder, and every knowledge-domain row, atomically.
-// usage survives detached (session_id set NULL by its own foreign key),
+// Reset permanently deletes every study session (and its messages), every
+// folder, and every knowledge-domain row, atomically. usage survives
+// detached (session_id set NULL by its own foreign key),
 // matching how deleting one session already behaves — see
 // TestOpen_migratesLegacyForeignKeysAndDetachesUsageWithoutRemovingIt.
 // The deletion order matters: knowledge_items and
@@ -46,7 +44,7 @@ func (r *Resetter) Reset(ctx context.Context) error {
 		args  []any
 	}{
 		{`DELETE FROM sessions`, nil},
-		{`DELETE FROM folders WHERE id <> ?`, []any{domainfolder.DefaultFolderID}},
+		{`DELETE FROM folders`, nil},
 		{`DELETE FROM knowledge_items`, nil},
 		{`DELETE FROM knowledge_reconciliation_proposals`, nil},
 		{`DELETE FROM knowledge_evidence`, nil},

@@ -27,6 +27,7 @@ import {
   listKnowledgeTopics,
   type KnowledgeItem,
 } from '@/lib/knowledge'
+import { deleteFolder, listFolders } from '@/lib/folder'
 import { AppShell } from './app-shell'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
@@ -61,7 +62,7 @@ vi.mock('@/lib/study', () => ({
 }))
 
 vi.mock('@/lib/folder', () => ({
-  listFolders: vi.fn().mockResolvedValue([{ id: 'default', name: 'General', isDefault: true }]),
+  listFolders: vi.fn().mockResolvedValue([{ id: 'default', name: 'General' }]),
   createFolder: vi.fn(),
   renameFolder: vi.fn(),
   deleteFolder: vi.fn(),
@@ -381,6 +382,22 @@ describe('AppShell', () => {
     expect(screen.getByText('No session open')).toBeInTheDocument()
   })
 
+  it('shows a "no folders yet" empty state on Study when there are zero folders', async () => {
+    // Given a brand new install with no folders at all
+    vi.mocked(listFolders).mockResolvedValueOnce([])
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+
+    // When navigating to Study
+    await user.click(screen.getByRole('button', { name: 'Start a study session' }))
+
+    // Then the empty state explains there is no folder yet, instead of
+    // assuming one already exists to pick a session from
+    expect(await screen.findByText('No folders yet')).toBeInTheDocument()
+    expect(screen.queryByText('No session open')).not.toBeInTheDocument()
+  })
+
   it('shows the folder tree in the sidebar only while on the Study section', async () => {
     // Given the app shell mounts on Home, with one folder available
     const user = userEvent.setup()
@@ -566,6 +583,46 @@ describe('AppShell', () => {
       expect(screen.getByRole('heading', { name: 'Study', level: 1 })).toBeInTheDocument(),
     )
     expect(screen.getByText('No session open')).toBeInTheDocument()
+  })
+
+  it('clears the active session and reverts the topbar/main pane when its folder is deleted from the tree', async () => {
+    // Given a session is open in Study, picked from the sidebar tree
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+    await user.click(screen.getByRole('button', { name: 'Study' }))
+    await screen.findByText('General')
+
+    const session: StudySession = {
+      id: 'session-b',
+      topic: 'Session B',
+      folderId: 'default',
+      goal: 'Ace the SQL interview',
+      startedAt: '2026-08-10T10:00:00Z',
+      context: CONTEXT_NORMAL,
+    }
+    vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([session])
+    vi.mocked(resumeStudySession).mockReturnValue(new Promise(() => {}))
+    await user.click(screen.getByText('General'))
+    await user.click(await screen.findByText('Session B'))
+    expect(await screen.findByText('Study / General')).toBeInTheDocument()
+
+    // When deleting the folder that session lives in, not the session itself
+    vi.mocked(deleteFolder).mockResolvedValueOnce()
+    await user.click(screen.getByRole('button', { name: 'General options' }))
+    await user.click(await screen.findByText('Delete folder'))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Delete folder' }))
+
+    // Then the topbar reverts to the section label, and the main pane
+    // reverts to an empty state — the folder delete alone clears the
+    // active session, without relying on a separate session-delete event.
+    // "No folders yet", not "No session open", since General was the only
+    // folder and it's the one just deleted.
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Study', level: 1 })).toBeInTheDocument(),
+    )
+    expect(screen.getByText('No folders yet')).toBeInTheDocument()
   })
 
   it('deletes a session without crashing when no session was ever opened', async () => {

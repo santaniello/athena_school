@@ -8,6 +8,9 @@ var ErrTopicRequired = errors.New("topic is required")
 // ErrGoalRequired is returned by Start when the goal is blank.
 var ErrGoalRequired = errors.New("goal is required")
 
+// ErrFolderRequired is returned by Start when no folder is chosen.
+var ErrFolderRequired = errors.New("folder is required")
+
 // ErrMessageRequired is returned by SendMessage when the content is blank.
 var ErrMessageRequired = errors.New("message content is required")
 

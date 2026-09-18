@@ -32,7 +32,7 @@ func TestCreateFolder_createsAndPersistsFolder(t *testing.T) {
 	sessions := studymocks.NewMockSessionRepository(t)
 	folders.EXPECT().
 		Create(context.Background(), mock.MatchedBy(func(f domainfolder.Folder) bool {
-			return f.ID != "" && f.Name == "System Design" && !f.IsDefault && !f.CreatedAt.IsZero()
+			return f.ID != "" && f.Name == "System Design" && !f.CreatedAt.IsZero()
 		})).
 		Return(nil).
 		Once()

@@ -14,8 +14,8 @@ import (
 // Service implements the Study Mode use cases against a
 // domainstudy.SessionRepository, a domainstudy.MessageRepository, a
 // domainllm.Provider, a domainprofile.Store, a domainfolder.Repository
-// (used to fall back to the default folder and validate a chosen one
-// exists before creating a session), a domainknowledge.Retriever (used by
+// (used to validate the chosen folder exists before creating a session),
+// a domainknowledge.Retriever (used by
 // every SendMessage call), a Transactor (atomic message + ContextUsage
 // writes), a
 // domainllm.ModelContextResolver (resolves a stream's model to its context

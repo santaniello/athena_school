@@ -38,7 +38,6 @@ func TestApp_CreateFolder_createsAndReturnsFolder(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, result.ID)
 	assert.Equal(t, "System Design", result.Name)
-	assert.False(t, result.IsDefault)
 }
 
 func TestApp_CreateFolder_propagatesNameRequiredError(t *testing.T) {
@@ -68,11 +67,11 @@ func TestApp_RenameFolder_renamesFolder(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestApp_DeleteFolder_reassignsSessionsThenDeletesFolder(t *testing.T) {
-	// Given an App backed by ports that accept the reassignment and delete
+func TestApp_DeleteFolder_deletesSessionsThenDeletesFolder(t *testing.T) {
+	// Given an App backed by ports that accept the session delete and folder delete
 	folders := foldermocks.NewMockRepository(t)
 	sessions := studymocks.NewMockSessionRepository(t)
-	sessions.EXPECT().ReassignFolder(mock.Anything, "f-1", domainfolder.DefaultFolderID).Return(nil).Once()
+	sessions.EXPECT().DeleteByFolder(mock.Anything, "f-1").Return(nil).Once()
 	folders.EXPECT().Delete(mock.Anything, "f-1").Return(nil).Once()
 	app := newTestFolderApp(t, folders, sessions)
 
@@ -83,25 +82,12 @@ func TestApp_DeleteFolder_reassignsSessionsThenDeletesFolder(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestApp_DeleteFolder_propagatesCannotDeleteDefaultFolderError(t *testing.T) {
-	// Given an App backed by a folder repository
-	folders := foldermocks.NewMockRepository(t)
-	sessions := studymocks.NewMockSessionRepository(t)
-	app := newTestFolderApp(t, folders, sessions)
-
-	// When deleting the default folder
-	err := app.DeleteFolder(domainfolder.DefaultFolderID)
-
-	// Then the error propagates; no port is touched
-	require.ErrorIs(t, err, domainfolder.ErrCannotDeleteDefaultFolder)
-}
-
 func TestApp_ListFolders_returnsEveryFolder(t *testing.T) {
 	// Given an App backed by a repository with two folders
 	folders := foldermocks.NewMockRepository(t)
 	sessions := studymocks.NewMockSessionRepository(t)
 	folders.EXPECT().List(mock.Anything).Return([]domainfolder.Folder{
-		{ID: "default", Name: "General", IsDefault: true},
+		{ID: "f-0", Name: "General"},
 		{ID: "f-1", Name: "System Design"},
 	}, nil).Once()
 	app := newTestFolderApp(t, folders, sessions)
@@ -113,6 +99,5 @@ func TestApp_ListFolders_returnsEveryFolder(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, results, 2)
 	assert.Equal(t, "General", results[0].Name)
-	assert.True(t, results[0].IsDefault)
 	assert.Equal(t, "System Design", results[1].Name)
 }

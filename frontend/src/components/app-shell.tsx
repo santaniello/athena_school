@@ -86,6 +86,7 @@ function AppShell() {
   const [newSessionError, setNewSessionError] = useState<string | null>(null)
   const [draftCount, setDraftCount] = useState(0)
   const [pendingProposalCount, setPendingProposalCount] = useState(0)
+  const [studyFolderCount, setStudyFolderCount] = useState<number | null>(null)
   const studyFolderTreeRef = useRef<StudyFolderTreeHandle>(null)
   const knowledgeTopicTreeRef = useRef<KnowledgeTopicTreeHandle>(null)
   // refreshDraftCount/refreshPendingProposalCount each fire from several
@@ -272,6 +273,15 @@ function AppShell() {
   }
   // Stryker restore ArrowFunction,ConditionalExpression,OptionalChaining
 
+  // Deleting a folder deletes every session inside it (cascade, on the
+  // backend) — clear the active session by folderId rather than relying on
+  // StudyFolderTree's per-session onSessionDeleted loop, which only knows
+  // about sessions its own (possibly stale, e.g. after a remount) local
+  // cache had already loaded.
+  function handleFolderDeleted(folderId: string) {
+    setActiveSession((current) => (current?.folderId === folderId ? null : current))
+  }
+
   function handleTopicResolved(topic: string) {
     setActiveSession((current) => (current ? { ...current, topic } : current))
   }
@@ -390,6 +400,8 @@ function AppShell() {
                       onSelectSession={handleSelectSession}
                       onSessionStarted={handleSessionStarted}
                       onSessionDeleted={handleSessionDeleted}
+                      onFolderDeleted={handleFolderDeleted}
+                      onFolderCountChange={setStudyFolderCount}
                     />
                   )}
                   {item.id === 'knowledge' && section === 'knowledge' && (
@@ -491,10 +503,22 @@ function AppShell() {
               ) : (
                 <div className="m-auto flex flex-col items-center gap-2 text-center">
                   <BookOpen className="size-8 text-muted-foreground" aria-hidden="true" />
-                  <p className="text-sm font-semibold text-foreground">No session open</p>
-                  <p className="max-w-64 text-sm text-muted-foreground">
-                    Pick one from the tree on the left, or start a new one inside a folder.
-                  </p>
+                  {studyFolderCount === 0 ? (
+                    <>
+                      <p className="text-sm font-semibold text-foreground">No folders yet</p>
+                      <p className="max-w-64 text-sm text-muted-foreground">
+                        Create a folder for the topic you want to study, then start a session inside
+                        it.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm font-semibold text-foreground">No session open</p>
+                      <p className="max-w-64 text-sm text-muted-foreground">
+                        Pick one from the tree on the left, or start a new one inside a folder.
+                      </p>
+                    </>
+                  )}
                 </div>
               )
             ) : section === 'knowledge' ? (

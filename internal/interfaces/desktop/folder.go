@@ -2,9 +2,8 @@ package desktop
 
 // FolderResult is the desktop-facing DTO for a Folder.
 type FolderResult struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	IsDefault bool   `json:"isDefault"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 // CreateFolder creates a new folder named name.
@@ -13,17 +12,16 @@ func (a *App) CreateFolder(name string) (FolderResult, error) {
 	if err != nil {
 		return FolderResult{}, err
 	}
-	return FolderResult{ID: f.ID, Name: f.Name, IsDefault: f.IsDefault}, nil
+	return FolderResult{ID: f.ID, Name: f.Name}, nil
 }
 
-// RenameFolder renames the folder with the given id, including the default
-// folder.
+// RenameFolder renames the folder with the given id.
 func (a *App) RenameFolder(id, name string) error {
 	return a.folder.RenameFolder(a.ctx, id, name)
 }
 
-// DeleteFolder deletes the folder with the given id, moving its sessions to
-// the default folder first. The default folder itself cannot be deleted.
+// DeleteFolder deletes the folder with the given id and every session
+// inside it — nothing in the folder survives.
 func (a *App) DeleteFolder(id string) error {
 	return a.folder.DeleteFolder(a.ctx, id)
 }
@@ -36,7 +34,7 @@ func (a *App) ListFolders() ([]FolderResult, error) {
 	}
 	results := make([]FolderResult, len(folders))
 	for i, f := range folders {
-		results[i] = FolderResult{ID: f.ID, Name: f.Name, IsDefault: f.IsDefault}
+		results[i] = FolderResult{ID: f.ID, Name: f.Name}
 	}
 	return results, nil
 }

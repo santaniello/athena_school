@@ -106,12 +106,12 @@ func TestApp_StartStudySession_createsAndReturnsSession(t *testing.T) {
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
-	folders.EXPECT().GetByID(mock.Anything, "default").Return(domainfolder.Folder{ID: "default", IsDefault: true}, nil).Once()
+	folders.EXPECT().GetByID(context.Background(), "folder-1").Return(domainfolder.Folder{ID: "folder-1"}, nil).Once()
 	sessions.EXPECT().Create(mock.Anything, mock.AnythingOfType("study.Session")).Return(nil).Once()
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
 	// When starting a study session
-	result, err := app.StartStudySession("Distributed systems", "", "Ace the SQL interview")
+	result, err := app.StartStudySession("Distributed systems", "folder-1", "Ace the SQL interview")
 
 	// Then it returns the created session without emitting any event (no
 	// streaming happened) and without touching the LLM/profile/messages
