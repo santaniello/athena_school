@@ -3,12 +3,11 @@ import { CreateFolder, DeleteFolder, ListFolders, RenameFolder } from '../../wai
 export interface Folder {
   id: string
   name: string
-  isDefault: boolean
 }
 
 export async function createFolder(name: string): Promise<Folder> {
   const result = await CreateFolder(name)
-  return { id: result.id, name: result.name, isDefault: result.isDefault }
+  return { id: result.id, name: result.name }
 }
 
 export async function renameFolder(id: string, name: string): Promise<void> {
@@ -24,6 +23,5 @@ export async function listFolders(): Promise<Folder[]> {
   return results.map((result) => ({
     id: result.id,
     name: result.name,
-    isDefault: result.isDefault,
   }))
 }

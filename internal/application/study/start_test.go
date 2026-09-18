@@ -96,32 +96,22 @@ func TestStart_createsAndPersistsSession(t *testing.T) {
 	require.Equal(t, "Ace the SQL interview", session.Goal)
 }
 
-func TestStart_fallsBackToDefaultFolder_whenFolderIDIsBlank(t *testing.T) {
+func TestStart_returnsFolderRequired_whenFolderIDIsBlank(t *testing.T) {
 	// Given a service and no folder chosen
 	sessions := studymocks.NewMockSessionRepository(t)
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
-	folders.EXPECT().
-		GetByID(context.Background(), domainfolder.DefaultFolderID).
-		Return(domainfolder.Folder{ID: domainfolder.DefaultFolderID, IsDefault: true}, nil).
-		Once()
-	sessions.EXPECT().
-		Create(context.Background(), mock.MatchedBy(func(session domainstudy.Session) bool {
-			return session.FolderID == domainfolder.DefaultFolderID
-		})).
-		Return(nil).
-		Once()
 	retriever := knowledgemocks.NewMockRetriever(t)
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil)
 
 	// When starting a session without specifying a folder
-	session, err := service.Start(context.Background(), "Distributed systems", "", "Ace the SQL interview")
+	_, err := service.Start(context.Background(), "Distributed systems", "", "Ace the SQL interview")
 
-	// Then it lands in the default folder
-	require.NoError(t, err)
-	require.Equal(t, domainfolder.DefaultFolderID, session.FolderID)
+	// Then it fails with ErrFolderRequired; no port received any call since
+	// none of the mocks above have a .EXPECT() set
+	require.ErrorIs(t, err, ErrFolderRequired)
 }
 
 func TestStart_propagatesFolderNotFound_whenChosenFolderDoesNotExist(t *testing.T) {

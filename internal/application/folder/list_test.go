@@ -17,7 +17,7 @@ func TestListFolders_returnsEveryFolder(t *testing.T) {
 	folders := foldermocks.NewMockRepository(t)
 	sessions := studymocks.NewMockSessionRepository(t)
 	want := []domainfolder.Folder{
-		{ID: "default", Name: "General", IsDefault: true},
+		{ID: "f-0", Name: "General"},
 		{ID: "f-1", Name: "System Design"},
 	}
 	folders.EXPECT().List(context.Background()).Return(want, nil).Once()

@@ -15,7 +15,6 @@ describe('createFolder', () => {
     vi.mocked(CreateFolder).mockResolvedValueOnce({
       id: 'folder-1',
       name: 'System Design',
-      isDefault: false,
     } as never)
 
     // When creating a folder
@@ -23,7 +22,7 @@ describe('createFolder', () => {
 
     // Then it forwarded the name and returned the created folder
     expect(CreateFolder).toHaveBeenCalledWith('System Design')
-    expect(folder).toEqual({ id: 'folder-1', name: 'System Design', isDefault: false })
+    expect(folder).toEqual({ id: 'folder-1', name: 'System Design' })
   })
 })
 
@@ -57,8 +56,8 @@ describe('listFolders', () => {
   it('returns every folder', async () => {
     // Given a ListFolders call that returns two folders
     vi.mocked(ListFolders).mockResolvedValueOnce([
-      { id: 'default', name: 'General', isDefault: true },
-      { id: 'folder-1', name: 'System Design', isDefault: false },
+      { id: 'default', name: 'General' },
+      { id: 'folder-1', name: 'System Design' },
     ] as never)
 
     // When listing folders
@@ -66,8 +65,8 @@ describe('listFolders', () => {
 
     // Then every folder is returned
     expect(folders).toEqual([
-      { id: 'default', name: 'General', isDefault: true },
-      { id: 'folder-1', name: 'System Design', isDefault: false },
+      { id: 'default', name: 'General' },
+      { id: 'folder-1', name: 'System Design' },
     ])
   })
 })

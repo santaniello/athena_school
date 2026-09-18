@@ -20,8 +20,9 @@ type SessionRepository interface {
 	// MoveToFolder reassigns the session with the given id to folderID,
 	// or returns ErrSessionNotFound if it does not exist.
 	MoveToFolder(ctx context.Context, id, folderID string) error
-	// ReassignFolder moves every session in fromFolderID to toFolderID.
-	ReassignFolder(ctx context.Context, fromFolderID, toFolderID string) error
+	// DeleteByFolder permanently removes every session in folderID, along
+	// with their owned dependents, atomically.
+	DeleteByFolder(ctx context.Context, folderID string) error
 	// Delete permanently removes the session with the given id and its owned
 	// dependents atomically, or returns ErrSessionNotFound if it does not exist.
 	Delete(ctx context.Context, id string) error

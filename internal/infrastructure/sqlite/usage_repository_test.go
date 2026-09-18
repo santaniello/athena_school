@@ -18,9 +18,11 @@ func newTestUsageRepository(t *testing.T) (*UsageRepository, *sql.DB) {
 	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
+	_, err = db.Exec(`INSERT INTO folders (id, name, created_at) VALUES ('folder-1', 'General', CURRENT_TIMESTAMP)`)
+	require.NoError(t, err)
 	_, err = db.Exec(`INSERT INTO sessions (id, topic, mode, folder_id, started_at) VALUES
-		('sess-1', 'Go', 'socratic', 'default', CURRENT_TIMESTAMP),
-		('sess-2', 'Rust', 'socratic', 'default', CURRENT_TIMESTAMP)`)
+		('sess-1', 'Go', 'socratic', 'folder-1', CURRENT_TIMESTAMP),
+		('sess-2', 'Rust', 'socratic', 'folder-1', CURRENT_TIMESTAMP)`)
 	require.NoError(t, err)
 	return NewUsageRepository(db), db
 }

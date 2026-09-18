@@ -17,9 +17,11 @@ func newTestMessageRepository(t *testing.T) *MessageRepository {
 	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
+	_, err = db.Exec(`INSERT INTO folders (id, name, created_at) VALUES ('folder-1', 'General', CURRENT_TIMESTAMP)`)
+	require.NoError(t, err)
 	_, err = db.Exec(`INSERT INTO sessions (id, topic, mode, folder_id, started_at) VALUES
-		('session-1', 'Go', 'socratic', 'default', CURRENT_TIMESTAMP),
-		('session-2', 'Rust', 'socratic', 'default', CURRENT_TIMESTAMP)`)
+		('session-1', 'Go', 'socratic', 'folder-1', CURRENT_TIMESTAMP),
+		('session-2', 'Rust', 'socratic', 'folder-1', CURRENT_TIMESTAMP)`)
 	require.NoError(t, err)
 	return NewMessageRepository(db)
 }
@@ -69,8 +71,10 @@ func TestMessageRepository_Append_participatesInTransaction(t *testing.T) {
 	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
+	_, err = db.Exec(`INSERT INTO folders (id, name, created_at) VALUES ('folder-1', 'General', CURRENT_TIMESTAMP)`)
+	require.NoError(t, err)
 	_, err = db.Exec(`INSERT INTO sessions (id, topic, mode, folder_id, started_at)
-		VALUES ('session-1', 'Go', 'socratic', 'default', CURRENT_TIMESTAMP)`)
+		VALUES ('session-1', 'Go', 'socratic', 'folder-1', CURRENT_TIMESTAMP)`)
 	require.NoError(t, err)
 	repo := NewMessageRepository(db)
 	transactor := NewSQLTransactor(db)

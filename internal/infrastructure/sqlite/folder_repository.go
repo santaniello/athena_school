@@ -24,8 +24,8 @@ func NewFolderRepository(db *sql.DB) *FolderRepository {
 // Create inserts a new folder.
 func (r *FolderRepository) Create(ctx context.Context, f folder.Folder) error {
 	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO folders (id, name, is_default, created_at) VALUES (?, ?, ?, ?)`,
-		f.ID, f.Name, f.IsDefault, f.CreatedAt,
+		`INSERT INTO folders (id, name, created_at) VALUES (?, ?, ?)`,
+		f.ID, f.Name, f.CreatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("sqlite: creating folder: %w", err)
@@ -38,8 +38,8 @@ func (r *FolderRepository) Create(ctx context.Context, f folder.Folder) error {
 func (r *FolderRepository) GetByID(ctx context.Context, id string) (folder.Folder, error) {
 	var f folder.Folder
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, name, is_default, created_at FROM folders WHERE id = ?`, id,
-	).Scan(&f.ID, &f.Name, &f.IsDefault, &f.CreatedAt)
+		`SELECT id, name, created_at FROM folders WHERE id = ?`, id,
+	).Scan(&f.ID, &f.Name, &f.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return folder.Folder{}, folder.ErrFolderNotFound
 	}
@@ -51,7 +51,7 @@ func (r *FolderRepository) GetByID(ctx context.Context, id string) (folder.Folde
 
 // List returns every folder.
 func (r *FolderRepository) List(ctx context.Context) ([]folder.Folder, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT id, name, is_default, created_at FROM folders`)
+	rows, err := r.db.QueryContext(ctx, `SELECT id, name, created_at FROM folders`)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: listing folders: %w", err)
 	}
@@ -60,7 +60,7 @@ func (r *FolderRepository) List(ctx context.Context) ([]folder.Folder, error) {
 	folders := []folder.Folder{}
 	for rows.Next() {
 		var f folder.Folder
-		if err := rows.Scan(&f.ID, &f.Name, &f.IsDefault, &f.CreatedAt); err != nil {
+		if err := rows.Scan(&f.ID, &f.Name, &f.CreatedAt); err != nil {
 			return nil, fmt.Errorf("sqlite: scanning folder: %w", err)
 		}
 		folders = append(folders, f)

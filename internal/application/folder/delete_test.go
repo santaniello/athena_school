@@ -2,43 +2,29 @@ package folder
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	domainfolder "github.com/santaniello/athena/internal/domain/folder"
 
 	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
 	studymocks "github.com/santaniello/athena/internal/domain/study/mocks"
 )
 
-func TestDeleteFolder_returnsCannotDeleteDefaultFolder_whenIDIsDefault(t *testing.T) {
-	// Given a service and the default folder's ID
-	folders := foldermocks.NewMockRepository(t)
-	sessions := studymocks.NewMockSessionRepository(t)
-	service := NewService(folders, sessions)
-
-	// When deleting the default folder
-	err := service.DeleteFolder(context.Background(), domainfolder.DefaultFolderID)
-
-	// Then it fails with ErrCannotDeleteDefaultFolder; no port received any call
-	require.ErrorIs(t, err, domainfolder.ErrCannotDeleteDefaultFolder)
-}
-
-func TestDeleteFolder_reassignsSessionsToDefaultFolderBeforeDeleting(t *testing.T) {
+func TestDeleteFolder_deletesSessionsBeforeDeletingFolder(t *testing.T) {
 	// Given a service tracking the order ports are called in
 	folders := foldermocks.NewMockRepository(t)
 	sessions := studymocks.NewMockSessionRepository(t)
 
 	var callOrder []string
 	sessions.EXPECT().
-		ReassignFolder(context.Background(), "f-1", domainfolder.DefaultFolderID).
-		Run(func(context.Context, string, string) { callOrder = append(callOrder, "reassign") }).
+		DeleteByFolder(context.Background(), "f-1").
+		Run(func(context.Context, string) { callOrder = append(callOrder, "delete-sessions") }).
 		Return(nil).
 		Once()
 	folders.EXPECT().
 		Delete(context.Background(), "f-1").
-		Run(func(context.Context, string) { callOrder = append(callOrder, "delete") }).
+		Run(func(context.Context, string) { callOrder = append(callOrder, "delete-folder") }).
 		Return(nil).
 		Once()
 	service := NewService(folders, sessions)
@@ -46,18 +32,18 @@ func TestDeleteFolder_reassignsSessionsToDefaultFolderBeforeDeleting(t *testing.
 	// When deleting the folder
 	err := service.DeleteFolder(context.Background(), "f-1")
 
-	// Then its sessions are reassigned to the default folder before it is deleted
+	// Then its sessions are deleted before the folder itself
 	require.NoError(t, err)
-	require.Equal(t, []string{"reassign", "delete"}, callOrder)
+	require.Equal(t, []string{"delete-sessions", "delete-folder"}, callOrder)
 }
 
-func TestDeleteFolder_doesNotDeleteFolder_whenReassignFails(t *testing.T) {
-	// Given a service whose reassignment fails
+func TestDeleteFolder_doesNotDeleteFolder_whenDeletingSessionsFails(t *testing.T) {
+	// Given a service whose session deletion fails
 	folders := foldermocks.NewMockRepository(t)
 	sessions := studymocks.NewMockSessionRepository(t)
 	sessions.EXPECT().
-		ReassignFolder(context.Background(), "f-1", domainfolder.DefaultFolderID).
-		Return(domainfolder.ErrFolderNotFound).
+		DeleteByFolder(context.Background(), "f-1").
+		Return(errors.New("boom")).
 		Once()
 	service := NewService(folders, sessions)
 

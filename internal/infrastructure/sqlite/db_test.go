@@ -217,8 +217,10 @@ func TestOpen_configuresSessionDeletionToCascadeMessagesAndDetachUsage(t *testin
 	db, err := Open(path)
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
+	_, err = db.Exec(`INSERT INTO folders (id, name, created_at) VALUES ('folder-1', 'General', CURRENT_TIMESTAMP)`)
+	require.NoError(t, err)
 	_, err = db.Exec(`INSERT INTO sessions (id, topic, mode, folder_id, started_at)
-		VALUES ('session-1', 'Go', 'socratic', 'default', CURRENT_TIMESTAMP)`)
+		VALUES ('session-1', 'Go', 'socratic', 'folder-1', CURRENT_TIMESTAMP)`)
 	require.NoError(t, err)
 	_, err = db.Exec(`INSERT INTO messages (id, session_id, role, content, created_at)
 		VALUES ('message-1', 'session-1', 'user', 'hello', CURRENT_TIMESTAMP)`)
@@ -281,38 +283,26 @@ func TestOpen_migratesLegacyForeignKeysAndDetachesUsageWithoutRemovingIt(t *test
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 
-	// Then the session with a stale folder reference is reassigned to the
-	// default folder, not deleted — its message survives with it. Only the
-	// message with no owning session at all is removed. Usage is a
-	// financial record, never deleted for merely losing its session: every
-	// row survives, detached instead
-	for _, check := range []struct {
-		name  string
-		query string
-	}{
-		{name: "sessions", query: `SELECT COUNT(*) FROM sessions`},
-		{name: "messages", query: `SELECT COUNT(*) FROM messages`},
-	} {
-		var count int
-		require.NoError(t, db.QueryRow(check.query).Scan(&count))
-		assert.Equal(t, 2, count, check.name)
-	}
-	var invalidSessionFolderID string
-	require.NoError(t, db.QueryRow(`SELECT folder_id FROM sessions WHERE id = 'invalid-session'`).Scan(&invalidSessionFolderID))
-	assert.Equal(t, "default", invalidSessionFolderID, "session with a stale folder reference is reassigned to default, not deleted")
+	// Then the session with a stale folder reference is deleted — there is
+	// no fallback folder left to reassign it to — along with its message.
+	// Only the message with no owning session at all is separately removed.
+	// Usage is a financial record, never deleted for merely losing its
+	// session: every row survives, detached instead
+	var sessionCount int
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM sessions`).Scan(&sessionCount))
+	assert.Equal(t, 1, sessionCount, "only valid-session survives; invalid-session had a stale folder reference")
+	var messageCount int
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM messages`).Scan(&messageCount))
+	assert.Equal(t, 1, messageCount, "only valid-message survives; invalid-session-message and orphan-message are both gone")
 	var validMessageContent string
 	require.NoError(t, db.QueryRow(`SELECT content FROM messages WHERE id = 'valid-message'`).Scan(&validMessageContent))
 	assert.Equal(t, "valid", validMessageContent)
-	var invalidSessionMessageContent string
-	require.NoError(t, db.QueryRow(`SELECT content FROM messages WHERE id = 'invalid-session-message'`).Scan(&invalidSessionMessageContent))
-	assert.Equal(t, "invalid parent", invalidSessionMessageContent, "message survives because its session was reassigned, not deleted")
 	var usageCount int
 	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM usage`).Scan(&usageCount))
 	assert.Equal(t, 3, usageCount, "usage rows are never deleted")
 	var invalidSessionUsageSessionID sql.NullString
 	require.NoError(t, db.QueryRow(`SELECT session_id FROM usage WHERE id = 'invalid-session-usage'`).Scan(&invalidSessionUsageSessionID))
-	require.True(t, invalidSessionUsageSessionID.Valid, "usage stays attached to invalid-session, since that session was reassigned, not deleted")
-	assert.Equal(t, "invalid-session", invalidSessionUsageSessionID.String)
+	assert.Falsef(t, invalidSessionUsageSessionID.Valid, "usage is detached, since invalid-session was deleted, not reassigned")
 	var orphanUsageSessionID sql.NullString
 	require.NoError(t, db.QueryRow(`SELECT session_id FROM usage WHERE id = 'orphan-usage'`).Scan(&orphanUsageSessionID))
 	assert.Falsef(t, orphanUsageSessionID.Valid, "orphan-usage should be detached (NULL session_id), since missing-session never existed")
@@ -325,9 +315,8 @@ func TestOpen_migratesLegacyForeignKeysAndDetachesUsageWithoutRemovingIt(t *test
 	// no remaining violations
 	_, err = db.Exec(`DELETE FROM sessions WHERE id = 'valid-session'`)
 	require.NoError(t, err)
-	var messageCount int
 	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM messages`).Scan(&messageCount))
-	assert.Equal(t, 1, messageCount, "only valid-session's message cascades away; invalid-session's message survives with its reassigned session")
+	assert.Equal(t, 0, messageCount, "valid-session's message cascades away; no sessions remain")
 	var usageSessionID sql.NullString
 	require.NoError(t, db.QueryRow(`SELECT session_id FROM usage WHERE id = 'valid-usage'`).Scan(&usageSessionID))
 	assert.False(t, usageSessionID.Valid)
@@ -337,7 +326,7 @@ func TestOpen_migratesLegacyForeignKeysAndDetachesUsageWithoutRemovingIt(t *test
 	assert.False(t, rows.Next())
 }
 
-func TestOpen_repairsOrphanedSessionFolders_evenWhenMessagesAndUsageAreAlreadyMigrated(t *testing.T) {
+func TestOpen_deletesSessionsWithInvalidFolders_evenWhenMessagesAndUsageAreAlreadyMigrated(t *testing.T) {
 	// Given a database whose messages/usage tables already declare the
 	// current foreign-key actions — as any schema created fresh, or
 	// already migrated in an earlier Open, would — but whose sessions
@@ -382,17 +371,15 @@ func TestOpen_repairsOrphanedSessionFolders_evenWhenMessagesAndUsageAreAlreadyMi
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 
-	// Then every session is reassigned to the default folder — the repair
-	// is not skipped just because messages/usage already had the current
-	// foreign-key actions — and every message survives with it
-	for _, id := range []string{"null-folder-session", "empty-folder-session", "missing-folder-session"} {
-		var folderID string
-		require.NoError(t, db.QueryRow(`SELECT folder_id FROM sessions WHERE id = ?`, id).Scan(&folderID))
-		assert.Equal(t, "default", folderID, id)
-	}
+	// Then every session with an invalid folder is deleted — the repair is
+	// not skipped just because messages/usage already had the current
+	// foreign-key actions — and every message goes with it
+	var sessionCount int
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM sessions`).Scan(&sessionCount))
+	assert.Equal(t, 0, sessionCount)
 	var messageCount int
 	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM messages`).Scan(&messageCount))
-	assert.Equal(t, 3, messageCount)
+	assert.Equal(t, 0, messageCount)
 }
 
 func TestOpen_refusesDatabaseWithUnexpectedForeignKeyViolation(t *testing.T) {
@@ -441,7 +428,7 @@ func TestOpen_createsFoldersTable(t *testing.T) {
 	assert.Equal(t, "folders", tableName)
 }
 
-func TestOpen_seedsDefaultFolder(t *testing.T) {
+func TestOpen_startsWithNoFoldersSeeded(t *testing.T) {
 	// Given a path to a database file that does not exist yet
 	path := filepath.Join(t.TempDir(), "athena.db")
 
@@ -450,34 +437,63 @@ func TestOpen_seedsDefaultFolder(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 
-	// Then a default folder named "General" is seeded
-	var name string
-	var isDefault bool
-	queryErr := db.QueryRow(
-		`SELECT name, is_default FROM folders WHERE id = 'default'`,
-	).Scan(&name, &isDefault)
+	// Then no folder is auto-created — the user must create their own
+	var count int
+	queryErr := db.QueryRow(`SELECT COUNT(*) FROM folders`).Scan(&count)
 	require.NoError(t, queryErr)
-	assert.Equal(t, "General", name)
-	assert.True(t, isDefault)
+	assert.Zero(t, count)
 }
 
-func TestOpen_doesNotDuplicateDefaultFolderOnSecondOpen(t *testing.T) {
-	// Given a database that was already opened once
+func TestOpen_dropsFoldersIsDefaultColumn(t *testing.T) {
+	// Given a legacy database whose folders table still has is_default,
+	// with a pre-existing row in it
 	path := filepath.Join(t.TempDir(), "athena.db")
-	first, err := Open(path)
+	legacy, err := sql.Open("sqlite", path)
 	require.NoError(t, err)
-	require.NoError(t, first.Close())
-
-	// When opening the same database file again
-	second, err := Open(path)
+	_, err = legacy.Exec(`
+		CREATE TABLE folders (
+			id TEXT PRIMARY KEY, name TEXT NOT NULL, is_default INTEGER NOT NULL DEFAULT 0, created_at DATETIME
+		);
+		INSERT INTO folders (id, name, is_default, created_at) VALUES ('default', 'General', 1, CURRENT_TIMESTAMP);
+	`)
 	require.NoError(t, err)
-	defer func() { _ = second.Close() }()
+	require.NoError(t, legacy.Close())
 
-	// Then the default folder still exists exactly once
-	var count int
-	queryErr := second.QueryRow(`SELECT COUNT(*) FROM folders WHERE id = 'default'`).Scan(&count)
+	// When opening it through the current migration path
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Then is_default is gone, but the row survives as an ordinary folder
+	has, err := hasColumn(db, "folders", "is_default")
+	require.NoError(t, err)
+	assert.False(t, has)
+	var name string
+	queryErr := db.QueryRow(`SELECT name FROM folders WHERE id = 'default'`).Scan(&name)
 	require.NoError(t, queryErr)
-	assert.Equal(t, 1, count)
+	assert.Equal(t, "General", name)
+}
+
+func TestOpen_configuresFolderDeletionToCascadeSessions(t *testing.T) {
+	// Given a folder with a session in it
+	path := filepath.Join(t.TempDir(), "athena.db")
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	_, err = db.Exec(`INSERT INTO folders (id, name, created_at) VALUES ('folder-1', 'General', CURRENT_TIMESTAMP)`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO sessions (id, topic, mode, folder_id, started_at)
+		VALUES ('session-1', 'Go', 'socratic', 'folder-1', CURRENT_TIMESTAMP)`)
+	require.NoError(t, err)
+
+	// When deleting the folder
+	_, deleteErr := db.Exec(`DELETE FROM folders WHERE id = 'folder-1'`)
+
+	// Then its session is deleted along with it
+	require.NoError(t, deleteErr)
+	var sessionCount int
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM sessions WHERE id = 'session-1'`).Scan(&sessionCount))
+	assert.Zero(t, sessionCount)
 }
 
 func TestOpen_createsKnowledgeItemsTable(t *testing.T) {
@@ -847,9 +863,9 @@ func TestOpen_addsFolderIDColumnToSessions(t *testing.T) {
 	assert.True(t, hasFolderID)
 }
 
-func TestOpen_backfillsExistingSessionsToDefaultFolder(t *testing.T) {
+func TestOpen_deletesExistingSessionsWithNoFolder(t *testing.T) {
 	// Given a session row inserted with no folder_id, as if it predated
-	// this migration
+	// this migration — there is no fallback folder to backfill it to
 	path := filepath.Join(t.TempDir(), "athena.db")
 	db, err := Open(path)
 	require.NoError(t, err)
@@ -865,22 +881,24 @@ func TestOpen_backfillsExistingSessionsToDefaultFolder(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = second.Close() }()
 
-	// Then the pre-existing session is backfilled to the default folder
-	var folderID string
-	queryErr := second.QueryRow(`SELECT folder_id FROM sessions WHERE id = ?`, "session-1").Scan(&folderID)
+	// Then the pre-existing session is deleted
+	var count int
+	queryErr := second.QueryRow(`SELECT COUNT(*) FROM sessions WHERE id = ?`, "session-1").Scan(&count)
 	require.NoError(t, queryErr)
-	assert.Equal(t, "default", folderID)
+	assert.Zero(t, count)
 }
 
 func TestOpen_backfillsExistingSessionsWithEmptyGoal(t *testing.T) {
-	// Given a session row inserted with no goal, as if it predated this
-	// migration
+	// Given a session row inserted with a valid folder but no goal, as if
+	// it predated this migration
 	path := filepath.Join(t.TempDir(), "athena.db")
 	db, err := Open(path)
 	require.NoError(t, err)
-	_, execErr := db.Exec(
-		`INSERT INTO sessions (id, topic, mode, started_at) VALUES (?, ?, ?, ?)`,
-		"session-1", "Topic", "study", "2024-01-01",
+	_, execErr := db.Exec(`INSERT INTO folders (id, name, created_at) VALUES ('folder-1', 'General', CURRENT_TIMESTAMP)`)
+	require.NoError(t, execErr)
+	_, execErr = db.Exec(
+		`INSERT INTO sessions (id, topic, mode, folder_id, started_at) VALUES (?, ?, ?, ?, ?)`,
+		"session-1", "Topic", "study", "folder-1", "2024-01-01",
 	)
 	require.NoError(t, execErr)
 	require.NoError(t, db.Close())
@@ -904,8 +922,8 @@ func TestOpen_isNoOpOnSecondOpenAndKeepsExistingData(t *testing.T) {
 	first, err := Open(path)
 	require.NoError(t, err)
 	_, execErr := first.Exec(
-		`INSERT INTO folders (id, name, is_default) VALUES (?, ?, ?)`,
-		"folder-1", "Custom", 0,
+		`INSERT INTO folders (id, name) VALUES (?, ?)`,
+		"folder-1", "Custom",
 	)
 	require.NoError(t, execErr)
 	require.NoError(t, first.Close())
@@ -942,8 +960,8 @@ func TestOpen_serializesConcurrentWrites_withoutDatabaseLockedErrors(t *testing.
 		go func(i int) {
 			defer wg.Done()
 			_, execErr := db.Exec(
-				`INSERT INTO folders (id, name, is_default, created_at) VALUES (?, ?, ?, ?)`,
-				fmt.Sprintf("folder-%d", i), fmt.Sprintf("Folder %d", i), 0, time.Now().UTC(),
+				`INSERT INTO folders (id, name, created_at) VALUES (?, ?, ?)`,
+				fmt.Sprintf("folder-%d", i), fmt.Sprintf("Folder %d", i), time.Now().UTC(),
 			)
 			errs <- execErr
 		}(i)

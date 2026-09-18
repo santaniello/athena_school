@@ -34,7 +34,7 @@ func TestSQLTransactor_WithinTx_commitsWritesMadeThroughExecer(t *testing.T) {
 	// When fn writes through execer(ctx, db) and returns no error
 	err := transactor.WithinTx(context.Background(), func(ctx context.Context) error {
 		_, execErr := execer(ctx, db).ExecContext(ctx,
-			`INSERT INTO folders (id, name, is_default, created_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP)`,
+			`INSERT INTO folders (id, name, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)`,
 			"tx-commit", "Committed",
 		)
 		return execErr
@@ -54,7 +54,7 @@ func TestSQLTransactor_WithinTx_rollsBackWritesWhenFnReturnsError(t *testing.T) 
 	// When fn writes through execer(ctx, db) but then fails
 	err := transactor.WithinTx(context.Background(), func(ctx context.Context) error {
 		_, execErr := execer(ctx, db).ExecContext(ctx,
-			`INSERT INTO folders (id, name, is_default, created_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP)`,
+			`INSERT INTO folders (id, name, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)`,
 			"tx-rollback", "Rolled back",
 		)
 		require.NoError(t, execErr)
@@ -73,7 +73,7 @@ func TestExecer_usesPooledDB_whenContextHasNoActiveTransaction(t *testing.T) {
 
 	// When writing through execer(ctx, db) outside of WithinTx
 	_, err := execer(ctx, db).ExecContext(ctx,
-		`INSERT INTO folders (id, name, is_default, created_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP)`,
+		`INSERT INTO folders (id, name, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)`,
 		"no-tx", "Auto-commit",
 	)
 

@@ -27,6 +27,7 @@ import {
   listKnowledgeTopics,
   type KnowledgeItem,
 } from '@/lib/knowledge'
+import { listFolders } from '@/lib/folder'
 import { AppShell } from './app-shell'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
@@ -61,7 +62,7 @@ vi.mock('@/lib/study', () => ({
 }))
 
 vi.mock('@/lib/folder', () => ({
-  listFolders: vi.fn().mockResolvedValue([{ id: 'default', name: 'General', isDefault: true }]),
+  listFolders: vi.fn().mockResolvedValue([{ id: 'default', name: 'General' }]),
   createFolder: vi.fn(),
   renameFolder: vi.fn(),
   deleteFolder: vi.fn(),
@@ -379,6 +380,22 @@ describe('AppShell', () => {
     // session is open yet — creating one now happens from the sidebar tree),
     // not a locked coming-soon panel
     expect(screen.getByText('No session open')).toBeInTheDocument()
+  })
+
+  it('shows a "no folders yet" empty state on Study when there are zero folders', async () => {
+    // Given a brand new install with no folders at all
+    vi.mocked(listFolders).mockResolvedValueOnce([])
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+
+    // When navigating to Study
+    await user.click(screen.getByRole('button', { name: 'Start a study session' }))
+
+    // Then the empty state explains there is no folder yet, instead of
+    // assuming one already exists to pick a session from
+    expect(await screen.findByText('No folders yet')).toBeInTheDocument()
+    expect(screen.queryByText('No session open')).not.toBeInTheDocument()
   })
 
   it('shows the folder tree in the sidebar only while on the Study section', async () => {

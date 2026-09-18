@@ -12,12 +12,13 @@ import (
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 )
 
-// setupMessageSourceFixture relies on the "default" folder migrations
-// already seed on every Open — it never inserts one itself.
+// setupMessageSourceFixture inserts its own folder, since no folder is
+// auto-seeded any more.
 func setupMessageSourceFixture(t *testing.T, db *sql.DB) {
 	t.Helper()
 	_, err := db.Exec(`
-		INSERT INTO sessions (id, topic, mode, folder_id, started_at) VALUES ('session-1', 'Go', 'socratic', 'default', CURRENT_TIMESTAMP);
+		INSERT INTO folders (id, name, created_at) VALUES ('folder-1', 'General', CURRENT_TIMESTAMP);
+		INSERT INTO sessions (id, topic, mode, folder_id, started_at) VALUES ('session-1', 'Go', 'socratic', 'folder-1', CURRENT_TIMESTAMP);
 		INSERT INTO messages (id, session_id, role, content, created_at) VALUES
 			('message-1', 'session-1', 'assistant', 'Goroutines are cheap.', CURRENT_TIMESTAMP),
 			('message-2', 'session-1', 'assistant', 'Channels connect goroutines.', CURRENT_TIMESTAMP);

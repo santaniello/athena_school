@@ -34,7 +34,6 @@ func TestFolderRepository_Create_storesFolder(t *testing.T) {
 	stored, getErr := repo.GetByID(ctx, "f-1")
 	require.NoError(t, getErr)
 	assert.Equal(t, "System Design", stored.Name)
-	assert.False(t, stored.IsDefault)
 }
 
 func TestFolderRepository_GetByID_returnsNotFound_whenFolderDoesNotExist(t *testing.T) {
@@ -50,7 +49,7 @@ func TestFolderRepository_GetByID_returnsNotFound_whenFolderDoesNotExist(t *test
 }
 
 func TestFolderRepository_List_returnsAllFolders(t *testing.T) {
-	// Given a repository with two extra folders, plus the seeded default one
+	// Given a repository with two folders
 	repo := newTestFolderRepository(t)
 	ctx := context.Background()
 	require.NoError(t, repo.Create(ctx, folder.Folder{ID: "f-1", Name: "System Design"}))
@@ -59,9 +58,9 @@ func TestFolderRepository_List_returnsAllFolders(t *testing.T) {
 	// When listing folders
 	folders, err := repo.List(ctx)
 
-	// Then all three are returned
+	// Then both are returned
 	require.NoError(t, err)
-	assert.Len(t, folders, 3)
+	assert.Len(t, folders, 2)
 }
 
 func TestFolderRepository_Rename_updatesName(t *testing.T) {
@@ -117,18 +116,4 @@ func TestFolderRepository_Delete_returnsNotFound_whenFolderDoesNotExist(t *testi
 
 	// Then it fails with ErrFolderNotFound
 	assert.ErrorIs(t, err, folder.ErrFolderNotFound)
-}
-
-func TestFolderRepository_GetByID_returnsTheSeededDefaultFolder(t *testing.T) {
-	// Given a freshly opened database (folders migration seeds "default")
-	repo := newTestFolderRepository(t)
-	ctx := context.Background()
-
-	// When fetching the default folder
-	stored, err := repo.GetByID(ctx, "default")
-
-	// Then it is marked as the default folder
-	require.NoError(t, err)
-	assert.Equal(t, "General", stored.Name)
-	assert.True(t, stored.IsDefault)
 }

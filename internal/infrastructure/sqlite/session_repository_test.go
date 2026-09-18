@@ -17,9 +17,9 @@ func newTestSessionRepository(t *testing.T) *SessionRepository {
 	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
-	_, err = db.Exec(`INSERT INTO folders (id, name, is_default, created_at) VALUES
-		('folder-a', 'Folder A', 0, CURRENT_TIMESTAMP),
-		('folder-b', 'Folder B', 0, CURRENT_TIMESTAMP)`)
+	_, err = db.Exec(`INSERT INTO folders (id, name, created_at) VALUES
+		('folder-a', 'Folder A', CURRENT_TIMESTAMP),
+		('folder-b', 'Folder B', CURRENT_TIMESTAMP)`)
 	require.NoError(t, err)
 	return NewSessionRepository(db)
 }
@@ -37,7 +37,7 @@ func TestSessionRepository_Create_storesSession(t *testing.T) {
 		ID:        "session-1",
 		Topic:     "Distributed systems",
 		Mode:      study.ModeStudy,
-		FolderID:  "default",
+		FolderID:  "folder-a",
 		StartedAt: time.Now().UTC().Truncate(time.Second),
 		Context:   normalContext,
 	}
@@ -62,7 +62,7 @@ func TestSessionRepository_Create_storesContextUsage(t *testing.T) {
 	repo := newTestSessionRepository(t)
 	ctx := context.Background()
 	session := study.Session{
-		ID: "session-1", Mode: study.ModeStudy, FolderID: "default", StartedAt: time.Now().UTC(),
+		ID: "session-1", Mode: study.ModeStudy, FolderID: "folder-a", StartedAt: time.Now().UTC(),
 		Context: study.ContextUsage{
 			State: study.ContextStateWarning, Model: "anthropic/claude-sonnet-4.5",
 			UsedTokens: 12345, ContextLength: 200000, Estimated: true,
@@ -84,7 +84,7 @@ func TestSessionRepository_Create_rejectsInvalidContextState(t *testing.T) {
 	repo := newTestSessionRepository(t)
 	ctx := context.Background()
 	session := study.Session{
-		ID: "session-1", Mode: study.ModeStudy, FolderID: "default", StartedAt: time.Now().UTC(),
+		ID: "session-1", Mode: study.ModeStudy, FolderID: "folder-a", StartedAt: time.Now().UTC(),
 		Context: study.ContextUsage{State: "bogus"},
 	}
 
@@ -100,7 +100,7 @@ func TestSessionRepository_Create_rejectsNegativeContextTokens(t *testing.T) {
 	repo := newTestSessionRepository(t)
 	ctx := context.Background()
 	session := study.Session{
-		ID: "session-1", Mode: study.ModeStudy, FolderID: "default", StartedAt: time.Now().UTC(),
+		ID: "session-1", Mode: study.ModeStudy, FolderID: "folder-a", StartedAt: time.Now().UTC(),
 		Context: study.ContextUsage{State: study.ContextStateNormal, UsedTokens: -1},
 	}
 
@@ -116,7 +116,7 @@ func TestSessionRepository_GetByID_returnsStoredSession(t *testing.T) {
 	repo := newTestSessionRepository(t)
 	ctx := context.Background()
 	session := study.Session{
-		ID: "session-1", Topic: "Topic", Mode: study.ModeStudy, FolderID: "default",
+		ID: "session-1", Topic: "Topic", Mode: study.ModeStudy, FolderID: "folder-a",
 		Goal: "Ace the SQL interview", StartedAt: time.Now().UTC().Truncate(time.Second), Context: normalContext,
 	}
 	require.NoError(t, repo.Create(ctx, session))
@@ -138,7 +138,7 @@ func TestSessionRepository_Create_defaultsGoalToEmpty_whenNotSet(t *testing.T) {
 	repo := newTestSessionRepository(t)
 	ctx := context.Background()
 	require.NoError(t, repo.Create(ctx, study.Session{
-		ID: "session-1", Mode: study.ModeStudy, FolderID: "default", StartedAt: time.Now().UTC(), Context: normalContext,
+		ID: "session-1", Mode: study.ModeStudy, FolderID: "folder-a", StartedAt: time.Now().UTC(), Context: normalContext,
 	}))
 
 	// When fetching it back
@@ -168,7 +168,7 @@ func TestSessionRepository_GetByID_returnsDecodeError_forUnknownPersistedContext
 	repo := newTestSessionRepository(t)
 	ctx := context.Background()
 	require.NoError(t, repo.Create(ctx, study.Session{
-		ID: "session-1", Mode: study.ModeStudy, FolderID: "default", StartedAt: time.Now().UTC(), Context: normalContext,
+		ID: "session-1", Mode: study.ModeStudy, FolderID: "folder-a", StartedAt: time.Now().UTC(), Context: normalContext,
 	}))
 	_, err := repo.db.ExecContext(ctx, `UPDATE sessions SET context_state = 'bogus' WHERE id = ?`, "session-1")
 	require.NoError(t, err)
@@ -245,7 +245,7 @@ func TestSessionRepository_Delete_removesSession(t *testing.T) {
 	// Given a repository with an existing session
 	repo := newTestSessionRepository(t)
 	ctx := context.Background()
-	session := study.Session{ID: "session-1", Mode: study.ModeStudy, FolderID: "default", StartedAt: time.Now().UTC(), Context: normalContext}
+	session := study.Session{ID: "session-1", Mode: study.ModeStudy, FolderID: "folder-a", StartedAt: time.Now().UTC(), Context: normalContext}
 	require.NoError(t, repo.Create(ctx, session))
 
 	// When deleting it
@@ -269,7 +269,7 @@ func TestSessionRepository_Delete_returnsNotFound_whenSessionDoesNotExist(t *tes
 	assert.ErrorIs(t, err, study.ErrSessionNotFound)
 }
 
-func TestSessionRepository_ReassignFolder_movesEverySessionFromOneFolderToAnother(t *testing.T) {
+func TestSessionRepository_DeleteByFolder_deletesEverySessionInThatFolder(t *testing.T) {
 	// Given two sessions in folder-a and one in folder-b
 	repo := newTestSessionRepository(t)
 	ctx := context.Background()
@@ -277,17 +277,17 @@ func TestSessionRepository_ReassignFolder_movesEverySessionFromOneFolderToAnothe
 	require.NoError(t, repo.Create(ctx, study.Session{ID: "s-2", Mode: study.ModeStudy, FolderID: "folder-a", StartedAt: time.Now().UTC(), Context: normalContext}))
 	require.NoError(t, repo.Create(ctx, study.Session{ID: "s-3", Mode: study.ModeStudy, FolderID: "folder-b", StartedAt: time.Now().UTC(), Context: normalContext}))
 
-	// When reassigning folder-a's sessions to folder-b
-	err := repo.ReassignFolder(ctx, "folder-a", "folder-b")
+	// When deleting folder-a's sessions
+	err := repo.DeleteByFolder(ctx, "folder-a")
 
-	// Then folder-a is empty and folder-b has all three sessions
+	// Then folder-a is empty and folder-b's session is untouched
 	require.NoError(t, err)
 	remaining, listErr := repo.ListByFolder(ctx, "folder-a")
 	require.NoError(t, listErr)
 	assert.Empty(t, remaining)
-	moved, listErr := repo.ListByFolder(ctx, "folder-b")
+	untouched, listErr := repo.ListByFolder(ctx, "folder-b")
 	require.NoError(t, listErr)
-	assert.Len(t, moved, 3)
+	assert.Len(t, untouched, 1)
 }
 
 func TestSessionRepository_UpdateContext_persistsNewUsage(t *testing.T) {
@@ -295,7 +295,7 @@ func TestSessionRepository_UpdateContext_persistsNewUsage(t *testing.T) {
 	repo := newTestSessionRepository(t)
 	ctx := context.Background()
 	require.NoError(t, repo.Create(ctx, study.Session{
-		ID: "session-1", Mode: study.ModeStudy, FolderID: "default", StartedAt: time.Now().UTC(), Context: normalContext,
+		ID: "session-1", Mode: study.ModeStudy, FolderID: "folder-a", StartedAt: time.Now().UTC(), Context: normalContext,
 	}))
 
 	// When updating its context usage
@@ -329,7 +329,7 @@ func TestSessionRepository_UpdateContext_rejectsInvalidState(t *testing.T) {
 	repo := newTestSessionRepository(t)
 	ctx := context.Background()
 	require.NoError(t, repo.Create(ctx, study.Session{
-		ID: "session-1", Mode: study.ModeStudy, FolderID: "default", StartedAt: time.Now().UTC(), Context: normalContext,
+		ID: "session-1", Mode: study.ModeStudy, FolderID: "folder-a", StartedAt: time.Now().UTC(), Context: normalContext,
 	}))
 
 	// When updating it with an unrecognized state
@@ -344,10 +344,12 @@ func TestSessionRepository_UpdateContext_participatesInTransaction(t *testing.T)
 	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
+	_, err = db.Exec(`INSERT INTO folders (id, name, created_at) VALUES ('folder-a', 'Folder A', CURRENT_TIMESTAMP)`)
+	require.NoError(t, err)
 	repo := NewSessionRepository(db)
 	ctx := context.Background()
 	require.NoError(t, repo.Create(ctx, study.Session{
-		ID: "session-1", Mode: study.ModeStudy, FolderID: "default", StartedAt: time.Now().UTC(), Context: normalContext,
+		ID: "session-1", Mode: study.ModeStudy, FolderID: "folder-a", StartedAt: time.Now().UTC(), Context: normalContext,
 	}))
 	transactor := NewSQLTransactor(db)
 

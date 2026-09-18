@@ -111,13 +111,15 @@ func (r *SessionRepository) MoveToFolder(ctx context.Context, id, folderID strin
 	return requireRowAffected(result, study.ErrSessionNotFound)
 }
 
-// ReassignFolder moves every session in fromFolderID to toFolderID.
-func (r *SessionRepository) ReassignFolder(ctx context.Context, fromFolderID, toFolderID string) error {
+// DeleteByFolder permanently removes every session in folderID, along with
+// their owned dependents (messages, message_sources), atomically via the
+// cascade already declared on those foreign keys.
+func (r *SessionRepository) DeleteByFolder(ctx context.Context, folderID string) error {
 	_, err := execer(ctx, r.db).ExecContext(ctx,
-		`UPDATE sessions SET folder_id = ? WHERE folder_id = ?`, toFolderID, fromFolderID,
+		`DELETE FROM sessions WHERE folder_id = ?`, folderID,
 	)
 	if err != nil {
-		return fmt.Errorf("sqlite: reassigning folder: %w", err)
+		return fmt.Errorf("sqlite: deleting sessions by folder: %w", err)
 	}
 	return nil
 }

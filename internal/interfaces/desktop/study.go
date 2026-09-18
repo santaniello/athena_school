@@ -197,10 +197,9 @@ func toStudySessionResult(s domainstudy.Session) StudySessionResult {
 }
 
 // StartStudySession starts a new study session for topic and goal inside
-// folderID and returns immediately — it does not call the LLM. If folderID
-// is blank, the session falls back to the default folder. Call
-// RequestOpeningTurn afterwards to stream the assistant's opening turn
-// once the chat view is already showing.
+// folderID and returns immediately — it does not call the LLM. folderID is
+// required. Call RequestOpeningTurn afterwards to stream the assistant's
+// opening turn once the chat view is already showing.
 func (a *App) StartStudySession(topic, folderID, goal string) (StudySessionResult, error) {
 	session, err := a.study.Start(a.ctx, topic, folderID, goal)
 	if err != nil {

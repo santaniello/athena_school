@@ -9,7 +9,7 @@ import (
 
 // Service implements the Folder use cases against a domainfolder.Repository
 // and a domainstudy.SessionRepository — deleting a folder needs the latter
-// to reassign its sessions to the default folder first.
+// to delete its sessions first.
 type Service struct {
 	folders  domainfolder.Repository
 	sessions domainstudy.SessionRepository

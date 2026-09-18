@@ -40,11 +40,8 @@ var migrations = []func(*sql.DB) error{
 	execSQL(`CREATE TABLE IF NOT EXISTS folders (
 		id         TEXT PRIMARY KEY,
 		name       TEXT NOT NULL,
-		is_default INTEGER NOT NULL DEFAULT 0,
 		created_at DATETIME
 	)`),
-	execSQL(`INSERT OR IGNORE INTO folders (id, name, is_default, created_at)
-		VALUES ('default', 'General', 1, CURRENT_TIMESTAMP)`),
 	addSessionsFolderIDColumn,
 	execSQL(`CREATE TABLE IF NOT EXISTS knowledge_items (
 		id               TEXT PRIMARY KEY,
@@ -113,6 +110,7 @@ var migrations = []func(*sql.DB) error{
 	migrateIngestedFilesToSourcePathSchema,
 	addSessionsContextColumns,
 	migrateSessionForeignKeyActions,
+	repairSessionsWithInvalidFolder,
 	addSessionsGoalColumn,
 	execSQL(`CREATE TABLE IF NOT EXISTS knowledge_reconciliation_proposals (
 		id                 TEXT PRIMARY KEY,
@@ -165,35 +163,198 @@ var migrations = []func(*sql.DB) error{
 		excerpt     TEXT NOT NULL,
 		PRIMARY KEY (message_id, position)
 	)`),
+	dropFoldersIsDefaultColumn,
+	addSessionsFolderIDCascade,
 }
 
 // addSessionsFolderIDColumn adds sessions.folder_id if it does not already
-// exist (SQLite has no "ADD COLUMN IF NOT EXISTS") and repairs any row
-// whose folder_id is missing, empty, or points at a folder that no longer
-// exists, reassigning it to the default folder — so folder_id is always
-// populated and valid even though it cannot be declared NOT NULL/FK-checked
-// on an ALTER TABLE. This repair runs unconditionally on every Open, not
-// gated behind migrateSessionForeignKeyActions's own readiness check:
-// that migration only rebuilds messages/usage once, so a session that goes
-// stale afterward (e.g. a partial restore of just the sessions table from
-// an older backup) would never be repaired if this lived there instead.
+// exist (SQLite has no "ADD COLUMN IF NOT EXISTS"). The repair for rows
+// left with a missing/dangling folder_id lives separately in
+// repairSessionsWithInvalidFolder, positioned after
+// migrateSessionForeignKeyActions in the migrations slice — see that
+// function's comment for why.
 func addSessionsFolderIDColumn(db *sql.DB) error {
 	hasFolderID, err := sessionsHasFolderIDColumn(db)
 	if err != nil {
 		return err
 	}
+	if hasFolderID {
+		return nil
+	}
+	_, err = db.Exec(`ALTER TABLE sessions ADD COLUMN folder_id TEXT REFERENCES folders(id)`)
+	return err
+}
 
-	if !hasFolderID {
-		if _, err := db.Exec(`ALTER TABLE sessions ADD COLUMN folder_id TEXT REFERENCES folders(id)`); err != nil {
-			return err
-		}
+// repairSessionsWithInvalidFolder deletes any session whose folder_id is
+// missing, empty, or points at a folder that no longer exists (and its
+// messages, ahead of the cascade sessions itself declares) — there is no
+// fallback folder left to reassign it to, so folder_id is always either
+// populated and valid or the row is gone. This repair runs unconditionally
+// on every Open, not gated behind migrateSessionForeignKeyActions's own
+// readiness check: that migration only rebuilds messages/usage once, so a
+// session that goes stale afterward (e.g. a partial restore of just the
+// sessions table from an older backup) would never be repaired if this
+// lived there instead.
+//
+// It runs after migrateSessionForeignKeyActions, not alongside
+// addSessionsFolderIDColumn near the top of the slice: deleting a stale
+// session here can be the parent side of a usage row that predates
+// migrateSessionForeignKeyActions's SET NULL upgrade, and a plain
+// REFERENCES sessions(id) with no ON DELETE action blocks the delete
+// entirely under foreign_keys=ON. Running after that upgrade guarantees
+// usage.session_id already detaches instead of blocking.
+func repairSessionsWithInvalidFolder(db *sql.DB) error {
+	const staleSessions = `folder_id IS NULL
+		   OR folder_id = ''
+		   OR NOT EXISTS (SELECT 1 FROM folders WHERE folders.id = sessions.folder_id)`
+	if _, err := db.Exec(`DELETE FROM messages WHERE session_id IN (
+		SELECT id FROM sessions WHERE ` + staleSessions + `)`); err != nil {
+		return err
+	}
+	_, err := db.Exec(`DELETE FROM sessions WHERE ` + staleSessions)
+	return err
+}
+
+// dropFoldersIsDefaultColumn removes folders.is_default: there is no
+// concept of a default/fallback folder any more, so the column is dead
+// weight. Guarded by hasColumn so a fresh install — whose folders table
+// never had the column — is a no-op.
+//
+// Rebuilt via create-under-a-temporary-name/copy/drop-old/rename-into-place,
+// deliberately NOT the more obvious rename-old-away/create/copy/drop-old
+// order: sessions.folder_id references folders(id), and renaming folders
+// away would make SQLite silently rewrite that reference to the temporary
+// name, leaving it dangling forever once the temporary table is dropped
+// and breaking every later query against sessions. Renaming a fresh
+// temporary table (that nothing references) into the now-free "folders"
+// name at the end avoids that rewrite entirely. foreign_keys is also
+// disabled for the rebuild: with it on, dropping "folders" while sessions
+// still references it (NO ACTION at this point in the migration order) can
+// itself fail the whole migration with a constraint error, even though
+// nothing here actually touches sessions' rows or schema. See
+// specs/phases/phase-01-desktop-mvp/15-remove-default-folder.md.
+func dropFoldersIsDefaultColumn(db *sql.DB) error {
+	hasIsDefault, err := hasColumn(db, "folders", "is_default")
+	if err != nil {
+		return err
+	}
+	if !hasIsDefault {
+		return nil
 	}
 
-	_, err = db.Exec(`UPDATE sessions SET folder_id = 'default'
-		WHERE folder_id IS NULL
-		   OR folder_id = ''
-		   OR NOT EXISTS (SELECT 1 FROM folders WHERE folders.id = sessions.folder_id)`)
-	return err
+	if _, err := db.Exec(`PRAGMA foreign_keys = OFF`); err != nil {
+		return fmt.Errorf("sqlite: disabling foreign keys for folders.is_default removal: %w", err)
+	}
+	defer func() { _, _ = db.Exec(`PRAGMA foreign_keys = ON`) }()
+
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("sqlite: beginning folders.is_default removal: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	statements := []string{
+		`CREATE TABLE folders_without_is_default (
+			id         TEXT PRIMARY KEY,
+			name       TEXT NOT NULL,
+			created_at DATETIME
+		)`,
+		`INSERT INTO folders_without_is_default (id, name, created_at)
+		 SELECT id, name, created_at FROM folders`,
+		`DROP TABLE folders`,
+		`ALTER TABLE folders_without_is_default RENAME TO folders`,
+	}
+	for _, statement := range statements {
+		if _, err := tx.Exec(statement); err != nil {
+			return fmt.Errorf("sqlite: removing folders.is_default: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("sqlite: committing folders.is_default removal: %w", err)
+	}
+	committed = true
+	return nil
+}
+
+// addSessionsFolderIDCascade upgrades sessions.folder_id to
+// ON DELETE CASCADE against folders(id): deleting a folder now deletes its
+// sessions (see application/folder.DeleteFolder), so the schema must agree
+// instead of leaving that invariant to application code alone. Guarded by
+// hasForeignKeyDeleteAction so an already-migrated database is a no-op.
+//
+// Rebuilt via create-under-a-temporary-name/copy/drop-old/rename-into-place
+// — see dropFoldersIsDefaultColumn's comment for why, applied here to
+// sessions instead of folders: renaming sessions away would leave
+// messages.session_id and usage.session_id permanently dangling once the
+// temporary table is dropped, breaking every later query against them.
+// foreign_keys is disabled for the same reason as there: dropping
+// "sessions" while messages/usage still reference it would otherwise
+// cascade-delete or block on their rows, even though nothing here touches
+// their data. See specs/phases/phase-01-desktop-mvp/15-remove-default-folder.md.
+func addSessionsFolderIDCascade(db *sql.DB) error {
+	ready, err := hasForeignKeyDeleteAction(db, "sessions", "folder_id", "folders", "CASCADE")
+	if err != nil {
+		return err
+	}
+	if ready {
+		return nil
+	}
+
+	if _, err := db.Exec(`PRAGMA foreign_keys = OFF`); err != nil {
+		return fmt.Errorf("sqlite: disabling foreign keys for sessions.folder_id cascade migration: %w", err)
+	}
+	defer func() { _, _ = db.Exec(`PRAGMA foreign_keys = ON`) }()
+
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("sqlite: beginning sessions.folder_id cascade migration: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	statements := []string{
+		`CREATE TABLE sessions_with_folder_cascade (
+			id                   TEXT PRIMARY KEY,
+			topic                TEXT,
+			mode                 TEXT,
+			started_at           DATETIME,
+			folder_id            TEXT REFERENCES folders(id) ON DELETE CASCADE,
+			context_state        TEXT NOT NULL DEFAULT 'normal',
+			context_model        TEXT NOT NULL DEFAULT '',
+			context_used_tokens  INTEGER NOT NULL DEFAULT 0,
+			context_length       INTEGER NOT NULL DEFAULT 0,
+			context_estimated    INTEGER NOT NULL DEFAULT 0,
+			goal                 TEXT NOT NULL DEFAULT ''
+		)`,
+		`INSERT INTO sessions_with_folder_cascade (
+			id, topic, mode, started_at, folder_id,
+			context_state, context_model, context_used_tokens, context_length, context_estimated, goal
+		 )
+		 SELECT id, topic, mode, started_at, folder_id,
+			context_state, context_model, context_used_tokens, context_length, context_estimated, goal
+		 FROM sessions`,
+		`DROP TABLE sessions`,
+		`ALTER TABLE sessions_with_folder_cascade RENAME TO sessions`,
+	}
+	for _, statement := range statements {
+		if _, err := tx.Exec(statement); err != nil {
+			return fmt.Errorf("sqlite: migrating sessions.folder_id cascade: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("sqlite: committing sessions.folder_id cascade migration: %w", err)
+	}
+	committed = true
+	return nil
 }
 
 // sessionsHasFolderIDColumn reports whether the sessions table already has

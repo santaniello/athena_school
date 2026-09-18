@@ -8,13 +8,12 @@ import (
 
 	"github.com/google/uuid"
 
-	domainfolder "github.com/santaniello/athena/internal/domain/folder"
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 )
 
 // Start opens a new study session for topic and goal inside folderID and
-// persists it. If folderID is blank, the session falls back to the default
-// folder. goal is required — it is what buildSystemPrompt renders into the
+// persists it. folderID is required — there is no fallback folder any
+// session can land in. goal is required — it is what buildSystemPrompt renders into the
 // system prompt's "Goal:" line for this session, replacing what used to be
 // a profile-wide UserProfile.Goals. It does not call the LLM: the caller
 // requests the opening turn separately via RequestOpeningTurn, once the
@@ -34,7 +33,7 @@ func (s *Service) Start(ctx context.Context, topic, folderID, goal string) (doma
 
 	folderID = strings.TrimSpace(folderID)
 	if folderID == "" {
-		folderID = domainfolder.DefaultFolderID
+		return domainstudy.Session{}, ErrFolderRequired
 	}
 	if _, err := s.folders.GetByID(ctx, folderID); err != nil {
 		return domainstudy.Session{}, fmt.Errorf("study: finding folder: %w", err)

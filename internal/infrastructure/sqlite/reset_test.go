@@ -7,12 +7,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	domainfolder "github.com/santaniello/athena/internal/domain/folder"
 )
 
-func TestReset_clearsStudyAndKnowledgeDataButKeepsTheDefaultFolderAndUsage(t *testing.T) {
-	// Given a database with a non-default folder, a study session with a
+func TestReset_clearsStudyAndKnowledgeDataAndEveryFolder(t *testing.T) {
+	// Given a database with a folder, a study session with a
 	// message, its usage record and its persisted local sources, and a full
 	// set of knowledge-domain rows (item, chunk, evidence, reconciliation
 	// proposal, ingested file, and a relation between two items)
@@ -22,7 +20,7 @@ func TestReset_clearsStudyAndKnowledgeDataButKeepsTheDefaultFolderAndUsage(t *te
 	defer func() { _ = db.Close() }()
 
 	_, err = db.Exec(`
-		INSERT INTO folders (id, name, is_default, created_at) VALUES ('custom', 'Custom', 0, CURRENT_TIMESTAMP);
+		INSERT INTO folders (id, name, created_at) VALUES ('custom', 'Custom', CURRENT_TIMESTAMP);
 		INSERT INTO sessions (id, topic, mode, folder_id, started_at) VALUES ('session-1', 'Go', 'socratic', 'custom', CURRENT_TIMESTAMP);
 		INSERT INTO messages (id, session_id, role, content, created_at) VALUES ('message-1', 'session-1', 'user', 'hi', CURRENT_TIMESTAMP);
 		INSERT INTO usage (id, session_id, model, input_tokens, output_tokens, cost, created_at) VALUES ('usage-1', 'session-1', 'gpt', 10, 20, 0.01, CURRENT_TIMESTAMP);
@@ -66,13 +64,10 @@ func TestReset_clearsStudyAndKnowledgeDataButKeepsTheDefaultFolderAndUsage(t *te
 		assert.Equalf(t, 0, count, "expected table %s to be empty", table)
 	}
 
-	// And the default folder survives, but the custom one does not
+	// And every folder is gone
 	var folderCount int
-	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM folders WHERE id = 'custom'`).Scan(&folderCount))
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM folders`).Scan(&folderCount))
 	assert.Equal(t, 0, folderCount)
-	var defaultFolderName string
-	require.NoError(t, db.QueryRow(`SELECT name FROM folders WHERE id = ?`, domainfolder.DefaultFolderID).Scan(&defaultFolderName))
-	assert.Equal(t, "General", defaultFolderName)
 
 	// And the usage record survives, detached from its now-deleted session
 	var usageSessionID *string
