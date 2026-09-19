@@ -51,11 +51,19 @@ function StudySourcesPanel({ sources }: StudySourcesPanelProps) {
             <p className="mt-0.5 text-[11px] text-muted-foreground">Attached to this session</p>
           </div>
           <Tooltip>
+            {/* A disabled <button> takes pointer-events: none (buttonVariants)
+                and drops out of the tab order, so neither hover nor focus
+                ever reaches it — the tooltip could never open with asChild
+                directly on the Button. Wrapping it in a plain, enabled <span>
+                gives the trigger something that actually receives those
+                events. */}
             <TooltipTrigger asChild>
-              <Button size="sm" disabled aria-label="Add source">
-                <Plus className="size-3.5" aria-hidden="true" />
-                Add
-              </Button>
+              <span>
+                <Button size="sm" disabled aria-label="Add source">
+                  <Plus className="size-3.5" aria-hidden="true" />
+                  Add
+                </Button>
+              </span>
             </TooltipTrigger>
             <TooltipContent>Coming soon</TooltipContent>
           </Tooltip>
@@ -100,16 +108,19 @@ function StudySourcesPanel({ sources }: StudySourcesPanelProps) {
                   )}
                 </div>
                 <Tooltip>
+                  {/* Same disabled-button-can't-trigger-a-tooltip issue as
+                      the Add button above — see its comment. */}
                   <TooltipTrigger asChild>
-                    <Button
-                      size="icon-sm"
-                      variant="ghost"
-                      disabled
-                      aria-label={`Remove ${title}`}
-                      className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                    >
-                      <Trash2 className="size-3.5" aria-hidden="true" />
-                    </Button>
+                    <span className="opacity-0 group-hover:opacity-100">
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        disabled
+                        aria-label={`Remove ${title}`}
+                      >
+                        <Trash2 className="size-3.5" aria-hidden="true" />
+                      </Button>
+                    </span>
                   </TooltipTrigger>
                   <TooltipContent>Coming soon</TooltipContent>
                 </Tooltip>

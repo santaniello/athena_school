@@ -248,6 +248,10 @@ function AppShell() {
   // Stryker restore ConditionalExpression,StringLiteral
 
   function handleSelectSession(session: StudySession, folderName: string) {
+    // Cleared alongside activeSession, not left for the new StudyChatScreen's
+    // onSourcesChanged effect to overwrite post-mount — otherwise the Sources
+    // panel briefly shows the previous session's sources for one render.
+    setSessionSources([])
     setActiveSession({
       id: session.id,
       topic: session.topic,
@@ -262,6 +266,7 @@ function AppShell() {
   }
 
   function handleSessionStarted(session: StudySession, folderName: string) {
+    setSessionSources([])
     setActiveSession({
       id: session.id,
       topic: session.topic,
@@ -329,6 +334,7 @@ function AppShell() {
       // StudyFolderTree via the ref this guards — current is never null
       // on this path.
       studyFolderTreeRef.current?.refreshFolder(session.folderId)
+      setSessionSources([])
       setActiveSession({
         id: session.id,
         topic: session.topic,
