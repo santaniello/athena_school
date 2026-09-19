@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ChangeEvent, KeyboardEvent, UIEvent } from 'react'
 import { ArrowUp } from 'lucide-react'
@@ -38,6 +38,7 @@ import {
   type SourceMode,
   type StudySource,
 } from '@/lib/study'
+import { sourceKey } from '@/lib/study-source-key'
 
 interface StudyChatScreenProps {
   sessionId: string
@@ -62,6 +63,11 @@ interface StudyChatScreenProps {
   // it out of the composer's textarea. Undefined/null (e.g. a standalone
   // render in tests) falls back to rendering it inline over the composer.
   sourceModeSlot?: HTMLElement | null
+  // Reports every distinct Source seen across this session's messages so
+  // far, whenever that set changes, so AppShell can feed its Sources
+  // panel without a second fetch. See
+  // specs/phases/phase-02-knowledge-engine/14-study-sources-panel.md.
+  onSourcesChanged?: (sources: StudySource[]) => void
 }
 
 // ContextState mirrors the persisted study.ContextState the backend tracks
@@ -101,6 +107,7 @@ function StudyChatScreen({
   startingNewSession,
   onKnowledgeChanged,
   sourceModeSlot,
+  onSourcesChanged,
 }: StudyChatScreenProps) {
   const [sessionTopic, setSessionTopic] = useState(initialTopic)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -145,6 +152,25 @@ function StudyChatScreen({
     contextUnavailableShownRef.current = false
     setContextUnavailable(null)
   }
+
+  // Every distinct Source cited across this session's messages so far,
+  // deduped since the same document/note commonly backs more than one
+  // reply. Derived from state already held here — see
+  // specs/phases/phase-02-knowledge-engine/14-study-sources-panel.md for
+  // why this stays in-memory rather than reading persisted history.
+  const sessionSources = useMemo(() => {
+    const bySourceKey = new Map<string, StudySource>()
+    for (const message of messages) {
+      for (const source of message.sources ?? []) {
+        bySourceKey.set(sourceKey(source), source)
+      }
+    }
+    return Array.from(bySourceKey.values())
+  }, [messages])
+
+  useEffect(() => {
+    onSourcesChanged?.(sessionSources)
+  }, [sessionSources, onSourcesChanged])
 
   // Keeps the newest content in view as messages arrive and the answer
   // streams in — but only while the user is still parked at the bottom, so

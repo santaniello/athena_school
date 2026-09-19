@@ -25,19 +25,25 @@ import {
 import { discardExtraction, extractKnowledge, saveExtractedKnowledge } from '@/lib/knowledge'
 import StudyChatScreen from './StudyChatScreen'
 
-vi.mock('@/lib/study', () => ({
-  requestOpeningTurn: vi.fn(),
-  resumeStudySession: vi.fn(),
-  sendStudyMessage: vi.fn(),
-  onStudyChunk: vi.fn(),
-  onStudyDone: vi.fn(),
-  onStudyError: vi.fn(),
-  onStudySources: vi.fn(),
-  onStudyContextNormal: vi.fn(),
-  onStudyContextWarning: vi.fn(),
-  onStudyContextLimitReached: vi.fn(),
-  onStudyContextLimitUnavailable: vi.fn(),
-}))
+// importOriginal keeps pure helpers (e.g. sourceLabel, used by
+// LocalSourcesStrip) real, same reasoning as the @/lib/knowledge mock below.
+vi.mock('@/lib/study', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/study')>()
+  return {
+    ...original,
+    requestOpeningTurn: vi.fn(),
+    resumeStudySession: vi.fn(),
+    sendStudyMessage: vi.fn(),
+    onStudyChunk: vi.fn(),
+    onStudyDone: vi.fn(),
+    onStudyError: vi.fn(),
+    onStudySources: vi.fn(),
+    onStudyContextNormal: vi.fn(),
+    onStudyContextWarning: vi.fn(),
+    onStudyContextLimitReached: vi.fn(),
+    onStudyContextLimitUnavailable: vi.fn(),
+  }
+})
 
 vi.mock('@/lib/knowledge', () => ({
   extractKnowledge: vi.fn(),
@@ -373,6 +379,78 @@ describe('StudyChatScreen — resuming a session', () => {
     // Then the strip shows up without any live stream ever happening
     expect(await screen.findByText('It stands for...')).toBeInTheDocument()
     expect(screen.getByText('Local sources (1)')).toBeInTheDocument()
+  })
+
+  it('reports the deduplicated set of sources cited across the session to onSourcesChanged', async () => {
+    // Given a resumed session where the same source backed two different
+    // replies, alongside one distinct source
+    setupSubscriptions()
+    const repeated = {
+      sourceType: 'athena',
+      filePath: '',
+      heading: '',
+      concept: 'CAP theorem',
+      score: 0.9,
+    }
+    const distinct = {
+      sourceType: 'user_note',
+      filePath: '',
+      heading: '',
+      concept: 'Idempotency',
+      score: 0.7,
+    }
+    vi.mocked(resumeStudySession).mockResolvedValueOnce({
+      session: {
+        id: 'session-1',
+        topic: 'Cache invalidation',
+        folderId: 'folder-1',
+        goal: 'Ace the SQL interview',
+        startedAt: '2026-08-16T10:00:00Z',
+        context: CONTEXT_NORMAL,
+      },
+      messages: [
+        {
+          role: 'user',
+          content: 'What is CAP theorem?',
+          createdAt: '2026-08-16T10:00:00Z',
+          sources: [],
+        },
+        {
+          role: 'assistant',
+          content: 'It stands for...',
+          createdAt: '2026-08-16T10:00:01Z',
+          sources: [repeated],
+        },
+        {
+          role: 'user',
+          content: 'And idempotency?',
+          createdAt: '2026-08-16T10:00:02Z',
+          sources: [],
+        },
+        {
+          role: 'assistant',
+          content: 'It means...',
+          createdAt: '2026-08-16T10:00:03Z',
+          sources: [repeated, distinct],
+        },
+      ],
+    })
+    const onSourcesChanged = vi.fn()
+
+    // When the chat screen mounts in "resume" mode
+    render(
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic=""
+        mode="resume"
+        onSourcesChanged={onSourcesChanged}
+        {...newSessionActionProps()}
+      />,
+    )
+    await screen.findByText('It means...')
+
+    // Then it is called once with both distinct sources, the repeat collapsed
+    expect(onSourcesChanged).toHaveBeenLastCalledWith([repeated, distinct])
   })
 
   it('shows no Local sources strip for a resumed message with no persisted sources', async () => {

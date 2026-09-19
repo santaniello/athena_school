@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { BookOpen } from 'lucide-react'
+import { BookOpen, PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { AthenaLogo } from '@/components/athena-logo'
 import { NavItem } from '@/components/nav-item'
 import { ComingSoonPanel } from '@/components/coming-soon-panel'
@@ -14,13 +14,17 @@ import { IndexFailedScreen } from '@/components/index-failed-screen'
 import { IndexStatusBanner } from '@/components/index-status-banner'
 import { IndexReviewDialog } from '@/components/index-review-dialog'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
+import type { PanelImperativeHandle } from 'react-resizable-panels'
+import { StudySourcesPanel } from '@/components/study-sources-panel'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import HomeScreen from '@/screens/HomeScreen'
 import StudyChatScreen from '@/screens/StudyChatScreen'
 import SettingsScreen from '@/screens/SettingsScreen'
 import DocumentationScreen from '@/screens/DocumentationScreen'
 import { NAVIGATION, type AppSection } from '@/lib/navigation'
 import { getUserProfile, type ProfileDraft } from '@/lib/profile'
-import { startStudySession, type StudySession } from '@/lib/study'
+import { startStudySession, type StudySession, type StudySource } from '@/lib/study'
 import { countDraftKnowledgeItems, countPendingReconciliations } from '@/lib/knowledge'
 import {
   getKnowledgeIndexStatus,
@@ -77,6 +81,17 @@ function AppShell() {
   // the node on mount and with null on unmount/section change — no portal
   // while this is null, which is exactly the "not in Study" state.
   const [sourceModeSlot, setSourceModeSlot] = useState<HTMLDivElement | null>(null)
+  // The Sources panel's collapse state and its content — see
+  // specs/phases/phase-02-knowledge-engine/14-study-sources-panel.md.
+  // sessionSources is fed by StudyChatScreen's onSourcesChanged, not
+  // fetched here, so it naturally resets to [] when a session switch
+  // remounts StudyChatScreen (it keys on activeSession.id below).
+  const [sourcesOpen, setSourcesOpen] = useState(true)
+  const [sessionSources, setSessionSources] = useState<StudySource[]>([])
+  // Drives the header toggle button — collapse()/expand() are the source of
+  // truth (also reachable by dragging the handle past minSize), sourcesOpen
+  // just mirrors the panel's own reported size via onResize below.
+  const sourcesPanelRef = useRef<PanelImperativeHandle>(null)
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
   const [indexStatus, setIndexStatus] = useState<IndexStatus>(INITIAL_INDEX_STATUS)
   const [continuedWithoutSearch, setContinuedWithoutSearch] = useState(false)
@@ -356,6 +371,134 @@ function AppShell() {
     )
   }
 
+  // Shared between "no Sources column" (every non-Study screen, and Study
+  // with no session open) and the Study-with-a-session case below, where it
+  // becomes the left panel of a resizable split against the Sources panel —
+  // one definition either way, so the header/main content never forks.
+  const studyChatColumn = (
+    <div className="flex h-full w-full flex-col" style={{ overflow: 'hidden' }}>
+      <header className="flex min-h-11 shrink-0 items-center justify-between gap-3 border-b border-border px-6 py-2">
+        {section === 'study' && activeSession ? (
+          <>
+            <div className="min-w-0">
+              <p className="truncate text-[11px] text-muted-foreground">
+                Study / {activeSession.folderName}
+              </p>
+              <h1 className="font-heading truncate text-base font-bold text-foreground">
+                {activeSession.topic}
+              </h1>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {/* StudyChatScreen portals its source-mode selector into
+                  this node — see the sourceModeSlot state above. */}
+              <div ref={setSourceModeSlot} />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    aria-label={sourcesOpen ? 'Hide sources panel' : 'Show sources panel'}
+                    onClick={() => {
+                      const panel = sourcesPanelRef.current
+                      if (!panel) return
+                      if (panel.isCollapsed()) panel.expand()
+                      else panel.collapse()
+                    }}
+                  >
+                    {sourcesOpen ? (
+                      <PanelRightClose className="size-4" aria-hidden="true" />
+                    ) : (
+                      <PanelRightOpen className="size-4" aria-hidden="true" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {sourcesOpen ? 'Hide sources panel' : 'Show sources panel'}
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </>
+        ) : (
+          <h1 className="font-heading text-xs font-bold tracking-[0.14em] text-foreground uppercase">
+            {activeItem.label}
+          </h1>
+        )}
+      </header>
+      <IndexStatusBanner
+        status={indexStatus}
+        continuedWithoutSearch={continuedWithoutSearch}
+        retrying={retryingIndex}
+        onRetry={() => void handleRetryIndex()}
+        onReview={() => setReviewOpen(true)}
+      />
+      {section === 'study' && newSessionError && (
+        <p className="border-b border-border px-6 py-2 text-sm text-destructive">
+          {newSessionError}
+        </p>
+      )}
+      {/* min-h-0 lets this flex item shrink below its content's height —
+          without it a long chat transcript stretches past the viewport
+          instead of scrolling inside its own scroll area. */}
+      <main className="flex min-h-0 flex-1 p-10">
+        {section === 'home' ? (
+          <HomeScreen
+            profile={profile}
+            studyLocked={studyLocked}
+            onStartStudy={() => setSection('study')}
+          />
+        ) : section === 'study' ? (
+          activeSession ? (
+            <StudyChatScreen
+              key={activeSession.id}
+              sessionId={activeSession.id}
+              initialTopic={activeSession.topic}
+              mode={activeSession.mode}
+              onTopicResolved={handleTopicResolved}
+              onStartNewSession={handleStartNewSession}
+              startingNewSession={startingNewSession}
+              onKnowledgeChanged={refreshReviewCounts}
+              sourceModeSlot={sourceModeSlot}
+              onSourcesChanged={setSessionSources}
+            />
+          ) : (
+            <div className="m-auto flex flex-col items-center gap-2 text-center">
+              <BookOpen className="size-8 text-muted-foreground" aria-hidden="true" />
+              {studyFolderCount === 0 ? (
+                <>
+                  <p className="text-sm font-semibold text-foreground">No folders yet</p>
+                  <p className="max-w-64 text-sm text-muted-foreground">
+                    Create a folder for the topic you want to study, then start a session inside it.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-semibold text-foreground">No session open</p>
+                  <p className="max-w-64 text-sm text-muted-foreground">
+                    Pick one from the tree on the left, or start a new one inside a folder.
+                  </p>
+                </>
+              )}
+            </div>
+          )
+        ) : section === 'knowledge' ? (
+          <KnowledgeSection
+            selectedTopic={selectedTopic}
+            mutationsDisabled={retryingIndex}
+            draftCount={draftCount}
+            onKnowledgeChanged={refreshReviewCounts}
+            onTopicsChanged={refreshKnowledgeTopics}
+          />
+        ) : section === 'documentation' ? (
+          <DocumentationScreen />
+        ) : section === 'settings' && profile ? (
+          <SettingsScreen profile={profile} onProfileUpdated={setProfile} />
+        ) : (
+          <ComingSoonPanel item={activeItem} />
+        )}
+      </main>
+    </div>
+  )
+
   // ResizablePanelGroup/ResizablePanel hard-code `height: 100%` and
   // `overflow: auto` as inline styles, which beat any h-*/overflow-* class.
   // #root has no height of its own, so a class alone would collapse the shell
@@ -439,104 +582,35 @@ function AppShell() {
 
         <ResizableHandle className="transition-colors hover:bg-primary/60 active:bg-primary" />
 
-        <ResizablePanel
-          minSize={360}
-          className="flex h-full w-full flex-col"
-          style={{ overflow: 'hidden' }}
-        >
-          <header className="flex min-h-11 shrink-0 items-center justify-between gap-3 border-b border-border px-6 py-2">
-            {section === 'study' && activeSession ? (
-              <>
-                <div className="min-w-0">
-                  <p className="truncate text-[11px] text-muted-foreground">
-                    Study / {activeSession.folderName}
-                  </p>
-                  <h1 className="font-heading truncate text-base font-bold text-foreground">
-                    {activeSession.topic}
-                  </h1>
-                </div>
-                {/* StudyChatScreen portals its source-mode selector into
-                    this node — see the sourceModeSlot state above. */}
-                <div ref={setSourceModeSlot} />
-              </>
-            ) : (
-              <h1 className="font-heading text-xs font-bold tracking-[0.14em] text-foreground uppercase">
-                {activeItem.label}
-              </h1>
-            )}
-          </header>
-          <IndexStatusBanner
-            status={indexStatus}
-            continuedWithoutSearch={continuedWithoutSearch}
-            retrying={retryingIndex}
-            onRetry={() => void handleRetryIndex()}
-            onReview={() => setReviewOpen(true)}
-          />
-          {section === 'study' && newSessionError && (
-            <p className="border-b border-border px-6 py-2 text-sm text-destructive">
-              {newSessionError}
-            </p>
+        <ResizablePanel minSize={360} style={{ overflow: 'hidden' }}>
+          {section === 'study' && activeSession ? (
+            // A real nested split (not a plain flex row) so the Sources
+            // panel drags to resize exactly like the sidebar does.
+            // collapsible/collapsedSize (not mount/unmount) back the header
+            // toggle button, so the panel's own state (its search query)
+            // survives being hidden and shown again.
+            <ResizablePanelGroup orientation="horizontal">
+              <ResizablePanel minSize={360} style={{ overflow: 'hidden' }}>
+                {studyChatColumn}
+              </ResizablePanel>
+              <ResizableHandle className="transition-colors hover:bg-primary/60 active:bg-primary" />
+              <ResizablePanel
+                panelRef={sourcesPanelRef}
+                collapsible
+                collapsedSize={0}
+                defaultSize={340}
+                minSize={280}
+                maxSize={520}
+                groupResizeBehavior="preserve-pixel-size"
+                onResize={(size) => setSourcesOpen(size.inPixels > 0)}
+                style={{ overflow: 'hidden' }}
+              >
+                <StudySourcesPanel sources={sessionSources} />
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          ) : (
+            studyChatColumn
           )}
-          {/* min-h-0 lets this flex item shrink below its content's height —
-            without it a long chat transcript stretches <main> past the
-            viewport instead of scrolling inside its own scroll area. */}
-          <main className="flex min-h-0 flex-1 p-10">
-            {section === 'home' ? (
-              <HomeScreen
-                profile={profile}
-                studyLocked={studyLocked}
-                onStartStudy={() => setSection('study')}
-              />
-            ) : section === 'study' ? (
-              activeSession ? (
-                <StudyChatScreen
-                  key={activeSession.id}
-                  sessionId={activeSession.id}
-                  initialTopic={activeSession.topic}
-                  mode={activeSession.mode}
-                  onTopicResolved={handleTopicResolved}
-                  onStartNewSession={handleStartNewSession}
-                  startingNewSession={startingNewSession}
-                  onKnowledgeChanged={refreshReviewCounts}
-                  sourceModeSlot={sourceModeSlot}
-                />
-              ) : (
-                <div className="m-auto flex flex-col items-center gap-2 text-center">
-                  <BookOpen className="size-8 text-muted-foreground" aria-hidden="true" />
-                  {studyFolderCount === 0 ? (
-                    <>
-                      <p className="text-sm font-semibold text-foreground">No folders yet</p>
-                      <p className="max-w-64 text-sm text-muted-foreground">
-                        Create a folder for the topic you want to study, then start a session inside
-                        it.
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-sm font-semibold text-foreground">No session open</p>
-                      <p className="max-w-64 text-sm text-muted-foreground">
-                        Pick one from the tree on the left, or start a new one inside a folder.
-                      </p>
-                    </>
-                  )}
-                </div>
-              )
-            ) : section === 'knowledge' ? (
-              <KnowledgeSection
-                selectedTopic={selectedTopic}
-                mutationsDisabled={retryingIndex}
-                draftCount={draftCount}
-                onKnowledgeChanged={refreshReviewCounts}
-                onTopicsChanged={refreshKnowledgeTopics}
-              />
-            ) : section === 'documentation' ? (
-              <DocumentationScreen />
-            ) : section === 'settings' && profile ? (
-              <SettingsScreen profile={profile} onProfileUpdated={setProfile} />
-            ) : (
-              <ComingSoonPanel item={activeItem} />
-            )}
-          </main>
         </ResizablePanel>
       </ResizablePanelGroup>
       <IndexReviewDialog

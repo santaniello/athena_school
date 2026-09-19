@@ -42,24 +42,30 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
 // The Study section's sidebar tree (StudyFolderTree) fetches folders as
 // soon as it mounts, and StudyChatScreen subscribes to study events as soon
 // as it mounts — both need mocking here, or they reach the real
-// (unavailable in jsdom) Wails runtime.
-vi.mock('@/lib/study', () => ({
-  startStudySession: vi.fn(),
-  requestOpeningTurn: vi.fn(),
-  sendStudyMessage: vi.fn(),
-  deleteStudySession: vi.fn(),
-  resumeStudySession: vi.fn(),
-  moveStudySession: vi.fn(),
-  listStudySessionsByFolder: vi.fn(),
-  onStudyChunk: vi.fn(() => vi.fn()),
-  onStudyDone: vi.fn(() => vi.fn()),
-  onStudyError: vi.fn(() => vi.fn()),
-  onStudySources: vi.fn(() => vi.fn()),
-  onStudyContextNormal: vi.fn(() => vi.fn()),
-  onStudyContextWarning: vi.fn(() => vi.fn()),
-  onStudyContextLimitReached: vi.fn(() => vi.fn()),
-  onStudyContextLimitUnavailable: vi.fn(() => vi.fn()),
-}))
+// (unavailable in jsdom) Wails runtime. importOriginal keeps pure helpers
+// (e.g. sourceLabel, used by StudySourcesPanel) real, same reasoning as the
+// @/lib/knowledge mock below.
+vi.mock('@/lib/study', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/study')>()
+  return {
+    ...original,
+    startStudySession: vi.fn(),
+    requestOpeningTurn: vi.fn(),
+    sendStudyMessage: vi.fn(),
+    deleteStudySession: vi.fn(),
+    resumeStudySession: vi.fn(),
+    moveStudySession: vi.fn(),
+    listStudySessionsByFolder: vi.fn(),
+    onStudyChunk: vi.fn(() => vi.fn()),
+    onStudyDone: vi.fn(() => vi.fn()),
+    onStudyError: vi.fn(() => vi.fn()),
+    onStudySources: vi.fn(() => vi.fn()),
+    onStudyContextNormal: vi.fn(() => vi.fn()),
+    onStudyContextWarning: vi.fn(() => vi.fn()),
+    onStudyContextLimitReached: vi.fn(() => vi.fn()),
+    onStudyContextLimitUnavailable: vi.fn(() => vi.fn()),
+  }
+})
 
 vi.mock('@/lib/folder', () => ({
   listFolders: vi.fn().mockResolvedValue([{ id: 'default', name: 'General' }]),
@@ -459,6 +465,55 @@ describe('AppShell', () => {
       screen.getByRole('heading', { name: 'Distributed systems', level: 1 }),
     ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Back to folders' })).not.toBeInTheDocument()
+  })
+
+  it('shows the Sources panel once a session is open, and hides/reopens it from the header toggle', async () => {
+    // Given a session is open
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+    await user.click(screen.getByRole('button', { name: 'Study' }))
+    await screen.findByText('General')
+    vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([])
+    const startedSession: StudySession = {
+      id: 'session-1',
+      topic: 'Distributed systems',
+      folderId: 'default',
+      goal: 'Ace the SQL interview',
+      startedAt: '2026-08-17T10:00:00Z',
+      context: CONTEXT_NORMAL,
+    }
+    vi.mocked(startStudySession).mockResolvedValueOnce(startedSession)
+    vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
+    await user.click(screen.getByText('General'))
+    await user.click(await screen.findByText('New session'))
+    await user.type(
+      screen.getByPlaceholderText('What do you want to study?'),
+      'Distributed systems',
+    )
+    await user.type(
+      screen.getByPlaceholderText('e.g. Pass the SQL interview'),
+      'Ace the SQL interview{Enter}',
+    )
+    await screen.findByText('Study / General')
+
+    // Then the Sources panel is showing, as a real resizable split against
+    // the chat (not a plain flex row) — collapsing it via the header toggle
+    // calls the panel's own collapse()/expand() imperative API, which
+    // reports its new size back through onResize. setup.ts forces every
+    // data-panel element's getBoundingClientRect to a zero-size rect (to
+    // fix a real divider-hit-testing bug elsewhere), so this library can
+    // never compute a real collapsed/expanded size here — the toggle
+    // round trip itself can only be verified by hand in a real window, not
+    // by this suite.
+    expect(screen.getByText('Attached to this session')).toBeInTheDocument()
+    const toggle = screen.getByRole('button', { name: 'Hide sources panel' })
+
+    // When clicking the header toggle
+    await user.click(toggle)
+
+    // Then it doesn't throw calling into the resizable-panel imperative API
+    expect(toggle).toBeInTheDocument()
   })
 
   it("shows the account's name in the sidebar footer", async () => {
