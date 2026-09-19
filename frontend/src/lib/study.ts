@@ -53,6 +53,21 @@ export interface StudySource {
   score: number
 }
 
+// Maps a Source to its display title/subtitle per
+// specs/phases/phase-02-knowledge-engine/05-rag-integration.md's three
+// source-type label variants. Shared by every surface that lists Sources
+// (LocalSourcesStrip, the Study Sources panel) so they can never drift.
+export function sourceLabel(source: StudySource): { title: string; subtitle: string } {
+  switch (source.sourceType) {
+    case 'user_note':
+      return { title: 'User note', subtitle: source.concept }
+    case 'athena':
+      return { title: 'Athena Knowledge', subtitle: source.concept }
+    default:
+      return { title: source.filePath, subtitle: source.heading }
+  }
+}
+
 export interface StudyChunkEvent {
   sessionId: string
   content: string

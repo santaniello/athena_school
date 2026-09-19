@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import type { StudySource } from '@/lib/study'
+import { sourceLabel, type StudySource } from '@/lib/study'
 
 interface LocalSourcesStripProps {
   sources: StudySource[]
@@ -10,20 +10,6 @@ interface LocalSourcesStripProps {
 // percentage, so it can't be mistaken for one.
 function formatScore(score: number): string {
   return score.toFixed(2)
-}
-
-// Maps a Source to its display title/subtitle per
-// specs/phases/phase-02-knowledge-engine/05-rag-integration.md's three
-// source-type label variants.
-function sourceLabel(source: StudySource): { title: string; subtitle: string } {
-  switch (source.sourceType) {
-    case 'user_note':
-      return { title: 'User note', subtitle: source.concept }
-    case 'athena':
-      return { title: 'Athena Knowledge', subtitle: source.concept }
-    default:
-      return { title: source.filePath, subtitle: source.heading }
-  }
 }
 
 // A collapsed "Local sources (N)" strip shown under a completed assistant
