@@ -34,9 +34,9 @@ func TestSaveDrafts_revalidatesAgainstTheReceiptAndPersistsItemWithEvidence(t *t
 	// Message and a hostile client input trying to smuggle its own ID/status
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
-	repository.EXPECT().FindByNormalizedConcept(ctx, "Distributed systems", "cap theorem").Return(nil, nil).Once()
+	repository.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Distributed systems", "cap theorem").Return(nil, nil).Once()
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
-		return item.ID != "candidate-1" && item.ID != "" &&
+		return item.ID != "candidate-1" && item.ID != "" && item.SessionID == "session-1" &&
 			item.Topic == "Distributed systems" && item.Concept == "CAP theorem" && item.Definition == "A trade-off." &&
 			item.Source == domainknowledge.SourceAthena && item.Status == domainknowledge.StatusDraft &&
 			!item.CreatedAt.IsZero() && item.CreatedAt.Equal(item.UpdatedAt)
@@ -149,7 +149,7 @@ func TestSaveDrafts_skipsCandidateThatIsAnExactDuplicateAtSaveTime(t *testing.T)
 	// item — e.g. another session saved it between extraction and this save
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
-	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", "channels").
+	repository.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Go", "channels").
 		Return([]domainknowledge.Item{{ID: "item-existing", Concept: "Channels", Status: domainknowledge.StatusApproved}}, nil)
 	messages := studymocks.NewMockMessageRepository(t)
 	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{
@@ -180,7 +180,7 @@ func TestSaveDrafts_stopsWhenTheDuplicateRecheckFails(t *testing.T) {
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
 	lookupErr := errors.New("sqlite: database is locked")
-	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", "channels").Return(nil, lookupErr)
+	repository.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Go", "channels").Return(nil, lookupErr)
 	messages := studymocks.NewMockMessageRepository(t)
 	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{
 		{ID: "message-1", Content: "Channels are typed conduits."},
@@ -209,7 +209,7 @@ func TestSaveDrafts_savesCandidateWhenTheMessageWasEditedAroundTheQuote(t *testi
 	ctx := context.Background()
 	var savedItemID string
 	repository := knowledgemocks.NewMockRepository(t)
-	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", "channels").Return(nil, nil).Once()
+	repository.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Go", "channels").Return(nil, nil).Once()
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.ID != "candidate-1" && item.ID != "" &&
 			item.Topic == "Go" && item.Concept == "Channels" && item.Definition == "Typed conduits."
@@ -252,7 +252,7 @@ func TestSaveDrafts_stopsWhenLinkingEvidenceToTheItemFails(t *testing.T) {
 	ctx := context.Background()
 	var savedItemID string
 	repository := knowledgemocks.NewMockRepository(t)
-	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", "channels").Return(nil, nil).Once()
+	repository.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Go", "channels").Return(nil, nil).Once()
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.ID != "candidate-1" && item.ID != "" &&
 			item.Topic == "Go" && item.Concept == "Channels" && item.Definition == "Typed conduits."
@@ -297,8 +297,8 @@ func TestSaveDrafts_stopsAtTransactionFailureAndKeepsThatReceiptForRetry(t *test
 	ctx := context.Background()
 	var savedItemID string
 	repository := knowledgemocks.NewMockRepository(t)
-	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", "first").Return(nil, nil).Once()
-	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", "second").Return(nil, nil).Once()
+	repository.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Go", "first").Return(nil, nil).Once()
+	repository.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Go", "second").Return(nil, nil).Once()
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool { return item.Concept == "first" })).
 		Run(func(_ context.Context, item domainknowledge.Item) { savedItemID = item.ID }).Return(nil).Once()
 	saveErr := errors.New("database locked")
@@ -352,9 +352,9 @@ func TestSaveDrafts_savesEveryItemAndConsumesEveryReceipt_butStopsAttemptingInde
 	ctx := context.Background()
 	savedItemIDByConcept := map[string]string{}
 	repository := knowledgemocks.NewMockRepository(t)
-	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", "first").Return(nil, nil).Once()
-	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", "second").Return(nil, nil).Once()
-	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", "third").Return(nil, nil).Once()
+	repository.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Go", "first").Return(nil, nil).Once()
+	repository.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Go", "second").Return(nil, nil).Once()
+	repository.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Go", "third").Return(nil, nil).Once()
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.ID != "" && item.Topic == "Go" &&
 			(item.Concept == "first" || item.Concept == "second" || item.Concept == "third")

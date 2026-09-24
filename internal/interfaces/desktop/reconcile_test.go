@@ -33,7 +33,7 @@ func TestApp_ApplyReconciliationCreate_createsANewDraftItem(t *testing.T) {
 	// shortlist — classified as a deterministic create, no comparison call
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
-	repository.EXPECT().FindByNormalizedConcept(ctx, "Distributed Systems", "idempotency key").Return(nil, nil).Twice()
+	repository.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Distributed Systems", "idempotency key").Return(nil, nil).Twice()
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.Concept == "Idempotency key" && item.Status == domainknowledge.StatusDraft
 	})).Return(nil).Once()
@@ -87,7 +87,7 @@ func TestApp_SaveReconciliationForReview_succeedsWithoutPersistingAnyItem(t *tes
 	// Given the same kind of real extraction batch
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
-	repository.EXPECT().FindByNormalizedConcept(ctx, "Distributed Systems", "idempotency key").Return(nil, nil).Once()
+	repository.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Distributed Systems", "idempotency key").Return(nil, nil).Once()
 	sessions := studymocks.NewMockSessionRepository(t)
 	messages := studymocks.NewMockMessageRepository(t)
 	sessions.EXPECT().GetByID(ctx, "session-1").Return(domainstudy.Session{ID: "session-1", Topic: "Distributed Systems"}, nil).Once()

@@ -20,7 +20,7 @@ func pendingDesktopProposal(id, action, targetItemID string, targetUpdatedAt tim
 	return domainknowledge.ReconciliationProposal{
 		ID: id, Action: action, Status: domainknowledge.ProposalPending,
 		Candidate: domainknowledge.Item{
-			Topic: "Distributed Systems", Concept: "Idempotency key",
+			SessionID: "session-1", Topic: "Distributed Systems", Concept: "Idempotency key",
 			Definition: "A unique value a client attaches to a request so retries produce the same effect exactly once.",
 			Source:     domainknowledge.SourceAthena, Status: domainknowledge.StatusDraft,
 		},
@@ -67,7 +67,7 @@ func TestApp_ApplyPendingReconciliationCreate_createsANewDraftItem(t *testing.T)
 	reconciliations.EXPECT().GetByID(ctx, "proposal-1").Return(proposal, nil).Once()
 	reconciliations.EXPECT().UpdateStatus(ctx, "proposal-1", domainknowledge.ProposalApplied, "classified reason", mock.Anything).Return(nil).Once()
 	repo := knowledgemocks.NewMockRepository(t)
-	repo.EXPECT().FindByNormalizedConcept(ctx, "Distributed Systems", "idempotency key").Return(nil, nil).Once()
+	repo.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Distributed Systems", "idempotency key").Return(nil, nil).Once()
 	repo.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.Concept == "Idempotency key" && item.Status == domainknowledge.StatusDraft
 	})).Return(nil).Once()

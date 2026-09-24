@@ -199,10 +199,11 @@ func TestApplyReconciliationCreate_persistsANewItemAndTheAuditProposalWithEviden
 	// Given a classified create candidate backed by a valid receipt
 	ctx := context.Background()
 	repo := knowledgemocks.NewMockRepository(t)
-	repo.EXPECT().FindByNormalizedConcept(ctx, "Distributed Systems", "idempotency key").Return(nil, nil).Once()
+	repo.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Distributed Systems", "idempotency key").Return(nil, nil).Once()
 	repo.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.ID != "candidate-1" && item.ID != "" && item.Topic == "Distributed Systems" &&
-			item.Concept == "Idempotency key" && item.Status == domainknowledge.StatusDraft
+			item.Concept == "Idempotency key" && item.Status == domainknowledge.StatusDraft &&
+			item.SessionID == "session-1"
 	})).Return(nil).Once()
 	messages := studymocks.NewMockMessageRepository(t)
 	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{
@@ -215,7 +216,8 @@ func TestApplyReconciliationCreate_persistsANewItemAndTheAuditProposalWithEviden
 	reconciliations := knowledgemocks.NewMockReconciliationRepository(t)
 	reconciliations.EXPECT().Save(ctx, mock.MatchedBy(func(p domainknowledge.ReconciliationProposal) bool {
 		return p.Action == domainknowledge.ReconcileCreate && p.Status == domainknowledge.ProposalApplied &&
-			p.TargetItemID == "" && p.Reason == "no existing match found in this topic"
+			p.TargetItemID == "" && p.Reason == "no existing match found in this topic" &&
+			p.Candidate.SessionID == "session-1"
 	})).Return(nil).Once()
 	reconciliations.EXPECT().LinkEvidence(ctx, mock.Anything, "evidence-1").Return(nil).Once()
 	llm := llmmocks.NewMockProvider(t)
@@ -244,7 +246,7 @@ func TestApplyReconciliationCreate_restoresTheReceiptWhenTheExactDuplicateRechec
 	// classification and apply
 	ctx := context.Background()
 	repo := knowledgemocks.NewMockRepository(t)
-	repo.EXPECT().FindByNormalizedConcept(ctx, "Distributed Systems", "idempotency key").
+	repo.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Distributed Systems", "idempotency key").
 		Return([]domainknowledge.Item{{ID: "item-existing", Concept: "Idempotency key", Status: domainknowledge.StatusApproved}}, nil).Once()
 	messages := studymocks.NewMockMessageRepository(t)
 	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{
@@ -271,7 +273,7 @@ func TestApplyReconciliationCreate_returnsIndexingFailureButKeepsTheDurableItem(
 	// post-commit embedding call fails
 	ctx := context.Background()
 	repo := knowledgemocks.NewMockRepository(t)
-	repo.EXPECT().FindByNormalizedConcept(ctx, "Distributed Systems", "idempotency key").Return(nil, nil).Once()
+	repo.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Distributed Systems", "idempotency key").Return(nil, nil).Once()
 	repo.EXPECT().Save(ctx, mock.Anything).Return(nil).Once()
 	messages := studymocks.NewMockMessageRepository(t)
 	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{
@@ -308,7 +310,7 @@ func TestApplyReconciliationCreate_restoresTheReceiptWhenLinkingEvidenceFails(t 
 	// Given a create candidate whose item persists but whose evidence link fails
 	ctx := context.Background()
 	repo := knowledgemocks.NewMockRepository(t)
-	repo.EXPECT().FindByNormalizedConcept(ctx, "Distributed Systems", "idempotency key").Return(nil, nil).Once()
+	repo.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Distributed Systems", "idempotency key").Return(nil, nil).Once()
 	repo.EXPECT().Save(ctx, mock.Anything).Return(nil).Once()
 	messages := studymocks.NewMockMessageRepository(t)
 	messages.EXPECT().ListBySession(ctx, "session-1").Return([]domainstudy.Message{
@@ -431,7 +433,7 @@ func TestApplyReconciliationRelate_createsANewDraftAndACanonicalRelationToTheTar
 	target := domainknowledge.Item{ID: "item-target", UpdatedAt: time.Date(2026, 8, 28, 9, 0, 0, 0, time.UTC)}
 	repo := knowledgemocks.NewMockRepository(t)
 	repo.EXPECT().GetByID(ctx, "item-target").Return(target, nil).Once()
-	repo.EXPECT().FindByNormalizedConcept(ctx, "Distributed Systems", "idempotency key").Return(nil, nil).Once()
+	repo.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Distributed Systems", "idempotency key").Return(nil, nil).Once()
 	var createdItemID string
 	repo.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		createdItemID = item.ID

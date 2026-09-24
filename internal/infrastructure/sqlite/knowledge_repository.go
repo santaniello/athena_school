@@ -98,10 +98,10 @@ func (r *KnowledgeRepository) FindByTopic(ctx context.Context, topic string) ([]
 // FindByNormalizedConcept returns every item in topic whose persisted
 // normalized_concept equals normalizedConcept, oldest first — draft,
 // approved, and deprecated alike.
-func (r *KnowledgeRepository) FindByNormalizedConcept(ctx context.Context, topic, normalizedConcept string) ([]knowledge.Item, error) {
+func (r *KnowledgeRepository) FindByNormalizedConcept(ctx context.Context, sessionID, topic, normalizedConcept string) ([]knowledge.Item, error) {
 	rows, err := execer(ctx, r.db).QueryContext(ctx,
-		`SELECT `+knowledgeItemSelectColumns+` FROM knowledge_items WHERE topic = ? AND normalized_concept = ? ORDER BY created_at ASC, id ASC`,
-		topic, normalizedConcept,
+		`SELECT `+knowledgeItemSelectColumns+` FROM knowledge_items WHERE session_id = ? AND topic = ? AND normalized_concept = ? ORDER BY created_at ASC, id ASC`,
+		sessionID, topic, normalizedConcept,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: finding knowledge items by normalized concept: %w", err)

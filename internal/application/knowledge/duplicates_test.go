@@ -15,7 +15,7 @@ import (
 )
 
 func duplicateCandidate(topic, concept, definition string) domainknowledge.Item {
-	return domainknowledge.Item{Topic: topic, Concept: concept, Definition: definition}
+	return domainknowledge.Item{SessionID: "session-1", Topic: topic, Concept: concept, Definition: definition}
 }
 
 func TestFindDuplicates_returnsExactMatch_withoutEmbeddingCall(t *testing.T) {
@@ -24,7 +24,7 @@ func TestFindDuplicates_returnsExactMatch_withoutEmbeddingCall(t *testing.T) {
 	ctx := context.Background()
 	items := knowledgemocks.NewMockRepository(t)
 	items.EXPECT().
-		FindByNormalizedConcept(ctx, "System Design", "cache aside pattern").
+		FindByNormalizedConcept(ctx, "session-1", "System Design", "cache aside pattern").
 		Return([]domainknowledge.Item{
 			{ID: "item-approved", Concept: "Cache-Aside Pattern", Status: domainknowledge.StatusApproved},
 			{ID: "item-draft", Concept: "cache aside pattern", Status: domainknowledge.StatusDraft},
@@ -52,7 +52,7 @@ func TestFindDuplicates_returnsNil_whenVectorStoreIsEmpty_withoutEmbeddingCall(t
 	// Given no exact match and an empty vector store
 	ctx := context.Background()
 	items := knowledgemocks.NewMockRepository(t)
-	items.EXPECT().FindByNormalizedConcept(ctx, "System Design", "circuit breaker").Return(nil, nil)
+	items.EXPECT().FindByNormalizedConcept(ctx, "session-1", "System Design", "circuit breaker").Return(nil, nil)
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(0)
 	llm := llmmocks.NewMockProvider(t)
@@ -72,14 +72,14 @@ func TestFindDuplicates_embedsConceptAndDefinition_andSearchesTopicScopedAthenaC
 	// Given no exact match and a non-empty vector store with one semantic match
 	ctx := context.Background()
 	items := knowledgemocks.NewMockRepository(t)
-	items.EXPECT().FindByNormalizedConcept(ctx, "System Design", "circuit breaker").Return(nil, nil)
+	items.EXPECT().FindByNormalizedConcept(ctx, "session-1", "System Design", "circuit breaker").Return(nil, nil)
 	items.EXPECT().GetByID(ctx, "item-1").
 		Return(domainknowledge.Item{ID: "item-1", Concept: "Resiliência de Circuito", Status: domainknowledge.StatusApproved}, nil)
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(3)
 	store.EXPECT().
 		Search(ctx, []float32{0.1, 0.2, 0.3}, domainknowledge.DefaultDuplicateTopK,
-			domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena}).
+			domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena, SessionID: "session-1"}).
 		Return([]domainknowledge.ScoredChunk{
 			{Chunk: domainknowledge.Chunk{ID: "chunk-1", ItemID: "item-1"}, Score: 0.9375},
 		}, nil)
@@ -106,11 +106,11 @@ func TestFindDuplicates_excludesSemanticMatchesBelowThreshold(t *testing.T) {
 	// Given a semantic match scoring below the injected threshold
 	ctx := context.Background()
 	items := knowledgemocks.NewMockRepository(t)
-	items.EXPECT().FindByNormalizedConcept(ctx, "System Design", "circuit breaker").Return(nil, nil)
+	items.EXPECT().FindByNormalizedConcept(ctx, "session-1", "System Design", "circuit breaker").Return(nil, nil)
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(3)
 	store.EXPECT().Search(ctx, []float32{0.1}, domainknowledge.DefaultDuplicateTopK,
-		domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena}).
+		domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena, SessionID: "session-1"}).
 		Return([]domainknowledge.ScoredChunk{
 			{Chunk: domainknowledge.Chunk{ID: "chunk-1", ItemID: "item-1"}, Score: 0.80},
 		}, nil)
@@ -133,13 +133,13 @@ func TestFindDuplicates_raisingTheThreshold_changesWhichMatchesSurvive(t *testin
 	// Given the exact same 0.80-scoring semantic match as above
 	ctx := context.Background()
 	items := knowledgemocks.NewMockRepository(t)
-	items.EXPECT().FindByNormalizedConcept(ctx, "System Design", "circuit breaker").Return(nil, nil)
+	items.EXPECT().FindByNormalizedConcept(ctx, "session-1", "System Design", "circuit breaker").Return(nil, nil)
 	items.EXPECT().GetByID(ctx, "item-1").
 		Return(domainknowledge.Item{ID: "item-1", Concept: "Circuit Breaking", Status: domainknowledge.StatusApproved}, nil)
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(3)
 	store.EXPECT().Search(ctx, []float32{0.1}, domainknowledge.DefaultDuplicateTopK,
-		domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena}).
+		domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena, SessionID: "session-1"}).
 		Return([]domainknowledge.ScoredChunk{
 			{Chunk: domainknowledge.Chunk{ID: "chunk-1", ItemID: "item-1"}, Score: 0.80},
 		}, nil)
@@ -164,13 +164,13 @@ func TestFindDuplicates_dedupsMultipleChunksOfTheSameItem_keepingTheHighestScore
 	// (VectorStore.Search's own documented ordering)
 	ctx := context.Background()
 	items := knowledgemocks.NewMockRepository(t)
-	items.EXPECT().FindByNormalizedConcept(ctx, "System Design", "circuit breaker").Return(nil, nil)
+	items.EXPECT().FindByNormalizedConcept(ctx, "session-1", "System Design", "circuit breaker").Return(nil, nil)
 	items.EXPECT().GetByID(ctx, "item-1").
 		Return(domainknowledge.Item{ID: "item-1", Concept: "Circuit Breaking", Status: domainknowledge.StatusApproved}, nil)
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(3)
 	store.EXPECT().Search(ctx, []float32{0.1}, domainknowledge.DefaultDuplicateTopK,
-		domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena}).
+		domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena, SessionID: "session-1"}).
 		Return([]domainknowledge.ScoredChunk{
 			{Chunk: domainknowledge.Chunk{ID: "chunk-1", ItemID: "item-1"}, Score: 0.96875},
 			{Chunk: domainknowledge.Chunk{ID: "chunk-2", ItemID: "item-1"}, Score: 0.90625},
@@ -197,13 +197,13 @@ func TestFindDuplicates_includesASemanticMatchExactlyAtTheThreshold(t *testing.T
 	// Given a semantic match scoring exactly at the injected threshold
 	ctx := context.Background()
 	items := knowledgemocks.NewMockRepository(t)
-	items.EXPECT().FindByNormalizedConcept(ctx, "System Design", "circuit breaker").Return(nil, nil)
+	items.EXPECT().FindByNormalizedConcept(ctx, "session-1", "System Design", "circuit breaker").Return(nil, nil)
 	items.EXPECT().GetByID(ctx, "item-1").
 		Return(domainknowledge.Item{ID: "item-1", Concept: "Circuit Breaking", Status: domainknowledge.StatusApproved}, nil)
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(3)
 	store.EXPECT().Search(ctx, []float32{0.1}, domainknowledge.DefaultDuplicateTopK,
-		domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena}).
+		domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena, SessionID: "session-1"}).
 		Return([]domainknowledge.ScoredChunk{
 			{Chunk: domainknowledge.Chunk{ID: "chunk-1", ItemID: "item-1"}, Score: 0.9375},
 		}, nil)
@@ -227,7 +227,7 @@ func TestFindDuplicates_ordersSemanticMatchesByScoreDescending(t *testing.T) {
 	// Given two distinct items scoring differently
 	ctx := context.Background()
 	items := knowledgemocks.NewMockRepository(t)
-	items.EXPECT().FindByNormalizedConcept(ctx, "System Design", "circuit breaker").Return(nil, nil)
+	items.EXPECT().FindByNormalizedConcept(ctx, "session-1", "System Design", "circuit breaker").Return(nil, nil)
 	items.EXPECT().GetByID(ctx, "item-lower").
 		Return(domainknowledge.Item{ID: "item-lower", Concept: "Lower", Status: domainknowledge.StatusApproved}, nil)
 	items.EXPECT().GetByID(ctx, "item-higher").
@@ -235,7 +235,7 @@ func TestFindDuplicates_ordersSemanticMatchesByScoreDescending(t *testing.T) {
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(3)
 	store.EXPECT().Search(ctx, []float32{0.1}, domainknowledge.DefaultDuplicateTopK,
-		domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena}).
+		domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena, SessionID: "session-1"}).
 		Return([]domainknowledge.ScoredChunk{
 			{Chunk: domainknowledge.Chunk{ID: "chunk-lower", ItemID: "item-lower"}, Score: 0.90625},
 			{Chunk: domainknowledge.Chunk{ID: "chunk-higher", ItemID: "item-higher"}, Score: 0.96875},
@@ -261,7 +261,7 @@ func TestFindDuplicates_breaksSemanticScoreTiesByItemIDAscending(t *testing.T) {
 	// Given two distinct items tied on score
 	ctx := context.Background()
 	items := knowledgemocks.NewMockRepository(t)
-	items.EXPECT().FindByNormalizedConcept(ctx, "System Design", "circuit breaker").Return(nil, nil)
+	items.EXPECT().FindByNormalizedConcept(ctx, "session-1", "System Design", "circuit breaker").Return(nil, nil)
 	items.EXPECT().GetByID(ctx, "item-b").
 		Return(domainknowledge.Item{ID: "item-b", Concept: "B", Status: domainknowledge.StatusApproved}, nil)
 	items.EXPECT().GetByID(ctx, "item-a").
@@ -269,7 +269,7 @@ func TestFindDuplicates_breaksSemanticScoreTiesByItemIDAscending(t *testing.T) {
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(3)
 	store.EXPECT().Search(ctx, []float32{0.1}, domainknowledge.DefaultDuplicateTopK,
-		domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena}).
+		domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena, SessionID: "session-1"}).
 		Return([]domainknowledge.ScoredChunk{
 			{Chunk: domainknowledge.Chunk{ID: "chunk-b", ItemID: "item-b"}, Score: 0.9375},
 			{Chunk: domainknowledge.Chunk{ID: "chunk-a", ItemID: "item-a"}, Score: 0.9375},
@@ -295,12 +295,12 @@ func TestFindDuplicates_dropsAnOrphanedChunk_whoseOwningItemNoLongerExists(t *te
 	// was indexed
 	ctx := context.Background()
 	items := knowledgemocks.NewMockRepository(t)
-	items.EXPECT().FindByNormalizedConcept(ctx, "System Design", "circuit breaker").Return(nil, nil)
+	items.EXPECT().FindByNormalizedConcept(ctx, "session-1", "System Design", "circuit breaker").Return(nil, nil)
 	items.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{}, domainknowledge.ErrItemNotFound)
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(3)
 	store.EXPECT().Search(ctx, []float32{0.1}, domainknowledge.DefaultDuplicateTopK,
-		domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena}).
+		domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena, SessionID: "session-1"}).
 		Return([]domainknowledge.ScoredChunk{
 			{Chunk: domainknowledge.Chunk{ID: "chunk-1", ItemID: "item-1"}, Score: 0.95},
 		}, nil)
@@ -322,7 +322,7 @@ func TestFindDuplicates_returnsErrSemanticDuplicateCheckUnavailable_whenEmbeddin
 	// Given no exact match, a non-empty store, and a failing embedding call
 	ctx := context.Background()
 	items := knowledgemocks.NewMockRepository(t)
-	items.EXPECT().FindByNormalizedConcept(ctx, "System Design", "circuit breaker").Return(nil, nil)
+	items.EXPECT().FindByNormalizedConcept(ctx, "session-1", "System Design", "circuit breaker").Return(nil, nil)
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(3)
 	llm := llmmocks.NewMockProvider(t)
@@ -344,11 +344,11 @@ func TestFindDuplicates_returnsErrSemanticDuplicateCheckUnavailable_whenSearchFa
 	// Given no exact match, a non-empty store, and a failing vector search
 	ctx := context.Background()
 	items := knowledgemocks.NewMockRepository(t)
-	items.EXPECT().FindByNormalizedConcept(ctx, "System Design", "circuit breaker").Return(nil, nil)
+	items.EXPECT().FindByNormalizedConcept(ctx, "session-1", "System Design", "circuit breaker").Return(nil, nil)
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(3)
 	store.EXPECT().Search(ctx, []float32{0.1}, domainknowledge.DefaultDuplicateTopK,
-		domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena}).
+		domainknowledge.SearchFilters{Topic: "System Design", Source: domainknowledge.SourceAthena, SessionID: "session-1"}).
 		Return(nil, errors.New("vectorstore: search failed"))
 	llm := llmmocks.NewMockProvider(t)
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Circuit Breaker\n\nA resiliency pattern."}).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil)
@@ -368,7 +368,7 @@ func TestFindDuplicates_returnsError_whenExactLookupFails(t *testing.T) {
 	// Given a repository failure on the exact-match lookup itself
 	ctx := context.Background()
 	items := knowledgemocks.NewMockRepository(t)
-	items.EXPECT().FindByNormalizedConcept(ctx, "System Design", "circuit breaker").
+	items.EXPECT().FindByNormalizedConcept(ctx, "session-1", "System Design", "circuit breaker").
 		Return(nil, errors.New("sqlite: database is locked"))
 	llm := llmmocks.NewMockProvider(t)
 	service := NewService(items, nil, nil, llm, nil, nil, nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil,

@@ -18,9 +18,11 @@ import (
 )
 
 func pendingProposal(id, action, targetItemID string, targetUpdatedAt time.Time) domainknowledge.ReconciliationProposal {
+	candidate := reconciliationCandidateContent()
+	candidate.SessionID = "session-1"
 	return domainknowledge.ReconciliationProposal{
 		ID: id, Action: action, Status: domainknowledge.ProposalPending,
-		Candidate: reconciliationCandidateContent(), TargetItemID: targetItemID, TargetUpdatedAt: targetUpdatedAt,
+		Candidate: candidate, TargetItemID: targetItemID, TargetUpdatedAt: targetUpdatedAt,
 		Reason: "classified reason", CreatedAt: time.Date(2026, 8, 28, 9, 0, 0, 0, time.UTC),
 		EvidenceIDs: []string{"evidence-1"},
 	}
@@ -87,9 +89,9 @@ func TestApplyPendingReconciliationCreate_persistsANewItemAndLinksAlreadyMateria
 	reconciliations.EXPECT().GetByID(ctx, "proposal-1").Return(proposal, nil).Once()
 	reconciliations.EXPECT().UpdateStatus(ctx, "proposal-1", domainknowledge.ProposalApplied, "classified reason", mock.Anything).Return(nil).Once()
 	repo := knowledgemocks.NewMockRepository(t)
-	repo.EXPECT().FindByNormalizedConcept(ctx, "Distributed Systems", "idempotency key").Return(nil, nil).Once()
+	repo.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Distributed Systems", "idempotency key").Return(nil, nil).Once()
 	repo.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
-		return item.Concept == "Idempotency key" && item.Status == domainknowledge.StatusDraft
+		return item.Concept == "Idempotency key" && item.Status == domainknowledge.StatusDraft && item.SessionID == "session-1"
 	})).Return(nil).Once()
 	evidenceRepo := knowledgemocks.NewMockEvidenceRepository(t)
 	evidenceRepo.EXPECT().LinkToItem(ctx, mock.MatchedBy(func(link domainknowledge.ItemEvidence) bool {
@@ -121,7 +123,7 @@ func TestApplyPendingReconciliationCreate_restoresNothingButPropagatesTheErrorWh
 	reconciliations.EXPECT().GetByID(ctx, "proposal-1").Return(proposal, nil).Once()
 	reconciliations.EXPECT().UpdateStatus(ctx, "proposal-1", domainknowledge.ProposalApplied, "classified reason", mock.Anything).Return(nil).Once()
 	repo := knowledgemocks.NewMockRepository(t)
-	repo.EXPECT().FindByNormalizedConcept(ctx, "Distributed Systems", "idempotency key").Return(nil, nil).Once()
+	repo.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Distributed Systems", "idempotency key").Return(nil, nil).Once()
 	repo.EXPECT().Save(ctx, mock.Anything).Return(nil).Once()
 	evidenceRepo := knowledgemocks.NewMockEvidenceRepository(t)
 	evidenceRepo.EXPECT().LinkToItem(ctx, mock.Anything).Return(errors.New("disk full")).Once()
@@ -145,7 +147,7 @@ func TestApplyPendingReconciliationCreate_returnsIndexingFailureButKeepsTheDurab
 	reconciliations.EXPECT().GetByID(ctx, "proposal-1").Return(proposal, nil).Once()
 	reconciliations.EXPECT().UpdateStatus(ctx, "proposal-1", domainknowledge.ProposalApplied, "classified reason", mock.Anything).Return(nil).Once()
 	repo := knowledgemocks.NewMockRepository(t)
-	repo.EXPECT().FindByNormalizedConcept(ctx, "Distributed Systems", "idempotency key").Return(nil, nil).Once()
+	repo.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Distributed Systems", "idempotency key").Return(nil, nil).Once()
 	repo.EXPECT().Save(ctx, mock.Anything).Return(nil).Once()
 	evidenceRepo := knowledgemocks.NewMockEvidenceRepository(t)
 	evidenceRepo.EXPECT().LinkToItem(ctx, mock.Anything).Return(nil).Once()
@@ -250,7 +252,7 @@ func TestApplyPendingReconciliationRelate_createsADraftAndACanonicalRelation(t *
 	reconciliations.EXPECT().UpdateStatus(ctx, "proposal-1", domainknowledge.ProposalApplied, "classified reason", mock.Anything).Return(nil).Once()
 	repo := knowledgemocks.NewMockRepository(t)
 	repo.EXPECT().GetByID(ctx, "item-target").Return(domainknowledge.Item{ID: "item-target", UpdatedAt: targetUpdatedAt}, nil).Once()
-	repo.EXPECT().FindByNormalizedConcept(ctx, "Distributed Systems", "idempotency key").Return(nil, nil).Once()
+	repo.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Distributed Systems", "idempotency key").Return(nil, nil).Once()
 	var createdItemID string
 	repo.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		createdItemID = item.ID

@@ -82,7 +82,7 @@ func TestExtractFromSession_returnsValidatedServerStampedCandidates(t *testing.T
 			strings.Contains(prompt.Content, "[message:message-assistant] Assistant:\nCAP describes trade-offs.")
 	})).Return(domainllm.ChatResponse{Content: "```json\n" + `{"items":[{"topic":"hostile","concept":" CAP theorem ","definition":" A self-contained definition. ","properties":[" partition tolerance "," "],"trade_offs":[" consistency vs availability "],"related_concepts":[" PACELC "],"evidence":[{"message_id":"message-assistant","quote":"CAP describes trade-offs."}]},{"concept":"invalid"}]}` + "\n```"}, nil).Once()
 	repo := knowledgemocks.NewMockRepository(t)
-	repo.EXPECT().FindByNormalizedConcept(ctx, "Distributed systems", "cap theorem").Return(nil, nil)
+	repo.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Distributed systems", "cap theorem").Return(nil, nil)
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(0)
 	service := NewService(repo, sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil, store, nil, domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
@@ -141,7 +141,7 @@ func TestExtractFromSession_attachesExactDuplicateMatch_withoutEmbeddingCall(t *
 		Content: `{"action":"no_change","target_item_id":"item-1","reason":"Already captures this concept."}`,
 	}, nil).Once()
 	repo := knowledgemocks.NewMockRepository(t)
-	repo.EXPECT().FindByNormalizedConcept(ctx, "System Design", "load balancer").
+	repo.EXPECT().FindByNormalizedConcept(ctx, "session-1", "System Design", "load balancer").
 		Return([]domainknowledge.Item{{ID: "item-1", Concept: "Load Balancer", Status: domainknowledge.StatusApproved}}, nil)
 	repo.EXPECT().GetByID(ctx, "item-1").
 		Return(domainknowledge.Item{ID: "item-1", Concept: "Load Balancer", Definition: "Distributes network traffic across servers.", Status: domainknowledge.StatusApproved}, nil).Once()
@@ -184,8 +184,8 @@ func TestExtractFromSession_shortCircuitsSemanticCheck_afterFirstEmbeddingFailur
 			`]}`,
 	}, nil).Once()
 	repo := knowledgemocks.NewMockRepository(t)
-	repo.EXPECT().FindByNormalizedConcept(ctx, "System Design", "cache aside").Return(nil, nil)
-	repo.EXPECT().FindByNormalizedConcept(ctx, "System Design", "circuit breaker").Return(nil, nil)
+	repo.EXPECT().FindByNormalizedConcept(ctx, "session-1", "System Design", "cache aside").Return(nil, nil)
+	repo.EXPECT().FindByNormalizedConcept(ctx, "session-1", "System Design", "circuit breaker").Return(nil, nil)
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(3).Once()
 	llm.EXPECT().Embeddings(ctx, mock.Anything).

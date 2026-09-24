@@ -183,9 +183,9 @@ func (_c *MockRepository_Delete_Call) RunAndReturn(run func(context.Context, str
 	return _c
 }
 
-// FindByNormalizedConcept provides a mock function with given fields: ctx, topic, normalizedConcept
-func (_m *MockRepository) FindByNormalizedConcept(ctx context.Context, topic string, normalizedConcept string) ([]knowledge.Item, error) {
-	ret := _m.Called(ctx, topic, normalizedConcept)
+// FindByNormalizedConcept provides a mock function with given fields: ctx, sessionID, topic, normalizedConcept
+func (_m *MockRepository) FindByNormalizedConcept(ctx context.Context, sessionID string, topic string, normalizedConcept string) ([]knowledge.Item, error) {
+	ret := _m.Called(ctx, sessionID, topic, normalizedConcept)
 
 	if len(ret) == 0 {
 		panic("no return value specified for FindByNormalizedConcept")
@@ -193,19 +193,19 @@ func (_m *MockRepository) FindByNormalizedConcept(ctx context.Context, topic str
 
 	var r0 []knowledge.Item
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string) ([]knowledge.Item, error)); ok {
-		return rf(ctx, topic, normalizedConcept)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string) ([]knowledge.Item, error)); ok {
+		return rf(ctx, sessionID, topic, normalizedConcept)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string, string) []knowledge.Item); ok {
-		r0 = rf(ctx, topic, normalizedConcept)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string) []knowledge.Item); ok {
+		r0 = rf(ctx, sessionID, topic, normalizedConcept)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]knowledge.Item)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
-		r1 = rf(ctx, topic, normalizedConcept)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, string) error); ok {
+		r1 = rf(ctx, sessionID, topic, normalizedConcept)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -220,15 +220,16 @@ type MockRepository_FindByNormalizedConcept_Call struct {
 
 // FindByNormalizedConcept is a helper method to define mock.On call
 //   - ctx context.Context
+//   - sessionID string
 //   - topic string
 //   - normalizedConcept string
-func (_e *MockRepository_Expecter) FindByNormalizedConcept(ctx interface{}, topic interface{}, normalizedConcept interface{}) *MockRepository_FindByNormalizedConcept_Call {
-	return &MockRepository_FindByNormalizedConcept_Call{Call: _e.mock.On("FindByNormalizedConcept", ctx, topic, normalizedConcept)}
+func (_e *MockRepository_Expecter) FindByNormalizedConcept(ctx interface{}, sessionID interface{}, topic interface{}, normalizedConcept interface{}) *MockRepository_FindByNormalizedConcept_Call {
+	return &MockRepository_FindByNormalizedConcept_Call{Call: _e.mock.On("FindByNormalizedConcept", ctx, sessionID, topic, normalizedConcept)}
 }
 
-func (_c *MockRepository_FindByNormalizedConcept_Call) Run(run func(ctx context.Context, topic string, normalizedConcept string)) *MockRepository_FindByNormalizedConcept_Call {
+func (_c *MockRepository_FindByNormalizedConcept_Call) Run(run func(ctx context.Context, sessionID string, topic string, normalizedConcept string)) *MockRepository_FindByNormalizedConcept_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(string), args[2].(string))
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(string))
 	})
 	return _c
 }
@@ -238,7 +239,7 @@ func (_c *MockRepository_FindByNormalizedConcept_Call) Return(_a0 []knowledge.It
 	return _c
 }
 
-func (_c *MockRepository_FindByNormalizedConcept_Call) RunAndReturn(run func(context.Context, string, string) ([]knowledge.Item, error)) *MockRepository_FindByNormalizedConcept_Call {
+func (_c *MockRepository_FindByNormalizedConcept_Call) RunAndReturn(run func(context.Context, string, string, string) ([]knowledge.Item, error)) *MockRepository_FindByNormalizedConcept_Call {
 	_c.Call.Return(run)
 	return _c
 }
