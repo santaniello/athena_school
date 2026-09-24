@@ -18,15 +18,17 @@ func newTestReconciliationRepository(t *testing.T) (*ReconciliationRepository, *
 	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
+	seedSession(t, db, testSessionID)
 	_, err = db.Exec(`INSERT INTO knowledge_items
-		(id, topic, concept, definition, properties, trade_offs, related_concepts, source, status, created_at, updated_at)
-		VALUES ('item-target', 'Distributed Systems', 'Eventual consistency', 'Converges eventually.', '[]', '[]', '[]', 'athena', 'approved', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`)
+		(id, session_id, topic, concept, definition, properties, trade_offs, related_concepts, source, status, created_at, updated_at)
+		VALUES ('item-target', 'session-1', 'Distributed Systems', 'Eventual consistency', 'Converges eventually.', '[]', '[]', '[]', 'athena', 'approved', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`)
 	require.NoError(t, err)
 	return NewReconciliationRepository(db), db
 }
 
 func testReconciliationCandidate() domainknowledge.Item {
 	return domainknowledge.Item{
+		SessionID:  testSessionID,
 		Topic:      "Distributed Systems",
 		Concept:    "Eventual consistency",
 		Definition: "Reads eventually reflect the latest write once updates stop.",
@@ -63,6 +65,31 @@ func TestReconciliationRepository_SavePersistsAnAppliedProposalWithAResolvedTime
 	assert.Equal(t, domainknowledge.ProposalApplied, status)
 	assert.Equal(t, "item-target", targetItemID)
 	assert.True(t, resolvedAt.Valid)
+}
+
+func TestReconciliationRepository_SaveOwnsTheProposalByItsCandidatesSession(t *testing.T) {
+	// Given a pending proposal whose candidate belongs to a session
+	repository, db := newTestReconciliationRepository(t)
+	ctx := context.Background()
+	proposal := domainknowledge.ReconciliationProposal{
+		ID: "proposal-owned", Action: domainknowledge.ReconcileCreate, Status: domainknowledge.ProposalPending,
+		Candidate: testReconciliationCandidate(), Reason: "no existing match",
+		CreatedAt: time.Date(2026, 8, 28, 10, 0, 0, 0, time.UTC),
+	}
+
+	// When saving it
+	require.NoError(t, repository.Save(ctx, proposal))
+
+	// Then the row's owner is the candidate's session, so deleting that
+	// session deletes the proposal
+	var sessionID string
+	require.NoError(t, db.QueryRow(
+		`SELECT session_id FROM knowledge_reconciliation_proposals WHERE id = ?`, proposal.ID,
+	).Scan(&sessionID))
+	assert.Equal(t, testSessionID, sessionID)
+	_, err := db.Exec(`DELETE FROM sessions WHERE id = ?`, testSessionID)
+	require.NoError(t, err)
+	assert.Zero(t, countRows(t, db, `SELECT COUNT(*) FROM knowledge_reconciliation_proposals`))
 }
 
 func TestReconciliationRepository_SavePersistsAPendingProposalWithNoResolvedTimestampAndNoTarget(t *testing.T) {

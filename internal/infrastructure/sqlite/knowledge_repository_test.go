@@ -30,6 +30,7 @@ func newTestKnowledgeRepositoryWithDB(t *testing.T) (*KnowledgeRepository, *sql.
 	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
+	seedSession(t, db, testSessionID)
 	return NewKnowledgeRepository(db), db
 }
 
@@ -37,6 +38,7 @@ func testItem(id, topic, status string) knowledge.Item {
 	now := time.Now().UTC().Truncate(time.Second)
 	return knowledge.Item{
 		ID:              id,
+		SessionID:       testSessionID,
 		Topic:           topic,
 		Concept:         "Concept " + id,
 		Definition:      "Definition " + id,
@@ -534,6 +536,7 @@ func TestKnowledgeRepository_Delete_returnsErrItemNotFound_whenMissing(t *testin
 func TestKnowledgeRepository_Save_participatesInCallerTransaction(t *testing.T) {
 	// Given a repository and a transactor sharing the same database
 	db := newTestDB(t)
+	seedSession(t, db, testSessionID)
 	repo := NewKnowledgeRepository(db)
 	transactor := NewSQLTransactor(db)
 	item := testItem("item-1", "Go", knowledge.StatusDraft)

@@ -18,11 +18,12 @@ func newTestEvidenceRepository(t *testing.T) (*EvidenceRepository, *sql.DB) {
 	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
+	seedSession(t, db, testSessionID)
 	_, err = db.Exec(`INSERT INTO knowledge_items
-		(id, topic, concept, definition, properties, trade_offs, related_concepts, source, status, created_at, updated_at)
+		(id, session_id, topic, concept, definition, properties, trade_offs, related_concepts, source, status, created_at, updated_at)
 		VALUES
-		('item-a', 'Go', 'A', 'First.', '[]', '[]', '[]', 'athena', 'draft', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-		('item-b', 'Go', 'B', 'Second.', '[]', '[]', '[]', 'athena', 'draft', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`)
+		('item-a', 'session-1', 'Go', 'A', 'First.', '[]', '[]', '[]', 'athena', 'draft', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+		('item-b', 'session-1', 'Go', 'B', 'Second.', '[]', '[]', '[]', 'athena', 'draft', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`)
 	require.NoError(t, err)
 	return NewEvidenceRepository(db), db
 }
@@ -109,8 +110,8 @@ func TestEvidenceRepository_DeleteUnreferencedPreservesEvidenceStillLinkedToARec
 	})
 	require.NoError(t, err)
 	_, err = db.Exec(`INSERT INTO knowledge_reconciliation_proposals
-		(id, action, status, candidate_snapshot, reason, changes, created_at)
-		VALUES ('proposal-1', 'create', 'pending', '{}', 'because', '{}', CURRENT_TIMESTAMP)`)
+		(id, session_id, action, status, candidate_snapshot, reason, changes, created_at)
+		VALUES ('proposal-1', 'session-1', 'create', 'pending', '{}', 'because', '{}', CURRENT_TIMESTAMP)`)
 	require.NoError(t, err)
 	_, err = db.Exec(`INSERT INTO knowledge_reconciliation_evidence (proposal_id, evidence_id) VALUES ('proposal-1', ?)`, evidence.ID)
 	require.NoError(t, err)
@@ -133,6 +134,7 @@ func TestEvidenceRepository_SavingAnItemWithItsEvidenceIsAtomic_aFailureLeavesNe
 	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
+	seedSession(t, db, testSessionID)
 	_, err = db.Exec(`CREATE TRIGGER always_fail_item_evidence_link
 		BEFORE INSERT ON knowledge_item_evidence
 		BEGIN SELECT RAISE(FAIL, 'boom'); END`)

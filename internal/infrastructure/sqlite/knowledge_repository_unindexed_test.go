@@ -18,7 +18,7 @@ const testUnindexedEmbeddingModel = "text-embedding-3-small"
 // and the current embedding model.
 func currentChunkFor(item knowledge.Item, chunkID string) knowledge.Chunk {
 	return knowledge.Chunk{
-		ID: chunkID, Source: knowledge.SourceAthena, Topic: item.Topic, Status: item.Status,
+		ID: chunkID, SessionID: item.SessionID, Source: knowledge.SourceAthena, Topic: item.Topic, Status: item.Status,
 		ItemID: item.ID, Content: "content", Embedding: []float32{0.1, 0.2},
 		EmbeddingModel: testUnindexedEmbeddingModel, ItemUpdatedAt: item.UpdatedAt,
 		CreatedAt: item.UpdatedAt,

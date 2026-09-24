@@ -20,6 +20,7 @@ func newTestChunkRepository(t *testing.T) *ChunkRepository {
 	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
+	seedSession(t, db, testSessionID)
 	return NewChunkRepository(db)
 }
 
@@ -31,6 +32,7 @@ func newTestChunkAndItemRepositories(t *testing.T) (*ChunkRepository, *Knowledge
 	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
+	seedSession(t, db, testSessionID)
 	return NewChunkRepository(db), NewKnowledgeRepository(db), db
 }
 
@@ -38,7 +40,7 @@ func newTestChunkAndItemRepositories(t *testing.T) (*ChunkRepository, *Knowledge
 // athena by default (tests override Source for imported_doc scenarios).
 func testItemAt(id, topic, status string, updatedAt time.Time) knowledge.Item {
 	return knowledge.Item{
-		ID: id, Topic: topic, Concept: "Concept", Definition: "A definition.",
+		ID: id, SessionID: testSessionID, Topic: topic, Concept: "Concept", Definition: "A definition.",
 		Source: knowledge.SourceAthena, Status: status,
 		CreatedAt: updatedAt, UpdatedAt: updatedAt,
 	}
@@ -47,6 +49,7 @@ func testItemAt(id, topic, status string, updatedAt time.Time) knowledge.Item {
 func testChunk(id, filePath string, createdAt time.Time) knowledge.Chunk {
 	return knowledge.Chunk{
 		ID:             id,
+		SessionID:      testSessionID,
 		Source:         knowledge.SourceImportedDoc,
 		Topic:          "Go",
 		Status:         knowledge.StatusApproved,
@@ -124,7 +127,7 @@ func TestChunkRepository_DeleteBySourcePath_removesOnlyThatSourcesChunks_andRetu
 	}))
 
 	// When deleting by one source's path
-	removedIDs, err := repo.DeleteBySourcePath(ctx, "/abs/notes/a.md")
+	removedIDs, err := repo.DeleteBySourcePath(ctx, testSessionID, "/abs/notes/a.md")
 
 	// Then only that source's chunks are gone, and their IDs are returned
 	require.NoError(t, err)
@@ -141,7 +144,7 @@ func TestChunkRepository_DeleteBySourcePath_isNoOp_whenNothingMatches(t *testing
 	ctx := context.Background()
 
 	// When deleting by a source path that was never ingested
-	removedIDs, err := repo.DeleteBySourcePath(ctx, "/abs/notes/never-imported.md")
+	removedIDs, err := repo.DeleteBySourcePath(ctx, testSessionID, "/abs/notes/never-imported.md")
 
 	// Then it succeeds without error and returns no IDs
 	require.NoError(t, err)
@@ -162,7 +165,7 @@ func TestChunkRepository_DeleteBySourcePath_targetsOnlyOneSource_whenTwoRootsSha
 	require.NoError(t, repo.SaveAll(ctx, []knowledge.Chunk{courseA, courseB}))
 
 	// When deleting by only one of the two sources
-	removedIDs, err := repo.DeleteBySourcePath(ctx, "/course-a/notes.md")
+	removedIDs, err := repo.DeleteBySourcePath(ctx, testSessionID, "/course-a/notes.md")
 
 	// Then only that source's chunk is gone; the other survives untouched
 	require.NoError(t, err)
@@ -550,4 +553,32 @@ func TestChunkRepository_ListCurrent_returnsError_onDatabaseWideFailure(t *testi
 	// Then the whole load fails loudly instead of reporting an empty result
 	assert.Error(t, err)
 	assert.Empty(t, result.Chunks)
+}
+
+func TestChunkRepository_DeleteBySourcePath_leavesTheSameSourcesChunksInOtherSessionsUntouched(t *testing.T) {
+	// Given the same source imported into two sessions
+	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	seedSession(t, db, "session-a")
+	seedSession(t, db, "session-b")
+	repo := NewChunkRepository(db)
+	ctx := context.Background()
+	inA := testChunk("chunk-a", "notes/go.md", time.Now().UTC())
+	inA.SessionID = "session-a"
+	inB := testChunk("chunk-b", "notes/go.md", time.Now().UTC())
+	inB.SessionID = "session-b"
+	require.NoError(t, repo.SaveAll(ctx, []knowledge.Chunk{inA, inB}))
+
+	// When re-importing it in session A, which deletes A's previous chunks
+	removedIDs, err := repo.DeleteBySourcePath(ctx, "session-a", inA.SourcePath)
+
+	// Then only session A's chunk is removed
+	require.NoError(t, err)
+	assert.Equal(t, []string{"chunk-a"}, removedIDs)
+	remaining, err := repo.ListAll(ctx)
+	require.NoError(t, err)
+	require.Len(t, remaining, 1)
+	assert.Equal(t, "chunk-b", remaining[0].ID)
+	assert.Equal(t, "session-b", remaining[0].SessionID)
 }

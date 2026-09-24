@@ -22,6 +22,10 @@ import (
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 )
 
+// testIngestSessionID is the study session every ImportFile binding test
+// imports into.
+const testIngestSessionID = "session-1"
+
 // normalizedSourceRoot mirrors the desktop adapter's own normalization
 // (filepath.Abs + filepath.Clean + filepath.ToSlash) so tests can predict
 // the exact SourcePath a given real directory resolves to.
@@ -153,10 +157,10 @@ func TestApp_ImportFile_emitsProgressThenDone_onSuccess(t *testing.T) {
 
 	ctx := context.Background()
 	sourcePath := path.Join(normalizedSourceRoot(t, dir), "go.md")
-	ingestedFiles.EXPECT().ListAll(ctx).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
+	ingestedFiles.EXPECT().ListBySession(ctx, testIngestSessionID).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nBasics of Go."}).
 		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}, Model: domainllm.EmbeddingModel}, nil).Once()
-	chunks.EXPECT().DeleteBySourcePath(ctx, sourcePath).Return(nil, nil).Once()
+	chunks.EXPECT().DeleteBySourcePath(ctx, testIngestSessionID, sourcePath).Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
 		return len(cs) == 1 && cs[0].FilePath == "go.md" && cs[0].SourcePath == sourcePath
 	})).Return(nil).Once()
@@ -171,7 +175,7 @@ func TestApp_ImportFile_emitsProgressThenDone_onSuccess(t *testing.T) {
 	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, llm, store)
 
 	// When importing that file through the desktop adapter
-	err := app.ImportFile(filePath)
+	err := app.ImportFile(testIngestSessionID, filePath)
 
 	// Then progress is emitted for the one file, followed by a done
 	// summary reporting it ingested — 1 of 1 files
@@ -193,7 +197,7 @@ func TestApp_ImportFile_emitsError_whenFileDoesNotExist(t *testing.T) {
 	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, llm, nil)
 
 	// When importing it
-	err := app.ImportFile(filepath.Join(t.TempDir(), "does-not-exist", "go.md"))
+	err := app.ImportFile(testIngestSessionID, filepath.Join(t.TempDir(), "does-not-exist", "go.md"))
 
 	// Then an "ingest:error" event is emitted and the error is returned,
 	// with no "ingest:done" ever firing
@@ -213,11 +217,11 @@ func TestApp_ImportFile_emitsError_whenImportFileFails(t *testing.T) {
 	items := knowledgemocks.NewMockRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	boom := errors.New("database unavailable")
-	ingestedFiles.EXPECT().ListAll(context.Background()).Return(nil, boom).Once()
+	ingestedFiles.EXPECT().ListBySession(context.Background(), testIngestSessionID).Return(nil, boom).Once()
 	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, llm, nil)
 
 	// When importing that file
-	err := app.ImportFile(filePath)
+	err := app.ImportFile(testIngestSessionID, filePath)
 
 	// Then the failure surfaces as an "ingest:error" event
 	require.Error(t, err)
@@ -238,11 +242,11 @@ func TestApp_ImportFile_emitsError_whenExtensionIsUnsupported(t *testing.T) {
 	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, llm, nil)
 
 	// When importing it
-	err := app.ImportFile(filePath)
+	err := app.ImportFile(testIngestSessionID, filePath)
 
 	// Then it is rejected before ever reaching the index/repositories
 	require.Error(t, err)
 	require.Len(t, captured.errors, 1)
 	assert.Nil(t, captured.done)
-	ingestedFiles.AssertNotCalled(t, "ListAll", mock.Anything)
+	ingestedFiles.AssertNotCalled(t, "ListBySession", mock.Anything, mock.Anything)
 }

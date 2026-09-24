@@ -165,6 +165,7 @@ var migrations = []func(*sql.DB) error{
 	)`),
 	dropFoldersIsDefaultColumn,
 	addSessionsFolderIDCascade,
+	migrateKnowledgeToSessionOwnership,
 }
 
 // addSessionsFolderIDColumn adds sessions.folder_id if it does not already
@@ -695,4 +696,125 @@ func execSQL(stmt string) func(*sql.DB) error {
 		_, err := db.Exec(stmt)
 		return err
 	}
+}
+
+// migrateKnowledgeToSessionOwnership rebuilds every table that stores
+// knowledge so each row is owned by a study session
+// (session_id NOT NULL REFERENCES sessions(id) ON DELETE CASCADE): deleting a
+// session, or the folder that holds it, deletes its knowledge with it. It
+// runs only while knowledge_items still lacks session_id.
+//
+// Rows are discarded on purpose. Knowledge written before this change has no
+// owner and the product is not deployed anywhere it must survive, so there is
+// no legacy path — see
+// specs/phases/phase-02-knowledge-engine/15-session-scoped-knowledge.md.
+// knowledge_evidence has no owner column of its own; it is emptied too, since
+// every snapshot it holds was only referenced by rows dropped here.
+//
+// DROP TABLE performs an implicit DELETE with foreign keys enforced, so the
+// cascades already declared on knowledge_item_evidence,
+// knowledge_item_relations and knowledge_reconciliation_evidence clear those
+// child tables; they are not recreated.
+func migrateKnowledgeToSessionOwnership(db *sql.DB) error {
+	owned, err := hasColumn(db, "knowledge_items", "session_id")
+	if err != nil {
+		return err
+	}
+	if owned {
+		return nil
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("sqlite: beginning knowledge session ownership migration: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	statements := []string{
+		`DROP TABLE knowledge_reconciliation_proposals`,
+		`DROP TABLE knowledge_items`,
+		`DROP TABLE knowledge_chunks`,
+		`DROP TABLE ingested_files`,
+		`DELETE FROM knowledge_evidence`,
+		`CREATE TABLE knowledge_items (
+			id                 TEXT PRIMARY KEY,
+			session_id         TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+			topic              TEXT,
+			concept            TEXT,
+			definition         TEXT,
+			properties         TEXT, -- JSON array
+			trade_offs         TEXT, -- JSON array
+			related_concepts   TEXT, -- JSON array
+			source             TEXT,
+			status             TEXT DEFAULT 'draft',
+			created_at         DATETIME,
+			updated_at         DATETIME,
+			normalized_concept TEXT
+		)`,
+		`CREATE INDEX idx_knowledge_items_session_id ON knowledge_items(session_id)`,
+		`CREATE INDEX idx_knowledge_items_status_created_at ON knowledge_items(status, created_at)`,
+		`CREATE INDEX idx_knowledge_items_topic ON knowledge_items(topic)`,
+		`CREATE INDEX idx_knowledge_items_topic_normalized_concept ON knowledge_items(topic, normalized_concept)`,
+		`CREATE TABLE knowledge_chunks (
+			id              TEXT PRIMARY KEY,
+			session_id      TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+			source          TEXT,
+			topic           TEXT,
+			status          TEXT,
+			item_id         TEXT,
+			source_path     TEXT, -- canonical absolute identity; set for imported_doc
+			file_path       TEXT, -- stable first-import relative/display path
+			heading         TEXT,
+			content         TEXT,
+			embedding       BLOB, -- tightly-packed little-endian float32
+			embedding_model TEXT NOT NULL,
+			item_updated_at DATETIME, -- NULL for imported_doc
+			created_at      DATETIME
+		)`,
+		`CREATE INDEX idx_knowledge_chunks_session_id ON knowledge_chunks(session_id)`,
+		`CREATE INDEX idx_knowledge_chunks_file_path ON knowledge_chunks(file_path)`,
+		`CREATE INDEX idx_knowledge_chunks_item_id ON knowledge_chunks(item_id)`,
+		`CREATE INDEX idx_knowledge_chunks_source_path ON knowledge_chunks(session_id, source_path)`,
+		`CREATE TABLE ingested_files (
+			session_id      TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+			source_path     TEXT NOT NULL,
+			file_path       TEXT NOT NULL,
+			mtime_unix_nano INTEGER NOT NULL,
+			embedding_model TEXT NOT NULL,
+			chunk_count     INTEGER NOT NULL,
+			item_id         TEXT NOT NULL,
+			ingested_at     DATETIME,
+			PRIMARY KEY (session_id, source_path)
+		)`,
+		`CREATE TABLE knowledge_reconciliation_proposals (
+			id                 TEXT PRIMARY KEY,
+			session_id         TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+			action             TEXT NOT NULL,
+			status             TEXT NOT NULL,
+			candidate_snapshot TEXT NOT NULL, -- validated JSON Item snapshot
+			target_item_id     TEXT,
+			target_updated_at  DATETIME,
+			reason             TEXT NOT NULL,
+			changes            TEXT NOT NULL, -- validated JSON ItemChanges
+			created_at         DATETIME NOT NULL,
+			resolved_at        DATETIME
+		)`,
+		`CREATE INDEX idx_knowledge_reconciliation_proposals_session_id
+			ON knowledge_reconciliation_proposals(session_id)`,
+	}
+	for _, statement := range statements {
+		if _, err := tx.Exec(statement); err != nil {
+			return fmt.Errorf("sqlite: migrating knowledge to session ownership: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("sqlite: committing knowledge session ownership migration: %w", err)
+	}
+	committed = true
+	return nil
 }

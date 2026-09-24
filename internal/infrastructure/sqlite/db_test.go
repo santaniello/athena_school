@@ -118,9 +118,10 @@ func TestOpen_createsKnowledgeEvidenceTablesWithSharingAndOwnershipConstraints(t
 	db, err := Open(path)
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
+	seedSession(t, db, testSessionID)
 	_, err = db.Exec(`INSERT INTO knowledge_items
-		(id, topic, concept, definition, properties, trade_offs, related_concepts, source, status, created_at, updated_at)
-		VALUES ('item-1', 'Go', 'Channels', 'Typed conduits.', '[]', '[]', '[]', 'athena', 'draft', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`)
+		(id, session_id, topic, concept, definition, properties, trade_offs, related_concepts, source, status, created_at, updated_at)
+		VALUES ('item-1', 'session-1', 'Go', 'Channels', 'Typed conduits.', '[]', '[]', '[]', 'athena', 'draft', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`)
 	require.NoError(t, err)
 	_, err = db.Exec(`INSERT INTO knowledge_evidence
 		(id, origin_type, origin_id, source_label, excerpt, created_at)
@@ -580,10 +581,11 @@ func TestOpen_backfillsNormalizedConceptForPreExistingKnowledgeItems(t *testing.
 	path := filepath.Join(t.TempDir(), "athena.db")
 	db, err := Open(path)
 	require.NoError(t, err)
+	seedSession(t, db, testSessionID)
 	_, execErr := db.Exec(
-		`INSERT INTO knowledge_items (id, topic, concept, definition, source, status, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		"item-1", "System Design", " Cache-Aside  Pattern ", "A caching strategy.", "athena", "draft", "2024-01-01", "2024-01-01",
+		`INSERT INTO knowledge_items (id, session_id, topic, concept, definition, source, status, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		"item-1", testSessionID, "System Design", " Cache-Aside  Pattern ", "A caching strategy.", "athena", "draft", "2024-01-01", "2024-01-01",
 	)
 	require.NoError(t, execErr)
 	require.NoError(t, db.Close())
