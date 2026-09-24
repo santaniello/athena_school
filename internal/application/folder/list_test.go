@@ -21,7 +21,7 @@ func TestListFolders_returnsEveryFolder(t *testing.T) {
 		{ID: "f-1", Name: "System Design"},
 	}
 	folders.EXPECT().List(context.Background()).Return(want, nil).Once()
-	service := NewService(folders, sessions)
+	service := NewService(folders, sessions, nil)
 
 	// When listing folders
 	got, err := service.ListFolders(context.Background())

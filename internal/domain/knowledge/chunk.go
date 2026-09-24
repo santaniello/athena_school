@@ -74,6 +74,11 @@ type ChunkRepository interface {
 	// same-named file, and scoping by sessionID ensures re-importing a file
 	// in one session never touches the same file's chunks in another.
 	DeleteBySourcePath(ctx context.Context, sessionID, sourcePath string) ([]string, error)
+	// ListIDsBySession returns the IDs of every chunk sessionID owns, without
+	// deleting anything — so a caller about to delete the session (whose
+	// foreign key cascades to its chunks) can evict them from an in-memory
+	// index after the transaction commits.
+	ListIDsBySession(ctx context.Context, sessionID string) ([]string, error)
 	// DeleteByItemID removes every chunk owned by itemID and returns the
 	// IDs removed, so a caller can evict them from an in-memory index
 	// after this call's transaction commits.

@@ -81,6 +81,21 @@ func (r *ChunkRepository) DeleteBySourcePath(ctx context.Context, sessionID, sou
 	return ids, nil
 }
 
+// ListIDsBySession returns the IDs of every chunk owned by sessionID. It is
+// a no-op read, not an error, when the session owns none.
+func (r *ChunkRepository) ListIDsBySession(ctx context.Context, sessionID string) ([]string, error) {
+	rows, err := execer(ctx, r.db).QueryContext(ctx,
+		`SELECT id FROM knowledge_chunks WHERE session_id = ?`, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: listing knowledge chunk ids by session: %w", err)
+	}
+	ids, err := scanIDs(rows)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: reading knowledge chunk ids by session: %w", err)
+	}
+	return ids, nil
+}
+
 // DeleteByItemID removes every chunk owned by itemID and returns the IDs
 // removed. It is a no-op, not an error, when no chunk matches.
 func (r *ChunkRepository) DeleteByItemID(ctx context.Context, itemID string) ([]string, error) {

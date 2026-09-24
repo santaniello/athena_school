@@ -582,3 +582,45 @@ func TestChunkRepository_DeleteBySourcePath_leavesTheSameSourcesChunksInOtherSes
 	assert.Equal(t, "chunk-b", remaining[0].ID)
 	assert.Equal(t, "session-b", remaining[0].SessionID)
 }
+
+func TestChunkRepository_ListIDsBySession_returnsOnlyThatSessionsChunkIDs(t *testing.T) {
+	// Given chunks owned by two different sessions
+	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	seedSession(t, db, "session-a")
+	seedSession(t, db, "session-b")
+	repo := NewChunkRepository(db)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	a1 := testChunk("chunk-a1", "a1.md", now)
+	a1.SessionID = "session-a"
+	a2 := testChunk("chunk-a2", "a2.md", now)
+	a2.SessionID = "session-a"
+	b1 := testChunk("chunk-b1", "b1.md", now)
+	b1.SessionID = "session-b"
+	require.NoError(t, repo.SaveAll(ctx, []knowledge.Chunk{a1, a2, b1}))
+
+	// When listing session A's chunk IDs
+	ids, err := repo.ListIDsBySession(ctx, "session-a")
+
+	// Then only A's IDs come back, and nothing is deleted
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"chunk-a1", "chunk-a2"}, ids)
+	all, err := repo.ListAll(ctx)
+	require.NoError(t, err)
+	assert.Len(t, all, 3)
+}
+
+func TestChunkRepository_ListIDsBySession_returnsAnEmptySlice_whenTheSessionOwnsNoChunks(t *testing.T) {
+	// Given a session with no chunks
+	repo := newTestChunkRepository(t)
+
+	// When listing its chunk IDs
+	ids, err := repo.ListIDsBySession(context.Background(), testSessionID)
+
+	// Then the result is empty and non-nil
+	require.NoError(t, err)
+	assert.NotNil(t, ids)
+	assert.Empty(t, ids)
+}
