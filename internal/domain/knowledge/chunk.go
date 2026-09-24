@@ -16,6 +16,9 @@ type Chunk struct {
 	// ItemID is the owning knowledge Item: the extracted Item for
 	// Source == athena, the shadow Item for Source == imported_doc. Always set.
 	ItemID string
+	// SessionID is the study session that owns this chunk; deleting the
+	// session deletes the chunk.
+	SessionID string
 	// SourcePath is the imported source's canonical absolute identity
 	// (desktop-normalized), set only for Source == imported_doc. Never
 	// shown in progress, failures, or index issue UI.
