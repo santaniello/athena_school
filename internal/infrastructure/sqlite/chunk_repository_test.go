@@ -36,12 +36,11 @@ func newTestChunkAndItemRepositories(t *testing.T) (*ChunkRepository, *Knowledge
 	return NewChunkRepository(db), NewKnowledgeRepository(db), db
 }
 
-// testItem is a matching owner for testChunk: same topic/status, source
-// athena by default (tests override Source for imported_doc scenarios).
-func testItemAt(id, topic, status string, updatedAt time.Time) knowledge.Item {
+// testItemAt is a matching owner for testChunk: an imported document's Item.
+func testItemAt(id, topic string, updatedAt time.Time) knowledge.Item {
 	return knowledge.Item{
 		ID: id, SessionID: testSessionID, Topic: topic, Concept: "Concept", Definition: "A definition.",
-		Source: knowledge.SourceAthena, Status: status,
+		Source:    knowledge.SourceImportedDoc,
 		CreatedAt: updatedAt, UpdatedAt: updatedAt,
 	}
 }
@@ -52,7 +51,6 @@ func testChunk(id, filePath string, createdAt time.Time) knowledge.Chunk {
 		SessionID:      testSessionID,
 		Source:         knowledge.SourceImportedDoc,
 		Topic:          "Go",
-		Status:         knowledge.StatusApproved,
 		ItemID:         "item-" + id,
 		SourcePath:     "/abs/" + filePath,
 		FilePath:       filePath,
@@ -65,36 +63,19 @@ func testChunk(id, filePath string, createdAt time.Time) knowledge.Chunk {
 }
 
 func TestChunkRepository_SaveAll_thenListAll_roundTripsEveryField(t *testing.T) {
-	// Given a repository and one chunk with an athena Item's UpdatedAt set
+	// Given a repository and one chunk
 	repo := newTestChunkRepository(t)
 	ctx := context.Background()
 	chunk := testChunk("chunk-1", "notes/go.md", time.Now().UTC().Truncate(time.Second))
-	chunk.ItemUpdatedAt = time.Now().UTC().Truncate(time.Second)
 
 	// When saving then listing it
 	require.NoError(t, repo.SaveAll(ctx, []knowledge.Chunk{chunk}))
 	got, err := repo.ListAll(ctx)
 
-	// Then every field round-trips, including the embedding and item_updated_at
+	// Then every field round-trips, including the embedding
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	assert.Equal(t, chunk, got[0])
-}
-
-func TestChunkRepository_SaveAll_roundTripsZeroItemUpdatedAt_asZeroTime(t *testing.T) {
-	// Given an imported-file chunk with no ItemUpdatedAt (zero value)
-	repo := newTestChunkRepository(t)
-	ctx := context.Background()
-	chunk := testChunk("chunk-1", "notes/go.md", time.Now().UTC().Truncate(time.Second))
-
-	// When saving then listing it
-	require.NoError(t, repo.SaveAll(ctx, []knowledge.Chunk{chunk}))
-	got, err := repo.ListAll(ctx)
-
-	// Then ItemUpdatedAt round-trips as the zero value, not some sentinel
-	require.NoError(t, err)
-	require.Len(t, got, 1)
-	assert.True(t, got[0].ItemUpdatedAt.IsZero())
 }
 
 func TestChunkRepository_ListAll_returnsChunksOldestFirst(t *testing.T) {
@@ -200,45 +181,20 @@ func TestChunkRepository_DeleteByItemID_removesOnlyThatItemsChunks_andReturnsRem
 	assert.Equal(t, "chunk-b1", got[0].ID)
 }
 
-func TestChunkRepository_ListCurrent_returnsMatchingAthenaChunk_whenItemUpdatedAtMatches(t *testing.T) {
-	// Given an athena chunk whose ItemUpdatedAt matches its Item's UpdatedAt
+func TestChunkRepository_ListCurrent_returnsAChunkWhoseItemExists(t *testing.T) {
+	// Given an imported_doc chunk whose owning Item exists
 	chunks, items, _ := newTestChunkAndItemRepositories(t)
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Second)
-	require.NoError(t, items.Save(ctx, testItemAt("item-1", "Go", knowledge.StatusApproved, now)))
-	chunk := testChunk("chunk-1", "", now)
-	chunk.Source = knowledge.SourceAthena
-	chunk.ItemID = "item-1"
-	chunk.ItemUpdatedAt = now
-	require.NoError(t, chunks.SaveAll(ctx, []knowledge.Chunk{chunk}))
-
-	// When listing current chunks for the matching embedding model
-	result, err := chunks.ListCurrent(ctx, testEmbeddingModel)
-
-	// Then it is included with no issues
-	require.NoError(t, err)
-	require.Len(t, result.Chunks, 1)
-	assert.Equal(t, "chunk-1", result.Chunks[0].ID)
-	assert.Empty(t, result.Issues)
-}
-
-func TestChunkRepository_ListCurrent_returnsImportedDocChunk_regardlessOfItemUpdatedAt(t *testing.T) {
-	// Given an imported_doc chunk with no ItemUpdatedAt at all (the normal
-	// case — its freshness is governed by ingested_files, not this field)
-	chunks, items, _ := newTestChunkAndItemRepositories(t)
-	ctx := context.Background()
-	now := time.Now().UTC().Truncate(time.Second)
-	item := testItemAt("item-1", "Go", knowledge.StatusApproved, now)
-	item.Source = knowledge.SourceImportedDoc
-	require.NoError(t, items.Save(ctx, item))
-	chunk := testChunk("chunk-1", "notes/go.md", now) // testChunk defaults to SourceImportedDoc, zero ItemUpdatedAt
+	require.NoError(t, items.Save(ctx, testItemAt("item-1", "Go", now)))
+	chunk := testChunk("chunk-1", "notes/go.md", now)
 	chunk.ItemID = "item-1"
 	require.NoError(t, chunks.SaveAll(ctx, []knowledge.Chunk{chunk}))
 
 	// When listing current chunks
 	result, err := chunks.ListCurrent(ctx, testEmbeddingModel)
 
-	// Then it is included despite ItemUpdatedAt never having been set
+	// Then it is included with no issues
 	require.NoError(t, err)
 	require.Len(t, result.Chunks, 1)
 	assert.Empty(t, result.Issues)
@@ -249,8 +205,7 @@ func TestChunkRepository_ListCurrent_excludesWrongEmbeddingModel_silently(t *tes
 	chunks, items, _ := newTestChunkAndItemRepositories(t)
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Second)
-	item := testItemAt("item-1", "Go", knowledge.StatusApproved, now)
-	item.Source = knowledge.SourceImportedDoc
+	item := testItemAt("item-1", "Go", now)
 	require.NoError(t, items.Save(ctx, item))
 	chunk := testChunk("chunk-1", "notes/go.md", now)
 	chunk.ItemID = "item-1"
@@ -287,124 +242,12 @@ func TestChunkRepository_ListCurrent_reportsMissingItem_whenNoOwningItemExists(t
 	assert.Equal(t, knowledge.ChunkIssueMissingItem, result.Issues[0].Reason)
 }
 
-func TestChunkRepository_ListCurrent_reportsSourceMismatch(t *testing.T) {
-	// Given a chunk whose Source disagrees with its Item's Source
-	chunks, items, _ := newTestChunkAndItemRepositories(t)
-	ctx := context.Background()
-	now := time.Now().UTC().Truncate(time.Second)
-	item := testItemAt("item-1", "Go", knowledge.StatusApproved, now) // Source: athena
-	require.NoError(t, items.Save(ctx, item))
-	chunk := testChunk("chunk-1", "notes/go.md", now) // Source: imported_doc
-	chunk.ItemID = "item-1"
-	require.NoError(t, chunks.SaveAll(ctx, []knowledge.Chunk{chunk}))
-
-	// When listing current chunks
-	result, err := chunks.ListCurrent(ctx, testEmbeddingModel)
-
-	// Then it is excluded and reported with the source-mismatch reason
-	require.NoError(t, err)
-	assert.Empty(t, result.Chunks)
-	require.Len(t, result.Issues, 1)
-	assert.Equal(t, knowledge.ChunkIssueSourceMismatch, result.Issues[0].Reason)
-}
-
-func TestChunkRepository_ListCurrent_reportsTopicMismatch(t *testing.T) {
-	// Given a chunk whose Topic disagrees with its Item's Topic
-	chunks, items, _ := newTestChunkAndItemRepositories(t)
-	ctx := context.Background()
-	now := time.Now().UTC().Truncate(time.Second)
-	item := testItemAt("item-1", "Rust", knowledge.StatusApproved, now)
-	item.Source = knowledge.SourceImportedDoc
-	require.NoError(t, items.Save(ctx, item))
-	chunk := testChunk("chunk-1", "notes/go.md", now) // Topic: "Go"
-	chunk.ItemID = "item-1"
-	require.NoError(t, chunks.SaveAll(ctx, []knowledge.Chunk{chunk}))
-
-	// When listing current chunks
-	result, err := chunks.ListCurrent(ctx, testEmbeddingModel)
-
-	// Then it is excluded and reported with the topic-mismatch reason
-	require.NoError(t, err)
-	assert.Empty(t, result.Chunks)
-	require.Len(t, result.Issues, 1)
-	assert.Equal(t, knowledge.ChunkIssueTopicMismatch, result.Issues[0].Reason)
-}
-
-func TestChunkRepository_ListCurrent_reportsStatusMismatch(t *testing.T) {
-	// Given a chunk whose Status disagrees with its Item's Status
-	chunks, items, _ := newTestChunkAndItemRepositories(t)
-	ctx := context.Background()
-	now := time.Now().UTC().Truncate(time.Second)
-	item := testItemAt("item-1", "Go", knowledge.StatusDeprecated, now)
-	item.Source = knowledge.SourceImportedDoc
-	require.NoError(t, items.Save(ctx, item))
-	chunk := testChunk("chunk-1", "notes/go.md", now) // Status: approved
-	chunk.ItemID = "item-1"
-	require.NoError(t, chunks.SaveAll(ctx, []knowledge.Chunk{chunk}))
-
-	// When listing current chunks
-	result, err := chunks.ListCurrent(ctx, testEmbeddingModel)
-
-	// Then it is excluded and reported with the status-mismatch reason
-	require.NoError(t, err)
-	assert.Empty(t, result.Chunks)
-	require.Len(t, result.Issues, 1)
-	assert.Equal(t, knowledge.ChunkIssueStatusMismatch, result.Issues[0].Reason)
-}
-
-func TestChunkRepository_ListCurrent_reportsStaleItem_whenAthenaItemUpdatedAtDiffers(t *testing.T) {
-	// Given an athena chunk whose ItemUpdatedAt no longer matches its
-	// Item's current UpdatedAt (the item changed after this chunk indexed)
-	chunks, items, _ := newTestChunkAndItemRepositories(t)
-	ctx := context.Background()
-	now := time.Now().UTC().Truncate(time.Second)
-	require.NoError(t, items.Save(ctx, testItemAt("item-1", "Go", knowledge.StatusApproved, now)))
-	chunk := testChunk("chunk-1", "", now)
-	chunk.Source = knowledge.SourceAthena
-	chunk.ItemID = "item-1"
-	chunk.ItemUpdatedAt = now.Add(-time.Hour)
-	require.NoError(t, chunks.SaveAll(ctx, []knowledge.Chunk{chunk}))
-
-	// When listing current chunks
-	result, err := chunks.ListCurrent(ctx, testEmbeddingModel)
-
-	// Then it is excluded and reported with the stale-item reason
-	require.NoError(t, err)
-	assert.Empty(t, result.Chunks)
-	require.Len(t, result.Issues, 1)
-	assert.Equal(t, knowledge.ChunkIssueStaleItem, result.Issues[0].Reason)
-}
-
-func TestChunkRepository_ListCurrent_reportsStaleItem_whenAthenaItemUpdatedAtNeverSet(t *testing.T) {
-	// Given an athena chunk that never recorded an ItemUpdatedAt at all
-	chunks, items, _ := newTestChunkAndItemRepositories(t)
-	ctx := context.Background()
-	now := time.Now().UTC().Truncate(time.Second)
-	require.NoError(t, items.Save(ctx, testItemAt("item-1", "Go", knowledge.StatusApproved, now)))
-	chunk := testChunk("chunk-1", "", now)
-	chunk.Source = knowledge.SourceAthena
-	chunk.ItemID = "item-1"
-	// ItemUpdatedAt left at its zero value
-	require.NoError(t, chunks.SaveAll(ctx, []knowledge.Chunk{chunk}))
-
-	// When listing current chunks
-	result, err := chunks.ListCurrent(ctx, testEmbeddingModel)
-
-	// Then it is excluded and reported with the stale-item reason, not
-	// silently matched against a mistaken zero-value comparison
-	require.NoError(t, err)
-	assert.Empty(t, result.Chunks)
-	require.Len(t, result.Issues, 1)
-	assert.Equal(t, knowledge.ChunkIssueStaleItem, result.Issues[0].Reason)
-}
-
 func TestChunkRepository_ListCurrent_reportsMalformedEmbedding_andStillReturnsOtherValidChunks(t *testing.T) {
 	// Given one valid chunk and one whose stored embedding blob is corrupt
 	chunks, items, db := newTestChunkAndItemRepositories(t)
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Second)
-	item := testItemAt("item-1", "Go", knowledge.StatusApproved, now)
-	item.Source = knowledge.SourceImportedDoc
+	item := testItemAt("item-1", "Go", now)
 	require.NoError(t, items.Save(ctx, item))
 	good := testChunk("chunk-good", "notes/go.md", now)
 	good.ItemID = "item-1"
@@ -429,20 +272,14 @@ func TestChunkRepository_ListCurrent_reportsMalformedEmbedding_andStillReturnsOt
 
 func TestChunkRepository_ListCurrent_reportsUnknownSource_asDefenseInDepth_whenItemAgrees(t *testing.T) {
 	// Given a chunk and its Item both corrupted to the same unrecognized
-	// source value — the mismatch check alone can't catch this, since both
-	// sides agree; ValidateChunk is the safety net that still rejects it
+	// source value; ValidateChunk is the safety net that still rejects it
 	chunks, items, db := newTestChunkAndItemRepositories(t)
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Second)
-	item := testItemAt("item-1", "Go", knowledge.StatusApproved, now)
-	item.Source = knowledge.SourceImportedDoc
+	item := testItemAt("item-1", "Go", now)
 	require.NoError(t, items.Save(ctx, item))
 	chunk := testChunk("chunk-1", "notes/go.md", now)
 	chunk.ItemID = "item-1"
-	// Matches the item's UpdatedAt so the staleness check (which applies to
-	// every source except imported_doc, and this chunk is about to stop
-	// being one) doesn't mask the unknown-source reason this test targets.
-	chunk.ItemUpdatedAt = now
 	require.NoError(t, chunks.SaveAll(ctx, []knowledge.Chunk{chunk}))
 	_, execErr := db.ExecContext(ctx, `UPDATE knowledge_chunks SET source = 'from_the_future' WHERE id = ?`, "chunk-1")
 	require.NoError(t, execErr)
@@ -464,8 +301,7 @@ func TestChunkRepository_ListCurrent_ordersValidChunksOldestFirst(t *testing.T) 
 	chunks, items, _ := newTestChunkAndItemRepositories(t)
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Second)
-	item := testItemAt("item-1", "Go", knowledge.StatusApproved, now)
-	item.Source = knowledge.SourceImportedDoc
+	item := testItemAt("item-1", "Go", now)
 	require.NoError(t, items.Save(ctx, item))
 	older := testChunk("chunk-old", "notes/a.md", now.Add(-time.Hour))
 	older.ItemID = "item-1"

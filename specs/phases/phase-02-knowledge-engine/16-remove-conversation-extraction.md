@@ -177,8 +177,14 @@ backend they used to call has no caller left when it is deleted.
       `ListTopics`, `CountByStatus`, `CountUnindexed`, `ListUnindexed`) and
       `ChunkRepository.UpdateMetadataByItemID`. `ChunkRepository.ListAll` stays: the SQLite
       tests use it to inspect the raw table
-- [ ] Domain and SQLite: drop status/source/topic filters and fields; migration; repository
-      and reset cleanup; regenerate mocks and Wails bindings
+- [x] Domain and SQLite: drop status/source/topic filters and fields; migration; repository
+      and reset cleanup; regenerate mocks and Wails bindings. Beyond the letter of the list:
+      `stale_item` and the `item_updated_at` column go too (only extracted items were ever
+      stale, so nothing can be), as do `ChunkLoadIssue.Source` and the index-review dialog's
+      per-source guidance; `idx_knowledge_items_topic` is not recreated (nothing queries by
+      topic). The historical `CREATE TABLE IF NOT EXISTS` steps for the knowledge tables are
+      gone from `migrations`: they re-run on every open and would bring the dropped tables
+      back, so one `migrateKnowledgeToDocumentsOnly` step now owns the final schema
 - [ ] Docs: mark the superseded specs, update `Athena.md`, `Planning.md`, README,
       `lib/documentation.ts`, CHANGELOG (breaking, see below)
 

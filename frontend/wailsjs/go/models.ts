@@ -3,7 +3,6 @@ export namespace desktop {
 	export class ChunkLoadIssueResult {
 	    chunkId: string;
 	    itemId: string;
-	    source: string;
 	    filePath: string;
 	    reason: string;
 	
@@ -15,7 +14,6 @@ export namespace desktop {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.chunkId = source["chunkId"];
 	        this.itemId = source["itemId"];
-	        this.source = source["source"];
 	        this.filePath = source["filePath"];
 	        this.reason = source["reason"];
 	    }

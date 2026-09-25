@@ -49,7 +49,7 @@ func scoredChunk(id, itemID string, score float32) domainknowledge.ScoredChunk {
 	return domainknowledge.ScoredChunk{
 		Chunk: domainknowledge.Chunk{
 			ID: id, ItemID: itemID, Source: domainknowledge.SourceImportedDoc,
-			Topic: "Go", Status: domainknowledge.StatusApproved,
+			Topic:    "Go",
 			FilePath: "notes/" + id + ".md", Heading: "Heading " + id, Content: "Content " + id,
 		},
 		Score: score,
@@ -97,7 +97,7 @@ func TestRetrieve_embedsQueryWithSessionAttribution_andSearchesApprovedChunksOfT
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(3)
 	store.EXPECT().
-		Search(context.Background(), []float32{0.1, 0.2, 0.3}, domainknowledge.DefaultTopK, domainknowledge.SearchFilters{Status: domainknowledge.StatusApproved, SessionID: "session-1"}).
+		Search(context.Background(), []float32{0.1, 0.2, 0.3}, domainknowledge.DefaultTopK, domainknowledge.SearchFilters{SessionID: "session-1"}).
 		Return([]domainknowledge.ScoredChunk{scoredChunk("chunk-1", "item-1", 0.9)}, nil).
 		Once()
 	llm := llmmocks.NewMockProvider(t)

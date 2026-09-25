@@ -169,7 +169,7 @@ func (l *IndexLoader) doReload(ctx context.Context) domainknowledge.IndexStatus 
 	for _, chunk := range result.Chunks {
 		if validateErr := domainknowledge.ValidateChunk(chunk); validateErr != nil {
 			issues = append(issues, domainknowledge.ChunkLoadIssue{
-				ChunkID: chunk.ID, ItemID: chunk.ItemID, Source: chunk.Source, FilePath: chunk.FilePath,
+				ChunkID: chunk.ID, ItemID: chunk.ItemID, FilePath: chunk.FilePath,
 				Reason: domainknowledge.ReasonForValidationError(validateErr),
 			})
 			continue

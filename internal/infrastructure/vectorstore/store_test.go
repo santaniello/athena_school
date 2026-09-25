@@ -18,7 +18,6 @@ func testChunk(id string, embedding []float32) knowledge.Chunk {
 		ID:        id,
 		Source:    knowledge.SourceImportedDoc,
 		Topic:     "Go",
-		Status:    knowledge.StatusApproved,
 		ItemID:    "item-" + id,
 		Embedding: embedding,
 	}
@@ -400,30 +399,6 @@ func TestStore_Search_returnsErrInvalidVector_forInvalidQuery(t *testing.T) {
 
 	// Then it is rejected
 	assert.ErrorIs(t, err, knowledge.ErrInvalidVector)
-}
-
-func TestStore_Search_filtersByTopicSourceStatus_exactMatch(t *testing.T) {
-	// Given chunks spanning different topics, sources and statuses
-	store := New()
-	ctx := context.Background()
-	goApproved := testChunk("go-approved", []float32{1, 0})
-	goDraft := testChunk("go-draft", []float32{1, 0})
-	goDraft.Status = knowledge.StatusDraft
-	rustApproved := testChunk("rust-approved", []float32{1, 0})
-	rustApproved.Topic = "Rust"
-	athenaChunk := testChunk("go-athena", []float32{1, 0})
-	athenaChunk.Source = knowledge.SourceAthena
-	require.NoError(t, store.ReplaceAll(ctx, []knowledge.Chunk{goApproved, goDraft, rustApproved, athenaChunk}))
-
-	// When searching with every filter set
-	results, err := store.Search(ctx, []float32{1, 0}, 10, knowledge.SearchFilters{
-		Topic: "Go", Source: knowledge.SourceImportedDoc, Status: knowledge.StatusApproved,
-	})
-
-	// Then only the exact match survives
-	require.NoError(t, err)
-	require.Len(t, results, 1)
-	assert.Equal(t, "go-approved", results[0].Chunk.ID)
 }
 
 func TestStore_Search_filtersBySessionID_exactMatch(t *testing.T) {

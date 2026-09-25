@@ -12,7 +12,6 @@ func validChunk() Chunk {
 		ID:        "chunk-1",
 		Source:    SourceImportedDoc,
 		Topic:     "Go",
-		Status:    StatusApproved,
 		ItemID:    "item-1",
 		Embedding: []float32{1, 2, 3},
 	}
@@ -53,28 +52,19 @@ func TestValidateChunk_returnsErrInvalidChunkID_whenIDIsWhitespaceOnly(t *testin
 	assert.ErrorIs(t, err, ErrInvalidChunkID)
 }
 
-func TestValidateChunk_returnsErrUnknownSource_whenSourceIsNotOneOfTheThreeKnownValues(t *testing.T) {
-	// Given a chunk with an unrecognized source
-	chunk := validChunk()
-	chunk.Source = "unknown_source"
+func TestValidateChunk_returnsErrUnknownSource_whenSourceIsNotAnImportedDocument(t *testing.T) {
+	// Given chunks whose source is unrecognized, or one of the sources that
+	// only conversation extraction used to produce
+	for _, source := range []string{"unknown_source", "athena", "user_note", ""} {
+		chunk := validChunk()
+		chunk.Source = source
 
-	// When validating it
-	err := ValidateChunk(chunk)
+		// When validating them
+		err := ValidateChunk(chunk)
 
-	// Then it is rejected as an unknown source
-	assert.ErrorIs(t, err, ErrUnknownSource)
-}
-
-func TestValidateChunk_returnsErrUnknownStatus_whenStatusIsNotOneOfTheThreeKnownValues(t *testing.T) {
-	// Given a chunk with an unrecognized status
-	chunk := validChunk()
-	chunk.Status = "unknown_status"
-
-	// When validating it
-	err := ValidateChunk(chunk)
-
-	// Then it is rejected as an unknown status
-	assert.ErrorIs(t, err, ErrUnknownStatus)
+		// Then each is rejected as an unknown source
+		assert.ErrorIs(t, err, ErrUnknownSource, "source %q", source)
+	}
 }
 
 func TestValidateChunk_returnsErrInvalidVector_whenEmbeddingIsEmpty(t *testing.T) {
@@ -188,7 +178,6 @@ func TestReasonForValidationError_mapsEachValidateChunkSentinel_toItsStableCode(
 	cases := map[error]string{
 		ErrInvalidChunkID: ChunkIssueInvalidChunkID,
 		ErrUnknownSource:  ChunkIssueUnknownSource,
-		ErrUnknownStatus:  ChunkIssueUnknownStatus,
 		ErrInvalidVector:  ChunkIssueInvalidVector,
 	}
 	for err, want := range cases {

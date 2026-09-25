@@ -32,7 +32,7 @@ func newTestKnowledgeRepositoryWithDB(t *testing.T) (*KnowledgeRepository, *sql.
 	return NewKnowledgeRepository(db), db
 }
 
-func testItem(id, topic, status string) knowledge.Item {
+func testItem(id, topic string) knowledge.Item {
 	now := time.Now().UTC().Truncate(time.Second)
 	return knowledge.Item{
 		ID:              id,
@@ -43,8 +43,7 @@ func testItem(id, topic, status string) knowledge.Item {
 		Properties:      []string{"prop-1", "prop-2", "prop-3"},
 		TradeOffs:       []string{"trade-off-1"},
 		RelatedConcepts: []string{"related-1"},
-		Source:          knowledge.SourceAthena,
-		Status:          status,
+		Source:          knowledge.SourceImportedDoc,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}
@@ -54,7 +53,7 @@ func TestKnowledgeRepository_Save_andGetByID_roundTripsEveryField(t *testing.T) 
 	// Given a repository and a fully populated item
 	repo := newTestKnowledgeRepository(t)
 	ctx := context.Background()
-	item := testItem("item-1", "Go Concurrency", knowledge.StatusDraft)
+	item := testItem("item-1", "Go Concurrency")
 
 	// When saving it and reading it back
 	require.NoError(t, repo.Save(ctx, item))
@@ -70,7 +69,7 @@ func TestKnowledgeRepository_Save_andGetByID_roundTripsEveryField(t *testing.T) 
 	assert.Equal(t, item.TradeOffs, stored.TradeOffs)
 	assert.Equal(t, item.RelatedConcepts, stored.RelatedConcepts)
 	assert.Equal(t, item.Source, stored.Source)
-	assert.Equal(t, item.Status, stored.Status)
+	assert.Equal(t, item.Source, stored.Source)
 	assert.Equal(t, item.CreatedAt, stored.CreatedAt)
 	assert.Equal(t, item.UpdatedAt, stored.UpdatedAt)
 }
@@ -79,7 +78,7 @@ func TestKnowledgeRepository_Save_roundTripsNilSlicesAsEmpty(t *testing.T) {
 	// Given an item with nil list fields
 	repo := newTestKnowledgeRepository(t)
 	ctx := context.Background()
-	item := testItem("item-1", "Go Concurrency", knowledge.StatusDraft)
+	item := testItem("item-1", "Go Concurrency")
 	item.Properties = nil
 	item.TradeOffs = nil
 	item.RelatedConcepts = nil
@@ -99,7 +98,7 @@ func TestKnowledgeRepository_Save_roundTripsEmptySlicesAsEmpty(t *testing.T) {
 	// Given an item with explicitly empty (non-nil) list fields
 	repo := newTestKnowledgeRepository(t)
 	ctx := context.Background()
-	item := testItem("item-1", "Go Concurrency", knowledge.StatusDraft)
+	item := testItem("item-1", "Go Concurrency")
 	item.Properties = []string{}
 	item.TradeOffs = []string{}
 	item.RelatedConcepts = []string{}
@@ -132,7 +131,7 @@ func TestKnowledgeRepository_GetByID_returnsError_whenPropertiesColumnHasInvalid
 	// or manual edit) into something that isn't valid JSON
 	repo := newTestKnowledgeRepository(t)
 	ctx := context.Background()
-	item := testItem("item-1", "Go Concurrency", knowledge.StatusDraft)
+	item := testItem("item-1", "Go Concurrency")
 	require.NoError(t, repo.Save(ctx, item))
 	_, execErr := repo.db.ExecContext(ctx,
 		`UPDATE knowledge_items SET properties = 'not json' WHERE id = ?`, "item-1")
@@ -149,12 +148,12 @@ func TestKnowledgeRepository_Update_persistsChanges(t *testing.T) {
 	// Given a saved item
 	repo := newTestKnowledgeRepository(t)
 	ctx := context.Background()
-	item := testItem("item-1", "Go Concurrency", knowledge.StatusDraft)
+	item := testItem("item-1", "Go Concurrency")
 	require.NoError(t, repo.Save(ctx, item))
 
 	// When updating its fields
 	item.Definition = "A new definition"
-	item.Status = knowledge.StatusApproved
+	item.Topic = "Rust"
 	err := repo.Update(ctx, item)
 
 	// Then the changes are persisted
@@ -162,53 +161,14 @@ func TestKnowledgeRepository_Update_persistsChanges(t *testing.T) {
 	stored, getErr := repo.GetByID(ctx, "item-1")
 	require.NoError(t, getErr)
 	assert.Equal(t, "A new definition", stored.Definition)
-	assert.Equal(t, knowledge.StatusApproved, stored.Status)
-}
-
-func TestKnowledgeRepository_Save_persistsNormalizedConcept(t *testing.T) {
-	// Given an item whose concept needs normalizing
-	repo, db := newTestKnowledgeRepositoryWithDB(t)
-	ctx := context.Background()
-	item := testItem("item-1", "System Design", knowledge.StatusDraft)
-	item.Concept = " Cache-Aside  Pattern "
-
-	// When saving it
-	require.NoError(t, repo.Save(ctx, item))
-
-	// Then normalized_concept holds the normalized form
-	var normalizedConcept string
-	queryErr := db.QueryRow(
-		`SELECT normalized_concept FROM knowledge_items WHERE id = ?`, "item-1",
-	).Scan(&normalizedConcept)
-	require.NoError(t, queryErr)
-	assert.Equal(t, "cache aside pattern", normalizedConcept)
-}
-
-func TestKnowledgeRepository_Update_recomputesNormalizedConceptWhenConceptChanges(t *testing.T) {
-	// Given a saved item
-	repo, db := newTestKnowledgeRepositoryWithDB(t)
-	ctx := context.Background()
-	item := testItem("item-1", "System Design", knowledge.StatusDraft)
-	require.NoError(t, repo.Save(ctx, item))
-
-	// When updating its concept
-	item.Concept = "Circuit Breaker"
-	require.NoError(t, repo.Update(ctx, item))
-
-	// Then normalized_concept is recomputed to match
-	var normalizedConcept string
-	queryErr := db.QueryRow(
-		`SELECT normalized_concept FROM knowledge_items WHERE id = ?`, "item-1",
-	).Scan(&normalizedConcept)
-	require.NoError(t, queryErr)
-	assert.Equal(t, "circuit breaker", normalizedConcept)
+	assert.Equal(t, "Rust", stored.Topic)
 }
 
 func TestKnowledgeRepository_Update_returnsErrItemNotFound_whenMissing(t *testing.T) {
 	// Given a repository with no matching item
 	repo := newTestKnowledgeRepository(t)
 	ctx := context.Background()
-	item := testItem("missing", "Go Concurrency", knowledge.StatusDraft)
+	item := testItem("missing", "Go Concurrency")
 
 	// When updating an item that does not exist
 	err := repo.Update(ctx, item)
@@ -221,7 +181,7 @@ func TestKnowledgeRepository_Delete_removesItem(t *testing.T) {
 	// Given a saved item
 	repo := newTestKnowledgeRepository(t)
 	ctx := context.Background()
-	require.NoError(t, repo.Save(ctx, testItem("item-1", "Go Concurrency", knowledge.StatusDraft)))
+	require.NoError(t, repo.Save(ctx, testItem("item-1", "Go Concurrency")))
 
 	// When deleting it
 	err := repo.Delete(ctx, "item-1")
@@ -250,7 +210,7 @@ func TestKnowledgeRepository_Save_participatesInCallerTransaction(t *testing.T) 
 	seedSession(t, db, testSessionID)
 	repo := NewKnowledgeRepository(db)
 	transactor := NewSQLTransactor(db)
-	item := testItem("item-1", "Go", knowledge.StatusDraft)
+	item := testItem("item-1", "Go")
 	boom := errors.New("boom")
 
 	// When Save runs inside a transaction that is then rolled back

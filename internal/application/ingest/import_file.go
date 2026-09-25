@@ -282,7 +282,6 @@ func (s *Service) ingestFile(
 			SessionID:      sessionID,
 			Source:         domainknowledge.SourceImportedDoc,
 			Topic:          topic,
-			Status:         domainknowledge.StatusApproved,
 			ItemID:         itemID,
 			SourcePath:     candidate.SourcePath,
 			FilePath:       displayPath,
@@ -370,7 +369,6 @@ func (s *Service) saveShadowItem(
 		Concept:    concept,
 		Definition: definition,
 		Source:     domainknowledge.SourceImportedDoc,
-		Status:     domainknowledge.StatusApproved,
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	})

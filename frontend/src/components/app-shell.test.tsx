@@ -948,7 +948,6 @@ describe('AppShell knowledge index lifecycle', () => {
         {
           chunkId: 'chunk-1',
           itemId: 'item-1',
-          source: 'imported_doc',
           filePath: 'notes/go.md',
           reason: 'missing_item',
         },
@@ -980,7 +979,6 @@ describe('AppShell knowledge index lifecycle', () => {
         {
           chunkId: 'chunk-1',
           itemId: 'item-1',
-          source: 'imported_doc',
           filePath: 'notes/go.md',
           reason: 'missing_item',
         },

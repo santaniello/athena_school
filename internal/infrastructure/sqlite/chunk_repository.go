@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 
 	"github.com/santaniello/athena/internal/domain/knowledge"
 )
@@ -21,7 +20,7 @@ func NewChunkRepository(db *sql.DB) *ChunkRepository {
 	return &ChunkRepository{db: db}
 }
 
-const chunkColumns = `id, session_id, source, topic, status, item_id, source_path, file_path, heading, content, embedding, embedding_model, item_updated_at, created_at`
+const chunkColumns = `id, session_id, source, topic, item_id, source_path, file_path, heading, content, embedding, embedding_model, created_at`
 
 // SaveAll inserts every chunk. Callers are responsible for deleting any
 // previous chunks for the same source/item first (see DeleteBySourcePath) —
@@ -29,10 +28,9 @@ const chunkColumns = `id, session_id, source, topic, status, item_id, source_pat
 func (r *ChunkRepository) SaveAll(ctx context.Context, chunks []knowledge.Chunk) error {
 	for _, chunk := range chunks {
 		_, err := execer(ctx, r.db).ExecContext(ctx,
-			`INSERT INTO knowledge_chunks (`+chunkColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			chunk.ID, chunk.SessionID, chunk.Source, chunk.Topic, chunk.Status, chunk.ItemID, chunk.SourcePath, chunk.FilePath,
-			chunk.Heading, chunk.Content, encodeEmbedding(chunk.Embedding), chunk.EmbeddingModel,
-			toNullTime(chunk.ItemUpdatedAt), chunk.CreatedAt,
+			`INSERT INTO knowledge_chunks (`+chunkColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			chunk.ID, chunk.SessionID, chunk.Source, chunk.Topic, chunk.ItemID, chunk.SourcePath, chunk.FilePath,
+			chunk.Heading, chunk.Content, encodeEmbedding(chunk.Embedding), chunk.EmbeddingModel, chunk.CreatedAt,
 		)
 		if err != nil {
 			return fmt.Errorf("sqlite: saving knowledge chunk %s: %w", chunk.ID, err)
@@ -112,13 +110,13 @@ func (r *ChunkRepository) DeleteByItemID(ctx context.Context, itemID string) ([]
 }
 
 // chunkLoadCurrentQuery backs ListCurrent: a LEFT JOIN so a chunk whose
-// owning knowledge_items row is missing still comes back (with NULL item_*
-// columns) and can be reported as a ChunkLoadIssue rather than silently
+// owning knowledge_items row is missing still comes back (with a NULL item
+// id) and can be reported as a ChunkLoadIssue rather than silently
 // vanishing from the result set.
 const chunkLoadCurrentQuery = `
-	SELECT c.id, c.session_id, c.source, c.topic, c.status, c.item_id, c.source_path, c.file_path, c.heading, c.content,
-	       c.embedding, c.embedding_model, c.item_updated_at, c.created_at,
-	       i.id, i.topic, i.status, i.source, i.updated_at
+	SELECT c.id, c.session_id, c.source, c.topic, c.item_id, c.source_path, c.file_path, c.heading, c.content,
+	       c.embedding, c.embedding_model, c.created_at,
+	       i.id
 	FROM knowledge_chunks c
 	LEFT JOIN knowledge_items i ON i.id = c.item_id
 	WHERE c.embedding_model = ?
@@ -161,21 +159,17 @@ func scanCurrentChunkRow(rows *sql.Rows) (knowledge.Chunk, *knowledge.ChunkLoadI
 	var chunk knowledge.Chunk
 	var embedding []byte
 	var sourcePath sql.NullString
-	var itemUpdatedAt sql.NullTime
-	var itemID, itemTopic, itemStatus, itemSource sql.NullString
-	var itemCurrentUpdatedAt sql.NullTime
+	var itemID sql.NullString
 
 	err := rows.Scan(
-		&chunk.ID, &chunk.SessionID, &chunk.Source, &chunk.Topic, &chunk.Status, &chunk.ItemID, &sourcePath, &chunk.FilePath,
-		&chunk.Heading, &chunk.Content, &embedding, &chunk.EmbeddingModel,
-		&itemUpdatedAt, &chunk.CreatedAt,
-		&itemID, &itemTopic, &itemStatus, &itemSource, &itemCurrentUpdatedAt,
+		&chunk.ID, &chunk.SessionID, &chunk.Source, &chunk.Topic, &chunk.ItemID, &sourcePath, &chunk.FilePath,
+		&chunk.Heading, &chunk.Content, &embedding, &chunk.EmbeddingModel, &chunk.CreatedAt,
+		&itemID,
 	)
 	if err != nil {
 		return knowledge.Chunk{}, nil, err
 	}
 	chunk.SourcePath = sourcePath.String
-	chunk.ItemUpdatedAt = fromNullTime(itemUpdatedAt)
 
 	decoded, decodeErr := decodeEmbedding(embedding)
 	if decodeErr != nil {
@@ -185,23 +179,6 @@ func scanCurrentChunkRow(rows *sql.Rows) (knowledge.Chunk, *knowledge.ChunkLoadI
 
 	if !itemID.Valid {
 		return knowledge.Chunk{}, chunkLoadIssue(chunk, knowledge.ChunkIssueMissingItem), nil
-	}
-	if chunk.Source != itemSource.String {
-		return knowledge.Chunk{}, chunkLoadIssue(chunk, knowledge.ChunkIssueSourceMismatch), nil
-	}
-	if chunk.Topic != itemTopic.String {
-		return knowledge.Chunk{}, chunkLoadIssue(chunk, knowledge.ChunkIssueTopicMismatch), nil
-	}
-	if chunk.Status != itemStatus.String {
-		return knowledge.Chunk{}, chunkLoadIssue(chunk, knowledge.ChunkIssueStatusMismatch), nil
-	}
-	// imported_doc freshness is governed by ingested_files (mtime + model),
-	// never by item_updated_at — every other source requires it to match
-	// the Item's current UpdatedAt.
-	if chunk.Source != knowledge.SourceImportedDoc {
-		if chunk.ItemUpdatedAt.IsZero() || !chunk.ItemUpdatedAt.Equal(itemCurrentUpdatedAt.Time) {
-			return knowledge.Chunk{}, chunkLoadIssue(chunk, knowledge.ChunkIssueStaleItem), nil
-		}
 	}
 
 	if validateErr := knowledge.ValidateChunk(chunk); validateErr != nil {
@@ -215,7 +192,6 @@ func chunkLoadIssue(chunk knowledge.Chunk, reason string) *knowledge.ChunkLoadIs
 	return &knowledge.ChunkLoadIssue{
 		ChunkID:  chunk.ID,
 		ItemID:   chunk.ItemID,
-		Source:   chunk.Source,
 		FilePath: chunk.FilePath,
 		Reason:   reason,
 	}
@@ -244,11 +220,9 @@ func scanChunk(scanner rowScanner) (knowledge.Chunk, error) {
 	var chunk knowledge.Chunk
 	var embedding []byte
 	var sourcePath sql.NullString
-	var itemUpdatedAt sql.NullTime
 	err := scanner.Scan(
-		&chunk.ID, &chunk.SessionID, &chunk.Source, &chunk.Topic, &chunk.Status, &chunk.ItemID, &sourcePath, &chunk.FilePath,
-		&chunk.Heading, &chunk.Content, &embedding, &chunk.EmbeddingModel,
-		&itemUpdatedAt, &chunk.CreatedAt,
+		&chunk.ID, &chunk.SessionID, &chunk.Source, &chunk.Topic, &chunk.ItemID, &sourcePath, &chunk.FilePath,
+		&chunk.Heading, &chunk.Content, &embedding, &chunk.EmbeddingModel, &chunk.CreatedAt,
 	)
 	if err != nil {
 		return knowledge.Chunk{}, err
@@ -259,20 +233,5 @@ func scanChunk(scanner rowScanner) (knowledge.Chunk, error) {
 	if err != nil {
 		return knowledge.Chunk{}, fmt.Errorf("decoding embedding for chunk %s: %w", chunk.ID, err)
 	}
-	chunk.ItemUpdatedAt = fromNullTime(itemUpdatedAt)
 	return chunk, nil
-}
-
-func toNullTime(t time.Time) sql.NullTime {
-	if t.IsZero() {
-		return sql.NullTime{}
-	}
-	return sql.NullTime{Time: t, Valid: true}
-}
-
-func fromNullTime(nt sql.NullTime) time.Time {
-	if !nt.Valid {
-		return time.Time{}
-	}
-	return nt.Time
 }

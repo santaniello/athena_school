@@ -21,13 +21,13 @@ func NewKnowledgeRepository(db *sql.DB) *KnowledgeRepository {
 	return &KnowledgeRepository{db: db}
 }
 
-const knowledgeItemColumns = `id, session_id, topic, concept, definition, properties, trade_offs, related_concepts, source, status, created_at, updated_at`
+const knowledgeItemColumns = `id, session_id, topic, concept, definition, properties, trade_offs, related_concepts, source, created_at, updated_at`
 
 // knowledgeItemSelectColumns reads the three JSON-array-as-TEXT columns
 // through COALESCE so a NULL value (e.g. a pre-existing row from before
 // these columns existed) decodes as "" rather than failing the Scan into
 // a plain string. unmarshalStringList treats "" as an empty list.
-const knowledgeItemSelectColumns = `id, session_id, topic, concept, definition, COALESCE(properties, ''), COALESCE(trade_offs, ''), COALESCE(related_concepts, ''), source, status, created_at, updated_at`
+const knowledgeItemSelectColumns = `id, session_id, topic, concept, definition, COALESCE(properties, ''), COALESCE(trade_offs, ''), COALESCE(related_concepts, ''), source, created_at, updated_at`
 
 // Save inserts a new knowledge item.
 func (r *KnowledgeRepository) Save(ctx context.Context, item knowledge.Item) error {
@@ -36,11 +36,10 @@ func (r *KnowledgeRepository) Save(ctx context.Context, item knowledge.Item) err
 		return err
 	}
 	_, err = execer(ctx, r.db).ExecContext(ctx,
-		`INSERT INTO knowledge_items (`+knowledgeItemColumns+`, normalized_concept) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO knowledge_items (`+knowledgeItemColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		item.ID, item.SessionID, item.Topic, item.Concept, item.Definition,
 		properties, tradeOffs, relatedConcepts,
-		item.Source, item.Status, item.CreatedAt, item.UpdatedAt,
-		knowledge.NormalizeConcept(item.Concept),
+		item.Source, item.CreatedAt, item.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("sqlite: saving knowledge item: %w", err)
@@ -90,11 +89,10 @@ func (r *KnowledgeRepository) Update(ctx context.Context, item knowledge.Item) e
 		return err
 	}
 	result, err := execer(ctx, r.db).ExecContext(ctx,
-		`UPDATE knowledge_items SET topic = ?, concept = ?, definition = ?, properties = ?, trade_offs = ?, related_concepts = ?, source = ?, status = ?, created_at = ?, updated_at = ?, normalized_concept = ? WHERE id = ?`,
+		`UPDATE knowledge_items SET topic = ?, concept = ?, definition = ?, properties = ?, trade_offs = ?, related_concepts = ?, source = ?, created_at = ?, updated_at = ? WHERE id = ?`,
 		item.Topic, item.Concept, item.Definition,
 		properties, tradeOffs, relatedConcepts,
-		item.Source, item.Status, item.CreatedAt, item.UpdatedAt,
-		knowledge.NormalizeConcept(item.Concept), item.ID,
+		item.Source, item.CreatedAt, item.UpdatedAt, item.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("sqlite: updating knowledge item: %w", err)
@@ -123,7 +121,7 @@ func scanItem(scanner rowScanner) (knowledge.Item, error) {
 	err := scanner.Scan(
 		&item.ID, &item.SessionID, &item.Topic, &item.Concept, &item.Definition,
 		&properties, &tradeOffs, &relatedConcepts,
-		&item.Source, &item.Status, &item.CreatedAt, &item.UpdatedAt,
+		&item.Source, &item.CreatedAt, &item.UpdatedAt,
 	)
 	if err != nil {
 		return knowledge.Item{}, err

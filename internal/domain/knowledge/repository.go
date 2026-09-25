@@ -8,14 +8,6 @@ import (
 // ErrItemNotFound is returned when no knowledge item matches the given ID.
 var ErrItemNotFound = errors.New("knowledge item not found")
 
-// ErrInvalidStatusTransition is returned by TransitionTo when the
-// requested status change is not one of the allowed transitions.
-var ErrInvalidStatusTransition = errors.New("invalid knowledge item status transition")
-
-// ErrUnknownStatus is returned by TransitionTo when the requested status
-// is not one of the three known statuses.
-var ErrUnknownStatus = errors.New("unknown knowledge item status")
-
 // Repository persists Items. Today the only implementation is
 // SQLite-backed (internal/infrastructure/sqlite).
 type Repository interface {

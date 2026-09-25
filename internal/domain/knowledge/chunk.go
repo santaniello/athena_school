@@ -10,18 +10,16 @@ import (
 // specs/phases/phase-02-knowledge-engine/03-notes-import-and-knowledge-explorer.md.
 type Chunk struct {
 	ID     string
-	Source string // athena | user_note | imported_doc
+	Source string // imported_doc
 	Topic  string
-	Status string
-	// ItemID is the owning knowledge Item: the extracted Item for
-	// Source == athena, the shadow Item for Source == imported_doc. Always set.
+	// ItemID is the owning knowledge Item — the document's shadow Item. Always set.
 	ItemID string
 	// SessionID is the study session that owns this chunk; deleting the
 	// session deletes the chunk.
 	SessionID string
 	// SourcePath is the imported source's canonical absolute identity
-	// (desktop-normalized), set only for Source == imported_doc. Never
-	// shown in progress, failures, or index issue UI.
+	// (desktop-normalized). Never shown in progress, failures, or index
+	// issue UI.
 	SourcePath string
 	// FilePath is the stable, root-relative display/provenance path
 	// captured on the source's first import — it does not change when the
@@ -31,13 +29,7 @@ type Chunk struct {
 	Content        string
 	Embedding      []float32
 	EmbeddingModel string
-	// ItemUpdatedAt is zero for imported files; it detects stale
-	// Knowledge Item chunks after an indexing failure. Imported-file
-	// chunks deliberately stay zero here even though they carry an
-	// ItemID — their dedup/staleness signal is IngestedFile.MTimeUnixNano, a
-	// different mechanism serving a different purpose.
-	ItemUpdatedAt time.Time
-	CreatedAt     time.Time
+	CreatedAt      time.Time
 }
 
 // ChunkLoadResult is ListCurrent's report: the chunks safe to index, plus
@@ -56,13 +48,10 @@ type ChunkRepository interface {
 	// startup must use ListCurrent instead; this remains for callers that
 	// genuinely want the raw table (see chunk_repository_test.go).
 	ListAll(ctx context.Context) ([]Chunk, error)
-	// ListCurrent returns only chunks safe to index: embeddingModel matches,
-	// the owning knowledge_items row exists with matching source/topic/
-	// status, and (for every source except imported_doc, whose freshness is
-	// governed by ingested_files instead) ItemUpdatedAt equals the Item's
-	// current UpdatedAt. Excluded rows are reported as Issues, never
-	// silently dropped, except a wrong-embedding-model row, which is
-	// expected reindex work rather than a corruption warning. A query,
+	// ListCurrent returns only chunks safe to index: embeddingModel matches
+	// and the owning knowledge_items row exists. Excluded rows are reported
+	// as Issues, never silently dropped, except a wrong-embedding-model row,
+	// which is expected reindex work rather than a corruption warning. A query,
 	// scan, or iteration failure returns an error for the entire load
 	// instead of reporting an empty result.
 	ListCurrent(ctx context.Context, embeddingModel string) (ChunkLoadResult, error)
