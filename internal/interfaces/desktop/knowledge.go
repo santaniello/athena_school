@@ -3,53 +3,11 @@ package desktop
 import (
 	"errors"
 	"log"
-	"strings"
 	"time"
 
 	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 )
-
-// Sentinel errors from the pending reconciliation bindings' own input
-// validation, checked before ever calling the knowledge service — proposalID
-// as an opaque non-empty token, and status/resolution against their known
-// enums. Keeps these Wails bindings thin adapters: validate
-// input, call the use case, return the result (see AGENTS.md).
-var (
-	ErrReconciliationProposalIDRequired = errors.New("desktop: reconciliation proposal id is required")
-	ErrReconciliationStatusInvalid      = errors.New("desktop: status must be draft or approved")
-	ErrReconciliationResolutionInvalid  = errors.New("desktop: resolution must be keep_existing, update_existing, or create_separately")
-)
-
-// validateReconciliationProposalID checks the single id every pending
-// reconciliation binding takes.
-func validateReconciliationProposalID(proposalID string) error {
-	if strings.TrimSpace(proposalID) == "" {
-		return ErrReconciliationProposalIDRequired
-	}
-	return nil
-}
-
-// validateKnowledgeStatus checks a target Knowledge Item status against
-// the only two a reconciliation "create" action may persist at.
-func validateKnowledgeStatus(status string) error {
-	if status != domainknowledge.StatusDraft && status != domainknowledge.StatusApproved {
-		return ErrReconciliationStatusInvalid
-	}
-	return nil
-}
-
-// validateConflictResolution checks a conflict resolution against the
-// three explicit outcomes ResolveReconciliationConflict/
-// ResolvePendingReconciliationConflict accept.
-func validateConflictResolution(resolution string) error {
-	switch resolution {
-	case applicationknowledge.ConflictKeepExisting, applicationknowledge.ConflictUpdateExisting, applicationknowledge.ConflictCreateSeparately:
-		return nil
-	default:
-		return ErrReconciliationResolutionInvalid
-	}
-}
 
 // KnowledgeItemResult is a knowledge item returned to the UI.
 type KnowledgeItemResult struct {
@@ -64,38 +22,6 @@ type KnowledgeItemResult struct {
 	Status          string   `json:"status"`
 	CreatedAt       string   `json:"createdAt"`
 	UpdatedAt       string   `json:"updatedAt"`
-}
-
-// ItemChangesResult is the desktop-facing DTO for a
-// domainknowledge.ItemChanges — optional replacements for an existing
-// Item's user-editable content fields. Every field uses `omitempty` on a
-// pointer (never on the slice itself, which would also drop an explicit
-// empty list): a nil Definition/list means "unchanged" and is omitted
-// from the wire format entirely, while a non-nil list — even an empty one
-// — means "set to this" and is always serialized, distinguishing "leave
-// this field alone" from "clear it".
-type ItemChangesResult struct {
-	Definition      *string   `json:"definition,omitempty"`
-	Properties      *[]string `json:"properties,omitempty"`
-	TradeOffs       *[]string `json:"tradeOffs,omitempty"`
-	RelatedConcepts *[]string `json:"relatedConcepts,omitempty"`
-}
-
-func toItemChangesResult(changes domainknowledge.ItemChanges) ItemChangesResult {
-	return ItemChangesResult{
-		Definition: changes.Definition, Properties: listPointer(changes.Properties),
-		TradeOffs: listPointer(changes.TradeOffs), RelatedConcepts: listPointer(changes.RelatedConcepts),
-	}
-}
-
-// listPointer returns nil for a nil list — "unchanged" — and otherwise a
-// pointer to list itself, even when it is empty, so `omitempty` never
-// mistakes an explicit empty list for an absent one.
-func listPointer(list []string) *[]string {
-	if list == nil {
-		return nil
-	}
-	return &list
 }
 
 // KnowledgeItemInput mirrors the full candidate returned by ExtractKnowledge.

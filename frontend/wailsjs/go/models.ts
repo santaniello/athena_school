@@ -70,24 +70,6 @@ export namespace desktop {
 		    return a;
 		}
 	}
-	export class ItemChangesResult {
-	    definition?: string;
-	    properties?: string[];
-	    tradeOffs?: string[];
-	    relatedConcepts?: string[];
-	
-	    static createFrom(source: any = {}) {
-	        return new ItemChangesResult(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.definition = source["definition"];
-	        this.properties = source["properties"];
-	        this.tradeOffs = source["tradeOffs"];
-	        this.relatedConcepts = source["relatedConcepts"];
-	    }
-	}
 	export class KnowledgeEvidenceResult {
 	    originType: string;
 	    sourceLabel: string;
@@ -169,54 +151,6 @@ export namespace desktop {
 	        this.createdAt = source["createdAt"];
 	        this.updatedAt = source["updatedAt"];
 	    }
-	}
-	export class PendingReconciliationResult {
-	    id: string;
-	    action: string;
-	    candidate: KnowledgeItemResult;
-	    targetItemId: string;
-	    targetConcept: string;
-	    targetStatus: string;
-	    reason: string;
-	    changes: ItemChangesResult;
-	    stale: boolean;
-	    createdAt: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new PendingReconciliationResult(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.action = source["action"];
-	        this.candidate = this.convertValues(source["candidate"], KnowledgeItemResult);
-	        this.targetItemId = source["targetItemId"];
-	        this.targetConcept = source["targetConcept"];
-	        this.targetStatus = source["targetStatus"];
-	        this.reason = source["reason"];
-	        this.changes = this.convertValues(source["changes"], ItemChangesResult);
-	        this.stale = source["stale"];
-	        this.createdAt = source["createdAt"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
 	}
 	export class StudyContextResult {
 	    state: string;

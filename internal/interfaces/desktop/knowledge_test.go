@@ -3,7 +3,6 @@ package desktop
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"log"
 	"os"
@@ -16,46 +15,11 @@ import (
 
 	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
 	txmocks "github.com/santaniello/athena/internal/application/knowledge/mocks"
-	configmocks "github.com/santaniello/athena/internal/domain/config/mocks"
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
-	studymocks "github.com/santaniello/athena/internal/domain/study/mocks"
 )
-
-// passingDesktopIndexGuard returns an IndexGuard mock that always allows
-// the mutation, for desktop tests exercising SaveExtractedKnowledge/
-// SaveAndApproveExtractedKnowledge (which now index each saved item).
-func passingDesktopIndexGuard(t *testing.T) *txmocks.MockIndexGuard {
-	guard := txmocks.NewMockIndexGuard(t)
-	guard.EXPECT().BeginMutation().Return(nil)
-	guard.EXPECT().EndMutation()
-	return guard
-}
-
-// expectDesktopSuccessfulIndexing wires llm/chunks/store/tx mocks so every
-// call indexKnowledgeItem makes succeeds, `times` times over.
-func expectDesktopSuccessfulIndexing(
-	ctx context.Context,
-	llm *llmmocks.MockProvider,
-	chunks *knowledgemocks.MockChunkRepository,
-	store *knowledgemocks.MockVectorStore,
-	tx *txmocks.MockTransactor,
-	times int,
-) {
-	llm.EXPECT().Embeddings(ctx, mock.MatchedBy(func(req domainllm.EmbeddingRequest) bool { return req.Input != "" })).
-		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Times(times)
-	chunks.EXPECT().DeleteByItemID(ctx, mock.MatchedBy(func(id string) bool { return id != "" })).
-		Return(nil, nil).Times(times)
-	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool { return len(cs) == 1 })).
-		Return(nil).Times(times)
-	store.EXPECT().Remove(mock.Anything, []string(nil)).Return(nil).Times(times)
-	store.EXPECT().Add(mock.Anything, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool { return len(cs) == 1 })).
-		Return(nil).Times(times)
-	tx.EXPECT().WithinTx(mock.Anything, mock.Anything).
-		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
-}
 
 func TestApp_ListKnowledgeItems_returnsItemsForTopicAndStatus(t *testing.T) {
 	// Given a repository with one matching item
@@ -63,7 +27,7 @@ func TestApp_ListKnowledgeItems_returnsItemsForTopicAndStatus(t *testing.T) {
 	repository := knowledgemocks.NewMockRepository(t)
 	repository.EXPECT().List(ctx, domainknowledge.Filter{Topic: "Go", Status: domainknowledge.StatusApproved}).
 		Return([]domainknowledge.Item{{ID: "item-1", Topic: "Go", Concept: "Channels", Status: domainknowledge.StatusApproved}}, nil).Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := applicationknowledge.NewService(repository, llmmocks.NewMockProvider(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil)
 	app := NewApp(nil, nil, nil, nil, nil, service, nil, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -81,7 +45,7 @@ func TestApp_CountDraftKnowledgeItems_returnsRepositoryDraftCount(t *testing.T) 
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
 	repository.EXPECT().CountByStatus(ctx, domainknowledge.StatusDraft).Return(2, nil).Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := applicationknowledge.NewService(repository, llmmocks.NewMockProvider(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil)
 	app := NewApp(nil, nil, nil, nil, nil, service, nil, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -98,7 +62,7 @@ func TestApp_ListKnowledgeTopics_returnsTopics(t *testing.T) {
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
 	repository.EXPECT().ListTopics(ctx).Return([]string{"Go", "Kubernetes"}, nil).Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := applicationknowledge.NewService(repository, llmmocks.NewMockProvider(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil)
 	app := NewApp(nil, nil, nil, nil, nil, service, nil, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -118,7 +82,7 @@ func TestApp_ListKnowledgeItemEvidence_returnsPersistedSnapshotsForTheItem(t *te
 	evidenceRepo.EXPECT().ListByItem(ctx, "item-1").Return([]domainknowledge.Evidence{
 		{ID: "evidence-1", OriginType: domainknowledge.OriginSessionMessage, OriginID: "message-1", SourceLabel: "Distributed systems", Excerpt: "CAP describes trade-offs.", CreatedAt: createdAt},
 	}, nil).Once()
-	service := applicationknowledge.NewService(knowledgemocks.NewMockRepository(t), studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, evidenceRepo, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := applicationknowledge.NewService(knowledgemocks.NewMockRepository(t), llmmocks.NewMockProvider(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, evidenceRepo)
 	app := NewApp(nil, nil, nil, nil, nil, service, nil, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -156,7 +120,7 @@ func TestApp_ApproveKnowledgeItem_returnsTheUpdatedItem(t *testing.T) {
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := applicationknowledge.NewService(repository, llmmocks.NewMockProvider(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, nil)
 	app := NewApp(nil, nil, nil, nil, nil, service, nil, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -190,7 +154,7 @@ func TestApp_DeprecateKnowledgeItem_returnsTheUpdatedItem(t *testing.T) {
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := applicationknowledge.NewService(repository, llmmocks.NewMockProvider(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, nil)
 	app := NewApp(nil, nil, nil, nil, nil, service, nil, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -232,7 +196,7 @@ func TestApp_UpdateKnowledgeItem_persistsEditableFields_andReturnsTheUpdatedItem
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llm, configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := applicationknowledge.NewService(repository, llm, chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, nil)
 	app := NewApp(nil, nil, nil, nil, nil, service, nil, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -263,7 +227,7 @@ func TestApp_DeleteKnowledgeItem_deletesTheItemAndItsChunks(t *testing.T) {
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, evidenceRepo, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := applicationknowledge.NewService(repository, llmmocks.NewMockProvider(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, evidenceRepo)
 	app := NewApp(nil, nil, nil, nil, nil, service, nil, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -305,7 +269,7 @@ func TestApp_ApproveKnowledgeItem_reportsSuccess_whenPostCommitReconciliationFai
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := applicationknowledge.NewService(repository, llmmocks.NewMockProvider(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, nil)
 	app := NewApp(nil, nil, nil, nil, nil, service, nil, nil, nil, nil)
 	app.Startup(ctx)
 	logs := captureLog(t)
@@ -341,7 +305,7 @@ func TestApp_DeprecateKnowledgeItem_reportsSuccess_whenPostCommitReconciliationF
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := applicationknowledge.NewService(repository, llmmocks.NewMockProvider(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, nil)
 	app := NewApp(nil, nil, nil, nil, nil, service, nil, nil, nil, nil)
 	app.Startup(ctx)
 	logs := captureLog(t)
@@ -376,7 +340,7 @@ func TestApp_UpdateKnowledgeItem_reportsSuccess_whenPostCommitReconciliationFail
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := applicationknowledge.NewService(repository, llmmocks.NewMockProvider(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, nil)
 	app := NewApp(nil, nil, nil, nil, nil, service, nil, nil, nil, nil)
 	app.Startup(ctx)
 	logs := captureLog(t)
@@ -410,7 +374,7 @@ func TestApp_DeleteKnowledgeItem_reportsSuccess_whenPostCommitReconciliationFail
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, evidenceRepo, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := applicationknowledge.NewService(repository, llmmocks.NewMockProvider(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, evidenceRepo)
 	app := NewApp(nil, nil, nil, nil, nil, service, nil, nil, nil, nil)
 	app.Startup(ctx)
 	logs := captureLog(t)
@@ -457,7 +421,7 @@ func TestApp_CountUnindexedKnowledgeItems_returnsRepositoryCount(t *testing.T) {
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
 	repository.EXPECT().CountUnindexed(ctx, domainllm.EmbeddingModel).Return(4, nil).Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := applicationknowledge.NewService(repository, llmmocks.NewMockProvider(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, nil, domainknowledge.RetrievalThresholds{}, nil)
 	app := NewApp(nil, nil, nil, nil, nil, service, nil, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -496,7 +460,7 @@ func TestApp_ReindexKnowledgeItems_emitsProgressThenDone_onSuccess(t *testing.T)
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llm, configmocks.NewMockStore(t), chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := applicationknowledge.NewService(repository, llm, chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, nil)
 	app, captured := newTestReindexApp(t, service)
 
 	// When reindexing through the desktop adapter
@@ -521,7 +485,7 @@ func TestApp_ReindexKnowledgeItems_emitsError_whenTheRunFails(t *testing.T) {
 	guard := txmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	service := applicationknowledge.NewService(repository, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), configmocks.NewMockStore(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, guard, domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	service := applicationknowledge.NewService(repository, llmmocks.NewMockProvider(t), knowledgemocks.NewMockChunkRepository(t), nil, nil, guard, domainknowledge.RetrievalThresholds{}, nil)
 	app, captured := newTestReindexApp(t, service)
 
 	// When reindexing through the desktop adapter
@@ -532,28 +496,4 @@ func TestApp_ReindexKnowledgeItems_emitsError_whenTheRunFails(t *testing.T) {
 	require.Len(t, captured.errors, 1)
 	assert.Contains(t, captured.errors[0], listErr.Error())
 	assert.Nil(t, captured.done)
-}
-
-func TestToItemChangesResult_omitsUnchangedFields_butKeepsAnExplicitEmptyList(t *testing.T) {
-	// Given a change that only touches Definition — leaving Properties,
-	// TradeOffs and RelatedConcepts nil, meaning "unchanged" — alongside a
-	// second change that explicitly clears RelatedConcepts to an empty
-	// (non-nil) list
-	definition := "Converges eventually."
-	unchanged := domainknowledge.ItemChanges{Definition: &definition}
-	explicitlyCleared := domainknowledge.ItemChanges{RelatedConcepts: []string{}}
-
-	// When mapping each to its desktop DTO and marshaling to JSON
-	unchangedJSON, err := json.Marshal(toItemChangesResult(unchanged))
-	require.NoError(t, err)
-	clearedJSON, err := json.Marshal(toItemChangesResult(explicitlyCleared))
-	require.NoError(t, err)
-
-	// Then an unchanged list is omitted from the wire format entirely —
-	// never serialized as null, which the frontend's optional-field
-	// contract can never represent — while an explicit (non-nil) empty
-	// list still serializes as `[]`, preserving the distinction between
-	// "leave this field alone" and "set it to nothing"
-	assert.JSONEq(t, `{"definition":"Converges eventually."}`, string(unchangedJSON))
-	assert.JSONEq(t, `{"relatedConcepts":[]}`, string(clearedJSON))
 }

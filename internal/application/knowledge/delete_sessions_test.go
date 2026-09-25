@@ -31,7 +31,7 @@ func newSessionDeleteService(
 	chunks *knowledgemocks.MockChunkRepository, evidence *knowledgemocks.MockEvidenceRepository,
 	tx *txmocks.MockTransactor, store *knowledgemocks.MockVectorStore, guard IndexGuard,
 ) *Service {
-	return NewService(nil, nil, nil, nil, nil, chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, evidence, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
+	return NewService(nil, nil, chunks, tx, store, guard, domainknowledge.RetrievalThresholds{}, evidence)
 }
 
 func TestDeleteSessionsWithKnowledge_collectsChunkIDsBeforeTheDelete_thenCleansEvidence_thenEvictsTheIndex(t *testing.T) {

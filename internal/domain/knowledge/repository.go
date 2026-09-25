@@ -28,14 +28,6 @@ type Repository interface {
 	GetByID(ctx context.Context, id string) (Item, error)
 	// FindByTopic returns every item for the given topic, oldest first.
 	FindByTopic(ctx context.Context, topic string) ([]Item, error)
-	// FindByNormalizedConcept returns every item in sessionID and topic whose
-	// persisted normalized_concept column equals normalizedConcept — draft,
-	// approved, and deprecated items alike, so exact-match duplicate
-	// detection never needs an embedding call. Only sessionID's own items
-	// count: the same concept in another session is not a duplicate.
-	// normalizedConcept must already be the output of NormalizeConcept; this
-	// method does no normalization of its own.
-	FindByNormalizedConcept(ctx context.Context, sessionID, topic, normalizedConcept string) ([]Item, error)
 	// List returns every item matching filter, oldest first.
 	List(ctx context.Context, filter Filter) ([]Item, error)
 	// ListTopics returns every distinct topic, alphabetically.

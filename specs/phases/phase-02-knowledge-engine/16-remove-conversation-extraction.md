@@ -161,10 +161,16 @@ backend they used to call has no caller left when it is deleted.
       `Config.WithDefaults`/`Validate` (delete them and their callers unless another setting
       needs them). Add one regression test that a `config.yaml` still containing the old key
       loads without error
-- [ ] Backend, pending reconciliation: `reconcile_pending.go`, the remaining reconciliation
-      helpers, relations, and their bindings and repositories
+- [x] Backend, pending reconciliation: `reconcile_pending.go`, the remaining reconciliation
+      helpers, duplicates, relations, and their bindings, repositories and mocks. With
+      nothing left to read them, `reconciliations`, `relations`, `sessions`, `messages`,
+      `configs` and the duplicate thresholds also left `Service`/`NewService` here (only
+      `evidence` remains, until the lifecycle slice), and so did the domain
+      `Reconciliation*`, `Relation*` and `DuplicateMatch` types and
+      `Repository.FindByNormalizedConcept`. `NormalizeConcept` and the `normalized_concept`
+      column stay until the domain/SQLite slice
 - [ ] Backend, lifecycle: approve/deprecate/update/list/review/backfill/indexing/`DeleteItem`
-      and their bindings; shrink `Service` and `NewService`
+      and their bindings; drop the last collaborator (`evidence`) from `Service`
 - [ ] Domain and SQLite: drop status/source/topic filters and fields; migration; repository
       and reset cleanup; regenerate mocks and Wails bindings
 - [ ] Docs: mark the superseded specs, update `Athena.md`, `Planning.md`, README,

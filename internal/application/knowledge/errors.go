@@ -7,29 +7,6 @@ import "errors"
 // mutation can never race a snapshot publish.
 var ErrIndexLoading = errors.New("knowledge index is loading")
 
-// errExactDuplicateAtSave signals createReconciledItem's transaction closure
-// that its exact-match recheck found a duplicate. See
-// specs/phases/phase-02-knowledge-engine/10-01-duplicate-detection-decisions.md
-// Decision 3, and its addendum on running the recheck inside the same
-// transaction as the write to close the check-then-act race a separate,
-// pre-transaction lookup would leave open.
-var errExactDuplicateAtSave = errors.New("knowledge: exact duplicate at save time")
-
-// ErrReconciliationTargetStale is returned when a proposal's classified
-// target was edited or removed since classification; the caller must run
-// reconciliation again.
-var ErrReconciliationTargetStale = errors.New("knowledge: reconciliation target changed since comparison; run reconciliation again")
-
-// ErrReconciliationResolutionInvalid is returned when a conflict
-// resolution is not one of ConflictKeepExisting, ConflictUpdateExisting,
-// or ConflictCreateSeparately.
-var ErrReconciliationResolutionInvalid = errors.New("knowledge: unknown conflict resolution")
-
-// ErrReconciliationProposalNotPending is returned when an action from
-// Knowledge Review targets a proposal that has already been applied,
-// rejected, or marked stale.
-var ErrReconciliationProposalNotPending = errors.New("knowledge: reconciliation proposal is not pending")
-
 // ErrIndexingFailed is the sentinel every knowledge-indexing failure wraps
 // — embedding, chunk persistence, or VectorStore reconciliation alike — so
 // every caller can distinguish "item saved but not indexed" from a real
