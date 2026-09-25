@@ -104,10 +104,11 @@ half-wired action that does the wrong thing.
 This increment deliberately stops short of the actual product pivot already discussed
 and agreed on, but not yet designed in detail. Session↔document ownership and the
 decision on documents already imported today are now specified in
-[15-session-scoped-knowledge.md](15-session-scoped-knowledge.md); the functional panel (Add,
-Remove, the real source list, removing the Knowledge nav entry) in
-[16-session-sources-panel.md](16-session-sources-panel.md); and the removal of session
-extraction in [17-remove-conversation-extraction.md](17-remove-conversation-extraction.md):
+[15-session-scoped-knowledge.md](15-session-scoped-knowledge.md); the removal of session
+extraction and of the Knowledge nav entry in
+[16-remove-conversation-extraction.md](16-remove-conversation-extraction.md); and the
+functional panel (Add, Remove, the real source list) in
+[17-session-sources-panel.md](17-session-sources-panel.md):
 
 - Deprecate session-extraction entirely: remove `ExtractFromSession`, the
   `Extract knowledge` composer button, and the draft/reconciliation review workflow.

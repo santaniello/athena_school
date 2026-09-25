@@ -1,17 +1,18 @@
-# Phase 2.16 — Session Sources Panel (NotebookLM-Style Knowledge UI)
+# Phase 2.17 — Session Sources Panel (NotebookLM-Style Knowledge UI)
 
 ## Goal
 
 Knowledge is managed where it is used: in the Sources panel on the right of a study
 session, as in NotebookLM. The panel lists the documents the session owns, imports a new one,
-and removes one. The `Knowledge` section leaves the left menu, and with it everything that
-only served the old global, item-centric model.
+and removes one.
 
-This is the UI half of the move to documents-only knowledge. Spec 2.14 built the panel as a
-disabled shell; spec 2.15 made every document owned by a session; this spec makes the panel
-real. Spec [2.17](17-remove-conversation-extraction.md) then deletes the backend that
-conversation extraction and the item lifecycle left behind. **2.16 ships first**: it removes
-every UI entry point to that backend, so 2.17 can delete it without stranding a screen.
+Spec 2.14 built the panel as a disabled shell; spec 2.15 made every document owned by a
+session; spec [2.16](16-remove-conversation-extraction.md) removed conversation extraction,
+the item lifecycle and the whole Knowledge section (including its left-menu entry). This spec
+makes the panel real, on top of that documents-only model: a session's knowledge is exactly
+its imported documents, so the panel has one kind of thing to list and remove. It also closes
+the gap 2.16 left on purpose — until now the UI has had no way to import, list or remove a
+session's documents.
 
 ## Layout
 
@@ -29,8 +30,8 @@ every UI entry point to that backend, so 2.17 can delete it without stranding a 
 └──────────────┴──────────────────────────────┴────────────────────────┘
 ```
 
-Left nav after this spec: Home, Study, (locked Phase 3+ entries), Documentation, Settings —
-no `Knowledge`.
+Left nav (already so after 2.16): Home, Study, (locked Phase 3+ entries), Documentation,
+Settings — no `Knowledge`.
 
 ## Decisions
 
@@ -49,16 +50,14 @@ no `Knowledge`.
    in-memory index. It never touches the file on disk and never touches another session's copy
    of the same file. The confirmation says so.
 5. **Removing a document also forgets it was imported.** So importing the same, unchanged
-   file again re-ingests it instead of being skipped as "unchanged". (Today's `DeleteItem`
-   deliberately keeps the `ingested_files` row — spec 2.3 — which is wrong for an explicit
-   Remove, hence a new use case rather than reusing it.)
+   file again re-ingests it instead of being skipped as "unchanged". (The old `DeleteItem`,
+   deleted by 2.16, deliberately kept the `ingested_files` row — spec 2.3 — which is wrong for
+   an explicit Remove, so this is a new use case built on the repository methods that stayed.)
 6. **What a row shows:** title (the document's H1, falling back to its file name), the
    root-relative display path, and the chunk count. Never the absolute source path.
    Ordered oldest-imported first, so a new document appears at the bottom.
-7. **The whole `Knowledge` section is removed from the UI now**: the nav entry, the
-   Explorer, the Review tab, the topic tree, the delete/reindex dialogs, the badges and the
-   composer's `Extract knowledge` button and dialog. An extracted item would otherwise be
-   saved with no screen left to review it. Their backend stays until 2.17.
+7. **The Knowledge section and the extraction UI are already gone** (2.16); nothing here
+   removes or re-adds any of it.
 8. **Not in this increment:** enabling/disabling a document for the chat, opening a
    citation in the panel, multi-file import, and a "changed on disk" indicator.
 
@@ -72,8 +71,8 @@ documents and their `ingested_files` records. Bindings stay thin adapters (ADR-0
 - `IngestedFileRepository.ListSourcesBySession(ctx, sessionID) []SessionSource` — `ingested_files`
   joined to `knowledge_items` on `item_id`, oldest first. A record whose item no longer exists
   is not listed (re-importing restores it, as today).
-- `IngestedFileRepository.DeleteByItemID(ctx, sessionID, itemID)`, and the existing
-  `ChunkRepository.DeleteByItemID` and `Repository.Delete`.
+- `IngestedFileRepository.DeleteByItemID(ctx, sessionID, itemID)`, plus the existing
+  `ChunkRepository.DeleteByItemID` and `Repository.Delete` that 2.16 kept.
 - `ingest.Service.ListSources(ctx, sessionID)` and
   `ingest.Service.RemoveSource(ctx, sessionID, itemID)`. `RemoveSource` reserves the index like
   `ImportFile`, checks the item belongs to `sessionID` (otherwise `ErrSourceNotFound`, so one
@@ -104,15 +103,10 @@ documents and their `ingested_files` records. Bindings stay thin adapters (ADR-0
   keeps the row and shows the error inside the dialog.
 - **`mutationsDisabled`** (the index is retrying) disables Add and Remove, exactly as the old
   Knowledge screen disabled its mutating actions, with the same reason as a tooltip.
-- **`AppShell`** keeps only the panel's open/size state; it stops passing `sources`, drops
-  `sessionSources`, and drops every Knowledge-section state (`section === 'knowledge'`, topic
-  selection, draft and pending counts, the Knowledge badge).
-- **`IngestProgressDialog`** loses its `reindex` kind — its only caller, the Explorer's
-  "not indexed" alert, is gone — and becomes file-import only.
-- **Navigation**: `knowledge` leaves `AppSection` and `NAVIGATION`. Anything that restored a
-  persisted section value must fall back to `home` for an unknown one.
-- **Copy**: `lib/documentation.ts` no longer describes extraction/review and instead says
-  that documents are added from a session's Sources panel.
+- **`AppShell`** keeps only the panel's open/size state; it stops passing `sources` and drops
+  `sessionSources` and the `onSourcesChanged` plumbing.
+- **Copy**: `lib/documentation.ts` says that documents are added from a session's Sources
+  panel.
 
 ## Tasks
 
@@ -129,12 +123,8 @@ Vitest, backend slices with `_test.go`.
       `onSourcesChanged`/`sessionSources` and the `messages`-derived dedupe
 - [ ] Panel: Add (picker, `IngestProgressDialog` with `sessionId`, reload)
 - [ ] Panel: Remove (menu, confirmation, reload, error)
-- [ ] Composer: remove `Extract knowledge` and the extraction dialog
-- [ ] Remove the Knowledge section (nav entry, Explorer, Review, topic tree, delete and reindex
-      dialogs, badges, `AppShell` state), the `reindex` kind, and the `lib/knowledge.ts`
-      functions nothing calls any more
-- [ ] Docs: CHANGELOG, README, `lib/documentation.ts`, spec 2.14's "Deferred" note, mark spec
-      2.14's placeholders as delivered
+- [ ] Docs: CHANGELOG, README, `lib/documentation.ts`, and mark spec 2.14's placeholders as
+      delivered
 
 ## Acceptance Criteria
 
@@ -147,8 +137,6 @@ Vitest, backend slices with `_test.go`.
   retrieval, its chunks are gone from SQLite and the in-memory index, the same file in another
   session is untouched, and a document id from another session is rejected.
 - Add and Remove are disabled, with a reason, while the index is retrying.
-- There is no `Knowledge` entry in the left menu, no `Extract knowledge` button, and no
-  Explorer/Review/topic-tree/reindex UI anywhere.
 - Deleting a session or folder still removes its documents (2.15).
 - `go test -race ./...`, coverage ≥ 80%, `make mutation-go` clean for the changed
   application/domain code; frontend tests, coverage, lint, typecheck, and Stryker on the
@@ -156,7 +144,7 @@ Vitest, backend slices with `_test.go`.
 
 ## Out of scope
 
-- Deleting the conversation-extraction backend, statuses, evidence, reconciliation and
-  duplicates — that is 2.17.
+- Anything about conversation extraction, statuses, evidence, reconciliation or duplicates —
+  gone since 2.16.
 - Renaming `Item` to `Source`.
 - Per-document enable/disable, citation → panel navigation, multi-file import.
