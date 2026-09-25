@@ -139,15 +139,17 @@ backend they used to call has no caller left when it is deleted.
 - [x] Composer: remove the `Extract knowledge` button, dialog and wiring
 - [x] Remove the Knowledge section: nav entry, Explorer, Review, topic tree, delete dialog,
       reindex dialog and the `reindex` kind, badges, and the `AppShell` state that fed them
-- [ ] Settings: remove `MaxKnowledgeExtractionItems` entirely — `Config` field,
-      `DefaultMaxKnowledgeExtractionItems`, `ErrMaxKnowledgeExtractionItemsOutOfRange`, the
-      `max_knowledge_extraction_items` yaml key in `configfile`, the
-      `Get`/`UpdateKnowledgeExtractionSettings` bindings, the Settings control and their tests.
-      `Config.WithDefaults` and `Config.Validate` only handled this field: delete them (and
-      their callers) unless another setting needs them. Add one regression test that a
-      `config.yaml` still containing the old key loads without error
+- [x] Settings: remove the Settings control, `lib/knowledge.ts`, the
+      `Get`/`UpdateKnowledgeExtractionSettings` bindings and their tests; regenerate the
+      Wails bindings. The `Config` field cannot go yet: `ExtractFromSession` still reads it,
+      so it is removed with the extraction slice below
 - [ ] Backend, extraction: extraction, receipts, parsing, prompt, evidence and their
-      bindings; `TaskKnowledgeExtraction`
+      bindings; `TaskKnowledgeExtraction`. This also removes `MaxKnowledgeExtractionItems`
+      entirely — the `Config` field, `DefaultMaxKnowledgeExtractionItems`,
+      `ErrMaxKnowledgeExtractionItemsOutOfRange`, the `max_knowledge_extraction_items` yaml
+      key in `configfile`, and `Config.WithDefaults`/`Validate` (delete them and their
+      callers unless another setting needs them). Add one regression test that a
+      `config.yaml` still containing the old key loads without error
 - [ ] Backend, reconciliation: reconciliation (immediate and pending), duplicates, relations
       and their bindings and repositories
 - [ ] Backend, lifecycle: approve/deprecate/update/list/review/backfill/indexing/`DeleteItem`

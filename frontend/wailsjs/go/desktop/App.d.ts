@@ -41,8 +41,6 @@ export function DiscardExtraction(arg1:string):Promise<void>;
 
 export function ExtractKnowledge(arg1:string,arg2:boolean):Promise<desktop.ExtractionResult>;
 
-export function GetKnowledgeExtractionSettings():Promise<desktop.KnowledgeExtractionSettings>;
-
 export function GetKnowledgeIndexStatus():Promise<desktop.IndexStatusResult>;
 
 export function GetProfile():Promise<desktop.UserProfileInput>;
@@ -104,8 +102,6 @@ export function StartKnowledgeIndex(arg1:context.Context):Promise<void>;
 export function StartStudySession(arg1:string,arg2:string,arg3:string):Promise<desktop.StudySessionResult>;
 
 export function Startup(arg1:context.Context):Promise<void>;
-
-export function UpdateKnowledgeExtractionSettings(arg1:number):Promise<void>;
 
 export function UpdateKnowledgeItem(arg1:string,arg2:desktop.KnowledgeItemInput):Promise<desktop.KnowledgeItemResult>;
 

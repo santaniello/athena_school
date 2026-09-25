@@ -26,8 +26,6 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   UpdateProfile: vi.fn(),
   SaveOpenRouterKey: vi.fn(),
   HasOpenRouterKey: vi.fn().mockResolvedValue(true),
-  GetKnowledgeExtractionSettings: vi.fn().mockResolvedValue({ maxKnowledgeExtractionItems: 8 }),
-  UpdateKnowledgeExtractionSettings: vi.fn(),
 }))
 
 // The Study section's sidebar tree (StudyFolderTree) fetches folders as

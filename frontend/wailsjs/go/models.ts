@@ -255,18 +255,6 @@ export namespace desktop {
 	        this.createdAt = source["createdAt"];
 	    }
 	}
-	export class KnowledgeExtractionSettings {
-	    maxKnowledgeExtractionItems: number;
-	
-	    static createFrom(source: any = {}) {
-	        return new KnowledgeExtractionSettings(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.maxKnowledgeExtractionItems = source["maxKnowledgeExtractionItems"];
-	    }
-	}
 	export class KnowledgeItemInput {
 	    id: string;
 	    topic: string;

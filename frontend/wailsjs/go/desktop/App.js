@@ -78,10 +78,6 @@ export function ExtractKnowledge(arg1, arg2) {
   return window['go']['desktop']['App']['ExtractKnowledge'](arg1, arg2);
 }
 
-export function GetKnowledgeExtractionSettings() {
-  return window['go']['desktop']['App']['GetKnowledgeExtractionSettings']();
-}
-
 export function GetKnowledgeIndexStatus() {
   return window['go']['desktop']['App']['GetKnowledgeIndexStatus']();
 }
@@ -204,10 +200,6 @@ export function StartStudySession(arg1, arg2, arg3) {
 
 export function Startup(arg1) {
   return window['go']['desktop']['App']['Startup'](arg1);
-}
-
-export function UpdateKnowledgeExtractionSettings(arg1) {
-  return window['go']['desktop']['App']['UpdateKnowledgeExtractionSettings'](arg1);
 }
 
 export function UpdateKnowledgeItem(arg1, arg2) {
