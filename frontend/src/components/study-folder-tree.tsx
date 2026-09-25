@@ -560,8 +560,8 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete {deletingFolder?.name}?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This folder and every session inside it will be permanently deleted. This
-                  can&apos;t be undone.
+                  This folder and every session inside it, with the knowledge those sessions own,
+                  will be permanently deleted. This can&apos;t be undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -581,7 +581,8 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete &quot;{deletingSession?.topic}&quot;?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Its messages will be permanently deleted. This can&apos;t be undone.
+                  Its messages and the knowledge it owns will be permanently deleted. This
+                  can&apos;t be undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

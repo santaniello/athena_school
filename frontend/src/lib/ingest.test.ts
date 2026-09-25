@@ -26,15 +26,15 @@ describe('pickNotesFile', () => {
 })
 
 describe('importFile', () => {
-  it('forwards the chosen path', async () => {
+  it('forwards the owning session and the chosen path', async () => {
     // Given an import that resolves
     vi.mocked(ImportFile).mockResolvedValueOnce()
 
-    // When importing a single file
-    await importFile('/home/user/notes/go.md')
+    // When importing a single file into a session
+    await importFile('session-1', '/home/user/notes/go.md')
 
-    // Then the path was forwarded
-    expect(ImportFile).toHaveBeenCalledWith('/home/user/notes/go.md')
+    // Then both the session and the path were forwarded
+    expect(ImportFile).toHaveBeenCalledWith('session-1', '/home/user/notes/go.md')
   })
 })
 
