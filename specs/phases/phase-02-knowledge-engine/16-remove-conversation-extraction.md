@@ -43,8 +43,12 @@ no extracted-item case, no evidence to preserve and no review state to reason ab
    `DeleteItem`.** 2.17 adds a session-scoped Remove that also clears `ingested_files`
    (today's `DeleteItem` deliberately does not — see spec 2.3). The repository methods it
    will build on (`Repository.Delete`, `ChunkRepository.DeleteByItemID`) stay.
-6. **Existing imported documents survive the migration; everything extracted does not**
-   (rows with `source` other than `imported_doc`, and their chunks).
+6. **The migration discards all existing knowledge, imported documents included.** Nothing
+   is deployed anywhere it must survive and the only database in use holds no imported
+   documents, so there is no copy path. This is the same call spec 2.15 made
+   (`migrateKnowledgeToSessionOwnership`), and the migration follows its shape: rebuild the
+   tables in one transaction, guarded by a `hasColumn` check so it runs once. Sessions,
+   messages and `message_sources` are untouched.
 
 ## What is removed
 
@@ -76,7 +80,8 @@ reindex/backfill bindings. Generated `wailsjs` bindings are regenerated.
 collaborators only they used (sessions, messages, configs, evidence, reconciliations,
 relations, duplicate thresholds), and `NewService` shrinks accordingly.
 `domainllm.TaskKnowledgeExtraction` and its routing go, and so does
-`MaxKnowledgeExtractionItems` in the config domain and store.
+`MaxKnowledgeExtractionItems` in the config domain, store and desktop bindings (see the
+Settings task).
 
 **Domain** (`domain/knowledge`): `evidence.go`, `reconciliation.go`, `relation.go`,
 `duplicate.go`, `NormalizeConcept`; `Status` and its transitions on `Item` and `Chunk`;
@@ -85,10 +90,12 @@ relations, duplicate thresholds), and `NewService` shrinks accordingly.
 without a caller is deleted with them — the compiler and `deadcode` decide.
 
 **SQLite**: drop `knowledge_evidence`, `knowledge_item_evidence`, `knowledge_item_relations`,
-`knowledge_reconciliation_proposals`, `knowledge_reconciliation_evidence`; delete the
-non-imported items and their chunks; drop `knowledge_items.status`,
-`knowledge_items.normalized_concept` and `knowledge_chunks.status` together with the indexes
-that use them; drop the now-unused evidence/proposal/relation repositories. `reset.go` and
+`knowledge_reconciliation_proposals`, `knowledge_reconciliation_evidence`; recreate
+`knowledge_items` and `knowledge_chunks` empty, without `status` and (on items)
+`normalized_concept`, and without the indexes that used them; empty `ingested_files`, whose
+rows point at the discarded items (see decision 6); drop the now-unused
+evidence/proposal/relation repositories. Deleting the old tables already cascades to their
+children, as in 2.15. `reset.go` and
 its test stop mentioning the dropped tables. The chunk load query
 (`chunkLoadCurrentQuery`) keeps checking that the owning item exists and the embedding
 model matches, and drops its status/source/topic mismatch reasons.
@@ -128,8 +135,13 @@ backend they used to call has no caller left when it is deleted.
 - [ ] Composer: remove the `Extract knowledge` button, dialog and wiring
 - [ ] Remove the Knowledge section: nav entry, Explorer, Review, topic tree, delete dialog,
       reindex dialog and the `reindex` kind, badges, and the `AppShell` state that fed them
-- [ ] Settings: remove `MaxKnowledgeExtractionItems` (config field, store, binding, screen,
-      test); an existing `config.yaml` that still has the key must keep loading
+- [ ] Settings: remove `MaxKnowledgeExtractionItems` entirely — `Config` field,
+      `DefaultMaxKnowledgeExtractionItems`, `ErrMaxKnowledgeExtractionItemsOutOfRange`, the
+      `max_knowledge_extraction_items` yaml key in `configfile`, the
+      `Get`/`UpdateKnowledgeExtractionSettings` bindings, the Settings control and their tests.
+      `Config.WithDefaults` and `Config.Validate` only handled this field: delete them (and
+      their callers) unless another setting needs them. Add one regression test that a
+      `config.yaml` still containing the old key loads without error
 - [ ] Backend, extraction: extraction, receipts, parsing, prompt, evidence and their
       bindings; `TaskKnowledgeExtraction`
 - [ ] Backend, reconciliation: reconciliation (immediate and pending), duplicates, relations
@@ -147,12 +159,15 @@ backend they used to call has no caller left when it is deleted.
   chat still cites it; a session's chat never retrieves another session's chunks.
 - No "Extract knowledge" action, Knowledge nav entry, Review, draft/approve/deprecate
   or reconciliation remains anywhere in the UI or in the Wails bindings.
-- Opening an existing database drops the extracted items and the dropped tables, keeps
-  imported documents and their chunks, and passes `PRAGMA foreign_key_check`; reopening
+- Opening an existing database drops the evidence/proposal/relation tables, leaves
+  `knowledge_items`, `knowledge_chunks` and `ingested_files` empty with the new schema, keeps
+  sessions, messages and `message_sources`, and passes `PRAGMA foreign_key_check`; reopening
   does not repeat the migration.
 - Deleting a session or a folder still removes its documents, chunks, ingested files and
   index entries.
-- An existing `config.yaml` containing `max_knowledge_extraction_items` still loads.
+- The `max_knowledge_extraction_items` setting no longer exists in code, bindings or UI. An
+  existing `config.yaml` that still contains the key loads normally (the loader ignores
+  unknown keys) and the key disappears the next time the config is saved.
 - `go test -race ./...`, coverage ≥ 80%, `make mutation-go` clean for the changed
   domain/application/vectorstore code, and the frontend suite, lint, typecheck and Stryker on
   the changed files pass. Removing code must not lower the coverage ratio below the
