@@ -81,7 +81,7 @@ export const NAVIGATION: NavItem[] = [
     phase: 3,
     status: 'locked',
     group: 'primary',
-    description: 'Spaced repetition review of your approved knowledge.',
+    description: 'Spaced repetition review of what you study.',
   },
   {
     id: 'interview',

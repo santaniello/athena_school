@@ -185,8 +185,10 @@ backend they used to call has no caller left when it is deleted.
       topic). The historical `CREATE TABLE IF NOT EXISTS` steps for the knowledge tables are
       gone from `migrations`: they re-run on every open and would bring the dropped tables
       back, so one `migrateKnowledgeToDocumentsOnly` step now owns the final schema
-- [ ] Docs: mark the superseded specs, update `Athena.md`, `Planning.md`, README,
-      `lib/documentation.ts`, CHANGELOG (breaking, see below)
+- [x] Docs: mark the superseded specs, update `Athena.md`, `Planning.md`, README,
+      `lib/documentation.ts`, CHANGELOG (breaking, see below). `Athena.md` and `Planning.md`
+      are the product vision, so they get dated callouts on the affected sections instead of
+      a rewrite, as the "Consequences" section above says
 
 ## Acceptance Criteria
 

@@ -336,15 +336,13 @@ func (s *Service) ingestFile(
 
 // saveShadowItem creates itemID on first import, or overwrites its
 // Topic/Concept/Definition/UpdatedAt in place on every subsequent one —
-// ID, Source, Status and CreatedAt are preserved from the existing record.
+// ID, Source and CreatedAt are preserved from the existing record.
 //
 // hasPrev only means ingested_files still remembers itemID from a past
-// import; the Knowledge Explorer's DeleteItem can remove the Item itself
-// without touching ingested_files (deleting an imported note's Item must
-// not resurrect it on the next unrelated import — see DeleteItem's own
-// doc comment). So a hasPrev GetByID miss falls back to recreating the
-// Item under the same itemID already baked into this file's chunks,
-// instead of failing every subsequent import of that file forever.
+// import, and the Item itself can be gone without ingested_files knowing
+// (a partially applied removal). So a hasPrev GetByID miss falls back to
+// recreating the Item under the same itemID already baked into this file's
+// chunks, instead of failing every subsequent import of that file forever.
 func (s *Service) saveShadowItem(
 	ctx context.Context, sessionID, itemID, topic, concept, definition string, now time.Time, hasPrev bool,
 ) error {
