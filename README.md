@@ -28,7 +28,7 @@ Payments         Paddle
 |---|---|
 | 0 | Repo setup, Wails scaffold, pre-commit quality gates, GitHub Actions CI/CD |
 | 1 | Conversational onboarding, personalized study sessions, streaming LLM responses |
-| 2 | On-demand knowledge extraction with draft review (session transcript sent to OpenRouter only when requested), personal knowledge base owned per study session (deleting a session or folder deletes its knowledge), Markdown/plain-text single-file notes import into a session, RAG retrieval scoped to the current session |
+| 2 | On-demand knowledge extraction with draft review (session transcript sent to OpenRouter only when requested), personal knowledge base owned per study session (deleting a session or folder deletes its knowledge), Markdown/plain-text single-file notes import scoped to a session (backend only for now: the import UI arrives with the Sources panel), RAG retrieval scoped to the current session |
 | 3 | Challenge mode, gap detection, spaced repetition flashcards (SM-2) |
 | 4 | Interview simulation with timer, per-answer evaluation, domain-aware feedback |
 | 5 | Plan management, Paddle payments, macOS + Linux + Windows distribution |

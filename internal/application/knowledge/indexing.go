@@ -66,6 +66,7 @@ func (s *Service) indexKnowledgeItem(ctx context.Context, item domainknowledge.I
 		Topic:          item.Topic,
 		Status:         item.Status,
 		ItemID:         item.ID,
+		SessionID:      item.SessionID,
 		Content:        renderItemContent(item),
 		Embedding:      toFloat32Embedding(response.Embedding),
 		EmbeddingModel: domainllm.EmbeddingModel,

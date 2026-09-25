@@ -614,7 +614,7 @@ func TestImportFile_fullReservationRelease_allowsASubsequentImport(t *testing.T)
 
 	ingestedFiles.EXPECT().ListBySession(ctx, testSessionID).Return(map[string]domainknowledge.IngestedFile{}, nil).Twice()
 	llm.EXPECT().Embeddings(ctx, mock.Anything).Return(embeddingResponse(), nil).Twice()
-	chunks.EXPECT().DeleteBySourcePath(ctx, testSessionID, mock.Anything).Return(nil, nil).Twice()
+	chunks.EXPECT().DeleteBySourcePath(ctx, testSessionID, srcPath("go.md")).Return(nil, nil).Twice()
 	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Twice()
 	items.EXPECT().Save(ctx, mock.Anything).Return(nil).Twice()
 	ingestedFiles.EXPECT().Upsert(ctx, mock.Anything).Return(nil).Twice()
