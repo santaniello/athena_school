@@ -462,7 +462,6 @@ function AppShell() {
               onTopicResolved={handleTopicResolved}
               onStartNewSession={handleStartNewSession}
               startingNewSession={startingNewSession}
-              onKnowledgeChanged={refreshReviewCounts}
               sourceModeSlot={sourceModeSlot}
               onSourcesChanged={setSessionSources}
             />

@@ -8,21 +8,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { MessageBubble } from '@/components/message-bubble'
 import { ThinkingIndicator } from '@/components/thinking-indicator'
-import { KnowledgeExtractionDialog } from '@/components/knowledge-extraction-dialog'
-import { TranscriptTruncationDialog } from '@/components/transcript-truncation-dialog'
 import { SourceModeSelect } from '@/components/source-mode-select'
 import { LocalSourcesStrip } from '@/components/local-sources-strip'
-
-const TRANSCRIPT_TOO_LARGE_ERROR = 'no complete transcript message fits within the extraction limit'
-
-function extractionErrorMessage(error: unknown): string {
-  if (!(error instanceof Error)) return 'Failed to extract knowledge.'
-  if (error.message.includes(TRANSCRIPT_TOO_LARGE_ERROR)) {
-    return 'The most recent message is too large to process in full.'
-  }
-  return error.message
-}
-import { extractKnowledge, type KnowledgeItem } from '@/lib/knowledge'
 import {
   onStudyChunk,
   onStudyContextLimitReached,
@@ -55,10 +42,6 @@ interface StudyChatScreenProps {
   // specs/phases/phase-02-knowledge-engine/06-study-context-limits.md).
   onStartNewSession: () => void | Promise<void>
   startingNewSession: boolean
-  // Fired after saving extracted candidates as drafts, so AppShell can
-  // refresh the sidebar/Review-tab badge without a reload. See
-  // specs/phases/phase-02-knowledge-engine/07-knowledge-review.md.
-  onKnowledgeChanged?: () => void
   // AppShell's topbar node the source-mode selector portals into, keeping
   // it out of the composer's textarea. Undefined/null (e.g. a standalone
   // render in tests) falls back to rendering it inline over the composer.
@@ -105,7 +88,6 @@ function StudyChatScreen({
   onTopicResolved,
   onStartNewSession,
   startingNewSession,
-  onKnowledgeChanged,
   sourceModeSlot,
   onSourcesChanged,
 }: StudyChatScreenProps) {
@@ -116,12 +98,6 @@ function StudyChatScreen({
   const [sourceMode, setSourceMode] = useState<SourceMode>('notes')
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [extractionError, setExtractionError] = useState<string | null>(null)
-  const [isExtracting, setIsExtracting] = useState(false)
-  const [extractedItems, setExtractedItems] = useState<KnowledgeItem[]>([])
-  const [extractionBatchId, setExtractionBatchId] = useState('')
-  const [showExtractionDialog, setShowExtractionDialog] = useState(false)
-  const [showTruncationDialog, setShowTruncationDialog] = useState(false)
   // Persistent context-limit state, restored on resume and updated live by
   // the study:context-* events below — unlike `error`, never cleared by the
   // next handleSend. See
@@ -321,26 +297,6 @@ function StudyChatScreen({
     }
   }
 
-  async function handleExtractKnowledge(confirmedTruncation: boolean) {
-    if (isExtracting || messages.length === 0 || isStreaming) return
-    setIsExtracting(true)
-    setExtractionError(null)
-    try {
-      const result = await extractKnowledge(sessionId, confirmedTruncation)
-      if (result.truncated && !confirmedTruncation) {
-        setShowTruncationDialog(true)
-        return
-      }
-      setExtractedItems(result.items)
-      setExtractionBatchId(result.batchId)
-      setShowExtractionDialog(true)
-    } catch (err) {
-      setExtractionError(extractionErrorMessage(err))
-    } finally {
-      setIsExtracting(false)
-    }
-  }
-
   // Grows the textarea to fit its content, ChatGPT/Claude-style, instead of
   // staying a fixed height with an internal scrollbar — the icon buttons
   // docked at its bottom corners (see the JSX below) track along for free,
@@ -403,11 +359,6 @@ function StudyChatScreen({
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-      {extractionError && (
-        <Alert variant="destructive">
-          <AlertDescription>{extractionError}</AlertDescription>
         </Alert>
       )}
       {contextState === 'warning' && (
@@ -473,15 +424,6 @@ function StudyChatScreen({
         />
         {!sourceModeSlot && <div className="absolute bottom-2 left-2">{sourceModeSelect}</div>}
         <div className="absolute right-2 bottom-2 flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            aria-label={isExtracting ? 'Extracting knowledge' : 'Extract knowledge'}
-            disabled={messages.length === 0 || isStreaming || isExtracting}
-            onClick={() => void handleExtractKnowledge(false)}
-          >
-            {isExtracting ? 'Extracting...' : 'Extract knowledge'}
-          </Button>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -497,23 +439,6 @@ function StudyChatScreen({
           </Tooltip>
         </div>
       </div>
-      <TranscriptTruncationDialog
-        open={showTruncationDialog}
-        onDecline={() => setShowTruncationDialog(false)}
-        onConfirm={() => {
-          setShowTruncationDialog(false)
-          void handleExtractKnowledge(true)
-        }}
-      />
-      {showExtractionDialog && (
-        <KnowledgeExtractionDialog
-          open
-          batchId={extractionBatchId}
-          items={extractedItems}
-          onClose={() => setShowExtractionDialog(false)}
-          onKnowledgeChanged={onKnowledgeChanged}
-        />
-      )}
     </div>
   )
 }

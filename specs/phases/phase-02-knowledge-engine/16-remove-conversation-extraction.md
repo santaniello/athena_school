@@ -132,7 +132,7 @@ at their top rather than deleted; they remain the record of what was built and w
 Each slice keeps the build green and is committed on its own. UI slices go first, so the
 backend they used to call has no caller left when it is deleted.
 
-- [ ] Composer: remove the `Extract knowledge` button, dialog and wiring
+- [x] Composer: remove the `Extract knowledge` button, dialog and wiring
 - [ ] Remove the Knowledge section: nav entry, Explorer, Review, topic tree, delete dialog,
       reindex dialog and the `reindex` kind, badges, and the `AppShell` state that fed them
 - [ ] Settings: remove `MaxKnowledgeExtractionItems` entirely — `Config` field,
