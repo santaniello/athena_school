@@ -104,7 +104,8 @@ Delivered in three increments, each demonstrable on its own: **2.1 → 2.2 → 2
 | [12-knowledge-revision-history.md](phase-02-knowledge-engine/12-knowledge-revision-history.md) | Immutable evidence-backed item revision history |
 | [14-study-sources-panel.md](phase-02-knowledge-engine/14-study-sources-panel.md) | NotebookLM-style Sources panel shell on the Study screen |
 | [15-session-scoped-knowledge.md](phase-02-knowledge-engine/15-session-scoped-knowledge.md) | Every knowledge item, chunk and import owned by a study session; retrieval and deletes follow it |
-| [16-remove-conversation-extraction.md](phase-02-knowledge-engine/16-remove-conversation-extraction.md) | Documents-only knowledge: removes conversation extraction, review and the item lifecycle (supersedes 2.2, 2.7, 2.9–2.13) |
+| [16-session-sources-panel.md](phase-02-knowledge-engine/16-session-sources-panel.md) | Functional NotebookLM-style Sources panel: list, add, remove a session's documents; removes the Knowledge section and extraction UI |
+| [17-remove-conversation-extraction.md](phase-02-knowledge-engine/17-remove-conversation-extraction.md) | Documents-only knowledge backend: removes conversation extraction, review and the item lifecycle (supersedes 2.2, 2.7, 2.9–2.13) |
 
 ---
 

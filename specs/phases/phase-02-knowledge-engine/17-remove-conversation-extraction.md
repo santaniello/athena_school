@@ -1,4 +1,4 @@
-# Phase 2.16 — Remove Conversation Extraction (Documents-Only Knowledge)
+# Phase 2.17 — Remove Conversation Extraction (Documents-Only Knowledge)
 
 ## Goal
 
@@ -11,9 +11,10 @@ session-extraction entirely"); spec 2.15 made every piece of knowledge owned by 
 This increment deletes the second source of knowledge, so what remains is a single, simple
 model: a session owns its imported documents, and retrieval searches their chunks.
 
-Spec 2.17 (not yet written) then makes the Sources panel functional. Doing this first
-means the panel's Remove is just "remove a document" — there is no extracted-item case,
-no evidence to preserve and no review state to reason about.
+This is the backend half. Spec [2.16](16-session-sources-panel.md) ships first: it makes
+the Sources panel functional and removes every UI entry point to conversation extraction (the
+composer button, the Knowledge section and its nav entry). By the time this spec runs, nothing
+in the UI calls what it deletes.
 
 ## Why
 
@@ -27,36 +28,26 @@ no evidence to preserve and no review state to reason about.
 
 ## Decisions
 
-1. **The whole Knowledge section goes**: the `Knowledge` nav entry, the Explorer, the
-   Review tab, the topic tree and the "not indexed" alerts. There is nothing left in them
-   to show. Until 2.17 there is no UI to list, import or remove a session's documents; that
-   was already true for import since 2.15.
-2. **Editing an item's concept/definition goes with the Explorer.** A source is a document,
-   not editable prose.
+1. **The UI is already gone.** 2.16 removed the `Knowledge` nav entry, the Explorer, the
+   Review tab, the topic tree, the extraction dialog and the "not indexed" alerts. This spec
+   deletes only what they used to call.
+2. **Editing an item's concept/definition is gone with the Explorer.** A source is a
+   document, not editable prose.
 3. **`user_note` is removed.** Nothing produces it; it is only a constant and a label.
 4. **`Item` is not renamed to `Source` here.** The shadow `Item` stays the owner of a
    document's chunks. Renaming is a separate, mechanical follow-up so this spec stays a
    pure deletion.
 5. **Use cases and bindings with no caller after this change are deleted, including
-   `DeleteItem`.** 2.17 adds a session-scoped Remove that also clears `ingested_files`
-   (today's `DeleteItem` deliberately does not — see spec 2.3).
+   `DeleteItem`.** The panel's Remove is `ingest.Service.RemoveSource` (2.16), which also
+   clears `ingested_files`; today's `DeleteItem` deliberately does not (spec 2.3).
 6. **Existing imported documents survive the migration; everything extracted does not**
    (rows with `source` other than `imported_doc`, and their chunks).
 
 ## What is removed
 
-**Frontend**
-- Composer's `Extract knowledge` button and `knowledge-extraction-dialog`, and
-  `handleExtractKnowledge` in `StudyChatScreen`.
-- `knowledge-section`, `KnowledgeExplorerScreen`, `knowledge-topic-tree`,
-  `knowledge-delete-dialog`, `pending-reconciliation-section`, `reconciliation-decision-row`,
-  `reconciliation-decision.ts`, `index-review-dialog` (the reindex flow) and the Knowledge
-  badge/draft counts owned by `AppShell`.
-- The `knowledge` entry in `lib/navigation.ts` and its `AppSection`.
-- The `MaxKnowledgeExtractionItems` field in Settings and the "Extract knowledge" copy in
-  `lib/documentation.ts`.
-- The extraction/review/approval/reconciliation/reindex functions in `lib/knowledge.ts`.
-  What the index-status screens and the study Sources panel still use stays.
+**Frontend**: nothing here except the Settings field (2.16 removed the rest): the
+`MaxKnowledgeExtractionItems` control in Settings and its wrapper, since the setting only
+ever bounded extraction.
 
 **Wails bindings** (`interfaces/desktop`): `ExtractKnowledge`, `SaveExtractedKnowledge`,
 `SaveAndApproveExtractedKnowledge`, `DiscardExtraction`, the whole reconciliation family
@@ -109,16 +100,15 @@ are implemented; this spec does not rewrite them:
 - `specs/Athena.md` and `specs/Planning.md` sections that describe extraction and review.
 
 Specs 2.2 (extraction), 2.7 (review), 2.9–2.12 (evidence, duplicates, reconciliation,
-revision history) and 2.13 (canonical topic identity) are marked **Superseded by 2.16**
+revision history) and 2.13 (canonical topic identity) are marked **Superseded by 2.17**
 at their top rather than deleted; they remain the record of what was built and why.
 
 ## Tasks
 
 Each slice keeps the build green and is committed on its own.
 
-- [ ] Composer: remove the `Extract knowledge` button, dialog and wiring
-- [ ] Remove the Knowledge section: nav entry, Explorer, Review, topic tree, delete dialog,
-      reindex dialog, badges, and the `AppShell` state that fed them
+- [ ] Precondition: 2.16 is merged — no UI calls extraction, review, approval, reconciliation
+      or reindex
 - [ ] Settings: remove `MaxKnowledgeExtractionItems` (config field, store, binding, screen,
       test); an existing `config.yaml` that still has the key must keep loading
 - [ ] Backend, extraction: extraction, receipts, parsing, prompt, evidence and their
@@ -130,14 +120,14 @@ Each slice keeps the build green and is committed on its own.
 - [ ] Domain and SQLite: drop status/source/topic filters and fields; migration; repository
       and reset cleanup; regenerate mocks and Wails bindings
 - [ ] Docs: mark the superseded specs, update `Athena.md`, `Planning.md`, README,
-      `lib/documentation.ts`, CHANGELOG (breaking, see below)
+      CHANGELOG (breaking, see below)
 
 ## Acceptance Criteria
 
 - Importing a document into a session still works end to end and the chat still cites it;
   a session's chat never retrieves another session's chunks.
-- No "Extract knowledge" action, Knowledge nav entry, Review, draft/approve/deprecate
-  or reconciliation remains anywhere in the UI or in the Wails bindings.
+- No extraction, draft/approve/deprecate or reconciliation remains in the Wails bindings
+  (the UI already lacks them after 2.16).
 - Opening an existing database drops the extracted items and the dropped tables, keeps
   imported documents and their chunks, and passes `PRAGMA foreign_key_check`; reopening
   does not repeat the migration.
@@ -159,5 +149,5 @@ bumped manually at release; the CHANGELOG entry under `[Unreleased]` is written 
 ## Out of scope
 
 - Renaming `Item` to `Source` (and the related field/table cleanup) — a follow-up.
-- The functional Sources panel: listing a session's documents, Add, Remove (2.17).
+- The functional Sources panel (2.16).
 - Redesigning Phase 3/7 features that depended on extracted knowledge.
