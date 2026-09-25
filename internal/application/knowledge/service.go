@@ -1,4 +1,5 @@
-// Package knowledge implements use cases for extracting and saving knowledge.
+// Package knowledge implements the use cases for retrieving a study
+// session's knowledge and keeping its search index consistent.
 package knowledge
 
 import (
@@ -9,10 +10,9 @@ import (
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
 )
 
-// Transactor runs fn inside a single atomic unit of work. Approve,
-// Deprecate, UpdateItem and DeleteItem each read an Item then write it
-// back (or write its chunks); wrapping that in one transaction closes the
-// read-write gap a concurrent call could otherwise land in — see db.go's
+// Transactor runs fn inside a single atomic unit of work.
+// DeleteSessionsWithKnowledge reads the chunk IDs and deletes the sessions
+// inside one, so a failure leaves neither half done — see db.go's
 // single-connection pool, which turns "one transaction open" into "every
 // other call blocks until it's done". Defined here (consumer side) per Go
 // convention; implemented by internal/infrastructure/sqlite.SQLTransactor.
@@ -25,27 +25,24 @@ type Transactor interface {
 // flight. Defined here (consumer side) per Go convention; implemented by
 // *IndexLoader.
 //
-// CheckMutationAllowed is a point-in-time read, kept for callers that only
-// need an early rejection. BeginMutation/EndMutation instead hold the
-// reservation for a mutation's entire duration — its transaction commit
-// through its post-commit VectorStore reconciliation — so a reload started
-// partway through can never publish a snapshot older than what the mutation
-// just wrote, or race its Add/Remove. Every mutation that touches the
-// VectorStore must wrap its full body in BeginMutation/EndMutation, not
-// just check CheckMutationAllowed once up front.
+// BeginMutation/EndMutation hold the reservation for a mutation's entire
+// duration — its transaction commit through its post-commit VectorStore
+// reconciliation — so a reload started partway through can never publish a
+// snapshot older than what the mutation just wrote, or race its Remove.
+// Every mutation that touches the VectorStore must wrap its full body in
+// them.
 //
 // Status reports the index coordinator's current lifecycle snapshot;
 // Retrieve reads it to distinguish a valid empty index from one that has
 // never loaded (see specs/phases/phase-02-knowledge-engine/05-rag-integration.md).
 type IndexGuard interface {
-	CheckMutationAllowed() error
 	BeginMutation() error
 	EndMutation()
 	Status() domainknowledge.IndexStatus
 }
 
-// Service implements knowledge retrieval and management against the
-// application's ports.
+// Service implements knowledge retrieval and session-knowledge cleanup
+// against the application's ports.
 type Service struct {
 	items      domainknowledge.Repository
 	llm        domainllm.Provider
@@ -54,10 +51,9 @@ type Service struct {
 	store      domainknowledge.VectorStore
 	index      IndexGuard
 	thresholds domainknowledge.RetrievalThresholds
-	evidence   domainknowledge.EvidenceRepository
 }
 
-// NewService creates a knowledge retrieval and management service.
+// NewService creates the knowledge service.
 func NewService(
 	items domainknowledge.Repository,
 	llm domainllm.Provider,
@@ -66,11 +62,10 @@ func NewService(
 	store domainknowledge.VectorStore,
 	index IndexGuard,
 	thresholds domainknowledge.RetrievalThresholds,
-	evidence domainknowledge.EvidenceRepository,
 ) *Service {
 	return &Service{
 		items: items, llm: llm, chunks: chunks, tx: tx,
-		store: store, index: index, thresholds: thresholds, evidence: evidence,
+		store: store, index: index, thresholds: thresholds,
 	}
 }
 

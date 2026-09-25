@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/santaniello/athena/internal/domain/knowledge"
 )
@@ -83,81 +82,6 @@ func (r *KnowledgeRepository) GetByID(ctx context.Context, id string) (knowledge
 	return item, nil
 }
 
-// FindByTopic returns every item for topic, oldest first.
-func (r *KnowledgeRepository) FindByTopic(ctx context.Context, topic string) ([]knowledge.Item, error) {
-	rows, err := execer(ctx, r.db).QueryContext(ctx,
-		`SELECT `+knowledgeItemSelectColumns+` FROM knowledge_items WHERE topic = ? ORDER BY created_at ASC, id ASC`,
-		topic,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("sqlite: finding knowledge items by topic: %w", err)
-	}
-	return scanItems(rows)
-}
-
-// List returns every item matching filter, oldest first.
-func (r *KnowledgeRepository) List(ctx context.Context, filter knowledge.Filter) ([]knowledge.Item, error) {
-	var conditions []string
-	var args []any
-	if filter.Topic != "" {
-		conditions = append(conditions, "topic = ?")
-		args = append(args, filter.Topic)
-	}
-	if filter.Status != "" {
-		conditions = append(conditions, "status = ?")
-		args = append(args, filter.Status)
-	}
-
-	queryParts := []string{`SELECT ` + knowledgeItemSelectColumns + ` FROM knowledge_items`}
-	if len(conditions) > 0 {
-		queryParts = append(queryParts, "WHERE "+strings.Join(conditions, " AND "))
-	}
-	queryParts = append(queryParts, "ORDER BY created_at ASC, id ASC")
-	query := strings.Join(queryParts, " ")
-
-	rows, err := execer(ctx, r.db).QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("sqlite: listing knowledge items: %w", err)
-	}
-	return scanItems(rows)
-}
-
-// ListTopics returns every distinct topic, alphabetically.
-func (r *KnowledgeRepository) ListTopics(ctx context.Context) ([]string, error) {
-	rows, err := execer(ctx, r.db).QueryContext(ctx,
-		`SELECT DISTINCT topic FROM knowledge_items ORDER BY topic ASC`,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("sqlite: listing knowledge topics: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	topics := []string{}
-	for rows.Next() {
-		var topic string
-		if err := rows.Scan(&topic); err != nil {
-			return nil, fmt.Errorf("sqlite: scanning knowledge topic: %w", err)
-		}
-		topics = append(topics, topic)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("sqlite: iterating knowledge topics: %w", err)
-	}
-	return topics, nil
-}
-
-// CountByStatus returns how many items currently have the given status.
-func (r *KnowledgeRepository) CountByStatus(ctx context.Context, status string) (int, error) {
-	var count int
-	err := execer(ctx, r.db).QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM knowledge_items WHERE status = ?`, status,
-	).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("sqlite: counting knowledge items by status: %w", err)
-	}
-	return count, nil
-}
-
 // Update persists every field of item, or returns knowledge.ErrItemNotFound
 // if it does not exist.
 func (r *KnowledgeRepository) Update(ctx context.Context, item knowledge.Item) error {
@@ -186,56 +110,6 @@ func (r *KnowledgeRepository) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("sqlite: deleting knowledge item: %w", err)
 	}
 	return requireRowAffected(result, knowledge.ErrItemNotFound)
-}
-
-// unindexedKnowledgeItemsQuery backs CountUnindexed/ListUnindexed: every
-// Source == athena item whose current chunk is missing or stale (by
-// ItemUpdatedAt, Status, or embedding model). i.source = 'athena' excludes
-// imported-doc shadow Items on purpose — their chunks always have
-// item_updated_at IS NULL by design (imported files use
-// ingested_files.mtime for staleness instead), so without this guard every
-// imported note would show up as permanently unindexed. See
-// specs/phases/phase-02-knowledge-engine/08-knowledge-item-indexing.md.
-const unindexedKnowledgeItemsQuery = `
-	FROM knowledge_items i
-	WHERE i.source = 'athena'
-	  AND NOT EXISTS (
-	        SELECT 1 FROM knowledge_chunks c
-	        WHERE c.item_id = i.id
-	          AND c.item_updated_at = i.updated_at
-	          AND c.status = i.status
-	          AND c.embedding_model = ?
-	      )`
-
-// knowledgeItemSelectColumnsQualified is knowledgeItemSelectColumns
-// prefixed with the "i." alias unindexedKnowledgeItemsQuery's table alias
-// requires.
-const knowledgeItemSelectColumnsQualified = `i.id, i.session_id, i.topic, i.concept, i.definition, COALESCE(i.properties, ''), COALESCE(i.trade_offs, ''), COALESCE(i.related_concepts, ''), i.source, i.status, i.created_at, i.updated_at`
-
-// CountUnindexed returns how many Source == athena items have no current
-// chunk under embeddingModel. See knowledge.Repository.CountUnindexed.
-func (r *KnowledgeRepository) CountUnindexed(ctx context.Context, embeddingModel string) (int, error) {
-	var count int
-	err := execer(ctx, r.db).QueryRowContext(ctx,
-		`SELECT COUNT(*) `+unindexedKnowledgeItemsQuery, embeddingModel,
-	).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("sqlite: counting unindexed knowledge items: %w", err)
-	}
-	return count, nil
-}
-
-// ListUnindexed returns every item CountUnindexed would count, oldest
-// first. See knowledge.Repository.ListUnindexed.
-func (r *KnowledgeRepository) ListUnindexed(ctx context.Context, embeddingModel string) ([]knowledge.Item, error) {
-	rows, err := execer(ctx, r.db).QueryContext(ctx,
-		`SELECT `+knowledgeItemSelectColumnsQualified+` `+unindexedKnowledgeItemsQuery+` ORDER BY i.created_at ASC, i.id ASC`,
-		embeddingModel,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("sqlite: listing unindexed knowledge items: %w", err)
-	}
-	return scanItems(rows)
 }
 
 // rowScanner is satisfied by both *sql.Row and *sql.Rows.
@@ -268,21 +142,4 @@ func scanItem(scanner rowScanner) (knowledge.Item, error) {
 		return knowledge.Item{}, fmt.Errorf("sqlite: decoding related_concepts for item %s: %w", item.ID, err)
 	}
 	return item, nil
-}
-
-func scanItems(rows *sql.Rows) ([]knowledge.Item, error) {
-	defer func() { _ = rows.Close() }()
-
-	items := []knowledge.Item{}
-	for rows.Next() {
-		item, err := scanItem(rows)
-		if err != nil {
-			return nil, fmt.Errorf("sqlite: scanning knowledge item: %w", err)
-		}
-		items = append(items, item)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("sqlite: iterating knowledge items: %w", err)
-	}
-	return items, nil
 }

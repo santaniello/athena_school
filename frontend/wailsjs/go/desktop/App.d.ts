@@ -3,21 +3,11 @@
 import {desktop} from '../models';
 import {context} from '../models';
 
-export function ApproveKnowledgeItem(arg1:string):Promise<desktop.KnowledgeItemResult>;
-
-export function CountDraftKnowledgeItems():Promise<number>;
-
-export function CountUnindexedKnowledgeItems():Promise<number>;
-
 export function CreateFolder(arg1:string):Promise<desktop.FolderResult>;
 
 export function DeleteFolder(arg1:string):Promise<void>;
 
-export function DeleteKnowledgeItem(arg1:string):Promise<void>;
-
 export function DeleteStudySession(arg1:string):Promise<void>;
-
-export function DeprecateKnowledgeItem(arg1:string):Promise<desktop.KnowledgeItemResult>;
 
 export function GetKnowledgeIndexStatus():Promise<desktop.IndexStatusResult>;
 
@@ -31,19 +21,11 @@ export function ImportFile(arg1:string,arg2:string):Promise<void>;
 
 export function ListFolders():Promise<Array<desktop.FolderResult>>;
 
-export function ListKnowledgeItemEvidence(arg1:string):Promise<Array<desktop.KnowledgeEvidenceResult>>;
-
-export function ListKnowledgeItems(arg1:string,arg2:string):Promise<Array<desktop.KnowledgeItemResult>>;
-
-export function ListKnowledgeTopics():Promise<Array<string>>;
-
 export function ListStudySessionsByFolder(arg1:string):Promise<Array<desktop.StudySessionResult>>;
 
 export function MoveStudySession(arg1:string,arg2:string):Promise<void>;
 
 export function PickNotesFile():Promise<string>;
-
-export function ReindexKnowledgeItems():Promise<void>;
 
 export function RenameFolder(arg1:string,arg2:string):Promise<void>;
 
@@ -66,7 +48,5 @@ export function StartKnowledgeIndex(arg1:context.Context):Promise<void>;
 export function StartStudySession(arg1:string,arg2:string,arg3:string):Promise<desktop.StudySessionResult>;
 
 export function Startup(arg1:context.Context):Promise<void>;
-
-export function UpdateKnowledgeItem(arg1:string,arg2:desktop.KnowledgeItemInput):Promise<desktop.KnowledgeItemResult>;
 
 export function UpdateProfile(arg1:desktop.UserProfileInput):Promise<desktop.UserProfileInput>;

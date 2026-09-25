@@ -111,33 +111,6 @@ func (r *ChunkRepository) DeleteByItemID(ctx context.Context, itemID string) ([]
 	return ids, nil
 }
 
-// UpdateMetadataByItemID overwrites topic/status/item_updated_at on every
-// chunk owned by itemID and returns the updated rows. It is a no-op, not an
-// error, when no chunk matches.
-func (r *ChunkRepository) UpdateMetadataByItemID(ctx context.Context, itemID, topic, status string, itemUpdatedAt time.Time) ([]knowledge.Chunk, error) {
-	rows, err := execer(ctx, r.db).QueryContext(ctx,
-		`UPDATE knowledge_chunks SET topic = ?, status = ?, item_updated_at = ? WHERE item_id = ? RETURNING `+chunkColumns,
-		topic, status, toNullTime(itemUpdatedAt), itemID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("sqlite: updating knowledge chunk metadata by item id: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	chunks := []knowledge.Chunk{}
-	for rows.Next() {
-		chunk, err := scanChunk(rows)
-		if err != nil {
-			return nil, fmt.Errorf("sqlite: scanning updated knowledge chunk: %w", err)
-		}
-		chunks = append(chunks, chunk)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("sqlite: iterating updated knowledge chunks: %w", err)
-	}
-	return chunks, nil
-}
-
 // chunkLoadCurrentQuery backs ListCurrent: a LEFT JOIN so a chunk whose
 // owning knowledge_items row is missing still comes back (with NULL item_*
 // columns) and can be reported as a ChunkLoadIssue rather than silently

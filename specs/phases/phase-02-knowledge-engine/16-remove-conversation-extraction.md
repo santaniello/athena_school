@@ -169,8 +169,14 @@ backend they used to call has no caller left when it is deleted.
       `Reconciliation*`, `Relation*` and `DuplicateMatch` types and
       `Repository.FindByNormalizedConcept`. `NormalizeConcept` and the `normalized_concept`
       column stay until the domain/SQLite slice
-- [ ] Backend, lifecycle: approve/deprecate/update/list/review/backfill/indexing/`DeleteItem`
-      and their bindings; drop the last collaborator (`evidence`) from `Service`
+- [x] Backend, lifecycle: approve/deprecate/update/list/review/backfill/indexing/`DeleteItem`
+      and their bindings; drop the last collaborator (`evidence`) from `Service`. With it went
+      the evidence domain type, repository and mock, the `IndexingWarning`/`ErrIndexingFailed`
+      pair and `IndexGuard.CheckMutationAllowed` (nothing in `knowledge` reads them), the
+      `Repository` methods only the Explorer used (`FindByTopic`, `List` with `Filter`,
+      `ListTopics`, `CountByStatus`, `CountUnindexed`, `ListUnindexed`) and
+      `ChunkRepository.UpdateMetadataByItemID`. `ChunkRepository.ListAll` stays: the SQLite
+      tests use it to inspect the raw table
 - [ ] Domain and SQLite: drop status/source/topic filters and fields; migration; repository
       and reset cleanup; regenerate mocks and Wails bindings
 - [ ] Docs: mark the superseded specs, update `Athena.md`, `Planning.md`, README,
