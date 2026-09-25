@@ -32,8 +32,10 @@ type DialogKind = 'file' | 'reindex'
 interface IngestProgressDialogProps {
   open: boolean
   kind: DialogKind
-  // Required for 'file' (the picked path); unused for 'reindex', which has
-  // no path of its own — it processes every unindexed item.
+  // Required for 'file' (the study session that will own the imported
+  // knowledge, and the picked path); unused for 'reindex', which has neither
+  // — it processes every unindexed item.
+  sessionId?: string
   path?: string
   onClose: () => void
 }
@@ -65,7 +67,13 @@ const completeDescription: Record<DialogKind, string> = {
 // events 'file' already streams — the UI only ever has one such operation
 // active at a time — but with an items-shaped payload instead of a
 // files-shaped one, so its progress/summary state is tracked separately.
-export function IngestProgressDialog({ open, kind, path, onClose }: IngestProgressDialogProps) {
+export function IngestProgressDialog({
+  open,
+  kind,
+  sessionId,
+  path,
+  onClose,
+}: IngestProgressDialogProps) {
   const [ingestProgress, setIngestProgress] = useState<IngestProgress | null>(null)
   const [ingestSummary, setIngestSummary] = useState<IngestSummary | null>(null)
   const [reindexProgress, setReindexProgress] = useState<ReindexProgress | null>(null)
@@ -113,7 +121,7 @@ export function IngestProgressDialog({ open, kind, path, onClose }: IngestProgre
     // itself fails before ever reaching that emit — e.g. an IPC error —
     // no ingest:error ever fires; fall back to a generic message so the
     // dialog still becomes closable rather than staying stuck forever.
-    void importFile(path ?? '').catch(() => {
+    void importFile(sessionId ?? '', path ?? '').catch(() => {
       if (!active) return
       setErrorMessage((current) => current || 'Failed to import notes. Please try again.')
     })
@@ -130,7 +138,7 @@ export function IngestProgressDialog({ open, kind, path, onClose }: IngestProgre
       setIngestSummary(null)
       setErrorMessage('')
     }
-  }, [open, kind, path])
+  }, [open, kind, sessionId, path])
 
   const finished = ingestSummary !== null || reindexSummary !== null || errorMessage !== ''
 

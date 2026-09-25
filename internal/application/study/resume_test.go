@@ -46,7 +46,7 @@ func TestResume_returnsSessionAndFullHistory(t *testing.T) {
 	messages.EXPECT().ListBySession(context.Background(), "session-1").Return(history, nil).Once()
 	retriever := knowledgemocks.NewMockRetriever(t)
 	messageSources := mockNoMessageSources(t, "session-1")
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, messageSources)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, messageSources, nil)
 
 	// When resuming the session
 	got, msgs, err := service.Resume(context.Background(), "session-1", nil, nil)
@@ -81,7 +81,7 @@ func TestResume_attachesPersistedSourcesToTheMessagesThatHaveThem(t *testing.T) 
 		Return(map[string][]domainknowledge.Source{"message-2": persistedSources}, nil).
 		Once()
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, messageSources)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, messageSources, nil)
 
 	// When resuming the session
 	_, msgs, err := service.Resume(context.Background(), "session-1", nil, nil)
@@ -104,7 +104,7 @@ func TestResume_propagatesSessionNotFound(t *testing.T) {
 	folders := foldermocks.NewMockRepository(t)
 	sessions.EXPECT().GetByID(context.Background(), "missing").Return(domainstudy.Session{}, domainstudy.ErrSessionNotFound).Once()
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil, nil)
 
 	// When resuming a session that does not exist
 	_, _, err := service.Resume(context.Background(), "missing", nil, nil)
@@ -127,7 +127,7 @@ func TestResume_propagatesMessageSourcesListError(t *testing.T) {
 	messageSources := knowledgemocks.NewMockMessageSourceRepository(t)
 	messageSources.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, listErr).Once()
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, messageSources)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, messageSources, nil)
 
 	// When resuming the session
 	_, _, err := service.Resume(context.Background(), "session-1", nil, nil)
@@ -148,7 +148,7 @@ func TestResume_unresolvedContextLength_emptyModel_callsOnContextUnavailable_wit
 	messages.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil).Once()
 	retriever := knowledgemocks.NewMockRetriever(t)
 	messageSources := mockNoMessageSources(t, "session-1")
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, messageSources)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, messageSources, nil)
 
 	var unavailableMsg string
 	// When resuming
@@ -191,7 +191,7 @@ func TestResume_unresolvedContextLength_cacheHit_recomputesAndPersistsBeforeRetu
 
 	retriever := knowledgemocks.NewMockRetriever(t)
 	messageSources := mockNoMessageSources(t, "session-1")
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, catalog, messageSources)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, catalog, messageSources, nil)
 
 	// When resuming
 	got, _, err := service.Resume(context.Background(), "session-1", nil, nil)
@@ -227,7 +227,7 @@ func TestResume_unresolvedContextLength_cacheMiss_startsBackgroundRefresh_withou
 
 	retriever := knowledgemocks.NewMockRetriever(t)
 	messageSources := mockNoMessageSources(t, "session-1")
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, catalog, messageSources)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, catalog, messageSources, nil)
 
 	done := make(chan struct{})
 	// When resuming

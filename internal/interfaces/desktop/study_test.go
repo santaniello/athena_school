@@ -40,6 +40,18 @@ func (passthroughTransactor) WithinTx(ctx context.Context, fn func(context.Conte
 	return fn(ctx)
 }
 
+// passthroughKnowledgeCascade is a KnowledgeCascade that just runs the delete
+// it wraps. These tests verify the desktop adapter's wiring against mocked
+// repositories, not the knowledge cleanup itself (see
+// internal/application/knowledge's own delete_sessions tests for that).
+type passthroughKnowledgeCascade struct{}
+
+func (passthroughKnowledgeCascade) DeleteSessionsWithKnowledge(
+	ctx context.Context, _ []string, deleteSessions func(context.Context) error,
+) error {
+	return deleteSessions(ctx)
+}
+
 // capturedEvents records every event emitted through App.emit during a test,
 // so assertions can inspect them without touching the real Wails runtime
 // (which os.Exit's when a.ctx wasn't produced by wails.Run).
@@ -65,8 +77,8 @@ func newTestStudyApp(t *testing.T, sessions domainstudy.SessionRepository, messa
 	messageSources := knowledgemocks.NewMockMessageSourceRepository(t)
 	messageSources.EXPECT().Save(context.Background(), mock.Anything, mock.Anything).Return(nil).Maybe()
 	messageSources.EXPECT().ListBySession(context.Background(), mock.Anything).Return(map[string][]domainknowledge.Source{}, nil).Maybe()
-	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog, messageSources)
-	folderService := folder.NewService(folders, sessions)
+	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog, messageSources, passthroughKnowledgeCascade{})
+	folderService := folder.NewService(folders, sessions, passthroughKnowledgeCascade{})
 	app := NewApp(nil, nil, nil, studyService, folderService, nil, nil, nil, nil, nil)
 	app.Startup(context.Background())
 
@@ -371,8 +383,8 @@ func TestApp_SendStudyMessage_emitsPostCapSourcesEvent_notes(t *testing.T) {
 
 	messageSources := knowledgemocks.NewMockMessageSourceRepository(t)
 	messageSources.EXPECT().Save(context.Background(), mock.Anything, mock.Anything).Return(nil).Maybe()
-	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog, messageSources)
-	folderService := folder.NewService(folders, sessions)
+	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog, messageSources, passthroughKnowledgeCascade{})
+	folderService := folder.NewService(folders, sessions, passthroughKnowledgeCascade{})
 	app := NewApp(nil, nil, nil, studyService, folderService, nil, nil, nil, nil, nil)
 	app.Startup(context.Background())
 	captured := &capturedEvents{}
@@ -503,8 +515,8 @@ func TestApp_ResumeStudySession_attachesPersistedSourcesToTheirMessage(t *testin
 			"message-1": {{ChunkID: "chunk-1", SourceType: domainknowledge.SourceAthena, Concept: "Goroutines", Score: 0.9}},
 		}, nil).
 		Once()
-	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog, messageSources)
-	folderService := folder.NewService(folders, sessions)
+	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog, messageSources, passthroughKnowledgeCascade{})
+	folderService := folder.NewService(folders, sessions, passthroughKnowledgeCascade{})
 	app := NewApp(nil, nil, nil, studyService, folderService, nil, nil, nil, nil, nil)
 	app.Startup(context.Background())
 	app.emit = func(context.Context, string, ...interface{}) {}

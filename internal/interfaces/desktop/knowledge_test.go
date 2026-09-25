@@ -78,7 +78,7 @@ func TestApp_ExtractKnowledge_returnsFullCandidateAndTruncationState(t *testing.
 			strings.Contains(req.Messages[0].Content, "[message:message-1] User:\nExplain channels")
 	})).Return(domainllm.ChatResponse{Content: `{"items":[{"concept":"Channels","definition":"Typed conduits.","properties":["typed"],"trade_offs":["coordination"],"related_concepts":["goroutines"],"evidence":[{"message_id":"message-1","quote":"Explain channels"}]}]}`}, nil).Once()
 	repository := knowledgemocks.NewMockRepository(t)
-	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", "channels").Return(nil, nil).Once()
+	repository.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Go", "channels").Return(nil, nil).Once()
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(0).Once()
 	service := applicationknowledge.NewService(repository, sessions, messages, llm, configs, knowledgemocks.NewMockChunkRepository(t), nil, store, nil, domainknowledge.RetrievalThresholds{}, nil, nil, nil, domainknowledge.DefaultDuplicateTopK, domainknowledge.DefaultDuplicateSimilarity)
@@ -137,7 +137,7 @@ func TestApp_SaveExtractedKnowledge_preservesFullInputAndReturnsSavedIndices(t *
 	// for provenance
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
-	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", "channels").Return(nil, nil).Twice()
+	repository.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Go", "channels").Return(nil, nil).Twice()
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.Concept == "Channels" && assert.ObjectsAreEqual([]string{"typed"}, item.Properties)
 	})).Return(nil).Once()
@@ -188,8 +188,8 @@ func TestApp_SaveExtractedKnowledge_returnsExactIndicesAlongsidePartialFailure(t
 	// repository failure among two candidates from a real extraction batch
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
-	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", "saved").Return(nil, nil).Twice()
-	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", "failed").Return(nil, nil).Twice()
+	repository.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Go", "saved").Return(nil, nil).Twice()
+	repository.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Go", "failed").Return(nil, nil).Twice()
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.Concept == "saved"
 	})).Return(nil).Once()
@@ -247,7 +247,7 @@ func TestApp_SaveAndApproveExtractedKnowledge_persistsDirectlyAsApproved(t *test
 	// Given a knowledge service backed by a repository and a real extraction batch
 	ctx := context.Background()
 	repository := knowledgemocks.NewMockRepository(t)
-	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", "channels").Return(nil, nil).Twice()
+	repository.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Go", "channels").Return(nil, nil).Twice()
 	repository.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.Concept == "Channels" && item.Status == domainknowledge.StatusApproved
 	})).Return(nil).Once()
@@ -306,7 +306,7 @@ func TestApp_DiscardExtraction_leavesTheBatchUnsavable(t *testing.T) {
 		return req.SessionID == "session-1" && req.Task == domainllm.TaskKnowledgeExtraction
 	})).Return(domainllm.ChatResponse{Content: `{"items":[{"concept":"Channels","definition":"Typed conduits.","evidence":[{"message_id":"message-1","quote":"Explain channels"}]}]}`}, nil).Once()
 	repository := knowledgemocks.NewMockRepository(t)
-	repository.EXPECT().FindByNormalizedConcept(ctx, "Go", "channels").Return(nil, nil).Once()
+	repository.EXPECT().FindByNormalizedConcept(ctx, "session-1", "Go", "channels").Return(nil, nil).Once()
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(0).Once()
 	guard := passingDesktopIndexGuard(t)

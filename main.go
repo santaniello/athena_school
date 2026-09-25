@@ -100,9 +100,9 @@ func main() {
 	catalogService := modelcatalog.NewService(llmClient)
 	studyService := study.NewService(
 		studySessions, studyMessages, llmClient, profiles, folders, knowledgeService, transactor, catalogService,
-		messageSources,
+		messageSources, knowledgeService,
 	)
-	folderService := folder.NewService(folders, studySessions)
+	folderService := folder.NewService(folders, studySessions, knowledgeService)
 
 	ingestedFiles := sqlite.NewIngestedFileRepository(db)
 	ingestService := applicationingest.NewService(

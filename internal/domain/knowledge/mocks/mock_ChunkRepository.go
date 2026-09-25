@@ -82,9 +82,9 @@ func (_c *MockChunkRepository_DeleteByItemID_Call) RunAndReturn(run func(context
 	return _c
 }
 
-// DeleteBySourcePath provides a mock function with given fields: ctx, sourcePath
-func (_m *MockChunkRepository) DeleteBySourcePath(ctx context.Context, sourcePath string) ([]string, error) {
-	ret := _m.Called(ctx, sourcePath)
+// DeleteBySourcePath provides a mock function with given fields: ctx, sessionID, sourcePath
+func (_m *MockChunkRepository) DeleteBySourcePath(ctx context.Context, sessionID string, sourcePath string) ([]string, error) {
+	ret := _m.Called(ctx, sessionID, sourcePath)
 
 	if len(ret) == 0 {
 		panic("no return value specified for DeleteBySourcePath")
@@ -92,19 +92,19 @@ func (_m *MockChunkRepository) DeleteBySourcePath(ctx context.Context, sourcePat
 
 	var r0 []string
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string) ([]string, error)); ok {
-		return rf(ctx, sourcePath)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) ([]string, error)); ok {
+		return rf(ctx, sessionID, sourcePath)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string) []string); ok {
-		r0 = rf(ctx, sourcePath)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) []string); ok {
+		r0 = rf(ctx, sessionID, sourcePath)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]string)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = rf(ctx, sourcePath)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = rf(ctx, sessionID, sourcePath)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -119,14 +119,15 @@ type MockChunkRepository_DeleteBySourcePath_Call struct {
 
 // DeleteBySourcePath is a helper method to define mock.On call
 //   - ctx context.Context
+//   - sessionID string
 //   - sourcePath string
-func (_e *MockChunkRepository_Expecter) DeleteBySourcePath(ctx interface{}, sourcePath interface{}) *MockChunkRepository_DeleteBySourcePath_Call {
-	return &MockChunkRepository_DeleteBySourcePath_Call{Call: _e.mock.On("DeleteBySourcePath", ctx, sourcePath)}
+func (_e *MockChunkRepository_Expecter) DeleteBySourcePath(ctx interface{}, sessionID interface{}, sourcePath interface{}) *MockChunkRepository_DeleteBySourcePath_Call {
+	return &MockChunkRepository_DeleteBySourcePath_Call{Call: _e.mock.On("DeleteBySourcePath", ctx, sessionID, sourcePath)}
 }
 
-func (_c *MockChunkRepository_DeleteBySourcePath_Call) Run(run func(ctx context.Context, sourcePath string)) *MockChunkRepository_DeleteBySourcePath_Call {
+func (_c *MockChunkRepository_DeleteBySourcePath_Call) Run(run func(ctx context.Context, sessionID string, sourcePath string)) *MockChunkRepository_DeleteBySourcePath_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(string))
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
 	})
 	return _c
 }
@@ -136,7 +137,7 @@ func (_c *MockChunkRepository_DeleteBySourcePath_Call) Return(_a0 []string, _a1 
 	return _c
 }
 
-func (_c *MockChunkRepository_DeleteBySourcePath_Call) RunAndReturn(run func(context.Context, string) ([]string, error)) *MockChunkRepository_DeleteBySourcePath_Call {
+func (_c *MockChunkRepository_DeleteBySourcePath_Call) RunAndReturn(run func(context.Context, string, string) ([]string, error)) *MockChunkRepository_DeleteBySourcePath_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -252,6 +253,65 @@ func (_c *MockChunkRepository_ListCurrent_Call) Return(_a0 knowledge.ChunkLoadRe
 }
 
 func (_c *MockChunkRepository_ListCurrent_Call) RunAndReturn(run func(context.Context, string) (knowledge.ChunkLoadResult, error)) *MockChunkRepository_ListCurrent_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListIDsBySession provides a mock function with given fields: ctx, sessionID
+func (_m *MockChunkRepository) ListIDsBySession(ctx context.Context, sessionID string) ([]string, error) {
+	ret := _m.Called(ctx, sessionID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListIDsBySession")
+	}
+
+	var r0 []string
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) ([]string, error)); ok {
+		return rf(ctx, sessionID)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) []string); ok {
+		r0 = rf(ctx, sessionID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, sessionID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockChunkRepository_ListIDsBySession_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListIDsBySession'
+type MockChunkRepository_ListIDsBySession_Call struct {
+	*mock.Call
+}
+
+// ListIDsBySession is a helper method to define mock.On call
+//   - ctx context.Context
+//   - sessionID string
+func (_e *MockChunkRepository_Expecter) ListIDsBySession(ctx interface{}, sessionID interface{}) *MockChunkRepository_ListIDsBySession_Call {
+	return &MockChunkRepository_ListIDsBySession_Call{Call: _e.mock.On("ListIDsBySession", ctx, sessionID)}
+}
+
+func (_c *MockChunkRepository_ListIDsBySession_Call) Run(run func(ctx context.Context, sessionID string)) *MockChunkRepository_ListIDsBySession_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockChunkRepository_ListIDsBySession_Call) Return(_a0 []string, _a1 error) *MockChunkRepository_ListIDsBySession_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockChunkRepository_ListIDsBySession_Call) RunAndReturn(run func(context.Context, string) ([]string, error)) *MockChunkRepository_ListIDsBySession_Call {
 	_c.Call.Return(run)
 	return _c
 }

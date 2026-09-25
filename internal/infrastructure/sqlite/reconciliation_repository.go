@@ -53,9 +53,9 @@ func (r *ReconciliationRepository) Save(ctx context.Context, proposal knowledge.
 	}
 
 	_, err = execer(ctx, r.db).ExecContext(ctx, `INSERT INTO knowledge_reconciliation_proposals
-		(id, action, status, candidate_snapshot, target_item_id, target_updated_at, reason, changes, created_at, resolved_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		proposal.ID, proposal.Action, proposal.Status, string(candidateSnapshot),
+		(id, session_id, action, status, candidate_snapshot, target_item_id, target_updated_at, reason, changes, created_at, resolved_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		proposal.ID, proposal.Candidate.SessionID, proposal.Action, proposal.Status, string(candidateSnapshot),
 		targetItemID, targetUpdatedAt, proposal.Reason, string(changes), proposal.CreatedAt, resolvedAt,
 	)
 	if err != nil {

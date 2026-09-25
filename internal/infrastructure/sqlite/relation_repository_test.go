@@ -18,11 +18,12 @@ func newTestRelationRepository(t *testing.T) (*RelationRepository, *sql.DB) {
 	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
+	seedSession(t, db, testSessionID)
 	_, err = db.Exec(`INSERT INTO knowledge_items
-		(id, topic, concept, definition, properties, trade_offs, related_concepts, source, status, created_at, updated_at)
+		(id, session_id, topic, concept, definition, properties, trade_offs, related_concepts, source, status, created_at, updated_at)
 		VALUES
-		('item-a', 'Distributed Systems', 'CAP theorem', 'Pick two.', '[]', '[]', '[]', 'athena', 'draft', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-		('item-b', 'Distributed Systems', 'CAP Theorem (Brewer theorem)', 'Pick two of three.', '[]', '[]', '[]', 'athena', 'approved', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`)
+		('item-a', 'session-1', 'Distributed Systems', 'CAP theorem', 'Pick two.', '[]', '[]', '[]', 'athena', 'draft', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+		('item-b', 'session-1', 'Distributed Systems', 'CAP Theorem (Brewer theorem)', 'Pick two of three.', '[]', '[]', '[]', 'athena', 'approved', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`)
 	require.NoError(t, err)
 	return NewRelationRepository(db), db
 }

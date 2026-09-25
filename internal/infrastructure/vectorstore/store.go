@@ -192,6 +192,9 @@ func (s *Store) Search(
 		if filters.Status != "" && filters.Status != c.Status {
 			continue
 		}
+		if filters.SessionID != "" && filters.SessionID != c.SessionID {
+			continue
+		}
 		if len(c.Embedding) != len(normalizedQuery) {
 			continue
 		}

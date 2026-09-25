@@ -23,4 +23,4 @@ packages:
     config:
       recursive: true
       all: false
-      include-regex: "^Transactor$"
+      include-regex: "^(Transactor|KnowledgeCascade)$"

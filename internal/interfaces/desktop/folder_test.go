@@ -18,7 +18,7 @@ import (
 
 func newTestFolderApp(t *testing.T, folders domainfolder.Repository, sessions domainstudy.SessionRepository) *App {
 	t.Helper()
-	folderService := folder.NewService(folders, sessions)
+	folderService := folder.NewService(folders, sessions, passthroughKnowledgeCascade{})
 	app := NewApp(nil, nil, nil, nil, folderService, nil, nil, nil, nil, nil)
 	app.Startup(context.Background())
 	return app
@@ -71,6 +71,7 @@ func TestApp_DeleteFolder_deletesSessionsThenDeletesFolder(t *testing.T) {
 	// Given an App backed by ports that accept the session delete and folder delete
 	folders := foldermocks.NewMockRepository(t)
 	sessions := studymocks.NewMockSessionRepository(t)
+	sessions.EXPECT().ListByFolder(mock.Anything, "f-1").Return([]domainstudy.Session{{ID: "s-1"}}, nil).Once()
 	sessions.EXPECT().DeleteByFolder(mock.Anything, "f-1").Return(nil).Once()
 	folders.EXPECT().Delete(mock.Anything, "f-1").Return(nil).Once()
 	app := newTestFolderApp(t, folders, sessions)

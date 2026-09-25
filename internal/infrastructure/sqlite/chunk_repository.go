@@ -21,7 +21,7 @@ func NewChunkRepository(db *sql.DB) *ChunkRepository {
 	return &ChunkRepository{db: db}
 }
 
-const chunkColumns = `id, source, topic, status, item_id, source_path, file_path, heading, content, embedding, embedding_model, item_updated_at, created_at`
+const chunkColumns = `id, session_id, source, topic, status, item_id, source_path, file_path, heading, content, embedding, embedding_model, item_updated_at, created_at`
 
 // SaveAll inserts every chunk. Callers are responsible for deleting any
 // previous chunks for the same source/item first (see DeleteBySourcePath) —
@@ -29,8 +29,8 @@ const chunkColumns = `id, source, topic, status, item_id, source_path, file_path
 func (r *ChunkRepository) SaveAll(ctx context.Context, chunks []knowledge.Chunk) error {
 	for _, chunk := range chunks {
 		_, err := execer(ctx, r.db).ExecContext(ctx,
-			`INSERT INTO knowledge_chunks (`+chunkColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			chunk.ID, chunk.Source, chunk.Topic, chunk.Status, chunk.ItemID, chunk.SourcePath, chunk.FilePath,
+			`INSERT INTO knowledge_chunks (`+chunkColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			chunk.ID, chunk.SessionID, chunk.Source, chunk.Topic, chunk.Status, chunk.ItemID, chunk.SourcePath, chunk.FilePath,
 			chunk.Heading, chunk.Content, encodeEmbedding(chunk.Embedding), chunk.EmbeddingModel,
 			toNullTime(chunk.ItemUpdatedAt), chunk.CreatedAt,
 		)
@@ -66,17 +66,32 @@ func (r *ChunkRepository) ListAll(ctx context.Context) ([]knowledge.Chunk, error
 }
 
 // DeleteBySourcePath removes every chunk previously produced by
-// sourcePath and returns the IDs removed. It is a no-op, not an error,
-// when no chunk matches.
-func (r *ChunkRepository) DeleteBySourcePath(ctx context.Context, sourcePath string) ([]string, error) {
+// sourcePath within sessionID and returns the IDs removed. It is a no-op,
+// not an error, when no chunk matches.
+func (r *ChunkRepository) DeleteBySourcePath(ctx context.Context, sessionID, sourcePath string) ([]string, error) {
 	rows, err := execer(ctx, r.db).QueryContext(ctx,
-		`DELETE FROM knowledge_chunks WHERE source_path = ? RETURNING id`, sourcePath)
+		`DELETE FROM knowledge_chunks WHERE session_id = ? AND source_path = ? RETURNING id`, sessionID, sourcePath)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: deleting knowledge chunks by source path: %w", err)
 	}
 	ids, err := scanIDs(rows)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: reading ids deleted by file path: %w", err)
+	}
+	return ids, nil
+}
+
+// ListIDsBySession returns the IDs of every chunk owned by sessionID. It is
+// a no-op read, not an error, when the session owns none.
+func (r *ChunkRepository) ListIDsBySession(ctx context.Context, sessionID string) ([]string, error) {
+	rows, err := execer(ctx, r.db).QueryContext(ctx,
+		`SELECT id FROM knowledge_chunks WHERE session_id = ?`, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: listing knowledge chunk ids by session: %w", err)
+	}
+	ids, err := scanIDs(rows)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: reading knowledge chunk ids by session: %w", err)
 	}
 	return ids, nil
 }
@@ -128,7 +143,7 @@ func (r *ChunkRepository) UpdateMetadataByItemID(ctx context.Context, itemID, to
 // columns) and can be reported as a ChunkLoadIssue rather than silently
 // vanishing from the result set.
 const chunkLoadCurrentQuery = `
-	SELECT c.id, c.source, c.topic, c.status, c.item_id, c.source_path, c.file_path, c.heading, c.content,
+	SELECT c.id, c.session_id, c.source, c.topic, c.status, c.item_id, c.source_path, c.file_path, c.heading, c.content,
 	       c.embedding, c.embedding_model, c.item_updated_at, c.created_at,
 	       i.id, i.topic, i.status, i.source, i.updated_at
 	FROM knowledge_chunks c
@@ -178,7 +193,7 @@ func scanCurrentChunkRow(rows *sql.Rows) (knowledge.Chunk, *knowledge.ChunkLoadI
 	var itemCurrentUpdatedAt sql.NullTime
 
 	err := rows.Scan(
-		&chunk.ID, &chunk.Source, &chunk.Topic, &chunk.Status, &chunk.ItemID, &sourcePath, &chunk.FilePath,
+		&chunk.ID, &chunk.SessionID, &chunk.Source, &chunk.Topic, &chunk.Status, &chunk.ItemID, &sourcePath, &chunk.FilePath,
 		&chunk.Heading, &chunk.Content, &embedding, &chunk.EmbeddingModel,
 		&itemUpdatedAt, &chunk.CreatedAt,
 		&itemID, &itemTopic, &itemStatus, &itemSource, &itemCurrentUpdatedAt,
@@ -258,7 +273,7 @@ func scanChunk(scanner rowScanner) (knowledge.Chunk, error) {
 	var sourcePath sql.NullString
 	var itemUpdatedAt sql.NullTime
 	err := scanner.Scan(
-		&chunk.ID, &chunk.Source, &chunk.Topic, &chunk.Status, &chunk.ItemID, &sourcePath, &chunk.FilePath,
+		&chunk.ID, &chunk.SessionID, &chunk.Source, &chunk.Topic, &chunk.Status, &chunk.ItemID, &sourcePath, &chunk.FilePath,
 		&chunk.Heading, &chunk.Content, &embedding, &chunk.EmbeddingModel,
 		&itemUpdatedAt, &chunk.CreatedAt,
 	)

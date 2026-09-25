@@ -51,7 +51,7 @@ export function HasOpenRouterKey():Promise<boolean>;
 
 export function HasUserProfile():Promise<boolean>;
 
-export function ImportFile(arg1:string):Promise<void>;
+export function ImportFile(arg1:string,arg2:string):Promise<void>;
 
 export function ListFolders():Promise<Array<desktop.FolderResult>>;
 

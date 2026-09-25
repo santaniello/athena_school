@@ -42,7 +42,7 @@ func (s *Service) FindDuplicates(
 // warning.
 func (s *Service) findExactDuplicates(ctx context.Context, candidate domainknowledge.Item) ([]domainknowledge.DuplicateMatch, error) {
 	normalizedConcept := domainknowledge.NormalizeConcept(candidate.Concept)
-	exactItems, err := s.items.FindByNormalizedConcept(ctx, candidate.Topic, normalizedConcept)
+	exactItems, err := s.items.FindByNormalizedConcept(ctx, candidate.SessionID, candidate.Topic, normalizedConcept)
 	if err != nil {
 		return nil, fmt.Errorf("knowledge: finding exact duplicate matches: %w", err)
 	}
@@ -67,7 +67,7 @@ func (s *Service) findSemanticDuplicates(
 
 	scored, err := s.store.Search(
 		ctx, toFloat32(response.Embedding), topK,
-		domainknowledge.SearchFilters{Topic: candidate.Topic, Source: domainknowledge.SourceAthena},
+		domainknowledge.SearchFilters{Topic: candidate.Topic, Source: domainknowledge.SourceAthena, SessionID: candidate.SessionID},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("knowledge: searching for semantic duplicates: %w: %w", domainknowledge.ErrSemanticDuplicateCheckUnavailable, err)

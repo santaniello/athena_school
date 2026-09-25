@@ -98,8 +98,8 @@ export function HasUserProfile() {
   return window['go']['desktop']['App']['HasUserProfile']();
 }
 
-export function ImportFile(arg1) {
-  return window['go']['desktop']['App']['ImportFile'](arg1);
+export function ImportFile(arg1, arg2) {
+  return window['go']['desktop']['App']['ImportFile'](arg1, arg2);
 }
 
 export function ListFolders() {

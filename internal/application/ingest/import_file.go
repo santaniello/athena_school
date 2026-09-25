@@ -55,7 +55,8 @@ type importCandidate struct {
 	SourcePath string
 }
 
-// ImportFile imports exactly one .md/.txt file (an fs.FS — the desktop
+// ImportFile imports exactly one .md/.txt file into the study session
+// sessionID (an fs.FS — the desktop
 // binding opens the picked file's parent directory via
 // os.OpenRoot(dir).FS() and passes it in, so this use case never touches
 // the os package; fstest.MapFS drives it in tests with no temp-dir
@@ -69,10 +70,15 @@ type importCandidate struct {
 // error.
 //
 // Input validation deliberately precedes index reservation: an invalid
-// request always reports its own error, even while the index is busy.
+// request always reports its own error, even while the index is busy. A
+// blank sessionID is ErrSessionRequired; that the session exists is enforced
+// by the foreign key on every row this writes.
 func (s *Service) ImportFile(
-	ctx context.Context, root fs.FS, sourceRoot, filePath string, onProgress func(Progress) error,
+	ctx context.Context, sessionID string, root fs.FS, sourceRoot, filePath string, onProgress func(Progress) error,
 ) (Summary, error) {
+	if strings.TrimSpace(sessionID) == "" {
+		return Summary{}, domainknowledge.ErrSessionRequired
+	}
 	if !fs.ValidPath(filePath) {
 		return Summary{}, fmt.Errorf("ingest: invalid file path %q", filePath)
 	}
@@ -88,7 +94,7 @@ func (s *Service) ImportFile(
 	defer s.index.EndMutation()
 
 	candidate := makeImportCandidate(sourceRoot, filePath)
-	return s.importCandidates(ctx, root, []importCandidate{candidate}, onProgress)
+	return s.importCandidates(ctx, sessionID, root, []importCandidate{candidate}, onProgress)
 }
 
 // makeImportCandidate combines sourceRoot with readPath to form one
@@ -106,10 +112,10 @@ func makeImportCandidate(sourceRoot, readPath string) importCandidate {
 // single-file import is an explicit restoration request. Another
 // repository error is recorded as that candidate's failure.
 func (s *Service) importCandidates(
-	ctx context.Context, root fs.FS, candidates []importCandidate,
+	ctx context.Context, sessionID string, root fs.FS, candidates []importCandidate,
 	onProgress func(Progress) error,
 ) (Summary, error) {
-	existing, err := s.ingestedFiles.ListAll(ctx)
+	existing, err := s.ingestedFiles.ListBySession(ctx, sessionID)
 	if err != nil {
 		return Summary{}, fmt.Errorf("ingest: listing previously ingested files: %w", err)
 	}
@@ -161,7 +167,7 @@ func (s *Service) importCandidates(
 			}
 		}
 
-		chunksCreated, ingestErr := s.ingestFile(ctx, root, candidate, displayPath, mtime, prev, hasPrev)
+		chunksCreated, ingestErr := s.ingestFile(ctx, sessionID, root, candidate, displayPath, mtime, prev, hasPrev)
 		applyIngestOutcome(&summary, &progress, displayPath, chunksCreated, ingestErr)
 
 		progress.FilesProcessed++
@@ -237,7 +243,7 @@ func modTime(root fs.FS, readPath string) (int64, error) {
 // source's first-import path, even when hasPrev came from another entry
 // point's sourceRoot.
 func (s *Service) ingestFile(
-	ctx context.Context, root fs.FS, candidate importCandidate, displayPath string, mtime int64,
+	ctx context.Context, sessionID string, root fs.FS, candidate importCandidate, displayPath string, mtime int64,
 	prev domainknowledge.IngestedFile, hasPrev bool,
 ) (int, error) {
 	raw, err := fs.ReadFile(root, candidate.ReadPath)
@@ -273,6 +279,7 @@ func (s *Service) ingestFile(
 		}
 		chunks[i] = domainknowledge.Chunk{
 			ID:             uuid.NewString(),
+			SessionID:      sessionID,
 			Source:         domainknowledge.SourceImportedDoc,
 			Topic:          topic,
 			Status:         domainknowledge.StatusApproved,
@@ -290,17 +297,18 @@ func (s *Service) ingestFile(
 	var removedChunkIDs []string
 	err = s.tx.WithinTx(ctx, func(ctx context.Context) error {
 		var err error
-		removedChunkIDs, err = s.chunks.DeleteBySourcePath(ctx, candidate.SourcePath)
+		removedChunkIDs, err = s.chunks.DeleteBySourcePath(ctx, sessionID, candidate.SourcePath)
 		if err != nil {
 			return err
 		}
 		if err := s.chunks.SaveAll(ctx, chunks); err != nil {
 			return err
 		}
-		if err := s.saveShadowItem(ctx, itemID, topic, concept, definition, now, hasPrev); err != nil {
+		if err := s.saveShadowItem(ctx, sessionID, itemID, topic, concept, definition, now, hasPrev); err != nil {
 			return err
 		}
 		return s.ingestedFiles.Upsert(ctx, domainknowledge.IngestedFile{
+			SessionID:      sessionID,
 			SourcePath:     candidate.SourcePath,
 			Path:           displayPath,
 			MTimeUnixNano:  mtime,
@@ -339,7 +347,7 @@ func (s *Service) ingestFile(
 // Item under the same itemID already baked into this file's chunks,
 // instead of failing every subsequent import of that file forever.
 func (s *Service) saveShadowItem(
-	ctx context.Context, itemID, topic, concept, definition string, now time.Time, hasPrev bool,
+	ctx context.Context, sessionID, itemID, topic, concept, definition string, now time.Time, hasPrev bool,
 ) error {
 	if hasPrev {
 		item, err := s.items.GetByID(ctx, itemID)
@@ -357,6 +365,7 @@ func (s *Service) saveShadowItem(
 
 	return s.items.Save(ctx, domainknowledge.Item{
 		ID:         itemID,
+		SessionID:  sessionID,
 		Topic:      topic,
 		Concept:    concept,
 		Definition: definition,

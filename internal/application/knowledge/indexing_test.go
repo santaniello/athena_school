@@ -20,7 +20,7 @@ import (
 func testItemForIndexing() domainknowledge.Item {
 	updatedAt := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	return domainknowledge.Item{
-		ID: "item-1", Topic: "Go", Concept: "Channels", Definition: "Typed conduits.",
+		ID: "item-1", SessionID: "session-1", Topic: "Go", Concept: "Channels", Definition: "Typed conduits.",
 		Properties: []string{"typed", "blocking"}, TradeOffs: []string{"coordination overhead"},
 		Source: domainknowledge.SourceAthena, Status: domainknowledge.StatusDraft,
 		UpdatedAt: updatedAt,
@@ -45,6 +45,7 @@ func matchesIndexedChunk(item domainknowledge.Item, embeddingLen int) func([]dom
 			cs[0].Topic == item.Topic &&
 			cs[0].Status == item.Status &&
 			cs[0].ItemID == item.ID &&
+			cs[0].SessionID == item.SessionID &&
 			cs[0].EmbeddingModel == domainllm.EmbeddingModel &&
 			cs[0].ItemUpdatedAt.Equal(item.UpdatedAt) &&
 			len(cs[0].Embedding) == embeddingLen

@@ -426,6 +426,26 @@ func TestStore_Search_filtersByTopicSourceStatus_exactMatch(t *testing.T) {
 	assert.Equal(t, "go-approved", results[0].Chunk.ID)
 }
 
+func TestStore_Search_filtersBySessionID_exactMatch(t *testing.T) {
+	// Given identical chunks owned by two different sessions
+	store := New()
+	ctx := context.Background()
+	inSessionA := testChunk("in-a", []float32{1, 0})
+	inSessionA.SessionID = "session-a"
+	inSessionB := testChunk("in-b", []float32{1, 0})
+	inSessionB.SessionID = "session-b"
+	require.NoError(t, store.ReplaceAll(ctx, []knowledge.Chunk{inSessionA, inSessionB}))
+
+	// When searching scoped to session A
+	results, err := store.Search(ctx, []float32{1, 0}, 10, knowledge.SearchFilters{SessionID: "session-a"})
+
+	// Then only session A's chunk is returned
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, "in-a", results[0].Chunk.ID)
+	assert.Equal(t, "session-a", results[0].Chunk.SessionID)
+}
+
 func TestStore_Search_emptyFilters_imposeNoConstraint(t *testing.T) {
 	// Given chunks with different topics
 	store := New()

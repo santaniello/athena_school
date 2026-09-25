@@ -91,13 +91,13 @@ func TestRetrieve_returnsEmptyResult_whenSnapshotValidButStoreEmpty(t *testing.T
 	require.Equal(t, domainknowledge.RetrievalResult{}, result)
 }
 
-func TestRetrieve_embedsQueryWithSessionAttribution_andSearchesApprovedOnlyWithDefaultTopK(t *testing.T) {
+func TestRetrieve_embedsQueryWithSessionAttribution_andSearchesApprovedChunksOfThatSessionWithDefaultTopK(t *testing.T) {
 	// Given a valid, non-empty snapshot with one matching chunk
 	guard := readyGuard(t)
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(3)
 	store.EXPECT().
-		Search(context.Background(), []float32{0.1, 0.2, 0.3}, domainknowledge.DefaultTopK, domainknowledge.SearchFilters{Status: domainknowledge.StatusApproved}).
+		Search(context.Background(), []float32{0.1, 0.2, 0.3}, domainknowledge.DefaultTopK, domainknowledge.SearchFilters{Status: domainknowledge.StatusApproved, SessionID: "session-1"}).
 		Return([]domainknowledge.ScoredChunk{scoredChunk("chunk-1", "item-1", 0.9)}, nil).
 		Once()
 	llm := llmmocks.NewMockProvider(t)

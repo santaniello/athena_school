@@ -235,8 +235,8 @@ func (s *Service) ApplyReconciliationCreate(
 	ctx context.Context, batchID, candidateID string, candidate domainknowledge.Item, status string,
 ) (domainknowledge.Item, error) {
 	return s.applyReconciliationMutation(ctx, batchID, candidateID, candidate, "",
-		func(ctx context.Context, _ candidateReceipt, _ domainknowledge.Item) (domainknowledge.Item, error) {
-			return s.createReconciledItem(ctx, candidate, status)
+		func(ctx context.Context, receipt candidateReceipt, _ domainknowledge.Item) (domainknowledge.Item, error) {
+			return s.createReconciledItem(ctx, receipt.SessionID, candidate, status)
 		},
 	)
 }
@@ -261,8 +261,8 @@ func (s *Service) ApplyReconciliationRelate(
 	ctx context.Context, batchID, candidateID string, candidate domainknowledge.Item,
 ) (domainknowledge.Item, error) {
 	return s.applyReconciliationMutation(ctx, batchID, candidateID, candidate, "",
-		func(ctx context.Context, _ candidateReceipt, target domainknowledge.Item) (domainknowledge.Item, error) {
-			item, err := s.createReconciledItem(ctx, candidate, domainknowledge.StatusDraft)
+		func(ctx context.Context, receipt candidateReceipt, target domainknowledge.Item) (domainknowledge.Item, error) {
+			item, err := s.createReconciledItem(ctx, receipt.SessionID, candidate, domainknowledge.StatusDraft)
 			if err != nil {
 				return domainknowledge.Item{}, err
 			}
@@ -298,8 +298,8 @@ func (s *Service) ResolveReconciliationConflict(
 		)
 	case ConflictCreateSeparately:
 		return s.applyReconciliationMutation(ctx, batchID, candidateID, candidate, "resolved: created separately",
-			func(ctx context.Context, _ candidateReceipt, _ domainknowledge.Item) (domainknowledge.Item, error) {
-				return s.createReconciledItem(ctx, candidate, domainknowledge.StatusDraft)
+			func(ctx context.Context, receipt candidateReceipt, _ domainknowledge.Item) (domainknowledge.Item, error) {
+				return s.createReconciledItem(ctx, receipt.SessionID, candidate, domainknowledge.StatusDraft)
 			},
 		)
 	default:
@@ -457,8 +457,10 @@ func (s *Service) checkReconciliationTargetFresh(ctx context.Context, targetItem
 // regenerating its ID and stamping fresh timestamps, exactly like
 // saveCandidates — rechecks the exact-duplicate policy inside the same
 // transaction (closing the same check-then-act race saveCandidates
-// closes), and persists it.
-func (s *Service) createReconciledItem(ctx context.Context, candidate domainknowledge.Item, status string) (domainknowledge.Item, error) {
+// closes), and persists it as owned by sessionID — never by anything
+// candidate itself claims, since a client-supplied candidate is not trusted
+// for ownership.
+func (s *Service) createReconciledItem(ctx context.Context, sessionID string, candidate domainknowledge.Item, status string) (domainknowledge.Item, error) {
 	topic, err := domainknowledge.NormalizeTopic(candidate.Topic)
 	if err != nil {
 		return domainknowledge.Item{}, err
@@ -466,6 +468,7 @@ func (s *Service) createReconciledItem(ctx context.Context, candidate domainknow
 	now := time.Now().UTC()
 	item := domainknowledge.Item{
 		ID:              uuid.NewString(),
+		SessionID:       sessionID,
 		Topic:           topic,
 		Concept:         truncateString(candidate.Concept, maxConceptChars),
 		Definition:      truncateString(candidate.Definition, maxDefinitionChars),
@@ -530,6 +533,7 @@ func (s *Service) persistReconciliationDecision(
 ) error {
 	now := time.Now().UTC()
 	reason := reasonWithResolution(receipt.Reconciliation.Reason, resolutionNote)
+	candidate.SessionID = receipt.SessionID
 	proposal := domainknowledge.ReconciliationProposal{
 		ID: uuid.NewString(), Action: receipt.Reconciliation.Action, Status: status,
 		Candidate: candidate, TargetItemID: receipt.Reconciliation.TargetItemID,

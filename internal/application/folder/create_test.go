@@ -17,7 +17,7 @@ func TestCreateFolder_returnsNameRequired_whenNameIsBlank(t *testing.T) {
 	// Given a service and a blank name
 	folders := foldermocks.NewMockRepository(t)
 	sessions := studymocks.NewMockSessionRepository(t)
-	service := NewService(folders, sessions)
+	service := NewService(folders, sessions, nil)
 
 	// When creating a folder with a whitespace-only name
 	_, err := service.CreateFolder(context.Background(), "   ")
@@ -36,7 +36,7 @@ func TestCreateFolder_createsAndPersistsFolder(t *testing.T) {
 		})).
 		Return(nil).
 		Once()
-	service := NewService(folders, sessions)
+	service := NewService(folders, sessions, nil)
 
 	// When creating a folder
 	f, err := service.CreateFolder(context.Background(), "System Design")

@@ -96,12 +96,13 @@ func (a *App) PickNotesFile() (string, error) {
 	})
 }
 
-// ImportFile imports exactly one .md/.txt file, streaming progress via
+// ImportFile imports exactly one .md/.txt file into the study session
+// sessionID, streaming progress via
 // "ingest:progress", then emitting "ingest:done" with the final summary
 // (or "ingest:error" on failure). selectedPath is not itself opened as an
 // os.Root — only its parent directory is, so the application service still
 // never touches OS paths directly.
-func (a *App) ImportFile(selectedPath string) error {
+func (a *App) ImportFile(sessionID, selectedPath string) error {
 	absolutePath, err := filepath.Abs(filepath.Clean(selectedPath))
 	if err != nil {
 		a.emit(a.ctx, eventIngestError, err.Error())
@@ -122,6 +123,7 @@ func (a *App) ImportFile(selectedPath string) error {
 
 	summary, err := a.ingest.ImportFile(
 		a.ctx,
+		sessionID,
 		root.FS(),
 		filepath.ToSlash(dir),
 		filepath.Base(absolutePath),

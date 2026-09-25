@@ -30,8 +30,8 @@ type contextEntry struct {
 }
 
 // Retrieve implements domainknowledge.Retriever: it embeds query with
-// sessionID attribution, searches approved local knowledge, filters and
-// caps the result, and resolves each surviving chunk's owning item's
+// sessionID attribution, searches the approved local knowledge owned by
+// that session only, filters and caps the result, and resolves each surviving chunk's owning item's
 // concept. study.Service calls this for every SourceMode.
 //
 // A survivor whose owning item no longer exists — e.g. a chunk orphaned in
@@ -56,7 +56,7 @@ func (s *Service) Retrieve(ctx context.Context, sessionID, query string) (domain
 
 	scored, err := s.store.Search(
 		ctx, toFloat32(response.Embedding), domainknowledge.DefaultTopK,
-		domainknowledge.SearchFilters{Status: domainknowledge.StatusApproved},
+		domainknowledge.SearchFilters{Status: domainknowledge.StatusApproved, SessionID: sessionID},
 	)
 	if err != nil {
 		return domainknowledge.RetrievalResult{}, fmt.Errorf("knowledge: searching local knowledge: %w", err)

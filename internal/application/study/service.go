@@ -4,12 +4,24 @@
 package study
 
 import (
+	"context"
+
 	domainfolder "github.com/santaniello/athena/internal/domain/folder"
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
 	domainprofile "github.com/santaniello/athena/internal/domain/profile"
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 )
+
+// KnowledgeCascade deletes study sessions together with the knowledge they
+// own: the session rows (and, through their foreign keys, every knowledge
+// item, chunk and imported-file record) go with deleteSessions, while the
+// in-memory search index and orphaned evidence are kept consistent around
+// it. Defined here (consumer side) per Go convention; implemented by
+// *applicationknowledge.Service.
+type KnowledgeCascade interface {
+	DeleteSessionsWithKnowledge(ctx context.Context, sessionIDs []string, deleteSessions func(ctx context.Context) error) error
+}
 
 // Service implements the Study Mode use cases against a
 // domainstudy.SessionRepository, a domainstudy.MessageRepository, a
@@ -35,6 +47,7 @@ type Service struct {
 	tx             Transactor
 	catalog        domainllm.ModelContextResolver
 	messageSources domainknowledge.MessageSourceRepository
+	knowledge      KnowledgeCascade
 	inFlight       *inFlightCoordinator
 }
 
@@ -49,11 +62,12 @@ func NewService(
 	tx Transactor,
 	catalog domainllm.ModelContextResolver,
 	messageSources domainknowledge.MessageSourceRepository,
+	knowledge KnowledgeCascade,
 ) *Service {
 	return &Service{
 		sessions: sessions, messages: messages, llm: llm,
 		profiles: profiles, folders: folders, retriever: retriever,
-		tx: tx, catalog: catalog, messageSources: messageSources,
+		tx: tx, catalog: catalog, messageSources: messageSources, knowledge: knowledge,
 		inFlight: newInFlightCoordinator(),
 	}
 }

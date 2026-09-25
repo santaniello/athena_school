@@ -32,12 +32,13 @@ export async function pickNotesFile(): Promise<string> {
   return PickNotesFile()
 }
 
-// importFile starts importing exactly one file at path. It resolves once
+// importFile starts importing exactly one file at path into the study
+// session sessionId, which owns the resulting knowledge. It resolves once
 // the import has finished (successfully or not) — progress and the final
 // summary arrive separately via onIngestProgress/onIngestDone/
 // onIngestError, so callers should subscribe to those before calling this.
-export async function importFile(path: string): Promise<void> {
-  await ImportFile(path)
+export async function importFile(sessionId: string, path: string): Promise<void> {
+  await ImportFile(sessionId, path)
 }
 
 // EventsOn returns its own unsubscribe function. Callers must invoke it on

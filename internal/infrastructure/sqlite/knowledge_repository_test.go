@@ -30,6 +30,7 @@ func newTestKnowledgeRepositoryWithDB(t *testing.T) (*KnowledgeRepository, *sql.
 	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
+	seedSession(t, db, testSessionID)
 	return NewKnowledgeRepository(db), db
 }
 
@@ -37,6 +38,7 @@ func testItem(id, topic, status string) knowledge.Item {
 	now := time.Now().UTC().Truncate(time.Second)
 	return knowledge.Item{
 		ID:              id,
+		SessionID:       testSessionID,
 		Topic:           topic,
 		Concept:         "Concept " + id,
 		Definition:      "Definition " + id,
@@ -381,7 +383,7 @@ func TestKnowledgeRepository_FindByNormalizedConcept_returnsMatchesAcrossStatuse
 	require.NoError(t, repo.Save(ctx, deprecated))
 
 	// When looking up that normalized concept in that topic
-	matches, err := repo.FindByNormalizedConcept(ctx, "System Design", knowledge.NormalizeConcept("Load Balancer"))
+	matches, err := repo.FindByNormalizedConcept(ctx, testSessionID, "System Design", knowledge.NormalizeConcept("Load Balancer"))
 
 	// Then every status is returned
 	require.NoError(t, err)
@@ -401,11 +403,33 @@ func TestKnowledgeRepository_FindByNormalizedConcept_excludesADifferentTopic(t *
 	require.NoError(t, repo.Save(ctx, item))
 
 	// When looking it up under a different topic
-	matches, err := repo.FindByNormalizedConcept(ctx, "System Design", knowledge.NormalizeConcept("Load Balancer"))
+	matches, err := repo.FindByNormalizedConcept(ctx, testSessionID, "System Design", knowledge.NormalizeConcept("Load Balancer"))
 
 	// Then it is not returned
 	require.NoError(t, err)
 	assert.Empty(t, matches)
+}
+
+func TestKnowledgeRepository_FindByNormalizedConcept_excludesTheSameConceptInAnotherSession(t *testing.T) {
+	// Given the same topic and concept saved in two different sessions
+	repo, db := newTestKnowledgeRepositoryWithDB(t)
+	seedSession(t, db, "session-other")
+	ctx := context.Background()
+	mine := testItem("item-mine", "System Design", knowledge.StatusApproved)
+	mine.Concept = "Load Balancer"
+	theirs := testItem("item-theirs", "System Design", knowledge.StatusApproved)
+	theirs.SessionID = "session-other"
+	theirs.Concept = "Load Balancer"
+	require.NoError(t, repo.Save(ctx, mine))
+	require.NoError(t, repo.Save(ctx, theirs))
+
+	// When looking it up within one session
+	matches, err := repo.FindByNormalizedConcept(ctx, testSessionID, "System Design", knowledge.NormalizeConcept("Load Balancer"))
+
+	// Then only that session's item is a match
+	require.NoError(t, err)
+	require.Len(t, matches, 1)
+	assert.Equal(t, "item-mine", matches[0].ID)
 }
 
 func TestKnowledgeRepository_FindByNormalizedConcept_returnsEmpty_whenNoMatch(t *testing.T) {
@@ -414,7 +438,7 @@ func TestKnowledgeRepository_FindByNormalizedConcept_returnsEmpty_whenNoMatch(t 
 	ctx := context.Background()
 
 	// When looking up a concept nothing matches
-	matches, err := repo.FindByNormalizedConcept(ctx, "System Design", knowledge.NormalizeConcept("Load Balancer"))
+	matches, err := repo.FindByNormalizedConcept(ctx, testSessionID, "System Design", knowledge.NormalizeConcept("Load Balancer"))
 
 	// Then an empty, non-nil result is returned
 	require.NoError(t, err)
@@ -454,7 +478,7 @@ func TestKnowledgeRepository_FindByNormalizedConceptThenSave_insideOneTransactio
 			ready.Done()
 			<-start
 			errs <- tx.WithinTx(ctx, func(ctx context.Context) error {
-				existing, err := repo.FindByNormalizedConcept(ctx, "System Design", "load balancer")
+				existing, err := repo.FindByNormalizedConcept(ctx, testSessionID, "System Design", "load balancer")
 				if err != nil {
 					return err
 				}
@@ -486,7 +510,7 @@ func TestKnowledgeRepository_FindByNormalizedConceptThenSave_insideOneTransactio
 	}
 	assert.Equal(t, 1, succeeded)
 
-	matches, err := repo.FindByNormalizedConcept(ctx, "System Design", "load balancer")
+	matches, err := repo.FindByNormalizedConcept(ctx, testSessionID, "System Design", "load balancer")
 	require.NoError(t, err)
 	assert.Len(t, matches, 1)
 }
@@ -534,6 +558,7 @@ func TestKnowledgeRepository_Delete_returnsErrItemNotFound_whenMissing(t *testin
 func TestKnowledgeRepository_Save_participatesInCallerTransaction(t *testing.T) {
 	// Given a repository and a transactor sharing the same database
 	db := newTestDB(t)
+	seedSession(t, db, testSessionID)
 	repo := NewKnowledgeRepository(db)
 	transactor := NewSQLTransactor(db)
 	item := testItem("item-1", "Go", knowledge.StatusDraft)

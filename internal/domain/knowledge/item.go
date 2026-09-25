@@ -17,6 +17,9 @@ var (
 	ErrConceptRequired = errors.New("knowledge item concept is required")
 	// ErrDefinitionRequired is returned when an Item has no definition.
 	ErrDefinitionRequired = errors.New("knowledge item definition is required")
+	// ErrSessionRequired is returned when knowledge is written without the
+	// study session that owns it.
+	ErrSessionRequired = errors.New("knowledge session is required")
 )
 
 // Source values categorize where an Item came from. This is a category,
@@ -39,7 +42,10 @@ const (
 // Item is a single unit of knowledge: a concept, its definition,
 // and the properties/trade-offs/related concepts that describe it.
 type Item struct {
-	ID              string
+	ID string
+	// SessionID is the study session that owns this Item; deleting the
+	// session deletes the Item.
+	SessionID       string
 	Topic           string
 	Concept         string
 	Definition      string

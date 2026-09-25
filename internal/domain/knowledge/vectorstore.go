@@ -9,7 +9,7 @@ import (
 
 // SearchFilters narrows a vector Search. An empty field means no constraint
 // on it — exact Go string equality, never case-folded or trimmed.
-type SearchFilters struct{ Topic, Source, Status string }
+type SearchFilters struct{ Topic, Source, Status, SessionID string }
 
 // ScoredChunk pairs a Chunk with its cosine similarity to a Search query.
 type ScoredChunk struct {

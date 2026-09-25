@@ -22,13 +22,13 @@ func NewKnowledgeRepository(db *sql.DB) *KnowledgeRepository {
 	return &KnowledgeRepository{db: db}
 }
 
-const knowledgeItemColumns = `id, topic, concept, definition, properties, trade_offs, related_concepts, source, status, created_at, updated_at`
+const knowledgeItemColumns = `id, session_id, topic, concept, definition, properties, trade_offs, related_concepts, source, status, created_at, updated_at`
 
 // knowledgeItemSelectColumns reads the three JSON-array-as-TEXT columns
 // through COALESCE so a NULL value (e.g. a pre-existing row from before
 // these columns existed) decodes as "" rather than failing the Scan into
 // a plain string. unmarshalStringList treats "" as an empty list.
-const knowledgeItemSelectColumns = `id, topic, concept, definition, COALESCE(properties, ''), COALESCE(trade_offs, ''), COALESCE(related_concepts, ''), source, status, created_at, updated_at`
+const knowledgeItemSelectColumns = `id, session_id, topic, concept, definition, COALESCE(properties, ''), COALESCE(trade_offs, ''), COALESCE(related_concepts, ''), source, status, created_at, updated_at`
 
 // Save inserts a new knowledge item.
 func (r *KnowledgeRepository) Save(ctx context.Context, item knowledge.Item) error {
@@ -37,8 +37,8 @@ func (r *KnowledgeRepository) Save(ctx context.Context, item knowledge.Item) err
 		return err
 	}
 	_, err = execer(ctx, r.db).ExecContext(ctx,
-		`INSERT INTO knowledge_items (`+knowledgeItemColumns+`, normalized_concept) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		item.ID, item.Topic, item.Concept, item.Definition,
+		`INSERT INTO knowledge_items (`+knowledgeItemColumns+`, normalized_concept) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		item.ID, item.SessionID, item.Topic, item.Concept, item.Definition,
 		properties, tradeOffs, relatedConcepts,
 		item.Source, item.Status, item.CreatedAt, item.UpdatedAt,
 		knowledge.NormalizeConcept(item.Concept),
@@ -98,10 +98,10 @@ func (r *KnowledgeRepository) FindByTopic(ctx context.Context, topic string) ([]
 // FindByNormalizedConcept returns every item in topic whose persisted
 // normalized_concept equals normalizedConcept, oldest first — draft,
 // approved, and deprecated alike.
-func (r *KnowledgeRepository) FindByNormalizedConcept(ctx context.Context, topic, normalizedConcept string) ([]knowledge.Item, error) {
+func (r *KnowledgeRepository) FindByNormalizedConcept(ctx context.Context, sessionID, topic, normalizedConcept string) ([]knowledge.Item, error) {
 	rows, err := execer(ctx, r.db).QueryContext(ctx,
-		`SELECT `+knowledgeItemSelectColumns+` FROM knowledge_items WHERE topic = ? AND normalized_concept = ? ORDER BY created_at ASC, id ASC`,
-		topic, normalizedConcept,
+		`SELECT `+knowledgeItemSelectColumns+` FROM knowledge_items WHERE session_id = ? AND topic = ? AND normalized_concept = ? ORDER BY created_at ASC, id ASC`,
+		sessionID, topic, normalizedConcept,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: finding knowledge items by normalized concept: %w", err)
@@ -224,7 +224,7 @@ const unindexedKnowledgeItemsQuery = `
 // knowledgeItemSelectColumnsQualified is knowledgeItemSelectColumns
 // prefixed with the "i." alias unindexedKnowledgeItemsQuery's table alias
 // requires.
-const knowledgeItemSelectColumnsQualified = `i.id, i.topic, i.concept, i.definition, COALESCE(i.properties, ''), COALESCE(i.trade_offs, ''), COALESCE(i.related_concepts, ''), i.source, i.status, i.created_at, i.updated_at`
+const knowledgeItemSelectColumnsQualified = `i.id, i.session_id, i.topic, i.concept, i.definition, COALESCE(i.properties, ''), COALESCE(i.trade_offs, ''), COALESCE(i.related_concepts, ''), i.source, i.status, i.created_at, i.updated_at`
 
 // CountUnindexed returns how many Source == athena items have no current
 // chunk under embeddingModel. See knowledge.Repository.CountUnindexed.
@@ -261,7 +261,7 @@ func scanItem(scanner rowScanner) (knowledge.Item, error) {
 	var item knowledge.Item
 	var properties, tradeOffs, relatedConcepts string
 	err := scanner.Scan(
-		&item.ID, &item.Topic, &item.Concept, &item.Definition,
+		&item.ID, &item.SessionID, &item.Topic, &item.Concept, &item.Definition,
 		&properties, &tradeOffs, &relatedConcepts,
 		&item.Source, &item.Status, &item.CreatedAt, &item.UpdatedAt,
 	)

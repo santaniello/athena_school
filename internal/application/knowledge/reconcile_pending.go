@@ -62,7 +62,7 @@ func (s *Service) CountPendingReconciliations(ctx context.Context) (int, error) 
 func (s *Service) ApplyPendingReconciliationCreate(ctx context.Context, proposalID, status string) (domainknowledge.Item, error) {
 	return s.applyPendingReconciliationMutation(ctx, proposalID, "",
 		func(ctx context.Context, proposal domainknowledge.ReconciliationProposal, _ domainknowledge.Item) (domainknowledge.Item, error) {
-			return s.createReconciledItem(ctx, proposal.Candidate, status)
+			return s.createReconciledItem(ctx, proposal.Candidate.SessionID, proposal.Candidate, status)
 		},
 	)
 }
@@ -83,7 +83,7 @@ func (s *Service) ApplyPendingReconciliationUpdate(ctx context.Context, proposal
 func (s *Service) ApplyPendingReconciliationRelate(ctx context.Context, proposalID string) (domainknowledge.Item, error) {
 	return s.applyPendingReconciliationMutation(ctx, proposalID, "",
 		func(ctx context.Context, proposal domainknowledge.ReconciliationProposal, target domainknowledge.Item) (domainknowledge.Item, error) {
-			item, err := s.createReconciledItem(ctx, proposal.Candidate, domainknowledge.StatusDraft)
+			item, err := s.createReconciledItem(ctx, proposal.Candidate.SessionID, proposal.Candidate, domainknowledge.StatusDraft)
 			if err != nil {
 				return domainknowledge.Item{}, err
 			}
@@ -115,7 +115,7 @@ func (s *Service) ResolvePendingReconciliationConflict(ctx context.Context, prop
 	case ConflictCreateSeparately:
 		return s.applyPendingReconciliationMutation(ctx, proposalID, "resolved: created separately",
 			func(ctx context.Context, proposal domainknowledge.ReconciliationProposal, _ domainknowledge.Item) (domainknowledge.Item, error) {
-				return s.createReconciledItem(ctx, proposal.Candidate, domainknowledge.StatusDraft)
+				return s.createReconciledItem(ctx, proposal.Candidate.SessionID, proposal.Candidate, domainknowledge.StatusDraft)
 			},
 		)
 	default:

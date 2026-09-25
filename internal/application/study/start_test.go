@@ -30,7 +30,7 @@ func TestStart_returnsTopicRequired_whenTopicIsBlank(t *testing.T) {
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil, nil)
 
 	// When starting a session with a whitespace-only topic
 	_, err := service.Start(context.Background(), "   ", "", "Ace the SQL interview")
@@ -49,7 +49,7 @@ func TestStart_returnsGoalRequired_whenGoalIsBlank(t *testing.T) {
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil, nil)
 
 	// When starting a session with a whitespace-only goal
 	_, err := service.Start(context.Background(), "Distributed systems", "", "   ")
@@ -82,7 +82,7 @@ func TestStart_createsAndPersistsSession(t *testing.T) {
 		Return(nil).
 		Once()
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil, nil)
 
 	// When starting a session for a topic and goal in a folder
 	session, err := service.Start(context.Background(), "Distributed systems", "folder-1", "Ace the SQL interview")
@@ -104,7 +104,7 @@ func TestStart_returnsFolderRequired_whenFolderIDIsBlank(t *testing.T) {
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil, nil)
 
 	// When starting a session without specifying a folder
 	_, err := service.Start(context.Background(), "Distributed systems", "", "Ace the SQL interview")
@@ -123,7 +123,7 @@ func TestStart_propagatesFolderNotFound_whenChosenFolderDoesNotExist(t *testing.
 	folders := foldermocks.NewMockRepository(t)
 	folders.EXPECT().GetByID(context.Background(), "missing").Return(domainfolder.Folder{}, domainfolder.ErrFolderNotFound).Once()
 	retriever := knowledgemocks.NewMockRetriever(t)
-	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil, nil)
 
 	// When starting a session in a folder that does not exist
 	_, err := service.Start(context.Background(), "Distributed systems", "missing", "Ace the SQL interview")

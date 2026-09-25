@@ -567,6 +567,26 @@ describe('StudyFolderTree', () => {
     expect(deleteItem.closest('[role="menuitem"]')).not.toHaveAttribute('data-disabled')
   })
 
+  it('warns that deleting a folder also deletes the knowledge of its sessions', async () => {
+    // Given a folder
+    vi.mocked(listFolders).mockResolvedValueOnce([SYSTEM_DESIGN])
+    const user = userEvent.setup()
+    renderTree()
+    await screen.findByText('System Design')
+
+    // When asking to delete it
+    await user.click(screen.getByRole('button', { name: 'System Design options' }))
+    await user.click(await screen.findByText('Delete folder'))
+
+    // Then the confirmation says the sessions' knowledge goes too
+    const dialog = await screen.findByRole('alertdialog')
+    expect(
+      within(dialog).getByText(
+        /every session inside it, with the knowledge those sessions own, will be permanently deleted/,
+      ),
+    ).toBeInTheDocument()
+  })
+
   it('deletes a folder after confirming, leaving other folders in place', async () => {
     // Given two folders, and a delete that succeeds
     vi.mocked(listFolders).mockResolvedValueOnce([GENERAL, SYSTEM_DESIGN])
@@ -991,6 +1011,29 @@ describe('StudyFolderTree', () => {
 
     // Then the click did not bubble up and expand the folder too
     expect(listStudySessionsByFolder).not.toHaveBeenCalled()
+  })
+
+  it('warns that deleting a session also deletes its knowledge', async () => {
+    // Given an expanded folder with a session
+    vi.mocked(listFolders).mockResolvedValueOnce([SYSTEM_DESIGN])
+    vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([CACHE_SESSION])
+    const user = userEvent.setup()
+    renderTree()
+    await screen.findByText('System Design')
+    await user.click(screen.getByText('System Design'))
+    await screen.findByText('Cache invalidation')
+
+    // When asking to delete the session
+    await user.click(screen.getByRole('button', { name: 'Cache invalidation options' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Delete' }))
+
+    // Then the confirmation says its knowledge goes too
+    const dialog = await screen.findByRole('alertdialog')
+    expect(
+      within(dialog).getByText(
+        /Its messages and the knowledge it owns will be permanently deleted/,
+      ),
+    ).toBeInTheDocument()
   })
 
   it('deletes a session after confirming, notifies the parent, and leaves the folder and its other sessions intact', async () => {

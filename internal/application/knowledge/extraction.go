@@ -99,6 +99,7 @@ func (s *Service) ExtractFromSession(ctx context.Context, sessionID string, conf
 	items := make([]domainknowledge.Item, len(candidates))
 	for index, candidate := range candidates {
 		items[index] = candidate.Item
+		items[index].SessionID = sessionID
 	}
 	if len(items) == 0 {
 		return ExtractionBatch{Items: []ExtractionCandidate{}}, truncated, nil
@@ -230,6 +231,7 @@ func (s *Service) saveCandidates(ctx context.Context, batchID string, items []do
 		now := time.Now().UTC()
 		item := domainknowledge.Item{
 			ID:              uuid.NewString(),
+			SessionID:       receipt.SessionID,
 			Topic:           topic,
 			Concept:         truncateString(input.Concept, maxConceptChars),
 			Definition:      truncateString(input.Definition, maxDefinitionChars),

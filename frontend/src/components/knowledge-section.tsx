@@ -1,18 +1,15 @@
 import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { IngestProgressDialog } from '@/components/ingest-progress-dialog'
 import { PendingReconciliationSection } from '@/components/pending-reconciliation-section'
 import { cn } from '@/lib/utils'
-import { pickNotesFile } from '@/lib/ingest'
 import KnowledgeExplorerScreen from '@/screens/KnowledgeExplorerScreen'
 
 interface KnowledgeSectionProps {
   // null means "All topics".
   selectedTopic: string | null
-  // True while the knowledge index is retrying — import/edit/approve/
-  // deprecate/delete are rejected by a backend guard during a retry, so the
-  // UI disables them too rather than letting a call fail confusingly.
+  // True while the knowledge index is retrying — edit/approve/deprecate/
+  // delete are rejected by a backend guard during a retry, so the UI
+  // disables them too rather than letting a call fail confusingly.
   mutationsDisabled: boolean
   // The count of drafts pending review, owned by AppShell (see
   // specs/phases/phase-02-knowledge-engine/07-knowledge-review.md) — shown
@@ -30,12 +27,10 @@ interface KnowledgeSectionProps {
 
 type Tab = 'explorer' | 'review'
 
-const pickerErrorMessage = 'Failed to open the notes picker. Please try again.'
-
-// Owns the Explorer/Review tab state and the "Import notes" toolbar action
-// (a single file) — the main-pane counterpart to KnowledgeTopicTree in the
-// sidebar. See the layout in
-// specs/phases/phase-02-knowledge-engine/04-01-import-file.md.
+// Owns the Explorer/Review tab state — the main-pane counterpart to
+// KnowledgeTopicTree in the sidebar. Importing is not offered here: knowledge
+// is owned by a study session, so importing belongs to that session's Sources
+// panel. See specs/phases/phase-02-knowledge-engine/15-session-scoped-knowledge.md.
 function KnowledgeSection({
   selectedTopic,
   mutationsDisabled,
@@ -44,18 +39,6 @@ function KnowledgeSection({
   onTopicsChanged,
 }: KnowledgeSectionProps) {
   const [activeTab, setActiveTab] = useState<Tab>('explorer')
-  const [importPath, setImportPath] = useState<string | null>(null)
-  const [pickerError, setPickerError] = useState('')
-
-  async function handleImportClick() {
-    setPickerError('')
-    try {
-      const path = await pickNotesFile()
-      if (path) setImportPath(path)
-    } catch {
-      setPickerError(pickerErrorMessage)
-    }
-  }
 
   function tabClassName(tab: Tab) {
     return cn(
@@ -63,14 +46,6 @@ function KnowledgeSection({
       activeTab === tab && 'bg-secondary text-foreground',
     )
   }
-
-  // Stryker disable StringLiteral: only read when importPath is null, i.e.
-  // IngestProgressDialog's own `open` prop is false — its effect bails via
-  // `if (!open) return` before path ever drives anything observable, so
-  // this fallback exists purely to satisfy the required (non-optional) prop
-  // type.
-  const importDialogPath = importPath ?? ''
-  // Stryker restore StringLiteral
 
   return (
     <div className="flex h-full w-full flex-col gap-4">
@@ -96,13 +71,7 @@ function KnowledgeSection({
             {draftCount > 0 && <Badge>{draftCount}</Badge>}
           </button>
         </div>
-
-        <Button disabled={mutationsDisabled} onClick={() => void handleImportClick()}>
-          Import notes
-        </Button>
       </div>
-
-      {pickerError && <p className="text-sm text-destructive">{pickerError}</p>}
 
       {activeTab === 'review' && (
         <PendingReconciliationSection onKnowledgeChanged={onKnowledgeChanged} />
@@ -117,13 +86,6 @@ function KnowledgeSection({
           onTopicsChanged={onTopicsChanged}
         />
       </div>
-
-      <IngestProgressDialog
-        open={importPath !== null}
-        kind="file"
-        path={importDialogPath}
-        onClose={() => setImportPath(null)}
-      />
     </div>
   )
 }

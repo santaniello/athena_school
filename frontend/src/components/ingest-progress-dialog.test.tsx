@@ -131,12 +131,18 @@ describe('IngestProgressDialog', () => {
 
     // When rendering it open
     render(
-      <IngestProgressDialog open kind="file" path="/home/user/notes/go.md" onClose={vi.fn()} />,
+      <IngestProgressDialog
+        open
+        kind="file"
+        sessionId="session-1"
+        path="/home/user/notes/go.md"
+        onClose={vi.fn()}
+      />,
     )
 
     // Then the import starts immediately for that file, and the dialog
     // explains that it is still processing
-    expect(importFile).toHaveBeenCalledWith('/home/user/notes/go.md')
+    expect(importFile).toHaveBeenCalledWith('session-1', '/home/user/notes/go.md')
     expect(screen.getByText('Processing the selected file.')).toBeInTheDocument()
     void events
   })
@@ -150,6 +156,7 @@ describe('IngestProgressDialog', () => {
       <IngestProgressDialog
         open={false}
         kind="file"
+        sessionId="session-1"
         path="/home/user/notes/go.md"
         onClose={vi.fn()}
       />,
@@ -164,7 +171,13 @@ describe('IngestProgressDialog', () => {
     const events = setupSubscriptions()
     vi.mocked(importFile).mockReturnValueOnce(new Promise<void>(() => {}))
     render(
-      <IngestProgressDialog open kind="file" path="/home/user/notes/go.md" onClose={vi.fn()} />,
+      <IngestProgressDialog
+        open
+        kind="file"
+        sessionId="session-1"
+        path="/home/user/notes/go.md"
+        onClose={vi.fn()}
+      />,
     )
 
     // When a progress event arrives
@@ -189,7 +202,13 @@ describe('IngestProgressDialog', () => {
     const events = setupSubscriptions()
     vi.mocked(importFile).mockReturnValueOnce(new Promise<void>(() => {}))
     render(
-      <IngestProgressDialog open kind="file" path="/home/user/notes/go.md" onClose={vi.fn()} />,
+      <IngestProgressDialog
+        open
+        kind="file"
+        sessionId="session-1"
+        path="/home/user/notes/go.md"
+        onClose={vi.fn()}
+      />,
     )
 
     // When a progress event arrives reporting zero files total
@@ -210,7 +229,13 @@ describe('IngestProgressDialog', () => {
     const events = setupSubscriptions()
     vi.mocked(importFile).mockReturnValueOnce(new Promise<void>(() => {}))
     render(
-      <IngestProgressDialog open kind="file" path="/home/user/notes/go.md" onClose={vi.fn()} />,
+      <IngestProgressDialog
+        open
+        kind="file"
+        sessionId="session-1"
+        path="/home/user/notes/go.md"
+        onClose={vi.fn()}
+      />,
     )
 
     // When the import finishes
@@ -231,7 +256,13 @@ describe('IngestProgressDialog', () => {
     const events = setupSubscriptions()
     vi.mocked(importFile).mockReturnValueOnce(new Promise<void>(() => {}))
     render(
-      <IngestProgressDialog open kind="file" path="/home/user/notes/go.md" onClose={vi.fn()} />,
+      <IngestProgressDialog
+        open
+        kind="file"
+        sessionId="session-1"
+        path="/home/user/notes/go.md"
+        onClose={vi.fn()}
+      />,
     )
 
     // When the import finishes with one failure
@@ -251,7 +282,13 @@ describe('IngestProgressDialog', () => {
     const events = setupSubscriptions()
     vi.mocked(importFile).mockReturnValueOnce(new Promise<void>(() => {}))
     render(
-      <IngestProgressDialog open kind="file" path="/home/user/notes/go.md" onClose={vi.fn()} />,
+      <IngestProgressDialog
+        open
+        kind="file"
+        sessionId="session-1"
+        path="/home/user/notes/go.md"
+        onClose={vi.fn()}
+      />,
     )
 
     // When the import finishes with one file that persisted but whose
@@ -271,7 +308,13 @@ describe('IngestProgressDialog', () => {
     const events = setupSubscriptions()
     vi.mocked(importFile).mockReturnValueOnce(new Promise<void>(() => {}))
     render(
-      <IngestProgressDialog open kind="file" path="/home/user/notes/go.md" onClose={vi.fn()} />,
+      <IngestProgressDialog
+        open
+        kind="file"
+        sessionId="session-1"
+        path="/home/user/notes/go.md"
+        onClose={vi.fn()}
+      />,
     )
 
     // When the whole import fails outright
@@ -288,7 +331,13 @@ describe('IngestProgressDialog', () => {
     const events = setupSubscriptions()
     vi.mocked(importFile).mockReturnValueOnce(Promise.reject(new Error('IPC failure')))
     render(
-      <IngestProgressDialog open kind="file" path="/home/user/notes/go.md" onClose={vi.fn()} />,
+      <IngestProgressDialog
+        open
+        kind="file"
+        sessionId="session-1"
+        path="/home/user/notes/go.md"
+        onClose={vi.fn()}
+      />,
     )
 
     // Then a generic error is shown and the dialog still becomes closable
@@ -307,7 +356,13 @@ describe('IngestProgressDialog', () => {
     firstImport.catch(() => {}) // avoid an unhandled-rejection warning from this local reference
     vi.mocked(importFile).mockReturnValueOnce(firstImport)
     const { rerender } = render(
-      <IngestProgressDialog open kind="file" path="/home/user/notes/go.md" onClose={vi.fn()} />,
+      <IngestProgressDialog
+        open
+        kind="file"
+        sessionId="session-1"
+        path="/home/user/notes/go.md"
+        onClose={vi.fn()}
+      />,
     )
 
     // When the dialog is closed, then reopened for a different file whose
@@ -317,13 +372,22 @@ describe('IngestProgressDialog', () => {
       <IngestProgressDialog
         open={false}
         kind="file"
+        sessionId="session-1"
         path="/home/user/notes/go.md"
         onClose={vi.fn()}
       />,
     )
     vi.mocked(importFile).mockReturnValueOnce(new Promise<void>(() => {}))
-    rerender(<IngestProgressDialog open kind="file" path="/home/user/other.md" onClose={vi.fn()} />)
-    await waitFor(() => expect(importFile).toHaveBeenCalledWith('/home/user/other.md'))
+    rerender(
+      <IngestProgressDialog
+        open
+        kind="file"
+        sessionId="session-1"
+        path="/home/user/other.md"
+        onClose={vi.fn()}
+      />,
+    )
+    await waitFor(() => expect(importFile).toHaveBeenCalledWith('session-1', '/home/user/other.md'))
     await act(async () => {
       rejectFirst(new Error('stale IPC failure'))
       await Promise.resolve()
@@ -340,7 +404,13 @@ describe('IngestProgressDialog', () => {
     setupSubscriptions()
     vi.mocked(importFile).mockReturnValueOnce(new Promise<void>(() => {}))
     render(
-      <IngestProgressDialog open kind="file" path="/home/user/notes/go.md" onClose={vi.fn()} />,
+      <IngestProgressDialog
+        open
+        kind="file"
+        sessionId="session-1"
+        path="/home/user/notes/go.md"
+        onClose={vi.fn()}
+      />,
     )
 
     // Then neither the dialog's own close (X) control nor the Close
@@ -355,7 +425,13 @@ describe('IngestProgressDialog', () => {
     const onClose = vi.fn()
     const user = userEvent.setup()
     render(
-      <IngestProgressDialog open kind="file" path="/home/user/notes/go.md" onClose={onClose} />,
+      <IngestProgressDialog
+        open
+        kind="file"
+        sessionId="session-1"
+        path="/home/user/notes/go.md"
+        onClose={onClose}
+      />,
     )
     events.emitDone(emptySummary)
 
@@ -373,7 +449,13 @@ describe('IngestProgressDialog', () => {
     const onClose = vi.fn()
     const user = userEvent.setup()
     render(
-      <IngestProgressDialog open kind="file" path="/home/user/notes/go.md" onClose={onClose} />,
+      <IngestProgressDialog
+        open
+        kind="file"
+        sessionId="session-1"
+        path="/home/user/notes/go.md"
+        onClose={onClose}
+      />,
     )
     events.emitDone(emptySummary)
     await findFooterCloseButton()
@@ -392,7 +474,13 @@ describe('IngestProgressDialog', () => {
     const onClose = vi.fn()
     const user = userEvent.setup()
     render(
-      <IngestProgressDialog open kind="file" path="/home/user/notes/go.md" onClose={onClose} />,
+      <IngestProgressDialog
+        open
+        kind="file"
+        sessionId="session-1"
+        path="/home/user/notes/go.md"
+        onClose={onClose}
+      />,
     )
 
     // When pressing Escape before it has finished
@@ -407,7 +495,13 @@ describe('IngestProgressDialog', () => {
     const events = setupSubscriptions()
     vi.mocked(importFile).mockReturnValueOnce(new Promise<void>(() => {}))
     const { rerender } = render(
-      <IngestProgressDialog open kind="file" path="/home/user/notes/go.md" onClose={vi.fn()} />,
+      <IngestProgressDialog
+        open
+        kind="file"
+        sessionId="session-1"
+        path="/home/user/notes/go.md"
+        onClose={vi.fn()}
+      />,
     )
 
     // When it closes
@@ -415,6 +509,7 @@ describe('IngestProgressDialog', () => {
       <IngestProgressDialog
         open={false}
         kind="file"
+        sessionId="session-1"
         path="/home/user/notes/go.md"
         onClose={vi.fn()}
       />,
@@ -431,7 +526,13 @@ describe('IngestProgressDialog', () => {
     const events = setupSubscriptions()
     vi.mocked(importFile).mockReturnValue(new Promise<void>(() => {}))
     const { rerender } = render(
-      <IngestProgressDialog open kind="file" path="/home/user/notes/go.md" onClose={vi.fn()} />,
+      <IngestProgressDialog
+        open
+        kind="file"
+        sessionId="session-1"
+        path="/home/user/notes/go.md"
+        onClose={vi.fn()}
+      />,
     )
     events.emitProgress({
       filesProcessed: 3,
@@ -447,14 +548,23 @@ describe('IngestProgressDialog', () => {
       <IngestProgressDialog
         open={false}
         kind="file"
+        sessionId="session-1"
         path="/home/user/notes/go.md"
         onClose={vi.fn()}
       />,
     )
-    rerender(<IngestProgressDialog open kind="file" path="/home/user/other.md" onClose={vi.fn()} />)
+    rerender(
+      <IngestProgressDialog
+        open
+        kind="file"
+        sessionId="session-1"
+        path="/home/user/other.md"
+        onClose={vi.fn()}
+      />,
+    )
 
     // Then it starts a fresh import instead of showing the stale summary
-    await waitFor(() => expect(importFile).toHaveBeenCalledWith('/home/user/other.md'))
+    await waitFor(() => expect(importFile).toHaveBeenCalledWith('session-1', '/home/user/other.md'))
     expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument()
     expect(screen.getByText('Starting...')).toBeInTheDocument()
   })

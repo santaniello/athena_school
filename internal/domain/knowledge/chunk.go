@@ -16,6 +16,9 @@ type Chunk struct {
 	// ItemID is the owning knowledge Item: the extracted Item for
 	// Source == athena, the shadow Item for Source == imported_doc. Always set.
 	ItemID string
+	// SessionID is the study session that owns this chunk; deleting the
+	// session deletes the chunk.
+	SessionID string
 	// SourcePath is the imported source's canonical absolute identity
 	// (desktop-normalized), set only for Source == imported_doc. Never
 	// shown in progress, failures, or index issue UI.
@@ -64,11 +67,18 @@ type ChunkRepository interface {
 	// instead of reporting an empty result.
 	ListCurrent(ctx context.Context, embeddingModel string) (ChunkLoadResult, error)
 	// DeleteBySourcePath removes every chunk previously produced by
-	// sourcePath and returns the IDs removed, so a caller can evict them
-	// from an in-memory index after this call's transaction commits. Using
-	// the canonical absolute identity (rather than the display FilePath)
-	// ensures replacement never deletes an unrelated same-named file.
-	DeleteBySourcePath(ctx context.Context, sourcePath string) ([]string, error)
+	// sourcePath within sessionID and returns the IDs removed, so a caller
+	// can evict them from an in-memory index after this call's transaction
+	// commits. Using the canonical absolute identity (rather than the
+	// display FilePath) ensures replacement never deletes an unrelated
+	// same-named file, and scoping by sessionID ensures re-importing a file
+	// in one session never touches the same file's chunks in another.
+	DeleteBySourcePath(ctx context.Context, sessionID, sourcePath string) ([]string, error)
+	// ListIDsBySession returns the IDs of every chunk sessionID owns, without
+	// deleting anything — so a caller about to delete the session (whose
+	// foreign key cascades to its chunks) can evict them from an in-memory
+	// index after the transaction commits.
+	ListIDsBySession(ctx context.Context, sessionID string) ([]string, error)
 	// DeleteByItemID removes every chunk owned by itemID and returns the
 	// IDs removed, so a caller can evict them from an in-memory index
 	// after this call's transaction commits.
@@ -86,9 +96,13 @@ type ChunkRepository interface {
 
 // IngestedFile records the dedup state for one previously imported source.
 type IngestedFile struct {
-	// SourcePath is the source's canonical absolute identity — the dedup
-	// key, so the same physical file reached through two different folder
-	// roots (or directly) is recognized as one source.
+	// SessionID is the study session this import belongs to. Dedup is per
+	// session: the same source imported in two sessions is two records.
+	SessionID string
+	// SourcePath is the source's canonical absolute identity — together
+	// with SessionID the dedup key, so the same physical file reached
+	// through two different folder roots (or directly) is recognized as
+	// one source within a session.
 	SourcePath string
 	// Path is the stable, root-relative display path captured on the
 	// source's first import.
@@ -105,8 +119,10 @@ type IngestedFile struct {
 // IngestedFileRepository persists IngestedFile dedup records. Today the
 // only implementation is SQLite-backed (internal/infrastructure/sqlite).
 type IngestedFileRepository interface {
-	// ListAll returns every ingested file, keyed by SourcePath — one query
-	// per import.
-	ListAll(ctx context.Context) (map[string]IngestedFile, error)
+	// ListBySession returns sessionID's ingested files, keyed by SourcePath
+	// — one query per import.
+	ListBySession(ctx context.Context, sessionID string) (map[string]IngestedFile, error)
+	// Upsert inserts file, or replaces the existing record for
+	// (file.SessionID, file.SourcePath).
 	Upsert(ctx context.Context, file IngestedFile) error
 }

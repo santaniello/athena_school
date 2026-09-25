@@ -22,29 +22,29 @@ func (_m *MockIngestedFileRepository) EXPECT() *MockIngestedFileRepository_Expec
 	return &MockIngestedFileRepository_Expecter{mock: &_m.Mock}
 }
 
-// ListAll provides a mock function with given fields: ctx
-func (_m *MockIngestedFileRepository) ListAll(ctx context.Context) (map[string]knowledge.IngestedFile, error) {
-	ret := _m.Called(ctx)
+// ListBySession provides a mock function with given fields: ctx, sessionID
+func (_m *MockIngestedFileRepository) ListBySession(ctx context.Context, sessionID string) (map[string]knowledge.IngestedFile, error) {
+	ret := _m.Called(ctx, sessionID)
 
 	if len(ret) == 0 {
-		panic("no return value specified for ListAll")
+		panic("no return value specified for ListBySession")
 	}
 
 	var r0 map[string]knowledge.IngestedFile
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context) (map[string]knowledge.IngestedFile, error)); ok {
-		return rf(ctx)
+	if rf, ok := ret.Get(0).(func(context.Context, string) (map[string]knowledge.IngestedFile, error)); ok {
+		return rf(ctx, sessionID)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context) map[string]knowledge.IngestedFile); ok {
-		r0 = rf(ctx)
+	if rf, ok := ret.Get(0).(func(context.Context, string) map[string]knowledge.IngestedFile); ok {
+		r0 = rf(ctx, sessionID)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(map[string]knowledge.IngestedFile)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context) error); ok {
-		r1 = rf(ctx)
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, sessionID)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -52,30 +52,31 @@ func (_m *MockIngestedFileRepository) ListAll(ctx context.Context) (map[string]k
 	return r0, r1
 }
 
-// MockIngestedFileRepository_ListAll_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListAll'
-type MockIngestedFileRepository_ListAll_Call struct {
+// MockIngestedFileRepository_ListBySession_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListBySession'
+type MockIngestedFileRepository_ListBySession_Call struct {
 	*mock.Call
 }
 
-// ListAll is a helper method to define mock.On call
+// ListBySession is a helper method to define mock.On call
 //   - ctx context.Context
-func (_e *MockIngestedFileRepository_Expecter) ListAll(ctx interface{}) *MockIngestedFileRepository_ListAll_Call {
-	return &MockIngestedFileRepository_ListAll_Call{Call: _e.mock.On("ListAll", ctx)}
+//   - sessionID string
+func (_e *MockIngestedFileRepository_Expecter) ListBySession(ctx interface{}, sessionID interface{}) *MockIngestedFileRepository_ListBySession_Call {
+	return &MockIngestedFileRepository_ListBySession_Call{Call: _e.mock.On("ListBySession", ctx, sessionID)}
 }
 
-func (_c *MockIngestedFileRepository_ListAll_Call) Run(run func(ctx context.Context)) *MockIngestedFileRepository_ListAll_Call {
+func (_c *MockIngestedFileRepository_ListBySession_Call) Run(run func(ctx context.Context, sessionID string)) *MockIngestedFileRepository_ListBySession_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context))
+		run(args[0].(context.Context), args[1].(string))
 	})
 	return _c
 }
 
-func (_c *MockIngestedFileRepository_ListAll_Call) Return(_a0 map[string]knowledge.IngestedFile, _a1 error) *MockIngestedFileRepository_ListAll_Call {
+func (_c *MockIngestedFileRepository_ListBySession_Call) Return(_a0 map[string]knowledge.IngestedFile, _a1 error) *MockIngestedFileRepository_ListBySession_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockIngestedFileRepository_ListAll_Call) RunAndReturn(run func(context.Context) (map[string]knowledge.IngestedFile, error)) *MockIngestedFileRepository_ListAll_Call {
+func (_c *MockIngestedFileRepository_ListBySession_Call) RunAndReturn(run func(context.Context, string) (map[string]knowledge.IngestedFile, error)) *MockIngestedFileRepository_ListBySession_Call {
 	_c.Call.Return(run)
 	return _c
 }
