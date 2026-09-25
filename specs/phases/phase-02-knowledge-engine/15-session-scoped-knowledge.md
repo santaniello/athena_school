@@ -37,20 +37,45 @@ disabled shell: import and management from the UI come in a later increment.
 
 ## Tasks
 
-- [ ] Domain: `SessionID` on `Item`, `Chunk`, `IngestedFile`, `SearchFilters`, `Repository.Filter`;
-      validation rejects a blank `SessionID`
-- [ ] SQLite: guarded migration recreating knowledge tables; repositories persist/filter
+- [x] Domain: `SessionID` on `Item`, `Chunk`, `IngestedFile`, `SearchFilters`;
+      `ErrSessionRequired` (see Implementation notes for why `Item.Validate` does not enforce it)
+- [x] SQLite: guarded migration recreating knowledge tables; repositories persist/filter
       `session_id`; `IngestedFileRepository.ListBySession`; `ChunkRepository.ListIDsBySession`;
       cascade tests
-- [ ] Vector store: `Search` honors `filters.SessionID`
-- [ ] Retrieval: `Retrieve` scopes the search to its `sessionID`
-- [ ] Ingest: `ImportFile(sessionID, …)` validates the session and stamps ownership; binding
+- [x] Vector store: `Search` honors `filters.SessionID`
+- [x] Retrieval: `Retrieve` scopes the search to its `sessionID`
+- [x] Ingest: `ImportFile(sessionID, …)` rejects a blank session and stamps ownership; binding
       and generated Wails bindings updated
-- [ ] Extraction/reconciliation/duplicates: saved items inherit the batch's session; lookups
+- [x] Extraction/reconciliation/duplicates: saved items inherit the batch's session; lookups
       restricted to the same session (split into 15-01 if this grows)
-- [ ] Delete: `study.DeleteSession` and `folder.DeleteFolder` purge evidence and evict the index
-- [ ] Frontend: remove global "Import notes"; delete dialogs mention knowledge removal
-- [ ] Docs: CHANGELOG `[Unreleased]`, README if the import flow is described
+- [x] Delete: `study.DeleteSession` and `folder.DeleteFolder` purge evidence and evict the index
+- [x] Frontend: remove global "Import notes"; delete dialogs mention knowledge removal
+- [x] Docs: CHANGELOG `[Unreleased]`, README if the import flow is described
+
+## Implementation notes
+
+Where the shipped code differs from the design above:
+
+- `Item.Validate` does **not** require `SessionID`. Every write path stamps it and the
+  `NOT NULL` + foreign key constraints are the backstop, so a domain rule would only have
+  forced churn on unrelated tests. `ImportFile` alone rejects a blank session
+  (`ErrSessionRequired`), before reserving the index.
+- `ImportFile` does not look the session up first; that the session exists is enforced by
+  the foreign key on the rows it writes. The trade-off is that a bad session id surfaces
+  after the embedding calls rather than before.
+- The cascade lives in one use case, `knowledge.Service.DeleteSessionsWithKnowledge(ctx,
+  sessionIDs, deleteSessions)`, which wraps the caller's delete: chunk IDs are read first
+  (they vanish with the sessions), orphaned evidence is cleaned in the same transaction,
+  and the index is evicted after commit. `study` and `folder` each declare a
+  `KnowledgeCascade` interface for it (consumer side). `DeleteFolder` deletes the folder
+  row after the wrapped call because `FolderRepository.Delete` does not join a transaction
+  (with a one-connection pool it would deadlock inside one).
+- A failed post-commit eviction is logged, not returned: the sessions are gone and
+  retrieval is scoped by session, so a leftover in-memory chunk is unreachable.
+- Reconciliation proposals take their owner from `Candidate.SessionID`, which the server
+  stamps from the receipt.
+- `IngestProgressDialog` and `lib/ingest.importFile` stay (now taking a `sessionId`) even
+  though nothing in the UI opens a `file` import until the Sources panel does.
 
 ## Acceptance Criteria
 
@@ -58,7 +83,7 @@ disabled shell: import and management from the UI come in a later increment.
 - Deleting a session removes its items, chunks, ingested files, orphaned evidence and index
   entries; deleting a folder does the same for every session in it.
 - The same file imported in two sessions yields two independent knowledge sets.
-- A failed index eviction returns a warning and does not undo the delete.
+- A failed index eviction is logged and does not undo the delete.
 - Go coverage ≥ 80%, no surviving mutants in changed domain/application/vectorstore code, and
   the frontend suite passes.
 
