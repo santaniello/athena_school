@@ -5,19 +5,11 @@ import {context} from '../models';
 
 export function AcknowledgePendingReconciliationNoChange(arg1:string):Promise<void>;
 
-export function AcknowledgeReconciliationNoChange(arg1:string,arg2:string,arg3:desktop.KnowledgeItemInput):Promise<void>;
-
 export function ApplyPendingReconciliationCreate(arg1:string,arg2:string):Promise<desktop.KnowledgeItemResult>;
 
 export function ApplyPendingReconciliationRelate(arg1:string):Promise<desktop.KnowledgeItemResult>;
 
 export function ApplyPendingReconciliationUpdate(arg1:string):Promise<desktop.KnowledgeItemResult>;
-
-export function ApplyReconciliationCreate(arg1:string,arg2:string,arg3:desktop.KnowledgeItemInput,arg4:string):Promise<desktop.KnowledgeItemResult>;
-
-export function ApplyReconciliationRelate(arg1:string,arg2:string,arg3:desktop.KnowledgeItemInput):Promise<desktop.KnowledgeItemResult>;
-
-export function ApplyReconciliationUpdate(arg1:string,arg2:string,arg3:desktop.KnowledgeItemInput):Promise<desktop.KnowledgeItemResult>;
 
 export function ApproveKnowledgeItem(arg1:string):Promise<desktop.KnowledgeItemResult>;
 
@@ -36,10 +28,6 @@ export function DeleteKnowledgeItem(arg1:string):Promise<void>;
 export function DeleteStudySession(arg1:string):Promise<void>;
 
 export function DeprecateKnowledgeItem(arg1:string):Promise<desktop.KnowledgeItemResult>;
-
-export function DiscardExtraction(arg1:string):Promise<void>;
-
-export function ExtractKnowledge(arg1:string,arg2:boolean):Promise<desktop.ExtractionResult>;
 
 export function GetKnowledgeIndexStatus():Promise<desktop.IndexStatusResult>;
 
@@ -79,21 +67,13 @@ export function ResetLocalData():Promise<void>;
 
 export function ResolvePendingReconciliationConflict(arg1:string,arg2:string):Promise<desktop.KnowledgeItemResult>;
 
-export function ResolveReconciliationConflict(arg1:string,arg2:string,arg3:desktop.KnowledgeItemInput,arg4:string):Promise<desktop.KnowledgeItemResult>;
-
 export function ResumeStudySession(arg1:string):Promise<desktop.StudySessionHistoryResult>;
 
 export function RetryKnowledgeIndex():Promise<desktop.IndexStatusResult>;
 
-export function SaveAndApproveExtractedKnowledge(arg1:string,arg2:Array<desktop.KnowledgeItemInput>):Promise<desktop.KnowledgeSaveResult>;
-
-export function SaveExtractedKnowledge(arg1:string,arg2:Array<desktop.KnowledgeItemInput>):Promise<desktop.KnowledgeSaveResult>;
-
 export function SaveOpenRouterKey(arg1:string):Promise<void>;
 
 export function SaveProfile(arg1:desktop.UserProfileInput):Promise<void>;
-
-export function SaveReconciliationForReview(arg1:string,arg2:string,arg3:desktop.KnowledgeItemInput):Promise<void>;
 
 export function SendStudyMessage(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 

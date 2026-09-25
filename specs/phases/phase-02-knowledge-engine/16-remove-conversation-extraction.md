@@ -143,15 +143,26 @@ backend they used to call has no caller left when it is deleted.
       `Get`/`UpdateKnowledgeExtractionSettings` bindings and their tests; regenerate the
       Wails bindings. The `Config` field cannot go yet: `ExtractFromSession` still reads it,
       so it is removed with the extraction slice below
-- [ ] Backend, extraction: extraction, receipts, parsing, prompt, evidence and their
-      bindings; `TaskKnowledgeExtraction`. This also removes `MaxKnowledgeExtractionItems`
-      entirely — the `Config` field, `DefaultMaxKnowledgeExtractionItems`,
-      `ErrMaxKnowledgeExtractionItemsOutOfRange`, the `max_knowledge_extraction_items` yaml
-      key in `configfile`, and `Config.WithDefaults`/`Validate` (delete them and their
-      callers unless another setting needs them). Add one regression test that a
-      `config.yaml` still containing the old key loads without error
-- [ ] Backend, reconciliation: reconciliation (immediate and pending), duplicates, relations
-      and their bindings and repositories
+- [x] Backend, extraction and immediate reconciliation: extraction, receipts, parsing, prompt,
+      duplicate detection, the immediate reconciliation actions (`Apply*`, `Resolve*`,
+      `Acknowledge*`, `SaveReconciliationForReview`) and the classifier, with their bindings;
+      `TaskKnowledgeExtraction` and `TaskKnowledgeReconciliation`. Receipts are shared by
+      extraction and the immediate reconciliation, and `FindDuplicates` has no caller besides
+      them, so none of these can go alone. Helpers the pending reconciliation still uses
+      (`createReconciledItem`, `updateReconciledItem`, `checkReconciliationTargetFresh`,
+      `reasonWithResolution`) stay until the next slice, and so do the pieces they lean on:
+      `findExactDuplicates`, `truncateString`, `normalizeList` and the size limits (moved
+      into `reconcile.go` when `parse.go` went). The `Service` collaborators only extraction
+      used (`sessions`, `messages`, `configs`, the duplicate thresholds) stay in `NewService`
+      until the lifecycle slice, which deletes the ~50 test call sites that build it. This also removes
+      `MaxKnowledgeExtractionItems` entirely — the `Config` field,
+      `DefaultMaxKnowledgeExtractionItems`, `ErrMaxKnowledgeExtractionItemsOutOfRange`, the
+      `max_knowledge_extraction_items` yaml key in `configfile`, and
+      `Config.WithDefaults`/`Validate` (delete them and their callers unless another setting
+      needs them). Add one regression test that a `config.yaml` still containing the old key
+      loads without error
+- [ ] Backend, pending reconciliation: `reconcile_pending.go`, the remaining reconciliation
+      helpers, relations, and their bindings and repositories
 - [ ] Backend, lifecycle: approve/deprecate/update/list/review/backfill/indexing/`DeleteItem`
       and their bindings; shrink `Service` and `NewService`
 - [ ] Domain and SQLite: drop status/source/topic filters and fields; migration; repository

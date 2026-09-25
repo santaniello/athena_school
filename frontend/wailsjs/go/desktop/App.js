@@ -6,10 +6,6 @@ export function AcknowledgePendingReconciliationNoChange(arg1) {
   return window['go']['desktop']['App']['AcknowledgePendingReconciliationNoChange'](arg1);
 }
 
-export function AcknowledgeReconciliationNoChange(arg1, arg2, arg3) {
-  return window['go']['desktop']['App']['AcknowledgeReconciliationNoChange'](arg1, arg2, arg3);
-}
-
 export function ApplyPendingReconciliationCreate(arg1, arg2) {
   return window['go']['desktop']['App']['ApplyPendingReconciliationCreate'](arg1, arg2);
 }
@@ -20,18 +16,6 @@ export function ApplyPendingReconciliationRelate(arg1) {
 
 export function ApplyPendingReconciliationUpdate(arg1) {
   return window['go']['desktop']['App']['ApplyPendingReconciliationUpdate'](arg1);
-}
-
-export function ApplyReconciliationCreate(arg1, arg2, arg3, arg4) {
-  return window['go']['desktop']['App']['ApplyReconciliationCreate'](arg1, arg2, arg3, arg4);
-}
-
-export function ApplyReconciliationRelate(arg1, arg2, arg3) {
-  return window['go']['desktop']['App']['ApplyReconciliationRelate'](arg1, arg2, arg3);
-}
-
-export function ApplyReconciliationUpdate(arg1, arg2, arg3) {
-  return window['go']['desktop']['App']['ApplyReconciliationUpdate'](arg1, arg2, arg3);
 }
 
 export function ApproveKnowledgeItem(arg1) {
@@ -68,14 +52,6 @@ export function DeleteStudySession(arg1) {
 
 export function DeprecateKnowledgeItem(arg1) {
   return window['go']['desktop']['App']['DeprecateKnowledgeItem'](arg1);
-}
-
-export function DiscardExtraction(arg1) {
-  return window['go']['desktop']['App']['DiscardExtraction'](arg1);
-}
-
-export function ExtractKnowledge(arg1, arg2) {
-  return window['go']['desktop']['App']['ExtractKnowledge'](arg1, arg2);
 }
 
 export function GetKnowledgeIndexStatus() {
@@ -154,10 +130,6 @@ export function ResolvePendingReconciliationConflict(arg1, arg2) {
   return window['go']['desktop']['App']['ResolvePendingReconciliationConflict'](arg1, arg2);
 }
 
-export function ResolveReconciliationConflict(arg1, arg2, arg3, arg4) {
-  return window['go']['desktop']['App']['ResolveReconciliationConflict'](arg1, arg2, arg3, arg4);
-}
-
 export function ResumeStudySession(arg1) {
   return window['go']['desktop']['App']['ResumeStudySession'](arg1);
 }
@@ -166,24 +138,12 @@ export function RetryKnowledgeIndex() {
   return window['go']['desktop']['App']['RetryKnowledgeIndex']();
 }
 
-export function SaveAndApproveExtractedKnowledge(arg1, arg2) {
-  return window['go']['desktop']['App']['SaveAndApproveExtractedKnowledge'](arg1, arg2);
-}
-
-export function SaveExtractedKnowledge(arg1, arg2) {
-  return window['go']['desktop']['App']['SaveExtractedKnowledge'](arg1, arg2);
-}
-
 export function SaveOpenRouterKey(arg1) {
   return window['go']['desktop']['App']['SaveOpenRouterKey'](arg1);
 }
 
 export function SaveProfile(arg1) {
   return window['go']['desktop']['App']['SaveProfile'](arg1);
-}
-
-export function SaveReconciliationForReview(arg1, arg2, arg3) {
-  return window['go']['desktop']['App']['SaveReconciliationForReview'](arg1, arg2, arg3);
 }
 
 export function SendStudyMessage(arg1, arg2, arg3, arg4) {

@@ -17,6 +17,14 @@ import (
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 )
 
+func reconciliationCandidateContent() domainknowledge.Item {
+	return domainknowledge.Item{
+		Topic: "Distributed Systems", Concept: "Idempotency key",
+		Definition: "A unique value a client attaches to a request so retries produce the same effect exactly once.",
+		Source:     domainknowledge.SourceAthena, Status: domainknowledge.StatusDraft,
+	}
+}
+
 func pendingProposal(id, action, targetItemID string, targetUpdatedAt time.Time) domainknowledge.ReconciliationProposal {
 	candidate := reconciliationCandidateContent()
 	candidate.SessionID = "session-1"
@@ -189,9 +197,11 @@ func TestApplyPendingReconciliationUpdate_appliesChangesAndKeepsIdentity(t *test
 	targetUpdatedAt := time.Date(2026, 8, 28, 9, 0, 0, 0, time.UTC)
 	newDefinition := "Converges eventually, with no read-your-writes guarantee."
 	proposal := pendingProposal("proposal-1", domainknowledge.ReconcileUpdate, "item-target", targetUpdatedAt)
-	proposal.Changes = domainknowledge.ItemChanges{Definition: &newDefinition}
+	newProperties := []string{"  Reads may return stale data  ", ""}
+	proposal.Changes = domainknowledge.ItemChanges{Definition: &newDefinition, Properties: newProperties}
 	target := domainknowledge.Item{
 		ID: "item-target", Topic: "Distributed Systems", Concept: "Eventual consistency", Definition: "Converges eventually.",
+		Properties: []string{"old property"}, TradeOffs: []string{"old trade-off"}, RelatedConcepts: []string{"old related"},
 		Source: domainknowledge.SourceAthena, Status: domainknowledge.StatusApproved,
 		CreatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), UpdatedAt: targetUpdatedAt,
 	}
@@ -215,10 +225,14 @@ func TestApplyPendingReconciliationUpdate_appliesChangesAndKeepsIdentity(t *test
 	// When applying it
 	item, err := service.ApplyPendingReconciliationUpdate(ctx, "proposal-1")
 
-	// Then the target's identity survives and only the reviewed field changed
+	// Then the target's identity survives, the reviewed fields are replaced
+	// (normalized), and every field the proposal did not touch is kept
 	require.NoError(t, err)
 	assert.Equal(t, "item-target", item.ID)
 	assert.Equal(t, newDefinition, item.Definition)
+	assert.Equal(t, []string{"Reads may return stale data"}, item.Properties)
+	assert.Equal(t, []string{"old trade-off"}, item.TradeOffs)
+	assert.Equal(t, []string{"old related"}, item.RelatedConcepts)
 }
 
 func TestApplyPendingReconciliationUpdate_returnsStaleWhenTheTargetChangedSinceClassification(t *testing.T) {

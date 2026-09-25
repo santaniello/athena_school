@@ -4,16 +4,14 @@ package llm
 // drives model routing via TierFor.
 type TaskType string
 
-// Task types recognized by TierFor. Future specs (challenge, interview,
-// knowledge extraction) add their own use of these as they are built.
+// Task types recognized by TierFor. Future specs (challenge, interview) add
+// their own use of these as they are built.
 const (
-	TaskOnboarding              TaskType = "onboarding"
-	TaskKnowledgeExtraction     TaskType = "knowledge_extraction"
-	TaskKnowledgeReconciliation TaskType = "knowledge_reconciliation"
-	TaskStudy                   TaskType = "study"
-	TaskChallengeFeedback       TaskType = "challenge_feedback"
-	TaskInterviewEvaluation     TaskType = "interview_evaluation"
-	TaskComplexReasoning        TaskType = "complex_reasoning"
+	TaskOnboarding          TaskType = "onboarding"
+	TaskStudy               TaskType = "study"
+	TaskChallengeFeedback   TaskType = "challenge_feedback"
+	TaskInterviewEvaluation TaskType = "interview_evaluation"
+	TaskComplexReasoning    TaskType = "complex_reasoning"
 )
 
 // Tier is a cost/capability class of model.
@@ -45,7 +43,7 @@ var tierModels = map[Tier]string{
 // defaults to TierMedium rather than leaving it unrouted.
 func TierFor(task TaskType) Tier {
 	switch task {
-	case TaskOnboarding, TaskKnowledgeExtraction, TaskKnowledgeReconciliation:
+	case TaskOnboarding:
 		return TierCheap
 	case TaskStudy, TaskChallengeFeedback:
 		return TierMedium

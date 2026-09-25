@@ -2,7 +2,6 @@ package desktop
 
 import (
 	"errors"
-	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -11,30 +10,16 @@ import (
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 )
 
-// Sentinel errors from the reconciliation bindings' own input validation,
-// checked before ever calling the knowledge service — batchID/candidateID/
-// proposalID as opaque non-empty tokens, and status/resolution against
-// their known enums. Keeps these Wails bindings thin adapters: validate
+// Sentinel errors from the pending reconciliation bindings' own input
+// validation, checked before ever calling the knowledge service — proposalID
+// as an opaque non-empty token, and status/resolution against their known
+// enums. Keeps these Wails bindings thin adapters: validate
 // input, call the use case, return the result (see AGENTS.md).
 var (
-	ErrReconciliationBatchIDRequired     = errors.New("desktop: reconciliation batch id is required")
-	ErrReconciliationCandidateIDRequired = errors.New("desktop: reconciliation candidate id is required")
-	ErrReconciliationProposalIDRequired  = errors.New("desktop: reconciliation proposal id is required")
-	ErrReconciliationStatusInvalid       = errors.New("desktop: status must be draft or approved")
-	ErrReconciliationResolutionInvalid   = errors.New("desktop: resolution must be keep_existing, update_existing, or create_separately")
+	ErrReconciliationProposalIDRequired = errors.New("desktop: reconciliation proposal id is required")
+	ErrReconciliationStatusInvalid      = errors.New("desktop: status must be draft or approved")
+	ErrReconciliationResolutionInvalid  = errors.New("desktop: resolution must be keep_existing, update_existing, or create_separately")
 )
-
-// validateReconciliationCandidate checks the batchID/candidateID pair
-// shared by every immediate (non-pending) reconciliation binding.
-func validateReconciliationCandidate(batchID, candidateID string) error {
-	if strings.TrimSpace(batchID) == "" {
-		return ErrReconciliationBatchIDRequired
-	}
-	if strings.TrimSpace(candidateID) == "" {
-		return ErrReconciliationCandidateIDRequired
-	}
-	return nil
-}
 
 // validateReconciliationProposalID checks the single id every pending
 // reconciliation binding takes.
@@ -66,7 +51,7 @@ func validateConflictResolution(resolution string) error {
 	}
 }
 
-// KnowledgeItemResult is an unpersisted extraction candidate returned to the UI.
+// KnowledgeItemResult is a knowledge item returned to the UI.
 type KnowledgeItemResult struct {
 	ID              string   `json:"id"`
 	Topic           string   `json:"topic"`
@@ -79,38 +64,6 @@ type KnowledgeItemResult struct {
 	Status          string   `json:"status"`
 	CreatedAt       string   `json:"createdAt"`
 	UpdatedAt       string   `json:"updatedAt"`
-	// Duplicates, SemanticCheckUnavailable, Reconciliation and
-	// ReconciliationFailed are only ever populated by ExtractKnowledge —
-	// every other KnowledgeItemResult producer (List, Approve, Deprecate,
-	// Update, and the reconciliation apply/resolve bindings below) leaves
-	// them at their zero value, since duplicate detection and
-	// reconciliation classification both run at extraction time only. See
-	// specs/phases/phase-02-knowledge-engine/10-duplicate-detection.md and
-	// 11-knowledge-reconciliation.md.
-	Duplicates               []DuplicateMatchResult          `json:"duplicates"`
-	SemanticCheckUnavailable bool                            `json:"semanticCheckUnavailable"`
-	Reconciliation           *ReconciliationSuggestionResult `json:"reconciliation"`
-	ReconciliationFailed     bool                            `json:"reconciliationFailed"`
-}
-
-// DuplicateMatchResult is the desktop-facing DTO for a domainknowledge.DuplicateMatch.
-type DuplicateMatchResult struct {
-	ItemID    string  `json:"itemId"`
-	Concept   string  `json:"concept"`
-	Status    string  `json:"status"`
-	MatchType string  `json:"matchType"`
-	Score     float64 `json:"score"`
-}
-
-// ReconciliationSuggestionResult is the desktop-facing DTO for an
-// applicationknowledge.ReconciliationSuggestion — the classifier's
-// suggested action for one extraction candidate, before the user has
-// decided anything.
-type ReconciliationSuggestionResult struct {
-	Action       string            `json:"action"`
-	TargetItemID string            `json:"targetItemId"`
-	Reason       string            `json:"reason"`
-	Changes      ItemChangesResult `json:"changes"`
 }
 
 // ItemChangesResult is the desktop-facing DTO for a
@@ -158,198 +111,6 @@ type KnowledgeItemInput struct {
 	Status          string   `json:"status"`
 	CreatedAt       string   `json:"createdAt"`
 	UpdatedAt       string   `json:"updatedAt"`
-}
-
-// ExtractionResult carries candidates and the transcript truncation signal.
-type ExtractionResult struct {
-	BatchID   string                `json:"batchId"`
-	Items     []KnowledgeItemResult `json:"items"`
-	Truncated bool                  `json:"truncated"`
-}
-
-// KnowledgeSaveResult identifies persisted inputs even when a later save fails.
-type KnowledgeSaveResult struct {
-	SavedIndices []int  `json:"savedIndices"`
-	Error        string `json:"error"`
-}
-
-// ExtractKnowledge extracts unpersisted knowledge candidates for review.
-func (a *App) ExtractKnowledge(sessionID string, confirmedTruncation bool) (ExtractionResult, error) {
-	batch, truncated, err := a.knowledge.ExtractFromSession(a.ctx, sessionID, confirmedTruncation)
-	if errors.Is(err, applicationknowledge.ErrMalformedExtraction) {
-		log.Printf("knowledge extraction returned malformed JSON: %v", err)
-		return ExtractionResult{Items: []KnowledgeItemResult{}}, nil
-	}
-	if err != nil {
-		return ExtractionResult{}, err
-	}
-	results := make([]KnowledgeItemResult, len(batch.Items))
-	for index, candidate := range batch.Items {
-		results[index] = toExtractionCandidateResult(candidate)
-	}
-	return ExtractionResult{BatchID: batch.ID, Items: results, Truncated: truncated}, nil
-}
-
-// toExtractionCandidateResult extends toKnowledgeItemResult with the
-// candidate's duplicate-detection outcome.
-func toExtractionCandidateResult(candidate applicationknowledge.ExtractionCandidate) KnowledgeItemResult {
-	result := toKnowledgeItemResult(candidate.Item)
-	result.Duplicates = make([]DuplicateMatchResult, len(candidate.Duplicates))
-	for index, match := range candidate.Duplicates {
-		result.Duplicates[index] = DuplicateMatchResult{
-			ItemID: match.ItemID, Concept: match.Concept, Status: match.Status,
-			MatchType: match.MatchType, Score: match.Score,
-		}
-	}
-	result.SemanticCheckUnavailable = candidate.SemanticCheckUnavailable
-	if candidate.Reconciliation != nil {
-		result.Reconciliation = &ReconciliationSuggestionResult{
-			Action: candidate.Reconciliation.Action, TargetItemID: candidate.Reconciliation.TargetItemID,
-			Reason: candidate.Reconciliation.Reason, Changes: toItemChangesResult(candidate.Reconciliation.Changes),
-		}
-	}
-	result.ReconciliationFailed = candidate.ReconciliationFailed
-	return result
-}
-
-// toDomainItemFromInput builds the domainknowledge.Item content the
-// reconciliation apply/resolve bindings pass to the application layer —
-// the frontend is trusted for candidate content the same way
-// SaveExtractedKnowledge already is, never for provenance (see
-// batchID/candidateID, which are looked up against the backend's own
-// receipt instead).
-func toDomainItemFromInput(input KnowledgeItemInput) domainknowledge.Item {
-	return domainknowledge.Item{
-		ID: input.ID, Topic: input.Topic, Concept: input.Concept, Definition: input.Definition,
-		Properties: input.Properties, TradeOffs: input.TradeOffs, RelatedConcepts: input.RelatedConcepts,
-		Source: input.Source, Status: input.Status,
-	}
-}
-
-// ApplyReconciliationCreate persists batchID/candidateID's classified
-// candidate as a brand-new Knowledge Item at status (draft or approved).
-func (a *App) ApplyReconciliationCreate(batchID, candidateID string, candidate KnowledgeItemInput, status string) (KnowledgeItemResult, error) {
-	if err := validateReconciliationCandidate(batchID, candidateID); err != nil {
-		return KnowledgeItemResult{}, err
-	}
-	if err := validateKnowledgeStatus(status); err != nil {
-		return KnowledgeItemResult{}, err
-	}
-	item, err := a.knowledge.ApplyReconciliationCreate(a.ctx, batchID, candidateID, toDomainItemFromInput(candidate), status)
-	if errors.Is(err, applicationknowledge.ErrIndexingFailed) {
-		logIndexingFailure("applying reconciliation create for candidate "+candidateID, err)
-		return toKnowledgeItemResult(item), nil
-	}
-	if err != nil {
-		return KnowledgeItemResult{}, err
-	}
-	return toKnowledgeItemResult(item), nil
-}
-
-// ApplyReconciliationUpdate applies the classified changes to
-// batchID/candidateID's target, preserving its identity and lifecycle.
-func (a *App) ApplyReconciliationUpdate(batchID, candidateID string, candidate KnowledgeItemInput) (KnowledgeItemResult, error) {
-	if err := validateReconciliationCandidate(batchID, candidateID); err != nil {
-		return KnowledgeItemResult{}, err
-	}
-	item, err := a.knowledge.ApplyReconciliationUpdate(a.ctx, batchID, candidateID, toDomainItemFromInput(candidate))
-	if errors.Is(err, applicationknowledge.ErrIndexingFailed) {
-		logIndexingFailure("applying reconciliation update for candidate "+candidateID, err)
-		return toKnowledgeItemResult(item), nil
-	}
-	if err != nil {
-		return KnowledgeItemResult{}, err
-	}
-	return toKnowledgeItemResult(item), nil
-}
-
-// ApplyReconciliationRelate creates batchID/candidateID's candidate as a
-// new draft Knowledge Item and links it to the classified target via a
-// `related` relation.
-func (a *App) ApplyReconciliationRelate(batchID, candidateID string, candidate KnowledgeItemInput) (KnowledgeItemResult, error) {
-	if err := validateReconciliationCandidate(batchID, candidateID); err != nil {
-		return KnowledgeItemResult{}, err
-	}
-	item, err := a.knowledge.ApplyReconciliationRelate(a.ctx, batchID, candidateID, toDomainItemFromInput(candidate))
-	if errors.Is(err, applicationknowledge.ErrIndexingFailed) {
-		logIndexingFailure("applying reconciliation relate for candidate "+candidateID, err)
-		return toKnowledgeItemResult(item), nil
-	}
-	if err != nil {
-		return KnowledgeItemResult{}, err
-	}
-	return toKnowledgeItemResult(item), nil
-}
-
-// ResolveReconciliationConflict applies one of the three explicit conflict
-// outcomes for batchID/candidateID: "keep_existing", "update_existing", or
-// "create_separately".
-func (a *App) ResolveReconciliationConflict(batchID, candidateID string, candidate KnowledgeItemInput, resolution string) (KnowledgeItemResult, error) {
-	if err := validateReconciliationCandidate(batchID, candidateID); err != nil {
-		return KnowledgeItemResult{}, err
-	}
-	if err := validateConflictResolution(resolution); err != nil {
-		return KnowledgeItemResult{}, err
-	}
-	item, err := a.knowledge.ResolveReconciliationConflict(a.ctx, batchID, candidateID, toDomainItemFromInput(candidate), resolution)
-	if errors.Is(err, applicationknowledge.ErrIndexingFailed) {
-		logIndexingFailure("resolving reconciliation conflict for candidate "+candidateID, err)
-		return toKnowledgeItemResult(item), nil
-	}
-	if err != nil {
-		return KnowledgeItemResult{}, err
-	}
-	return toKnowledgeItemResult(item), nil
-}
-
-// AcknowledgeReconciliationNoChange marks batchID/candidateID's classified
-// no_change proposal resolved without creating or changing any Item.
-func (a *App) AcknowledgeReconciliationNoChange(batchID, candidateID string, candidate KnowledgeItemInput) error {
-	if err := validateReconciliationCandidate(batchID, candidateID); err != nil {
-		return err
-	}
-	return a.knowledge.AcknowledgeReconciliationNoChange(a.ctx, batchID, candidateID, toDomainItemFromInput(candidate))
-}
-
-// SaveReconciliationForReview persists batchID/candidateID's classified
-// proposal as pending, changing neither the candidate nor its target.
-func (a *App) SaveReconciliationForReview(batchID, candidateID string, candidate KnowledgeItemInput) error {
-	if err := validateReconciliationCandidate(batchID, candidateID); err != nil {
-		return err
-	}
-	return a.knowledge.SaveReconciliationForReview(a.ctx, batchID, candidateID, toDomainItemFromInput(candidate))
-}
-
-// SaveExtractedKnowledge persists only the candidates confirmed by the user.
-// batchID identifies the backend extraction receipt (see ExtractKnowledge);
-// each input's ID is used only as an opaque lookup key into that receipt —
-// the frontend is never trusted for provenance.
-func (a *App) SaveExtractedKnowledge(batchID string, inputs []KnowledgeItemInput) KnowledgeSaveResult {
-	items := make([]domainknowledge.Item, len(inputs))
-	for index, input := range inputs {
-		items[index] = domainknowledge.Item{
-			ID: input.ID, Topic: input.Topic, Concept: input.Concept, Definition: input.Definition,
-			Properties: input.Properties, TradeOffs: input.TradeOffs, RelatedConcepts: input.RelatedConcepts,
-			Source: input.Source, Status: input.Status,
-		}
-	}
-	savedIndices, err := a.knowledge.SaveDrafts(a.ctx, batchID, items)
-	if errors.Is(err, applicationknowledge.ErrIndexingFailed) {
-		logIndexingFailure("saving drafts", err)
-		return KnowledgeSaveResult{SavedIndices: savedIndices}
-	}
-	result := KnowledgeSaveResult{SavedIndices: savedIndices}
-	if err != nil {
-		result.Error = fmt.Sprintf("knowledge save failed: %v", err)
-	}
-	return result
-}
-
-// DiscardExtraction drops every unsaved candidate in batchID — called when
-// the user dismisses an extraction batch. It must never be called after a
-// partial save error, so unsaved or failed candidates stay retryable.
-func (a *App) DiscardExtraction(batchID string) {
-	a.knowledge.DiscardExtraction(batchID)
 }
 
 // ListKnowledgeItems returns every Item matching topic/status. An empty
@@ -472,33 +233,6 @@ func (a *App) DeleteKnowledgeItem(id string) error {
 // startup even without it.
 func logIndexingFailure(op string, err error) {
 	log.Printf("knowledge index: %s: %v", op, err)
-}
-
-// SaveAndApproveExtractedKnowledge persists only the confirmed candidates,
-// directly as approved — the "Save as knowledge" option from
-// specs/Athena.md §12, skipping the draft review stage SaveExtractedKnowledge
-// (SaveDrafts) leaves candidates in. batchID identifies the backend
-// extraction receipt (see ExtractKnowledge); each input's ID is used only
-// as an opaque lookup key into that receipt.
-func (a *App) SaveAndApproveExtractedKnowledge(batchID string, inputs []KnowledgeItemInput) KnowledgeSaveResult {
-	items := make([]domainknowledge.Item, len(inputs))
-	for index, input := range inputs {
-		items[index] = domainknowledge.Item{
-			ID: input.ID, Topic: input.Topic, Concept: input.Concept, Definition: input.Definition,
-			Properties: input.Properties, TradeOffs: input.TradeOffs, RelatedConcepts: input.RelatedConcepts,
-			Source: input.Source, Status: input.Status,
-		}
-	}
-	savedIndices, err := a.knowledge.SaveAndApprove(a.ctx, batchID, items)
-	if errors.Is(err, applicationknowledge.ErrIndexingFailed) {
-		logIndexingFailure("saving and approving drafts", err)
-		return KnowledgeSaveResult{SavedIndices: savedIndices}
-	}
-	result := KnowledgeSaveResult{SavedIndices: savedIndices}
-	if err != nil {
-		result.Error = fmt.Sprintf("knowledge save failed: %v", err)
-	}
-	return result
 }
 
 func toKnowledgeItemResult(item domainknowledge.Item) KnowledgeItemResult {

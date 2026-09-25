@@ -2,49 +2,22 @@ package knowledge
 
 import "errors"
 
-// ErrMalformedExtraction is returned when an LLM response has no valid JSON envelope.
-var ErrMalformedExtraction = errors.New("malformed knowledge extraction response")
-
-// ErrTranscriptTooLarge is returned when no complete transcript message fits
-// within the extraction budget.
-var ErrTranscriptTooLarge = errors.New("no complete transcript message fits within the extraction limit")
-
 // ErrIndexLoading is returned by IndexLoader.CheckMutationAllowed while an
 // initial load or a retry is in progress, so a concurrent knowledge
 // mutation can never race a snapshot publish.
 var ErrIndexLoading = errors.New("knowledge index is loading")
 
-// errExactDuplicateAtSave signals saveCandidates' transaction closure that
-// this candidate's exact-match recheck found a duplicate. It is caught right
-// outside WithinTx and translated into the same silent skip/restore as an
-// invalid-evidence candidate — never returned to a caller. See
+// errExactDuplicateAtSave signals createReconciledItem's transaction closure
+// that its exact-match recheck found a duplicate. See
 // specs/phases/phase-02-knowledge-engine/10-01-duplicate-detection-decisions.md
 // Decision 3, and its addendum on running the recheck inside the same
 // transaction as the write to close the check-then-act race a separate,
 // pre-transaction lookup would leave open.
 var errExactDuplicateAtSave = errors.New("knowledge: exact duplicate at save time")
 
-// ErrMalformedReconciliation is returned when the reconciliation
-// classifier's response has no valid JSON envelope, targets an item
-// outside the supplied shortlist, or is otherwise structurally invalid.
-// The caller falls back to a deterministic create classification rather
-// than guessing at a target. See
-// specs/phases/phase-02-knowledge-engine/11-knowledge-reconciliation.md.
-var ErrMalformedReconciliation = errors.New("malformed knowledge reconciliation response")
-
-// ErrReconciliationCandidateNotFound is returned when batchID/candidateID
-// no longer has a claimable receipt — already decided, discarded, or never
-// classified.
-var ErrReconciliationCandidateNotFound = errors.New("knowledge: reconciliation candidate not found or already decided")
-
-// ErrReconciliationEvidenceInvalid is returned when none of a
-// reconciliation candidate's evidence references still hold against its
-// source session's current Messages.
-var ErrReconciliationEvidenceInvalid = errors.New("knowledge: reconciliation candidate has no valid evidence")
-
 // ErrReconciliationTargetStale is returned when a proposal's classified
-// target was edited or removed since classification. The receipt is
-// restored for retry; the caller must run reconciliation again.
+// target was edited or removed since classification; the caller must run
+// reconciliation again.
 var ErrReconciliationTargetStale = errors.New("knowledge: reconciliation target changed since comparison; run reconciliation again")
 
 // ErrReconciliationResolutionInvalid is returned when a conflict
