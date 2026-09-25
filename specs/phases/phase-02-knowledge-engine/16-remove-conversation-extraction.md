@@ -57,11 +57,15 @@ no extracted-item case, no evidence to preserve and no review state to reason ab
   `handleExtractKnowledge` in `StudyChatScreen`.
 - `knowledge-section`, `KnowledgeExplorerScreen`, `knowledge-topic-tree`,
   `knowledge-delete-dialog`, `pending-reconciliation-section`, `reconciliation-decision-row`,
-  `reconciliation-decision.ts`, `index-review-dialog` (the reindex flow) and the Knowledge
-  badge/draft counts and topic selection owned by `AppShell`. `IngestProgressDialog` loses its
-  `reindex` kind (its only caller was the Explorer's alert) and becomes file-import only.
-- The `knowledge` entry in `lib/navigation.ts` and its `AppSection`; a persisted section
-  value that is no longer known must fall back to `home`.
+  `reconciliation-decision.ts` and the Knowledge badge/draft counts and topic selection owned
+  by `AppShell` (and `NavItem`'s `badge` prop, which had no other caller).
+  `IngestProgressDialog` loses its `reindex` kind and the `kind` prop (its only caller was
+  the Explorer's alert) and becomes file-import only.
+- The `knowledge` entry in `lib/navigation.ts` and its `AppSection`. The active section is
+  plain in-memory state that always starts on `home`, so nothing persisted needs a fallback.
+- `index-review-dialog` **stays**. It is not a reindex flow: it lists the chunks the index
+  load isolated (`IndexStatusBanner`'s Review action). Its copy for the source/topic/status
+  mismatch reasons is trimmed in the domain/SQLite slice, when the backend stops emitting them.
 - The `MaxKnowledgeExtractionItems` control in Settings, and the extraction/review copy in
   `lib/documentation.ts`.
 - The extraction/review/approval/reconciliation/reindex functions in `lib/knowledge.ts`.
@@ -133,7 +137,7 @@ Each slice keeps the build green and is committed on its own. UI slices go first
 backend they used to call has no caller left when it is deleted.
 
 - [x] Composer: remove the `Extract knowledge` button, dialog and wiring
-- [ ] Remove the Knowledge section: nav entry, Explorer, Review, topic tree, delete dialog,
+- [x] Remove the Knowledge section: nav entry, Explorer, Review, topic tree, delete dialog,
       reindex dialog and the `reindex` kind, badges, and the `AppShell` state that fed them
 - [ ] Settings: remove `MaxKnowledgeExtractionItems` entirely — `Config` field,
       `DefaultMaxKnowledgeExtractionItems`, `ErrMaxKnowledgeExtractionItemsOutOfRange`, the

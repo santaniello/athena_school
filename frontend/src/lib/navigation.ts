@@ -2,7 +2,6 @@ import type { LucideIcon } from 'lucide-react'
 import {
   BookOpen,
   FileText,
-  FolderTree,
   Home,
   Layers,
   MessagesSquare,
@@ -18,7 +17,6 @@ import {
 export type AppSection =
   | 'home'
   | 'study'
-  | 'knowledge'
   | 'challenge'
   | 'progress'
   | 'flashcards'
@@ -57,15 +55,6 @@ export const NAVIGATION: NavItem[] = [
     status: 'unlocked',
     group: 'primary',
     description: 'Guided, personalized study sessions with streaming AI responses and feedback.',
-  },
-  {
-    id: 'knowledge',
-    label: 'Knowledge',
-    icon: FolderTree,
-    phase: 2,
-    status: 'unlocked',
-    group: 'primary',
-    description: 'Your knowledge base: notes, approved concepts and the review queue.',
   },
   {
     id: 'challenge',

@@ -4,11 +4,6 @@ import { AthenaLogo } from '@/components/athena-logo'
 import { NavItem } from '@/components/nav-item'
 import { ComingSoonPanel } from '@/components/coming-soon-panel'
 import { StudyFolderTree, type StudyFolderTreeHandle } from '@/components/study-folder-tree'
-import {
-  KnowledgeTopicTree,
-  type KnowledgeTopicTreeHandle,
-} from '@/components/knowledge-topic-tree'
-import { KnowledgeSection } from '@/components/knowledge-section'
 import { IndexLoadingScreen } from '@/components/index-loading-screen'
 import { IndexFailedScreen } from '@/components/index-failed-screen'
 import { IndexStatusBanner } from '@/components/index-status-banner'
@@ -25,7 +20,6 @@ import DocumentationScreen from '@/screens/DocumentationScreen'
 import { NAVIGATION, type AppSection } from '@/lib/navigation'
 import { getUserProfile, type ProfileDraft } from '@/lib/profile'
 import { startStudySession, type StudySession, type StudySource } from '@/lib/study'
-import { countDraftKnowledgeItems, countPendingReconciliations } from '@/lib/knowledge'
 import {
   getKnowledgeIndexStatus,
   onKnowledgeIndexStatus,
@@ -92,89 +86,19 @@ function AppShell() {
   // truth (also reachable by dragging the handle past minSize), sourcesOpen
   // just mirrors the panel's own reported size via onResize below.
   const sourcesPanelRef = useRef<PanelImperativeHandle>(null)
-  const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
   const [indexStatus, setIndexStatus] = useState<IndexStatus>(INITIAL_INDEX_STATUS)
   const [continuedWithoutSearch, setContinuedWithoutSearch] = useState(false)
   const [retryingIndex, setRetryingIndex] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
   const [startingNewSession, setStartingNewSession] = useState(false)
   const [newSessionError, setNewSessionError] = useState<string | null>(null)
-  const [draftCount, setDraftCount] = useState(0)
-  const [pendingProposalCount, setPendingProposalCount] = useState(0)
   const [studyFolderCount, setStudyFolderCount] = useState<number | null>(null)
   const studyFolderTreeRef = useRef<StudyFolderTreeHandle>(null)
-  const knowledgeTopicTreeRef = useRef<KnowledgeTopicTreeHandle>(null)
-  // refreshDraftCount/refreshPendingProposalCount each fire from several
-  // independent call sites (mount, approve, reject, save-as-drafts, a
-  // reconciliation decision); their responses can arrive out of order, so
-  // only the reply to the most recently *started* call is ever applied —
-  // same requestVersion guard KnowledgeExplorerScreen uses for its own list
-  // fetch.
-  const draftCountRequestRef = useRef(0)
-  const pendingProposalCountRequestRef = useRef(0)
 
   // Stryker disable ArrayDeclaration: mount-once effect — its dependency
   // array's content is not itself observable behavior.
   useEffect(() => {
     void getUserProfile().then(setProfile)
-  }, [])
-  // Stryker restore ArrayDeclaration
-
-  // draftCount/pendingProposalCount are lifted here (alongside profile/
-  // activeSession) rather than fetched locally by KnowledgeSection, so the
-  // sidebar badge (their sum) and the Review tab's own draft-only badge
-  // always agree — see specs/phases/phase-02-knowledge-engine/07-knowledge-review.md
-  // and 11-knowledge-reconciliation.md.
-  // Stryker disable UpdateOperator: both refresh functions below only ever
-  // compare their own requestId against the ref's *current* value to detect
-  // staleness — incrementing or decrementing produces the same distinct,
-  // monotonic sequence either way, so the direction itself is unobservable;
-  // only ever assigning the same, unchanging value would be.
-  function refreshDraftCount() {
-    const requestId = ++draftCountRequestRef.current
-    void countDraftKnowledgeItems()
-      .then((count) => {
-        if (draftCountRequestRef.current === requestId) setDraftCount(count)
-      })
-      .catch(() => {})
-  }
-
-  function refreshPendingProposalCount() {
-    const requestId = ++pendingProposalCountRequestRef.current
-    void countPendingReconciliations()
-      .then((count) => {
-        if (pendingProposalCountRequestRef.current === requestId) setPendingProposalCount(count)
-      })
-      .catch(() => {})
-  }
-  // Stryker restore UpdateOperator
-
-  // refreshReviewCounts is what every knowledge-changing action actually
-  // triggers — a single decision (approve, reject, save-as-drafts, applying
-  // or rejecting a reconciliation proposal) can move either count, so both
-  // refetch together rather than each call site guessing which one to ask for.
-  function refreshReviewCounts() {
-    refreshDraftCount()
-    refreshPendingProposalCount()
-  }
-
-  // Fired after a Knowledge Explorer delete or a topic-changing edit — the
-  // only two actions that can add or remove a topic outside of an import.
-  // KnowledgeTopicTree otherwise only refetches on ingest:done, so without
-  // this a removed or renamed topic would linger in the sidebar until the
-  // next import or a full app restart.
-  // Stryker disable next-line OptionalChaining: only reachable while
-  // viewing the Knowledge section, which always mounts KnowledgeTopicTree
-  // via the ref this guards — current is never null on this path.
-  function refreshKnowledgeTopics() {
-    knowledgeTopicTreeRef.current?.reload()
-  }
-
-  // Stryker disable ArrayDeclaration: mount-once effect — its dependency
-  // array's content is not itself observable behavior.
-  useEffect(() => {
-    refreshReviewCounts()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   // Stryker restore ArrayDeclaration
 
@@ -485,14 +409,6 @@ function AppShell() {
               )}
             </div>
           )
-        ) : section === 'knowledge' ? (
-          <KnowledgeSection
-            selectedTopic={selectedTopic}
-            mutationsDisabled={retryingIndex}
-            draftCount={draftCount}
-            onKnowledgeChanged={refreshReviewCounts}
-            onTopicsChanged={refreshKnowledgeTopics}
-          />
         ) : section === 'documentation' ? (
           <DocumentationScreen />
         ) : section === 'settings' && profile ? (
@@ -535,12 +451,7 @@ function AppShell() {
             >
               {PRIMARY_ITEMS.map((item) => (
                 <div key={item.id}>
-                  <NavItem
-                    item={item}
-                    active={item.id === section}
-                    onSelect={setSection}
-                    badge={item.id === 'knowledge' ? draftCount + pendingProposalCount : undefined}
-                  />
+                  <NavItem item={item} active={item.id === section} onSelect={setSection} />
                   {item.id === 'study' && section === 'study' && (
                     <StudyFolderTree
                       ref={studyFolderTreeRef}
@@ -550,13 +461,6 @@ function AppShell() {
                       onSessionDeleted={handleSessionDeleted}
                       onFolderDeleted={handleFolderDeleted}
                       onFolderCountChange={setStudyFolderCount}
-                    />
-                  )}
-                  {item.id === 'knowledge' && section === 'knowledge' && (
-                    <KnowledgeTopicTree
-                      ref={knowledgeTopicTreeRef}
-                      selectedTopic={selectedTopic}
-                      onSelectTopic={setSelectedTopic}
                     />
                   )}
                 </div>

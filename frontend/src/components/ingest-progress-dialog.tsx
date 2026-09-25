@@ -18,66 +18,29 @@ import {
   type IngestProgress,
   type IngestSummary,
 } from '@/lib/ingest'
-import {
-  onReindexDone,
-  onReindexError,
-  onReindexProgress,
-  reindexKnowledgeItems,
-  type ReindexProgress,
-  type ReindexSummary,
-} from '@/lib/knowledge'
-
-type DialogKind = 'file' | 'reindex'
 
 interface IngestProgressDialogProps {
   open: boolean
-  kind: DialogKind
-  // Required for 'file' (the study session that will own the imported
-  // knowledge, and the picked path); unused for 'reindex', which has neither
-  // — it processes every unindexed item.
+  // The study session that will own the imported knowledge, and the picked
+  // path.
   sessionId?: string
   path?: string
   onClose: () => void
 }
 
-const dialogTitle: Record<DialogKind, string> = {
-  file: 'Importing notes',
-  reindex: 'Indexing knowledge',
-}
-
-const processingDescription: Record<DialogKind, string> = {
-  file: 'Processing the selected file.',
-  reindex: 'Indexing knowledge items for search.',
-}
-
-const completeDescription: Record<DialogKind, string> = {
-  file: 'Import complete.',
-  reindex: 'Indexing complete.',
-}
-
 // No cancel affordance here by design: no operation in the app is
-// cancellable today, and each file's replace (or each item's re-index) is
-// already an isolated transaction, so worst case the user waits out the
-// run. The dialog only becomes dismissible once ingest:done or
-// ingest:error has fired — see
-// specs/phases/phase-02-knowledge-engine/04-01-import-file.md and
-// specs/phases/phase-02-knowledge-engine/08-knowledge-item-indexing.md.
-//
-// 'reindex' reuses the exact same ingest:progress/ingest:done/ingest:error
-// events 'file' already streams — the UI only ever has one such operation
-// active at a time — but with an items-shaped payload instead of a
-// files-shaped one, so its progress/summary state is tracked separately.
+// cancellable today, and each file's replace is already an isolated
+// transaction, so worst case the user waits out the run. The dialog only
+// becomes dismissible once ingest:done or ingest:error has fired — see
+// specs/phases/phase-02-knowledge-engine/04-01-import-file.md.
 export function IngestProgressDialog({
   open,
-  kind,
   sessionId,
   path,
   onClose,
 }: IngestProgressDialogProps) {
   const [ingestProgress, setIngestProgress] = useState<IngestProgress | null>(null)
   const [ingestSummary, setIngestSummary] = useState<IngestSummary | null>(null)
-  const [reindexProgress, setReindexProgress] = useState<ReindexProgress | null>(null)
-  const [reindexSummary, setReindexSummary] = useState<ReindexSummary | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
 
   useEffect(() => {
@@ -87,29 +50,6 @@ export function IngestProgressDialog({
     // settles, that old rejection must not set errorMessage on the new
     // operation's state.
     let active = true
-
-    if (kind === 'reindex') {
-      const unsubscribeProgress = onReindexProgress(setReindexProgress)
-      const unsubscribeDone = onReindexDone(setReindexSummary)
-      const unsubscribeError = onReindexError(setErrorMessage)
-
-      void reindexKnowledgeItems().catch(() => {
-        if (!active) return
-        setErrorMessage(
-          (current) => current || 'Failed to index knowledge items. Please try again.',
-        )
-      })
-
-      return () => {
-        active = false
-        unsubscribeProgress()
-        unsubscribeDone()
-        unsubscribeError()
-        setReindexProgress(null)
-        setReindexSummary(null)
-        setErrorMessage('')
-      }
-    }
 
     const unsubscribeProgress = onIngestProgress(setIngestProgress)
     const unsubscribeDone = onIngestDone(setIngestSummary)
@@ -138,28 +78,18 @@ export function IngestProgressDialog({
       setIngestSummary(null)
       setErrorMessage('')
     }
-  }, [open, kind, sessionId, path])
+  }, [open, sessionId, path])
 
-  const finished = ingestSummary !== null || reindexSummary !== null || errorMessage !== ''
+  const finished = ingestSummary !== null || errorMessage !== ''
 
-  const progressLabel =
-    kind === 'reindex'
-      ? reindexProgress
-        ? `${reindexProgress.itemsProcessed} of ${reindexProgress.itemsTotal} items`
-        : 'Starting...'
-      : ingestProgress
-        ? `${ingestProgress.filesProcessed} of ${ingestProgress.filesTotal} files`
-        : 'Starting...'
-  const currentLabel =
-    kind === 'reindex' ? reindexProgress?.currentTopic : ingestProgress?.currentFile
+  const progressLabel = ingestProgress
+    ? `${ingestProgress.filesProcessed} of ${ingestProgress.filesTotal} files`
+    : 'Starting...'
+  const currentLabel = ingestProgress?.currentFile
   const percent =
-    kind === 'reindex'
-      ? reindexProgress && reindexProgress.itemsTotal > 0
-        ? Math.round((reindexProgress.itemsProcessed / reindexProgress.itemsTotal) * 100)
-        : 0
-      : ingestProgress && ingestProgress.filesTotal > 0
-        ? Math.round((ingestProgress.filesProcessed / ingestProgress.filesTotal) * 100)
-        : 0
+    ingestProgress && ingestProgress.filesTotal > 0
+      ? Math.round((ingestProgress.filesProcessed / ingestProgress.filesTotal) * 100)
+      : 0
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && finished && onClose()}>
@@ -170,9 +100,9 @@ export function IngestProgressDialog({
         onInteractOutside={(event) => !finished && event.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle>{dialogTitle[kind]}</DialogTitle>
+          <DialogTitle>Importing notes</DialogTitle>
           <DialogDescription>
-            {finished ? completeDescription[kind] : processingDescription[kind]}
+            {finished ? 'Import complete.' : 'Processing the selected file.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -223,10 +153,7 @@ export function IngestProgressDialog({
             )}
             {ingestSummary.indexWarnings.length > 0 && (
               <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">
-                  Imported, but not yet searchable — retry the knowledge index from the Knowledge
-                  section to fix this:
-                </p>
+                <p className="text-xs text-muted-foreground">Imported, but not yet searchable:</p>
                 <div className="thin-scroll max-h-40 space-y-1 overflow-y-auto rounded-lg border p-2">
                   {ingestSummary.indexWarnings.map((warning) => (
                     <p key={warning.path} className="text-xs text-muted-foreground">
@@ -234,34 +161,6 @@ export function IngestProgressDialog({
                     </p>
                   ))}
                 </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {reindexSummary && (
-          <div className="space-y-3">
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-              <div>
-                <dt className="text-muted-foreground">Processed</dt>
-                <dd className="font-medium text-foreground">{reindexSummary.itemsProcessed}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Indexed</dt>
-                <dd className="font-medium text-foreground">{reindexSummary.itemsIndexed}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Failed</dt>
-                <dd className="font-medium text-foreground">{reindexSummary.itemsFailed}</dd>
-              </div>
-            </dl>
-            {reindexSummary.failures.length > 0 && (
-              <div className="thin-scroll max-h-40 space-y-1 overflow-y-auto rounded-lg border p-2">
-                {reindexSummary.failures.map((failure) => (
-                  <p key={failure.itemId} className="text-xs text-destructive">
-                    <span className="font-medium">{failure.topic}</span>: {failure.reason}
-                  </p>
-                ))}
               </div>
             )}
           </div>
