@@ -21,8 +21,8 @@ func TestSaveOpenRouterKey_savesConfig_whenKeyIsValid(t *testing.T) {
 	const key = "sk-or-valid"
 
 	validator.EXPECT().ValidateKey(ctx, key).Return(nil).Once()
-	store.EXPECT().Load().Return(domainconfig.Config{OpenRouterKey: "old", MaxKnowledgeExtractionItems: 12}, nil).Once()
-	store.EXPECT().Save(domainconfig.Config{OpenRouterKey: key, MaxKnowledgeExtractionItems: 12}).Return(nil).Once()
+	store.EXPECT().Load().Return(domainconfig.Config{OpenRouterKey: "old"}, nil).Once()
+	store.EXPECT().Save(domainconfig.Config{OpenRouterKey: key}).Return(nil).Once()
 
 	service := NewService(nil, store, validator)
 
@@ -41,16 +41,13 @@ func TestSaveOpenRouterKey_createsConfigWhenItDoesNotExist(t *testing.T) {
 	const key = "sk-or-first"
 	validator.EXPECT().ValidateKey(ctx, key).Return(nil).Once()
 	store.EXPECT().Load().Return(domainconfig.Config{}, fs.ErrNotExist).Once()
-	store.EXPECT().Save(domainconfig.Config{
-		OpenRouterKey:               key,
-		MaxKnowledgeExtractionItems: domainconfig.DefaultMaxKnowledgeExtractionItems,
-	}).Return(nil).Once()
+	store.EXPECT().Save(domainconfig.Config{OpenRouterKey: key}).Return(nil).Once()
 	service := NewService(nil, store, validator)
 
 	// When saving the first key
 	err := service.SaveOpenRouterKey(ctx, key)
 
-	// Then a defaulted config is created
+	// Then a config holding just the key is created
 	require.NoError(t, err)
 }
 

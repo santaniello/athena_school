@@ -22,11 +22,8 @@ func NewResetter(db *sql.DB) *Resetter {
 // detached (session_id set NULL by its own foreign key),
 // matching how deleting one session already behaves — see
 // TestOpen_migratesLegacyForeignKeysAndDetachesUsageWithoutRemovingIt.
-// The deletion order matters: knowledge_items and
-// knowledge_reconciliation_proposals are deleted before knowledge_evidence
-// because their junction tables (knowledge_item_evidence,
-// knowledge_reconciliation_evidence) reference it and only cascade from
-// the item/proposal side.
+// Knowledge rows already leave through the sessions' ON DELETE CASCADE; the
+// explicit deletes below only make the reset independent of that.
 func (r *Resetter) Reset(ctx context.Context) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -46,8 +43,6 @@ func (r *Resetter) Reset(ctx context.Context) error {
 		{`DELETE FROM sessions`, nil},
 		{`DELETE FROM folders`, nil},
 		{`DELETE FROM knowledge_items`, nil},
-		{`DELETE FROM knowledge_reconciliation_proposals`, nil},
-		{`DELETE FROM knowledge_evidence`, nil},
 		{`DELETE FROM knowledge_chunks`, nil},
 		{`DELETE FROM ingested_files`, nil},
 	}

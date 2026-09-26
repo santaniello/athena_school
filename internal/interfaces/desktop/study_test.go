@@ -512,7 +512,7 @@ func TestApp_ResumeStudySession_attachesPersistedSourcesToTheirMessage(t *testin
 	messageSources.EXPECT().
 		ListBySession(context.Background(), "session-1").
 		Return(map[string][]domainknowledge.Source{
-			"message-1": {{ChunkID: "chunk-1", SourceType: domainknowledge.SourceAthena, Concept: "Goroutines", Score: 0.9}},
+			"message-1": {{ChunkID: "chunk-1", SourceType: domainknowledge.SourceImportedDoc, Concept: "Goroutines", Score: 0.9}},
 		}, nil).
 		Once()
 	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog, messageSources, passthroughKnowledgeCascade{})

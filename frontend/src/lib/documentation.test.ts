@@ -49,6 +49,30 @@ describe('DOCUMENTATION', () => {
   })
 })
 
+describe('DOCUMENTATION knowledge scope', () => {
+  const everyText = DOCUMENTATION.flatMap((section) => [
+    section.title,
+    section.summary,
+    ...section.body,
+    ...section.topics.flatMap((topic) => [topic.term, topic.description]),
+  ]).join('\n')
+
+  it('describes documents as the only source of knowledge', () => {
+    // Given knowledge comes only from documents imported into a study session
+    // Then the manual says each session owns its documents
+    expect(everyText).toMatch(/each study session owns/i)
+  })
+
+  it.each(['extract', 'draft', 'review queue', 'approv', 'concept card', 'deprecat'])(
+    'never mentions %s, since conversation extraction no longer exists',
+    (word) => {
+      // Given the extraction and review workflow was removed
+      // Then no section, summary or topic may still describe it
+      expect(everyText.toLowerCase()).not.toContain(word)
+    },
+  )
+})
+
 describe('plannedSectionIds', () => {
   it('returns an empty list once nothing is planned', () => {
     // Given a manual whose sections have all shipped

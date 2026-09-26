@@ -9,14 +9,6 @@ import {
   type IngestProgress,
   type IngestSummary,
 } from '@/lib/ingest'
-import {
-  onReindexDone,
-  onReindexError,
-  onReindexProgress,
-  reindexKnowledgeItems,
-  type ReindexProgress,
-  type ReindexSummary,
-} from '@/lib/knowledge'
 import { IngestProgressDialog } from './ingest-progress-dialog'
 
 vi.mock('@/lib/ingest', async (importOriginal) => {
@@ -29,48 +21,6 @@ vi.mock('@/lib/ingest', async (importOriginal) => {
     onIngestError: vi.fn(),
   }
 })
-
-vi.mock('@/lib/knowledge', async (importOriginal) => {
-  const original = await importOriginal<typeof import('@/lib/knowledge')>()
-  return {
-    ...original,
-    reindexKnowledgeItems: vi.fn(),
-    onReindexProgress: vi.fn(),
-    onReindexDone: vi.fn(),
-    onReindexError: vi.fn(),
-  }
-})
-
-function setupReindexSubscriptions() {
-  let progressHandler: (progress: ReindexProgress) => void = () => {}
-  let doneHandler: (summary: ReindexSummary) => void = () => {}
-  let errorHandler: (message: string) => void = () => {}
-  const unsubscribeProgress = vi.fn()
-  const unsubscribeDone = vi.fn()
-  const unsubscribeError = vi.fn()
-
-  vi.mocked(onReindexProgress).mockImplementation((handler) => {
-    progressHandler = handler
-    return unsubscribeProgress
-  })
-  vi.mocked(onReindexDone).mockImplementation((handler) => {
-    doneHandler = handler
-    return unsubscribeDone
-  })
-  vi.mocked(onReindexError).mockImplementation((handler) => {
-    errorHandler = handler
-    return unsubscribeError
-  })
-
-  return {
-    emitProgress: (progress: ReindexProgress) => act(() => progressHandler(progress)),
-    emitDone: (summary: ReindexSummary) => act(() => doneHandler(summary)),
-    emitError: (message: string) => act(() => errorHandler(message)),
-    unsubscribeProgress,
-    unsubscribeDone,
-    unsubscribeError,
-  }
-}
 
 function setupSubscriptions() {
   let progressHandler: (progress: IngestProgress) => void = () => {}
@@ -133,7 +83,6 @@ describe('IngestProgressDialog', () => {
     render(
       <IngestProgressDialog
         open
-        kind="file"
         sessionId="session-1"
         path="/home/user/notes/go.md"
         onClose={vi.fn()}
@@ -155,7 +104,6 @@ describe('IngestProgressDialog', () => {
     render(
       <IngestProgressDialog
         open={false}
-        kind="file"
         sessionId="session-1"
         path="/home/user/notes/go.md"
         onClose={vi.fn()}
@@ -173,7 +121,6 @@ describe('IngestProgressDialog', () => {
     render(
       <IngestProgressDialog
         open
-        kind="file"
         sessionId="session-1"
         path="/home/user/notes/go.md"
         onClose={vi.fn()}
@@ -204,7 +151,6 @@ describe('IngestProgressDialog', () => {
     render(
       <IngestProgressDialog
         open
-        kind="file"
         sessionId="session-1"
         path="/home/user/notes/go.md"
         onClose={vi.fn()}
@@ -231,7 +177,6 @@ describe('IngestProgressDialog', () => {
     render(
       <IngestProgressDialog
         open
-        kind="file"
         sessionId="session-1"
         path="/home/user/notes/go.md"
         onClose={vi.fn()}
@@ -258,7 +203,6 @@ describe('IngestProgressDialog', () => {
     render(
       <IngestProgressDialog
         open
-        kind="file"
         sessionId="session-1"
         path="/home/user/notes/go.md"
         onClose={vi.fn()}
@@ -277,14 +221,13 @@ describe('IngestProgressDialog', () => {
     expect(screen.getByText(/invalid utf-8/)).toBeInTheDocument()
   })
 
-  it('lists files that imported successfully but need a knowledge index retry', () => {
+  it('lists files that imported successfully but are not yet searchable', () => {
     // Given a dialog mid-import
     const events = setupSubscriptions()
     vi.mocked(importFile).mockReturnValueOnce(new Promise<void>(() => {}))
     render(
       <IngestProgressDialog
         open
-        kind="file"
         sessionId="session-1"
         path="/home/user/notes/go.md"
         onClose={vi.fn()}
@@ -300,7 +243,7 @@ describe('IngestProgressDialog', () => {
 
     // Then the file is listed, distinctly from a real failure
     expect(screen.getByText('notes/go.md')).toBeInTheDocument()
-    expect(screen.getByText(/retry the knowledge index/)).toBeInTheDocument()
+    expect(screen.getByText(/Imported, but not yet searchable/)).toBeInTheDocument()
   })
 
   it('shows the error state when ingest:error fires instead of ingest:done', async () => {
@@ -310,7 +253,6 @@ describe('IngestProgressDialog', () => {
     render(
       <IngestProgressDialog
         open
-        kind="file"
         sessionId="session-1"
         path="/home/user/notes/go.md"
         onClose={vi.fn()}
@@ -333,7 +275,6 @@ describe('IngestProgressDialog', () => {
     render(
       <IngestProgressDialog
         open
-        kind="file"
         sessionId="session-1"
         path="/home/user/notes/go.md"
         onClose={vi.fn()}
@@ -358,7 +299,6 @@ describe('IngestProgressDialog', () => {
     const { rerender } = render(
       <IngestProgressDialog
         open
-        kind="file"
         sessionId="session-1"
         path="/home/user/notes/go.md"
         onClose={vi.fn()}
@@ -371,7 +311,6 @@ describe('IngestProgressDialog', () => {
     rerender(
       <IngestProgressDialog
         open={false}
-        kind="file"
         sessionId="session-1"
         path="/home/user/notes/go.md"
         onClose={vi.fn()}
@@ -381,7 +320,6 @@ describe('IngestProgressDialog', () => {
     rerender(
       <IngestProgressDialog
         open
-        kind="file"
         sessionId="session-1"
         path="/home/user/other.md"
         onClose={vi.fn()}
@@ -406,7 +344,6 @@ describe('IngestProgressDialog', () => {
     render(
       <IngestProgressDialog
         open
-        kind="file"
         sessionId="session-1"
         path="/home/user/notes/go.md"
         onClose={vi.fn()}
@@ -427,7 +364,6 @@ describe('IngestProgressDialog', () => {
     render(
       <IngestProgressDialog
         open
-        kind="file"
         sessionId="session-1"
         path="/home/user/notes/go.md"
         onClose={onClose}
@@ -451,7 +387,6 @@ describe('IngestProgressDialog', () => {
     render(
       <IngestProgressDialog
         open
-        kind="file"
         sessionId="session-1"
         path="/home/user/notes/go.md"
         onClose={onClose}
@@ -476,7 +411,6 @@ describe('IngestProgressDialog', () => {
     render(
       <IngestProgressDialog
         open
-        kind="file"
         sessionId="session-1"
         path="/home/user/notes/go.md"
         onClose={onClose}
@@ -497,7 +431,6 @@ describe('IngestProgressDialog', () => {
     const { rerender } = render(
       <IngestProgressDialog
         open
-        kind="file"
         sessionId="session-1"
         path="/home/user/notes/go.md"
         onClose={vi.fn()}
@@ -508,7 +441,6 @@ describe('IngestProgressDialog', () => {
     rerender(
       <IngestProgressDialog
         open={false}
-        kind="file"
         sessionId="session-1"
         path="/home/user/notes/go.md"
         onClose={vi.fn()}
@@ -528,7 +460,6 @@ describe('IngestProgressDialog', () => {
     const { rerender } = render(
       <IngestProgressDialog
         open
-        kind="file"
         sessionId="session-1"
         path="/home/user/notes/go.md"
         onClose={vi.fn()}
@@ -547,7 +478,6 @@ describe('IngestProgressDialog', () => {
     rerender(
       <IngestProgressDialog
         open={false}
-        kind="file"
         sessionId="session-1"
         path="/home/user/notes/go.md"
         onClose={vi.fn()}
@@ -556,7 +486,6 @@ describe('IngestProgressDialog', () => {
     rerender(
       <IngestProgressDialog
         open
-        kind="file"
         sessionId="session-1"
         path="/home/user/other.md"
         onClose={vi.fn()}
@@ -567,115 +496,5 @@ describe('IngestProgressDialog', () => {
     await waitFor(() => expect(importFile).toHaveBeenCalledWith('session-1', '/home/user/other.md'))
     expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument()
     expect(screen.getByText('Starting...')).toBeInTheDocument()
-  })
-
-  describe('kind="reindex"', () => {
-    it('starts the reindex run as soon as it opens, with its own title and description', () => {
-      // Given a dialog opened for a reindex run (no path needed)
-      const events = setupReindexSubscriptions()
-      vi.mocked(reindexKnowledgeItems).mockReturnValueOnce(new Promise<void>(() => {}))
-
-      // When rendering it open
-      render(<IngestProgressDialog open kind="reindex" onClose={vi.fn()} />)
-
-      // Then the reindex starts immediately, and the dialog uses copy
-      // distinct from "Importing notes" — it isn't importing anything
-      expect(reindexKnowledgeItems).toHaveBeenCalled()
-      expect(importFile).not.toHaveBeenCalled()
-      expect(screen.getByText('Indexing knowledge')).toBeInTheDocument()
-      expect(screen.getByText('Indexing knowledge items for search.')).toBeInTheDocument()
-      void events
-    })
-
-    it('shows live progress in items, not files', () => {
-      // Given a dialog mid-reindex
-      const events = setupReindexSubscriptions()
-      vi.mocked(reindexKnowledgeItems).mockReturnValueOnce(new Promise<void>(() => {}))
-      render(<IngestProgressDialog open kind="reindex" onClose={vi.fn()} />)
-
-      // When a progress event arrives
-      events.emitProgress({ itemsProcessed: 2, itemsTotal: 5, currentTopic: 'Go' })
-
-      // Then the current progress and topic are shown
-      expect(screen.getByText('2 of 5 items')).toBeInTheDocument()
-      expect(screen.getByText('Go')).toBeInTheDocument()
-    })
-
-    it('transitions to the item-shaped result summary when ingest:done fires', async () => {
-      // Given a dialog mid-reindex
-      const events = setupReindexSubscriptions()
-      vi.mocked(reindexKnowledgeItems).mockReturnValueOnce(new Promise<void>(() => {}))
-      render(<IngestProgressDialog open kind="reindex" onClose={vi.fn()} />)
-
-      // When the run finishes
-      events.emitDone({ itemsProcessed: 5, itemsIndexed: 4, itemsFailed: 1, failures: [] })
-
-      // Then the summary counts replace the progress bar
-      expect(screen.getByText('Indexing complete.')).toBeInTheDocument()
-      expect(screen.getByText('4')).toBeInTheDocument()
-      expect(await findFooterCloseButton()).toBeInTheDocument()
-    })
-
-    it('lists per-item failures with their reason', () => {
-      // Given a dialog mid-reindex
-      const events = setupReindexSubscriptions()
-      vi.mocked(reindexKnowledgeItems).mockReturnValueOnce(new Promise<void>(() => {}))
-      render(<IngestProgressDialog open kind="reindex" onClose={vi.fn()} />)
-
-      // When the run finishes with one failure
-      events.emitDone({
-        itemsProcessed: 2,
-        itemsIndexed: 1,
-        itemsFailed: 1,
-        failures: [{ itemId: 'item-1', topic: 'Go', reason: 'openrouter unavailable' }],
-      })
-
-      // Then the failing topic and its reason are both shown
-      expect(screen.getByText(/Go/)).toBeInTheDocument()
-      expect(screen.getByText(/openrouter unavailable/)).toBeInTheDocument()
-    })
-
-    it('shows the error state when ingest:error fires instead of ingest:done', async () => {
-      // Given a dialog mid-reindex
-      const events = setupReindexSubscriptions()
-      vi.mocked(reindexKnowledgeItems).mockReturnValueOnce(new Promise<void>(() => {}))
-      render(<IngestProgressDialog open kind="reindex" onClose={vi.fn()} />)
-
-      // When the whole run fails outright
-      events.emitError('database locked')
-
-      // Then the error is shown and closing becomes available
-      expect(screen.getByText('database locked')).toBeInTheDocument()
-      expect(await findFooterCloseButton()).toBeInTheDocument()
-    })
-
-    it('falls back to a closable error state when reindexKnowledgeItems rejects without an ingest:error event', async () => {
-      // Given a run whose binding call itself fails before ever emitting ingest:error
-      const events = setupReindexSubscriptions()
-      vi.mocked(reindexKnowledgeItems).mockReturnValueOnce(Promise.reject(new Error('IPC failure')))
-      render(<IngestProgressDialog open kind="reindex" onClose={vi.fn()} />)
-
-      // Then a generic error is shown and the dialog still becomes closable
-      expect(
-        await screen.findByText('Failed to index knowledge items. Please try again.'),
-      ).toBeInTheDocument()
-      expect(await findFooterCloseButton()).toBeInTheDocument()
-      void events
-    })
-
-    it('unsubscribes every reindex event listener when it closes', () => {
-      // Given an open reindex dialog
-      const events = setupReindexSubscriptions()
-      vi.mocked(reindexKnowledgeItems).mockReturnValueOnce(new Promise<void>(() => {}))
-      const { rerender } = render(<IngestProgressDialog open kind="reindex" onClose={vi.fn()} />)
-
-      // When it closes
-      rerender(<IngestProgressDialog open={false} kind="reindex" onClose={vi.fn()} />)
-
-      // Then every subscription is torn down
-      expect(events.unsubscribeProgress).toHaveBeenCalled()
-      expect(events.unsubscribeDone).toHaveBeenCalled()
-      expect(events.unsubscribeError).toHaveBeenCalled()
-    })
   })
 })

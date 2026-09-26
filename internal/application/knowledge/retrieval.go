@@ -56,7 +56,7 @@ func (s *Service) Retrieve(ctx context.Context, sessionID, query string) (domain
 
 	scored, err := s.store.Search(
 		ctx, toFloat32(response.Embedding), domainknowledge.DefaultTopK,
-		domainknowledge.SearchFilters{Status: domainknowledge.StatusApproved, SessionID: sessionID},
+		domainknowledge.SearchFilters{SessionID: sessionID},
 	)
 	if err != nil {
 		return domainknowledge.RetrievalResult{}, fmt.Errorf("knowledge: searching local knowledge: %w", err)

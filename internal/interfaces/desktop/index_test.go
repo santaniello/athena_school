@@ -18,7 +18,7 @@ const testEmbeddingModel = "openai/text-embedding-3-small"
 func testIndexChunk(id string) domainknowledge.Chunk {
 	return domainknowledge.Chunk{
 		ID: id, Source: domainknowledge.SourceImportedDoc, Topic: "Go",
-		Status: domainknowledge.StatusApproved, ItemID: "item-" + id,
+		ItemID:    "item-" + id,
 		Embedding: []float32{1, 0},
 	}
 }
@@ -78,7 +78,7 @@ func TestApp_GetKnowledgeIndexStatus_reportsIssues_afterAPartiallyValidLoad(t *t
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	valid := []domainknowledge.Chunk{testIndexChunk("c1")}
 	issue := domainknowledge.ChunkLoadIssue{
-		ChunkID: "c2", ItemID: "item-c2", Source: domainknowledge.SourceImportedDoc,
+		ChunkID: "c2", ItemID: "item-c2",
 		FilePath: "notes/c2.md", Reason: domainknowledge.ChunkIssueMissingItem,
 	}
 	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).

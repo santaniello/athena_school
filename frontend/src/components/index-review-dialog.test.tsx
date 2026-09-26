@@ -8,7 +8,6 @@ function issue(overrides: Partial<ChunkLoadIssue> = {}): ChunkLoadIssue {
   return {
     chunkId: 'chunk-1',
     itemId: 'item-1',
-    source: 'imported_doc',
     filePath: 'notes/go.md',
     reason: 'missing_item',
     ...overrides,
@@ -50,21 +49,20 @@ describe('IndexReviewDialog', () => {
     expect(screen.queryByText('malformed_embedding')).not.toBeInTheDocument()
   })
 
-  it('falls back to the chunk id when the file path is empty (a non-imported source)', () => {
-    // Given an isolated chunk with no file path (e.g. an Athena item)
+  it('falls back to the chunk id when the file path is empty', () => {
+    // Given an isolated chunk with no file path
     render(
       <IndexReviewDialog
         open={true}
-        issues={[issue({ filePath: '', chunkId: 'chunk-42', source: 'athena' })]}
+        issues={[issue({ filePath: '', chunkId: 'chunk-42' })]}
         onClose={vi.fn()}
       />,
     )
 
-    // Then the chunk id identifies the row, with reindexing guidance instead
-    // of re-import guidance
+    // Then the chunk id identifies the row, with the same re-import guidance
     expect(screen.getByText('chunk-42')).toBeInTheDocument()
     expect(
-      screen.getByText('This item is waiting on reindexing support in a future update.'),
+      screen.getByText('Re-import the folder containing this file to fix this.'),
     ).toBeInTheDocument()
   })
 
@@ -98,14 +96,10 @@ describe('IndexReviewDialog', () => {
   })
 
   it.each([
-    ['source_mismatch', "This content's source no longer matches its knowledge item."],
-    ['topic_mismatch', "This content's topic no longer matches its knowledge item."],
-    ['status_mismatch', "This content's status no longer matches its knowledge item."],
-    ['stale_item', 'This knowledge item changed after this content was last indexed.'],
+    ['missing_item', 'The knowledge item this content belonged to no longer exists.'],
     ['malformed_embedding', "This content's stored data is corrupted."],
     ['invalid_chunk_id', 'This content has an invalid identifier.'],
     ['unknown_source', 'This content has an unrecognized source.'],
-    ['unknown_status', 'This content has an unrecognized status.'],
     ['invalid_vector', "This content's stored data is invalid."],
   ])('maps reason code %s to its plain-English label', (reason, expectedLabel) => {
     // Given an isolated chunk with this exact reason code
@@ -114,4 +108,15 @@ describe('IndexReviewDialog', () => {
     // Then the matching plain-English label is shown
     expect(screen.getByText(expectedLabel)).toBeInTheDocument()
   })
+
+  it.each(['source_mismatch', 'topic_mismatch', 'status_mismatch', 'stale_item', 'unknown_status'])(
+    'shows the generic label for %s, a reason the backend no longer reports',
+    (reason) => {
+      // Given a reason code left over from before conversation extraction was removed
+      render(<IndexReviewDialog open={true} issues={[issue({ reason })]} onClose={vi.fn()} />)
+
+      // Then it is not given a dedicated explanation
+      expect(screen.getByText('This content could not be indexed.')).toBeInTheDocument()
+    },
+  )
 })

@@ -37,14 +37,12 @@ describe('IndexStatusBanner', () => {
             {
               chunkId: 'c1',
               itemId: 'i1',
-              source: 'imported_doc',
               filePath: 'a.md',
               reason: 'missing_item',
             },
             {
               chunkId: 'c2',
               itemId: 'i2',
-              source: 'imported_doc',
               filePath: 'b.md',
               reason: 'missing_item',
             },
@@ -99,7 +97,6 @@ describe('IndexStatusBanner', () => {
             {
               chunkId: 'c1',
               itemId: 'i1',
-              source: 'imported_doc',
               filePath: 'a.md',
               reason: 'missing_item',
             },
@@ -126,14 +123,12 @@ describe('IndexStatusBanner', () => {
             {
               chunkId: 'c1',
               itemId: 'i1',
-              source: 'imported_doc',
               filePath: 'a.md',
               reason: 'missing_item',
             },
             {
               chunkId: 'c2',
               itemId: 'i1',
-              source: 'imported_doc',
               filePath: 'a.md',
               reason: 'missing_item',
             },

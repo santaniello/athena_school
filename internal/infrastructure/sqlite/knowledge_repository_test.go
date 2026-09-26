@@ -4,9 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
@@ -34,7 +32,7 @@ func newTestKnowledgeRepositoryWithDB(t *testing.T) (*KnowledgeRepository, *sql.
 	return NewKnowledgeRepository(db), db
 }
 
-func testItem(id, topic, status string) knowledge.Item {
+func testItem(id, topic string) knowledge.Item {
 	now := time.Now().UTC().Truncate(time.Second)
 	return knowledge.Item{
 		ID:              id,
@@ -45,8 +43,7 @@ func testItem(id, topic, status string) knowledge.Item {
 		Properties:      []string{"prop-1", "prop-2", "prop-3"},
 		TradeOffs:       []string{"trade-off-1"},
 		RelatedConcepts: []string{"related-1"},
-		Source:          knowledge.SourceAthena,
-		Status:          status,
+		Source:          knowledge.SourceImportedDoc,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}
@@ -56,7 +53,7 @@ func TestKnowledgeRepository_Save_andGetByID_roundTripsEveryField(t *testing.T) 
 	// Given a repository and a fully populated item
 	repo := newTestKnowledgeRepository(t)
 	ctx := context.Background()
-	item := testItem("item-1", "Go Concurrency", knowledge.StatusDraft)
+	item := testItem("item-1", "Go Concurrency")
 
 	// When saving it and reading it back
 	require.NoError(t, repo.Save(ctx, item))
@@ -72,7 +69,7 @@ func TestKnowledgeRepository_Save_andGetByID_roundTripsEveryField(t *testing.T) 
 	assert.Equal(t, item.TradeOffs, stored.TradeOffs)
 	assert.Equal(t, item.RelatedConcepts, stored.RelatedConcepts)
 	assert.Equal(t, item.Source, stored.Source)
-	assert.Equal(t, item.Status, stored.Status)
+	assert.Equal(t, item.Source, stored.Source)
 	assert.Equal(t, item.CreatedAt, stored.CreatedAt)
 	assert.Equal(t, item.UpdatedAt, stored.UpdatedAt)
 }
@@ -81,7 +78,7 @@ func TestKnowledgeRepository_Save_roundTripsNilSlicesAsEmpty(t *testing.T) {
 	// Given an item with nil list fields
 	repo := newTestKnowledgeRepository(t)
 	ctx := context.Background()
-	item := testItem("item-1", "Go Concurrency", knowledge.StatusDraft)
+	item := testItem("item-1", "Go Concurrency")
 	item.Properties = nil
 	item.TradeOffs = nil
 	item.RelatedConcepts = nil
@@ -101,7 +98,7 @@ func TestKnowledgeRepository_Save_roundTripsEmptySlicesAsEmpty(t *testing.T) {
 	// Given an item with explicitly empty (non-nil) list fields
 	repo := newTestKnowledgeRepository(t)
 	ctx := context.Background()
-	item := testItem("item-1", "Go Concurrency", knowledge.StatusDraft)
+	item := testItem("item-1", "Go Concurrency")
 	item.Properties = []string{}
 	item.TradeOffs = []string{}
 	item.RelatedConcepts = []string{}
@@ -134,7 +131,7 @@ func TestKnowledgeRepository_GetByID_returnsError_whenPropertiesColumnHasInvalid
 	// or manual edit) into something that isn't valid JSON
 	repo := newTestKnowledgeRepository(t)
 	ctx := context.Background()
-	item := testItem("item-1", "Go Concurrency", knowledge.StatusDraft)
+	item := testItem("item-1", "Go Concurrency")
 	require.NoError(t, repo.Save(ctx, item))
 	_, execErr := repo.db.ExecContext(ctx,
 		`UPDATE knowledge_items SET properties = 'not json' WHERE id = ?`, "item-1")
@@ -147,177 +144,16 @@ func TestKnowledgeRepository_GetByID_returnsError_whenPropertiesColumnHasInvalid
 	assert.Error(t, err)
 }
 
-func TestKnowledgeRepository_FindByTopic_returnsOnlyItemsOfThatTopic(t *testing.T) {
-	// Given items across two topics
-	repo := newTestKnowledgeRepository(t)
-	ctx := context.Background()
-	require.NoError(t, repo.Save(ctx, testItem("item-1", "Go Concurrency", knowledge.StatusDraft)))
-	require.NoError(t, repo.Save(ctx, testItem("item-2", "Go Concurrency", knowledge.StatusApproved)))
-	require.NoError(t, repo.Save(ctx, testItem("item-3", "Java Generics", knowledge.StatusDraft)))
-
-	// When finding items by topic
-	items, err := repo.FindByTopic(ctx, "Go Concurrency")
-
-	// Then only that topic's items are returned
-	require.NoError(t, err)
-	require.Len(t, items, 2)
-	assert.Equal(t, "item-1", items[0].ID)
-	assert.Equal(t, "item-2", items[1].ID)
-}
-
-func TestKnowledgeRepository_List_returnsEverything_whenFilterIsEmpty(t *testing.T) {
-	// Given items across topics and statuses
-	repo := newTestKnowledgeRepository(t)
-	ctx := context.Background()
-	require.NoError(t, repo.Save(ctx, testItem("item-1", "Go Concurrency", knowledge.StatusDraft)))
-	require.NoError(t, repo.Save(ctx, testItem("item-2", "Java Generics", knowledge.StatusApproved)))
-
-	// When listing with no filter
-	items, err := repo.List(ctx, knowledge.Filter{})
-
-	// Then every item is returned
-	require.NoError(t, err)
-	assert.Len(t, items, 2)
-}
-
-func TestKnowledgeRepository_List_honoursTopicFilter(t *testing.T) {
-	// Given items across two topics
-	repo := newTestKnowledgeRepository(t)
-	ctx := context.Background()
-	require.NoError(t, repo.Save(ctx, testItem("item-1", "Go Concurrency", knowledge.StatusDraft)))
-	require.NoError(t, repo.Save(ctx, testItem("item-2", "Java Generics", knowledge.StatusDraft)))
-
-	// When listing filtered by topic
-	items, err := repo.List(ctx, knowledge.Filter{Topic: "Go Concurrency"})
-
-	// Then only matching items are returned
-	require.NoError(t, err)
-	require.Len(t, items, 1)
-	assert.Equal(t, "item-1", items[0].ID)
-}
-
-func TestKnowledgeRepository_List_honoursStatusFilter(t *testing.T) {
-	// Given items with different statuses
-	repo := newTestKnowledgeRepository(t)
-	ctx := context.Background()
-	require.NoError(t, repo.Save(ctx, testItem("item-1", "Go Concurrency", knowledge.StatusDraft)))
-	require.NoError(t, repo.Save(ctx, testItem("item-2", "Go Concurrency", knowledge.StatusApproved)))
-
-	// When listing filtered by status
-	items, err := repo.List(ctx, knowledge.Filter{Status: knowledge.StatusApproved})
-
-	// Then only matching items are returned
-	require.NoError(t, err)
-	require.Len(t, items, 1)
-	assert.Equal(t, "item-2", items[0].ID)
-}
-
-func TestKnowledgeRepository_List_honoursCombinedTopicAndStatusFilter(t *testing.T) {
-	// Given items across topics and statuses
-	repo := newTestKnowledgeRepository(t)
-	ctx := context.Background()
-	require.NoError(t, repo.Save(ctx, testItem("item-1", "Go Concurrency", knowledge.StatusDraft)))
-	require.NoError(t, repo.Save(ctx, testItem("item-2", "Go Concurrency", knowledge.StatusApproved)))
-	require.NoError(t, repo.Save(ctx, testItem("item-3", "Java Generics", knowledge.StatusApproved)))
-
-	// When listing filtered by both topic and status
-	items, err := repo.List(ctx, knowledge.Filter{Topic: "Go Concurrency", Status: knowledge.StatusApproved})
-
-	// Then only the item matching both constraints is returned
-	require.NoError(t, err)
-	require.Len(t, items, 1)
-	assert.Equal(t, "item-2", items[0].ID)
-}
-
-func TestKnowledgeRepository_List_returnsItemsOldestFirst(t *testing.T) {
-	// Given items saved with increasing timestamps
-	repo := newTestKnowledgeRepository(t)
-	ctx := context.Background()
-	base := time.Now().UTC().Truncate(time.Second)
-	older := testItem("item-older", "Go Concurrency", knowledge.StatusDraft)
-	older.CreatedAt = base
-	newer := testItem("item-newer", "Go Concurrency", knowledge.StatusDraft)
-	newer.CreatedAt = base.Add(time.Hour)
-	require.NoError(t, repo.Save(ctx, newer))
-	require.NoError(t, repo.Save(ctx, older))
-
-	// When listing
-	items, err := repo.List(ctx, knowledge.Filter{})
-
-	// Then the oldest item comes first
-	require.NoError(t, err)
-	require.Len(t, items, 2)
-	assert.Equal(t, "item-older", items[0].ID)
-	assert.Equal(t, "item-newer", items[1].ID)
-}
-
-func TestKnowledgeRepository_List_tieBreaksByID_whenCreatedAtCollides(t *testing.T) {
-	// Given two items sharing the exact same timestamp
-	repo := newTestKnowledgeRepository(t)
-	ctx := context.Background()
-	same := time.Now().UTC().Truncate(time.Second)
-	first := testItem("item-b", "Go Concurrency", knowledge.StatusDraft)
-	first.CreatedAt = same
-	second := testItem("item-a", "Go Concurrency", knowledge.StatusDraft)
-	second.CreatedAt = same
-	require.NoError(t, repo.Save(ctx, first))
-	require.NoError(t, repo.Save(ctx, second))
-
-	// When listing
-	items, err := repo.List(ctx, knowledge.Filter{})
-
-	// Then items are ordered by id as a deterministic tiebreak
-	require.NoError(t, err)
-	require.Len(t, items, 2)
-	assert.Equal(t, "item-a", items[0].ID)
-	assert.Equal(t, "item-b", items[1].ID)
-}
-
-func TestKnowledgeRepository_ListTopics_returnsDistinctTopicsAlphabetically(t *testing.T) {
-	// Given items across topics, with one topic repeated
-	repo := newTestKnowledgeRepository(t)
-	ctx := context.Background()
-	require.NoError(t, repo.Save(ctx, testItem("item-1", "Java Generics", knowledge.StatusDraft)))
-	require.NoError(t, repo.Save(ctx, testItem("item-2", "Go Concurrency", knowledge.StatusDraft)))
-	require.NoError(t, repo.Save(ctx, testItem("item-3", "Go Concurrency", knowledge.StatusApproved)))
-
-	// When listing topics
-	topics, err := repo.ListTopics(ctx)
-
-	// Then distinct topics are returned, alphabetically
-	require.NoError(t, err)
-	assert.Equal(t, []string{"Go Concurrency", "Java Generics"}, topics)
-}
-
-func TestKnowledgeRepository_CountByStatus_returnsCountPerStatus(t *testing.T) {
-	// Given items across statuses
-	repo := newTestKnowledgeRepository(t)
-	ctx := context.Background()
-	require.NoError(t, repo.Save(ctx, testItem("item-1", "Go Concurrency", knowledge.StatusDraft)))
-	require.NoError(t, repo.Save(ctx, testItem("item-2", "Go Concurrency", knowledge.StatusDraft)))
-	require.NoError(t, repo.Save(ctx, testItem("item-3", "Go Concurrency", knowledge.StatusApproved)))
-
-	// When counting by status
-	draftCount, draftErr := repo.CountByStatus(ctx, knowledge.StatusDraft)
-	approvedCount, approvedErr := repo.CountByStatus(ctx, knowledge.StatusApproved)
-
-	// Then each status is counted correctly
-	require.NoError(t, draftErr)
-	require.NoError(t, approvedErr)
-	assert.Equal(t, 2, draftCount)
-	assert.Equal(t, 1, approvedCount)
-}
-
 func TestKnowledgeRepository_Update_persistsChanges(t *testing.T) {
 	// Given a saved item
 	repo := newTestKnowledgeRepository(t)
 	ctx := context.Background()
-	item := testItem("item-1", "Go Concurrency", knowledge.StatusDraft)
+	item := testItem("item-1", "Go Concurrency")
 	require.NoError(t, repo.Save(ctx, item))
 
 	// When updating its fields
 	item.Definition = "A new definition"
-	item.Status = knowledge.StatusApproved
+	item.Topic = "Rust"
 	err := repo.Update(ctx, item)
 
 	// Then the changes are persisted
@@ -325,201 +161,14 @@ func TestKnowledgeRepository_Update_persistsChanges(t *testing.T) {
 	stored, getErr := repo.GetByID(ctx, "item-1")
 	require.NoError(t, getErr)
 	assert.Equal(t, "A new definition", stored.Definition)
-	assert.Equal(t, knowledge.StatusApproved, stored.Status)
-}
-
-func TestKnowledgeRepository_Save_persistsNormalizedConcept(t *testing.T) {
-	// Given an item whose concept needs normalizing
-	repo, db := newTestKnowledgeRepositoryWithDB(t)
-	ctx := context.Background()
-	item := testItem("item-1", "System Design", knowledge.StatusDraft)
-	item.Concept = " Cache-Aside  Pattern "
-
-	// When saving it
-	require.NoError(t, repo.Save(ctx, item))
-
-	// Then normalized_concept holds the normalized form
-	var normalizedConcept string
-	queryErr := db.QueryRow(
-		`SELECT normalized_concept FROM knowledge_items WHERE id = ?`, "item-1",
-	).Scan(&normalizedConcept)
-	require.NoError(t, queryErr)
-	assert.Equal(t, "cache aside pattern", normalizedConcept)
-}
-
-func TestKnowledgeRepository_Update_recomputesNormalizedConceptWhenConceptChanges(t *testing.T) {
-	// Given a saved item
-	repo, db := newTestKnowledgeRepositoryWithDB(t)
-	ctx := context.Background()
-	item := testItem("item-1", "System Design", knowledge.StatusDraft)
-	require.NoError(t, repo.Save(ctx, item))
-
-	// When updating its concept
-	item.Concept = "Circuit Breaker"
-	require.NoError(t, repo.Update(ctx, item))
-
-	// Then normalized_concept is recomputed to match
-	var normalizedConcept string
-	queryErr := db.QueryRow(
-		`SELECT normalized_concept FROM knowledge_items WHERE id = ?`, "item-1",
-	).Scan(&normalizedConcept)
-	require.NoError(t, queryErr)
-	assert.Equal(t, "circuit breaker", normalizedConcept)
-}
-
-func TestKnowledgeRepository_FindByNormalizedConcept_returnsMatchesAcrossStatuses(t *testing.T) {
-	// Given items sharing the same normalized concept and topic, across
-	// every lifecycle status
-	repo := newTestKnowledgeRepository(t)
-	ctx := context.Background()
-	draft := testItem("item-draft", "System Design", knowledge.StatusDraft)
-	draft.Concept = "Load Balancer"
-	approved := testItem("item-approved", "System Design", knowledge.StatusApproved)
-	approved.Concept = "load balancer"
-	deprecated := testItem("item-deprecated", "System Design", knowledge.StatusDeprecated)
-	deprecated.Concept = "Load-Balancer"
-	require.NoError(t, repo.Save(ctx, draft))
-	require.NoError(t, repo.Save(ctx, approved))
-	require.NoError(t, repo.Save(ctx, deprecated))
-
-	// When looking up that normalized concept in that topic
-	matches, err := repo.FindByNormalizedConcept(ctx, testSessionID, "System Design", knowledge.NormalizeConcept("Load Balancer"))
-
-	// Then every status is returned
-	require.NoError(t, err)
-	ids := make([]string, len(matches))
-	for i, m := range matches {
-		ids[i] = m.ID
-	}
-	assert.ElementsMatch(t, []string{"item-draft", "item-approved", "item-deprecated"}, ids)
-}
-
-func TestKnowledgeRepository_FindByNormalizedConcept_excludesADifferentTopic(t *testing.T) {
-	// Given a matching concept saved under a different topic
-	repo := newTestKnowledgeRepository(t)
-	ctx := context.Background()
-	item := testItem("item-1", "Databases", knowledge.StatusApproved)
-	item.Concept = "Load Balancer"
-	require.NoError(t, repo.Save(ctx, item))
-
-	// When looking it up under a different topic
-	matches, err := repo.FindByNormalizedConcept(ctx, testSessionID, "System Design", knowledge.NormalizeConcept("Load Balancer"))
-
-	// Then it is not returned
-	require.NoError(t, err)
-	assert.Empty(t, matches)
-}
-
-func TestKnowledgeRepository_FindByNormalizedConcept_excludesTheSameConceptInAnotherSession(t *testing.T) {
-	// Given the same topic and concept saved in two different sessions
-	repo, db := newTestKnowledgeRepositoryWithDB(t)
-	seedSession(t, db, "session-other")
-	ctx := context.Background()
-	mine := testItem("item-mine", "System Design", knowledge.StatusApproved)
-	mine.Concept = "Load Balancer"
-	theirs := testItem("item-theirs", "System Design", knowledge.StatusApproved)
-	theirs.SessionID = "session-other"
-	theirs.Concept = "Load Balancer"
-	require.NoError(t, repo.Save(ctx, mine))
-	require.NoError(t, repo.Save(ctx, theirs))
-
-	// When looking it up within one session
-	matches, err := repo.FindByNormalizedConcept(ctx, testSessionID, "System Design", knowledge.NormalizeConcept("Load Balancer"))
-
-	// Then only that session's item is a match
-	require.NoError(t, err)
-	require.Len(t, matches, 1)
-	assert.Equal(t, "item-mine", matches[0].ID)
-}
-
-func TestKnowledgeRepository_FindByNormalizedConcept_returnsEmpty_whenNoMatch(t *testing.T) {
-	// Given a repository with no matching item
-	repo := newTestKnowledgeRepository(t)
-	ctx := context.Background()
-
-	// When looking up a concept nothing matches
-	matches, err := repo.FindByNormalizedConcept(ctx, testSessionID, "System Design", knowledge.NormalizeConcept("Load Balancer"))
-
-	// Then an empty, non-nil result is returned
-	require.NoError(t, err)
-	assert.Empty(t, matches)
-}
-
-func TestKnowledgeRepository_FindByNormalizedConceptThenSave_insideOneTransaction_closesTheConcurrentDuplicateRace(t *testing.T) {
-	// Given many goroutines racing to be the first to create an item for the
-	// same normalized concept in the same topic, each checking then
-	// inserting inside its own transaction — this is the exact
-	// check-then-act sequence internal/application/knowledge.saveCandidates
-	// runs. A separate, pre-transaction check (the original implementation)
-	// would let two goroutines both observe "no match" before either
-	// commits; running both steps inside one WithinTx instead relies on
-	// db.go's single-connection pool (SetMaxOpenConns(1)) to serialize
-	// them — this proves that guarantee against a real database, not a
-	// mock. See specs/phases/phase-02-knowledge-engine/10-01-duplicate-detection-decisions.md.
-	repo, db := newTestKnowledgeRepositoryWithDB(t)
-	tx := NewSQLTransactor(db)
-	ctx := context.Background()
-	errAlreadyExists := errors.New("already exists")
-
-	const attempts = 15
-	errs := make(chan error, attempts)
-	var wg sync.WaitGroup
-	// ready/start hold every goroutine at the same starting line, so the
-	// race actually begins with every attempt contending at once instead
-	// of however the scheduler happened to interleave goroutine launch
-	// with each attempt's own DB round trip.
-	var ready sync.WaitGroup
-	start := make(chan struct{})
-	for i := range attempts {
-		wg.Add(1)
-		ready.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			ready.Done()
-			<-start
-			errs <- tx.WithinTx(ctx, func(ctx context.Context) error {
-				existing, err := repo.FindByNormalizedConcept(ctx, testSessionID, "System Design", "load balancer")
-				if err != nil {
-					return err
-				}
-				if len(existing) > 0 {
-					return errAlreadyExists
-				}
-				item := testItem(fmt.Sprintf("item-%d", i), "System Design", knowledge.StatusDraft)
-				item.Concept = "Load Balancer"
-				return repo.Save(ctx, item)
-			})
-		}(i)
-	}
-
-	// When every attempt begins racing at once
-	ready.Wait()
-	close(start)
-	wg.Wait()
-	close(errs)
-
-	// Then exactly one attempt actually created the item — every other
-	// attempt's own check, inside its own transaction, saw it already there
-	succeeded := 0
-	for err := range errs {
-		if err == nil {
-			succeeded++
-			continue
-		}
-		assert.ErrorIs(t, err, errAlreadyExists)
-	}
-	assert.Equal(t, 1, succeeded)
-
-	matches, err := repo.FindByNormalizedConcept(ctx, testSessionID, "System Design", "load balancer")
-	require.NoError(t, err)
-	assert.Len(t, matches, 1)
+	assert.Equal(t, "Rust", stored.Topic)
 }
 
 func TestKnowledgeRepository_Update_returnsErrItemNotFound_whenMissing(t *testing.T) {
 	// Given a repository with no matching item
 	repo := newTestKnowledgeRepository(t)
 	ctx := context.Background()
-	item := testItem("missing", "Go Concurrency", knowledge.StatusDraft)
+	item := testItem("missing", "Go Concurrency")
 
 	// When updating an item that does not exist
 	err := repo.Update(ctx, item)
@@ -532,7 +181,7 @@ func TestKnowledgeRepository_Delete_removesItem(t *testing.T) {
 	// Given a saved item
 	repo := newTestKnowledgeRepository(t)
 	ctx := context.Background()
-	require.NoError(t, repo.Save(ctx, testItem("item-1", "Go Concurrency", knowledge.StatusDraft)))
+	require.NoError(t, repo.Save(ctx, testItem("item-1", "Go Concurrency")))
 
 	// When deleting it
 	err := repo.Delete(ctx, "item-1")
@@ -561,7 +210,7 @@ func TestKnowledgeRepository_Save_participatesInCallerTransaction(t *testing.T) 
 	seedSession(t, db, testSessionID)
 	repo := NewKnowledgeRepository(db)
 	transactor := NewSQLTransactor(db)
-	item := testItem("item-1", "Go", knowledge.StatusDraft)
+	item := testItem("item-1", "Go")
 	boom := errors.New("boom")
 
 	// When Save runs inside a transaction that is then rolled back

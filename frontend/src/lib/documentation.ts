@@ -50,7 +50,7 @@ const DOCUMENTATION: DocSection[] = [
       {
         term: 'Nothing becomes truth by itself',
         description:
-          'Models are confidently wrong sometimes. Anything Athena learns from a conversation waits for your approval before it counts.',
+          'Models are confidently wrong sometimes, so Athena never turns a conversation into knowledge on its own. What it consults is the documents you chose to import.',
       },
     ],
   },
@@ -91,18 +91,18 @@ const DOCUMENTATION: DocSection[] = [
     id: 'knowledge-engine',
     title: 'The Knowledge Engine',
     status: 'planned',
-    summary: 'Your notes become searchable, and what you learn becomes a library you own.',
+    summary:
+      'Your notes become searchable, and each session answers from the documents you gave it.',
     body: [
-      'Study sessions already work, but they forget. Close the app and next week Athena has no idea what you covered, and the notes you have kept for years sit in a folder it has never opened. The Knowledge Engine fixes both.',
-      'You point Athena at a folder and it reads every Markdown and text file inside, splitting each into passages it can find again later. Finding is by meaning, not wording: ask "how does Go handle parallelism?" and it surfaces your note that says "the scheduler multiplexes M:N" — not one shared word, exactly the right passage. That is why old, messily written notes are still worth importing.',
-      'From then on your sessions consult those notes first, and every reply shows which ones it drew on. When a session has taught you something worth keeping, you ask Athena to extract it: it rereads the conversation and proposes concept cards — what a thing is, its properties, its trade-offs, what it connects to. Nothing is saved until you choose.',
-      'Every card starts as a draft and waits in a review queue, because a model wrote it and models are confidently wrong. Approving is what separates "a model said so" from "I checked, and it is right". The moment you approve, the card joins the same memory as your imported notes and comes back on its own in later sessions.',
+      'Study sessions already work, but they forget. Close the app and next week Athena has no idea what you covered, and the notes you have kept for years sit in a folder it has never opened. The Knowledge Engine fixes that.',
+      'Each study session owns the documents you import into it. Athena reads a Markdown or text file and splits it into passages it can find again later. Finding is by meaning, not wording: ask "how does Go handle parallelism?" and it surfaces your note that says "the scheduler multiplexes M:N" — not one shared word, exactly the right passage. That is why old, messily written notes are still worth importing.',
+      "From then on that session consults its documents first, and every reply shows which ones it drew on. A session never searches another session's documents, and deleting a session, or the folder that holds it, deletes its documents with it.",
     ],
     topics: [
       {
         term: 'Import notes',
         description:
-          'Point Athena at a folder of Markdown or text files. Re-importing later skips what has not changed and never duplicates anything.',
+          'Add a Markdown or text file to a study session. Re-importing later skips a file that has not changed and never duplicates anything.',
       },
       {
         term: 'Search by meaning',
@@ -112,7 +112,7 @@ const DOCUMENTATION: DocSection[] = [
       {
         term: 'Cited sources',
         description:
-          'Replies list the notes and cards they used, and how closely each matched, so you can tell what came from your material and what did not.',
+          'Replies list the documents they used, and how closely each matched, so you can tell what came from your material and what did not.',
       },
       {
         term: 'Source modes',
@@ -120,19 +120,9 @@ const DOCUMENTATION: DocSection[] = [
           'Choose where an answer may come from: notes fills gaps with the model, strict-notes answers only from your material and says so when it finds nothing, and web ignores your notes entirely.',
       },
       {
-        term: 'Extract knowledge',
+        term: 'One session, its own documents',
         description:
-          'Turns a conversation into concept cards on demand. Ignore them and nothing at all is written.',
-      },
-      {
-        term: 'Review queue',
-        description:
-          'Every card waits for your approval, so one confident mistake never becomes something Athena teaches back to you for months.',
-      },
-      {
-        term: 'Knowledge library',
-        description:
-          'Everything organised by subject, with editing, deprecating and deleting — and the actions offered always match the card state.',
+          'Documents belong to the session they were imported into, so one subject never bleeds into another and nothing is left behind when a session is deleted.',
       },
     ],
   },
@@ -150,11 +140,10 @@ const DOCUMENTATION: DocSection[] = [
       { term: 'Folders', description: 'Conversations grouped by subject, reopenable any time.' },
       { term: 'Socratic study', description: 'Opens with a question and keeps turns short.' },
       { term: 'Settings', description: 'Change your profile or key; it applies immediately.' },
-      { term: 'Import notes', description: 'Athena reads your Markdown folder.' },
+      { term: 'Import notes', description: 'Athena reads your Markdown and text files.' },
       { term: 'Meaning search', description: 'Finds the right passage regardless of wording.' },
       { term: 'Source modes', description: 'Decide whether the model may fill gaps.' },
-      { term: 'Concept cards', description: 'Conversations become structured knowledge.' },
-      { term: 'Review queue', description: 'You approve before anything counts as true.' },
+      { term: 'Session documents', description: 'Each session searches only its own documents.' },
     ],
   },
 ]

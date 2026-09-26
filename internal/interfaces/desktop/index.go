@@ -17,7 +17,6 @@ const eventKnowledgeIndexStatus = "knowledge-index:status"
 type ChunkLoadIssueResult struct {
 	ChunkID  string `json:"chunkId"`
 	ItemID   string `json:"itemId"`
-	Source   string `json:"source"`
 	FilePath string `json:"filePath"`
 	Reason   string `json:"reason"`
 }
@@ -35,7 +34,7 @@ func toIndexStatusResult(status domainknowledge.IndexStatus) IndexStatusResult {
 	issues := make([]ChunkLoadIssueResult, len(status.Issues))
 	for i, issue := range status.Issues {
 		issues[i] = ChunkLoadIssueResult{
-			ChunkID: issue.ChunkID, ItemID: issue.ItemID, Source: issue.Source,
+			ChunkID: issue.ChunkID, ItemID: issue.ItemID,
 			FilePath: issue.FilePath, Reason: issue.Reason,
 		}
 	}
