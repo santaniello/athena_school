@@ -22,6 +22,54 @@ func (_m *MockIngestedFileRepository) EXPECT() *MockIngestedFileRepository_Expec
 	return &MockIngestedFileRepository_Expecter{mock: &_m.Mock}
 }
 
+// DeleteByItemID provides a mock function with given fields: ctx, sessionID, itemID
+func (_m *MockIngestedFileRepository) DeleteByItemID(ctx context.Context, sessionID string, itemID string) error {
+	ret := _m.Called(ctx, sessionID, itemID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteByItemID")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = rf(ctx, sessionID, itemID)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockIngestedFileRepository_DeleteByItemID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteByItemID'
+type MockIngestedFileRepository_DeleteByItemID_Call struct {
+	*mock.Call
+}
+
+// DeleteByItemID is a helper method to define mock.On call
+//   - ctx context.Context
+//   - sessionID string
+//   - itemID string
+func (_e *MockIngestedFileRepository_Expecter) DeleteByItemID(ctx interface{}, sessionID interface{}, itemID interface{}) *MockIngestedFileRepository_DeleteByItemID_Call {
+	return &MockIngestedFileRepository_DeleteByItemID_Call{Call: _e.mock.On("DeleteByItemID", ctx, sessionID, itemID)}
+}
+
+func (_c *MockIngestedFileRepository_DeleteByItemID_Call) Run(run func(ctx context.Context, sessionID string, itemID string)) *MockIngestedFileRepository_DeleteByItemID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *MockIngestedFileRepository_DeleteByItemID_Call) Return(_a0 error) *MockIngestedFileRepository_DeleteByItemID_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockIngestedFileRepository_DeleteByItemID_Call) RunAndReturn(run func(context.Context, string, string) error) *MockIngestedFileRepository_DeleteByItemID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListBySession provides a mock function with given fields: ctx, sessionID
 func (_m *MockIngestedFileRepository) ListBySession(ctx context.Context, sessionID string) (map[string]knowledge.IngestedFile, error) {
 	ret := _m.Called(ctx, sessionID)
@@ -77,6 +125,65 @@ func (_c *MockIngestedFileRepository_ListBySession_Call) Return(_a0 map[string]k
 }
 
 func (_c *MockIngestedFileRepository_ListBySession_Call) RunAndReturn(run func(context.Context, string) (map[string]knowledge.IngestedFile, error)) *MockIngestedFileRepository_ListBySession_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListSourcesBySession provides a mock function with given fields: ctx, sessionID
+func (_m *MockIngestedFileRepository) ListSourcesBySession(ctx context.Context, sessionID string) ([]knowledge.SessionSource, error) {
+	ret := _m.Called(ctx, sessionID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListSourcesBySession")
+	}
+
+	var r0 []knowledge.SessionSource
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) ([]knowledge.SessionSource, error)); ok {
+		return rf(ctx, sessionID)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) []knowledge.SessionSource); ok {
+		r0 = rf(ctx, sessionID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]knowledge.SessionSource)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, sessionID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockIngestedFileRepository_ListSourcesBySession_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListSourcesBySession'
+type MockIngestedFileRepository_ListSourcesBySession_Call struct {
+	*mock.Call
+}
+
+// ListSourcesBySession is a helper method to define mock.On call
+//   - ctx context.Context
+//   - sessionID string
+func (_e *MockIngestedFileRepository_Expecter) ListSourcesBySession(ctx interface{}, sessionID interface{}) *MockIngestedFileRepository_ListSourcesBySession_Call {
+	return &MockIngestedFileRepository_ListSourcesBySession_Call{Call: _e.mock.On("ListSourcesBySession", ctx, sessionID)}
+}
+
+func (_c *MockIngestedFileRepository_ListSourcesBySession_Call) Run(run func(ctx context.Context, sessionID string)) *MockIngestedFileRepository_ListSourcesBySession_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockIngestedFileRepository_ListSourcesBySession_Call) Return(_a0 []knowledge.SessionSource, _a1 error) *MockIngestedFileRepository_ListSourcesBySession_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockIngestedFileRepository_ListSourcesBySession_Call) RunAndReturn(run func(context.Context, string) ([]knowledge.SessionSource, error)) *MockIngestedFileRepository_ListSourcesBySession_Call {
 	_c.Call.Return(run)
 	return _c
 }
