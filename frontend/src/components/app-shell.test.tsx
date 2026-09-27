@@ -18,15 +18,6 @@ import {
   retryKnowledgeIndex,
 } from '@/lib/knowledge-index'
 import type { IndexStatus } from '@/lib/knowledge-index'
-import {
-  approveKnowledgeItem,
-  countDraftKnowledgeItems,
-  countPendingReconciliations,
-  deleteKnowledgeItem,
-  listKnowledgeItems,
-  listKnowledgeTopics,
-  type KnowledgeItem,
-} from '@/lib/knowledge'
 import { deleteFolder, listFolders } from '@/lib/folder'
 import { AppShell } from './app-shell'
 
@@ -35,16 +26,13 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   UpdateProfile: vi.fn(),
   SaveOpenRouterKey: vi.fn(),
   HasOpenRouterKey: vi.fn().mockResolvedValue(true),
-  GetKnowledgeExtractionSettings: vi.fn().mockResolvedValue({ maxKnowledgeExtractionItems: 8 }),
-  UpdateKnowledgeExtractionSettings: vi.fn(),
 }))
 
 // The Study section's sidebar tree (StudyFolderTree) fetches folders as
 // soon as it mounts, and StudyChatScreen subscribes to study events as soon
 // as it mounts — both need mocking here, or they reach the real
 // (unavailable in jsdom) Wails runtime. importOriginal keeps pure helpers
-// (e.g. sourceLabel, used by StudySourcesPanel) real, same reasoning as the
-// @/lib/knowledge mock below.
+// (e.g. sourceLabel, used by StudySourcesPanel) real.
 vi.mock('@/lib/study', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/study')>()
   return {
@@ -73,26 +61,6 @@ vi.mock('@/lib/folder', () => ({
   renameFolder: vi.fn(),
   deleteFolder: vi.fn(),
 }))
-
-// The Knowledge section's sidebar tree and Explorer screen both fetch as
-// soon as they mount, same reasoning as the Study mocks above. SettingsScreen
-// also imports from this module (getKnowledgeExtractionSettings), so this
-// keeps the rest of the module real rather than replacing it wholesale.
-vi.mock('@/lib/knowledge', async (importOriginal) => {
-  const original = await importOriginal<typeof import('@/lib/knowledge')>()
-  return {
-    ...original,
-    listKnowledgeItems: vi.fn().mockResolvedValue([]),
-    listKnowledgeTopics: vi.fn().mockResolvedValue([]),
-    countDraftKnowledgeItems: vi.fn().mockResolvedValue(0),
-    countPendingReconciliations: vi.fn().mockResolvedValue(0),
-    listPendingReconciliations: vi.fn().mockResolvedValue([]),
-    approveKnowledgeItem: vi.fn(),
-    deprecateKnowledgeItem: vi.fn(),
-    updateKnowledgeItem: vi.fn(),
-    deleteKnowledgeItem: vi.fn(),
-  }
-})
 
 vi.mock('@/lib/ingest', () => ({
   pickNotesFile: vi.fn(),
@@ -155,7 +123,6 @@ describe('AppShell', () => {
     for (const label of [
       'Home',
       'Study',
-      'Knowledge',
       'Challenge',
       'Progress',
       'Flashcards',
@@ -165,6 +132,7 @@ describe('AppShell', () => {
     ]) {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
     }
+    expect(screen.queryByRole('button', { name: /knowledge/i })).not.toBeInTheDocument()
   })
 
   it('opens the real Documentation screen, not the coming-soon panel', async () => {
@@ -188,189 +156,12 @@ describe('AppShell', () => {
     await screen.findByText(/Felipe\./)
 
     // When selecting a locked section (challenge stays locked for the
-    // whole of Phase 2, unlike knowledge)
+    // whole of Phase 2)
     await user.click(screen.getByRole('button', { name: 'Challenge' }))
 
     // Then the topbar and content reflect that section, still locked
     expect(screen.getByRole('heading', { name: 'Challenge', level: 1 })).toBeInTheDocument()
     expect(screen.getByText('Planned for Phase 3')).toBeInTheDocument()
-  })
-
-  it('opens the real Knowledge Explorer, not the coming-soon panel', async () => {
-    // Given the app shell mounts
-    const user = userEvent.setup()
-    renderShell()
-    await screen.findByText(/Felipe\./)
-
-    // When selecting Knowledge
-    await user.click(screen.getByRole('button', { name: 'Knowledge' }))
-
-    // Then the Explorer/Review tabs render instead of the coming-soon panel
-    expect(screen.getByRole('heading', { name: 'Knowledge', level: 1 })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Explorer' })).toBeInTheDocument()
-    expect(screen.queryByText('Planned for Phase 2')).not.toBeInTheDocument()
-  })
-
-  it('shows the draft count as a badge on the Knowledge nav item', async () => {
-    // Given three drafts pending review
-    vi.mocked(countDraftKnowledgeItems).mockResolvedValueOnce(3)
-
-    // When the app shell mounts
-    renderShell()
-    await screen.findByText(/Felipe\./)
-
-    // Then the Knowledge nav row carries the count
-    expect(await screen.findByRole('button', { name: 'Knowledge3' })).toBeInTheDocument()
-  })
-
-  it('sums drafts and pending reconciliation proposals into one nav badge', async () => {
-    // Given two drafts and three pending reconciliation proposals
-    vi.mocked(countDraftKnowledgeItems).mockResolvedValueOnce(2)
-    vi.mocked(countPendingReconciliations).mockResolvedValueOnce(3)
-
-    // When the app shell mounts
-    renderShell()
-    await screen.findByText(/Felipe\./)
-
-    // Then the Knowledge nav row carries their sum, not either count alone
-    expect(await screen.findByRole('button', { name: 'Knowledge5' })).toBeInTheDocument()
-  })
-
-  it('shows no badge on the Knowledge nav item when there are no drafts', async () => {
-    // Given no drafts pending review (the default mock)
-    renderShell()
-    await screen.findByText(/Felipe\./)
-
-    // Then the nav row shows no count
-    expect(await screen.findByRole('button', { name: 'Knowledge' })).toBeInTheDocument()
-  })
-
-  it('refreshes the draft badge after approving a draft from the Review tab', async () => {
-    // Given one draft item visible in the Review tab
-    vi.mocked(countDraftKnowledgeItems).mockResolvedValueOnce(1)
-    const draftItem = {
-      id: 'item-1',
-      topic: 'Go',
-      concept: 'Channels',
-      definition: 'Typed conduits.',
-      properties: [],
-      tradeOffs: [],
-      relatedConcepts: [],
-      source: 'athena',
-      status: 'draft',
-      createdAt: '2026-08-18T10:00:00Z',
-      updatedAt: '2026-08-18T10:00:00Z',
-    }
-    vi.mocked(listKnowledgeItems).mockResolvedValue([draftItem])
-    vi.mocked(approveKnowledgeItem).mockResolvedValueOnce({ ...draftItem, status: 'approved' })
-    vi.mocked(countDraftKnowledgeItems).mockResolvedValueOnce(0)
-    const user = userEvent.setup()
-    renderShell()
-    await screen.findByText(/Felipe\./)
-    const navBadge = await screen.findByText('1')
-    await user.click(navBadge.closest('button')!)
-    await user.click(screen.getByRole('tab', { name: /Review/ }))
-    await user.click(await screen.findByText('Channels'))
-
-    // When approving it
-    await user.click(screen.getByRole('button', { name: 'Approve' }))
-
-    // Then the count is refetched, and the nav badge drops without a reload
-    await waitFor(() => expect(countDraftKnowledgeItems).toHaveBeenCalledTimes(2))
-    expect(await screen.findByRole('button', { name: 'Knowledge' })).toBeInTheDocument()
-  })
-
-  it('applies only the most recently started draft-count response, ignoring a stale one that resolves later', async () => {
-    // Given the mount fetch left pending, and a second fetch (triggered by
-    // approving a draft) that resolves before it does
-    let resolveMountFetch: (count: number) => void = () => {}
-    vi.mocked(countDraftKnowledgeItems).mockReturnValueOnce(
-      new Promise((resolve) => {
-        resolveMountFetch = resolve
-      }),
-    )
-    const draftItem = {
-      id: 'item-1',
-      topic: 'Go',
-      concept: 'Channels',
-      definition: 'Typed conduits.',
-      properties: [],
-      tradeOffs: [],
-      relatedConcepts: [],
-      source: 'athena',
-      status: 'draft',
-      createdAt: '2026-08-18T10:00:00Z',
-      updatedAt: '2026-08-18T10:00:00Z',
-    }
-    vi.mocked(listKnowledgeItems).mockResolvedValue([draftItem])
-    vi.mocked(approveKnowledgeItem).mockResolvedValueOnce({ ...draftItem, status: 'approved' })
-    vi.mocked(countDraftKnowledgeItems).mockResolvedValueOnce(2)
-    const user = userEvent.setup()
-    renderShell()
-    await screen.findByText(/Felipe\./)
-
-    // When the approval's own count refetch resolves first...
-    await user.click(screen.getByRole('button', { name: 'Knowledge' }))
-    await user.click(screen.getByRole('tab', { name: /Review/ }))
-    await user.click(await screen.findByText('Channels'))
-    await user.click(screen.getByRole('button', { name: 'Approve' }))
-    const sidebar = screen.getByRole('navigation')
-    const navBadge = await within(sidebar).findByText('2')
-
-    // ...and only afterwards the stale mount fetch resolves
-    act(() => resolveMountFetch(5))
-
-    // Then the stale response never overwrites the newer count
-    await waitFor(() => expect(countDraftKnowledgeItems).toHaveBeenCalledTimes(2))
-    expect(navBadge).toBeInTheDocument()
-    expect(within(sidebar).queryByText('5')).not.toBeInTheDocument()
-  })
-
-  it('applies only the most recently started pending-proposal-count response, ignoring a stale one that resolves later', async () => {
-    // Given the mount fetch left pending, and a second fetch (triggered by
-    // approving a draft, which refreshes both counts together) that
-    // resolves before it does
-    let resolveMountFetch: (count: number) => void = () => {}
-    vi.mocked(countPendingReconciliations).mockReturnValueOnce(
-      new Promise((resolve) => {
-        resolveMountFetch = resolve
-      }),
-    )
-    const draftItem = {
-      id: 'item-1',
-      topic: 'Go',
-      concept: 'Channels',
-      definition: 'Typed conduits.',
-      properties: [],
-      tradeOffs: [],
-      relatedConcepts: [],
-      source: 'athena',
-      status: 'draft',
-      createdAt: '2026-08-18T10:00:00Z',
-      updatedAt: '2026-08-18T10:00:00Z',
-    }
-    vi.mocked(listKnowledgeItems).mockResolvedValue([draftItem])
-    vi.mocked(approveKnowledgeItem).mockResolvedValueOnce({ ...draftItem, status: 'approved' })
-    vi.mocked(countPendingReconciliations).mockResolvedValueOnce(4)
-    const user = userEvent.setup()
-    renderShell()
-    await screen.findByText(/Felipe\./)
-
-    // When the approval's own count refetch resolves first...
-    await user.click(screen.getByRole('button', { name: 'Knowledge' }))
-    await user.click(screen.getByRole('tab', { name: /Review/ }))
-    await user.click(await screen.findByText('Channels'))
-    await user.click(screen.getByRole('button', { name: 'Approve' }))
-    const sidebar = screen.getByRole('navigation')
-    const navBadge = await within(sidebar).findByText('4')
-
-    // ...and only afterwards the stale mount fetch resolves
-    act(() => resolveMountFetch(9))
-
-    // Then the stale response never overwrites the newer count
-    await waitFor(() => expect(countPendingReconciliations).toHaveBeenCalledTimes(2))
-    expect(navBadge).toBeInTheDocument()
-    expect(within(sidebar).queryByText('9')).not.toBeInTheDocument()
   })
 
   it('routes the Home CTA to the Study screen, same as the Study nav row', async () => {
@@ -1029,63 +820,6 @@ describe('AppShell', () => {
     expect(screen.getByRole('button', { name: 'Home' })).not.toHaveAttribute('aria-current')
   })
 
-  it('shows the topic tree in the sidebar only while on the Knowledge section, exactly once', async () => {
-    // Given the app shell mounts on Home
-    const user = userEvent.setup()
-    renderShell()
-    await screen.findByText(/Felipe\./)
-
-    // Then the topic tree is not shown yet
-    expect(screen.queryByText('All topics')).not.toBeInTheDocument()
-
-    // When selecting Knowledge
-    await user.click(screen.getByRole('button', { name: 'Knowledge' }))
-
-    // Then the tree appears, exactly once — not once per sidebar nav row
-    expect(await screen.findAllByText('All topics')).toHaveLength(1)
-
-    // When navigating away to a different section
-    await user.click(screen.getByRole('button', { name: 'Documentation' }))
-
-    // Then the tree is gone again
-    expect(screen.queryByText('All topics')).not.toBeInTheDocument()
-  })
-
-  it('reloads the sidebar topic list after deleting a Knowledge Item', async () => {
-    // Given a single item, the only one under its topic
-    const item: KnowledgeItem = {
-      id: 'item-1',
-      topic: 'Go',
-      concept: 'Channels',
-      definition: 'Typed conduits for goroutine communication.',
-      properties: [],
-      tradeOffs: [],
-      relatedConcepts: [],
-      source: 'athena',
-      status: 'approved',
-      createdAt: '2026-08-18T10:00:00Z',
-      updatedAt: '2026-08-18T10:00:00Z',
-    }
-    vi.mocked(listKnowledgeItems).mockResolvedValue([item])
-    vi.mocked(deleteKnowledgeItem).mockResolvedValueOnce(undefined)
-    const user = userEvent.setup()
-    renderShell()
-    await screen.findByText(/Felipe\./)
-    await user.click(screen.getByRole('button', { name: 'Knowledge' }))
-    await screen.findAllByText('All topics')
-    await waitFor(() => expect(listKnowledgeTopics).toHaveBeenCalledTimes(1))
-
-    // When deleting that item
-    await user.click(await screen.findByText('Channels'))
-    await user.click(screen.getByRole('button', { name: 'Delete' }))
-    const dialog = await screen.findByRole('alertdialog')
-    await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
-
-    // Then the sidebar's topic list refetches — without this, "Go" would
-    // otherwise linger in the sidebar until a full app restart
-    await waitFor(() => expect(listKnowledgeTopics).toHaveBeenCalledTimes(2))
-  })
-
   it('renders the sidebar safely, with no name shown yet, before the profile has loaded', async () => {
     // Given the profile fetch never resolves during this assertion
     vi.mocked(GetProfile).mockReturnValueOnce(new Promise(() => {}))
@@ -1214,7 +948,6 @@ describe('AppShell knowledge index lifecycle', () => {
         {
           chunkId: 'chunk-1',
           itemId: 'item-1',
-          source: 'imported_doc',
           filePath: 'notes/go.md',
           reason: 'missing_item',
         },
@@ -1246,7 +979,6 @@ describe('AppShell knowledge index lifecycle', () => {
         {
           chunkId: 'chunk-1',
           itemId: 'item-1',
-          source: 'imported_doc',
           filePath: 'notes/go.md',
           reason: 'missing_item',
         },

@@ -3,8 +3,6 @@ package sqlite
 import (
 	"database/sql"
 	"fmt"
-
-	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 )
 
 // migrations are idempotent DDL/DML steps applied in order on every Open
@@ -43,100 +41,10 @@ var migrations = []func(*sql.DB) error{
 		created_at DATETIME
 	)`),
 	addSessionsFolderIDColumn,
-	execSQL(`CREATE TABLE IF NOT EXISTS knowledge_items (
-		id               TEXT PRIMARY KEY,
-		topic            TEXT,
-		concept          TEXT,
-		definition       TEXT,
-		properties       TEXT, -- JSON array
-		trade_offs       TEXT, -- JSON array
-		related_concepts TEXT, -- JSON array
-		source           TEXT,
-		status           TEXT DEFAULT 'draft',
-		created_at       DATETIME,
-		updated_at       DATETIME
-	)`),
-	execSQL(`CREATE INDEX IF NOT EXISTS idx_knowledge_items_status_created_at
-		ON knowledge_items(status, created_at)`),
-	execSQL(`CREATE INDEX IF NOT EXISTS idx_knowledge_items_topic
-		ON knowledge_items(topic)`),
-	addKnowledgeItemsNormalizedConceptColumn,
-	execSQL(`CREATE INDEX IF NOT EXISTS idx_knowledge_items_topic_normalized_concept
-		ON knowledge_items(topic, normalized_concept)`),
-	execSQL(`CREATE TABLE IF NOT EXISTS knowledge_evidence (
-		id           TEXT PRIMARY KEY,
-		origin_type  TEXT NOT NULL,
-		origin_id    TEXT NOT NULL,
-		source_label TEXT NOT NULL,
-		excerpt      TEXT NOT NULL,
-		created_at   DATETIME NOT NULL,
-		UNIQUE (origin_type, origin_id, excerpt)
-	)`),
-	execSQL(`CREATE TABLE IF NOT EXISTS knowledge_item_evidence (
-		item_id     TEXT NOT NULL REFERENCES knowledge_items(id) ON DELETE CASCADE,
-		evidence_id TEXT NOT NULL REFERENCES knowledge_evidence(id),
-		PRIMARY KEY (item_id, evidence_id)
-	)`),
-	execSQL(`CREATE INDEX IF NOT EXISTS idx_knowledge_item_evidence_evidence
-		ON knowledge_item_evidence(evidence_id)`),
-	execSQL(`CREATE TABLE IF NOT EXISTS knowledge_chunks (
-		id          TEXT PRIMARY KEY,
-		source      TEXT,
-		topic       TEXT,
-		status      TEXT,
-		item_id     TEXT,
-		source_path TEXT, -- canonical absolute identity; set for imported_doc
-		file_path   TEXT, -- stable first-import relative/display path
-		heading     TEXT,
-		content     TEXT,
-		embedding   BLOB, -- tightly-packed little-endian float32
-		embedding_model TEXT NOT NULL,
-		item_updated_at DATETIME, -- NULL for imported_doc
-		created_at DATETIME
-	)`),
-	execSQL(`CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_file_path ON knowledge_chunks(file_path)`),
-	execSQL(`CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_item_id ON knowledge_chunks(item_id)`),
-	addKnowledgeChunksSourcePathColumn,
-	execSQL(`CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_source_path ON knowledge_chunks(source_path)`),
-	execSQL(`CREATE TABLE IF NOT EXISTS ingested_files (
-		source_path     TEXT PRIMARY KEY,
-		file_path       TEXT NOT NULL,
-		mtime_unix_nano INTEGER NOT NULL,
-		embedding_model TEXT NOT NULL,
-		chunk_count     INTEGER NOT NULL,
-		item_id         TEXT NOT NULL,
-		ingested_at     DATETIME
-	)`),
-	migrateIngestedFilesToSourcePathSchema,
 	addSessionsContextColumns,
 	migrateSessionForeignKeyActions,
 	repairSessionsWithInvalidFolder,
 	addSessionsGoalColumn,
-	execSQL(`CREATE TABLE IF NOT EXISTS knowledge_reconciliation_proposals (
-		id                 TEXT PRIMARY KEY,
-		action             TEXT NOT NULL,
-		status             TEXT NOT NULL,
-		candidate_snapshot TEXT NOT NULL, -- validated JSON Item snapshot
-		target_item_id     TEXT,
-		target_updated_at  DATETIME,
-		reason             TEXT NOT NULL,
-		changes            TEXT NOT NULL, -- validated JSON ItemChanges
-		created_at         DATETIME NOT NULL,
-		resolved_at        DATETIME
-	)`),
-	execSQL(`CREATE TABLE IF NOT EXISTS knowledge_reconciliation_evidence (
-		proposal_id TEXT NOT NULL REFERENCES knowledge_reconciliation_proposals(id) ON DELETE CASCADE,
-		evidence_id TEXT NOT NULL REFERENCES knowledge_evidence(id),
-		PRIMARY KEY (proposal_id, evidence_id)
-	)`),
-	execSQL(`CREATE TABLE IF NOT EXISTS knowledge_item_relations (
-		from_item_id  TEXT NOT NULL REFERENCES knowledge_items(id) ON DELETE CASCADE,
-		to_item_id    TEXT NOT NULL REFERENCES knowledge_items(id) ON DELETE CASCADE,
-		relation_type TEXT NOT NULL,
-		created_at    DATETIME NOT NULL,
-		PRIMARY KEY (from_item_id, to_item_id, relation_type),
-		CHECK (from_item_id <> to_item_id)
-	)`),
 	// dropAccountsTable removes the local login/account table: no other
 	// table ever referenced it by foreign key, and the app is now a
 	// single-user local install identified by ~/.athena/profile.json, not
@@ -165,7 +73,7 @@ var migrations = []func(*sql.DB) error{
 	)`),
 	dropFoldersIsDefaultColumn,
 	addSessionsFolderIDCascade,
-	migrateKnowledgeToSessionOwnership,
+	migrateKnowledgeToDocumentsOnly,
 }
 
 // addSessionsFolderIDColumn adds sessions.folder_id if it does not already
@@ -441,156 +349,6 @@ func hasColumn(db *sql.DB, table, column string) (bool, error) {
 	return false, rows.Err()
 }
 
-// tableIsEmpty reports whether table currently holds zero rows.
-func tableIsEmpty(db *sql.DB, table string) (bool, error) {
-	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&count); err != nil {
-		return false, err
-	}
-	return count == 0, nil
-}
-
-// addKnowledgeItemsNormalizedConceptColumn adds
-// knowledge_items.normalized_concept if it does not already exist, then
-// backfills every row whose value is still NULL — every pre-existing item,
-// or one inserted through a path that predates this column — computing it
-// from Concept via domainknowledge.NormalizeConcept, the exact function
-// FindByNormalizedConcept's application-layer caller uses to normalize a
-// candidate before comparing. This repair runs unconditionally on every
-// Open, mirroring addSessionsFolderIDColumn, rather than gating it behind a
-// one-time "table was empty" check: normalized_concept must always match
-// Concept for exact-match duplicate detection to be trustworthy, and a plain
-// SQL UPDATE cannot compute NormalizeConcept's Unicode-aware result itself.
-// See specs/phases/phase-02-knowledge-engine/10-01-duplicate-detection-decisions.md
-// Decision 1.
-func addKnowledgeItemsNormalizedConceptColumn(db *sql.DB) error {
-	hasNormalizedConcept, err := hasColumn(db, "knowledge_items", "normalized_concept")
-	if err != nil {
-		return err
-	}
-	if !hasNormalizedConcept {
-		if _, err := db.Exec(`ALTER TABLE knowledge_items ADD COLUMN normalized_concept TEXT`); err != nil {
-			return err
-		}
-	}
-	return backfillKnowledgeItemsNormalizedConcept(db)
-}
-
-// knowledgeItemConceptRow is one row pendingNormalizedConceptBackfills reads.
-type knowledgeItemConceptRow struct{ id, concept string }
-
-// backfillKnowledgeItemsNormalizedConcept computes normalized_concept in Go
-// for every row where it is still NULL, since the normalization rule cannot
-// be expressed as a single SQL statement. The SELECT runs, and its Rows are
-// fully closed, inside pendingNormalizedConceptBackfills before any UPDATE
-// below runs — db.SetMaxOpenConns(1) means an UPDATE issued while those Rows
-// were still open here would block forever waiting for the very connection
-// they're holding.
-func backfillKnowledgeItemsNormalizedConcept(db *sql.DB) error {
-	pending, err := pendingNormalizedConceptBackfills(db)
-	if err != nil {
-		return err
-	}
-	for _, item := range pending {
-		normalized := domainknowledge.NormalizeConcept(item.concept)
-		if _, err := db.Exec(
-			`UPDATE knowledge_items SET normalized_concept = ? WHERE id = ?`, normalized, item.id,
-		); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func pendingNormalizedConceptBackfills(db *sql.DB) ([]knowledgeItemConceptRow, error) {
-	rows, err := db.Query(`SELECT id, concept FROM knowledge_items WHERE normalized_concept IS NULL`)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-
-	var pending []knowledgeItemConceptRow
-	for rows.Next() {
-		var item knowledgeItemConceptRow
-		if scanErr := rows.Scan(&item.id, &item.concept); scanErr != nil {
-			return nil, scanErr
-		}
-		pending = append(pending, item)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return pending, nil
-}
-
-// addKnowledgeChunksSourcePathColumn adds knowledge_chunks.source_path when
-// an older schema (predating this column) is detected. This pre-release
-// schema correction assumes no deployed or local knowledge records must
-// survive it: it verifies the table holds no rows and fails rather than
-// silently proceeding if that premise is violated, instead of attempting a
-// heuristic backfill.
-func addKnowledgeChunksSourcePathColumn(db *sql.DB) error {
-	hasSourcePath, err := hasColumn(db, "knowledge_chunks", "source_path")
-	if err != nil {
-		return err
-	}
-	if hasSourcePath {
-		return nil
-	}
-
-	empty, err := tableIsEmpty(db, "knowledge_chunks")
-	if err != nil {
-		return err
-	}
-	if !empty {
-		return fmt.Errorf("sqlite: knowledge_chunks predates source_path and is not empty; refusing to alter it")
-	}
-
-	_, err = db.Exec(`ALTER TABLE knowledge_chunks ADD COLUMN source_path TEXT`)
-	return err
-}
-
-// migrateIngestedFilesToSourcePathSchema rebuilds the pre-release
-// ingested_files table (file_path PRIMARY KEY, mtime) into its
-// source_path-keyed, nanosecond-precision replacement when an older schema
-// is detected. There are no deployed or local knowledge records that must
-// survive this change, but as a safety net it still verifies the table
-// holds no rows and fails rather than dropping data if that premise is
-// violated. Idempotent on the next Open, since a rebuilt table already has
-// a source_path column.
-func migrateIngestedFilesToSourcePathSchema(db *sql.DB) error {
-	hasSourcePath, err := hasColumn(db, "ingested_files", "source_path")
-	if err != nil {
-		return err
-	}
-	if hasSourcePath {
-		return nil
-	}
-
-	empty, err := tableIsEmpty(db, "ingested_files")
-	if err != nil {
-		return err
-	}
-	if !empty {
-		return fmt.Errorf("sqlite: ingested_files predates source_path and is not empty; refusing to drop it")
-	}
-
-	_, err = db.Exec(`DROP TABLE ingested_files`)
-	if err != nil {
-		return err
-	}
-	_, err = db.Exec(`CREATE TABLE ingested_files (
-		source_path     TEXT PRIMARY KEY,
-		file_path       TEXT NOT NULL,
-		mtime_unix_nano INTEGER NOT NULL,
-		embedding_model TEXT NOT NULL,
-		chunk_count     INTEGER NOT NULL,
-		item_id         TEXT NOT NULL,
-		ingested_at     DATETIME
-	)`)
-	return err
-}
-
 // migrateSessionForeignKeyActions upgrades the two pre-enforcement session
 // relationships to their ownership semantics: messages are owned by their
 // session, while usage remains as an unattributed financial record after a
@@ -698,35 +456,105 @@ func execSQL(stmt string) func(*sql.DB) error {
 	}
 }
 
-// migrateKnowledgeToSessionOwnership rebuilds every table that stores
-// knowledge so each row is owned by a study session
-// (session_id NOT NULL REFERENCES sessions(id) ON DELETE CASCADE): deleting a
-// session, or the folder that holds it, deletes its knowledge with it. It
-// runs only while knowledge_items still lacks session_id.
+// documentsOnlyKnowledgeSchema is the final shape of the knowledge tables:
+// a session owns its imported documents (knowledge_items is the record that
+// owns each document's chunks), their chunks and their dedup state.
+var documentsOnlyKnowledgeSchema = []string{
+	`CREATE TABLE knowledge_items (
+		id               TEXT PRIMARY KEY,
+		session_id       TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+		topic            TEXT,
+		concept          TEXT,
+		definition       TEXT,
+		properties       TEXT, -- JSON array
+		trade_offs       TEXT, -- JSON array
+		related_concepts TEXT, -- JSON array
+		source           TEXT,
+		created_at       DATETIME,
+		updated_at       DATETIME
+	)`,
+	`CREATE INDEX idx_knowledge_items_session_id ON knowledge_items(session_id)`,
+	`CREATE TABLE knowledge_chunks (
+		id              TEXT PRIMARY KEY,
+		session_id      TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+		source          TEXT,
+		topic           TEXT,
+		item_id         TEXT,
+		source_path     TEXT, -- canonical absolute identity of the imported document
+		file_path       TEXT, -- stable first-import relative/display path
+		heading         TEXT,
+		content         TEXT,
+		embedding       BLOB, -- tightly-packed little-endian float32
+		embedding_model TEXT NOT NULL,
+		created_at      DATETIME
+	)`,
+	`CREATE INDEX idx_knowledge_chunks_session_id ON knowledge_chunks(session_id)`,
+	`CREATE INDEX idx_knowledge_chunks_file_path ON knowledge_chunks(file_path)`,
+	`CREATE INDEX idx_knowledge_chunks_item_id ON knowledge_chunks(item_id)`,
+	`CREATE INDEX idx_knowledge_chunks_source_path ON knowledge_chunks(session_id, source_path)`,
+	`CREATE TABLE ingested_files (
+		session_id      TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+		source_path     TEXT NOT NULL,
+		file_path       TEXT NOT NULL,
+		mtime_unix_nano INTEGER NOT NULL,
+		embedding_model TEXT NOT NULL,
+		chunk_count     INTEGER NOT NULL,
+		item_id         TEXT NOT NULL,
+		ingested_at     DATETIME,
+		PRIMARY KEY (session_id, source_path)
+	)`,
+}
+
+// knowledgeTablesToRebuild lists every table migrateKnowledgeToDocumentsOnly
+// drops before it creates the final schema, children before the tables they
+// reference. The first five only conversation extraction used.
+var knowledgeTablesToRebuild = []string{
+	"knowledge_reconciliation_evidence",
+	"knowledge_reconciliation_proposals",
+	"knowledge_item_relations",
+	"knowledge_item_evidence",
+	"knowledge_evidence",
+	"knowledge_chunks",
+	"knowledge_items",
+	"ingested_files",
+}
+
+// migrateKnowledgeToDocumentsOnly leaves the knowledge tables in their final,
+// documents-only shape: no status, no normalized concept, no item-staleness
+// column, and none of the tables conversation extraction used (evidence,
+// relations, reconciliation proposals). It runs only while knowledge_items is
+// not already in that shape — a fresh database, or one from before this
+// change — so the knowledge tables are never rebuilt twice.
 //
-// Rows are discarded on purpose. Knowledge written before this change has no
-// owner and the product is not deployed anywhere it must survive, so there is
-// no legacy path — see
-// specs/phases/phase-02-knowledge-engine/15-session-scoped-knowledge.md.
-// knowledge_evidence has no owner column of its own; it is emptied too, since
-// every snapshot it holds was only referenced by rows dropped here.
+// Rows are discarded on purpose: nothing is deployed anywhere it must
+// survive and the only database in use held no imported documents, so there
+// is no copy path (see decision 6 of
+// specs/phases/phase-02-knowledge-engine/16-remove-conversation-extraction.md,
+// which follows the same call spec 15 made). Sessions, messages and
+// message_sources are untouched; a message_sources row that names a dropped
+// item keeps rendering from its own stored columns.
 //
-// DROP TABLE performs an implicit DELETE with foreign keys enforced, so the
-// cascades already declared on knowledge_item_evidence,
-// knowledge_item_relations and knowledge_reconciliation_evidence clear those
-// child tables; they are not recreated.
-func migrateKnowledgeToSessionOwnership(db *sql.DB) error {
+// The knowledge tables' CREATE statements live only here — earlier steps must
+// never create them, or every Open would bring the dropped tables back before
+// this step could run again. It sits after every sessions rebuild
+// (addSessionsFolderIDCascade) because dropping and recreating sessions
+// cascades into whatever references it.
+func migrateKnowledgeToDocumentsOnly(db *sql.DB) error {
 	owned, err := hasColumn(db, "knowledge_items", "session_id")
 	if err != nil {
 		return err
 	}
-	if owned {
+	hasStatus, err := hasColumn(db, "knowledge_items", "status")
+	if err != nil {
+		return err
+	}
+	if owned && !hasStatus {
 		return nil
 	}
 
 	tx, err := db.Begin()
 	if err != nil {
-		return fmt.Errorf("sqlite: beginning knowledge session ownership migration: %w", err)
+		return fmt.Errorf("sqlite: beginning documents-only knowledge migration: %w", err)
 	}
 	committed := false
 	defer func() {
@@ -735,85 +563,18 @@ func migrateKnowledgeToSessionOwnership(db *sql.DB) error {
 		}
 	}()
 
-	statements := []string{
-		`DROP TABLE knowledge_reconciliation_proposals`,
-		`DROP TABLE knowledge_items`,
-		`DROP TABLE knowledge_chunks`,
-		`DROP TABLE ingested_files`,
-		`DELETE FROM knowledge_evidence`,
-		`CREATE TABLE knowledge_items (
-			id                 TEXT PRIMARY KEY,
-			session_id         TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-			topic              TEXT,
-			concept            TEXT,
-			definition         TEXT,
-			properties         TEXT, -- JSON array
-			trade_offs         TEXT, -- JSON array
-			related_concepts   TEXT, -- JSON array
-			source             TEXT,
-			status             TEXT DEFAULT 'draft',
-			created_at         DATETIME,
-			updated_at         DATETIME,
-			normalized_concept TEXT
-		)`,
-		`CREATE INDEX idx_knowledge_items_session_id ON knowledge_items(session_id)`,
-		`CREATE INDEX idx_knowledge_items_status_created_at ON knowledge_items(status, created_at)`,
-		`CREATE INDEX idx_knowledge_items_topic ON knowledge_items(topic)`,
-		`CREATE INDEX idx_knowledge_items_topic_normalized_concept ON knowledge_items(topic, normalized_concept)`,
-		`CREATE TABLE knowledge_chunks (
-			id              TEXT PRIMARY KEY,
-			session_id      TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-			source          TEXT,
-			topic           TEXT,
-			status          TEXT,
-			item_id         TEXT,
-			source_path     TEXT, -- canonical absolute identity; set for imported_doc
-			file_path       TEXT, -- stable first-import relative/display path
-			heading         TEXT,
-			content         TEXT,
-			embedding       BLOB, -- tightly-packed little-endian float32
-			embedding_model TEXT NOT NULL,
-			item_updated_at DATETIME, -- NULL for imported_doc
-			created_at      DATETIME
-		)`,
-		`CREATE INDEX idx_knowledge_chunks_session_id ON knowledge_chunks(session_id)`,
-		`CREATE INDEX idx_knowledge_chunks_file_path ON knowledge_chunks(file_path)`,
-		`CREATE INDEX idx_knowledge_chunks_item_id ON knowledge_chunks(item_id)`,
-		`CREATE INDEX idx_knowledge_chunks_source_path ON knowledge_chunks(session_id, source_path)`,
-		`CREATE TABLE ingested_files (
-			session_id      TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-			source_path     TEXT NOT NULL,
-			file_path       TEXT NOT NULL,
-			mtime_unix_nano INTEGER NOT NULL,
-			embedding_model TEXT NOT NULL,
-			chunk_count     INTEGER NOT NULL,
-			item_id         TEXT NOT NULL,
-			ingested_at     DATETIME,
-			PRIMARY KEY (session_id, source_path)
-		)`,
-		`CREATE TABLE knowledge_reconciliation_proposals (
-			id                 TEXT PRIMARY KEY,
-			session_id         TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-			action             TEXT NOT NULL,
-			status             TEXT NOT NULL,
-			candidate_snapshot TEXT NOT NULL, -- validated JSON Item snapshot
-			target_item_id     TEXT,
-			target_updated_at  DATETIME,
-			reason             TEXT NOT NULL,
-			changes            TEXT NOT NULL, -- validated JSON ItemChanges
-			created_at         DATETIME NOT NULL,
-			resolved_at        DATETIME
-		)`,
-		`CREATE INDEX idx_knowledge_reconciliation_proposals_session_id
-			ON knowledge_reconciliation_proposals(session_id)`,
+	statements := make([]string, 0, len(knowledgeTablesToRebuild)+len(documentsOnlyKnowledgeSchema))
+	for _, table := range knowledgeTablesToRebuild {
+		statements = append(statements, `DROP TABLE IF EXISTS `+table)
 	}
+	statements = append(statements, documentsOnlyKnowledgeSchema...)
 	for _, statement := range statements {
 		if _, err := tx.Exec(statement); err != nil {
-			return fmt.Errorf("sqlite: migrating knowledge to session ownership: %w", err)
+			return fmt.Errorf("sqlite: migrating knowledge to documents only: %w", err)
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("sqlite: committing knowledge session ownership migration: %w", err)
+		return fmt.Errorf("sqlite: committing documents-only knowledge migration: %w", err)
 	}
 	committed = true
 	return nil

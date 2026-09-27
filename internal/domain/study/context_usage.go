@@ -11,14 +11,13 @@ import "unicode/utf8"
 // NextContextUsage, which handles that case by preserving the previous
 // state instead.
 func ComputeContextState(usedTokens, contextLength int) ContextState {
-	switch {
-	case usedTokens*100 >= contextLength*95:
+	if usedTokens*100 >= contextLength*95 {
 		return ContextStateBlocked
-	case usedTokens*100 >= contextLength*80:
-		return ContextStateWarning
-	default:
-		return ContextStateNormal
 	}
+	if usedTokens*100 >= contextLength*80 {
+		return ContextStateWarning
+	}
+	return ContextStateNormal
 }
 
 // higherState returns whichever of a, b is closer to ContextStateBlocked.

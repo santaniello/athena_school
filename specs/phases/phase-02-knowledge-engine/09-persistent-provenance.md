@@ -1,5 +1,7 @@
 # Phase 2.9 — Persistent Provenance
 
+> **Superseded by [2.16](16-remove-conversation-extraction.md).** Item evidence was removed together with extraction. Increment 2 (`message_sources`, the persisted sources of each assistant answer) is unaffected and stays in place. This document stays as the record of what was built and why.
+
 ## Goal
 
 Every Knowledge Item created by an evidence-bearing extraction flow records the

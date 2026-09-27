@@ -1,5 +1,7 @@
 # Phase 2.12 — Knowledge Revision History
 
+> **Superseded by [2.16](16-remove-conversation-extraction.md).** Items are no longer edited, so there is no revision history to keep. This document stays as the record of what was built and why.
+
 ## Goal
 
 Preserve an immutable, evidence-backed history of every Knowledge Item mutation so the user can see what changed, why, and what supported the change.

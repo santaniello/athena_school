@@ -1,5 +1,7 @@
 # Phase 2.10 — Knowledge Duplicate Detection
 
+> **Superseded by [2.16](16-remove-conversation-extraction.md).** Duplicate detection only compared extracted candidates; it was removed together with extraction. This document stays as the record of what was built and why.
+
 ## Goal
 
 Detect when extracted knowledge is already represented before the user creates another Knowledge Item.

@@ -6,7 +6,6 @@ import { NAVIGATION, type AppSection } from './navigation'
 const EXPECTED_IDS: AppSection[] = [
   'home',
   'study',
-  'knowledge',
   'challenge',
   'progress',
   'flashcards',
@@ -20,9 +19,13 @@ describe('NAVIGATION', () => {
     expect(NAVIGATION.map((item) => item.id)).toEqual(EXPECTED_IDS)
   })
 
-  it('unlocks home, study, knowledge, documentation and settings', () => {
+  it('unlocks home, study, documentation and settings', () => {
     const unlocked = NAVIGATION.filter((item) => item.status === 'unlocked').map((item) => item.id)
-    expect(unlocked).toEqual(['home', 'study', 'knowledge', 'documentation', 'settings'])
+    expect(unlocked).toEqual(['home', 'study', 'documentation', 'settings'])
+  })
+
+  it('has no Knowledge section, since knowledge comes only from documents imported into a study session', () => {
+    expect(NAVIGATION.map((item) => item.id)).not.toContain('knowledge')
   })
 
   it('pins documentation and settings to the sidebar footer group', () => {

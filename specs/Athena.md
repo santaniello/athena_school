@@ -290,6 +290,8 @@ Possibilidade futura de importar:
 
 # 10. Knowledge Item
 
+> **Atualização — Fase 2.16:** a extração de conhecimento a partir da conversa foi removida, junto com o ciclo `draft → approved → deprecated`, a proveniência persistente, a detecção de duplicidade, a reconciliação e o histórico de revisões (seções 10 a 11.3). Conhecimento agora vem somente de documentos importados numa sessão de estudo, e o `Item` permanece apenas como o registro que possui os chunks de um documento. Estas seções ficam como registro do desenho anterior. Ver `specs/phases/phase-02-knowledge-engine/16-remove-conversation-extraction.md`.
+
 O Athena deve trabalhar com unidades de conhecimento, e não apenas perguntas e respostas.
 
 Exemplo:
@@ -1255,6 +1257,8 @@ Queues            █████████░ 90%
 
 # 46. Knowledge Explorer
 
+> **Atualização — Fase 2.16:** o Knowledge Explorer, a fila de revisão e a edição/exclusão de itens foram removidos. O painel de Sources da sessão (spec 2.17) passa a listar, adicionar e remover documentos.
+
 Interface para navegar pela base:
 
 ```text
@@ -1282,8 +1286,8 @@ Knowledge
 
 Funcionalidade futura.
 
-As relações começam na reconciliação da Fase 2 e usam IDs de Knowledge Items. O
-grafo futuro reutiliza essas relações e acrescenta semânticas direcionais; nomes de
+As relações da reconciliação da Fase 2 foram removidas na 2.16 (`knowledge_item_relations`); o
+grafo futuro precisará de uma base nova, e não reutiliza essas relações e acrescenta semânticas direcionais; nomes de
 conceitos não são chaves de integridade.
 
 Relacionamentos:
@@ -2271,7 +2275,7 @@ Cada plano está disponível nas modalidades **mensal** e **anual**.
 │  ✅ Gap Detection                                           │
 │  ✅ Progress Tracking completo                              │
 │  ✅ Acesso a modelos premium                                │
-│  ✅ Knowledge Lifecycle (draft / approved / deprecated)     │
+│  ✅ Knowledge Base por sessão (documentos importados)       │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
@@ -2496,6 +2500,8 @@ Funcionalidades além do plano contratado ficam bloqueadas na UI, com indicaçã
 ---
 
 # 69. Flashcards
+
+> **Revisar antes de implementar (Fase 2.16):** esta seção assume Knowledge Items extraídos e aprovados, que deixaram de existir. Os flashcards precisarão ser gerados a partir de documentos/chunks.
 
 ---
 

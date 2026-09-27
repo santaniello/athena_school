@@ -1,5 +1,7 @@
 # Phase 2.11 — Knowledge Reconciliation
 
+> **Superseded by [2.16](16-remove-conversation-extraction.md).** Reconciliation only compared extracted candidates; it was removed together with extraction. This document stays as the record of what was built and why.
+
 ## Goal
 
 Compare newly extracted knowledge with existing matches and let the user decide whether it creates, updates, relates, conflicts with, or adds nothing to the Knowledge Base.

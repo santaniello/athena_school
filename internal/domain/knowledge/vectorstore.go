@@ -7,9 +7,9 @@ import (
 	"strings"
 )
 
-// SearchFilters narrows a vector Search. An empty field means no constraint
-// on it — exact Go string equality, never case-folded or trimmed.
-type SearchFilters struct{ Topic, Source, Status, SessionID string }
+// SearchFilters narrows a vector Search. An empty SessionID means no
+// constraint — exact Go string equality, never case-folded or trimmed.
+type SearchFilters struct{ SessionID string }
 
 // ScoredChunk pairs a Chunk with its cosine similarity to a Search query.
 type ScoredChunk struct {
@@ -55,22 +55,14 @@ var (
 )
 
 // ValidateChunk reports whether chunk is valid for indexing: a non-blank ID
-// (never trimmed or rewritten), a known Source, a known Status, and a valid
-// embedding (see ValidateVector). Structural errors take precedence over the
+// (never trimmed or rewritten), a known Source, and a valid embedding (see ValidateVector). Structural errors take precedence over the
 // vector error, matching VectorStore's documented error precedence.
 func ValidateChunk(chunk Chunk) error {
 	if strings.TrimSpace(chunk.ID) == "" {
 		return ErrInvalidChunkID
 	}
-	switch chunk.Source {
-	case SourceAthena, SourceUserNote, SourceImportedDoc:
-	default:
+	if chunk.Source != SourceImportedDoc {
 		return ErrUnknownSource
-	}
-	switch chunk.Status {
-	case StatusDraft, StatusApproved, StatusDeprecated:
-	default:
-		return ErrUnknownStatus
 	}
 	return ValidateVector(chunk.Embedding)
 }
@@ -104,7 +96,6 @@ func ValidateVector(vec []float32) error {
 type ChunkLoadIssue struct {
 	ChunkID  string
 	ItemID   string
-	Source   string
 	FilePath string
 	Reason   string
 }
@@ -114,14 +105,9 @@ type ChunkLoadIssue struct {
 // work, excluded silently rather than reported.
 const (
 	ChunkIssueMissingItem        = "missing_item"
-	ChunkIssueSourceMismatch     = "source_mismatch"
-	ChunkIssueTopicMismatch      = "topic_mismatch"
-	ChunkIssueStatusMismatch     = "status_mismatch"
-	ChunkIssueStaleItem          = "stale_item"
 	ChunkIssueMalformedEmbedding = "malformed_embedding"
 	ChunkIssueInvalidChunkID     = "invalid_chunk_id"
 	ChunkIssueUnknownSource      = "unknown_source"
-	ChunkIssueUnknownStatus      = "unknown_status"
 	ChunkIssueInvalidVector      = "invalid_vector"
 )
 
@@ -147,8 +133,6 @@ func ReasonForValidationError(err error) string {
 		return ChunkIssueInvalidChunkID
 	case errors.Is(err, ErrUnknownSource):
 		return ChunkIssueUnknownSource
-	case errors.Is(err, ErrUnknownStatus):
-		return ChunkIssueUnknownStatus
 	default:
 		return ChunkIssueInvalidVector
 	}

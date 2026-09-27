@@ -17,7 +17,7 @@ Separately, `ci.yml`'s coverage step and `.gremlins.yaml`'s mutation scope were 
 
 ## Decision
 
-**Backend (Go):** [Mockery](https://vektra.github.io/mockery/) (`go run github.com/vektra/mockery/v2@v2.53.3`, pinned like Gremlins in `mutation-go`), generating `testify/mock`-based mocks (already a dependency) for interfaces in `internal/domain` and `internal/application`. Mocks are generated into a `mocks` subpackage next to each source package (not in-package), with `with-expecter: true` so call expectations are typed — consistent with `AGENTS.md`'s rule against `mock.Anything`/`mock.AnythingOfType`.
+**Backend (Go):** [Mockery](https://vektra.github.io/mockery/) (`go run github.com/vektra/mockery/v2@v2.53.6`, pinned like Gremlins in `mutation-go`), generating `testify/mock`-based mocks (already a dependency) for interfaces in `internal/domain` and `internal/application`. Mocks are generated into a `mocks` subpackage next to each source package (not in-package), with `with-expecter: true` so call expectations are typed — consistent with `AGENTS.md`'s rule against `mock.Anything`/`mock.AnythingOfType`.
 
 **Frontend (React/TS):** Vitest's native `vi.fn()` / `vi.mock()`, with no added library. If the app ever gains real outbound HTTP calls (e.g. a future cloud-sync feature), that is the trigger to reconsider MSW — not before.
 

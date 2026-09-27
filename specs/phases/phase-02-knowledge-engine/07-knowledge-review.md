@@ -1,5 +1,7 @@
 # Phase 2.7 — Knowledge Review
 
+> **Superseded by [2.16](16-remove-conversation-extraction.md).** The draft → approved → deprecated lifecycle and its review queue were removed together with extraction. This document stays as the record of what was built and why.
+
 ## Goal
 
 Drafts accumulated from extractions surface in the existing Explorer/Review tab so the

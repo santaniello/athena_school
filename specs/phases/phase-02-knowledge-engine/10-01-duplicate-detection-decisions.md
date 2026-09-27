@@ -1,5 +1,7 @@
 # Phase 2.10.1 — Duplicate Detection: Implementation Decisions
 
+> **Superseded by [2.16](16-remove-conversation-extraction.md).** Duplicate detection was removed together with extraction. This document stays as the record of what was built and why.
+
 ## Goal
 
 `10-duplicate-detection.md` specifies the match types, thresholds, and save

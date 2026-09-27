@@ -18,7 +18,7 @@ const testEmbeddingModel = "openai/text-embedding-3-small"
 func testLoadChunk(id string) domainknowledge.Chunk {
 	return domainknowledge.Chunk{
 		ID: id, Source: domainknowledge.SourceImportedDoc, Topic: "Go",
-		Status: domainknowledge.StatusApproved, ItemID: "item-" + id,
+		ItemID:    "item-" + id,
 		Embedding: []float32{1, 0},
 	}
 }

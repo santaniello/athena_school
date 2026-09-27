@@ -1,5 +1,7 @@
 # Phase 2.2 — Knowledge Extraction
 
+> **Superseded by [2.16](16-remove-conversation-extraction.md).** Conversation extraction was removed; knowledge now comes only from imported documents. This document stays as the record of what was built and why.
+
 ## Goal
 
 On demand, the LLM extracts concepts from a study session's transcript and proposes them as Knowledge Items. Nothing is persisted until the user confirms.

@@ -1,21 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HasOpenRouterKey, ResetLocalData, UpdateProfile } from '../../wailsjs/go/desktop/App'
 import SettingsScreen from './SettingsScreen'
 import type { ProfileDraft } from '@/lib/profile'
-import { getKnowledgeExtractionSettings, updateKnowledgeExtractionSettings } from '@/lib/knowledge'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
   UpdateProfile: vi.fn(),
   SaveOpenRouterKey: vi.fn(),
   HasOpenRouterKey: vi.fn(),
   ResetLocalData: vi.fn(),
-}))
-
-vi.mock('@/lib/knowledge', () => ({
-  getKnowledgeExtractionSettings: vi.fn(),
-  updateKnowledgeExtractionSettings: vi.fn(),
 }))
 
 function currentProfile(): ProfileDraft {
@@ -32,9 +26,6 @@ function currentProfile(): ProfileDraft {
 describe('SettingsScreen', () => {
   beforeEach(() => {
     vi.mocked(HasOpenRouterKey).mockResolvedValue(false)
-    vi.mocked(getKnowledgeExtractionSettings).mockResolvedValue({
-      maxKnowledgeExtractionItems: 8,
-    })
   })
 
   it('shows that a key is already configured, without ever showing it', async () => {
@@ -118,183 +109,13 @@ describe('SettingsScreen', () => {
     expect(screen.getByLabelText('OpenRouter key')).toBeInTheDocument()
   })
 
-  it('loads and displays the configured knowledge extraction maximum', async () => {
-    // Given a configured maximum
-    vi.mocked(getKnowledgeExtractionSettings).mockResolvedValueOnce({
-      maxKnowledgeExtractionItems: 12,
-    })
-
-    // When opening Settings
+  it('offers no knowledge extraction setting, since extraction no longer exists', () => {
+    // Given the settings screen
     render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
 
-    // Then the Knowledge Extraction section displays it
-    expect(await screen.findByLabelText('Maximum items per extraction')).toHaveValue(12)
-  })
-
-  it('shows an inline error when loading knowledge extraction settings fails', async () => {
-    // Given the settings binding is unavailable
-    vi.mocked(getKnowledgeExtractionSettings).mockRejectedValueOnce(new Error('unavailable'))
-
-    // When opening Settings
-    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
-
-    // Then the load failure is reported without crashing the profile form
-    expect(await screen.findByText('Failed to load the setting.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
-  })
-
-  it('shows the binding validation error for a maximum above the limit', async () => {
-    // Given the binding rejects an out-of-range maximum
-    vi.mocked(updateKnowledgeExtractionSettings).mockRejectedValueOnce(
-      new Error('maximum knowledge extraction items must be an integer between 1 and 20'),
-    )
-    const user = userEvent.setup()
-    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
-    const input = await screen.findByLabelText('Maximum items per extraction')
-
-    // When entering an out-of-range value and saving
-    await user.clear(input)
-    await user.type(input, '21')
-    await user.click(screen.getByRole('button', { name: 'Save extraction setting' }))
-
-    // Then the backend receives the value and its validation error is translated
-    expect(await screen.findByText('Enter an integer between 1 and 20.')).toBeInTheDocument()
-    expect(updateKnowledgeExtractionSettings).toHaveBeenCalledWith(21)
-  })
-
-  it('rejects a knowledge extraction maximum below the minimum', async () => {
-    // Given the binding rejects a value below the allowed range
-    vi.mocked(updateKnowledgeExtractionSettings).mockRejectedValueOnce(
-      new Error('maximum knowledge extraction items must be an integer between 1 and 20'),
-    )
-    const user = userEvent.setup()
-    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
-    const input = await screen.findByLabelText('Maximum items per extraction')
-
-    // When entering a value below the allowed range and saving
-    await user.clear(input)
-    await user.type(input, '0')
-    await user.click(screen.getByRole('button', { name: 'Save extraction setting' }))
-
-    // Then the backend receives the value and its validation error is translated
-    expect(await screen.findByText('Enter an integer between 1 and 20.')).toBeInTheDocument()
-    expect(updateKnowledgeExtractionSettings).toHaveBeenCalledWith(0)
-  })
-
-  it('shows the binding validation error for a fractional maximum', async () => {
-    // Given the binding rejects a fractional maximum
-    vi.mocked(updateKnowledgeExtractionSettings).mockRejectedValueOnce(
-      new Error('maximum knowledge extraction items must be an integer between 1 and 20'),
-    )
-    const user = userEvent.setup()
-    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
-    const input = await screen.findByLabelText('Maximum items per extraction')
-
-    // When entering a fractional value and saving
-    fireEvent.change(input, { target: { value: '1.5' } })
-    await user.click(screen.getByRole('button', { name: 'Save extraction setting' }))
-
-    // Then the backend receives the fraction and its validation error is translated
-    expect(await screen.findByText('Enter an integer between 1 and 20.')).toBeInTheDocument()
-    expect(updateKnowledgeExtractionSettings).toHaveBeenCalledWith(1.5)
-  })
-
-  it('saves a valid knowledge extraction maximum', async () => {
-    // Given the knowledge extraction settings form
-    vi.mocked(updateKnowledgeExtractionSettings).mockResolvedValueOnce()
-    const user = userEvent.setup()
-    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
-    const input = await screen.findByLabelText('Maximum items per extraction')
-
-    // When entering a valid value and saving
-    await user.clear(input)
-    await user.type(input, '12')
-    await user.click(screen.getByRole('button', { name: 'Save extraction setting' }))
-
-    // Then the backend receives it and success is shown
-    await waitFor(() => expect(updateKnowledgeExtractionSettings).toHaveBeenCalledWith(12))
-    expect(await screen.findByText('Setting saved.')).toBeInTheDocument()
-  })
-
-  it.each([1, 20])('accepts the boundary knowledge extraction maximum %i', async (maximum) => {
-    // Given the knowledge extraction settings form
-    vi.mocked(updateKnowledgeExtractionSettings).mockResolvedValueOnce()
-    const user = userEvent.setup()
-    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
-    const input = await screen.findByLabelText('Maximum items per extraction')
-
-    // When saving an inclusive boundary value
-    await user.clear(input)
-    await user.type(input, String(maximum))
-    await user.click(screen.getByRole('button', { name: 'Save extraction setting' }))
-
-    // Then the boundary is persisted
-    await waitFor(() => expect(updateKnowledgeExtractionSettings).toHaveBeenCalledWith(maximum))
-  })
-
-  it('locks the knowledge extraction form and reports progress while saving', async () => {
-    // Given a settings update that remains in flight
-    vi.mocked(updateKnowledgeExtractionSettings).mockReturnValueOnce(new Promise(() => {}))
-    const user = userEvent.setup()
-    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
-    const input = await screen.findByLabelText('Maximum items per extraction')
-    await user.clear(input)
-    await user.type(input, '12')
-
-    // When saving the extraction setting
-    await user.click(screen.getByRole('button', { name: 'Save extraction setting' }))
-
-    // Then the button exposes and locks its pending state
-    expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled()
-  })
-
-  it('shows an inline error when saving knowledge extraction settings fails', async () => {
-    // Given a rejected settings update
-    vi.mocked(updateKnowledgeExtractionSettings).mockRejectedValueOnce(new Error('unavailable'))
-    const user = userEvent.setup()
-    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
-    const input = await screen.findByLabelText('Maximum items per extraction')
-    await user.clear(input)
-    await user.type(input, '12')
-
-    // When saving the extraction setting
-    await user.click(screen.getByRole('button', { name: 'Save extraction setting' }))
-
-    // Then the save failure is reported and the action is available again
-    expect(await screen.findByText('Failed to save the setting.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Save extraction setting' })).toBeEnabled()
-  })
-
-  it('clears stale validation and success messages before a new valid save', async () => {
-    // Given a previous validation failure returned by the binding
-    let resolveSave!: () => void
-    vi.mocked(updateKnowledgeExtractionSettings)
-      .mockRejectedValueOnce(
-        new Error('maximum knowledge extraction items must be an integer between 1 and 20'),
-      )
-      .mockReturnValueOnce(
-        new Promise<void>((resolve) => {
-          resolveSave = resolve
-        }),
-      )
-    const user = userEvent.setup()
-    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
-    const input = await screen.findByLabelText('Maximum items per extraction')
-    await user.clear(input)
-    await user.type(input, '21')
-    await user.click(screen.getByRole('button', { name: 'Save extraction setting' }))
-    expect(await screen.findByText('Enter an integer between 1 and 20.')).toBeInTheDocument()
-
-    // When starting a valid save
-    await user.clear(input)
-    await user.type(input, '12')
-    await user.click(screen.getByRole('button', { name: 'Save extraction setting' }))
-
-    // Then stale feedback is cleared before the request resolves
-    expect(screen.queryByText('Enter an integer between 1 and 20.')).not.toBeInTheDocument()
-    expect(screen.queryByText('Setting saved.')).not.toBeInTheDocument()
-    resolveSave()
-    expect(await screen.findByText('Setting saved.')).toBeInTheDocument()
+    // Then there is no extraction section or control
+    expect(screen.queryByText('Knowledge extraction')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Maximum items per extraction')).not.toBeInTheDocument()
   })
 
   it('opens the reset confirmation dialog from the Danger zone button', async () => {

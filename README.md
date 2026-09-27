@@ -28,7 +28,7 @@ Payments         Paddle
 |---|---|
 | 0 | Repo setup, Wails scaffold, pre-commit quality gates, GitHub Actions CI/CD |
 | 1 | Conversational onboarding, personalized study sessions, streaming LLM responses |
-| 2 | On-demand knowledge extraction with draft review (session transcript sent to OpenRouter only when requested), personal knowledge base owned per study session (deleting a session or folder deletes its knowledge), Markdown/plain-text single-file notes import scoped to a session (backend only for now: the import UI arrives with the Sources panel), RAG retrieval scoped to the current session |
+| 2 | Personal knowledge base built only from documents you import, owned per study session (deleting a session or folder deletes its knowledge), Markdown/plain-text single-file notes import scoped to a session (backend only for now: the import UI arrives with the Sources panel), RAG retrieval scoped to the current session |
 | 3 | Challenge mode, gap detection, spaced repetition flashcards (SM-2) |
 | 4 | Interview simulation with timer, per-answer evaluation, domain-aware feedback |
 | 5 | Plan management, Paddle payments, macOS + Linux + Windows distribution |
@@ -215,19 +215,19 @@ All user data is stored on-device at rest:
 
 ```text
 ~/.athena/
-├── config.yaml        # OpenRouter key and knowledge-extraction limit
+├── config.yaml        # OpenRouter key
 ├── profile.json       # User profile (name, area, level, goals)
 ├── athena.db          # SQLite (sessions, knowledge, flashcards, progress, embeddings)
 └── logs/              # Structured execution logs
 ```
 
-The auth server only manages accounts and licenses. Your notes and knowledge base never leave your machine. When you explicitly click **Extract knowledge**, Athena sends the relevant session transcript to OpenRouter so its configured language model can propose draft knowledge items. Nothing is sent for extraction automatically, and candidates are stored locally only after you choose which drafts to save.
+The auth server only manages accounts and licenses. Your notes and knowledge base never leave your machine. Text leaves the machine only to reach OpenRouter for a reply or an embedding: your study conversation, and the passages of a document while it is being embedded. Knowledge is never generated from a conversation — the only knowledge is the documents you import into a study session.
 
-Embeddings live only in `athena.db` (`knowledge_chunks.embedding`, a packed float32 BLOB) — there is no separate `~/.athena/vectors/` directory. On launch, Athena loads the current chunks into an in-process, pure-Go cosine-similarity index (`internal/infrastructure/vectorstore`) in the background, so the window renders immediately behind a "Loading knowledge index..." screen instead of blocking on it; SQLite stays the single source of truth, and the in-memory index is a disposable cache rebuilt from it on every launch (and on demand via **Retry**, from the Knowledge section, if the initial load fails or a chunk gets isolated). See [ADR-004](specs/decisions/ADR-004-local-vector-store.md).
+Embeddings live only in `athena.db` (`knowledge_chunks.embedding`, a packed float32 BLOB) — there is no separate `~/.athena/vectors/` directory. On launch, Athena loads the current chunks into an in-process, pure-Go cosine-similarity index (`internal/infrastructure/vectorstore`) in the background, so the window renders immediately behind a "Loading knowledge index..." screen instead of blocking on it; SQLite stays the single source of truth, and the in-memory index is a disposable cache rebuilt from it on every launch (and on demand via **Retry**, from the warning banner, if the initial load fails or a chunk gets isolated). See [ADR-004](specs/decisions/ADR-004-local-vector-store.md).
 
-Every Knowledge Item — saved as a draft, approved, deprecated, or edited — is automatically embedded into a searchable chunk right after it is persisted. That embedding call can fail independently of the save (no OpenRouter key, offline), so an item can end up saved-but-unsearchable; this never fails the save itself and self-heals through the same mechanism as the vector-store cache above. On mount, the Knowledge Explorer shows an inline "N knowledge items aren't indexed for search yet — Index now" alert whenever that happens, so re-indexing is discoverable and consent-based rather than silently spending API credits in the background. Clicking **Index now** processes the backlog and streams progress the same way notes import does; a run that fails partway simply leaves the count non-zero for the next attempt.
+Every imported document is split into chunks and embedded when it is imported, and the study session that owns it is the only one that searches them. That embedding call can fail independently of the import (no OpenRouter key, offline), so a file can end up imported-but-unsearchable; the import reports it as "imported, but not yet searchable" instead of failing, and the in-memory index picks the chunks up on the next load.
 
-Because a Knowledge Item's chunk is tagged with the embedding model that produced it, **changing the configured embedding model makes every existing item eligible for re-indexing** — even ones whose vector already happens to share the same dimensions — since a stale-model vector isn't comparable to freshly embedded queries. The same "Index now" backfill alert is what surfaces and clears that backlog.
+Because a chunk is tagged with the embedding model that produced it, **changing the configured embedding model leaves every existing chunk out of the index** — a stale-model vector isn't comparable to freshly embedded queries — until its document is imported again.
 
 ---
 

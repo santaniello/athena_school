@@ -183,15 +183,6 @@ func (s *Store) Search(
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if filters.Topic != "" && filters.Topic != c.Topic {
-			continue
-		}
-		if filters.Source != "" && filters.Source != c.Source {
-			continue
-		}
-		if filters.Status != "" && filters.Status != c.Status {
-			continue
-		}
 		if filters.SessionID != "" && filters.SessionID != c.SessionID {
 			continue
 		}

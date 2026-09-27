@@ -31,7 +31,6 @@ func (s *Service) SaveOpenRouterKey(ctx context.Context, key string) error {
 		}
 		cfg = domainconfig.Config{}
 	}
-	cfg = cfg.WithDefaults()
 	cfg.OpenRouterKey = key
 	if err := s.config.Save(cfg); err != nil {
 		return fmt.Errorf("onboarding: saving openrouter key: %w", err)

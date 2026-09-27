@@ -43,8 +43,9 @@ Settings — no `Knowledge`.
    each answer.
 2. **One document per Add.** The picker and `ImportFile` handle a single `.md`/`.txt` file;
    the panel reuses them as they are. Multi-select is out of scope.
-3. **Import progress reuses `IngestProgressDialog`** (kind `file`, now with the session id). No
-   new inline-progress UI in this increment.
+3. **Import progress reuses `IngestProgressDialog`**, which since 2.16 only imports a file (it no
+   longer has a `kind`) and takes the session id and the picked path. No new inline-progress UI
+   in this increment.
 4. **Remove is a hard delete of that document from this session only.** It deletes the
    session's `Item`, its chunks and its `ingested_files` record, and evicts the chunks from the
    in-memory index. It never touches the file on disk and never touches another session's copy
@@ -59,7 +60,8 @@ Settings — no `Knowledge`.
 7. **The Knowledge section and the extraction UI are already gone** (2.16); nothing here
    removes or re-adds any of it.
 8. **Not in this increment:** enabling/disabling a document for the chat, opening a
-   citation in the panel, multi-file import, and a "changed on disk" indicator.
+   citation in the panel (delivered by [2.18](18-notebooklm-style-citations.md), together with
+   the document viewer), multi-file import, and a "changed on disk" indicator.
 
 ## New backend surface
 
@@ -95,8 +97,7 @@ documents and their `ingested_files` records. Bindings stay thin adapters (ADR-0
   document with a `⋮` menu → **Remove**; loading, error-with-retry and empty states (the empty
   state carries its own "Add a source" action and a one-line explanation that the chat searches
   these documents).
-- **Add**: `pickNotesFile()` → open `IngestProgressDialog` (`kind="file"`, `sessionId`,
-  `path`) → on close, `reload()`. A cancelled picker does nothing; a rejected picker shows the
+- **Add**: `pickNotesFile()` → open `IngestProgressDialog` (`sessionId`, `path`) → on close, `reload()`. A cancelled picker does nothing; a rejected picker shows the
   existing inline error copy.
 - **Remove**: `AlertDialog` "Remove *title*?" — "It will no longer be searched in this session.
   The file on your computer is not changed." → `removeSessionSource` → `reload()`; a failure
@@ -147,4 +148,5 @@ Vitest, backend slices with `_test.go`.
 - Anything about conversation extraction, statuses, evidence, reconciliation or duplicates —
   gone since 2.16.
 - Renaming `Item` to `Source`.
-- Per-document enable/disable, citation → panel navigation, multi-file import.
+- Per-document enable/disable, multi-file import. (Citation → panel navigation is spec
+  [2.18](18-notebooklm-style-citations.md).)

@@ -15,7 +15,7 @@ func TestStore_SaveThenLoad_roundTrips(t *testing.T) {
 	// Given a store pointing at a config file and a config to persist
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	store := NewStore(path)
-	original := config.Config{OpenRouterKey: "sk-or-abc123", MaxKnowledgeExtractionItems: 12}
+	original := config.Config{OpenRouterKey: "sk-or-abc123"}
 
 	// When saving it and loading it back
 	require.NoError(t, store.Save(original))
@@ -26,18 +26,18 @@ func TestStore_SaveThenLoad_roundTrips(t *testing.T) {
 	assert.Equal(t, original, loaded)
 }
 
-func TestStore_Load_defaultsExtractionLimitForLegacyConfig(t *testing.T) {
-	// Given a legacy config containing only the OpenRouter key
+func TestStore_Load_ignoresTheRemovedExtractionLimitKey(t *testing.T) {
+	// Given a config file written before the extraction limit was removed
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	require.NoError(t, os.WriteFile(path, []byte("openrouter_key: sk-or-legacy\n"), 0o600))
+	require.NoError(t, os.WriteFile(path, []byte("openrouter_key: sk-or-legacy\nmax_knowledge_extraction_items: 12\n"), 0o600))
 	store := NewStore(path)
 
 	// When loading it
 	loaded, err := store.Load()
 
-	// Then the new extraction setting receives its documented default
+	// Then it still loads and keeps the key it does understand
 	require.NoError(t, err)
-	assert.Equal(t, 8, loaded.MaxKnowledgeExtractionItems)
+	assert.Equal(t, config.Config{OpenRouterKey: "sk-or-legacy"}, loaded)
 }
 
 func TestStore_Save_writesOpenRouterKeyAsYAML(t *testing.T) {
@@ -54,18 +54,22 @@ func TestStore_Save_writesOpenRouterKeyAsYAML(t *testing.T) {
 	assert.Contains(t, string(data), "openrouter_key: sk-or-abc123")
 }
 
-func TestStore_Save_writesMaxKnowledgeExtractionItemsAsYAML(t *testing.T) {
-	// Given a store pointing at a config file
+func TestStore_Save_dropsTheRemovedExtractionLimitKeyFromAnOldFile(t *testing.T) {
+	// Given a config file that still carries the removed extraction limit
 	path := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(path, []byte("openrouter_key: sk-or-old\nmax_knowledge_extraction_items: 12\n"), 0o600))
 	store := NewStore(path)
+	loaded, err := store.Load()
+	require.NoError(t, err)
 
-	// When saving a configured extraction limit
-	require.NoError(t, store.Save(config.Config{MaxKnowledgeExtractionItems: 12}))
+	// When saving the loaded config back
+	require.NoError(t, store.Save(loaded))
 
-	// Then the file uses the documented YAML field
+	// Then the removed key no longer appears in the file
 	data, err := os.ReadFile(filepath.Clean(path))
 	require.NoError(t, err)
-	assert.Contains(t, string(data), "max_knowledge_extraction_items: 12")
+	assert.NotContains(t, string(data), "max_knowledge_extraction_items")
+	assert.Contains(t, string(data), "openrouter_key: sk-or-old")
 }
 
 func TestStore_Save_writesFileWithOwnerOnlyPermissions(t *testing.T) {
@@ -105,15 +109,4 @@ func TestStore_Load_returnsErrorWhenNoConfigExists(t *testing.T) {
 
 	// Then it returns an error instead of a zero-value config
 	assert.Error(t, err)
-}
-
-func TestStore_Save_rejectsOutOfRangeExtractionLimit(t *testing.T) {
-	// Given a store and an invalid extraction limit
-	store := NewStore(filepath.Join(t.TempDir(), "config.yaml"))
-
-	// When saving it
-	err := store.Save(config.Config{MaxKnowledgeExtractionItems: 21})
-
-	// Then defensive domain validation rejects it
-	assert.ErrorIs(t, err, config.ErrMaxKnowledgeExtractionItemsOutOfRange)
 }

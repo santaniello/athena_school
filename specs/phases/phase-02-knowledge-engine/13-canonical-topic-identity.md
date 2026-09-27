@@ -1,5 +1,7 @@
 # Phase 2.13 — Canonical Topic Identity
 
+> **Superseded by [2.16](16-remove-conversation-extraction.md).** Topics no longer filter or group anything (the Explorer and the topic tree are gone), so this draft has no subject left. This document stays as the record of what was built and why.
+
 > **Status: Draft — grilling required before implementation.**
 >
 > This document records the discovered problem, the already-agreed product

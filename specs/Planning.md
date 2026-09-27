@@ -351,9 +351,13 @@ CREATE TABLE usage (
 > (o modelo `Item`) — mas evita que o Explorer mantenha duas listagens
 > paralelas. Ver a spec da fase para a justificativa completa.
 
+> **Atualização — Fase 2.16 (`16-remove-conversation-extraction.md`):** a extração de conhecimento a partir da conversa foi removida junto com tudo que existia para sustentá-la: ciclo `draft → approved → deprecated`, fila de revisão, proveniência persistente dos itens, duplicidade, reconciliação, histórico de revisões e o Knowledge Explorer. O conhecimento agora vem somente de documentos importados numa sessão de estudo, e a spec 2.17 (painel de Sources) passa a listar, adicionar e remover esses documentos. As subseções 2.2, 2.7 e 2.9–2.12 abaixo ficam como registro do que foi construído e estão marcadas como superadas.
+
 > As specs detalhadas estão em `specs/phases/phase-02-knowledge-engine/`. Esta seção é o resumo; em caso de divergência, a spec da fase é a mais específica.
 
 ### 2.1 — Knowledge Item Model
+
+> **Atualização (2.16):** `Status`, `SourceAthena`/`SourceUserNote` e `TransitionTo` foram removidos; o `Item` permanece como o registro que possui os chunks de um documento importado (`Source = imported_doc`).
 
 ```go
 type KnowledgeItem struct {
@@ -395,6 +399,8 @@ CREATE TABLE knowledge_items (
 
 ### 2.2 — Knowledge Extraction
 
+> **Superada pela 2.16:** a extração de conhecimento da conversa foi removida.
+
 Sob demanda, o LLM extrai conceitos da sessão e os **propõe** como Knowledge Items. Nada é gravado até o usuário confirmar.
 
 O domínio `study` não tem conceito de fim de sessão (`Session` não tem `EndedAt`, não existe caso de uso `End`), e reintroduzi-lo mexeria numa área já estável. O gatilho é portanto uma **ação explícita**: botão "Extract knowledge" no composer do chat.
@@ -406,6 +412,8 @@ O domínio `study` não tem conceito de fim de sessão (`Session` não tem `Ende
 - [ ] UI: modal "New knowledge found" com [Save as drafts / Dismiss] — o terceiro botão [Save and approve] entra na 2.3, quando `Approve` passa a existir
 
 ### 2.3 — Notes Import & Knowledge Explorer
+
+> **Parcialmente superada pela 2.16:** o Knowledge Explorer, a edição e a exclusão de itens foram removidos; o import (`ImportFile`), o `Item` sombra e `ingested_files` permanecem.
 
 > Substitui as antigas 2.3 (Notes Import) e 2.6 (Knowledge Explorer), tratadas
 > como uma entrega conjunta — ver a nota de trilhas acima e a spec da fase para
@@ -534,11 +542,15 @@ strict-notes sem chunks: resposta fixa sem chat/completion
 
 ### 2.7 — Knowledge Review
 
+> **Superada pela 2.16:** a fila de revisão foi removida.
+
 - [ ] Lista de itens em `draft` aguardando revisão, mais antigos primeiro
 - [ ] Usuário aprova ou rejeita; `ApproveAllDrafts` itera por `TransitionTo`, `RejectAllDrafts` itera `Delete` — rejeitar não é mudança de status
 - [ ] Badge com contador de itens pendentes, com estado no `AppShell` + callback — sem Context nem store
 
 ### 2.8 — Knowledge Item Indexing
+
+> **Parcialmente superada pela 2.16:** a indexação de itens extraídos e o backfill consentido foram removidos; o índice em memória e o `IndexLoader` permanecem para os chunks dos documentos.
 
 Todos os Knowledge Items entram no vector store para permitir detecção de duplicidade em qualquer estado. Somente items aprovados são recuperáveis pelo RAG (`source = athena`, `status = approved`).
 
@@ -551,6 +563,8 @@ Todos os Knowledge Items entram no vector store para permitir detecção de dupl
 
 ### 2.9 — Persistent Provenance
 
+> **Parcialmente superada pela 2.16:** as evidências dos itens saíram; `message_sources` (fontes persistidas de cada resposta) permanece.
+
 - [ ] Extração marca mensagens por ID e exige ao menos uma citação literal `{message_id, quote}` válida por candidato (máximo 5 × 1000 caracteres)
 - [ ] `knowledge_evidence` + `knowledge_item_evidence` guardam snapshots imutáveis; `Source` continua sendo apenas a categoria
 - [ ] `message_sources` persiste, em ordem, exatamente os chunks que sobreviveram ao threshold e ao teto de contexto, incluindo `source_type` para reconstruir os rótulos da 2.5
@@ -559,12 +573,16 @@ Todos os Knowledge Items entram no vector store para permitir detecção de dupl
 
 ### 2.10 — Knowledge Duplicate Detection
 
+> **Superada pela 2.16.**
+
 - [ ] Match exato por conceito normalizado dentro do tópico, sem embedding
 - [ ] Sem match exato, busca semântica top-5 em items de todos os estados, threshold injetável default `0.90`
 - [ ] Match exato bloqueia criação direta; match semântico alerta e permite criação separada somente por escolha explícita
 - [ ] Backend repete a checagem no save para impedir bypass por chamada forjada ou UI stale
 
 ### 2.11 — Knowledge Reconciliation
+
+> **Superada pela 2.16.**
 
 - [ ] Propostas `create | update | relate | conflict | no_change`; LLM propõe, Go valida e usuário decide
 - [ ] Sem candidatos duplicados, `create` é determinístico e não faz uma segunda chamada LLM
@@ -574,12 +592,16 @@ Todos os Knowledge Items entram no vector store para permitir detecção de dupl
 
 ### 2.12 — Knowledge Revision History
 
+> **Superada pela 2.16.**
+
 - [ ] Snapshot imutável por criação, edição, aprovação, depreciação e reconciliação aplicada
 - [ ] Revisão e mutação do item ficam na mesma transação; falha de indexação posterior não apaga a revisão
 - [ ] Backfill `baseline` idempotente para items preexistentes
 - [ ] Histórico read-only no Explorer com diff por campo e evidências; restore fica fora da Fase 2
 
 ### Done when (Fase 2)
+
+> Após a 2.16, os critérios de extrair, reconciliar e aprovar itens e o do Knowledge Explorer não se aplicam.
 
 - Usuário importa uma pasta de notas Markdown
 - Faz uma sessão de estudo que usa as notas como contexto
@@ -665,6 +687,8 @@ CREATE TABLE progress (
 
 ### 3.5 — Flashcards
 
+> **Revisar antes de implementar (2.16):** assume Knowledge Items extraídos e aprovados, que deixaram de existir; os flashcards precisarão ser gerados a partir de documentos/chunks.
+
 #### Modelo
 
 ```go
@@ -713,6 +737,8 @@ type FlashcardReview struct {
 - [ ] Cartões com erros recorrentes → recomendação de sessão de estudo
 
 ### 3.6 — Knowledge Promotion
+
+> **Revisar antes de implementar (2.16):** a promoção de `draft` para `approved` não existe mais.
 
 - [ ] Após sessões, modal de promoção de Knowledge Items de `draft` para `approved`
 - [ ] Ao aprovar: flashcards são gerados automaticamente (com confirmação)
@@ -918,6 +944,8 @@ type AudioProvider interface {
 **Dependência:** Fase 4 completa.
 
 ### 7.1 — Knowledge Graph
+
+> **Revisar antes de implementar (2.16):** as relações entre Items (`knowledge_item_relations`) foram removidas.
 
 - [ ] `internal/domain/knowledge/graph.go` — relacionamentos entre conceitos
 - [ ] Reutilizar `knowledge_item_relations` da 2.11 sem nova tabela: `related` é simétrica; `prerequisite` e `extends` usam direção `from_item_id → to_item_id`; nomes não são chaves
