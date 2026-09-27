@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -249,4 +250,94 @@ func TestApp_ImportFile_emitsError_whenExtensionIsUnsupported(t *testing.T) {
 	require.Len(t, captured.errors, 1)
 	assert.Nil(t, captured.done)
 	ingestedFiles.AssertNotCalled(t, "ListBySession", mock.Anything, mock.Anything)
+}
+
+func TestApp_ListSessionSources_returnsTheMappedResults(t *testing.T) {
+	// Given a session with one imported document
+	ctx := context.Background()
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	ingestedAt := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
+	ingestedFiles.EXPECT().ListSourcesBySession(ctx, testIngestSessionID).Return([]domainknowledge.SessionSource{
+		{ItemID: "item-1", Title: "CAP theorem", Path: "cap.md", ChunkCount: 4, IngestedAt: ingestedAt},
+	}, nil).Once()
+	guard := ingestmocks.NewMockIndexGuard(t)
+	ingestService := applicationingest.NewService(nil, ingestedFiles, nil, nil, nil, nil, guard)
+	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
+	app.Startup(ctx)
+
+	// When listing the session's sources
+	results, err := app.ListSessionSources(testIngestSessionID)
+
+	// Then it returns the DTO, with IngestedAt formatted as RFC3339
+	require.NoError(t, err)
+	assert.Equal(t, []SessionSourceResult{
+		{ItemID: "item-1", Title: "CAP theorem", Path: "cap.md", ChunkCount: 4, IngestedAt: "2024-01-02T03:04:05Z"},
+	}, results)
+}
+
+func TestApp_ListSessionSources_returnsTheServiceError(t *testing.T) {
+	// Given a service that fails to list
+	ctx := context.Background()
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	boom := errors.New("database unavailable")
+	ingestedFiles.EXPECT().ListSourcesBySession(ctx, testIngestSessionID).Return(nil, boom).Once()
+	guard := ingestmocks.NewMockIndexGuard(t)
+	ingestService := applicationingest.NewService(nil, ingestedFiles, nil, nil, nil, nil, guard)
+	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
+	app.Startup(ctx)
+
+	// When listing the session's sources
+	_, err := app.ListSessionSources(testIngestSessionID)
+
+	// Then the error propagates
+	assert.ErrorIs(t, err, boom)
+}
+
+func TestApp_RemoveSessionSource_delegatesToTheIngestService(t *testing.T) {
+	// Given a document owned by the session
+	ctx := context.Background()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	chunks.EXPECT().DeleteByItemID(ctx, "item-1").Return([]string{"chunk-1"}, nil).Once()
+	items := knowledgemocks.NewMockRepository(t)
+	items.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{ID: "item-1", SessionID: testIngestSessionID}, nil).Once()
+	items.EXPECT().Delete(ctx, "item-1").Return(nil).Once()
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	ingestedFiles.EXPECT().DeleteByItemID(ctx, testIngestSessionID, "item-1").Return(nil).Once()
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Remove(mock.Anything, []string{"chunk-1"}).Return(nil).Once()
+	tx := ingestmocks.NewMockTransactor(t)
+	tx.EXPECT().WithinTx(ctx, mock.Anything).RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error {
+		return fn(ctx)
+	}).Once()
+	guard := ingestmocks.NewMockIndexGuard(t)
+	guard.EXPECT().BeginMutation().Return(nil).Once()
+	guard.EXPECT().EndMutation().Once()
+	ingestService := applicationingest.NewService(chunks, ingestedFiles, items, nil, tx, store, guard)
+	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
+	app.Startup(ctx)
+
+	// When removing it
+	err := app.RemoveSessionSource(testIngestSessionID, "item-1")
+
+	// Then it succeeds
+	require.NoError(t, err)
+}
+
+func TestApp_RemoveSessionSource_returnsErrSourceNotFound_forAnotherSessionsDocument(t *testing.T) {
+	// Given a document owned by a different session
+	ctx := context.Background()
+	items := knowledgemocks.NewMockRepository(t)
+	items.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{ID: "item-1", SessionID: "other-session"}, nil).Once()
+	guard := ingestmocks.NewMockIndexGuard(t)
+	guard.EXPECT().BeginMutation().Return(nil).Once()
+	guard.EXPECT().EndMutation().Once()
+	ingestService := applicationingest.NewService(nil, nil, items, nil, nil, nil, guard)
+	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
+	app.Startup(ctx)
+
+	// When testIngestSessionID tries to remove it
+	err := app.RemoveSessionSource(testIngestSessionID, "item-1")
+
+	// Then it is rejected, so one session can never delete another's document
+	assert.ErrorIs(t, err, applicationingest.ErrSourceNotFound)
 }

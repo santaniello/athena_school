@@ -21,11 +21,15 @@ export function ImportFile(arg1:string,arg2:string):Promise<void>;
 
 export function ListFolders():Promise<Array<desktop.FolderResult>>;
 
+export function ListSessionSources(arg1:string):Promise<Array<desktop.SessionSourceResult>>;
+
 export function ListStudySessionsByFolder(arg1:string):Promise<Array<desktop.StudySessionResult>>;
 
 export function MoveStudySession(arg1:string,arg2:string):Promise<void>;
 
 export function PickNotesFile():Promise<string>;
+
+export function RemoveSessionSource(arg1:string,arg2:string):Promise<void>;
 
 export function RenameFolder(arg1:string,arg2:string):Promise<void>;
 
