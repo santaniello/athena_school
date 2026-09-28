@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { StudySourcesPanel } from './study-sources-panel'
-import { listSessionSources, removeSessionSource } from '@/lib/sources'
+import { getSessionSourceDocument, listSessionSources, removeSessionSource } from '@/lib/sources'
 import {
   importFile,
   onIngestDone,
@@ -15,6 +15,7 @@ import {
 vi.mock('@/lib/sources', () => ({
   listSessionSources: vi.fn(),
   removeSessionSource: vi.fn(),
+  getSessionSourceDocument: vi.fn(),
 }))
 
 vi.mock('@/lib/ingest', async (importOriginal) => {
@@ -588,5 +589,55 @@ describe('StudySourcesPanel', () => {
     expect(addButton).toBeDisabled()
     await user.hover(addButton)
     expect(await screen.findByText('Rebuilding knowledge index…')).toBeInTheDocument()
+  })
+
+  it('opens the document viewer when a row is clicked', async () => {
+    // Given a loaded source and its document
+    vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
+    vi.mocked(getSessionSourceDocument).mockResolvedValueOnce({
+      itemId: 'item-1',
+      title: 'Distributed Systems',
+      path: 'notes/ds.md',
+      segments: [{ text: 'The scheduler multiplexes M:N goroutines.', chunkId: 'chunk-1' }],
+    })
+    const user = userEvent.setup()
+    render(<StudySourcesPanel sessionId="session-1" />)
+    await screen.findByText('Distributed Systems')
+
+    // When clicking the row
+    await user.click(screen.getByText('Distributed Systems'))
+
+    // Then the viewer opens for that document, not a highlighted passage
+    expect(getSessionSourceDocument).toHaveBeenCalledWith('session-1', 'item-1')
+    await waitFor(() =>
+      expect(
+        screen.getByText('The scheduler multiplexes M:N goroutines.', { exact: false }),
+      ).toBeInTheDocument(),
+    )
+    // And the list itself is no longer rendered
+    expect(screen.queryByPlaceholderText('Search sources')).not.toBeInTheDocument()
+  })
+
+  it('returns to the list when the viewer\'s "Sources" back button is clicked', async () => {
+    // Given the viewer open for a document
+    vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
+    vi.mocked(getSessionSourceDocument).mockResolvedValueOnce({
+      itemId: 'item-1',
+      title: 'Distributed Systems',
+      path: 'notes/ds.md',
+      segments: [{ text: 'Body text.', chunkId: 'chunk-1' }],
+    })
+    const user = userEvent.setup()
+    render(<StudySourcesPanel sessionId="session-1" />)
+    await screen.findByText('Distributed Systems')
+    await user.click(screen.getByText('Distributed Systems'))
+    await waitFor(() => expect(screen.getByText('Body text.')).toBeInTheDocument())
+
+    // When clicking the back button
+    await user.click(screen.getByRole('button', { name: /sources/i }))
+
+    // Then the list is shown again
+    expect(screen.getByPlaceholderText('Search sources')).toBeInTheDocument()
+    expect(screen.queryByText('Body text.')).not.toBeInTheDocument()
   })
 })
