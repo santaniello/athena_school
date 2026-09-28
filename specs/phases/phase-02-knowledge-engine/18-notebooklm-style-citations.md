@@ -167,6 +167,15 @@ Chunker and ingestion changes live in `application/ingest`; the reader lives nex
 Each slice keeps the build green and is committed on its own; backend slices are TDD with
 `_test.go`, frontend slices with Vitest.
 
+Shipped as two PRs (a single PR for the whole spec was judged too large to review): **PR 1**
+delivers the stored source and its viewer — the original ask (source stored, chunks stop being
+the only truth, removal cascades to the text) plus opening a document from a Sources-panel row
+click, with no highlighted passage yet. **PR 2** layers the `[n]` inline-citation experience on
+top (depends on PR 1's `knowledge_documents` table, `GetSourceDocument` and `source-viewer.tsx`).
+See `~/.claude/plans/hoje-ao-fazermos-o-virtual-gray.md` for the file-level breakdown of each
+slice.
+
+**PR 1 — stored source, cascade delete, viewer**
 - [ ] Chunker: `Start`/`End` on `ChunkCandidate` for headings, packed paragraphs, merges and the
       plain-text fallback (pure, no persistence yet)
 - [ ] Domain and SQLite: `Chunk` offsets, `DocumentRepository`, `knowledge_documents`, additive
@@ -174,14 +183,18 @@ Each slice keeps the build green and is committed on its own; backend slices are
 - [ ] Ingest: `ImportFile` stores text and offsets, treats a text-less item as stale;
       `RemoveSource` deletes the text
 - [ ] Reader: `ingest.Service.GetSourceDocument` (ownership, segments, `ErrSourceNotFound`,
-      `ErrSourceTextUnavailable`) and the `GetSessionSourceDocument` binding; `chunkId`/`itemId`
-      on `StudySourceResult`; regenerate `wailsjs`
+      `ErrSourceTextUnavailable`) and the `GetSessionSourceDocument` binding; regenerate `wailsjs`
+- [ ] Frontend: `lib/sources.ts` additions, `useSourceDocument`, `source-viewer.tsx`, panel `view`
+      state, row click opens the viewer (no highlighted passage)
+- [ ] Docs: CHANGELOG, README
+
+**PR 2 — `[n]` inline citations in chat**
+- [ ] `chunkId`/`itemId` on `StudySourceResult`; regenerate `wailsjs`
 - [ ] Prompting: context `id`s, the `[n]` instruction, markers stripped from history
 - [ ] Frontend: `lib/citations.ts`, `CitationChip`, `MessageBubble` wiring, streaming, Copy
-- [ ] Frontend: `lib/sources.ts` additions, `useSourceDocument`, `source-viewer.tsx`, panel views,
-      `AppShell` request flow, strip entries clickable
-- [ ] Docs: CHANGELOG, README, `lib/documentation.ts`, and mark 2.17's "citation → panel" line
-      as delivered
+- [ ] Frontend: viewer highlight for the cited `chunkId`, `AppShell` open-citation request flow,
+      strip entries clickable
+- [ ] Docs: `lib/documentation.ts`, and mark 2.17's "citation → panel" line as delivered
 
 ## Acceptance Criteria
 
