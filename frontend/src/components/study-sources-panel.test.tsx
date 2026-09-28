@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { StudySourcesPanel } from './study-sources-panel'
-import { listSessionSources } from '@/lib/sources'
+import { listSessionSources, removeSessionSource } from '@/lib/sources'
 import {
   importFile,
   onIngestDone,
@@ -14,6 +14,7 @@ import {
 
 vi.mock('@/lib/sources', () => ({
   listSessionSources: vi.fn(),
+  removeSessionSource: vi.fn(),
 }))
 
 vi.mock('@/lib/ingest', async (importOriginal) => {
@@ -236,15 +237,189 @@ describe('StudySourcesPanel', () => {
     expect(listSessionSources).toHaveBeenCalledWith('session-2')
   })
 
-  it('renders Remove as disabled, not silently inert', async () => {
+  it('opens a confirmation naming the document when Remove is picked from its menu', async () => {
     // Given one document loaded
     vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
+    const user = userEvent.setup()
     render(<StudySourcesPanel sessionId="session-1" />)
     await screen.findByText('Distributed Systems')
 
-    // Then Remove is visibly disabled — it is wired in a later increment
-    // (specs/phases/phase-02-knowledge-engine/17-session-sources-panel.md)
-    expect(screen.getByRole('button', { name: 'Remove Distributed Systems' })).toBeDisabled()
+    // When opening its ⋮ menu and picking Remove
+    await user.click(screen.getByRole('button', { name: 'Distributed Systems options' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Remove' }))
+
+    // Then a confirmation names the document and explains the scope
+    const dialog = await screen.findByRole('alertdialog')
+    expect(within(dialog).getByText('Remove Distributed Systems?')).toBeInTheDocument()
+    expect(
+      within(dialog).getByText(
+        'It will no longer be searched in this session. The file on your computer is not changed.',
+      ),
+    ).toBeInTheDocument()
+    expect(dialog.querySelector('p.text-destructive')).toBeNull()
+  })
+
+  it('cancelling the confirmation removes nothing', async () => {
+    // Given the confirmation open for one document
+    vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
+    const user = userEvent.setup()
+    render(<StudySourcesPanel sessionId="session-1" />)
+    await screen.findByText('Distributed Systems')
+    await user.click(screen.getByRole('button', { name: 'Distributed Systems options' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Remove' }))
+    const dialog = await screen.findByRole('alertdialog')
+
+    // When cancelling
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+
+    // Then nothing was removed, and the confirmation closes
+    expect(removeSessionSource).not.toHaveBeenCalled()
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+  })
+
+  it('confirming Remove deletes the document and reloads the list', async () => {
+    // Given the confirmation open for one document, and a removal that succeeds
+    vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
+    vi.mocked(removeSessionSource).mockResolvedValueOnce()
+    const user = userEvent.setup()
+    render(<StudySourcesPanel sessionId="session-1" />)
+    await screen.findByText('Distributed Systems')
+    await user.click(screen.getByRole('button', { name: 'Distributed Systems options' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Remove' }))
+    const dialog = await screen.findByRole('alertdialog')
+
+    // When confirming
+    vi.mocked(listSessionSources).mockResolvedValueOnce([])
+    await user.click(within(dialog).getByRole('button', { name: 'Remove' }))
+
+    // Then it removed the right document, reloaded, and the confirmation closed
+    expect(removeSessionSource).toHaveBeenCalledWith('session-1', 'item-1')
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+    expect(await screen.findByText('No sources imported yet.')).toBeInTheDocument()
+    expect(listSessionSources).toHaveBeenCalledTimes(2)
+  })
+
+  it('a failed removal keeps the confirmation open and shows the error inside it', async () => {
+    // Given the confirmation open for one document, and a removal that fails
+    vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
+    vi.mocked(removeSessionSource).mockRejectedValueOnce(new Error('ingest: source not found'))
+    const user = userEvent.setup()
+    render(<StudySourcesPanel sessionId="session-1" />)
+    await screen.findByText('Distributed Systems')
+    await user.click(screen.getByRole('button', { name: 'Distributed Systems options' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Remove' }))
+    const dialog = await screen.findByRole('alertdialog')
+
+    // When confirming and it fails
+    await user.click(within(dialog).getByRole('button', { name: 'Remove' }))
+
+    // Then the confirmation stays open, showing the error, and the row survives
+    expect(await within(dialog).findByText('ingest: source not found')).toBeInTheDocument()
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+    expect(screen.getByText('Distributed Systems')).toBeInTheDocument()
+    expect(listSessionSources).toHaveBeenCalledOnce()
+  })
+
+  it('reopening the confirmation for another document clears a previous error', async () => {
+    // Given a failed removal attempt on one document
+    vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS, CAP_THEOREM])
+    vi.mocked(removeSessionSource).mockRejectedValueOnce(new Error('ingest: source not found'))
+    const user = userEvent.setup()
+    render(<StudySourcesPanel sessionId="session-1" />)
+    await screen.findByText('Distributed Systems')
+    await user.click(screen.getByRole('button', { name: 'Distributed Systems options' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Remove' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Remove' }))
+    await within(dialog).findByText('ingest: source not found')
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+
+    // When opening the confirmation for a different document
+    await user.click(screen.getByRole('button', { name: 'CAP theorem options' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Remove' }))
+
+    // Then the stale error from the other document is gone
+    expect(screen.queryByText('ingest: source not found')).not.toBeInTheDocument()
+  })
+
+  it('disables Cancel/Remove and ignores Escape while a removal is in flight', async () => {
+    // Given a removal held pending until released
+    vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
+    let resolveRemove: () => void = () => {}
+    vi.mocked(removeSessionSource).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveRemove = resolve
+      }),
+    )
+    const user = userEvent.setup()
+    render(<StudySourcesPanel sessionId="session-1" />)
+    await screen.findByText('Distributed Systems')
+    await user.click(screen.getByRole('button', { name: 'Distributed Systems options' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Remove' }))
+    const dialog = await screen.findByRole('alertdialog')
+
+    // When confirming, while the removal is still pending
+    await user.click(within(dialog).getByRole('button', { name: 'Remove' }))
+
+    // Then both actions are disabled, and Escape does not close it
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeDisabled()
+    expect(within(dialog).getByRole('button', { name: 'Remove' })).toBeDisabled()
+    await user.keyboard('{Escape}')
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+
+    // Cleanup: release the pending removal (whose success reloads the list)
+    // so it doesn't leak into another test
+    vi.mocked(listSessionSources).mockResolvedValueOnce([])
+    resolveRemove()
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+  })
+
+  it('retrying Remove in the same confirmation clears the previous error on success', async () => {
+    // Given a first Remove attempt that failed
+    vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
+    vi.mocked(removeSessionSource).mockRejectedValueOnce(new Error('ingest: source not found'))
+    const user = userEvent.setup()
+    render(<StudySourcesPanel sessionId="session-1" />)
+    await screen.findByText('Distributed Systems')
+    await user.click(screen.getByRole('button', { name: 'Distributed Systems options' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Remove' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Remove' }))
+    await within(dialog).findByText('ingest: source not found')
+
+    // When retrying, in the same still-open confirmation, held pending
+    let resolveRetry: () => void = () => {}
+    vi.mocked(removeSessionSource).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveRetry = resolve
+      }),
+    )
+    await user.click(within(dialog).getByRole('button', { name: 'Remove' }))
+
+    // Then no error shows at all, immediately, before the retry even
+    // resolves — not just the old text swapped for something else, and not
+    // just once the dialog eventually closes
+    expect(dialog.querySelector('p.text-destructive')).toBeNull()
+
+    // And once it succeeds, the confirmation closes
+    vi.mocked(listSessionSources).mockResolvedValueOnce([])
+    resolveRetry()
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+  })
+
+  it("disables each row's ⋮ menu, with a reason, while the index is retrying", async () => {
+    // Given the index is retrying
+    vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
+    const user = userEvent.setup()
+    render(<StudySourcesPanel sessionId="session-1" mutationsDisabled />)
+    await screen.findByText('Distributed Systems')
+
+    // Then the row's menu trigger is disabled, with the reason as a tooltip
+    const optionsButton = screen.getByRole('button', { name: 'Distributed Systems options' })
+    expect(optionsButton).toBeDisabled()
+    await user.hover(optionsButton)
+    expect(await screen.findByText('Rebuilding knowledge index…')).toBeInTheDocument()
   })
 
   it('Add opens the file picker, then the import dialog with the picked path', async () => {

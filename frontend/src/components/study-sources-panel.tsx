@@ -1,12 +1,29 @@
 import { useMemo, useState } from 'react'
 import type { ChangeEvent, ReactNode } from 'react'
-import { Plus, Search, Trash2 } from 'lucide-react'
+import { MoreVertical, Plus, Search, Trash2 } from 'lucide-react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { IngestProgressDialog } from '@/components/ingest-progress-dialog'
 import { useSessionSources } from '@/hooks/use-session-sources'
 import { pickNotesFile } from '@/lib/ingest'
+import { removeSessionSource, type SessionSource } from '@/lib/sources'
 
 interface StudySourcesPanelProps {
   sessionId: string
@@ -76,16 +93,30 @@ function AddSourceButton({
 // The Study screen's NotebookLM-style right rail: the session's imported
 // documents, from the moment each is imported (not a per-message dedupe of
 // sources cited so far — see StudyChatScreen's per-message "Local sources"
-// strip for that). Remove is still disabled; wiring it is this spec's next
-// slice (specs/phases/phase-02-knowledge-engine/17-session-sources-panel.md).
+// strip for that). See
+// specs/phases/phase-02-knowledge-engine/17-session-sources-panel.md.
 function StudySourcesPanel({ sessionId, mutationsDisabled = false }: StudySourcesPanelProps) {
   const { sources, loading, error, reload } = useSessionSources(sessionId)
   const [query, setQuery] = useState('')
   const [importPath, setImportPath] = useState<string | null>(null)
   const [pickerError, setPickerError] = useState('')
+  // The document a Remove confirmation targets — non-null opens the
+  // AlertDialog. removeError is scoped to that one confirmation, not the
+  // whole panel, so opening it for another document always starts clean.
+  const [removeTarget, setRemoveTarget] = useState<SessionSource | null>(null)
+  const [removing, setRemoving] = useState(false)
+  // Stryker disable next-line StringLiteral: only rendered while the
+  // AlertDialog is open (removeTarget set), and every path that opens it
+  // (handleRemoveClick) clears this fresh first — so this initial value is
+  // never itself observable.
+  const [removeError, setRemoveError] = useState('')
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
+    // Stryker disable next-line ConditionalExpression: an empty needle
+    // matches every source via .includes('') below anyway, so skipping the
+    // early return produces the exact same result — a genuine equivalent
+    // mutant, not a gap in test coverage.
     if (!needle) return sources
     return sources.filter((source) =>
       `${source.title} ${source.path}`.toLowerCase().includes(needle),
@@ -109,6 +140,40 @@ function StudySourcesPanel({ sessionId, mutationsDisabled = false }: StudySource
   function handleImportDialogClose() {
     setImportPath(null)
     reload()
+  }
+
+  function handleRemoveClick(source: SessionSource) {
+    setRemoveError('')
+    setRemoveTarget(source)
+  }
+
+  // No AlertDialogTrigger is ever rendered — this panel opens the
+  // confirmation itself, via handleRemoveClick — so Radix only ever calls
+  // this to report a close (Cancel or Escape), never an open. Closing
+  // without confirming always just clears the target; a confirmed click
+  // goes through handleConfirmRemove instead, which decides for itself
+  // whether to close.
+  function handleRemoveDialogOpenChange() {
+    setRemoveTarget(null)
+  }
+
+  async function handleConfirmRemove() {
+    // Stryker disable next-line ConditionalExpression: structurally
+    // unreachable — the Remove button that calls this only ever renders
+    // inside this same AlertDialog, which is only open while removeTarget
+    // is set.
+    if (!removeTarget) return
+    setRemoving(true)
+    setRemoveError('')
+    try {
+      await removeSessionSource(sessionId, removeTarget.itemId)
+      setRemoveTarget(null)
+      reload()
+    } catch (err) {
+      setRemoveError(err instanceof Error ? err.message : 'Failed to remove the source.')
+    } finally {
+      setRemoving(false)
+    }
   }
 
   // Stryker disable next-line StringLiteral: only read when importPath is
@@ -204,23 +269,47 @@ function StudySourcesPanel({ sessionId, mutationsDisabled = false }: StudySource
                     {source.path} · {chunkCountLabel(source.chunkCount)}
                   </p>
                 </div>
-                <Tooltip>
-                  {/* Same disabled-button-can't-trigger-a-tooltip issue as
-                      AddSourceButton above — see its comment. */}
-                  <TooltipTrigger asChild>
-                    <span className="opacity-0 group-hover:opacity-100">
+                {mutationsDisabled ? (
+                  <Tooltip>
+                    {/* Same disabled-button-can't-trigger-a-tooltip issue as
+                        AddSourceButton above — see its comment. */}
+                    <TooltipTrigger asChild>
+                      <span className="opacity-0 group-hover:opacity-100">
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          disabled
+                          aria-label={`${source.title} options`}
+                        >
+                          <MoreVertical className="size-3.5" aria-hidden="true" />
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>Rebuilding knowledge index…</TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
                       <Button
                         size="icon-sm"
                         variant="ghost"
-                        disabled
-                        aria-label={`Remove ${source.title}`}
+                        aria-label={`${source.title} options`}
+                        className="opacity-0 group-hover:opacity-100"
+                      >
+                        <MoreVertical className="size-3.5" aria-hidden="true" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onClick={() => handleRemoveClick(source)}
                       >
                         <Trash2 className="size-3.5" aria-hidden="true" />
-                      </Button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>Coming soon</TooltipContent>
-                </Tooltip>
+                        Remove
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
             ))
           )}
@@ -232,6 +321,36 @@ function StudySourcesPanel({ sessionId, mutationsDisabled = false }: StudySource
         path={importDialogPath}
         onClose={handleImportDialogClose}
       />
+      <AlertDialog open={removeTarget !== null} onOpenChange={handleRemoveDialogOpenChange}>
+        {/* No onInteractOutside guard here: unlike Dialog, AlertDialog
+            never closes on an outside click by design — only Cancel,
+            Escape, or a confirmed Remove can close it. */}
+        <AlertDialogContent onEscapeKeyDown={(event) => removing && event.preventDefault()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove {removeTarget?.title}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              It will no longer be searched in this session. The file on your computer is not
+              changed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {removeError && <p className="text-sm text-destructive">{removeError}</p>}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={removing}
+              onClick={(event) => {
+                // AlertDialogAction auto-closes on click by default; this
+                // panel instead drives open/close entirely off removeTarget,
+                // so a failed removal can keep the confirmation open.
+                event.preventDefault()
+                void handleConfirmRemove()
+              }}
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }
