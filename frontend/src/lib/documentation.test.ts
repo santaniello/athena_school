@@ -63,6 +63,12 @@ describe('DOCUMENTATION knowledge scope', () => {
     expect(everyText).toMatch(/each study session owns/i)
   })
 
+  it("says documents are added from a session's Sources panel", () => {
+    // Given spec 2.17 moved import into the session's own Sources panel
+    // Then the manual points the reader there, not at a global action
+    expect(everyText).toMatch(/sources panel/i)
+  })
+
   it.each(['extract', 'draft', 'review queue', 'approv', 'concept card', 'deprecat'])(
     'never mentions %s, since conversation extraction no longer exists',
     (word) => {
