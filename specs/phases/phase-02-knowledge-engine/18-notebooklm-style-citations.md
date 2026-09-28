@@ -176,17 +176,17 @@ See `~/.claude/plans/hoje-ao-fazermos-o-virtual-gray.md` for the file-level brea
 slice.
 
 **PR 1 — stored source, cascade delete, viewer**
-- [ ] Chunker: `Start`/`End` on `ChunkCandidate` for headings, packed paragraphs, merges and the
+- [x] Chunker: `Start`/`End` on `ChunkCandidate` for headings, packed paragraphs, merges and the
       plain-text fallback (pure, no persistence yet)
-- [ ] Domain and SQLite: `Chunk` offsets, `DocumentRepository`, `knowledge_documents`, additive
+- [x] Domain and SQLite: `Chunk` offsets, `DocumentRepository`, `knowledge_documents`, additive
       migration; regenerate mocks
-- [ ] Ingest: `ImportFile` stores text and offsets, treats a text-less item as stale;
+- [x] Ingest: `ImportFile` stores text and offsets, treats a text-less item as stale;
       `RemoveSource` deletes the text
-- [ ] Reader: `ingest.Service.GetSourceDocument` (ownership, segments, `ErrSourceNotFound`,
+- [x] Reader: `ingest.Service.GetSourceDocument` (ownership, segments, `ErrSourceNotFound`,
       `ErrSourceTextUnavailable`) and the `GetSessionSourceDocument` binding; regenerate `wailsjs`
-- [ ] Frontend: `lib/sources.ts` additions, `useSourceDocument`, `source-viewer.tsx`, panel `view`
+- [x] Frontend: `lib/sources.ts` additions, `useSourceDocument`, `source-viewer.tsx`, panel `view`
       state, row click opens the viewer (no highlighted passage)
-- [ ] Docs: CHANGELOG, README
+- [x] Docs: CHANGELOG, README
 
 **PR 2 — `[n]` inline citations in chat**
 - [ ] `chunkId`/`itemId` on `StudySourceResult`; regenerate `wailsjs`
