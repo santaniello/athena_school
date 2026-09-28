@@ -183,3 +183,46 @@ func (a *App) ListSessionSources(sessionID string) ([]SessionSourceResult, error
 func (a *App) RemoveSessionSource(sessionID, itemID string) error {
 	return a.ingest.RemoveSource(a.ctx, sessionID, itemID)
 }
+
+// SourceDocumentSegmentResult is the desktop-facing DTO for one ordered
+// slice of a source document's text: either a chunk's own passage
+// (ChunkID set) or the gap between two chunks (ChunkID empty).
+type SourceDocumentSegmentResult struct {
+	Text    string `json:"text"`
+	ChunkID string `json:"chunkId"`
+}
+
+// SourceDocumentResult is the desktop-facing DTO for a session's document,
+// as read by the source viewer.
+type SourceDocumentResult struct {
+	ItemID   string                        `json:"itemId"`
+	Title    string                        `json:"title"`
+	Path     string                        `json:"path"`
+	Segments []SourceDocumentSegmentResult `json:"segments"`
+}
+
+func toSourceDocumentResult(doc domainknowledge.SourceDocument) SourceDocumentResult {
+	segments := make([]SourceDocumentSegmentResult, len(doc.Segments))
+	for i, s := range doc.Segments {
+		segments[i] = SourceDocumentSegmentResult{Text: s.Text, ChunkID: s.ChunkID}
+	}
+	return SourceDocumentResult{
+		ItemID:   doc.ItemID,
+		Title:    doc.Title,
+		Path:     doc.Path,
+		Segments: segments,
+	}
+}
+
+// GetSessionSourceDocument returns itemID's full document for the source
+// viewer, scoped to sessionID. Errors propagate as-is: ingest.ErrSourceNotFound
+// (itemID does not exist, or belongs to another session) and
+// ingest.ErrSourceTextUnavailable (no document text is stored — a document
+// imported before spec 2.18, or whose text was otherwise lost).
+func (a *App) GetSessionSourceDocument(sessionID, itemID string) (SourceDocumentResult, error) {
+	doc, err := a.ingest.GetSourceDocument(a.ctx, sessionID, itemID)
+	if err != nil {
+		return SourceDocumentResult{}, err
+	}
+	return toSourceDocumentResult(doc), nil
+}

@@ -346,3 +346,71 @@ func TestApp_RemoveSessionSource_returnsErrSourceNotFound_forAnotherSessionsDocu
 	// Then it is rejected, so one session can never delete another's document
 	assert.ErrorIs(t, err, applicationingest.ErrSourceNotFound)
 }
+
+func TestApp_GetSessionSourceDocument_returnsTheMappedDocument(t *testing.T) {
+	// Given a document owned by the session
+	ctx := context.Background()
+	items := knowledgemocks.NewMockRepository(t)
+	items.EXPECT().GetByID(ctx, "item-1").
+		Return(domainknowledge.Item{ID: "item-1", SessionID: testIngestSessionID, Concept: "CAP theorem"}, nil).Once()
+	documents := knowledgemocks.NewMockDocumentRepository(t)
+	documents.EXPECT().Get(ctx, testIngestSessionID, "item-1").Return("hello world", nil).Once()
+	start, end := 0, 5
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	chunks.EXPECT().ListByItemID(ctx, "item-1").Return([]domainknowledge.Chunk{
+		{ID: "chunk-1", FilePath: "cap.md", StartOffset: &start, EndOffset: &end},
+	}, nil).Once()
+	guard := ingestmocks.NewMockIndexGuard(t)
+	ingestService := applicationingest.NewService(chunks, nil, items, documents, nil, nil, nil, guard)
+	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
+	app.Startup(ctx)
+
+	// When getting its document
+	result, err := app.GetSessionSourceDocument(testIngestSessionID, "item-1")
+
+	// Then it returns the mapped DTO, segments in order
+	require.NoError(t, err)
+	assert.Equal(t, SourceDocumentResult{
+		ItemID: "item-1", Title: "CAP theorem", Path: "cap.md",
+		Segments: []SourceDocumentSegmentResult{
+			{Text: "hello", ChunkID: "chunk-1"},
+			{Text: " world"},
+		},
+	}, result)
+}
+
+func TestApp_GetSessionSourceDocument_returnsErrSourceNotFound_forAnotherSessionsDocument(t *testing.T) {
+	// Given a document owned by a different session
+	ctx := context.Background()
+	items := knowledgemocks.NewMockRepository(t)
+	items.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{ID: "item-1", SessionID: "other-session"}, nil).Once()
+	guard := ingestmocks.NewMockIndexGuard(t)
+	ingestService := applicationingest.NewService(nil, nil, items, nil, nil, nil, nil, guard)
+	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
+	app.Startup(ctx)
+
+	// When testIngestSessionID tries to get its document
+	_, err := app.GetSessionSourceDocument(testIngestSessionID, "item-1")
+
+	// Then it is rejected, so one session can never read another's document
+	assert.ErrorIs(t, err, applicationingest.ErrSourceNotFound)
+}
+
+func TestApp_GetSessionSourceDocument_returnsErrSourceTextUnavailable_whenNoTextIsStored(t *testing.T) {
+	// Given an item imported before document text was stored
+	ctx := context.Background()
+	items := knowledgemocks.NewMockRepository(t)
+	items.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{ID: "item-1", SessionID: testIngestSessionID}, nil).Once()
+	documents := knowledgemocks.NewMockDocumentRepository(t)
+	documents.EXPECT().Get(ctx, testIngestSessionID, "item-1").Return("", domainknowledge.ErrDocumentNotFound).Once()
+	guard := ingestmocks.NewMockIndexGuard(t)
+	ingestService := applicationingest.NewService(nil, nil, items, documents, nil, nil, nil, guard)
+	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
+	app.Startup(ctx)
+
+	// When getting its document
+	_, err := app.GetSessionSourceDocument(testIngestSessionID, "item-1")
+
+	// Then it reports that the text is unavailable rather than opening
+	assert.ErrorIs(t, err, applicationingest.ErrSourceTextUnavailable)
+}
