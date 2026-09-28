@@ -1064,6 +1064,59 @@ describe('AppShell knowledge index lifecycle', () => {
     expect(screen.getByText(/Local search is unavailable/)).toBeInTheDocument()
   })
 
+  it("disables the Sources panel's Add button, with a reason, while a retry is in flight", async () => {
+    // Given a session is open, past a failed load with no snapshot
+    vi.mocked(getKnowledgeIndexStatus).mockResolvedValueOnce({
+      state: 'failed',
+      hasSnapshot: false,
+      issues: [],
+      lastError: 'disk full',
+    })
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText('Knowledge index could not be loaded.')
+    await user.click(screen.getByRole('button', { name: 'Continue without local search' }))
+    await screen.findByText(/Local search is unavailable/)
+    await user.click(screen.getByRole('button', { name: 'Study' }))
+    await screen.findByText('General')
+    vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([])
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      folderId: 'default',
+      goal: 'Ace the SQL interview',
+      startedAt: '2026-08-17T10:00:00Z',
+      context: CONTEXT_NORMAL,
+    })
+    vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
+    await user.click(screen.getByText('General'))
+    await user.click(await screen.findByText('New session'))
+    await user.type(
+      screen.getByPlaceholderText('What do you want to study?'),
+      'Distributed systems',
+    )
+    await user.type(
+      screen.getByPlaceholderText('e.g. Pass the SQL interview'),
+      'Ace the SQL interview{Enter}',
+    )
+    await screen.findByText('Imported into this session')
+
+    // When retrying, held pending
+    let resolveRetry: (status: IndexStatus) => void = () => {}
+    vi.mocked(retryKnowledgeIndex).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveRetry = resolve
+      }),
+    )
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+
+    // Then the panel's Add is disabled while the retry is pending
+    expect(screen.getByRole('button', { name: 'Add source' })).toBeDisabled()
+
+    // Cleanup: release the pending retry so it doesn't leak into another test
+    resolveRetry({ state: 'ready', hasSnapshot: true, issues: [], lastError: '' })
+  })
+
   it('actually resets the "continued without search" opt-in on a successful retry, re-blocking on a later failure', async () => {
     // Given the user already continued past a failed load with no snapshot,
     // with the status-event handler captured so a later event can be

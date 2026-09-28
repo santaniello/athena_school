@@ -504,7 +504,10 @@ function AppShell() {
                 onResize={(size) => setSourcesOpen(size.inPixels > 0)}
                 style={{ overflow: 'hidden' }}
               >
-                <StudySourcesPanel sessionId={activeSession.id} />
+                <StudySourcesPanel
+                  sessionId={activeSession.id}
+                  mutationsDisabled={retryingIndex}
+                />
               </ResizablePanel>
             </ResizablePanelGroup>
           ) : (
