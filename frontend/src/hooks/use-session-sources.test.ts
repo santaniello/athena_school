@@ -7,8 +7,20 @@ vi.mock('@/lib/sources', () => ({
   listSessionSources: vi.fn(),
 }))
 
-const sourceA = { itemId: 'item-a', title: 'Go', path: 'go.md', chunkCount: 3, ingestedAt: '2024-01-01T00:00:00Z' }
-const sourceB = { itemId: 'item-b', title: 'Rust', path: 'rust.md', chunkCount: 5, ingestedAt: '2024-01-02T00:00:00Z' }
+const sourceA = {
+  itemId: 'item-a',
+  title: 'Go',
+  path: 'go.md',
+  chunkCount: 3,
+  ingestedAt: '2024-01-01T00:00:00Z',
+}
+const sourceB = {
+  itemId: 'item-b',
+  title: 'Rust',
+  path: 'rust.md',
+  chunkCount: 5,
+  ingestedAt: '2024-01-02T00:00:00Z',
+}
 
 describe('useSessionSources', () => {
   it('starts loading, then exposes the loaded sources', async () => {
@@ -63,7 +75,7 @@ describe('useSessionSources', () => {
 
   it('ignores a response that resolves after the session has already changed', async () => {
     // Given session-1's load that never resolves until told to
-    let resolveSessionOne!: (sources: typeof sourceA[]) => void
+    let resolveSessionOne!: (sources: (typeof sourceA)[]) => void
     vi.mocked(listSessionSources).mockImplementationOnce(
       () =>
         new Promise((resolve) => {

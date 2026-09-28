@@ -69,7 +69,13 @@ function AddSourceButton({
   ariaLabel,
 }: AddSourceButtonProps) {
   const button = (
-    <Button size="sm" variant={variant} disabled={disabled} onClick={onClick} aria-label={ariaLabel}>
+    <Button
+      size="sm"
+      variant={variant}
+      disabled={disabled}
+      onClick={onClick}
+      aria-label={ariaLabel}
+    >
       <Plus className="size-3.5" aria-hidden="true" />
       {children}
     </Button>
@@ -195,9 +201,7 @@ function StudySourcesPanel({ sessionId, mutationsDisabled = false }: StudySource
               <h2 className="font-heading text-base font-bold text-foreground">
                 Sources ({sources.length})
               </h2>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">
-                Imported into this session
-              </p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">Imported into this session</p>
             </div>
             <AddSourceButton
               onClick={() => void handleAddClick()}

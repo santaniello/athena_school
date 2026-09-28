@@ -11,8 +11,20 @@ describe('listSessionSources', () => {
   it('forwards the session id and returns every source', async () => {
     // Given a session with two imported documents
     vi.mocked(ListSessionSources).mockResolvedValueOnce([
-      { itemId: 'item-1', title: 'Distributed Systems', path: 'notes/ds.md', chunkCount: 12, ingestedAt: '2024-01-01T00:00:00Z' },
-      { itemId: 'item-2', title: 'CAP theorem', path: 'cap.md', chunkCount: 4, ingestedAt: '2024-01-02T00:00:00Z' },
+      {
+        itemId: 'item-1',
+        title: 'Distributed Systems',
+        path: 'notes/ds.md',
+        chunkCount: 12,
+        ingestedAt: '2024-01-01T00:00:00Z',
+      },
+      {
+        itemId: 'item-2',
+        title: 'CAP theorem',
+        path: 'cap.md',
+        chunkCount: 4,
+        ingestedAt: '2024-01-02T00:00:00Z',
+      },
     ] as never)
 
     // When listing the session's sources
@@ -21,8 +33,20 @@ describe('listSessionSources', () => {
     // Then the session id was forwarded and every source is returned
     expect(ListSessionSources).toHaveBeenCalledWith('session-1')
     expect(sources).toEqual([
-      { itemId: 'item-1', title: 'Distributed Systems', path: 'notes/ds.md', chunkCount: 12, ingestedAt: '2024-01-01T00:00:00Z' },
-      { itemId: 'item-2', title: 'CAP theorem', path: 'cap.md', chunkCount: 4, ingestedAt: '2024-01-02T00:00:00Z' },
+      {
+        itemId: 'item-1',
+        title: 'Distributed Systems',
+        path: 'notes/ds.md',
+        chunkCount: 12,
+        ingestedAt: '2024-01-01T00:00:00Z',
+      },
+      {
+        itemId: 'item-2',
+        title: 'CAP theorem',
+        path: 'cap.md',
+        chunkCount: 4,
+        ingestedAt: '2024-01-02T00:00:00Z',
+      },
     ])
   })
 
@@ -54,6 +78,8 @@ describe('removeSessionSource', () => {
 
     // When removing it
     // Then the failure propagates
-    await expect(removeSessionSource('session-1', 'item-1')).rejects.toThrow('ingest: source not found')
+    await expect(removeSessionSource('session-1', 'item-1')).rejects.toThrow(
+      'ingest: source not found',
+    )
   })
 })
