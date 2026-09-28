@@ -38,6 +38,7 @@ type Service struct {
 	chunks        domainknowledge.ChunkRepository
 	ingestedFiles domainknowledge.IngestedFileRepository
 	items         domainknowledge.Repository
+	documents     domainknowledge.DocumentRepository
 	llm           domainllm.Provider
 	tx            Transactor
 	store         domainknowledge.VectorStore
@@ -49,13 +50,14 @@ func NewService(
 	chunks domainknowledge.ChunkRepository,
 	ingestedFiles domainknowledge.IngestedFileRepository,
 	items domainknowledge.Repository,
+	documents domainknowledge.DocumentRepository,
 	llm domainllm.Provider,
 	tx Transactor,
 	store domainknowledge.VectorStore,
 	index IndexGuard,
 ) *Service {
 	return &Service{
-		chunks: chunks, ingestedFiles: ingestedFiles, items: items, llm: llm, tx: tx,
+		chunks: chunks, ingestedFiles: ingestedFiles, items: items, documents: documents, llm: llm, tx: tx,
 		store: store, index: index,
 	}
 }

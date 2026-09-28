@@ -98,8 +98,9 @@ func main() {
 	folderService := folder.NewService(folders, studySessions, knowledgeService)
 
 	ingestedFiles := sqlite.NewIngestedFileRepository(db)
+	knowledgeDocuments := sqlite.NewDocumentRepository(db)
 	ingestService := applicationingest.NewService(
-		knowledgeChunks, ingestedFiles, knowledgeItems, llmClient, transactor, vectorStore, indexLoader,
+		knowledgeChunks, ingestedFiles, knowledgeItems, knowledgeDocuments, llmClient, transactor, vectorStore, indexLoader,
 	)
 
 	resetter := sqlite.NewResetter(db)

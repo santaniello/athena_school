@@ -147,7 +147,7 @@ func (s *Service) importCandidates(
 		}
 
 		if hasPrev && prev.MTimeUnixNano == mtime && prev.EmbeddingModel == domainllm.EmbeddingModel {
-			skip, failure, checkErr := s.shouldSkipUnchanged(ctx, prev)
+			skip, failure, checkErr := s.shouldSkipUnchanged(ctx, sessionID, prev)
 			if checkErr != nil {
 				summary.FilesFailed++
 				summary.Failures = append(summary.Failures, FileFailure{Path: displayPath, Reason: failure})
@@ -206,22 +206,34 @@ func applyIngestOutcome(summary *Summary, progress *Progress, displayPath string
 }
 
 // shouldSkipUnchanged decides whether an unchanged source (matching mtime
-// and embedding model) should be skipped. It additionally checks that
-// prev.ItemID's shadow Item still exists: a deleted Item forces the
-// ordinary replacement path instead of skipping, restoring it under the
-// same ID; any other repository error is reported as a failure via a
-// non-nil returned error, whose message is failure.
+// and embedding model) should be skipped. It checks that prev.ItemID's
+// shadow Item still exists: a deleted Item forces the ordinary replacement
+// path instead of skipping, restoring it under the same ID. It then checks
+// that the item's document text is actually stored: a chunk imported
+// before spec 2.18 (or whose text was otherwise lost) has none, and is
+// treated as stale the same way — forcing ingestFile to (re)store it —
+// rather than skipped forever with no text for the viewer to ever show.
+// Any other repository error from either check is reported as a failure
+// via a non-nil returned error, whose message is failure.
 func (s *Service) shouldSkipUnchanged(
-	ctx context.Context, prev domainknowledge.IngestedFile,
+	ctx context.Context, sessionID string, prev domainknowledge.IngestedFile,
 ) (skip bool, failure string, err error) {
 	_, getErr := s.items.GetByID(ctx, prev.ItemID)
-	if getErr == nil {
+	if getErr != nil {
+		if errors.Is(getErr, domainknowledge.ErrItemNotFound) {
+			return false, "", nil
+		}
+		return false, getErr.Error(), getErr
+	}
+
+	_, docErr := s.documents.Get(ctx, sessionID, prev.ItemID)
+	if docErr == nil {
 		return true, "", nil
 	}
-	if errors.Is(getErr, domainknowledge.ErrItemNotFound) {
+	if errors.Is(docErr, domainknowledge.ErrDocumentNotFound) {
 		return false, "", nil
 	}
-	return false, getErr.Error(), getErr
+	return false, docErr.Error(), docErr
 }
 
 // modTime returns candidate ReadPath's modification time in root as
@@ -277,6 +289,7 @@ func (s *Service) ingestFile(
 		if embedErr != nil {
 			return 0, fmt.Errorf("embedding chunk %d: %w", i, embedErr)
 		}
+		start, end := chunkCandidate.Start, chunkCandidate.End
 		chunks[i] = domainknowledge.Chunk{
 			ID:             uuid.NewString(),
 			SessionID:      sessionID,
@@ -287,6 +300,8 @@ func (s *Service) ingestFile(
 			FilePath:       displayPath,
 			Heading:        chunkCandidate.Heading,
 			Content:        chunkCandidate.Content,
+			StartOffset:    &start,
+			EndOffset:      &end,
 			Embedding:      toFloat32(response.Embedding),
 			EmbeddingModel: domainllm.EmbeddingModel,
 			CreatedAt:      now,
@@ -301,6 +316,9 @@ func (s *Service) ingestFile(
 			return err
 		}
 		if err := s.chunks.SaveAll(ctx, chunks); err != nil {
+			return err
+		}
+		if err := s.documents.Save(ctx, itemID, sessionID, content); err != nil {
 			return err
 		}
 		if err := s.saveShadowItem(ctx, sessionID, itemID, topic, concept, definition, now, hasPrev); err != nil {

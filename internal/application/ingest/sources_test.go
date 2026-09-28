@@ -37,7 +37,7 @@ func TestListSources_returnsTheRepositorysSessionSources(t *testing.T) {
 		{ItemID: "item-2", Title: "CAP theorem", Path: "cap.md", ChunkCount: 4, IngestedAt: time.Unix(2, 0)},
 	}
 	ingestedFiles.EXPECT().ListSourcesBySession(ctx, testSessionID).Return(want, nil).Once()
-	service := newTestService(nil, ingestedFiles, nil, nil, nil, nil, nil)
+	service := newTestService(nil, ingestedFiles, nil, nil, nil, nil, nil, nil)
 
 	// When listing the session's sources
 	got, err := service.ListSources(ctx, testSessionID)
@@ -53,7 +53,7 @@ func TestListSources_returnsTheRepositoryError(t *testing.T) {
 	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
 	boom := errors.New("disk full")
 	ingestedFiles.EXPECT().ListSourcesBySession(ctx, testSessionID).Return(nil, boom).Once()
-	service := newTestService(nil, ingestedFiles, nil, nil, nil, nil, nil)
+	service := newTestService(nil, ingestedFiles, nil, nil, nil, nil, nil, nil)
 
 	// When listing the session's sources
 	_, err := service.ListSources(ctx, testSessionID)
@@ -76,6 +76,10 @@ func TestRemoveSource_deletesChunksItemAndIngestedFile_thenEvictsTheIndex(t *tes
 	items.EXPECT().Delete(ctx, "item-1").Run(func(context.Context, string) {
 		order = append(order, "delete-item")
 	}).Return(nil).Once()
+	documents := knowledgemocks.NewMockDocumentRepository(t)
+	documents.EXPECT().DeleteByItemID(ctx, testSessionID, "item-1").Run(func(context.Context, string, string) {
+		order = append(order, "delete-document")
+	}).Return(nil).Once()
 	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
 	ingestedFiles.EXPECT().DeleteByItemID(ctx, testSessionID, "item-1").Run(func(context.Context, string, string) {
 		order = append(order, "delete-ingested-file")
@@ -86,7 +90,7 @@ func TestRemoveSource_deletesChunksItemAndIngestedFile_thenEvictsTheIndex(t *tes
 	}).Return(nil).Once()
 	tx := ingestmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := newTestService(chunks, ingestedFiles, items, nil, tx, store, passingIndexGuard(t))
+	service := newTestService(chunks, ingestedFiles, items, documents, nil, tx, store, passingIndexGuard(t))
 
 	// When removing it
 	err := service.RemoveSource(ctx, testSessionID, "item-1")
@@ -94,7 +98,7 @@ func TestRemoveSource_deletesChunksItemAndIngestedFile_thenEvictsTheIndex(t *tes
 	// Then every deletion happens inside the transaction, in order, and
 	// the index is evicted only after it commits
 	require.NoError(t, err)
-	assert.Equal(t, []string{"delete-chunks", "delete-item", "delete-ingested-file", "evict"}, order)
+	assert.Equal(t, []string{"delete-chunks", "delete-item", "delete-document", "delete-ingested-file", "evict"}, order)
 }
 
 func TestRemoveSource_itemDoesNotExist_returnsErrSourceNotFound_withoutMutating(t *testing.T) {
@@ -102,7 +106,7 @@ func TestRemoveSource_itemDoesNotExist_returnsErrSourceNotFound_withoutMutating(
 	ctx := context.Background()
 	items := knowledgemocks.NewMockRepository(t)
 	items.EXPECT().GetByID(ctx, "missing").Return(domainknowledge.Item{}, domainknowledge.ErrItemNotFound).Once()
-	service := newTestService(nil, nil, items, nil, nil, nil, passingIndexGuard(t))
+	service := newTestService(nil, nil, items, nil, nil, nil, nil, passingIndexGuard(t))
 
 	// When removing it
 	err := service.RemoveSource(ctx, testSessionID, "missing")
@@ -117,7 +121,7 @@ func TestRemoveSource_itemBelongsToAnotherSession_returnsErrSourceNotFound_witho
 	ctx := context.Background()
 	items := knowledgemocks.NewMockRepository(t)
 	items.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{ID: "item-1", SessionID: "other-session"}, nil).Once()
-	service := newTestService(nil, nil, items, nil, nil, nil, passingIndexGuard(t))
+	service := newTestService(nil, nil, items, nil, nil, nil, nil, passingIndexGuard(t))
 
 	// When session-1 tries to remove it
 	err := service.RemoveSource(ctx, testSessionID, "item-1")
@@ -133,7 +137,7 @@ func TestRemoveSource_indexBusy_returnsTheGuardError_withoutLookingUpTheItem(t *
 	guard := ingestmocks.NewMockIndexGuard(t)
 	boom := errors.New("index is retrying")
 	guard.EXPECT().BeginMutation().Return(boom).Once()
-	service := newTestService(nil, nil, nil, nil, nil, nil, guard)
+	service := newTestService(nil, nil, nil, nil, nil, nil, nil, guard)
 
 	// When removing a source
 	err := service.RemoveSource(ctx, testSessionID, "item-1")
@@ -153,7 +157,7 @@ func TestRemoveSource_transactionFails_returnsTheErrorWithoutEvictingTheIndex(t 
 	items.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{ID: "item-1", SessionID: testSessionID}, nil).Once()
 	tx := ingestmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := newTestService(chunks, nil, items, nil, tx, nil, passingIndexGuard(t))
+	service := newTestService(chunks, nil, items, nil, nil, tx, nil, passingIndexGuard(t))
 
 	// When removing it (no VectorStore mock was set up, so an eviction
 	// attempt would panic)
@@ -172,11 +176,13 @@ func TestRemoveSource_noChunks_skipsTheIndexEviction(t *testing.T) {
 	items := knowledgemocks.NewMockRepository(t)
 	items.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{ID: "item-1", SessionID: testSessionID}, nil).Once()
 	items.EXPECT().Delete(ctx, "item-1").Return(nil).Once()
+	documents := knowledgemocks.NewMockDocumentRepository(t)
+	documents.EXPECT().DeleteByItemID(ctx, testSessionID, "item-1").Return(nil).Once()
 	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
 	ingestedFiles.EXPECT().DeleteByItemID(ctx, testSessionID, "item-1").Return(nil).Once()
 	tx := ingestmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := newTestService(chunks, ingestedFiles, items, nil, tx, nil, passingIndexGuard(t))
+	service := newTestService(chunks, ingestedFiles, items, documents, nil, tx, nil, passingIndexGuard(t))
 
 	// When removing it (no VectorStore mock was set up, so Remove would panic)
 	err := service.RemoveSource(ctx, testSessionID, "item-1")
@@ -193,13 +199,15 @@ func TestRemoveSource_evictionFails_isLoggedNotReturned(t *testing.T) {
 	items := knowledgemocks.NewMockRepository(t)
 	items.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{ID: "item-1", SessionID: testSessionID}, nil).Once()
 	items.EXPECT().Delete(ctx, "item-1").Return(nil).Once()
+	documents := knowledgemocks.NewMockDocumentRepository(t)
+	documents.EXPECT().DeleteByItemID(ctx, testSessionID, "item-1").Return(nil).Once()
 	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
 	ingestedFiles.EXPECT().DeleteByItemID(ctx, testSessionID, "item-1").Return(nil).Once()
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Remove(mock.Anything, []string{"chunk-1"}).Return(errors.New("index unavailable")).Once()
 	tx := ingestmocks.NewMockTransactor(t)
 	runWithinTx(tx)
-	service := newTestService(chunks, ingestedFiles, items, nil, tx, store, passingIndexGuard(t))
+	service := newTestService(chunks, ingestedFiles, items, documents, nil, tx, store, passingIndexGuard(t))
 	logged := captureLog(t)
 
 	// When removing it

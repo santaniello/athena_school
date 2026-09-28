@@ -69,12 +69,22 @@ func newTestService(
 	chunks *knowledgemocks.MockChunkRepository,
 	ingestedFiles *knowledgemocks.MockIngestedFileRepository,
 	items *knowledgemocks.MockRepository,
+	documents *knowledgemocks.MockDocumentRepository,
 	llm *llmmocks.MockProvider,
 	tx *ingestmocks.MockTransactor,
 	store *knowledgemocks.MockVectorStore,
 	index IndexGuard,
 ) *Service {
-	return NewService(chunks, ingestedFiles, items, llm, tx, store, index)
+	return NewService(chunks, ingestedFiles, items, documents, llm, tx, store, index)
+}
+
+// noOpDocuments returns a DocumentRepository mock whose Save always
+// succeeds — the default for a test that reaches ingestFile's full
+// transactional replace but isn't specifically about document storage.
+func noOpDocuments(t *testing.T) *knowledgemocks.MockDocumentRepository {
+	documents := knowledgemocks.NewMockDocumentRepository(t)
+	documents.EXPECT().Save(mock.Anything, mock.Anything, testSessionID, mock.Anything).Return(nil)
+	return documents
 }
 
 // passingIndexGuard returns an IndexGuard mock that always allows the
@@ -133,7 +143,7 @@ func TestImportFile_newFile_ingestsExactlyOneFileWithFilesTotalOne(t *testing.T)
 		seen = append(seen, p)
 		return nil
 	}
-	service := newTestService(chunks, ingestedFiles, items, llm, tx, noOpReconciliationStore(t), passingIndexGuard(t))
+	service := newTestService(chunks, ingestedFiles, items, noOpDocuments(t), llm, tx, noOpReconciliationStore(t), passingIndexGuard(t))
 
 	// When importing that single file
 	summary, err := service.ImportFile(ctx, testSessionID, root, testSourceRoot, "go.md", onProgress)
@@ -171,7 +181,7 @@ func TestImportFile_stampsTheSessionOnChunksShadowItemAndIngestedFile(t *testing
 	ingestedFiles.EXPECT().Upsert(ctx, mock.MatchedBy(func(f domainknowledge.IngestedFile) bool {
 		return f.SessionID == testSessionID
 	})).Return(nil).Once()
-	service := newTestService(chunks, ingestedFiles, items, llm, tx, noOpReconciliationStore(t), passingIndexGuard(t))
+	service := newTestService(chunks, ingestedFiles, items, noOpDocuments(t), llm, tx, noOpReconciliationStore(t), passingIndexGuard(t))
 
 	// When importing it
 	summary, err := service.ImportFile(ctx, testSessionID, root, testSourceRoot, "go.md", noopProgress)
@@ -187,7 +197,8 @@ func TestImportFile_blankSessionID_isRejectedBeforeReservingTheIndexOrTouchingAn
 	ctx := context.Background()
 	service := newTestService(
 		knowledgemocks.NewMockChunkRepository(t), knowledgemocks.NewMockIngestedFileRepository(t),
-		knowledgemocks.NewMockRepository(t), llmmocks.NewMockProvider(t), ingestmocks.NewMockTransactor(t),
+		knowledgemocks.NewMockRepository(t), knowledgemocks.NewMockDocumentRepository(t),
+		llmmocks.NewMockProvider(t), ingestmocks.NewMockTransactor(t),
 		nil, ingestmocks.NewMockIndexGuard(t),
 	)
 
@@ -201,12 +212,13 @@ func TestImportFile_blankSessionID_isRejectedBeforeReservingTheIndexOrTouchingAn
 
 func TestImportFile_unchangedFile_withExistingItem_isSkipped(t *testing.T) {
 	// Given a file already recorded with its current mtime/model, whose
-	// shadow Item still exists
+	// shadow Item and stored document text both still exist
 	root := fstest.MapFS{"go.md": {Data: []byte("# Go\nBasics of Go."), ModTime: fixedModTime}}
 	ctx := context.Background()
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
 	items := knowledgemocks.NewMockRepository(t)
+	documents := knowledgemocks.NewMockDocumentRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	tx := ingestmocks.NewMockTransactor(t)
 
@@ -217,8 +229,9 @@ func TestImportFile_unchangedFile_withExistingItem_isSkipped(t *testing.T) {
 		},
 	}, nil).Once()
 	items.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{ID: "item-1"}, nil).Once()
+	documents.EXPECT().Get(ctx, testSessionID, "item-1").Return("# Go\nBasics of Go.", nil).Once()
 
-	service := newTestService(chunks, ingestedFiles, items, llm, tx, nil, passingIndexGuard(t))
+	service := newTestService(chunks, ingestedFiles, items, documents, llm, tx, nil, passingIndexGuard(t))
 
 	// When importing that single file
 	summary, err := service.ImportFile(ctx, testSessionID, root, testSourceRoot, "go.md", noopProgress)
@@ -228,6 +241,83 @@ func TestImportFile_unchangedFile_withExistingItem_isSkipped(t *testing.T) {
 	assert.Equal(t, 1, summary.FilesSkipped)
 	assert.Equal(t, 0, summary.FilesIngested)
 	llm.AssertNotCalled(t, "Embeddings", mock.Anything, mock.Anything)
+}
+
+func TestImportFile_unchangedFile_withNoStoredDocumentText_isTreatedAsStale_notSkipped(t *testing.T) {
+	// Given a file already recorded with its current mtime/model, whose
+	// shadow Item exists but whose document text was never stored (a
+	// pre-spec-2.18 chunk, or one whose text was otherwise lost)
+	root := fstest.MapFS{"go.md": {Data: []byte("# Go\nBasics of Go."), ModTime: fixedModTime}}
+	ctx := context.Background()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	items := knowledgemocks.NewMockRepository(t)
+	documents := knowledgemocks.NewMockDocumentRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	tx := ingestmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+
+	ingestedFiles.EXPECT().ListBySession(ctx, testSessionID).Return(map[string]domainknowledge.IngestedFile{
+		srcPath("go.md"): {
+			SourcePath: srcPath("go.md"), Path: "go.md", MTimeUnixNano: fixedModTime.UnixNano(),
+			EmbeddingModel: domainllm.EmbeddingModel, ChunkCount: 1, ItemID: "item-1",
+		},
+	}, nil).Once()
+	items.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{ID: "item-1"}, nil).Twice()
+	documents.EXPECT().Get(ctx, testSessionID, "item-1").Return("", domainknowledge.ErrDocumentNotFound).Once()
+	items.EXPECT().Update(ctx, mock.Anything).Return(nil).Once()
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nBasics of Go."}).
+		Return(embeddingResponse(), nil).Once()
+	chunks.EXPECT().DeleteBySourcePath(ctx, testSessionID, srcPath("go.md")).Return(nil, nil).Once()
+	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()
+	documents.EXPECT().Save(ctx, "item-1", testSessionID, "# Go\nBasics of Go.").Return(nil).Once()
+	ingestedFiles.EXPECT().Upsert(ctx, mock.Anything).Return(nil).Once()
+
+	service := newTestService(chunks, ingestedFiles, items, documents, llm, tx, noOpReconciliationStore(t), passingIndexGuard(t))
+
+	// When importing that single file
+	summary, err := service.ImportFile(ctx, testSessionID, root, testSourceRoot, "go.md", noopProgress)
+
+	// Then it is re-ingested (stores the text and re-embeds), not skipped
+	require.NoError(t, err)
+	assert.Equal(t, 1, summary.FilesIngested)
+	assert.Equal(t, 0, summary.FilesSkipped)
+}
+
+func TestImportFile_unchangedFile_whenDocumentLookupFailsForAnotherReason_isRecordedAsFailure(t *testing.T) {
+	// Given a file that would otherwise be skipped, but whose stored-text
+	// check hits a genuine repository error (not ErrDocumentNotFound)
+	root := fstest.MapFS{"go.md": {Data: []byte("# Go\nBasics of Go."), ModTime: fixedModTime}}
+	ctx := context.Background()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	items := knowledgemocks.NewMockRepository(t)
+	documents := knowledgemocks.NewMockDocumentRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	tx := ingestmocks.NewMockTransactor(t)
+
+	ingestedFiles.EXPECT().ListBySession(ctx, testSessionID).Return(map[string]domainknowledge.IngestedFile{
+		srcPath("go.md"): {
+			SourcePath: srcPath("go.md"), Path: "go.md", MTimeUnixNano: fixedModTime.UnixNano(),
+			EmbeddingModel: domainllm.EmbeddingModel, ChunkCount: 1, ItemID: "item-1",
+		},
+	}, nil).Once()
+	items.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{ID: "item-1"}, nil).Once()
+	boom := errors.New("database unavailable")
+	documents.EXPECT().Get(ctx, testSessionID, "item-1").Return("", boom).Once()
+
+	service := newTestService(chunks, ingestedFiles, items, documents, llm, tx, nil, passingIndexGuard(t))
+
+	// When importing that single file
+	summary, err := service.ImportFile(ctx, testSessionID, root, testSourceRoot, "go.md", noopProgress)
+
+	// Then the candidate is recorded as failed, not silently skipped or
+	// force-replaced
+	require.NoError(t, err)
+	assert.Equal(t, 1, summary.FilesFailed)
+	assert.Equal(t, 0, summary.FilesSkipped)
+	require.Len(t, summary.Failures, 1)
+	assert.Contains(t, summary.Failures[0].Reason, boom.Error())
 }
 
 func TestImportFile_unchangedFile_withDeletedItem_restoresItUnderTheSameID(t *testing.T) {
@@ -264,7 +354,7 @@ func TestImportFile_unchangedFile_withDeletedItem_restoresItUnderTheSameID(t *te
 		return f.ItemID == "item-1"
 	})).Return(nil).Once()
 
-	service := newTestService(chunks, ingestedFiles, items, llm, tx, noOpReconciliationStore(t), passingIndexGuard(t))
+	service := newTestService(chunks, ingestedFiles, items, noOpDocuments(t), llm, tx, noOpReconciliationStore(t), passingIndexGuard(t))
 
 	// When importing that single file
 	summary, err := service.ImportFile(ctx, testSessionID, root, testSourceRoot, "go.md", noopProgress)
@@ -296,7 +386,7 @@ func TestImportFile_unchangedFile_whenItemLookupFailsForAnotherReason_isRecorded
 	boom := errors.New("database unavailable")
 	items.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{}, boom).Once()
 
-	service := newTestService(chunks, ingestedFiles, items, llm, tx, nil, passingIndexGuard(t))
+	service := newTestService(chunks, ingestedFiles, items, nil, llm, tx, nil, passingIndexGuard(t))
 
 	// When importing that single file
 	summary, err := service.ImportFile(ctx, testSessionID, root, testSourceRoot, "go.md", noopProgress)
@@ -335,7 +425,7 @@ func TestImportFile_unchangedFile_whenItemLookupFailsForAnotherReason_advancesPr
 		seen = append(seen, p)
 		return nil
 	}
-	service := newTestService(chunks, ingestedFiles, items, llm, tx, nil, passingIndexGuard(t))
+	service := newTestService(chunks, ingestedFiles, items, nil, llm, tx, nil, passingIndexGuard(t))
 
 	// When importing that single file
 	summary, err := service.ImportFile(ctx, testSessionID, root, testSourceRoot, "go.md", onProgress)
@@ -369,7 +459,7 @@ func TestImportFile_unchangedFile_whenItemLookupFailsForAnotherReason_stopsAndPr
 
 	stopErr := errors.New("cancelled by caller")
 	onProgress := func(Progress) error { return stopErr }
-	service := newTestService(chunks, ingestedFiles, items, llm, tx, nil, passingIndexGuard(t))
+	service := newTestService(chunks, ingestedFiles, items, nil, llm, tx, nil, passingIndexGuard(t))
 
 	// When importing that single file
 	summary, err := service.ImportFile(ctx, testSessionID, root, testSourceRoot, "go.md", onProgress)
@@ -405,7 +495,7 @@ func TestImportFile_changedFile_reembedsAndUpdatesInPlace(t *testing.T) {
 	items.EXPECT().Update(ctx, mock.Anything).Return(nil).Once()
 	ingestedFiles.EXPECT().Upsert(ctx, mock.Anything).Return(nil).Once()
 
-	service := newTestService(chunks, ingestedFiles, items, llm, tx, noOpReconciliationStore(t), passingIndexGuard(t))
+	service := newTestService(chunks, ingestedFiles, items, noOpDocuments(t), llm, tx, noOpReconciliationStore(t), passingIndexGuard(t))
 
 	// When importing that single file
 	summary, err := service.ImportFile(ctx, testSessionID, root, testSourceRoot, "go.md", noopProgress)
@@ -435,7 +525,7 @@ func TestImportFile_caseInsensitiveExtension_isAccepted(t *testing.T) {
 	items.EXPECT().Save(ctx, mock.Anything).Return(nil).Once()
 	ingestedFiles.EXPECT().Upsert(ctx, mock.Anything).Return(nil).Once()
 
-	service := newTestService(chunks, ingestedFiles, items, llm, tx, noOpReconciliationStore(t), passingIndexGuard(t))
+	service := newTestService(chunks, ingestedFiles, items, noOpDocuments(t), llm, tx, noOpReconciliationStore(t), passingIndexGuard(t))
 
 	// When importing that single file
 	summary, err := service.ImportFile(ctx, testSessionID, root, testSourceRoot, "GO.MD", noopProgress)
@@ -455,7 +545,7 @@ func TestImportFile_rejectsInvalidPath_beforeReservingTheIndex(t *testing.T) {
 	tx := ingestmocks.NewMockTransactor(t)
 	guard := ingestmocks.NewMockIndexGuard(t) // no expectations: never called
 
-	service := newTestService(chunks, ingestedFiles, items, llm, tx, nil, guard)
+	service := newTestService(chunks, ingestedFiles, items, nil, llm, tx, nil, guard)
 
 	// When importing an invalid path
 	summary, err := service.ImportFile(ctx, testSessionID, fstest.MapFS{}, testSourceRoot, "../escape.md", noopProgress)
@@ -475,7 +565,7 @@ func TestImportFile_rejectsUnsupportedExtension_beforeReservingTheIndex(t *testi
 	tx := ingestmocks.NewMockTransactor(t)
 	guard := ingestmocks.NewMockIndexGuard(t) // no expectations: never called
 
-	service := newTestService(chunks, ingestedFiles, items, llm, tx, nil, guard)
+	service := newTestService(chunks, ingestedFiles, items, nil, llm, tx, nil, guard)
 
 	// When importing an unsupported file type
 	summary, err := service.ImportFile(ctx, testSessionID, fstest.MapFS{"notes.pdf": {}}, testSourceRoot, "notes.pdf", noopProgress)
@@ -497,7 +587,7 @@ func TestImportFile_returnsErrIndexLoading_whenIndexIsBusy(t *testing.T) {
 	guard := ingestmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(boom).Once()
 
-	service := newTestService(chunks, ingestedFiles, items, llm, tx, nil, guard)
+	service := newTestService(chunks, ingestedFiles, items, nil, llm, tx, nil, guard)
 
 	// When importing a valid file while the index is busy
 	summary, err := service.ImportFile(ctx, testSessionID, fstest.MapFS{"go.md": {}}, testSourceRoot, "go.md", noopProgress)
@@ -523,7 +613,7 @@ func TestImportFile_perFileFailure_isRecordedInSummary_notAsATopLevelError(t *te
 	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nBasics of Go."}).
 		Return(domainllm.EmbeddingResponse{}, boom).Once()
 
-	service := newTestService(chunks, ingestedFiles, items, llm, tx, nil, passingIndexGuard(t))
+	service := newTestService(chunks, ingestedFiles, items, nil, llm, tx, nil, passingIndexGuard(t))
 
 	// When importing that single file
 	summary, err := service.ImportFile(ctx, testSessionID, root, testSourceRoot, "go.md", noopProgress)
@@ -551,7 +641,7 @@ func TestImportFile_statFailure_isRecordedAsFailure(t *testing.T) {
 
 	ingestedFiles.EXPECT().ListBySession(ctx, testSessionID).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
 
-	service := newTestService(chunks, ingestedFiles, items, llm, tx, nil, passingIndexGuard(t))
+	service := newTestService(chunks, ingestedFiles, items, nil, llm, tx, nil, passingIndexGuard(t))
 
 	// When importing that single file
 	summary, err := service.ImportFile(ctx, testSessionID, root, testSourceRoot, "go.md", noopProgress)
@@ -589,7 +679,7 @@ func TestImportFile_reportsIndexingWarning_butStillCountsTheFileAsIngested(t *te
 	store.EXPECT().Remove(mock.Anything, mock.Anything).Return(nil).Once()
 	store.EXPECT().Add(mock.Anything, mock.Anything).Return(boom).Once()
 
-	service := newTestService(chunks, ingestedFiles, items, llm, tx, store, passingIndexGuard(t))
+	service := newTestService(chunks, ingestedFiles, items, noOpDocuments(t), llm, tx, store, passingIndexGuard(t))
 
 	// When importing that single file
 	summary, err := service.ImportFile(ctx, testSessionID, root, testSourceRoot, "go.md", noopProgress)
@@ -623,7 +713,7 @@ func TestImportFile_fullReservationRelease_allowsASubsequentImport(t *testing.T)
 	guard.EXPECT().BeginMutation().Return(nil).Twice()
 	guard.EXPECT().EndMutation().Twice()
 
-	service := newTestService(chunks, ingestedFiles, items, llm, tx, noOpReconciliationStore(t), guard)
+	service := newTestService(chunks, ingestedFiles, items, noOpDocuments(t), llm, tx, noOpReconciliationStore(t), guard)
 
 	// When importing the same file twice in a row
 	_, err1 := service.ImportFile(ctx, testSessionID, root, testSourceRoot, "go.md", noopProgress)
