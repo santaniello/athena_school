@@ -199,6 +199,65 @@ func (_c *MockChunkRepository_ListAll_Call) RunAndReturn(run func(context.Contex
 	return _c
 }
 
+// ListByItemID provides a mock function with given fields: ctx, itemID
+func (_m *MockChunkRepository) ListByItemID(ctx context.Context, itemID string) ([]knowledge.Chunk, error) {
+	ret := _m.Called(ctx, itemID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListByItemID")
+	}
+
+	var r0 []knowledge.Chunk
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) ([]knowledge.Chunk, error)); ok {
+		return rf(ctx, itemID)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) []knowledge.Chunk); ok {
+		r0 = rf(ctx, itemID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]knowledge.Chunk)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, itemID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockChunkRepository_ListByItemID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListByItemID'
+type MockChunkRepository_ListByItemID_Call struct {
+	*mock.Call
+}
+
+// ListByItemID is a helper method to define mock.On call
+//   - ctx context.Context
+//   - itemID string
+func (_e *MockChunkRepository_Expecter) ListByItemID(ctx interface{}, itemID interface{}) *MockChunkRepository_ListByItemID_Call {
+	return &MockChunkRepository_ListByItemID_Call{Call: _e.mock.On("ListByItemID", ctx, itemID)}
+}
+
+func (_c *MockChunkRepository_ListByItemID_Call) Run(run func(ctx context.Context, itemID string)) *MockChunkRepository_ListByItemID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockChunkRepository_ListByItemID_Call) Return(_a0 []knowledge.Chunk, _a1 error) *MockChunkRepository_ListByItemID_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockChunkRepository_ListByItemID_Call) RunAndReturn(run func(context.Context, string) ([]knowledge.Chunk, error)) *MockChunkRepository_ListByItemID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListCurrent provides a mock function with given fields: ctx, embeddingModel
 func (_m *MockChunkRepository) ListCurrent(ctx context.Context, embeddingModel string) (knowledge.ChunkLoadResult, error) {
 	ret := _m.Called(ctx, embeddingModel)

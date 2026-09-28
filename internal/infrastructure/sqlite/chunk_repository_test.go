@@ -72,10 +72,35 @@ func TestChunkRepository_SaveAll_thenListAll_roundTripsEveryField(t *testing.T) 
 	require.NoError(t, repo.SaveAll(ctx, []knowledge.Chunk{chunk}))
 	got, err := repo.ListAll(ctx)
 
-	// Then every field round-trips, including the embedding
+	// Then every field round-trips, including the embedding, and offsets
+	// stay nil when never set
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	assert.Equal(t, chunk, got[0])
+	assert.Nil(t, got[0].StartOffset)
+	assert.Nil(t, got[0].EndOffset)
+}
+
+func TestChunkRepository_SaveAll_thenListAll_roundTripsOffsets(t *testing.T) {
+	// Given a chunk with Start/End offsets set
+	repo := newTestChunkRepository(t)
+	ctx := context.Background()
+	chunk := testChunk("chunk-1", "notes/go.md", time.Now().UTC().Truncate(time.Second))
+	start, end := 12, 345
+	chunk.StartOffset = &start
+	chunk.EndOffset = &end
+
+	// When saving then listing it
+	require.NoError(t, repo.SaveAll(ctx, []knowledge.Chunk{chunk}))
+	got, err := repo.ListAll(ctx)
+
+	// Then the offsets round-trip as equal, independently allocated values
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.NotNil(t, got[0].StartOffset)
+	require.NotNil(t, got[0].EndOffset)
+	assert.Equal(t, start, *got[0].StartOffset)
+	assert.Equal(t, end, *got[0].EndOffset)
 }
 
 func TestChunkRepository_ListAll_returnsChunksOldestFirst(t *testing.T) {
@@ -401,4 +426,67 @@ func TestChunkRepository_ListIDsBySession_returnsAnEmptySlice_whenTheSessionOwns
 	require.NoError(t, err)
 	assert.NotNil(t, ids)
 	assert.Empty(t, ids)
+}
+
+func TestChunkRepository_ListByItemID_returnsOnlyThatItemsChunks_inDocumentOrder(t *testing.T) {
+	// Given two chunks of one item, saved out of document order, plus a
+	// chunk owned by a different item
+	repo := newTestChunkRepository(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Second)
+	first, second := 0, 500
+	third, fourth := 500, 900
+	firstChunk := testChunk("chunk-second", "notes/a.md", now)
+	firstChunk.ItemID = "item-a"
+	firstChunk.StartOffset, firstChunk.EndOffset = &third, &fourth
+	secondChunk := testChunk("chunk-first", "notes/a.md", now)
+	secondChunk.ItemID = "item-a"
+	secondChunk.StartOffset, secondChunk.EndOffset = &first, &second
+	otherItem := testChunk("chunk-other", "notes/b.md", now)
+	otherItem.ItemID = "item-b"
+	require.NoError(t, repo.SaveAll(ctx, []knowledge.Chunk{firstChunk, secondChunk, otherItem}))
+
+	// When listing item-a's chunks
+	got, err := repo.ListByItemID(ctx, "item-a")
+
+	// Then only item-a's chunks come back, in document order (by offset),
+	// not save order
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	assert.Equal(t, "chunk-first", got[0].ID)
+	assert.Equal(t, "chunk-second", got[1].ID)
+}
+
+func TestChunkRepository_ListByItemID_ordersChunksWithNoOffsetByCreatedAtThenID(t *testing.T) {
+	// Given two pre-2.18 chunks of the same item, neither carrying an
+	// offset, saved with distinct created_at timestamps
+	repo := newTestChunkRepository(t)
+	ctx := context.Background()
+	older := testChunk("chunk-old", "notes/a.md", time.Now().UTC().Add(-time.Hour).Truncate(time.Second))
+	older.ItemID = "item-a"
+	newer := testChunk("chunk-new", "notes/a.md", time.Now().UTC().Truncate(time.Second))
+	newer.ItemID = "item-a"
+	require.NoError(t, repo.SaveAll(ctx, []knowledge.Chunk{newer, older}))
+
+	// When listing item-a's chunks
+	got, err := repo.ListByItemID(ctx, "item-a")
+
+	// Then they fall back to created_at order
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	assert.Equal(t, "chunk-old", got[0].ID)
+	assert.Equal(t, "chunk-new", got[1].ID)
+}
+
+func TestChunkRepository_ListByItemID_returnsAnEmptySlice_whenTheItemOwnsNoChunks(t *testing.T) {
+	// Given a repository with no chunks at all
+	repo := newTestChunkRepository(t)
+
+	// When listing an item's chunks
+	got, err := repo.ListByItemID(context.Background(), "item-never-ingested")
+
+	// Then the result is empty and non-nil
+	require.NoError(t, err)
+	assert.NotNil(t, got)
+	assert.Empty(t, got)
 }

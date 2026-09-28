@@ -596,6 +596,71 @@ func TestOpen_createsKnowledgeChunksSourcePathIndex(t *testing.T) {
 	assert.Equal(t, "idx_knowledge_chunks_source_path", name)
 }
 
+func TestOpen_createsKnowledgeDocumentsTable(t *testing.T) {
+	// Given a path to a database file that does not exist yet
+	path := filepath.Join(t.TempDir(), "athena.db")
+
+	// When opening the database
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Then the knowledge_documents table exists
+	var tableName string
+	queryErr := db.QueryRow(
+		`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'knowledge_documents'`,
+	).Scan(&tableName)
+	require.NoError(t, queryErr)
+	assert.Equal(t, "knowledge_documents", tableName)
+}
+
+func TestOpen_isIdempotentOnSecondOpen_forKnowledgeDocuments(t *testing.T) {
+	// Given a database that was already opened once
+	path := filepath.Join(t.TempDir(), "athena.db")
+	first, err := Open(path)
+	require.NoError(t, err)
+	require.NoError(t, first.Close())
+
+	// When opening the same database file again
+	second, err := Open(path)
+
+	// Then it succeeds without error on the repeated CREATE TABLE
+	require.NoError(t, err)
+	defer func() { _ = second.Close() }()
+}
+
+func TestOpen_addsOffsetColumnsToKnowledgeChunks(t *testing.T) {
+	// Given a path to a database file that does not exist yet
+	path := filepath.Join(t.TempDir(), "athena.db")
+
+	// When opening the database
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Then knowledge_chunks has both start_offset and end_offset columns
+	for _, column := range []string{"start_offset", "end_offset"} {
+		has, err := hasColumn(db, "knowledge_chunks", column)
+		require.NoError(t, err)
+		assert.True(t, has, "expected knowledge_chunks to have column %q", column)
+	}
+}
+
+func TestOpen_isIdempotentOnSecondOpen_forKnowledgeChunksOffsetColumns(t *testing.T) {
+	// Given a database that was already opened once
+	path := filepath.Join(t.TempDir(), "athena.db")
+	first, err := Open(path)
+	require.NoError(t, err)
+	require.NoError(t, first.Close())
+
+	// When opening the same database file again
+	second, err := Open(path)
+
+	// Then it succeeds without error on the repeated ALTER TABLE ADD COLUMN
+	require.NoError(t, err)
+	defer func() { _ = second.Close() }()
+}
+
 func TestOpen_addsFolderIDColumnToSessions(t *testing.T) {
 	// Given a path to a database file that does not exist yet
 	path := filepath.Join(t.TempDir(), "athena.db")

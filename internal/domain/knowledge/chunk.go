@@ -24,12 +24,19 @@ type Chunk struct {
 	// FilePath is the stable, root-relative display/provenance path
 	// captured on the source's first import — it does not change when the
 	// same source is later reached through a different folder root.
-	FilePath       string
-	Heading        string
-	Content        string
-	Embedding      []float32
-	EmbeddingModel string
-	CreatedAt      time.Time
+	FilePath string
+	Heading  string
+	Content  string
+	// StartOffset/EndOffset are byte offsets, at UTF-8 boundaries, into the
+	// source document's full stored text (knowledge_documents) spanning the
+	// raw passage this chunk was built from — set by the chunker
+	// (application/ingest) at import time. Nil for a chunk imported before
+	// this field existed; such a chunk has no document text to offset into
+	// either (see DocumentRepository).
+	StartOffset, EndOffset *int
+	Embedding              []float32
+	EmbeddingModel         string
+	CreatedAt              time.Time
 }
 
 // ChunkLoadResult is ListCurrent's report: the chunks safe to index, plus
@@ -72,6 +79,10 @@ type ChunkRepository interface {
 	// IDs removed, so a caller can evict them from an in-memory index
 	// after this call's transaction commits.
 	DeleteByItemID(ctx context.Context, itemID string) ([]string, error)
+	// ListByItemID returns itemID's chunks in document order (by
+	// StartOffset, falling back to CreatedAt/ID for a pre-2.18 chunk with no
+	// offset), for building a SourceDocument's segments.
+	ListByItemID(ctx context.Context, itemID string) ([]Chunk, error)
 }
 
 // IngestedFile records the dedup state for one previously imported source.

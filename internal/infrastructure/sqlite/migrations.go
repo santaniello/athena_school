@@ -74,6 +74,19 @@ var migrations = []func(*sql.DB) error{
 	dropFoldersIsDefaultColumn,
 	addSessionsFolderIDCascade,
 	migrateKnowledgeToDocumentsOnly,
+	// knowledge_documents stores a document's full imported text, kept apart
+	// from knowledge_items so item reads (retrieval touches them) never drag
+	// it along. Additive: knowledge_chunks/ingested_files are untouched, and
+	// a document imported before this migration simply has no row here yet
+	// (see addKnowledgeChunksOffsetColumns and
+	// specs/phases/phase-02-knowledge-engine/18-notebooklm-style-citations.md
+	// decision 8).
+	execSQL(`CREATE TABLE IF NOT EXISTS knowledge_documents (
+		item_id    TEXT PRIMARY KEY,
+		session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+		content    TEXT NOT NULL
+	)`),
+	addKnowledgeChunksOffsetColumns,
 }
 
 // addSessionsFolderIDColumn adds sessions.folder_id if it does not already
@@ -577,5 +590,27 @@ func migrateKnowledgeToDocumentsOnly(db *sql.DB) error {
 		return fmt.Errorf("sqlite: committing documents-only knowledge migration: %w", err)
 	}
 	committed = true
+	return nil
+}
+
+// addKnowledgeChunksOffsetColumns adds knowledge_chunks.start_offset/
+// end_offset if they do not already exist (SQLite has no "ADD COLUMN IF NOT
+// EXISTS"). Both are nullable with no default: a chunk imported before this
+// migration has no offsets and keeps loading as such — see
+// specs/phases/phase-02-knowledge-engine/18-notebooklm-style-citations.md
+// decision 8.
+func addKnowledgeChunksOffsetColumns(db *sql.DB) error {
+	for _, column := range []string{"start_offset", "end_offset"} {
+		has, err := hasColumn(db, "knowledge_chunks", column)
+		if err != nil {
+			return err
+		}
+		if has {
+			continue
+		}
+		if _, err := db.Exec(`ALTER TABLE knowledge_chunks ADD COLUMN ` + column + ` INTEGER`); err != nil {
+			return err
+		}
+	}
 	return nil
 }
