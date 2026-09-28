@@ -94,6 +94,24 @@ type IngestedFile struct {
 	ChunkCount     int
 	// ItemID is the shadow Item's stable ID, carried across re-imports.
 	ItemID string
+	// IngestedAt is when this record was last written (insert or
+	// replace) — populated by ListSourcesBySession, which orders on it.
+	IngestedAt time.Time
+}
+
+// SessionSource is the Sources panel's read model: one row per document a
+// session has imported, joining an IngestedFile to its shadow Item. See
+// specs/phases/phase-02-knowledge-engine/17-session-sources-panel.md.
+type SessionSource struct {
+	ItemID string
+	// Title is the document's H1, falling back to its file name — the
+	// same value as the shadow Item's Concept.
+	Title string
+	// Path is the stable, root-relative display path. Never the absolute
+	// source path.
+	Path       string
+	ChunkCount int
+	IngestedAt time.Time
 }
 
 // IngestedFileRepository persists IngestedFile dedup records. Today the
@@ -105,4 +123,12 @@ type IngestedFileRepository interface {
 	// Upsert inserts file, or replaces the existing record for
 	// (file.SessionID, file.SourcePath).
 	Upsert(ctx context.Context, file IngestedFile) error
+	// ListSourcesBySession returns sessionID's imported documents for the
+	// Sources panel, oldest-imported first. A record whose item no longer
+	// exists is not listed.
+	ListSourcesBySession(ctx context.Context, sessionID string) ([]SessionSource, error)
+	// DeleteByItemID removes the ingested-file record owned by itemID
+	// within sessionID. It is a no-op, not an error, when no such record
+	// exists.
+	DeleteByItemID(ctx context.Context, sessionID, itemID string) error
 }

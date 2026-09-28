@@ -4,10 +4,12 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/santaniello/athena/internal/application/ingest"
+	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 )
 
 // Wails events emitted while a notes import runs. The UI only ever has one
@@ -138,4 +140,46 @@ func (a *App) ImportFile(sessionID, selectedPath string) error {
 	}
 	a.emit(a.ctx, eventIngestDone, toIngestSummaryResult(summary))
 	return nil
+}
+
+// SessionSourceResult is the desktop-facing DTO for one document a session
+// has imported, listed in the Sources panel. See
+// specs/phases/phase-02-knowledge-engine/17-session-sources-panel.md.
+type SessionSourceResult struct {
+	ItemID     string `json:"itemId"`
+	Title      string `json:"title"`
+	Path       string `json:"path"`
+	ChunkCount int    `json:"chunkCount"`
+	IngestedAt string `json:"ingestedAt"`
+}
+
+func toSessionSourceResult(s domainknowledge.SessionSource) SessionSourceResult {
+	return SessionSourceResult{
+		ItemID:     s.ItemID,
+		Title:      s.Title,
+		Path:       s.Path,
+		ChunkCount: s.ChunkCount,
+		IngestedAt: s.IngestedAt.Format(time.RFC3339),
+	}
+}
+
+// ListSessionSources returns sessionID's imported documents for the
+// Sources panel, oldest-imported first.
+func (a *App) ListSessionSources(sessionID string) ([]SessionSourceResult, error) {
+	sources, err := a.ingest.ListSources(a.ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]SessionSourceResult, len(sources))
+	for i, s := range sources {
+		results[i] = toSessionSourceResult(s)
+	}
+	return results, nil
+}
+
+// RemoveSessionSource hard-deletes itemID's chunks, its knowledge Item and
+// its ingested_files record from sessionID — never the file on disk, and
+// never another session's copy of it.
+func (a *App) RemoveSessionSource(sessionID, itemID string) error {
+	return a.ingest.RemoveSource(a.ctx, sessionID, itemID)
 }

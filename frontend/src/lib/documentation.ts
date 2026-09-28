@@ -102,7 +102,7 @@ const DOCUMENTATION: DocSection[] = [
       {
         term: 'Import notes',
         description:
-          'Add a Markdown or text file to a study session. Re-importing later skips a file that has not changed and never duplicates anything.',
+          "Add a Markdown or text file from a session's Sources panel. Re-importing later skips a file that has not changed and never duplicates anything, and removing one only affects that session.",
       },
       {
         term: 'Search by meaning',

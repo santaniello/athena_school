@@ -68,6 +68,26 @@ export namespace desktop {
 		    return a;
 		}
 	}
+	export class SessionSourceResult {
+	    itemId: string;
+	    title: string;
+	    path: string;
+	    chunkCount: number;
+	    ingestedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SessionSourceResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.itemId = source["itemId"];
+	        this.title = source["title"];
+	        this.path = source["path"];
+	        this.chunkCount = source["chunkCount"];
+	        this.ingestedAt = source["ingestedAt"];
+	    }
+	}
 	export class StudyContextResult {
 	    state: string;
 	    model: string;

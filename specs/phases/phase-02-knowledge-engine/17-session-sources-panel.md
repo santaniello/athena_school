@@ -114,17 +114,17 @@ documents and their `ingested_files` records. Bindings stay thin adapters (ADR-0
 Each slice keeps the build green and is committed on its own; frontend slices are TDD with
 Vitest, backend slices with `_test.go`.
 
-- [ ] Domain and SQLite: `IngestedAt`, `SessionSource`, `ListSourcesBySession`,
+- [x] Domain and SQLite: `IngestedAt`, `SessionSource`, `ListSourcesBySession`,
       `DeleteByItemID`; regenerate mocks
-- [ ] Application: `ingest.Service.ListSources` and `RemoveSource` (ownership check, index
+- [x] Application: `ingest.Service.ListSources` and `RemoveSource` (ownership check, index
       reservation, transaction, post-commit eviction), plus `ErrSourceNotFound`
-- [ ] Bindings `ListSessionSources`, `RemoveSessionSource`; regenerate `wailsjs`
-- [ ] `lib/sources.ts` and `useSessionSources`
-- [ ] Panel: real list, search and the loading/error/empty states; remove
+- [x] Bindings `ListSessionSources`, `RemoveSessionSource`; regenerate `wailsjs`
+- [x] `lib/sources.ts` and `useSessionSources`
+- [x] Panel: real list, search and the loading/error/empty states; remove
       `onSourcesChanged`/`sessionSources` and the `messages`-derived dedupe
-- [ ] Panel: Add (picker, `IngestProgressDialog` with `sessionId`, reload)
-- [ ] Panel: Remove (menu, confirmation, reload, error)
-- [ ] Docs: CHANGELOG, README, `lib/documentation.ts`, and mark spec 2.14's placeholders as
+- [x] Panel: Add (picker, `IngestProgressDialog` with `sessionId`, reload)
+- [x] Panel: Remove (menu, confirmation, reload, error)
+- [x] Docs: CHANGELOG, README, `lib/documentation.ts`, and mark spec 2.14's placeholders as
       delivered
 
 ## Acceptance Criteria

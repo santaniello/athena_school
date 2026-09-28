@@ -38,6 +38,10 @@ export function ListFolders() {
   return window['go']['desktop']['App']['ListFolders']();
 }
 
+export function ListSessionSources(arg1) {
+  return window['go']['desktop']['App']['ListSessionSources'](arg1);
+}
+
 export function ListStudySessionsByFolder(arg1) {
   return window['go']['desktop']['App']['ListStudySessionsByFolder'](arg1);
 }
@@ -48,6 +52,10 @@ export function MoveStudySession(arg1, arg2) {
 
 export function PickNotesFile() {
   return window['go']['desktop']['App']['PickNotesFile']();
+}
+
+export function RemoveSessionSource(arg1, arg2) {
+  return window['go']['desktop']['App']['RemoveSessionSource'](arg1, arg2);
 }
 
 export function RenameFolder(arg1, arg2) {

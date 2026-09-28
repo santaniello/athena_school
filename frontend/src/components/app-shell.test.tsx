@@ -26,13 +26,16 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   UpdateProfile: vi.fn(),
   SaveOpenRouterKey: vi.fn(),
   HasOpenRouterKey: vi.fn().mockResolvedValue(true),
+  // The Sources panel (useSessionSources) fetches this itself as soon as a
+  // session is open — resolved empty so it settles past its loading state.
+  ListSessionSources: vi.fn().mockResolvedValue([]),
 }))
 
 // The Study section's sidebar tree (StudyFolderTree) fetches folders as
 // soon as it mounts, and StudyChatScreen subscribes to study events as soon
 // as it mounts — both need mocking here, or they reach the real
 // (unavailable in jsdom) Wails runtime. importOriginal keeps pure helpers
-// (e.g. sourceLabel, used by StudySourcesPanel) real.
+// (e.g. sourceLabel, used by LocalSourcesStrip) real.
 vi.mock('@/lib/study', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/study')>()
   return {
@@ -297,7 +300,7 @@ describe('AppShell', () => {
     // never compute a real collapsed/expanded size here — the toggle
     // round trip itself can only be verified by hand in a real window, not
     // by this suite.
-    expect(screen.getByText('Attached to this session')).toBeInTheDocument()
+    expect(await screen.findByText('Imported into this session')).toBeInTheDocument()
     const toggle = screen.getByRole('button', { name: 'Hide sources panel' })
 
     // When clicking the header toggle
@@ -1059,6 +1062,59 @@ describe('AppShell knowledge index lifecycle', () => {
     await waitFor(() => expect(retryKnowledgeIndex).toHaveBeenCalledOnce())
     expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument()
     expect(screen.getByText(/Local search is unavailable/)).toBeInTheDocument()
+  })
+
+  it("disables the Sources panel's Add button, with a reason, while a retry is in flight", async () => {
+    // Given a session is open, past a failed load with no snapshot
+    vi.mocked(getKnowledgeIndexStatus).mockResolvedValueOnce({
+      state: 'failed',
+      hasSnapshot: false,
+      issues: [],
+      lastError: 'disk full',
+    })
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText('Knowledge index could not be loaded.')
+    await user.click(screen.getByRole('button', { name: 'Continue without local search' }))
+    await screen.findByText(/Local search is unavailable/)
+    await user.click(screen.getByRole('button', { name: 'Study' }))
+    await screen.findByText('General')
+    vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([])
+    vi.mocked(startStudySession).mockResolvedValueOnce({
+      id: 'session-1',
+      topic: 'Distributed systems',
+      folderId: 'default',
+      goal: 'Ace the SQL interview',
+      startedAt: '2026-08-17T10:00:00Z',
+      context: CONTEXT_NORMAL,
+    })
+    vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
+    await user.click(screen.getByText('General'))
+    await user.click(await screen.findByText('New session'))
+    await user.type(
+      screen.getByPlaceholderText('What do you want to study?'),
+      'Distributed systems',
+    )
+    await user.type(
+      screen.getByPlaceholderText('e.g. Pass the SQL interview'),
+      'Ace the SQL interview{Enter}',
+    )
+    await screen.findByText('Imported into this session')
+
+    // When retrying, held pending
+    let resolveRetry: (status: IndexStatus) => void = () => {}
+    vi.mocked(retryKnowledgeIndex).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveRetry = resolve
+      }),
+    )
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+
+    // Then the panel's Add is disabled while the retry is pending
+    expect(screen.getByRole('button', { name: 'Add source' })).toBeDisabled()
+
+    // Cleanup: release the pending retry so it doesn't leak into another test
+    resolveRetry({ state: 'ready', hasSnapshot: true, issues: [], lastError: '' })
   })
 
   it('actually resets the "continued without search" opt-in on a successful retry, re-blocking on a later failure', async () => {

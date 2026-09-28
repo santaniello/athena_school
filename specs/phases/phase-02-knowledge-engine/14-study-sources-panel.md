@@ -114,15 +114,21 @@ functional panel (Add, Remove, the real source list) in
   `Extract knowledge` composer button, and the draft/reconciliation review workflow.
 - Move "Import notes" from a global action to a session-scoped one: importing a file
   attaches it to the currently open session.
-- Make Add/Remove real: define the session↔document ownership (schema + domain), wire
+- ~~Make Add/Remove real: define the session↔document ownership (schema + domain), wire
   the panel's Add to session-scoped import and Remove to a real detach/delete, with an
-  explicit decision on hard-delete vs. detach semantics.
+  explicit decision on hard-delete vs. detach semantics.~~ **Delivered by
+  [17](17-session-sources-panel.md):** Add opens the picker then `IngestProgressDialog`;
+  Remove is a session-scoped hard delete, confirmed, with the ownership check
+  `ingest.Service.RemoveSource` decided on.
 - Decide what happens to documents already imported today (no session owner) once
   session-scoping exists — do they stay globally visible everywhere, or need a
   one-time migration decision?
 - Remove `Knowledge` from the left nav once Explorer/Review have nothing left to
   review under the new model.
-- Replace the panel's in-memory (`messages`-derived) source list with a real read of
+- ~~Replace the panel's in-memory (`messages`-derived) source list with a real read of
   `knowledge.MessageSourceRepository.ListBySession` (already exists, unused by the
   frontend today) once the panel needs to survive a session resume with no new replies
-  yet.
+  yet.~~ **Delivered by [17](17-session-sources-panel.md):** the panel now lists the
+  session's imported documents (`IngestedFileRepository.ListSourcesBySession`), not
+  messages' cited sources — a different, simpler read than the one anticipated here,
+  since 2.16 already made a session's knowledge exactly its imported documents.
