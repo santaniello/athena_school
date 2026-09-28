@@ -55,8 +55,10 @@ export interface StudySource {
 
 // Maps a Source to its display title/subtitle per
 // specs/phases/phase-02-knowledge-engine/05-rag-integration.md's three
-// source-type label variants. Shared by every surface that lists Sources
-// (LocalSourcesStrip, the Study Sources panel) so they can never drift.
+// source-type label variants. Used by LocalSourcesStrip, the per-message
+// list of what backed a reply — the Sources panel instead lists a
+// session's imported documents directly (see lib/sources.ts's
+// SessionSource), which needs no such mapping.
 export function sourceLabel(source: StudySource): { title: string; subtitle: string } {
   switch (source.sourceType) {
     case 'user_note':

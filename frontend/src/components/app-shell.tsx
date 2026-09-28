@@ -19,7 +19,7 @@ import SettingsScreen from '@/screens/SettingsScreen'
 import DocumentationScreen from '@/screens/DocumentationScreen'
 import { NAVIGATION, type AppSection } from '@/lib/navigation'
 import { getUserProfile, type ProfileDraft } from '@/lib/profile'
-import { startStudySession, type StudySession, type StudySource } from '@/lib/study'
+import { startStudySession, type StudySession } from '@/lib/study'
 import {
   getKnowledgeIndexStatus,
   onKnowledgeIndexStatus,
@@ -75,13 +75,10 @@ function AppShell() {
   // the node on mount and with null on unmount/section change — no portal
   // while this is null, which is exactly the "not in Study" state.
   const [sourceModeSlot, setSourceModeSlot] = useState<HTMLDivElement | null>(null)
-  // The Sources panel's collapse state and its content — see
-  // specs/phases/phase-02-knowledge-engine/14-study-sources-panel.md.
-  // sessionSources is fed by StudyChatScreen's onSourcesChanged, not
-  // fetched here, so it naturally resets to [] when a session switch
-  // remounts StudyChatScreen (it keys on activeSession.id below).
+  // The Sources panel's collapse state — its content is now fetched by the
+  // panel itself (useSessionSources), keyed on sessionId; see
+  // specs/phases/phase-02-knowledge-engine/17-session-sources-panel.md.
   const [sourcesOpen, setSourcesOpen] = useState(true)
-  const [sessionSources, setSessionSources] = useState<StudySource[]>([])
   // Drives the header toggle button — collapse()/expand() are the source of
   // truth (also reachable by dragging the handle past minSize), sourcesOpen
   // just mirrors the panel's own reported size via onResize below.
@@ -172,10 +169,6 @@ function AppShell() {
   // Stryker restore ConditionalExpression,StringLiteral
 
   function handleSelectSession(session: StudySession, folderName: string) {
-    // Cleared alongside activeSession, not left for the new StudyChatScreen's
-    // onSourcesChanged effect to overwrite post-mount — otherwise the Sources
-    // panel briefly shows the previous session's sources for one render.
-    setSessionSources([])
     setActiveSession({
       id: session.id,
       topic: session.topic,
@@ -190,7 +183,6 @@ function AppShell() {
   }
 
   function handleSessionStarted(session: StudySession, folderName: string) {
-    setSessionSources([])
     setActiveSession({
       id: session.id,
       topic: session.topic,
@@ -258,7 +250,6 @@ function AppShell() {
       // StudyFolderTree via the ref this guards — current is never null
       // on this path.
       studyFolderTreeRef.current?.refreshFolder(session.folderId)
-      setSessionSources([])
       setActiveSession({
         id: session.id,
         topic: session.topic,
@@ -387,7 +378,6 @@ function AppShell() {
               onStartNewSession={handleStartNewSession}
               startingNewSession={startingNewSession}
               sourceModeSlot={sourceModeSlot}
-              onSourcesChanged={setSessionSources}
             />
           ) : (
             <div className="m-auto flex flex-col items-center gap-2 text-center">
@@ -514,7 +504,7 @@ function AppShell() {
                 onResize={(size) => setSourcesOpen(size.inPixels > 0)}
                 style={{ overflow: 'hidden' }}
               >
-                <StudySourcesPanel sources={sessionSources} />
+                <StudySourcesPanel sessionId={activeSession.id} />
               </ResizablePanel>
             </ResizablePanelGroup>
           ) : (

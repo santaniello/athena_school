@@ -26,13 +26,16 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   UpdateProfile: vi.fn(),
   SaveOpenRouterKey: vi.fn(),
   HasOpenRouterKey: vi.fn().mockResolvedValue(true),
+  // The Sources panel (useSessionSources) fetches this itself as soon as a
+  // session is open — resolved empty so it settles past its loading state.
+  ListSessionSources: vi.fn().mockResolvedValue([]),
 }))
 
 // The Study section's sidebar tree (StudyFolderTree) fetches folders as
 // soon as it mounts, and StudyChatScreen subscribes to study events as soon
 // as it mounts — both need mocking here, or they reach the real
 // (unavailable in jsdom) Wails runtime. importOriginal keeps pure helpers
-// (e.g. sourceLabel, used by StudySourcesPanel) real.
+// (e.g. sourceLabel, used by LocalSourcesStrip) real.
 vi.mock('@/lib/study', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/study')>()
   return {
@@ -297,7 +300,7 @@ describe('AppShell', () => {
     // never compute a real collapsed/expanded size here — the toggle
     // round trip itself can only be verified by hand in a real window, not
     // by this suite.
-    expect(screen.getByText('Attached to this session')).toBeInTheDocument()
+    expect(await screen.findByText('Imported into this session')).toBeInTheDocument()
     const toggle = screen.getByRole('button', { name: 'Hide sources panel' })
 
     // When clicking the header toggle
