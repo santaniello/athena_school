@@ -2,6 +2,23 @@ import { describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MessageBubble } from './message-bubble'
+import type { StudySource } from '@/lib/study'
+
+// testSource fills in the fields a given case doesn't care about with
+// harmless defaults, so each one only spells out what it's asserting on.
+function testSource(overrides: Partial<StudySource>): StudySource {
+  return {
+    chunkId: 'chunk-1',
+    itemId: 'item-1',
+    sourceType: 'imported_doc',
+    filePath: 'notes/a.md',
+    heading: 'Channels',
+    concept: '',
+    score: 0.9,
+    excerpt: 'Channels are typed conduits for communicating between goroutines.',
+    ...overrides,
+  }
+}
 
 describe('MessageBubble', () => {
   it('shows a copy button for a settled assistant message', () => {
@@ -233,5 +250,146 @@ describe('MessageBubble', () => {
     expect(screen.getByRole('table')).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: 'Col A' })).toBeInTheDocument()
     expect(screen.getByRole('cell', { name: 'a1' })).toBeInTheDocument()
+  })
+
+  describe('citations', () => {
+    it('renders a citation chip for a valid index', () => {
+      // Given a reply citing its one source
+      const sources = [testSource({})]
+      render(<MessageBubble role="assistant" content="Channels are typed [1]." sources={sources} />)
+
+      // Then a chip renders for that index
+      expect(screen.getByRole('button', { name: '1' })).toHaveAttribute(
+        'data-slot',
+        'citation-chip',
+      )
+    })
+
+    it('renders plain text for an out-of-range index', () => {
+      // Given a reply citing an index with no matching source
+      render(<MessageBubble role="assistant" content="Channels are typed [1]." sources={[]} />)
+
+      // Then no chip is rendered, and the marker stays as plain text
+      expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()
+      expect(screen.getByText(/\[1\]/)).toBeInTheDocument()
+    })
+
+    it('renders plain text when no sources prop is given at all', () => {
+      // Given a reply with a citation marker and no sources prop
+      render(<MessageBubble role="assistant" content="Channels are typed [1]." />)
+
+      // Then the marker stays as plain text
+      expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()
+      expect(screen.getByText(/\[1\]/)).toBeInTheDocument()
+    })
+
+    it('shows the source title, heading, and excerpt start on hover', async () => {
+      // Given a reply citing a source with a known title/heading/excerpt
+      const user = userEvent.setup()
+      const sources = [
+        testSource({
+          filePath: 'notes/channels.md',
+          heading: 'Channels',
+          excerpt: 'Channels are typed conduits.',
+        }),
+      ]
+      render(<MessageBubble role="assistant" content="Channels are typed [1]." sources={sources} />)
+
+      // When hovering the chip
+      await user.hover(screen.getByRole('button', { name: '1' }))
+
+      // Then the tooltip shows the title, heading, and excerpt start
+      expect(await screen.findByText('notes/channels.md')).toBeInTheDocument()
+      expect(screen.getByText('Channels')).toBeInTheDocument()
+      expect(screen.getByText(/Channels are typed conduits\./)).toBeInTheDocument()
+    })
+
+    it('calls onOpenCitation with the resolved source when a chip is clicked', async () => {
+      // Given a reply citing its one source
+      const user = userEvent.setup()
+      const source = testSource({})
+      const onOpenCitation = vi.fn()
+      render(
+        <MessageBubble
+          role="assistant"
+          content="Channels are typed [1]."
+          sources={[source]}
+          onOpenCitation={onOpenCitation}
+        />,
+      )
+
+      // When clicking the chip
+      await user.click(screen.getByRole('button', { name: '1' }))
+
+      // Then onOpenCitation is called with that exact source
+      expect(onOpenCitation).toHaveBeenCalledWith(source)
+    })
+
+    it('re-resolves a chip against a new sources list on rerender', async () => {
+      // Given a bubble citing its one source
+      const user = userEvent.setup()
+      const first = testSource({ filePath: 'notes/first.md', heading: 'First' })
+      const { rerender } = render(
+        <MessageBubble role="assistant" content="Channels are typed [1]." sources={[first]} />,
+      )
+      await user.hover(screen.getByRole('button', { name: '1' }))
+      expect(await screen.findByText('notes/first.md')).toBeInTheDocument()
+
+      // When rerendered with a different sources list (e.g. the same
+      // streaming bubble instance, a later study:sources event)
+      const second = testSource({ filePath: 'notes/second.md', heading: 'Second' })
+      rerender(
+        <MessageBubble role="assistant" content="Channels are typed [1]." sources={[second]} />,
+      )
+      await user.unhover(screen.getByRole('button', { name: '1' }))
+      await user.hover(screen.getByRole('button', { name: '1' }))
+
+      // Then the chip resolves against the new list, not a memoized stale one
+      expect(await screen.findByText('notes/second.md')).toBeInTheDocument()
+      expect(screen.queryByText('notes/first.md')).not.toBeInTheDocument()
+    })
+
+    it('resolves citation chips in a streaming bubble', () => {
+      // Given a streaming assistant bubble that already has its sources
+      const sources = [testSource({})]
+      render(
+        <MessageBubble
+          role="assistant"
+          content="Channels are typed [1]"
+          isStreaming
+          sources={sources}
+        />,
+      )
+
+      // Then the chip still resolves before the stream settles
+      expect(screen.getByRole('button', { name: '1' })).toHaveAttribute(
+        'data-slot',
+        'citation-chip',
+      )
+    })
+
+    it('strips citation markers when copying', async () => {
+      // Given a settled assistant message citing a source
+      const user = userEvent.setup()
+      const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
+      const sources = [testSource({})]
+      render(<MessageBubble role="assistant" content="Channels are typed [1]." sources={sources} />)
+
+      // When clicking the copy button
+      await user.click(screen.getByRole('button', { name: 'Copy message' }))
+
+      // Then the copied text has no citation markers
+      expect(writeText).toHaveBeenCalledWith('Channels are typed .')
+    })
+
+    it('leaves a marker inside a code span unconverted', () => {
+      // Given a citation-shaped marker inside an inline code span
+      const sources = [testSource({})]
+      render(<MessageBubble role="assistant" content="Run `foo[1]bar`." sources={sources} />)
+
+      // Then it stays plain text inside the code element, not a chip
+      expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()
+      expect(screen.getByText('foo[1]bar')).toHaveProperty('tagName', 'CODE')
+    })
   })
 })

@@ -45,6 +45,11 @@ interface StudyChatScreenProps {
   // it out of the composer's textarea. Undefined/null (e.g. a standalone
   // render in tests) falls back to rendering it inline over the composer.
   sourceModeSlot?: HTMLElement | null
+  // Opens the Sources panel at a citation's source document, at the exact
+  // cited passage. Owned by AppShell (see spec 2.18 decision 11). Omitted
+  // in contexts that never open the panel (e.g. this screen rendered
+  // standalone, as in its own tests).
+  onOpenCitation?: (source: StudySource) => void
 }
 
 // ContextState mirrors the persisted study.ContextState the backend tracks
@@ -83,6 +88,7 @@ function StudyChatScreen({
   onStartNewSession,
   startingNewSession,
   sourceModeSlot,
+  onOpenCitation,
 }: StudyChatScreenProps) {
   const [sessionTopic, setSessionTopic] = useState(initialTopic)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -102,6 +108,12 @@ function StudyChatScreen({
   // flight, until "study:done" attaches them to the completed assistant
   // message and clears this back to empty.
   const pendingSourcesRef = useRef<StudySource[]>([])
+  // Mirrors pendingSourcesRef as state, so the streaming bubble's own render
+  // can resolve a citation before study:done — reading ref.current during
+  // render is flagged by react-hooks/refs. onStudyDone still reads the ref
+  // directly (a synchronous read, to attach sources to the persisted message
+  // object); only the streaming bubble's render uses this state instead.
+  const [streamingSources, setStreamingSources] = useState<StudySource[]>([])
   // Holds the draft text of the currently in-flight optimistic send, so a
   // study:error carrying a pre-persistence code (context_limit_reached,
   // turn_in_progress) can pop the optimistic bubble and restore it.
@@ -186,6 +198,7 @@ function StudyChatScreen({
       streamingTextRef.current = ''
       const sources = pendingSourcesRef.current
       pendingSourcesRef.current = []
+      setStreamingSources([])
       pendingSendRef.current = null
       setMessages((previous) => [...previous, { role: 'assistant', content, sources }])
       setStreamingText('')
@@ -213,6 +226,7 @@ function StudyChatScreen({
     const offSources = onStudySources((event) => {
       if (event.sessionId !== sessionId) return
       pendingSourcesRef.current = event.sources
+      setStreamingSources(event.sources)
     })
     const offContextNormal = onStudyContextNormal((event) => {
       if (event.sessionId !== sessionId) return
@@ -318,8 +332,13 @@ function StudyChatScreen({
         {messages.map((message, index) =>
           message.role === 'assistant' && message.sources && message.sources.length > 0 ? (
             <div key={index} className="flex flex-col items-start gap-1">
-              <MessageBubble role={message.role} content={message.content} />
-              <LocalSourcesStrip sources={message.sources} />
+              <MessageBubble
+                role={message.role}
+                content={message.content}
+                sources={message.sources}
+                onOpenCitation={onOpenCitation}
+              />
+              <LocalSourcesStrip sources={message.sources} onOpenCitation={onOpenCitation} />
             </div>
           ) : (
             <MessageBubble key={index} role={message.role} content={message.content} />
@@ -327,7 +346,12 @@ function StudyChatScreen({
         )}
         {isStreaming && !streamingText && <ThinkingIndicator />}
         {isStreaming && streamingText && (
-          <MessageBubble role="assistant" content={streamingText} isStreaming />
+          <MessageBubble
+            role="assistant"
+            content={streamingText}
+            isStreaming
+            sources={streamingSources}
+          />
         )}
       </div>
       {error && (

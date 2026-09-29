@@ -1,8 +1,11 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { ComponentProps } from 'react'
 import { Check, Copy } from 'lucide-react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { CitationChip } from '@/components/citation-chip'
+import { CITATION_TAG_NAME, remarkCitations, stripCitationMarkers } from '@/lib/citations'
+import type { StudySource } from '@/lib/study'
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import bash from 'react-syntax-highlighter/dist/esm/languages/prism/bash'
@@ -43,6 +46,12 @@ interface MessageBubbleProps {
   role: 'user' | 'assistant'
   content: string
   isStreaming?: boolean
+  // The reply's full source list, so an inline [n] marker can resolve to a
+  // CitationChip. Defaults to empty, which renders every marker as plain
+  // text — the correct behavior with no sources to resolve against.
+  sources?: StudySource[]
+  // Omitted while streaming; forwarded to each CitationChip.
+  onOpenCitation?: (source: StudySource) => void
 }
 
 const COPIED_RESET_DELAY_MS = 2000
@@ -100,7 +109,7 @@ function CodeRenderer({ className, children, ...props }: ComponentProps<'code'>)
   )
 }
 
-const markdownComponents: Components = {
+const baseMarkdownComponents: Components = {
   p: (props) => <p className="mb-2 last:mb-0" {...props} />,
   h1: (props) => (
     <h2 className="mb-2 font-heading text-base font-semibold text-foreground" {...props} />
@@ -138,11 +147,31 @@ const markdownComponents: Components = {
   code: CodeRenderer,
 }
 
-function MessageBubble({ role, content, isStreaming = false }: MessageBubbleProps) {
+function MessageBubble({
+  role,
+  content,
+  isStreaming = false,
+  sources = [],
+  onOpenCitation,
+}: MessageBubbleProps) {
   const [copied, setCopied] = useState(false)
 
+  const components = useMemo<Components>(
+    () => ({
+      ...baseMarkdownComponents,
+      [CITATION_TAG_NAME]: (props: { citationIndex?: number }) => (
+        <CitationChip
+          citationIndex={props.citationIndex ?? 0}
+          sources={sources}
+          onOpenCitation={onOpenCitation}
+        />
+      ),
+    }),
+    [sources, onOpenCitation],
+  )
+
   async function handleCopy() {
-    await navigator.clipboard.writeText(content)
+    await navigator.clipboard.writeText(stripCitationMarkers(content))
     setCopied(true)
     setTimeout(() => setCopied(false), COPIED_RESET_DELAY_MS)
   }
@@ -153,7 +182,7 @@ function MessageBubble({ role, content, isStreaming = false }: MessageBubbleProp
       data-role={role}
       className={cn(messageBubbleVariants({ role }))}
     >
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkCitations]} components={components}>
         {content}
       </ReactMarkdown>
       {role === 'assistant' && !isStreaming && (

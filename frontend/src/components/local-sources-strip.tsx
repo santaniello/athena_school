@@ -4,6 +4,10 @@ import { sourceLabel, type StudySource } from '@/lib/study'
 
 interface LocalSourcesStripProps {
   sources: StudySource[]
+  // Opens the Sources panel at this source's document, at the exact cited
+  // passage. Omitted in contexts that never open the panel (e.g. tests
+  // rendering this in isolation).
+  onOpenCitation?: (source: StudySource) => void
 }
 
 // Formats a cosine similarity as a fixed decimal — never a confidence
@@ -17,7 +21,7 @@ function formatScore(score: number): string {
 // Renders nothing when there are no sources — calling it "Local sources"
 // (rather than "citations") makes clear a `notes` answer may also draw on
 // the model's general knowledge.
-function LocalSourcesStrip({ sources }: LocalSourcesStripProps) {
+function LocalSourcesStrip({ sources, onOpenCitation }: LocalSourcesStripProps) {
   const [expanded, setExpanded] = useState(false)
   if (sources.length === 0) return null
 
@@ -42,9 +46,15 @@ function LocalSourcesStrip({ sources }: LocalSourcesStripProps) {
             const { title, subtitle } = sourceLabel(source)
             return (
               <li key={index} className="text-muted-foreground">
-                <span className="font-medium text-foreground">{title}</span>
-                {subtitle && <span> · {subtitle}</span>}
-                <span> · {formatScore(source.score)}</span>
+                <button
+                  type="button"
+                  onClick={() => onOpenCitation?.(source)}
+                  className="cursor-pointer text-left hover:text-foreground"
+                >
+                  <span className="font-medium text-foreground">{`${index + 1}. ${title}`}</span>
+                  {subtitle && <span> · {subtitle}</span>}
+                  <span> · {formatScore(source.score)}</span>
+                </button>
               </li>
             )
           })}

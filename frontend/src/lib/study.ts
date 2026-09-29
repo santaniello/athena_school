@@ -46,11 +46,14 @@ export interface StudySessionHistory {
 export type SourceMode = 'notes' | 'strict-notes'
 
 export interface StudySource {
+  chunkId: string
+  itemId: string
   sourceType: string
   filePath: string
   heading: string
   concept: string
   score: number
+  excerpt: string
 }
 
 // Maps a Source to its display title/subtitle per
