@@ -133,4 +133,99 @@ describe('SourceViewer', () => {
     await waitFor(() => expect(screen.getByText('Distributed Systems')).toBeInTheDocument())
     expect(getSessionSourceDocument).toHaveBeenCalledTimes(2)
   })
+
+  it('highlights the segment matching the given chunkId', async () => {
+    // Given a document and a citation pointing at its second segment
+    vi.mocked(getSessionSourceDocument).mockResolvedValueOnce(document)
+
+    // When the viewer renders with that chunkId
+    render(
+      <SourceViewer sessionId="session-1" itemId="item-1" onBack={vi.fn()} chunkId="chunk-1" />,
+    )
+    await waitFor(() => expect(screen.getByText('Distributed Systems')).toBeInTheDocument())
+
+    // Then only the matching segment carries the highlight class
+    const highlighted = screen.getByText('The scheduler multiplexes M:N goroutines.', {
+      exact: false,
+    })
+    expect(highlighted).toHaveClass('citation-highlight')
+    const untouched = screen.getByText('Intro.', { exact: false })
+    expect(untouched).not.toHaveClass('citation-highlight')
+  })
+
+  it('scrolls the matching segment into view once the document loads', async () => {
+    // Given a document and a citation pointing at its second segment
+    vi.mocked(getSessionSourceDocument).mockResolvedValueOnce(document)
+    const scrollIntoView = vi
+      .spyOn(Element.prototype, 'scrollIntoView')
+      .mockImplementation(() => {})
+
+    // When the viewer renders with that chunkId
+    render(
+      <SourceViewer sessionId="session-1" itemId="item-1" onBack={vi.fn()} chunkId="chunk-1" />,
+    )
+    await waitFor(() => expect(screen.getByText('Distributed Systems')).toBeInTheDocument())
+
+    // Then exactly the matching segment was scrolled into view, centered —
+    // not the gap segment, and not with default scroll options
+    const target = screen.getByText('The scheduler multiplexes M:N goroutines.', { exact: false })
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1))
+    expect(scrollIntoView.mock.instances[0]).toBe(target)
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' })
+  })
+
+  it('does not scroll anything when no chunkId is given', async () => {
+    // Given the same document, opened without a citation (a plain row click)
+    vi.mocked(getSessionSourceDocument).mockResolvedValueOnce(document)
+    const scrollIntoView = vi
+      .spyOn(Element.prototype, 'scrollIntoView')
+      .mockImplementation(() => {})
+
+    // When the viewer renders with no chunkId
+    render(<SourceViewer sessionId="session-1" itemId="item-1" onBack={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Distributed Systems')).toBeInTheDocument())
+
+    // Then nothing was scrolled
+    expect(scrollIntoView).not.toHaveBeenCalled()
+  })
+
+  it('does not scroll or throw when chunkId matches no segment in the document', async () => {
+    // Given a chunkId that does not exist in this document (e.g. the cited
+    // chunk was re-chunked differently since)
+    vi.mocked(getSessionSourceDocument).mockResolvedValueOnce(document)
+    const scrollIntoView = vi
+      .spyOn(Element.prototype, 'scrollIntoView')
+      .mockImplementation(() => {})
+
+    // When the viewer renders with that chunkId
+    render(
+      <SourceViewer
+        sessionId="session-1"
+        itemId="item-1"
+        onBack={vi.fn()}
+        chunkId="no-such-chunk"
+      />,
+    )
+    await waitFor(() => expect(screen.getByText('Distributed Systems')).toBeInTheDocument())
+
+    // Then nothing was scrolled, and nothing is highlighted
+    expect(scrollIntoView).not.toHaveBeenCalled()
+    expect(
+      screen.getByText('The scheduler multiplexes M:N goroutines.', { exact: false }),
+    ).not.toHaveClass('citation-highlight')
+  })
+
+  it('renders no highlight when no chunkId is given', async () => {
+    // Given the same document, opened without a citation (a plain row click)
+    vi.mocked(getSessionSourceDocument).mockResolvedValueOnce(document)
+
+    // When the viewer renders
+    render(<SourceViewer sessionId="session-1" itemId="item-1" onBack={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Distributed Systems')).toBeInTheDocument())
+
+    // Then no segment carries the highlight class
+    expect(
+      screen.getByText('The scheduler multiplexes M:N goroutines.', { exact: false }),
+    ).not.toHaveClass('citation-highlight')
+  })
 })

@@ -640,4 +640,68 @@ describe('StudySourcesPanel', () => {
     expect(screen.getByPlaceholderText('Search sources')).toBeInTheDocument()
     expect(screen.queryByText('Body text.')).not.toBeInTheDocument()
   })
+
+  it('opens the viewer at the requested document and chunk when openRequest is set', async () => {
+    // Given a panel showing the list
+    vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
+    vi.mocked(getSessionSourceDocument).mockResolvedValueOnce({
+      itemId: 'item-1',
+      title: 'Distributed Systems',
+      path: 'notes/ds.md',
+      segments: [{ text: 'The scheduler multiplexes M:N goroutines.', chunkId: 'chunk-1' }],
+    })
+    const { rerender } = render(<StudySourcesPanel sessionId="session-1" openRequest={null} />)
+    await screen.findByText('Distributed Systems')
+
+    // When an external open request arrives (a citation click in the chat)
+    rerender(
+      <StudySourcesPanel
+        sessionId="session-1"
+        openRequest={{ itemId: 'item-1', chunkId: 'chunk-1' }}
+      />,
+    )
+
+    // Then the viewer opens for that document, not the list
+    await waitFor(() =>
+      expect(
+        screen.getByText('The scheduler multiplexes M:N goroutines.', { exact: false }),
+      ).toBeInTheDocument(),
+    )
+    expect(screen.queryByPlaceholderText('Search sources')).not.toBeInTheDocument()
+  })
+
+  it('does not throw when openRequest transitions back to null after being set', async () => {
+    // Given the viewer open from an earlier citation request
+    vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
+    vi.mocked(getSessionSourceDocument).mockResolvedValueOnce({
+      itemId: 'item-1',
+      title: 'Distributed Systems',
+      path: 'notes/ds.md',
+      segments: [{ text: 'The scheduler multiplexes M:N goroutines.', chunkId: 'chunk-1' }],
+    })
+    const { rerender } = render(<StudySourcesPanel sessionId="session-1" openRequest={null} />)
+    await screen.findByText('Distributed Systems')
+    rerender(<StudySourcesPanel sessionId="session-1" openRequest={{ itemId: 'item-1' }} />)
+    await waitFor(() =>
+      expect(
+        screen.getByText('The scheduler multiplexes M:N goroutines.', { exact: false }),
+      ).toBeInTheDocument(),
+    )
+
+    // When openRequest is cleared back to null (e.g. AppShell clearing it on
+    // a session change)
+    expect(() =>
+      rerender(<StudySourcesPanel sessionId="session-1" openRequest={null} />),
+    ).not.toThrow()
+  })
+
+  it('does nothing when openRequest is null', async () => {
+    // Given a panel showing the list
+    vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
+    render(<StudySourcesPanel sessionId="session-1" openRequest={null} />)
+
+    // Then the list stays shown, not the viewer
+    await screen.findByText('Distributed Systems')
+    expect(screen.getByPlaceholderText('Search sources')).toBeInTheDocument()
+  })
 })

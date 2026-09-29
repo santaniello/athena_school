@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useSourceDocument } from '@/hooks/use-source-document'
@@ -6,6 +7,10 @@ interface SourceViewerProps {
   sessionId: string
   itemId: string
   onBack: () => void
+  // The chunk a citation click asked to see, scrolled into view and briefly
+  // highlighted once the document loads. Undefined renders the document
+  // with no highlight, same as a plain Sources-panel row click.
+  chunkId?: string
 }
 
 // A document imported before spec 2.18 (or whose text was otherwise lost)
@@ -26,8 +31,32 @@ const NOT_FOUND_MESSAGE = 'source not found'
 // tagged with its own chunkId, laying the groundwork for a cited passage
 // to be highlighted and scrolled into view — not wired up until the
 // citations feature lands.
-function SourceViewer({ sessionId, itemId, onBack }: SourceViewerProps) {
+function SourceViewer({ sessionId, itemId, onBack, chunkId }: SourceViewerProps) {
   const { document, loading, error, reload } = useSourceDocument(sessionId, itemId)
+  const segmentsRef = useRef<HTMLDivElement>(null)
+
+  // Scrolls the cited passage into view once the document (and its
+  // segments) are actually on the page. Segments already carry their own
+  // chunkId (data-chunk-id, from PR 1) — this just needed to find and
+  // scroll to the one that matches.
+  useEffect(() => {
+    // Stryker disable next-line ConditionalExpression,LogicalOperator: this
+    // guard is a redundant optimization, not a correctness gap — the
+    // ref/DOM guarantee it short-circuits is already structurally enforced
+    // below regardless: segmentsRef only attaches to the div this effect
+    // targets once `document` is truthy (it's rendered in that same branch),
+    // and no segment's data-chunk-id is ever the empty/falsy value chunkId
+    // would be compared against when absent. Removing this line changes no
+    // observable outcome in any reachable state.
+    if (!chunkId || !document) return
+    // Stryker disable next-line OptionalChaining: unreachable without a
+    // ref — see the guard's own comment above; the div this ref attaches to
+    // is only ever rendered once `document` is truthy, and effects run
+    // after commit, so the ref is always populated by the time this runs.
+    const candidates = segmentsRef.current?.querySelectorAll<HTMLElement>('[data-chunk-id]')
+    const target = candidates && Array.from(candidates).find((el) => el.dataset.chunkId === chunkId)
+    target?.scrollIntoView({ block: 'center' })
+  }, [document, chunkId])
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-[oklch(0.115_0.014_50)]">
@@ -72,13 +101,22 @@ function SourceViewer({ sessionId, itemId, onBack }: SourceViewerProps) {
             </Button>
           </div>
         ) : (
-          <div className="whitespace-pre-wrap text-xs leading-relaxed text-foreground">
+          <div
+            ref={segmentsRef}
+            className="whitespace-pre-wrap text-xs leading-relaxed text-foreground"
+          >
             {/* Stryker disable next-line OptionalChaining: this branch only
                 renders once loading is false and error is falsy, which only
                 happens after a successful load — document is guaranteed
                 set here, so the "?." is defensive, not itself a gap. */}
             {document?.segments.map((segment, index) => (
-              <span key={index} data-chunk-id={segment.chunkId || undefined}>
+              <span
+                key={index}
+                data-chunk-id={segment.chunkId || undefined}
+                className={
+                  segment.chunkId && segment.chunkId === chunkId ? 'citation-highlight' : undefined
+                }
+              >
                 {segment.text}
               </span>
             ))}
