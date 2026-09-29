@@ -189,12 +189,12 @@ breakdown, including implementation gotchas found doing it once already.
 - [x] Docs: CHANGELOG, README
 
 **PR 2 — `[n]` inline citations in chat**
-- [ ] `chunkId`/`itemId` on `StudySourceResult`; regenerate `wailsjs`
-- [ ] Prompting: context `id`s, the `[n]` instruction, markers stripped from history
-- [ ] Frontend: `lib/citations.ts`, `CitationChip`, `MessageBubble` wiring, streaming, Copy
-- [ ] Frontend: viewer highlight for the cited `chunkId`, `AppShell` open-citation request flow,
+- [x] `chunkId`/`itemId` on `StudySourceResult`; regenerate `wailsjs`
+- [x] Prompting: context `id`s, the `[n]` instruction, markers stripped from history
+- [x] Frontend: `lib/citations.ts`, `CitationChip`, `MessageBubble` wiring, streaming, Copy
+- [x] Frontend: viewer highlight for the cited `chunkId`, `AppShell` open-citation request flow,
       strip entries clickable
-- [ ] Docs: `lib/documentation.ts`, and mark 2.17's "citation → panel" line as delivered
+- [x] Docs: `lib/documentation.ts`, and mark 2.17's "citation → panel" line as delivered
 
 ## Acceptance Criteria
 

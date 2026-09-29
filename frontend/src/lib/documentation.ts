@@ -97,6 +97,7 @@ const DOCUMENTATION: DocSection[] = [
       'Study sessions already work, but they forget. Close the app and next week Athena has no idea what you covered, and the notes you have kept for years sit in a folder it has never opened. The Knowledge Engine fixes that.',
       'Each study session owns the documents you import into it. Athena reads a Markdown or text file and splits it into passages it can find again later. Finding is by meaning, not wording: ask "how does Go handle parallelism?" and it surfaces your note that says "the scheduler multiplexes M:N" — not one shared word, exactly the right passage. That is why old, messily written notes are still worth importing.',
       "From then on that session consults its documents first, and every reply shows which ones it drew on. A session never searches another session's documents, and deleting a session, or the folder that holds it, deletes its documents with it.",
+      'A reply that used your documents marks each claim with a small numbered citation, matching the order of the "Local sources" list underneath it. Hover one to preview which document and passage it came from; click it (or a row in the Sources panel) to open that document and jump straight to the exact passage, briefly highlighted.',
     ],
     topics: [
       {
@@ -112,7 +113,12 @@ const DOCUMENTATION: DocSection[] = [
       {
         term: 'Cited sources',
         description:
-          'Replies list the documents they used, and how closely each matched, so you can tell what came from your material and what did not.',
+          'Replies list the documents they used, and how closely each matched, so you can tell what came from your material and what did not. Each claim is numbered inline, matching that list.',
+      },
+      {
+        term: 'Document viewer',
+        description:
+          'Click a citation number or a "Local sources" entry to open the source document at the exact passage it came from, scrolled into view and briefly highlighted.',
       },
       {
         term: 'Source modes',

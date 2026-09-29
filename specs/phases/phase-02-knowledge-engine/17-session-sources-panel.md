@@ -59,9 +59,10 @@ Settings — no `Knowledge`.
    Ordered oldest-imported first, so a new document appears at the bottom.
 7. **The Knowledge section and the extraction UI are already gone** (2.16); nothing here
    removes or re-adds any of it.
-8. **Not in this increment:** enabling/disabling a document for the chat, opening a
-   citation in the panel (delivered by [2.18](18-notebooklm-style-citations.md), together with
-   the document viewer), multi-file import, and a "changed on disk" indicator.
+8. **Not in this increment:** enabling/disabling a document for the chat and multi-file
+   import, and a "changed on disk" indicator. Opening a citation in the panel, together with
+   the document viewer, was delivered by
+   [2.18.1](18-01-inline-citations-in-chat.md).
 
 ## New backend surface
 
@@ -148,5 +149,5 @@ Vitest, backend slices with `_test.go`.
 - Anything about conversation extraction, statuses, evidence, reconciliation or duplicates —
   gone since 2.16.
 - Renaming `Item` to `Source`.
-- Per-document enable/disable, multi-file import. (Citation → panel navigation is spec
-  [2.18](18-notebooklm-style-citations.md).)
+- Per-document enable/disable, multi-file import. (Citation → panel navigation was delivered
+  by [2.18.1](18-01-inline-citations-in-chat.md).)
