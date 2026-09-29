@@ -172,8 +172,8 @@ delivers the stored source and its viewer — the original ask (source stored, c
 the only truth, removal cascades to the text) plus opening a document from a Sources-panel row
 click, with no highlighted passage yet. **PR 2** layers the `[n]` inline-citation experience on
 top (depends on PR 1's `knowledge_documents` table, `GetSourceDocument` and `source-viewer.tsx`).
-See `~/.claude/plans/hoje-ao-fazermos-o-virtual-gray.md` for the file-level breakdown of each
-slice.
+See [18-01-inline-citations-in-chat.md](18-01-inline-citations-in-chat.md) for PR 2's file-level
+breakdown, including implementation gotchas found doing it once already.
 
 **PR 1 — stored source, cascade delete, viewer**
 - [x] Chunker: `Start`/`End` on `ChunkCandidate` for headings, packed paragraphs, merges and the
