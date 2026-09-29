@@ -115,7 +115,8 @@ func noopProgress(Progress) error { return nil }
 
 func TestImportFile_newFile_ingestsExactlyOneFileWithFilesTotalOne(t *testing.T) {
 	// Given one never-before-seen markdown file
-	root := fstest.MapFS{"go.md": {Data: []byte("# Go\nBasics of Go.")}}
+	const content = "# Go\nBasics of Go."
+	root := fstest.MapFS{"go.md": {Data: []byte(content)}}
 	ctx := context.Background()
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
@@ -125,11 +126,18 @@ func TestImportFile_newFile_ingestsExactlyOneFileWithFilesTotalOne(t *testing.T)
 	runWithinTx(tx)
 
 	ingestedFiles.EXPECT().ListBySession(ctx, testSessionID).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
-	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nBasics of Go."}).
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: content}).
 		Return(embeddingResponse(), nil).Once()
 	chunks.EXPECT().DeleteBySourcePath(ctx, testSessionID, srcPath("go.md")).Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
-		return len(cs) == 1 && cs[0].FilePath == "go.md" && cs[0].SourcePath == srcPath("go.md")
+		if len(cs) != 1 || cs[0].FilePath != "go.md" || cs[0].SourcePath != srcPath("go.md") {
+			return false
+		}
+		// The whole (single-heading, under-budget) file is kept as one
+		// chunk spanning it entirely — proves the chunker's offsets reach
+		// the persisted Chunk unchanged, not just ChunkCandidate itself.
+		return cs[0].StartOffset != nil && *cs[0].StartOffset == 0 &&
+			cs[0].EndOffset != nil && *cs[0].EndOffset == len(content)
 	})).Return(nil).Once()
 	items.EXPECT().Save(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool {
 		return item.Concept == "Go" && item.Source == domainknowledge.SourceImportedDoc
