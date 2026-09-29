@@ -137,7 +137,11 @@ func (s *Service) SendMessage(
 		llmMessages = append(llmMessages, *knowledgeMessage)
 	}
 	for _, message := range history {
-		llmMessages = append(llmMessages, domainllm.Message{Role: message.Role, Content: message.Content})
+		content := message.Content
+		if message.Role == domainstudy.RoleAssistant {
+			content = stripCitationMarkers(content)
+		}
+		llmMessages = append(llmMessages, domainllm.Message{Role: message.Role, Content: content})
 	}
 
 	if _, err := s.streamAndPersist(ctx, sessionID, newContext, llmMessages, sources, onChunk, onContext, onContextUnavailable); err != nil {

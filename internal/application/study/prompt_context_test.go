@@ -108,3 +108,29 @@ func TestBuildKnowledgeContext_alwaysIncludesUntrustedDataFraming_regardlessOfMo
 			"mode=%s sufficient=%v missing untrusted-data framing", c.mode, c.sufficient)
 	}
 }
+
+func TestBuildKnowledgeContext_alwaysIncludesCitationInstruction_regardlessOfModeOrSufficiency(t *testing.T) {
+	cases := []struct {
+		mode       string
+		sufficient bool
+	}{
+		{domainknowledge.SourceModeNotes, true},
+		{domainknowledge.SourceModeNotes, false},
+		{domainknowledge.SourceModeStrictNotes, true},
+		{domainknowledge.SourceModeStrictNotes, false},
+	}
+	for _, c := range cases {
+		// Given a retrieval result for each mode/sufficiency combination
+		result := domainknowledge.RetrievalResult{Context: "[]", Sufficient: c.sufficient}
+
+		// When building the knowledge context message
+		message := buildKnowledgeContext(result, c.mode)
+
+		// Then the fixed citation instruction is present verbatim, telling
+		// the model how to mark [n] citations against the JSON block's ids
+		require.True(t, strings.Contains(message.Content, citationInstruction),
+			"mode=%s sufficient=%v missing citation instruction", c.mode, c.sufficient)
+		assert.Contains(t, message.Content, "[n]")
+		assert.Contains(t, message.Content, "id")
+	}
+}

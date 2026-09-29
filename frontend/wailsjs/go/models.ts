@@ -160,11 +160,14 @@ export namespace desktop {
 	    }
 	}
 	export class StudySourceResult {
+	    chunkId: string;
+	    itemId: string;
 	    sourceType: string;
 	    filePath: string;
 	    heading: string;
 	    concept: string;
 	    score: number;
+	    excerpt: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new StudySourceResult(source);
@@ -172,11 +175,14 @@ export namespace desktop {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.chunkId = source["chunkId"];
+	        this.itemId = source["itemId"];
 	        this.sourceType = source["sourceType"];
 	        this.filePath = source["filePath"];
 	        this.heading = source["heading"];
 	        this.concept = source["concept"];
 	        this.score = source["score"];
+	        this.excerpt = source["excerpt"];
 	    }
 	}
 	export class StudyMessageResult {

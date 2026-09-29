@@ -403,14 +403,15 @@ func TestApp_SendStudyMessage_emitsPostCapSourcesEvent_notes(t *testing.T) {
 	err := app.SendStudyMessage("session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeNotes)
 
 	// Then the emitted sources event carries exactly the DTO fields, in
-	// order, derived from the post-cap domain Source (no internal ID or
-	// excerpt field exists on the DTO type at all)
+	// order, derived from the post-cap domain Source — including chunkId,
+	// itemId, and the full excerpt
 	require.NoError(t, err)
 	require.Len(t, captured.sources, 1)
 	assert.Equal(t, "session-1", captured.sources[0].SessionID)
 	require.Len(t, captured.sources[0].Sources, 1)
 	assert.Equal(t, StudySourceResult{
-		SourceType: domainknowledge.SourceImportedDoc, FilePath: "notes/a.md", Heading: "H", Concept: "Channels", Score: 0.9,
+		ChunkID: "chunk-1", ItemID: "item-1",
+		SourceType: domainknowledge.SourceImportedDoc, FilePath: "notes/a.md", Heading: "H", Concept: "Channels", Score: 0.9, Excerpt: "...",
 	}, captured.sources[0].Sources[0])
 }
 
