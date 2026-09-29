@@ -11,6 +11,12 @@ interface SourceViewerProps {
   // highlighted once the document loads. Undefined renders the document
   // with no highlight, same as a plain Sources-panel row click.
   chunkId?: string
+  // An opaque value that changes on every open request, even a repeat click
+  // on the exact same citation (sessionId/itemId/chunkId all unchanged in
+  // that case). Forces the scroll-and-highlight effect to re-run and the
+  // highlighted segment to remount (restarting its fade animation) on every
+  // open, not just the first one for a given chunkId.
+  reopenToken?: number
 }
 
 // A document imported before spec 2.18 (or whose text was otherwise lost)
@@ -31,7 +37,7 @@ const NOT_FOUND_MESSAGE = 'source not found'
 // tagged with its own chunkId, laying the groundwork for a cited passage
 // to be highlighted and scrolled into view — not wired up until the
 // citations feature lands.
-function SourceViewer({ sessionId, itemId, onBack, chunkId }: SourceViewerProps) {
+function SourceViewer({ sessionId, itemId, onBack, chunkId, reopenToken }: SourceViewerProps) {
   const { document, loading, error, reload } = useSourceDocument(sessionId, itemId)
   const segmentsRef = useRef<HTMLDivElement>(null)
 
@@ -56,7 +62,7 @@ function SourceViewer({ sessionId, itemId, onBack, chunkId }: SourceViewerProps)
     const candidates = segmentsRef.current?.querySelectorAll<HTMLElement>('[data-chunk-id]')
     const target = candidates && Array.from(candidates).find((el) => el.dataset.chunkId === chunkId)
     target?.scrollIntoView({ block: 'center' })
-  }, [document, chunkId])
+  }, [document, chunkId, reopenToken])
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-[oklch(0.115_0.014_50)]">
@@ -109,17 +115,22 @@ function SourceViewer({ sessionId, itemId, onBack, chunkId }: SourceViewerProps)
                 renders once loading is false and error is falsy, which only
                 happens after a successful load — document is guaranteed
                 set here, so the "?." is defensive, not itself a gap. */}
-            {document?.segments.map((segment, index) => (
-              <span
-                key={index}
-                data-chunk-id={segment.chunkId || undefined}
-                className={
-                  segment.chunkId && segment.chunkId === chunkId ? 'citation-highlight' : undefined
-                }
-              >
-                {segment.text}
-              </span>
-            ))}
+            {document?.segments.map((segment, index) => {
+              const highlighted = Boolean(segment.chunkId) && segment.chunkId === chunkId
+              return (
+                <span
+                  // Keying the highlighted segment off reopenToken too forces
+                  // React to remount it (not just re-render) on every open,
+                  // restarting the CSS fade animation even when it's the same
+                  // segment as last time.
+                  key={highlighted ? `${index}-${reopenToken}` : index}
+                  data-chunk-id={segment.chunkId || undefined}
+                  className={highlighted ? 'citation-highlight' : undefined}
+                >
+                  {segment.text}
+                </span>
+              )
+            })}
           </div>
         )}
       </div>

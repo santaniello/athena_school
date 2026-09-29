@@ -670,6 +670,48 @@ describe('StudySourcesPanel', () => {
     expect(screen.queryByPlaceholderText('Search sources')).not.toBeInTheDocument()
   })
 
+  it('re-scrolls to the same passage when the exact same citation is requested again', async () => {
+    // Given the viewer already open at chunk-1, from one citation click
+    vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
+    vi.mocked(getSessionSourceDocument).mockResolvedValueOnce({
+      itemId: 'item-1',
+      title: 'Distributed Systems',
+      path: 'notes/ds.md',
+      segments: [{ text: 'The scheduler multiplexes M:N goroutines.', chunkId: 'chunk-1' }],
+    })
+    const scrollIntoView = vi
+      .spyOn(Element.prototype, 'scrollIntoView')
+      .mockImplementation(() => {})
+    const { rerender } = render(<StudySourcesPanel sessionId="session-1" openRequest={null} />)
+    await screen.findByText('Distributed Systems')
+    rerender(
+      <StudySourcesPanel
+        sessionId="session-1"
+        openRequest={{ itemId: 'item-1', chunkId: 'chunk-1' }}
+      />,
+    )
+    await waitFor(() =>
+      expect(
+        screen.getByText('The scheduler multiplexes M:N goroutines.', { exact: false }),
+      ).toBeInTheDocument(),
+    )
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+
+    // When the exact same citation is clicked again — a fresh request object
+    // with the identical itemId/chunkId (the document is already loaded, so
+    // it never refetches)
+    rerender(
+      <StudySourcesPanel
+        sessionId="session-1"
+        openRequest={{ itemId: 'item-1', chunkId: 'chunk-1' }}
+      />,
+    )
+
+    // Then it scrolls to the passage again, instead of silently doing
+    // nothing because sessionId/itemId/chunkId all stayed the same
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(2))
+  })
+
   it('does not throw when openRequest transitions back to null after being set', async () => {
     // Given the viewer open from an earlier citation request
     vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])

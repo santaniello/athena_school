@@ -129,8 +129,23 @@ function StudySourcesPanel({
   // The document currently shown in the viewer instead of the list — null
   // means the list. A row click sets it (with no chunkId, i.e. no
   // highlight); the viewer's own "← Sources" clears it; the openRequest
-  // check below sets it too, for a citation click.
-  const [viewing, setViewing] = useState<{ itemId: string; chunkId?: string } | null>(null)
+  // check below sets it too, for a citation click. token is a monotonic
+  // counter, bumped on every open (whichever path), so re-clicking the
+  // exact same already-open citation still tells SourceViewer to recenter
+  // and replay the highlight — sessionId/itemId/chunkId alone wouldn't
+  // change in that case, so nothing else would signal a re-open.
+  const [viewing, setViewing] = useState<{
+    itemId: string
+    chunkId?: string
+    token: number
+  } | null>(null)
+
+  // A functional update (reading previous state, not a ref) so this stays
+  // safe to call from the render-time openRequest check below, not just
+  // from event handlers.
+  function openViewing(itemId: string, chunkId?: string) {
+    setViewing((previous) => ({ itemId, chunkId, token: (previous?.token ?? 0) + 1 }))
+  }
 
   // A citation click in the chat drives this panel the same way a row click
   // does. openRequest is a fresh object per click (even re-clicking the same
@@ -141,7 +156,7 @@ function StudySourcesPanel({
   const [lastOpenRequest, setLastOpenRequest] = useState(openRequest)
   if (openRequest !== lastOpenRequest) {
     setLastOpenRequest(openRequest)
-    if (openRequest) setViewing({ itemId: openRequest.itemId, chunkId: openRequest.chunkId })
+    if (openRequest) openViewing(openRequest.itemId, openRequest.chunkId)
   }
 
   const filtered = useMemo(() => {
@@ -222,6 +237,7 @@ function StudySourcesPanel({
         sessionId={sessionId}
         itemId={viewing.itemId}
         chunkId={viewing.chunkId}
+        reopenToken={viewing.token}
         onBack={() => setViewing(null)}
       />
     )
@@ -307,7 +323,7 @@ function StudySourcesPanel({
               >
                 <button
                   type="button"
-                  onClick={() => setViewing({ itemId: source.itemId })}
+                  onClick={() => openViewing(source.itemId)}
                   className="min-w-0 flex-1 text-left"
                 >
                   <p className="truncate text-xs font-semibold text-foreground">{source.title}</p>

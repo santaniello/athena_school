@@ -174,6 +174,49 @@ describe('SourceViewer', () => {
     expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' })
   })
 
+  it('re-scrolls and remounts the highlight when reopenToken changes for the same chunkId', async () => {
+    // Given a viewer already open at chunk-1
+    vi.mocked(getSessionSourceDocument).mockResolvedValueOnce(document)
+    const scrollIntoView = vi
+      .spyOn(Element.prototype, 'scrollIntoView')
+      .mockImplementation(() => {})
+    const { rerender } = render(
+      <SourceViewer
+        sessionId="session-1"
+        itemId="item-1"
+        onBack={vi.fn()}
+        chunkId="chunk-1"
+        reopenToken={1}
+      />,
+    )
+    await waitFor(() => expect(screen.getByText('Distributed Systems')).toBeInTheDocument())
+    const firstNode = screen.getByText('The scheduler multiplexes M:N goroutines.', {
+      exact: false,
+    })
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+
+    // When re-clicking the exact same citation (sessionId/itemId/chunkId all
+    // unchanged, only reopenToken bumped)
+    rerender(
+      <SourceViewer
+        sessionId="session-1"
+        itemId="item-1"
+        onBack={vi.fn()}
+        chunkId="chunk-1"
+        reopenToken={2}
+      />,
+    )
+
+    // Then it scrolls again, and the highlighted segment is a fresh DOM node
+    // (remounted, so its fade animation restarts) rather than the same one
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(2))
+    const secondNode = screen.getByText('The scheduler multiplexes M:N goroutines.', {
+      exact: false,
+    })
+    expect(secondNode).not.toBe(firstNode)
+    expect(secondNode).toHaveClass('citation-highlight')
+  })
+
   it('does not scroll anything when no chunkId is given', async () => {
     // Given the same document, opened without a citation (a plain row click)
     vi.mocked(getSessionSourceDocument).mockResolvedValueOnce(document)
