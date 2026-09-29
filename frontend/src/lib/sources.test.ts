@@ -1,10 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ListSessionSources, RemoveSessionSource } from '../../wailsjs/go/desktop/App'
-import { listSessionSources, removeSessionSource } from './sources'
+import {
+  GetSessionSourceDocument,
+  ListSessionSources,
+  RemoveSessionSource,
+} from '../../wailsjs/go/desktop/App'
+import { getSessionSourceDocument, listSessionSources, removeSessionSource } from './sources'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
   ListSessionSources: vi.fn(),
   RemoveSessionSource: vi.fn(),
+  GetSessionSourceDocument: vi.fn(),
 }))
 
 describe('listSessionSources', () => {
@@ -79,6 +84,47 @@ describe('removeSessionSource', () => {
     // When removing it
     // Then the failure propagates
     await expect(removeSessionSource('session-1', 'item-1')).rejects.toThrow(
+      'ingest: source not found',
+    )
+  })
+})
+
+describe('getSessionSourceDocument', () => {
+  it('forwards both ids and returns the document', async () => {
+    // Given a document with two segments
+    vi.mocked(GetSessionSourceDocument).mockResolvedValueOnce({
+      itemId: 'item-1',
+      title: 'Distributed Systems',
+      path: 'notes/ds.md',
+      segments: [
+        { text: 'Intro. ', chunkId: '' },
+        { text: 'The scheduler multiplexes M:N goroutines.', chunkId: 'chunk-1' },
+      ],
+    } as never)
+
+    // When getting it
+    const document = await getSessionSourceDocument('session-1', 'item-1')
+
+    // Then both ids were forwarded and the document is returned as-is
+    expect(GetSessionSourceDocument).toHaveBeenCalledWith('session-1', 'item-1')
+    expect(document).toEqual({
+      itemId: 'item-1',
+      title: 'Distributed Systems',
+      path: 'notes/ds.md',
+      segments: [
+        { text: 'Intro. ', chunkId: '' },
+        { text: 'The scheduler multiplexes M:N goroutines.', chunkId: 'chunk-1' },
+      ],
+    })
+  })
+
+  it('propagates a failure', async () => {
+    // Given a document that does not exist (or belongs to another session)
+    vi.mocked(GetSessionSourceDocument).mockRejectedValueOnce(new Error('ingest: source not found'))
+
+    // When getting it
+    // Then the failure propagates
+    await expect(getSessionSourceDocument('session-1', 'item-1')).rejects.toThrow(
       'ingest: source not found',
     )
   })

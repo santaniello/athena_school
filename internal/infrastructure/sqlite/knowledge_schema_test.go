@@ -73,7 +73,7 @@ func TestOpen_createsTheDocumentsOnlyKnowledgeSchema(t *testing.T) {
 	}, columnNames(t, db, "knowledge_items"))
 	assert.Equal(t, []string{
 		"id", "session_id", "source", "topic", "item_id", "source_path", "file_path", "heading",
-		"content", "embedding", "embedding_model", "created_at",
+		"content", "embedding", "embedding_model", "created_at", "start_offset", "end_offset",
 	}, columnNames(t, db, "knowledge_chunks"))
 	assert.Equal(t, []string{
 		"session_id", "source_path", "file_path", "mtime_unix_nano", "embedding_model",

@@ -20,7 +20,7 @@ func NewChunkRepository(db *sql.DB) *ChunkRepository {
 	return &ChunkRepository{db: db}
 }
 
-const chunkColumns = `id, session_id, source, topic, item_id, source_path, file_path, heading, content, embedding, embedding_model, created_at`
+const chunkColumns = `id, session_id, source, topic, item_id, source_path, file_path, heading, content, embedding, embedding_model, created_at, start_offset, end_offset`
 
 // SaveAll inserts every chunk. Callers are responsible for deleting any
 // previous chunks for the same source/item first (see DeleteBySourcePath) —
@@ -28,9 +28,10 @@ const chunkColumns = `id, session_id, source, topic, item_id, source_path, file_
 func (r *ChunkRepository) SaveAll(ctx context.Context, chunks []knowledge.Chunk) error {
 	for _, chunk := range chunks {
 		_, err := execer(ctx, r.db).ExecContext(ctx,
-			`INSERT INTO knowledge_chunks (`+chunkColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			`INSERT INTO knowledge_chunks (`+chunkColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			chunk.ID, chunk.SessionID, chunk.Source, chunk.Topic, chunk.ItemID, chunk.SourcePath, chunk.FilePath,
 			chunk.Heading, chunk.Content, encodeEmbedding(chunk.Embedding), chunk.EmbeddingModel, chunk.CreatedAt,
+			chunk.StartOffset, chunk.EndOffset,
 		)
 		if err != nil {
 			return fmt.Errorf("sqlite: saving knowledge chunk %s: %w", chunk.ID, err)
@@ -115,7 +116,7 @@ func (r *ChunkRepository) DeleteByItemID(ctx context.Context, itemID string) ([]
 // vanishing from the result set.
 const chunkLoadCurrentQuery = `
 	SELECT c.id, c.session_id, c.source, c.topic, c.item_id, c.source_path, c.file_path, c.heading, c.content,
-	       c.embedding, c.embedding_model, c.created_at,
+	       c.embedding, c.embedding_model, c.created_at, c.start_offset, c.end_offset,
 	       i.id
 	FROM knowledge_chunks c
 	LEFT JOIN knowledge_items i ON i.id = c.item_id
@@ -160,16 +161,20 @@ func scanCurrentChunkRow(rows *sql.Rows) (knowledge.Chunk, *knowledge.ChunkLoadI
 	var embedding []byte
 	var sourcePath sql.NullString
 	var itemID sql.NullString
+	var startOffset, endOffset sql.NullInt64
 
 	err := rows.Scan(
 		&chunk.ID, &chunk.SessionID, &chunk.Source, &chunk.Topic, &chunk.ItemID, &sourcePath, &chunk.FilePath,
 		&chunk.Heading, &chunk.Content, &embedding, &chunk.EmbeddingModel, &chunk.CreatedAt,
+		&startOffset, &endOffset,
 		&itemID,
 	)
 	if err != nil {
 		return knowledge.Chunk{}, nil, err
 	}
 	chunk.SourcePath = sourcePath.String
+	chunk.StartOffset = nullInt64ToIntPtr(startOffset)
+	chunk.EndOffset = nullInt64ToIntPtr(endOffset)
 
 	decoded, decodeErr := decodeEmbedding(embedding)
 	if decodeErr != nil {
@@ -220,18 +225,59 @@ func scanChunk(scanner rowScanner) (knowledge.Chunk, error) {
 	var chunk knowledge.Chunk
 	var embedding []byte
 	var sourcePath sql.NullString
+	var startOffset, endOffset sql.NullInt64
 	err := scanner.Scan(
 		&chunk.ID, &chunk.SessionID, &chunk.Source, &chunk.Topic, &chunk.ItemID, &sourcePath, &chunk.FilePath,
 		&chunk.Heading, &chunk.Content, &embedding, &chunk.EmbeddingModel, &chunk.CreatedAt,
+		&startOffset, &endOffset,
 	)
 	if err != nil {
 		return knowledge.Chunk{}, err
 	}
 	chunk.SourcePath = sourcePath.String
+	chunk.StartOffset = nullInt64ToIntPtr(startOffset)
+	chunk.EndOffset = nullInt64ToIntPtr(endOffset)
 
 	chunk.Embedding, err = decodeEmbedding(embedding)
 	if err != nil {
 		return knowledge.Chunk{}, fmt.Errorf("decoding embedding for chunk %s: %w", chunk.ID, err)
 	}
 	return chunk, nil
+}
+
+// nullInt64ToIntPtr converts a nullable database column to Chunk's *int
+// offset fields: nil when the column is NULL (a chunk imported before
+// offsets existed), a freshly allocated *int otherwise.
+func nullInt64ToIntPtr(n sql.NullInt64) *int {
+	if !n.Valid {
+		return nil
+	}
+	v := int(n.Int64)
+	return &v
+}
+
+// ListByItemID returns itemID's chunks in document order (by StartOffset,
+// falling back to CreatedAt/ID for a pre-2.18 chunk with no offset).
+func (r *ChunkRepository) ListByItemID(ctx context.Context, itemID string) ([]knowledge.Chunk, error) {
+	rows, err := execer(ctx, r.db).QueryContext(ctx,
+		`SELECT `+chunkColumns+` FROM knowledge_chunks WHERE item_id = ? ORDER BY start_offset ASC, created_at ASC, id ASC`,
+		itemID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: listing knowledge chunks by item id: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	chunks := []knowledge.Chunk{}
+	for rows.Next() {
+		chunk, err := scanChunk(rows)
+		if err != nil {
+			return nil, fmt.Errorf("sqlite: scanning knowledge chunk: %w", err)
+		}
+		chunks = append(chunks, chunk)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sqlite: iterating knowledge chunks by item id: %w", err)
+	}
+	return chunks, nil
 }

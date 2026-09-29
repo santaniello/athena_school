@@ -50,6 +50,7 @@ func newTestIngestApp(
 	chunks domainknowledge.ChunkRepository,
 	ingestedFiles domainknowledge.IngestedFileRepository,
 	items domainknowledge.Repository,
+	documents domainknowledge.DocumentRepository,
 	llm domainllm.Provider,
 	store domainknowledge.VectorStore,
 ) (*App, *capturedIngestEvents) {
@@ -68,7 +69,7 @@ func newTestIngestApp(
 	// file that doesn't exist) never calls the guard at all.
 	guard.EXPECT().BeginMutation().Return(nil).Maybe()
 	guard.EXPECT().EndMutation().Maybe()
-	ingestService := applicationingest.NewService(chunks, ingestedFiles, items, llm, tx, store, guard)
+	ingestService := applicationingest.NewService(chunks, ingestedFiles, items, documents, llm, tx, store, guard)
 	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
 	app.Startup(context.Background())
 
@@ -172,8 +173,10 @@ func TestApp_ImportFile_emitsProgressThenDone_onSuccess(t *testing.T) {
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Remove(mock.Anything, ([]string)(nil)).Return(nil).Once()
 	store.EXPECT().Add(mock.Anything, mock.Anything).Return(nil).Once()
+	documents := knowledgemocks.NewMockDocumentRepository(t)
+	documents.EXPECT().Save(ctx, mock.Anything, testIngestSessionID, "# Go\nBasics of Go.").Return(nil).Once()
 
-	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, llm, store)
+	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, documents, llm, store)
 
 	// When importing that file through the desktop adapter
 	err := app.ImportFile(testIngestSessionID, filePath)
@@ -195,7 +198,7 @@ func TestApp_ImportFile_emitsError_whenFileDoesNotExist(t *testing.T) {
 	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
 	items := knowledgemocks.NewMockRepository(t)
 	llm := llmmocks.NewMockProvider(t)
-	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, llm, nil)
+	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, nil, llm, nil)
 
 	// When importing it
 	err := app.ImportFile(testIngestSessionID, filepath.Join(t.TempDir(), "does-not-exist", "go.md"))
@@ -219,7 +222,7 @@ func TestApp_ImportFile_emitsError_whenImportFileFails(t *testing.T) {
 	llm := llmmocks.NewMockProvider(t)
 	boom := errors.New("database unavailable")
 	ingestedFiles.EXPECT().ListBySession(context.Background(), testIngestSessionID).Return(nil, boom).Once()
-	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, llm, nil)
+	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, nil, llm, nil)
 
 	// When importing that file
 	err := app.ImportFile(testIngestSessionID, filePath)
@@ -240,7 +243,7 @@ func TestApp_ImportFile_emitsError_whenExtensionIsUnsupported(t *testing.T) {
 	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
 	items := knowledgemocks.NewMockRepository(t)
 	llm := llmmocks.NewMockProvider(t)
-	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, llm, nil)
+	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, nil, llm, nil)
 
 	// When importing it
 	err := app.ImportFile(testIngestSessionID, filePath)
@@ -261,7 +264,7 @@ func TestApp_ListSessionSources_returnsTheMappedResults(t *testing.T) {
 		{ItemID: "item-1", Title: "CAP theorem", Path: "cap.md", ChunkCount: 4, IngestedAt: ingestedAt},
 	}, nil).Once()
 	guard := ingestmocks.NewMockIndexGuard(t)
-	ingestService := applicationingest.NewService(nil, ingestedFiles, nil, nil, nil, nil, guard)
+	ingestService := applicationingest.NewService(nil, ingestedFiles, nil, nil, nil, nil, nil, guard)
 	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -282,7 +285,7 @@ func TestApp_ListSessionSources_returnsTheServiceError(t *testing.T) {
 	boom := errors.New("database unavailable")
 	ingestedFiles.EXPECT().ListSourcesBySession(ctx, testIngestSessionID).Return(nil, boom).Once()
 	guard := ingestmocks.NewMockIndexGuard(t)
-	ingestService := applicationingest.NewService(nil, ingestedFiles, nil, nil, nil, nil, guard)
+	ingestService := applicationingest.NewService(nil, ingestedFiles, nil, nil, nil, nil, nil, guard)
 	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -301,6 +304,8 @@ func TestApp_RemoveSessionSource_delegatesToTheIngestService(t *testing.T) {
 	items := knowledgemocks.NewMockRepository(t)
 	items.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{ID: "item-1", SessionID: testIngestSessionID}, nil).Once()
 	items.EXPECT().Delete(ctx, "item-1").Return(nil).Once()
+	documents := knowledgemocks.NewMockDocumentRepository(t)
+	documents.EXPECT().DeleteByItemID(ctx, testIngestSessionID, "item-1").Return(nil).Once()
 	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
 	ingestedFiles.EXPECT().DeleteByItemID(ctx, testIngestSessionID, "item-1").Return(nil).Once()
 	store := knowledgemocks.NewMockVectorStore(t)
@@ -312,7 +317,7 @@ func TestApp_RemoveSessionSource_delegatesToTheIngestService(t *testing.T) {
 	guard := ingestmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	ingestService := applicationingest.NewService(chunks, ingestedFiles, items, nil, tx, store, guard)
+	ingestService := applicationingest.NewService(chunks, ingestedFiles, items, documents, nil, tx, store, guard)
 	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -331,7 +336,7 @@ func TestApp_RemoveSessionSource_returnsErrSourceNotFound_forAnotherSessionsDocu
 	guard := ingestmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	ingestService := applicationingest.NewService(nil, nil, items, nil, nil, nil, guard)
+	ingestService := applicationingest.NewService(nil, nil, items, nil, nil, nil, nil, guard)
 	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -340,4 +345,72 @@ func TestApp_RemoveSessionSource_returnsErrSourceNotFound_forAnotherSessionsDocu
 
 	// Then it is rejected, so one session can never delete another's document
 	assert.ErrorIs(t, err, applicationingest.ErrSourceNotFound)
+}
+
+func TestApp_GetSessionSourceDocument_returnsTheMappedDocument(t *testing.T) {
+	// Given a document owned by the session
+	ctx := context.Background()
+	items := knowledgemocks.NewMockRepository(t)
+	items.EXPECT().GetByID(ctx, "item-1").
+		Return(domainknowledge.Item{ID: "item-1", SessionID: testIngestSessionID, Concept: "CAP theorem"}, nil).Once()
+	documents := knowledgemocks.NewMockDocumentRepository(t)
+	documents.EXPECT().Get(ctx, testIngestSessionID, "item-1").Return("hello world", nil).Once()
+	start, end := 0, 5
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	chunks.EXPECT().ListByItemID(ctx, "item-1").Return([]domainknowledge.Chunk{
+		{ID: "chunk-1", FilePath: "cap.md", StartOffset: &start, EndOffset: &end},
+	}, nil).Once()
+	guard := ingestmocks.NewMockIndexGuard(t)
+	ingestService := applicationingest.NewService(chunks, nil, items, documents, nil, nil, nil, guard)
+	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
+	app.Startup(ctx)
+
+	// When getting its document
+	result, err := app.GetSessionSourceDocument(testIngestSessionID, "item-1")
+
+	// Then it returns the mapped DTO, segments in order
+	require.NoError(t, err)
+	assert.Equal(t, SourceDocumentResult{
+		ItemID: "item-1", Title: "CAP theorem", Path: "cap.md",
+		Segments: []SourceDocumentSegmentResult{
+			{Text: "hello", ChunkID: "chunk-1"},
+			{Text: " world"},
+		},
+	}, result)
+}
+
+func TestApp_GetSessionSourceDocument_returnsErrSourceNotFound_forAnotherSessionsDocument(t *testing.T) {
+	// Given a document owned by a different session
+	ctx := context.Background()
+	items := knowledgemocks.NewMockRepository(t)
+	items.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{ID: "item-1", SessionID: "other-session"}, nil).Once()
+	guard := ingestmocks.NewMockIndexGuard(t)
+	ingestService := applicationingest.NewService(nil, nil, items, nil, nil, nil, nil, guard)
+	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
+	app.Startup(ctx)
+
+	// When testIngestSessionID tries to get its document
+	_, err := app.GetSessionSourceDocument(testIngestSessionID, "item-1")
+
+	// Then it is rejected, so one session can never read another's document
+	assert.ErrorIs(t, err, applicationingest.ErrSourceNotFound)
+}
+
+func TestApp_GetSessionSourceDocument_returnsErrSourceTextUnavailable_whenNoTextIsStored(t *testing.T) {
+	// Given an item imported before document text was stored
+	ctx := context.Background()
+	items := knowledgemocks.NewMockRepository(t)
+	items.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{ID: "item-1", SessionID: testIngestSessionID}, nil).Once()
+	documents := knowledgemocks.NewMockDocumentRepository(t)
+	documents.EXPECT().Get(ctx, testIngestSessionID, "item-1").Return("", domainknowledge.ErrDocumentNotFound).Once()
+	guard := ingestmocks.NewMockIndexGuard(t)
+	ingestService := applicationingest.NewService(nil, nil, items, documents, nil, nil, nil, guard)
+	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
+	app.Startup(ctx)
+
+	// When getting its document
+	_, err := app.GetSessionSourceDocument(testIngestSessionID, "item-1")
+
+	// Then it reports that the text is unavailable rather than opening
+	assert.ErrorIs(t, err, applicationingest.ErrSourceTextUnavailable)
 }

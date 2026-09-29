@@ -21,6 +21,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { IngestProgressDialog } from '@/components/ingest-progress-dialog'
+import { SourceViewer } from '@/components/source-viewer'
 import { useSessionSources } from '@/hooks/use-session-sources'
 import { pickNotesFile } from '@/lib/ingest'
 import { removeSessionSource, type SessionSource } from '@/lib/sources'
@@ -116,6 +117,10 @@ function StudySourcesPanel({ sessionId, mutationsDisabled = false }: StudySource
   // (handleRemoveClick) clears this fresh first — so this initial value is
   // never itself observable.
   const [removeError, setRemoveError] = useState('')
+  // The document currently shown in the viewer instead of the list — null
+  // means the list. A row click sets it; the viewer's own "← Sources"
+  // clears it.
+  const [viewingItemId, setViewingItemId] = useState<string | null>(null)
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -188,6 +193,16 @@ function StudySourcesPanel({ sessionId, mutationsDisabled = false }: StudySource
   // observable, so this fallback exists purely to satisfy the required
   // (non-optional) prop type.
   const importDialogPath = importPath ?? ''
+
+  if (viewingItemId !== null) {
+    return (
+      <SourceViewer
+        sessionId={sessionId}
+        itemId={viewingItemId}
+        onBack={() => setViewingItemId(null)}
+      />
+    )
+  }
 
   return (
     <>
@@ -267,12 +282,16 @@ function StudySourcesPanel({ sessionId, mutationsDisabled = false }: StudySource
                 data-slot="study-source-row"
                 className="group flex items-start gap-2 rounded-md px-2 py-2 hover:bg-accent/40"
               >
-                <div className="min-w-0 flex-1">
+                <button
+                  type="button"
+                  onClick={() => setViewingItemId(source.itemId)}
+                  className="min-w-0 flex-1 text-left"
+                >
                   <p className="truncate text-xs font-semibold text-foreground">{source.title}</p>
                   <p className="truncate text-[11px] text-muted-foreground">
                     {source.path} · {chunkCountLabel(source.chunkCount)}
                   </p>
-                </div>
+                </button>
                 {mutationsDisabled ? (
                   <Tooltip>
                     {/* Same disabled-button-can't-trigger-a-tooltip issue as

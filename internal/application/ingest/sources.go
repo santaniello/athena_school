@@ -26,11 +26,11 @@ func (s *Service) ListSources(ctx context.Context, sessionID string) ([]domainkn
 	return sources, nil
 }
 
-// RemoveSource hard-deletes itemID's chunks, its shadow knowledge.Item and
-// its ingested_files record — all scoped to sessionID — evicting the
-// removed chunks from the in-memory index once the transaction commits. It
-// never touches the source file on disk, and never touches another
-// session's copy of the same file.
+// RemoveSource hard-deletes itemID's chunks, its shadow knowledge.Item, its
+// stored document text and its ingested_files record — all scoped to
+// sessionID — evicting the removed chunks from the in-memory index once the
+// transaction commits. It never touches the source file on disk, and never
+// touches another session's copy of the same file.
 //
 // Deleting the ingested_files record (unlike the old, deleted DeleteItem —
 // spec 2.3, which deliberately kept it) means importing the same,
@@ -70,6 +70,9 @@ func (s *Service) RemoveSource(ctx context.Context, sessionID, itemID string) er
 			return err
 		}
 		if err := s.items.Delete(ctx, itemID); err != nil {
+			return err
+		}
+		if err := s.documents.DeleteByItemID(ctx, sessionID, itemID); err != nil {
 			return err
 		}
 		return s.ingestedFiles.DeleteByItemID(ctx, sessionID, itemID)

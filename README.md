@@ -28,7 +28,7 @@ Payments         Paddle
 |---|---|
 | 0 | Repo setup, Wails scaffold, pre-commit quality gates, GitHub Actions CI/CD |
 | 1 | Conversational onboarding, personalized study sessions, streaming LLM responses |
-| 2 | Personal knowledge base built only from documents you import, owned per study session (deleting a session or folder deletes its knowledge), added and removed from the session's own Sources panel, RAG retrieval scoped to the current session |
+| 2 | Personal knowledge base built only from documents you import, owned per study session (deleting a session or folder deletes its knowledge), added, opened and removed from the session's own Sources panel, RAG retrieval scoped to the current session |
 | 3 | Challenge mode, gap detection, spaced repetition flashcards (SM-2) |
 | 4 | Interview simulation with timer, per-answer evaluation, domain-aware feedback |
 | 5 | Plan management, Paddle payments, macOS + Linux + Windows distribution |

@@ -13,6 +13,8 @@ export function GetKnowledgeIndexStatus():Promise<desktop.IndexStatusResult>;
 
 export function GetProfile():Promise<desktop.UserProfileInput>;
 
+export function GetSessionSourceDocument(arg1:string,arg2:string):Promise<desktop.SourceDocumentResult>;
+
 export function HasOpenRouterKey():Promise<boolean>;
 
 export function HasUserProfile():Promise<boolean>;
