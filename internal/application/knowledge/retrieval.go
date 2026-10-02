@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 	"unicode/utf8"
 
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
@@ -29,10 +30,13 @@ type contextEntry struct {
 	Content    string `json:"content"`
 }
 
-// Retrieve implements domainknowledge.Retriever: it embeds query with
-// sessionID attribution, searches the approved local knowledge owned by
-// that session only, filters and caps the result, and resolves each surviving chunk's owning item's
-// concept. study.Service calls this for every SourceMode.
+// Retrieve implements domainknowledge.Retriever: it embeds and searches
+// each of queries independently (session-attributed, scoped to that
+// session's own approved local knowledge), combines the results by chunk —
+// keeping each surviving chunk's best score across every query — then
+// filters and caps the combined result, and resolves each surviving
+// chunk's owning item's concept. study.Service calls this for every
+// SourceMode.
 //
 // A survivor whose owning item no longer exists — e.g. a chunk orphaned in
 // the VectorStore by a failed post-commit Remove (see
@@ -40,7 +44,7 @@ type contextEntry struct {
 // — is dropped rather than failing the whole call: a partial answer beats
 // none. Any other resolution error still aborts Retrieve, so a genuine
 // infrastructure failure is never mistaken for "nothing relevant found".
-func (s *Service) Retrieve(ctx context.Context, sessionID, query string) (domainknowledge.RetrievalResult, error) {
+func (s *Service) Retrieve(ctx context.Context, sessionID string, queries []string) (domainknowledge.RetrievalResult, error) {
 	status := s.index.Status()
 	if !status.HasSnapshot {
 		return domainknowledge.RetrievalResult{}, domainknowledge.ErrVectorStoreUnavailable
@@ -49,18 +53,23 @@ func (s *Service) Retrieve(ctx context.Context, sessionID, query string) (domain
 		return domainknowledge.RetrievalResult{}, nil
 	}
 
-	response, err := s.llm.Embeddings(ctx, domainllm.EmbeddingRequest{SessionID: sessionID, Input: query})
-	if err != nil {
-		return domainknowledge.RetrievalResult{}, fmt.Errorf("knowledge: embedding retrieval query: %w", err)
-	}
+	resultSets := make([][]domainknowledge.ScoredChunk, len(queries))
+	for i, query := range queries {
+		response, err := s.llm.Embeddings(ctx, domainllm.EmbeddingRequest{SessionID: sessionID, Input: query})
+		if err != nil {
+			return domainknowledge.RetrievalResult{}, fmt.Errorf("knowledge: embedding retrieval query: %w", err)
+		}
 
-	scored, err := s.store.Search(
-		ctx, toFloat32(response.Embedding), domainknowledge.DefaultTopK,
-		domainknowledge.SearchFilters{SessionID: sessionID},
-	)
-	if err != nil {
-		return domainknowledge.RetrievalResult{}, fmt.Errorf("knowledge: searching local knowledge: %w", err)
+		scored, err := s.store.Search(
+			ctx, toFloat32(response.Embedding), domainknowledge.DefaultTopK,
+			domainknowledge.SearchFilters{SessionID: sessionID},
+		)
+		if err != nil {
+			return domainknowledge.RetrievalResult{}, fmt.Errorf("knowledge: searching local knowledge: %w", err)
+		}
+		resultSets[i] = scored
 	}
+	scored := combineByBestScore(resultSets)
 
 	survivors := make([]domainknowledge.ScoredChunk, 0, len(scored))
 	for _, sc := range scored {
@@ -155,6 +164,38 @@ func (s *Service) Retrieve(ctx context.Context, sessionID, query string) (domain
 		Context:    renderedContext,
 		Sources:    sources,
 	}, nil
+}
+
+// combineByBestScore merges several per-query search results into one,
+// keeping, for each surviving chunk, the best score it received across any
+// of them — a chunk only one query actually found still survives with that
+// query's own score. Re-sorts score-descending/chunk-ID-ascending
+// afterward, matching VectorStore.Search's own order: everything
+// downstream (MinSimilarity filtering, capping) relies on that order,
+// capping in particular discarding the lowest-scoring tail first.
+func combineByBestScore(resultSets [][]domainknowledge.ScoredChunk) []domainknowledge.ScoredChunk {
+	best := make(map[string]domainknowledge.ScoredChunk)
+	for _, set := range resultSets {
+		for _, sc := range set {
+			if existing, ok := best[sc.Chunk.ID]; !ok || sc.Score > existing.Score {
+				best[sc.Chunk.ID] = sc
+			}
+		}
+	}
+	combined := make([]domainknowledge.ScoredChunk, 0, len(best))
+	for _, sc := range best {
+		combined = append(combined, sc)
+	}
+	sort.Slice(combined, func(i, j int) bool {
+		if combined[i].Score != combined[j].Score {
+			return combined[i].Score > combined[j].Score
+		}
+		// combined is deduplicated by Chunk.ID (it's a map's values), so
+		// this comparison never sees equal IDs on both sides — i < j and
+		// i <= j always agree here.
+		return combined[i].Chunk.ID < combined[j].Chunk.ID
+	})
+	return combined
 }
 
 // renderContext serializes chunks into the deterministic JSON data block,

@@ -32,9 +32,12 @@ type KnowledgeCascade interface {
 // writes), a
 // domainllm.ModelContextResolver (resolves a stream's model to its context
 // window; see specs/phases/phase-02-knowledge-engine/06-study-context-limits.md),
-// and a domainknowledge.MessageSourceRepository (persists the Sources
+// a domainknowledge.MessageSourceRepository (persists the Sources
 // behind a completed assistant message, so they survive a resume — see
-// specs/phases/phase-02-knowledge-engine/09-persistent-provenance.md).
+// specs/phases/phase-02-knowledge-engine/09-persistent-provenance.md), and
+// a domainknowledge.QueryEnricher (used only for strict-notes turns, to
+// combine a HyDE-enriched query alongside the raw one — see
+// specs/phases/phase-02-knowledge-engine/05-01-hyde-query-enrichment.md).
 // domain/study never imports domain/knowledge itself; this is the layer
 // that composes the two, both here and in Resume's MessageWithSources.
 type Service struct {
@@ -48,6 +51,7 @@ type Service struct {
 	catalog        domainllm.ModelContextResolver
 	messageSources domainknowledge.MessageSourceRepository
 	knowledge      KnowledgeCascade
+	enricher       domainknowledge.QueryEnricher
 	inFlight       *inFlightCoordinator
 }
 
@@ -63,11 +67,13 @@ func NewService(
 	catalog domainllm.ModelContextResolver,
 	messageSources domainknowledge.MessageSourceRepository,
 	knowledge KnowledgeCascade,
+	enricher domainknowledge.QueryEnricher,
 ) *Service {
 	return &Service{
 		sessions: sessions, messages: messages, llm: llm,
 		profiles: profiles, folders: folders, retriever: retriever,
 		tx: tx, catalog: catalog, messageSources: messageSources, knowledge: knowledge,
+		enricher: enricher,
 		inFlight: newInFlightCoordinator(),
 	}
 }

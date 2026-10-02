@@ -22,9 +22,9 @@ func (_m *MockRetriever) EXPECT() *MockRetriever_Expecter {
 	return &MockRetriever_Expecter{mock: &_m.Mock}
 }
 
-// Retrieve provides a mock function with given fields: ctx, sessionID, query
-func (_m *MockRetriever) Retrieve(ctx context.Context, sessionID string, query string) (knowledge.RetrievalResult, error) {
-	ret := _m.Called(ctx, sessionID, query)
+// Retrieve provides a mock function with given fields: ctx, sessionID, queries
+func (_m *MockRetriever) Retrieve(ctx context.Context, sessionID string, queries []string) (knowledge.RetrievalResult, error) {
+	ret := _m.Called(ctx, sessionID, queries)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Retrieve")
@@ -32,17 +32,17 @@ func (_m *MockRetriever) Retrieve(ctx context.Context, sessionID string, query s
 
 	var r0 knowledge.RetrievalResult
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string) (knowledge.RetrievalResult, error)); ok {
-		return rf(ctx, sessionID, query)
+	if rf, ok := ret.Get(0).(func(context.Context, string, []string) (knowledge.RetrievalResult, error)); ok {
+		return rf(ctx, sessionID, queries)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string, string) knowledge.RetrievalResult); ok {
-		r0 = rf(ctx, sessionID, query)
+	if rf, ok := ret.Get(0).(func(context.Context, string, []string) knowledge.RetrievalResult); ok {
+		r0 = rf(ctx, sessionID, queries)
 	} else {
 		r0 = ret.Get(0).(knowledge.RetrievalResult)
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
-		r1 = rf(ctx, sessionID, query)
+	if rf, ok := ret.Get(1).(func(context.Context, string, []string) error); ok {
+		r1 = rf(ctx, sessionID, queries)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -58,14 +58,14 @@ type MockRetriever_Retrieve_Call struct {
 // Retrieve is a helper method to define mock.On call
 //   - ctx context.Context
 //   - sessionID string
-//   - query string
-func (_e *MockRetriever_Expecter) Retrieve(ctx interface{}, sessionID interface{}, query interface{}) *MockRetriever_Retrieve_Call {
-	return &MockRetriever_Retrieve_Call{Call: _e.mock.On("Retrieve", ctx, sessionID, query)}
+//   - queries []string
+func (_e *MockRetriever_Expecter) Retrieve(ctx interface{}, sessionID interface{}, queries interface{}) *MockRetriever_Retrieve_Call {
+	return &MockRetriever_Retrieve_Call{Call: _e.mock.On("Retrieve", ctx, sessionID, queries)}
 }
 
-func (_c *MockRetriever_Retrieve_Call) Run(run func(ctx context.Context, sessionID string, query string)) *MockRetriever_Retrieve_Call {
+func (_c *MockRetriever_Retrieve_Call) Run(run func(ctx context.Context, sessionID string, queries []string)) *MockRetriever_Retrieve_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(string), args[2].(string))
+		run(args[0].(context.Context), args[1].(string), args[2].([]string))
 	})
 	return _c
 }
@@ -75,7 +75,7 @@ func (_c *MockRetriever_Retrieve_Call) Return(_a0 knowledge.RetrievalResult, _a1
 	return _c
 }
 
-func (_c *MockRetriever_Retrieve_Call) RunAndReturn(run func(context.Context, string, string) (knowledge.RetrievalResult, error)) *MockRetriever_Retrieve_Call {
+func (_c *MockRetriever_Retrieve_Call) RunAndReturn(run func(context.Context, string, []string) (knowledge.RetrievalResult, error)) *MockRetriever_Retrieve_Call {
 	_c.Call.Return(run)
 	return _c
 }

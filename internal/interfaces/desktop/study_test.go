@@ -77,7 +77,7 @@ func newTestStudyApp(t *testing.T, sessions domainstudy.SessionRepository, messa
 	messageSources := knowledgemocks.NewMockMessageSourceRepository(t)
 	messageSources.EXPECT().Save(context.Background(), mock.Anything, mock.Anything).Return(nil).Maybe()
 	messageSources.EXPECT().ListBySession(context.Background(), mock.Anything).Return(map[string][]domainknowledge.Source{}, nil).Maybe()
-	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog, messageSources, passthroughKnowledgeCascade{})
+	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog, messageSources, passthroughKnowledgeCascade{}, nil)
 	folderService := folder.NewService(folders, sessions, passthroughKnowledgeCascade{})
 	app := NewApp(nil, nil, nil, studyService, folderService, nil, nil, nil, nil, nil)
 	app.Startup(context.Background())
@@ -377,13 +377,13 @@ func TestApp_SendStudyMessage_emitsPostCapSourcesEvent_notes(t *testing.T) {
 			{ChunkID: "chunk-1", ItemID: "item-1", SourceType: domainknowledge.SourceImportedDoc, FilePath: "notes/a.md", Heading: "H", Concept: "Channels", Score: 0.9, Excerpt: "..."},
 		},
 	}
-	retriever.EXPECT().Retrieve(mock.Anything, "session-1", mock.AnythingOfType("string")).Return(result, nil).Once()
+	retriever.EXPECT().Retrieve(mock.Anything, "session-1", mock.AnythingOfType("[]string")).Return(result, nil).Once()
 	llm.EXPECT().ChatStream(mock.Anything, mock.AnythingOfType("llm.ChatRequest"), mock.AnythingOfType("func(string) error")).
 		Return(domainllm.StreamResponse{}, nil).Once()
 
 	messageSources := knowledgemocks.NewMockMessageSourceRepository(t)
 	messageSources.EXPECT().Save(context.Background(), mock.Anything, mock.Anything).Return(nil).Maybe()
-	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog, messageSources, passthroughKnowledgeCascade{})
+	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog, messageSources, passthroughKnowledgeCascade{}, nil)
 	folderService := folder.NewService(folders, sessions, passthroughKnowledgeCascade{})
 	app := NewApp(nil, nil, nil, studyService, folderService, nil, nil, nil, nil, nil)
 	app.Startup(context.Background())
@@ -515,7 +515,7 @@ func TestApp_ResumeStudySession_attachesPersistedSourcesToTheirMessage(t *testin
 			"message-1": {{ChunkID: "chunk-1", SourceType: domainknowledge.SourceImportedDoc, Concept: "Goroutines", Score: 0.9}},
 		}, nil).
 		Once()
-	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog, messageSources, passthroughKnowledgeCascade{})
+	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog, messageSources, passthroughKnowledgeCascade{}, nil)
 	folderService := folder.NewService(folders, sessions, passthroughKnowledgeCascade{})
 	app := NewApp(nil, nil, nil, studyService, folderService, nil, nil, nil, nil, nil)
 	app.Startup(context.Background())

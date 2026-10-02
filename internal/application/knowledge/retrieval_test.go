@@ -66,7 +66,7 @@ func TestRetrieve_returnsErrVectorStoreUnavailable_whenNoSnapshot(t *testing.T) 
 	service := NewService(items, llm, nil, nil, store, guard, defaultThresholds(t))
 
 	// When retrieving
-	_, err := service.Retrieve(context.Background(), "session-1", "Topic: Go\n\nMessage: what is a channel?")
+	_, err := service.Retrieve(context.Background(), "session-1", []string{"Topic: Go\n\nMessage: what is a channel?"})
 
 	// Then it fails with ErrVectorStoreUnavailable; store/llm/items have no
 	// .EXPECT() set, so an unexpected call would fail the test
@@ -83,7 +83,7 @@ func TestRetrieve_returnsEmptyResult_whenSnapshotValidButStoreEmpty(t *testing.T
 	service := NewService(items, llm, nil, nil, store, guard, defaultThresholds(t))
 
 	// When retrieving
-	result, err := service.Retrieve(context.Background(), "session-1", "Topic: Go\n\nMessage: what is a channel?")
+	result, err := service.Retrieve(context.Background(), "session-1", []string{"Topic: Go\n\nMessage: what is a channel?"})
 
 	// Then it returns a zero-value result with no error; llm has no
 	// .EXPECT() set, so no embedding call happened
@@ -110,7 +110,7 @@ func TestRetrieve_embedsQueryWithSessionAttribution_andSearchesApprovedChunksOfT
 	service := NewService(items, llm, nil, nil, store, guard, defaultThresholds(t))
 
 	// When retrieving
-	result, err := service.Retrieve(context.Background(), "session-1", "Topic: Go\n\nMessage: what is a channel?")
+	result, err := service.Retrieve(context.Background(), "session-1", []string{"Topic: Go\n\nMessage: what is a channel?"})
 
 	// Then the single chunk survives into Chunks and Sources
 	require.NoError(t, err)
@@ -119,6 +119,172 @@ func TestRetrieve_embedsQueryWithSessionAttribution_andSearchesApprovedChunksOfT
 	require.Equal(t, "chunk-1", result.Sources[0].ChunkID)
 	require.Equal(t, "Channels", result.Sources[0].Concept)
 	require.NotEmpty(t, result.Context)
+}
+
+func TestRetrieve_multipleQueries_embedsAndSearchesEachOneIndependently(t *testing.T) {
+	// Given two distinct queries
+	guard := readyGuard(t)
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Len().Return(2)
+	store.EXPECT().
+		Search(context.Background(), []float32{0.1}, domainknowledge.DefaultTopK, domainknowledge.SearchFilters{SessionID: "session-1"}).
+		Return([]domainknowledge.ScoredChunk{scoredChunk("chunk-1", "item-1", 0.9)}, nil).
+		Once()
+	store.EXPECT().
+		Search(context.Background(), []float32{0.2}, domainknowledge.DefaultTopK, domainknowledge.SearchFilters{SessionID: "session-1"}).
+		Return([]domainknowledge.ScoredChunk{scoredChunk("chunk-2", "item-2", 0.8)}, nil).
+		Once()
+	llm := llmmocks.NewMockProvider(t)
+	llm.EXPECT().Embeddings(context.Background(), domainllm.EmbeddingRequest{SessionID: "session-1", Input: "raw query"}).
+		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
+	llm.EXPECT().Embeddings(context.Background(), domainllm.EmbeddingRequest{SessionID: "session-1", Input: "hypothetical passage"}).
+		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.2}}, nil).Once()
+	items := knowledgemocks.NewMockRepository(t)
+	items.EXPECT().GetByID(mock.Anything, mock.Anything).Return(domainknowledge.Item{Concept: "C"}, nil)
+	service := NewService(items, llm, nil, nil, store, guard, defaultThresholds(t))
+
+	// When retrieving with both queries
+	result, err := service.Retrieve(context.Background(), "session-1", []string{"raw query", "hypothetical passage"})
+
+	// Then both chunks (one per query) are combined into the result
+	require.NoError(t, err)
+	require.Len(t, result.Chunks, 2)
+	chunkIDs := []string{result.Chunks[0].Chunk.ID, result.Chunks[1].Chunk.ID}
+	require.ElementsMatch(t, []string{"chunk-1", "chunk-2"}, chunkIDs)
+}
+
+func TestRetrieve_multipleQueries_keepsTheBestScorePerChunk(t *testing.T) {
+	// Given the same chunk found by both queries, with different scores
+	guard := readyGuard(t)
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Len().Return(1)
+	lowScore := scoredChunk("chunk-1", "item-1", 0.5)
+	highScore := scoredChunk("chunk-1", "item-1", 0.9)
+	store.EXPECT().
+		Search(context.Background(), []float32{0.1}, domainknowledge.DefaultTopK, domainknowledge.SearchFilters{SessionID: "session-1"}).
+		Return([]domainknowledge.ScoredChunk{lowScore}, nil).
+		Once()
+	store.EXPECT().
+		Search(context.Background(), []float32{0.2}, domainknowledge.DefaultTopK, domainknowledge.SearchFilters{SessionID: "session-1"}).
+		Return([]domainknowledge.ScoredChunk{highScore}, nil).
+		Once()
+	llm := llmmocks.NewMockProvider(t)
+	llm.EXPECT().Embeddings(context.Background(), domainllm.EmbeddingRequest{SessionID: "session-1", Input: "raw query"}).
+		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
+	llm.EXPECT().Embeddings(context.Background(), domainllm.EmbeddingRequest{SessionID: "session-1", Input: "hypothetical passage"}).
+		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.2}}, nil).Once()
+	items := knowledgemocks.NewMockRepository(t)
+	items.EXPECT().GetByID(mock.Anything, mock.Anything).Return(domainknowledge.Item{Concept: "C"}, nil)
+	service := NewService(items, llm, nil, nil, store, guard, defaultThresholds(t))
+
+	// When retrieving with both queries
+	result, err := service.Retrieve(context.Background(), "session-1", []string{"raw query", "hypothetical passage"})
+
+	// Then the chunk survives exactly once, at its best (higher) score
+	require.NoError(t, err)
+	require.Len(t, result.Chunks, 1)
+	require.Equal(t, "chunk-1", result.Chunks[0].Chunk.ID)
+	require.Equal(t, float32(0.9), result.Chunks[0].Score)
+}
+
+func TestRetrieve_multipleQueries_firstResultSetWinsOnAnExactScoreTie(t *testing.T) {
+	// Given the same chunk ID found by both queries, at the exact same
+	// score but with distinguishable content, so which one "won" is
+	// observable
+	guard := readyGuard(t)
+	fromRawQuery := domainknowledge.ScoredChunk{
+		Chunk: domainknowledge.Chunk{ID: "chunk-1", ItemID: "item-1", Content: "from raw query"},
+		Score: 0.7,
+	}
+	fromHypothetical := domainknowledge.ScoredChunk{
+		Chunk: domainknowledge.Chunk{ID: "chunk-1", ItemID: "item-1", Content: "from hypothetical"},
+		Score: 0.7,
+	}
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Len().Return(1)
+	store.EXPECT().
+		Search(context.Background(), []float32{0.1}, domainknowledge.DefaultTopK, domainknowledge.SearchFilters{SessionID: "session-1"}).
+		Return([]domainknowledge.ScoredChunk{fromRawQuery}, nil).
+		Once()
+	store.EXPECT().
+		Search(context.Background(), []float32{0.2}, domainknowledge.DefaultTopK, domainknowledge.SearchFilters{SessionID: "session-1"}).
+		Return([]domainknowledge.ScoredChunk{fromHypothetical}, nil).
+		Once()
+	llm := llmmocks.NewMockProvider(t)
+	llm.EXPECT().Embeddings(context.Background(), domainllm.EmbeddingRequest{SessionID: "session-1", Input: "raw query"}).
+		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
+	llm.EXPECT().Embeddings(context.Background(), domainllm.EmbeddingRequest{SessionID: "session-1", Input: "hypothetical passage"}).
+		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.2}}, nil).Once()
+	items := knowledgemocks.NewMockRepository(t)
+	items.EXPECT().GetByID(mock.Anything, mock.Anything).Return(domainknowledge.Item{Concept: "C"}, nil)
+	service := NewService(items, llm, nil, nil, store, guard, defaultThresholds(t))
+
+	// When retrieving with both queries
+	result, err := service.Retrieve(context.Background(), "session-1", []string{"raw query", "hypothetical passage"})
+
+	// Then the chunk survives exactly once, keeping the first result set's
+	// own entry — an exact tie never overwrites it (strict ">", not ">=")
+	require.NoError(t, err)
+	require.Len(t, result.Chunks, 1)
+	require.Equal(t, "from raw query", result.Chunks[0].Chunk.Content)
+}
+
+func TestRetrieve_multipleQueries_breaksAnExactScoreTieBetweenDifferentChunksByIDAscending(t *testing.T) {
+	// Given two distinct chunks tied at the exact same score, one per query
+	guard := readyGuard(t)
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Len().Return(2)
+	store.EXPECT().
+		Search(context.Background(), []float32{0.1}, domainknowledge.DefaultTopK, domainknowledge.SearchFilters{SessionID: "session-1"}).
+		Return([]domainknowledge.ScoredChunk{scoredChunk("chunk-b", "item-1", 0.7)}, nil).
+		Once()
+	store.EXPECT().
+		Search(context.Background(), []float32{0.2}, domainknowledge.DefaultTopK, domainknowledge.SearchFilters{SessionID: "session-1"}).
+		Return([]domainknowledge.ScoredChunk{scoredChunk("chunk-a", "item-2", 0.7)}, nil).
+		Once()
+	llm := llmmocks.NewMockProvider(t)
+	llm.EXPECT().Embeddings(context.Background(), domainllm.EmbeddingRequest{SessionID: "session-1", Input: "raw query"}).
+		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
+	llm.EXPECT().Embeddings(context.Background(), domainllm.EmbeddingRequest{SessionID: "session-1", Input: "hypothetical passage"}).
+		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.2}}, nil).Once()
+	items := knowledgemocks.NewMockRepository(t)
+	items.EXPECT().GetByID(mock.Anything, mock.Anything).Return(domainknowledge.Item{Concept: "C"}, nil)
+	service := NewService(items, llm, nil, nil, store, guard, defaultThresholds(t))
+
+	// When retrieving with both queries
+	result, err := service.Retrieve(context.Background(), "session-1", []string{"raw query", "hypothetical passage"})
+
+	// Then both survive, ordered by chunk ID ascending (their tie-break),
+	// not by which query found them
+	require.NoError(t, err)
+	require.Len(t, result.Chunks, 2)
+	require.Equal(t, "chunk-a", result.Chunks[0].Chunk.ID)
+	require.Equal(t, "chunk-b", result.Chunks[1].Chunk.ID)
+}
+
+func TestRetrieve_multipleQueries_propagatesEmbeddingErrorFromEitherQuery(t *testing.T) {
+	// Given the second query's embedding call fails
+	guard := readyGuard(t)
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Len().Return(1)
+	store.EXPECT().
+		Search(context.Background(), []float32{0.1}, domainknowledge.DefaultTopK, domainknowledge.SearchFilters{SessionID: "session-1"}).
+		Return([]domainknowledge.ScoredChunk{scoredChunk("chunk-1", "item-1", 0.9)}, nil).
+		Once()
+	llm := llmmocks.NewMockProvider(t)
+	llm.EXPECT().Embeddings(context.Background(), domainllm.EmbeddingRequest{SessionID: "session-1", Input: "raw query"}).
+		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
+	embedErr := errors.New("rate limited")
+	llm.EXPECT().Embeddings(context.Background(), domainllm.EmbeddingRequest{SessionID: "session-1", Input: "hypothetical passage"}).
+		Return(domainllm.EmbeddingResponse{}, embedErr).Once()
+	service := NewService(nil, llm, nil, nil, store, guard, defaultThresholds(t))
+
+	// When retrieving with both queries
+	_, err := service.Retrieve(context.Background(), "session-1", []string{"raw query", "hypothetical passage"})
+
+	// Then the error propagates; no item-resolution call happens (no
+	// .EXPECT() set on items)
+	require.Error(t, err)
 }
 
 func TestRetrieve_filtersChunksBelowMinScore(t *testing.T) {
@@ -138,7 +304,7 @@ func TestRetrieve_filtersChunksBelowMinScore(t *testing.T) {
 	service := NewService(items, llm, nil, nil, store, guard, defaultThresholds(t))
 
 	// When retrieving
-	result, err := service.Retrieve(context.Background(), "session-1", "query")
+	result, err := service.Retrieve(context.Background(), "session-1", []string{"query"})
 
 	// Then only the chunk scoring at or above minScore survives; items is
 	// never asked to resolve item-2 (no .EXPECT() for it)
@@ -161,7 +327,7 @@ func TestRetrieve_includesChunkAtExactlyMinScore(t *testing.T) {
 	service := NewService(items, llm, nil, nil, store, guard, cleanThresholds(t, 0.5, 0.9))
 
 	// When retrieving
-	result, err := service.Retrieve(context.Background(), "session-1", "query")
+	result, err := service.Retrieve(context.Background(), "session-1", []string{"query"})
 
 	// Then equality is inclusive — the chunk survives
 	require.NoError(t, err)
@@ -185,7 +351,7 @@ func TestRetrieve_resolvesConceptOncePerDistinctItemID(t *testing.T) {
 	service := NewService(items, llm, nil, nil, store, guard, defaultThresholds(t))
 
 	// When retrieving
-	result, err := service.Retrieve(context.Background(), "session-1", "query")
+	result, err := service.Retrieve(context.Background(), "session-1", []string{"query"})
 
 	// Then both chunks survive as separate Sources, each carrying the same
 	// concept — items.GetByID was called only Once (see .EXPECT() above)
@@ -211,7 +377,7 @@ func TestRetrieve_dropsSoleChunk_whenOwningItemMissing_yieldingNoMatch(t *testin
 	service := NewService(items, llm, nil, nil, store, guard, defaultThresholds(t))
 
 	// When retrieving
-	result, err := service.Retrieve(context.Background(), "session-1", "query")
+	result, err := service.Retrieve(context.Background(), "session-1", []string{"query"})
 
 	// Then the orphaned chunk is dropped rather than failing the call,
 	// leaving no survivors — the same result as no local match at all
@@ -238,7 +404,7 @@ func TestRetrieve_dropsOrphanedChunk_keepingOtherSurvivors(t *testing.T) {
 	service := NewService(items, llm, nil, nil, store, guard, defaultThresholds(t))
 
 	// When retrieving
-	result, err := service.Retrieve(context.Background(), "session-1", "query")
+	result, err := service.Retrieve(context.Background(), "session-1", []string{"query"})
 
 	// Then only the valid chunk survives, with its metadata and Source
 	// intact — not just its ChunkID
@@ -281,7 +447,7 @@ func TestRetrieve_propagatesNonNotFoundError_whenResolvingOwningItem(t *testing.
 	service := NewService(items, llm, nil, nil, store, guard, defaultThresholds(t))
 
 	// When retrieving
-	_, err := service.Retrieve(context.Background(), "session-1", "query")
+	_, err := service.Retrieve(context.Background(), "session-1", []string{"query"})
 
 	// Then it fails — a genuine infrastructure error is never mistaken for
 	// "nothing relevant found"
@@ -307,7 +473,7 @@ func TestRetrieve_preservesScoreDescendingIDAscendingOrder_acrossChunksSourcesAn
 	service := NewService(items, llm, nil, nil, store, guard, defaultThresholds(t))
 
 	// When retrieving
-	result, err := service.Retrieve(context.Background(), "session-1", "query")
+	result, err := service.Retrieve(context.Background(), "session-1", []string{"query"})
 	require.NoError(t, err)
 
 	// Then Chunks, Sources, and the JSON entries all preserve the same order
@@ -333,7 +499,7 @@ func TestRetrieve_excludesEmbeddingAndScoreFromRenderedJSON(t *testing.T) {
 	service := NewService(items, llm, nil, nil, store, guard, defaultThresholds(t))
 
 	// When retrieving
-	result, err := service.Retrieve(context.Background(), "session-1", "query")
+	result, err := service.Retrieve(context.Background(), "session-1", []string{"query"})
 	require.NoError(t, err)
 
 	// Then each JSON entry has exactly the five documented keys
@@ -362,7 +528,7 @@ func TestRetrieve_capsContext_removingLowestScoreChunksWholeUntilUnderBudget(t *
 	service := NewService(items, llm, nil, nil, store, guard, defaultThresholds(t))
 
 	// When retrieving
-	result, err := service.Retrieve(context.Background(), "session-1", "query")
+	result, err := service.Retrieve(context.Background(), "session-1", []string{"query"})
 	require.NoError(t, err)
 
 	// Then the lowest-scoring chunk (chunk-big) is dropped whole; the
@@ -390,7 +556,7 @@ func TestRetrieve_dropsSoleOversizedChunk_yieldingNoMatch(t *testing.T) {
 	service := NewService(items, llm, nil, nil, store, guard, defaultThresholds(t))
 
 	// When retrieving
-	result, err := service.Retrieve(context.Background(), "session-1", "query")
+	result, err := service.Retrieve(context.Background(), "session-1", []string{"query"})
 
 	// Then the result is the same as no local match
 	require.NoError(t, err)
@@ -422,7 +588,7 @@ func TestRetrieve_includesChunkAtExactlyTheCapBoundary(t *testing.T) {
 	service := NewService(items, llm, nil, nil, store, guard, defaultThresholds(t))
 
 	// When retrieving
-	result, retrieveErr := service.Retrieve(context.Background(), "session-1", "query")
+	result, retrieveErr := service.Retrieve(context.Background(), "session-1", []string{"query"})
 
 	// Then a JSON block landing exactly on the cap is included, not dropped
 	require.NoError(t, retrieveErr)
@@ -454,7 +620,7 @@ func TestRetrieve_dropsSoleChunk_whenRenderedJSONIsOneCodePointOverTheCap(t *tes
 	service := NewService(items, llm, nil, nil, store, guard, defaultThresholds(t))
 
 	// When retrieving
-	result, retrieveErr := service.Retrieve(context.Background(), "session-1", "query")
+	result, retrieveErr := service.Retrieve(context.Background(), "session-1", []string{"query"})
 
 	// Then it is dropped whole, same as no local match
 	require.NoError(t, retrieveErr)
@@ -462,17 +628,24 @@ func TestRetrieve_dropsSoleChunk_whenRenderedJSONIsOneCodePointOverTheCap(t *tes
 }
 
 func TestRetrieve_sufficientIsBasedOnlyOnPostCapSurvivors(t *testing.T) {
-	// Given the only chunk meeting the sufficiency threshold is the lowest
-	// scoring one, and it gets capped away for being oversized
+	// Given a sufficient chunk whose own content alone exceeds the cap,
+	// alongside a smaller insufficient one. Capping always strips the
+	// lowest-scoring survivor first (score-descending order, enforced
+	// regardless of the order Search returns results in — see
+	// combineByBestScore), so the smaller insufficient chunk is dropped
+	// before the sufficient one is ever reached; the sufficient chunk's own
+	// size then empties the result entirely on the next pass. A sufficient
+	// chunk can therefore never survive capping "in place of" a lower-
+	// scoring one — the only way it goes away is for the whole result to
+	// become empty.
 	guard := readyGuard(t)
-	sufficientButOversized := scoredChunk("chunk-big", "item-1", 0.75)
-	sufficientButOversized.Chunk.Content = strings.Repeat("x", 7900)
-	insufficientButSmall := scoredChunk("chunk-small", "item-2", 0.5)
-	insufficientButSmall.Chunk.Content = "short"
+	sufficientButOversized := scoredChunk("chunk-big", "item-1", 0.9)
+	sufficientButOversized.Chunk.Content = strings.Repeat("x", maxContextChars+1)
+	insufficientSmall := scoredChunk("chunk-small", "item-2", 0.5)
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Len().Return(2)
 	store.EXPECT().Search(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return([]domainknowledge.ScoredChunk{insufficientButSmall, sufficientButOversized}, nil).Once()
+		Return([]domainknowledge.ScoredChunk{sufficientButOversized, insufficientSmall}, nil).Once()
 	llm := llmmocks.NewMockProvider(t)
 	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
 	items := knowledgemocks.NewMockRepository(t)
@@ -480,15 +653,12 @@ func TestRetrieve_sufficientIsBasedOnlyOnPostCapSurvivors(t *testing.T) {
 	service := NewService(items, llm, nil, nil, store, guard, cleanThresholds(t, 0.5, 0.75))
 
 	// When retrieving
-	result, err := service.Retrieve(context.Background(), "session-1", "query")
+	result, err := service.Retrieve(context.Background(), "session-1", []string{"query"})
 	require.NoError(t, err)
 
-	// Then the surviving (capped-in) chunk scores below sufficiency, so the
-	// result as a whole is not Sufficient — a result discarded by the cap
-	// cannot make the context sufficient
-	require.Len(t, result.Chunks, 1)
-	require.Equal(t, "chunk-small", result.Chunks[0].Chunk.ID)
-	require.False(t, result.Sufficient)
+	// Then even though a sufficient chunk existed pre-cap, the whole result
+	// ends up empty — Sufficient is never backfilled from pre-cap data
+	require.Equal(t, domainknowledge.RetrievalResult{}, result)
 }
 
 func TestRetrieve_sufficientTrue_whenAnyPostCapSurvivorMeetsOrExceedsThreshold(t *testing.T) {
@@ -505,7 +675,7 @@ func TestRetrieve_sufficientTrue_whenAnyPostCapSurvivorMeetsOrExceedsThreshold(t
 	service := NewService(items, llm, nil, nil, store, guard, cleanThresholds(t, 0.5, 0.75))
 
 	// When retrieving
-	result, err := service.Retrieve(context.Background(), "session-1", "query")
+	result, err := service.Retrieve(context.Background(), "session-1", []string{"query"})
 
 	// Then equality counts as sufficient
 	require.NoError(t, err)
@@ -524,7 +694,7 @@ func TestRetrieve_propagatesEmbeddingsError(t *testing.T) {
 	service := NewService(items, llm, nil, nil, store, guard, defaultThresholds(t))
 
 	// When retrieving
-	_, err := service.Retrieve(context.Background(), "session-1", "query")
+	_, err := service.Retrieve(context.Background(), "session-1", []string{"query"})
 
 	// Then the error propagates; store.Search is never called (no .EXPECT())
 	require.ErrorIs(t, err, embedErr)
@@ -543,7 +713,7 @@ func TestRetrieve_propagatesSearchError(t *testing.T) {
 	service := NewService(items, llm, nil, nil, store, guard, defaultThresholds(t))
 
 	// When retrieving
-	_, err := service.Retrieve(context.Background(), "session-1", "query")
+	_, err := service.Retrieve(context.Background(), "session-1", []string{"query"})
 
 	// Then the error propagates
 	require.ErrorIs(t, err, searchErr)

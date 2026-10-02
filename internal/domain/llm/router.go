@@ -12,6 +12,10 @@ const (
 	TaskChallengeFeedback   TaskType = "challenge_feedback"
 	TaskInterviewEvaluation TaskType = "interview_evaluation"
 	TaskComplexReasoning    TaskType = "complex_reasoning"
+	// TaskQueryEnrichment is a short, non-streamed generation used to
+	// enrich a retrieval query (see domainknowledge.QueryEnricher) — never
+	// shown to the user, so it is routed cheap like onboarding.
+	TaskQueryEnrichment TaskType = "query_enrichment"
 )
 
 // Tier is a cost/capability class of model.
@@ -43,7 +47,7 @@ var tierModels = map[Tier]string{
 // defaults to TierMedium rather than leaving it unrouted.
 func TierFor(task TaskType) Tier {
 	switch task {
-	case TaskOnboarding:
+	case TaskOnboarding, TaskQueryEnrichment:
 		return TierCheap
 	case TaskStudy, TaskChallengeFeedback:
 		return TierMedium

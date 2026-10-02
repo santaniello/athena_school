@@ -93,7 +93,24 @@ func (s *Service) SendMessage(
 
 	var knowledgeMessage *domainllm.Message
 	var sources []domainknowledge.Source
-	result, err := s.retriever.Retrieve(ctx, sessionID, buildRetrievalQuery(topic, content))
+	queries := []string{buildRetrievalQuery(topic, content)}
+	if sourceMode == domainknowledge.SourceModeStrictNotes {
+		// HyDE: a short question structurally scores lower against long-form
+		// chunk content than a passage of similar shape does, regardless of
+		// relevance — see
+		// specs/phases/phase-02-knowledge-engine/05-01-hyde-query-enrichment.md.
+		// Combined with, never instead of, the raw query above: Retrieve
+		// keeps whichever score is higher per chunk, so a hypothetical that
+		// drifts can only match or improve on today's result, never regress
+		// it. notes mode never calls this — it already degrades gracefully
+		// below Sufficiency, so the extra call isn't worth paying for there.
+		hypothetical, err := s.enricher.Enrich(ctx, sessionID, topic, content)
+		if err != nil {
+			return fmt.Errorf("study: enriching retrieval query: %w", err)
+		}
+		queries = append(queries, hypothetical)
+	}
+	result, err := s.retriever.Retrieve(ctx, sessionID, queries)
 	if err != nil {
 		return fmt.Errorf("study: retrieving local knowledge: %w", err)
 	}
