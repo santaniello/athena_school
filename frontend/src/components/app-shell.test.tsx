@@ -1,16 +1,24 @@
 import { describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { GetProfile, UpdateProfile } from '../../wailsjs/go/desktop/App'
+import { GetProfile, GetSessionSourceDocument, UpdateProfile } from '../../wailsjs/go/desktop/App'
 import {
   deleteStudySession,
   listStudySessionsByFolder,
+  onStudyChunk,
   onStudyContextWarning,
+  onStudyDone,
+  onStudySources,
   requestOpeningTurn,
   resumeStudySession,
   startStudySession,
 } from '@/lib/study'
-import type { StudyContextEvent } from '@/lib/study'
+import type {
+  StudyChunkEvent,
+  StudyContextEvent,
+  StudyDoneEvent,
+  StudySourcesEvent,
+} from '@/lib/study'
 import type { StudyContextUsage, StudySession } from '@/lib/study'
 import {
   getKnowledgeIndexStatus,
@@ -26,6 +34,9 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   UpdateProfile: vi.fn(),
   SaveOpenRouterKey: vi.fn(),
   HasOpenRouterKey: vi.fn().mockResolvedValue(true),
+  // The source viewer (useSourceDocument) fetches this on demand, once a
+  // citation click or row click opens it.
+  GetSessionSourceDocument: vi.fn(),
   // The Sources panel (useSessionSources) fetches this itself as soon as a
   // session is open — resolved empty so it settles past its loading state.
   ListSessionSources: vi.fn().mockResolvedValue([]),
@@ -308,6 +319,93 @@ describe('AppShell', () => {
 
     // Then it doesn't throw calling into the resizable-panel imperative API
     expect(toggle).toBeInTheDocument()
+  })
+
+  it('opens the Sources panel at the cited document and passage when a citation chip is clicked', async () => {
+    // Given a session open in Study, with a completed reply citing its one
+    // local source
+    let chunkHandler: ((event: StudyChunkEvent) => void) | undefined
+    let doneHandler: ((event: StudyDoneEvent) => void) | undefined
+    let sourcesHandler: ((event: StudySourcesEvent) => void) | undefined
+    vi.mocked(onStudyChunk).mockImplementationOnce((handler) => {
+      chunkHandler = handler
+      return vi.fn()
+    })
+    vi.mocked(onStudyDone).mockImplementationOnce((handler) => {
+      doneHandler = handler
+      return vi.fn()
+    })
+    vi.mocked(onStudySources).mockImplementationOnce((handler) => {
+      sourcesHandler = handler
+      return vi.fn()
+    })
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+    await user.click(screen.getByRole('button', { name: 'Study' }))
+    await screen.findByText('General')
+    vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([])
+    const startedSession: StudySession = {
+      id: 'session-1',
+      topic: 'Distributed systems',
+      folderId: 'default',
+      goal: 'Ace the SQL interview',
+      startedAt: '2026-08-17T10:00:00Z',
+      context: CONTEXT_NORMAL,
+    }
+    vi.mocked(startStudySession).mockResolvedValueOnce(startedSession)
+    vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
+    await user.click(screen.getByText('General'))
+    await user.click(await screen.findByText('New session'))
+    await user.type(
+      screen.getByPlaceholderText('What do you want to study?'),
+      'Distributed systems',
+    )
+    await user.type(
+      screen.getByPlaceholderText('e.g. Pass the SQL interview'),
+      'Ace the SQL interview{Enter}',
+    )
+    await screen.findByText('Study / General')
+    expect(await screen.findByText('Imported into this session')).toBeInTheDocument()
+
+    vi.mocked(GetSessionSourceDocument).mockResolvedValueOnce({
+      itemId: 'item-1',
+      title: 'Distributed Systems',
+      path: 'notes/ds.md',
+      segments: [{ text: 'The scheduler multiplexes M:N goroutines.', chunkId: 'chunk-1' }],
+    } as unknown as Awaited<ReturnType<typeof GetSessionSourceDocument>>)
+    act(() => {
+      sourcesHandler?.({
+        sessionId: 'session-1',
+        sources: [
+          {
+            chunkId: 'chunk-1',
+            itemId: 'item-1',
+            sourceType: 'imported_doc',
+            filePath: 'notes/ds.md',
+            heading: 'CAP theorem',
+            concept: '',
+            score: 0.68,
+            excerpt: 'The scheduler multiplexes M:N goroutines.',
+          },
+        ],
+      })
+      chunkHandler?.({ sessionId: 'session-1', content: 'It stands for [1].' })
+      doneHandler?.({ sessionId: 'session-1' })
+    })
+
+    // When clicking the citation chip
+    await user.click(await screen.findByRole('button', { name: '1' }))
+
+    // Then the Sources panel opens the viewer for that document, scrolled
+    // to the cited passage
+    expect(GetSessionSourceDocument).toHaveBeenCalledWith('session-1', 'item-1')
+    await waitFor(() =>
+      expect(
+        screen.getByText('The scheduler multiplexes M:N goroutines.', { exact: false }),
+      ).toBeInTheDocument(),
+    )
+    expect(screen.queryByPlaceholderText('Search sources')).not.toBeInTheDocument()
   })
 
   it("shows the account's name in the sidebar footer", async () => {

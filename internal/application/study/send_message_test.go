@@ -342,6 +342,51 @@ func TestSendMessage_sendsHistoryAndFreshSystemPromptToLLM(t *testing.T) {
 	require.Equal(t, []string{"It stands for..."}, received)
 }
 
+func TestSendMessage_stripsCitationMarkersFromPriorAssistantTurns_butNotUserTurns(t *testing.T) {
+	// Given a service with a prior assistant turn containing a citation
+	// marker, and a prior user turn whose literal bracketed number is not a
+	// citation marker at all
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
+	retriever := knowledgemocks.NewMockRetriever(t)
+	tx := mockNormalSession(t, sessions, "session-1")
+	retriever.EXPECT().Retrieve(context.Background(), "session-1", mock.AnythingOfType("string")).
+		Return(domainknowledge.RetrievalResult{}, nil).Once()
+
+	messages.EXPECT().Append(context.Background(), mock.AnythingOfType("study.Message")).Return(nil).Twice()
+	messages.EXPECT().
+		ListBySession(context.Background(), "session-1").
+		Return([]domainstudy.Message{
+			{Role: domainstudy.RoleUser, Content: "See step [3] of the guide"},
+			{Role: domainstudy.RoleAssistant, Content: "Channels are typed pipes [2]."},
+		}, nil).
+		Once()
+	profiles.EXPECT().Load().Return(domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}, nil)
+	llm.EXPECT().
+		ChatStream(context.Background(), mock.MatchedBy(func(req domainllm.ChatRequest) bool {
+			if len(req.Messages) != 3 || req.Messages[0].Role != "system" {
+				return false
+			}
+			return req.Messages[1].Content == "See step [3] of the guide" &&
+				req.Messages[2].Content == "Channels are typed pipes ."
+		}), mock.AnythingOfType("func(string) error")).
+		Return(domainllm.StreamResponse{}, nil).
+		Once()
+
+	messageSources := mockMessageSourceSave(t, nil)
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, messageSources, nil)
+
+	// When sending a message
+	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeNotes, noopSourcesHandler, noopChunkHandler, nil, nil)
+
+	// Then the assistant turn's marker was stripped, and the user turn's
+	// literal bracketed number survived verbatim
+	require.NoError(t, err)
+}
+
 func TestSendMessage_propagatesStreamError_withoutPersistingAssistantMessage(t *testing.T) {
 	// Given a service whose LLM call fails mid-stream, after the user
 	// message has already been persisted

@@ -306,14 +306,14 @@ the real file.
 
 ## Tasks
 
-- [ ] Backend: `StudySourceResult` chunkId/itemId/excerpt; regenerate `wailsjs`
-- [ ] Backend: `contextEntry.id`, the citation instruction, history marker-stripping
-- [ ] Frontend: `lib/citations.ts` (+ module augmentation), `CitationChip`
-- [ ] Frontend: `message-bubble.tsx`, `local-sources-strip.tsx`, `StudyChatScreen.tsx` wiring
+- [x] Backend: `StudySourceResult` chunkId/itemId/excerpt; regenerate `wailsjs`
+- [x] Backend: `contextEntry.id`, the citation instruction, history marker-stripping
+- [x] Frontend: `lib/citations.ts` (+ module augmentation), `CitationChip`
+- [x] Frontend: `message-bubble.tsx`, `local-sources-strip.tsx`, `StudyChatScreen.tsx` wiring
       (including the `lib/study.ts` `StudySource` fields and the resulting test-literal fallout)
-- [ ] Frontend: read `app-shell.tsx`; design and implement the open-citation request flow,
+- [x] Frontend: read `app-shell.tsx`; design and implement the open-citation request flow,
       `study-sources-panel.tsx`'s external-open prop, `source-viewer.tsx`'s highlight
-- [ ] Docs: CHANGELOG, `lib/documentation.ts`, this spec + 2.18 + 2.17 checklists
+- [x] Docs: CHANGELOG, `lib/documentation.ts`, this spec + 2.18 + 2.17 checklists
 
 ## Acceptance Criteria
 

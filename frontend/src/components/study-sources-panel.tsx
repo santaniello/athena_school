@@ -34,6 +34,11 @@ interface StudySourcesPanelProps {
   // confusingly. Defaults to false (every call site before AppShell wires
   // it, and every test that isn't specifically about this state).
   mutationsDisabled?: boolean
+  // An external request to open the viewer — e.g. a citation clicked in the
+  // chat — the same way a row click does, at the exact cited passage. A new
+  // object (even for the same itemId/chunkId) re-opens/re-highlights; null/
+  // undefined is a no-op. Owned by AppShell (see spec 2.18 decision 11).
+  openRequest?: { itemId: string; chunkId?: string } | null
 }
 
 // The existing inline error copy for a picker that failed to open, carried
@@ -102,7 +107,11 @@ function AddSourceButton({
 // sources cited so far — see StudyChatScreen's per-message "Local sources"
 // strip for that). See
 // specs/phases/phase-02-knowledge-engine/17-session-sources-panel.md.
-function StudySourcesPanel({ sessionId, mutationsDisabled = false }: StudySourcesPanelProps) {
+function StudySourcesPanel({
+  sessionId,
+  mutationsDisabled = false,
+  openRequest,
+}: StudySourcesPanelProps) {
   const { sources, loading, error, reload } = useSessionSources(sessionId)
   const [query, setQuery] = useState('')
   const [importPath, setImportPath] = useState<string | null>(null)
@@ -118,9 +127,37 @@ function StudySourcesPanel({ sessionId, mutationsDisabled = false }: StudySource
   // never itself observable.
   const [removeError, setRemoveError] = useState('')
   // The document currently shown in the viewer instead of the list — null
-  // means the list. A row click sets it; the viewer's own "← Sources"
-  // clears it.
-  const [viewingItemId, setViewingItemId] = useState<string | null>(null)
+  // means the list. A row click sets it (with no chunkId, i.e. no
+  // highlight); the viewer's own "← Sources" clears it; the openRequest
+  // check below sets it too, for a citation click. token is a monotonic
+  // counter, bumped on every open (whichever path), so re-clicking the
+  // exact same already-open citation still tells SourceViewer to recenter
+  // and replay the highlight — sessionId/itemId/chunkId alone wouldn't
+  // change in that case, so nothing else would signal a re-open.
+  const [viewing, setViewing] = useState<{
+    itemId: string
+    chunkId?: string
+    token: number
+  } | null>(null)
+
+  // A functional update (reading previous state, not a ref) so this stays
+  // safe to call from the render-time openRequest check below, not just
+  // from event handlers.
+  function openViewing(itemId: string, chunkId?: string) {
+    setViewing((previous) => ({ itemId, chunkId, token: (previous?.token ?? 0) + 1 }))
+  }
+
+  // A citation click in the chat drives this panel the same way a row click
+  // does. openRequest is a fresh object per click (even re-clicking the same
+  // citation), so tracking its identity (not just itemId/chunkId) always
+  // re-opens/re-highlights on a new click. Adjusting state during render,
+  // not inside an effect (see
+  // https://react.dev/learn/you-might-not-need-an-effect).
+  const [lastOpenRequest, setLastOpenRequest] = useState(openRequest)
+  if (openRequest !== lastOpenRequest) {
+    setLastOpenRequest(openRequest)
+    if (openRequest) openViewing(openRequest.itemId, openRequest.chunkId)
+  }
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -194,12 +231,14 @@ function StudySourcesPanel({ sessionId, mutationsDisabled = false }: StudySource
   // (non-optional) prop type.
   const importDialogPath = importPath ?? ''
 
-  if (viewingItemId !== null) {
+  if (viewing !== null) {
     return (
       <SourceViewer
         sessionId={sessionId}
-        itemId={viewingItemId}
-        onBack={() => setViewingItemId(null)}
+        itemId={viewing.itemId}
+        chunkId={viewing.chunkId}
+        reopenToken={viewing.token}
+        onBack={() => setViewing(null)}
       />
     )
   }
@@ -284,7 +323,7 @@ function StudySourcesPanel({ sessionId, mutationsDisabled = false }: StudySource
               >
                 <button
                   type="button"
-                  onClick={() => setViewingItemId(source.itemId)}
+                  onClick={() => openViewing(source.itemId)}
                   className="min-w-0 flex-1 text-left"
                 >
                   <p className="truncate text-xs font-semibold text-foreground">{source.title}</p>

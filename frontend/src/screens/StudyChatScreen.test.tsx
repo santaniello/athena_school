@@ -113,7 +113,7 @@ function setupSubscriptions() {
   return handlers
 }
 
-function renderNewSession() {
+function renderNewSession(props: Partial<React.ComponentProps<typeof StudyChatScreen>> = {}) {
   return render(
     <StudyChatScreen
       sessionId="session-1"
@@ -121,6 +121,7 @@ function renderNewSession() {
       mode="new"
       onStartNewSession={vi.fn()}
       startingNewSession={false}
+      {...props}
     />,
   )
 }
@@ -131,18 +132,22 @@ function newSessionActionProps() {
   return { onStartNewSession: vi.fn(), startingNewSession: false }
 }
 
-async function renderStartedSession() {
+async function renderStartedSession(
+  props: Partial<React.ComponentProps<typeof StudyChatScreen>> = {},
+) {
   const handlers = setupSubscriptions()
   vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
-  renderNewSession()
+  renderNewSession(props)
   await screen.findByRole('status', { name: /thinking/i })
   return handlers
 }
 
-async function renderSettledSession() {
+async function renderSettledSession(
+  props: Partial<React.ComponentProps<typeof StudyChatScreen>> = {},
+) {
   const handlers = setupSubscriptions()
   vi.mocked(requestOpeningTurn).mockResolvedValueOnce()
-  renderNewSession()
+  renderNewSession(props)
   await screen.findByRole('status', { name: /thinking/i })
   act(() => {
     handlers.chunk?.({ sessionId: 'session-1', content: 'Welcome!' })
@@ -339,7 +344,16 @@ describe('StudyChatScreen — resuming a session', () => {
           content: 'It stands for...',
           createdAt: '2026-08-16T10:00:01Z',
           sources: [
-            { sourceType: 'athena', filePath: '', heading: '', concept: 'CAP theorem', score: 0.9 },
+            {
+              chunkId: 'chunk-1',
+              itemId: 'item-1',
+              sourceType: 'athena',
+              filePath: '',
+              heading: '',
+              concept: 'CAP theorem',
+              score: 0.9,
+              excerpt: '',
+            },
           ],
         },
       ],
@@ -985,11 +999,14 @@ describe('StudyChatScreen — source modes and local sources', () => {
     const handlers = await renderStartedSession()
     const sources = [
       {
+        chunkId: 'chunk-1',
+        itemId: 'item-1',
         sourceType: 'imported_doc',
         filePath: 'notes/a.md',
         heading: 'CAP theorem',
         concept: '',
         score: 0.68,
+        excerpt: '',
       },
     ]
 
@@ -1029,11 +1046,14 @@ describe('StudyChatScreen — source modes and local sources', () => {
     const handlers = await renderStartedSession()
     const sources = [
       {
+        chunkId: 'chunk-1',
+        itemId: 'item-1',
         sourceType: 'imported_doc',
         filePath: 'notes/a.md',
         heading: 'CAP theorem',
         concept: '',
         score: 0.68,
+        excerpt: '',
       },
     ]
 
@@ -1047,7 +1067,7 @@ describe('StudyChatScreen — source modes and local sources', () => {
 
     await user.click(strip)
 
-    expect(screen.getByText('notes/a.md')).toBeInTheDocument()
+    expect(screen.getByText(/notes\/a\.md/)).toBeInTheDocument()
   })
 
   it('ignores study:chunk/done/error/sources events whose sessionId does not match the displayed session', async () => {
@@ -1057,7 +1077,16 @@ describe('StudyChatScreen — source modes and local sources', () => {
       handlers.sources?.({
         sessionId: 'another-session',
         sources: [
-          { sourceType: 'imported_doc', filePath: 'x.md', heading: 'H', concept: '', score: 0.9 },
+          {
+            chunkId: 'chunk-1',
+            itemId: 'item-1',
+            sourceType: 'imported_doc',
+            filePath: 'x.md',
+            heading: 'H',
+            concept: '',
+            score: 0.9,
+            excerpt: '',
+          },
         ],
       })
       handlers.chunk?.({ sessionId: 'another-session', content: 'Should not appear' })
@@ -1082,6 +1111,152 @@ describe('StudyChatScreen — source modes and local sources', () => {
 
     await screen.findByText('Welcome!')
     expect(screen.queryByText(/Local sources/)).not.toBeInTheDocument()
+  })
+
+  it('does not resolve a citation chip during the opening turn, which never announces sources', async () => {
+    // Given a new session streaming its opening turn — which never emits
+    // study:sources at all
+    const handlers = await renderStartedSession()
+
+    // When a chunk citing [1] streams in, with no sources ever announced
+    act(() => {
+      handlers.chunk?.({ sessionId: 'session-1', content: 'Welcome [1]!' })
+    })
+
+    // Then the marker stays plain text — there is no source at index 0 to
+    // resolve it against
+    await screen.findByText(/\[1\]/)
+    expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument()
+  })
+
+  it("clears the prior turn's sources so a later turn's citation does not resolve before its own sources are announced", async () => {
+    // Given a completed turn that cited its one source
+    const handlers = await renderStartedSession()
+    const user = userEvent.setup()
+    const source = {
+      chunkId: 'chunk-1',
+      itemId: 'item-1',
+      sourceType: 'imported_doc',
+      filePath: 'notes/a.md',
+      heading: 'CAP theorem',
+      concept: '',
+      score: 0.68,
+      excerpt: '',
+    }
+    act(() => {
+      handlers.sources?.({ sessionId: 'session-1', sources: [source] })
+      handlers.chunk?.({ sessionId: 'session-1', content: 'It stands for [1].' })
+      handlers.done?.({ sessionId: 'session-1' })
+    })
+    await screen.findByRole('button', { name: '1' })
+
+    // When a follow-up message starts streaming, before its own sources
+    // (if any) are announced
+    await user.type(screen.getByPlaceholderText(/type your answer/i), 'Another question')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+    act(() => {
+      handlers.chunk?.({ sessionId: 'session-1', content: 'Partial answer [1]' })
+    })
+
+    // Then the new streaming bubble's [1] stays plain text — the previous
+    // turn's sources were cleared, not carried over
+    const streamingBubble = await screen.findByText(/Partial answer/)
+    expect(
+      within(streamingBubble.closest('[data-slot="message-bubble"]')!).getByText(/\[1\]/),
+    ).toBeInTheDocument()
+    expect(
+      within(streamingBubble.closest('[data-slot="message-bubble"]')!).queryByRole('button', {
+        name: '1',
+      }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('resolves a citation chip mid-stream, once its source is announced', async () => {
+    // Given a new session whose sources arrived before the turn completed
+    const handlers = await renderStartedSession()
+    const sources = [
+      {
+        chunkId: 'chunk-1',
+        itemId: 'item-1',
+        sourceType: 'imported_doc',
+        filePath: 'notes/a.md',
+        heading: 'CAP theorem',
+        concept: '',
+        score: 0.68,
+        excerpt: '',
+      },
+    ]
+
+    // When sources arrive, then a chunk citing [1] streams in, before
+    // study:done
+    act(() => {
+      handlers.sources?.({ sessionId: 'session-1', sources })
+      handlers.chunk?.({ sessionId: 'session-1', content: 'It stands for [1].' })
+    })
+
+    // Then the chip already resolves against the announced source
+    expect(await screen.findByRole('button', { name: '1' })).toHaveAttribute(
+      'data-slot',
+      'citation-chip',
+    )
+  })
+
+  it('calls onOpenCitation when a citation chip in a completed message is clicked', async () => {
+    // Given a completed assistant message citing its one source
+    const onOpenCitation = vi.fn()
+    const handlers = await renderStartedSession({ onOpenCitation })
+    const source = {
+      chunkId: 'chunk-1',
+      itemId: 'item-1',
+      sourceType: 'imported_doc',
+      filePath: 'notes/a.md',
+      heading: 'CAP theorem',
+      concept: '',
+      score: 0.68,
+      excerpt: '',
+    }
+    act(() => {
+      handlers.sources?.({ sessionId: 'session-1', sources: [source] })
+      handlers.chunk?.({ sessionId: 'session-1', content: 'It stands for [1].' })
+      handlers.done?.({ sessionId: 'session-1' })
+    })
+    const user = userEvent.setup()
+
+    // When clicking the chip
+    await user.click(await screen.findByRole('button', { name: '1' }))
+
+    // Then onOpenCitation is called with that exact source
+    expect(onOpenCitation).toHaveBeenCalledWith(source)
+  })
+
+  it('calls onOpenCitation when a Local-sources entry is clicked', async () => {
+    // Given a completed assistant message with one local source
+    const onOpenCitation = vi.fn()
+    const handlers = await renderStartedSession({ onOpenCitation })
+    const source = {
+      chunkId: 'chunk-1',
+      itemId: 'item-1',
+      sourceType: 'imported_doc',
+      filePath: 'notes/a.md',
+      heading: 'CAP theorem',
+      concept: '',
+      score: 0.68,
+      excerpt: '',
+    }
+    act(() => {
+      handlers.sources?.({ sessionId: 'session-1', sources: [source] })
+      handlers.chunk?.({ sessionId: 'session-1', content: 'It stands for...' })
+      handlers.done?.({ sessionId: 'session-1' })
+    })
+    const strip = await screen.findByText('Local sources (1)')
+    const user = userEvent.setup()
+    await user.click(strip)
+
+    // When clicking the entry
+    await user.click(screen.getByText(/notes\/a\.md/))
+
+    // Then onOpenCitation is called with that exact source
+    expect(onOpenCitation).toHaveBeenCalledWith(source)
   })
 })
 

@@ -188,6 +188,24 @@ body {
   animation: avatar-glow 2400ms ease-in-out infinite;
 }
 
+/* SourceViewer: the passage a citation click scrolled to gets a brief
+   golden wash that fades to nothing, so the reader's eye lands on it
+   without leaving a permanent highlight behind. animation-fill-mode
+   "forwards" holds the final (transparent) frame, so this class never
+   needs to be removed once applied. */
+@keyframes citation-highlight-fade {
+  0% {
+    background-color: oklch(0.8 0.14 86 / 35%);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.citation-highlight {
+  animation: citation-highlight-fade 2000ms ease-out forwards;
+}
+
 /* Opt-in scrollbar for the app's own scroll areas (sidebar nav, chat
    transcript). Without any ::-webkit-scrollbar rule, WebKit/Chromium defer to
    the OS scrollbar style — on Linux (webkit2gtk) that's GTK's overlay

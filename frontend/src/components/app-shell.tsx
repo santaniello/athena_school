@@ -19,7 +19,7 @@ import SettingsScreen from '@/screens/SettingsScreen'
 import DocumentationScreen from '@/screens/DocumentationScreen'
 import { NAVIGATION, type AppSection } from '@/lib/navigation'
 import { getUserProfile, type ProfileDraft } from '@/lib/profile'
-import { startStudySession, type StudySession } from '@/lib/study'
+import { startStudySession, type StudySession, type StudySource } from '@/lib/study'
 import {
   getKnowledgeIndexStatus,
   onKnowledgeIndexStatus,
@@ -91,6 +91,30 @@ function AppShell() {
   const [newSessionError, setNewSessionError] = useState<string | null>(null)
   const [studyFolderCount, setStudyFolderCount] = useState<number | null>(null)
   const studyFolderTreeRef = useRef<StudyFolderTreeHandle>(null)
+  // The pending "open citation" request a chat citation click sets, routed
+  // down into the Sources panel — a fresh object per click, so re-clicking
+  // the same citation re-opens/re-highlights it. Cleared whenever the
+  // active session changes, so a stale request can never leak into a
+  // different session's panel. See
+  // specs/phases/phase-02-knowledge-engine/18-01-inline-citations-in-chat.md
+  // decision 11.
+  const [openCitationRequest, setOpenCitationRequest] = useState<{
+    itemId: string
+    chunkId?: string
+  } | null>(null)
+  // Tracks which session's id the request above was last cleared for, so
+  // the reset below (adjusting state during render, not inside an effect —
+  // see https://react.dev/learn/you-might-not-need-an-effect) fires exactly
+  // once per session change, including closing it (activeSession becoming
+  // null).
+  // Stryker disable next-line LogicalOperator: activeSession is always null
+  // on this, the very first render, so `?? null` and `&&` only disagree on
+  // this one call (null vs undefined) — the reset below fires once, harmlessly,
+  // either way, since it just re-sets openCitationRequest to the null it
+  // already is.
+  const [citationsClearedFor, setCitationsClearedFor] = useState<string | null>(
+    activeSession?.id ?? null,
+  )
 
   // Stryker disable ArrayDeclaration: mount-once effect — its dependency
   // array's content is not itself observable behavior.
@@ -133,6 +157,36 @@ function AppShell() {
     return unsubscribe
   }, [])
   // Stryker restore ArrayDeclaration
+
+  // Clears any pending citation-open request whenever the active session
+  // changes (including closing it, i.e. becoming null) — a request from a
+  // just-abandoned session must never leak into a different one's panel.
+  // Stryker disable next-line BlockStatement,ConditionalExpression,CallExpression:
+  // StudySourcesPanel isn't remounted (no `key`) across a same-truthiness
+  // session switch, and its own openRequest-change guard already ignores a
+  // reference it has already seen — so a leaked, uncleared request here
+  // never actually reaches a different rendered behavior through any
+  // current call path. This reset is a defensive invariant (the request is
+  // logically scoped to the session that produced it), not something this
+  // black-box test suite can observe breaking.
+  if ((activeSession?.id ?? null) !== citationsClearedFor) {
+    setCitationsClearedFor(activeSession?.id ?? null)
+    setOpenCitationRequest(null)
+  }
+
+  // Opens the Sources panel at source's document, at the exact cited
+  // passage, expanding the panel first if it's currently collapsed.
+  function handleOpenCitation(source: StudySource) {
+    const panel = sourcesPanelRef.current
+    if (!panel) return
+    // Stryker disable next-line ConditionalExpression: same as the header
+    // toggle button above — setup.ts zeroes every panel's
+    // getBoundingClientRect, so this library can never compute a real
+    // collapsed/expanded size here; verified by hand in a real window, not
+    // by this suite.
+    if (panel.isCollapsed()) panel.expand()
+    setOpenCitationRequest({ itemId: source.itemId, chunkId: source.chunkId })
+  }
 
   async function handleRetryIndex() {
     setRetryingIndex(true)
@@ -378,6 +432,7 @@ function AppShell() {
               onStartNewSession={handleStartNewSession}
               startingNewSession={startingNewSession}
               sourceModeSlot={sourceModeSlot}
+              onOpenCitation={handleOpenCitation}
             />
           ) : (
             <div className="m-auto flex flex-col items-center gap-2 text-center">
@@ -504,7 +559,11 @@ function AppShell() {
                 onResize={(size) => setSourcesOpen(size.inPixels > 0)}
                 style={{ overflow: 'hidden' }}
               >
-                <StudySourcesPanel sessionId={activeSession.id} mutationsDisabled={retryingIndex} />
+                <StudySourcesPanel
+                  sessionId={activeSession.id}
+                  mutationsDisabled={retryingIndex}
+                  openRequest={openCitationRequest}
+                />
               </ResizablePanel>
             </ResizablePanelGroup>
           ) : (

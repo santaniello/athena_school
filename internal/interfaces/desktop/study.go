@@ -109,14 +109,16 @@ func (a *App) emitContextUnavailable(sessionID, message string) {
 }
 
 // StudySourceResult is the desktop-facing DTO for one local source the
-// model received. It deliberately omits internal IDs and the full
-// excerpt — see the domain Source it is built from.
+// model received.
 type StudySourceResult struct {
+	ChunkID    string  `json:"chunkId"`
+	ItemID     string  `json:"itemId"`
 	SourceType string  `json:"sourceType"`
 	FilePath   string  `json:"filePath"`
 	Heading    string  `json:"heading"`
 	Concept    string  `json:"concept"`
 	Score      float32 `json:"score"`
+	Excerpt    string  `json:"excerpt"`
 }
 
 // StudySourcesEvent is study:sources' payload.
@@ -131,11 +133,14 @@ func toStudySourceResults(sources []domainknowledge.Source) []StudySourceResult 
 	results := make([]StudySourceResult, len(sources))
 	for i, s := range sources {
 		results[i] = StudySourceResult{
+			ChunkID:    s.ChunkID,
+			ItemID:     s.ItemID,
 			SourceType: s.SourceType,
 			FilePath:   s.FilePath,
 			Heading:    s.Heading,
 			Concept:    s.Concept,
 			Score:      s.Score,
+			Excerpt:    s.Excerpt,
 		}
 	}
 	return results

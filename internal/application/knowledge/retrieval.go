@@ -21,7 +21,10 @@ const maxContextChars = 8000
 
 // contextEntry is one chunk's rendered representation inside the JSON data
 // block sent to the LLM. The embedding and score are deliberately excluded.
+// ID is the entry's 1-based position, matching its Source's own position in
+// RetrievalResult.Sources — the number the model is asked to cite as [n].
 type contextEntry struct {
+	ID         int    `json:"id"`
 	SourceType string `json:"sourceType"`
 	FilePath   string `json:"filePath"`
 	Heading    string `json:"heading"`
@@ -164,6 +167,7 @@ func renderContext(chunks []domainknowledge.ScoredChunk, concepts map[string]str
 	entries := make([]contextEntry, len(chunks))
 	for i, sc := range chunks {
 		entries[i] = contextEntry{
+			ID:         i + 1,
 			SourceType: sc.Chunk.Source,
 			FilePath:   sc.Chunk.FilePath,
 			Heading:    sc.Chunk.Heading,

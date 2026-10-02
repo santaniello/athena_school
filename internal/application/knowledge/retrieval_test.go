@@ -8,6 +8,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
@@ -336,11 +337,40 @@ func TestRetrieve_excludesEmbeddingAndScoreFromRenderedJSON(t *testing.T) {
 	result, err := service.Retrieve(context.Background(), "session-1", "query")
 	require.NoError(t, err)
 
-	// Then each JSON entry has exactly the five documented keys
+	// Then each JSON entry has exactly the six documented keys
 	var entries []map[string]any
 	require.NoError(t, json.Unmarshal([]byte(result.Context), &entries))
 	require.Len(t, entries, 1)
-	require.ElementsMatch(t, []string{"sourceType", "filePath", "heading", "concept", "content"}, keysOf(entries[0]))
+	require.ElementsMatch(t, []string{"id", "sourceType", "filePath", "heading", "concept", "content"}, keysOf(entries[0]))
+}
+
+func TestRetrieve_numbersContextEntriesByOnebasedPosition_matchingSourcesOrder(t *testing.T) {
+	// Given two surviving chunks
+	guard := readyGuard(t)
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Len().Return(2)
+	store.EXPECT().Search(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return([]domainknowledge.ScoredChunk{scoredChunk("chunk-1", "item-1", 0.9), scoredChunk("chunk-2", "item-2", 0.8)}, nil).Once()
+	llm := llmmocks.NewMockProvider(t)
+	llm.EXPECT().Embeddings(mock.Anything, mock.Anything).Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}}, nil).Once()
+	items := knowledgemocks.NewMockRepository(t)
+	items.EXPECT().GetByID(mock.Anything, mock.Anything).Return(domainknowledge.Item{Concept: "C"}, nil)
+	service := NewService(items, llm, nil, nil, store, guard, defaultThresholds(t))
+
+	// When retrieving
+	result, err := service.Retrieve(context.Background(), "session-1", "query")
+	require.NoError(t, err)
+
+	// Then each context entry's "id" is its 1-based position, matching the
+	// chunk at the same index in Sources
+	var entries []map[string]any
+	require.NoError(t, json.Unmarshal([]byte(result.Context), &entries))
+	require.Len(t, entries, 2)
+	require.Len(t, result.Sources, 2)
+	assert.EqualValues(t, 1, entries[0]["id"])
+	assert.Equal(t, "chunk-1", result.Sources[0].ChunkID)
+	assert.EqualValues(t, 2, entries[1]["id"])
+	assert.Equal(t, "chunk-2", result.Sources[1].ChunkID)
 }
 
 func TestRetrieve_capsContext_removingLowestScoreChunksWholeUntilUnderBudget(t *testing.T) {
