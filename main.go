@@ -90,10 +90,11 @@ func main() {
 	vectorStore := vectorstore.New()
 	indexLoader := applicationknowledge.NewIndexLoader(knowledgeChunks, vectorStore, domainllm.EmbeddingModel)
 	knowledgeService := applicationknowledge.NewService(knowledgeItems, llmClient, knowledgeChunks, transactor, vectorStore, indexLoader, retrievalThresholds)
+	queryEnricher := applicationknowledge.NewHydeEnricher(llmClient)
 	catalogService := modelcatalog.NewService(llmClient)
 	studyService := study.NewService(
 		studySessions, studyMessages, llmClient, profiles, folders, knowledgeService, transactor, catalogService,
-		messageSources, knowledgeService,
+		messageSources, knowledgeService, queryEnricher,
 	)
 	folderService := folder.NewService(folders, studySessions, knowledgeService)
 

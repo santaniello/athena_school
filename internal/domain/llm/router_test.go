@@ -56,6 +56,17 @@ func TestTierFor_returnsPremium_forComplexReasoningTask(t *testing.T) {
 	assert.Equal(t, TierPremium, tier)
 }
 
+func TestTierFor_returnsCheap_forQueryEnrichmentTask(t *testing.T) {
+	// Given the retrieval query-enrichment task type — a short, cheap
+	// generation call, not a user-facing reply
+
+	// When resolving its tier
+	tier := TierFor(TaskQueryEnrichment)
+
+	// Then it is cheap
+	assert.Equal(t, TierCheap, tier)
+}
+
 func TestTierFor_returnsMedium_forUnrecognizedTaskType(t *testing.T) {
 	// Given a task type that does not appear in the tier table
 	unknown := TaskType("something_future_specs_add_later")

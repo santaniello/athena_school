@@ -35,7 +35,7 @@ func newDeleteTestService(
 	return NewService(
 		sessions, domainstudymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t),
 		profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t), knowledgemocks.NewMockRetriever(t),
-		nil, nil, nil, cascade,
+		nil, nil, nil, cascade, nil,
 	)
 }
 
