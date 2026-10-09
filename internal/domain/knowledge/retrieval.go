@@ -103,8 +103,14 @@ type RetrievalResult struct {
 }
 
 // Retriever performs one local-knowledge-base retrieval for a study
-// session's query. study.Service owns source-mode policy; every SourceMode
-// calls Retriever, so Retriever needs no mode parameter.
+// session, combining one or more query strings into a single result:
+// each is embedded and searched independently, then merged by chunk,
+// keeping the best score any one of them found — so a caller that wants to
+// search with more than one phrasing of the same question (see
+// QueryEnricher) never has to merge results itself. study.Service owns
+// source-mode policy; every SourceMode calls Retriever, so Retriever needs
+// no mode parameter, and no opinion on why a caller passed more than one
+// query.
 type Retriever interface {
-	Retrieve(ctx context.Context, sessionID, query string) (RetrievalResult, error)
+	Retrieve(ctx context.Context, sessionID string, queries []string) (RetrievalResult, error)
 }
