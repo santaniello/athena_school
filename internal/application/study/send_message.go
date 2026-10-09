@@ -93,8 +93,22 @@ func (s *Service) SendMessage(
 
 	var knowledgeMessage *domainllm.Message
 	var sources []domainknowledge.Source
-	queries := []string{buildRetrievalQuery(topic, content)}
+	var queries []string
 	if sourceMode == domainknowledge.SourceModeStrictNotes {
+		// strict-notes embeds the raw trimmed message alone, without notes
+		// mode's "Topic: X" prefix (used in the else branch below) — that
+		// prefix inflates every query's score by roughly the same amount
+		// whether or not the question is actually about the note's content
+		// (a note's own heading repeating its topic word is what the score
+		// picks up on, not the question's relevance), which narrows the
+		// margin strict-notes needs to tell a well-supported question apart
+		// from an off-topic one down to almost nothing. notes mode keeps
+		// the prefix: its own score never gates an answer, and a genuinely
+		// ambiguous follow-up ("o que é isso?") depends on it to find
+		// anything at all. See
+		// specs/phases/phase-02-knowledge-engine/05-02-strict-notes-query-scope-and-sufficiency.md.
+		queries = []string{content}
+
 		// HyDE: a short question structurally scores lower against long-form
 		// chunk content than a passage of similar shape does, regardless of
 		// relevance — see
@@ -102,13 +116,17 @@ func (s *Service) SendMessage(
 		// Combined with, never instead of, the raw query above: Retrieve
 		// keeps whichever score is higher per chunk, so a hypothetical that
 		// drifts can only match or improve on today's result, never regress
-		// it. notes mode never calls this — it already degrades gracefully
-		// below Sufficiency, so the extra call isn't worth paying for there.
+		// it. topic still flows in here unchanged — only the raw query
+		// above drops it. notes mode never calls this — it already
+		// degrades gracefully below Sufficiency, so the extra call isn't
+		// worth paying for there.
 		hypothetical, err := s.enricher.Enrich(ctx, sessionID, topic, content)
 		if err != nil {
 			return fmt.Errorf("study: enriching retrieval query: %w", err)
 		}
 		queries = append(queries, hypothetical)
+	} else {
+		queries = []string{buildRetrievalQuery(topic, content)}
 	}
 	result, err := s.retriever.Retrieve(ctx, sessionID, queries)
 	if err != nil {

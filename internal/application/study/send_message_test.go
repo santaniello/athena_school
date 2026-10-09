@@ -858,7 +858,7 @@ func TestSendMessage_strictNotes_combinesRawAndEnrichedQueriesForRetrieve(t *tes
 	enricher := mockHydeEnricher(t, "Hypothetical passage about CAP theorem.")
 	retriever.EXPECT().
 		Retrieve(context.Background(), "session-1", []string{
-			"Topic: Distributed systems\n\nMessage: What is CAP theorem?",
+			"What is CAP theorem?",
 			"Hypothetical passage about CAP theorem.",
 		}).
 		Return(domainknowledge.RetrievalResult{}, nil).
@@ -870,8 +870,50 @@ func TestSendMessage_strictNotes_combinesRawAndEnrichedQueriesForRetrieve(t *tes
 	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeStrictNotes,
 		noopSourcesHandler, noopChunkHandler, nil, nil)
 
-	// Then Retrieve was called with both the raw query and the enriched one
-	// (asserted via the exact-value EXPECT() above), in that order
+	// Then Retrieve was called with the raw query — the trimmed message
+	// alone, without notes mode's "Topic: X" prefix (see
+	// specs/phases/phase-02-knowledge-engine/05-02-strict-notes-query-scope-and-sufficiency.md
+	// for why strict-notes drops it) — and the enriched one, in that order
+	// (asserted via the exact-value EXPECT() above)
+	require.NoError(t, err)
+}
+
+func TestSendMessage_strictNotes_hyDeStillReceivesTopic_evenThoughTheRawQueryDoesNot(t *testing.T) {
+	// Given a strict-notes turn: dropping "Topic: X" from the raw embedded
+	// query (the test above) must not also drop topic from the separate
+	// HyDE hypothetical-generation call, which still needs it to write a
+	// plausible passage
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	profiles := profilemocks.NewMockStore(t)
+	folders := foldermocks.NewMockRepository(t)
+	retriever := knowledgemocks.NewMockRetriever(t)
+	enricher := knowledgemocks.NewMockQueryEnricher(t)
+	tx := mockNormalSession(t, sessions, "session-1")
+
+	messages.EXPECT().Append(context.Background(), mock.MatchedBy(func(m domainstudy.Message) bool {
+		return m.Role == domainstudy.RoleUser
+	})).Return(nil).Once()
+	messages.EXPECT().Append(context.Background(), mock.MatchedBy(func(m domainstudy.Message) bool {
+		return m.Role == domainstudy.RoleAssistant && m.Content == domainknowledge.NoLocalKnowledgeMessage
+	})).Return(nil).Once()
+	profiles.EXPECT().Load().Return(domainprofile.UserProfile{AssistantLanguage: domainprofile.AssistantLanguageEnglish}, nil).Once()
+	enricher.EXPECT().
+		Enrich(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?").
+		Return("Hypothetical passage.", nil).
+		Once()
+	retriever.EXPECT().Retrieve(context.Background(), "session-1", mock.AnythingOfType("[]string")).
+		Return(domainknowledge.RetrievalResult{}, nil).Once()
+
+	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, nil, nil, enricher)
+
+	// When sending a message
+	err := service.SendMessage(context.Background(), "session-1", "Distributed systems", "What is CAP theorem?", domainknowledge.SourceModeStrictNotes,
+		noopSourcesHandler, noopChunkHandler, nil, nil)
+
+	// Then Enrich still received the topic (asserted via the exact-value
+	// EXPECT() above)
 	require.NoError(t, err)
 }
 

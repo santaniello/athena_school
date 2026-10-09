@@ -40,8 +40,16 @@ const (
 	// DefaultMinSimilarity discards chunks scoring below it.
 	DefaultMinSimilarity = 0.45
 	// DefaultSufficiency is the score a surviving chunk must meet or exceed
-	// for a RetrievalResult to be considered Sufficient.
-	DefaultSufficiency = 0.68
+	// for a RetrievalResult to be considered Sufficient. Recalibrated from
+	// 0.68 to 0.55: with strict-notes' query no longer carrying notes
+	// mode's "Topic: X" prefix (see
+	// specs/phases/phase-02-knowledge-engine/05-02-strict-notes-query-scope-and-sufficiency.md),
+	// real on/off-topic queries against the same note landed at ~0.60
+	// (on-topic floor) and ~0.47 (off-topic ceiling) — 0.55 sits at that
+	// margin's midpoint rather than hugging either edge. This is a global
+	// constant calibrated from one note's worth of real data, not a proven
+	// bound: see that spec's "Known risks".
+	DefaultSufficiency = 0.55
 )
 
 // ErrInvalidThresholds is returned by NewRetrievalThresholds when either
