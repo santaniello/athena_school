@@ -572,10 +572,12 @@ describe('StudySourcesPanel', () => {
     // When clicking Add
     await user.click(screen.getByRole('button', { name: 'Add source' }))
 
-    // Then a status message appears and Add is disabled — distinct from
-    // the index-retry tooltip, since the index isn't involved yet
+    // Then the FormattingNoteDialog opens (a real Radix modal, so the
+    // background panel — Add included — is hidden from the accessibility
+    // tree while it's up; `hidden: true` looks past that), and Add itself
+    // stays disabled underneath it
     expect(await screen.findByText('Formatting note…')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Add source' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Add source', hidden: true })).toBeDisabled()
   })
 
   it('renders the header Add button with the default (primary) variant, unlike the outline empty-state one', async () => {

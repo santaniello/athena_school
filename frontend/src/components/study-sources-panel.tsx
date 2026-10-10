@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { FormattingNoteDialog } from '@/components/formatting-note-dialog'
 import { ImportReviewDialog } from '@/components/import-review-dialog'
 import { IngestProgressDialog } from '@/components/ingest-progress-dialog'
 import { SourceViewer } from '@/components/source-viewer'
@@ -379,7 +380,6 @@ function StudySourcesPanel({
             />
           </label>
 
-          {previewing && <p className="text-xs text-muted-foreground">{PREVIEWING_LABEL}</p>}
           {pickerError && <p className="text-xs text-destructive">{pickerError}</p>}
         </div>
 
@@ -477,6 +477,7 @@ function StudySourcesPanel({
           )}
         </div>
       </div>
+      <FormattingNoteDialog open={previewing} />
       <ImportReviewDialog
         open={reviewPreview !== null}
         preview={reviewPreview}
