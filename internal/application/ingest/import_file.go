@@ -16,12 +16,20 @@ import (
 )
 
 // Progress reports ImportFile's advance after each file, processed or
-// skipped.
+// skipped, plus — from ConfirmImport, spec 2.20 — intra-file progress as
+// each chunk of the file currently being processed is embedded.
+// ChunksProcessed/ChunksTotal are 0 for every tick ImportFile's own
+// multi-file batch loop reports (it never passes an onChunkEmbedded
+// callback into ingestContent) — a consumer should treat 0 as "no
+// per-chunk detail for this tick" and fall back to FilesProcessed/
+// FilesTotal, exactly as the desktop binding's progressLabel already must.
 type Progress struct {
-	FilesProcessed int
-	FilesTotal     int
-	ChunksCreated  int
-	CurrentFile    string
+	FilesProcessed  int
+	FilesTotal      int
+	ChunksCreated   int
+	CurrentFile     string
+	ChunksProcessed int
+	ChunksTotal     int
 }
 
 // FileFailure records why one file could not be imported.
@@ -262,7 +270,9 @@ func modTime(root fs.FS, readPath string) (int64, error) {
 
 // ingestFile reads candidate's raw file content and delegates chunking,
 // embedding and persistence to ingestContent. displayPath/mtime/prev/hasPrev
-// are forwarded unchanged — see ingestContent for what they drive.
+// are forwarded unchanged — see ingestContent for what they drive. Passes
+// no onChunkEmbedded callback: ImportFile's own multi-file batch loop only
+// ever reports progress per file (see importCandidates), never per chunk.
 func (s *Service) ingestFile(
 	ctx context.Context, sessionID string, root fs.FS, candidate importCandidate, displayPath string, mtime int64,
 	prev domainknowledge.IngestedFile, hasPrev bool,
@@ -271,7 +281,7 @@ func (s *Service) ingestFile(
 	if err != nil {
 		return 0, fmt.Errorf("reading file: %w", err)
 	}
-	return s.ingestContent(ctx, sessionID, candidate, displayPath, mtime, prev, hasPrev, string(raw))
+	return s.ingestContent(ctx, sessionID, candidate, displayPath, mtime, prev, hasPrev, string(raw), nil)
 }
 
 // ingestContent chunks, embeds and replaces candidate's stored chunks and
@@ -284,9 +294,18 @@ func (s *Service) ingestFile(
 // stable, root-relative path used for BuildShadowItem, Chunk.FilePath, and
 // provenance — the source's first-import path, even when hasPrev came from
 // another entry point's sourceRoot.
+//
+// onChunkEmbedded, when non-nil, is called after each chunk's embedding
+// call succeeds, with its 1-based position and the total chunk count —
+// ConfirmImport uses this to report intra-file progress (spec 2.20); a nil
+// value (ingestFile's own call) means no such reporting is wanted.
+// Returning a non-nil error aborts immediately, before anything is
+// persisted — exactly as safe as any other error already returned before
+// reaching the transactional block below.
 func (s *Service) ingestContent(
 	ctx context.Context, sessionID string, candidate importCandidate, displayPath string, mtime int64,
 	prev domainknowledge.IngestedFile, hasPrev bool, content string,
+	onChunkEmbedded func(processed, total int) error,
 ) (int, error) {
 	var chunkCandidates []ChunkCandidate
 	if strings.EqualFold(path.Ext(candidate.ReadPath), ".md") {
@@ -329,6 +348,12 @@ func (s *Service) ingestContent(
 			Embedding:      toFloat32(response.Embedding),
 			EmbeddingModel: domainllm.EmbeddingModel,
 			CreatedAt:      now,
+		}
+
+		if onChunkEmbedded != nil {
+			if err := onChunkEmbedded(i+1, len(chunkCandidates)); err != nil {
+				return 0, err
+			}
 		}
 	}
 

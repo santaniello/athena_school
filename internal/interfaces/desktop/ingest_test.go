@@ -341,10 +341,13 @@ func TestApp_ConfirmImport_emitsProgressThenDone_onSuccess(t *testing.T) {
 	err := app.ConfirmImport(testIngestSessionID, filePath, approved)
 
 	// Then it emits the same ingest:progress/ingest:done events ImportFile
-	// does — IngestProgressDialog needs no new event wiring
+	// does — IngestProgressDialog needs no new event wiring — plus one
+	// intra-file chunk-progress tick (spec 2.20) before the final one
 	require.NoError(t, err)
-	require.Len(t, captured.progress, 1)
-	assert.Equal(t, "go.md", captured.progress[0].CurrentFile)
+	require.Len(t, captured.progress, 2)
+	assert.Equal(t, 1, captured.progress[0].ChunksProcessed)
+	assert.Equal(t, 1, captured.progress[0].ChunksTotal)
+	assert.Equal(t, "go.md", captured.progress[1].CurrentFile)
 	require.NotNil(t, captured.done)
 	assert.Equal(t, 1, captured.done.FilesIngested)
 	assert.Empty(t, captured.errors)

@@ -20,13 +20,18 @@ const (
 	eventIngestError    = "ingest:error"
 )
 
-// IngestProgressResult is the desktop-facing DTO for ImportFile's
-// progress callback.
+// IngestProgressResult is the desktop-facing DTO for ImportFile's/
+// ConfirmImport's progress callback. ChunksProcessed/ChunksTotal are 0 for
+// every tick ImportFile's own multi-file batch reports — only
+// ConfirmImport (spec 2.20) ever sets them, as each chunk of the single
+// file it is confirming gets embedded.
 type IngestProgressResult struct {
-	FilesProcessed int    `json:"filesProcessed"`
-	FilesTotal     int    `json:"filesTotal"`
-	ChunksCreated  int    `json:"chunksCreated"`
-	CurrentFile    string `json:"currentFile"`
+	FilesProcessed  int    `json:"filesProcessed"`
+	FilesTotal      int    `json:"filesTotal"`
+	ChunksCreated   int    `json:"chunksCreated"`
+	CurrentFile     string `json:"currentFile"`
+	ChunksProcessed int    `json:"chunksProcessed"`
+	ChunksTotal     int    `json:"chunksTotal"`
 }
 
 // IngestFailureResult is the desktop-facing DTO for one file that failed
@@ -54,10 +59,12 @@ type IngestSummaryResult struct {
 
 func toIngestProgressResult(p ingest.Progress) IngestProgressResult {
 	return IngestProgressResult{
-		FilesProcessed: p.FilesProcessed,
-		FilesTotal:     p.FilesTotal,
-		ChunksCreated:  p.ChunksCreated,
-		CurrentFile:    p.CurrentFile,
+		FilesProcessed:  p.FilesProcessed,
+		FilesTotal:      p.FilesTotal,
+		ChunksCreated:   p.ChunksCreated,
+		CurrentFile:     p.CurrentFile,
+		ChunksProcessed: p.ChunksProcessed,
+		ChunksTotal:     p.ChunksTotal,
 	}
 }
 

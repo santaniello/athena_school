@@ -3,6 +3,7 @@ package ingest
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -60,9 +61,99 @@ func TestConfirmImport_persistsExactlyTheApprovedContent_notTheFileOnDisk(t *tes
 	require.NoError(t, err)
 	assert.Equal(t, 1, summary.FilesScanned)
 	assert.Equal(t, 1, summary.FilesIngested)
-	require.Len(t, seen, 1)
-	assert.Equal(t, 1, seen[0].FilesProcessed)
-	assert.Equal(t, 1, seen[0].FilesTotal)
+	// One chunk tick (this file has exactly one chunk), then one final
+	// file tick — see TestConfirmImport_reportsPerChunkProgress_
+	// duringEmbedding for the multi-chunk case in full.
+	require.Len(t, seen, 2)
+	assert.Equal(t, 1, seen[0].ChunksProcessed)
+	assert.Equal(t, 1, seen[0].ChunksTotal)
+	assert.Equal(t, 1, seen[1].FilesProcessed)
+	assert.Equal(t, 1, seen[1].FilesTotal)
+}
+
+func TestConfirmImport_reportsPerChunkProgress_duringEmbedding(t *testing.T) {
+	// Given approved content that chunks into 2 sections, each long enough
+	// to stand on its own (clears minChunkChars so neither merges into the
+	// other)
+	section := func(label string) string {
+		return strings.Repeat(label+" content long enough to clear the chunk floor on its own. ", 5)
+	}
+	approved := "## Section A\n\n" + section("Alpha") + "\n\n## Section B\n\n" + section("Beta")
+	root := fstest.MapFS{"go.md": {Data: []byte("raw")}}
+	ctx := context.Background()
+
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	items := knowledgemocks.NewMockRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	tx := ingestmocks.NewMockTransactor(t)
+	runWithinTx(tx)
+
+	ingestedFiles.EXPECT().ListBySession(ctx, testSessionID).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
+	llm.EXPECT().Embeddings(ctx, mock.Anything).Return(embeddingResponse(), nil).Twice()
+	chunks.EXPECT().DeleteBySourcePath(ctx, testSessionID, srcPath("go.md")).Return(nil, nil).Once()
+	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool { return len(cs) == 2 })).
+		Return(nil).Once()
+	items.EXPECT().Save(ctx, mock.Anything).Return(nil).Once()
+	ingestedFiles.EXPECT().Upsert(ctx, mock.Anything).Return(nil).Once()
+	service := newTestService(chunks, ingestedFiles, items, noOpDocuments(t), llm, tx, noOpReconciliationStore(t), passingIndexGuard(t))
+
+	var seen []Progress
+	onProgress := func(p Progress) error {
+		seen = append(seen, p)
+		return nil
+	}
+
+	// When confirming the import
+	_, err := service.ConfirmImport(ctx, testSessionID, root, testSourceRoot, "go.md", approved, onProgress)
+
+	// Then onProgress fires once per chunk as it is embedded, reporting
+	// intra-file progress, plus one final tick for the finished file
+	require.NoError(t, err)
+	require.Len(t, seen, 3)
+	assert.Equal(t, 1, seen[0].ChunksProcessed)
+	assert.Equal(t, 2, seen[0].ChunksTotal)
+	assert.Equal(t, 0, seen[0].FilesProcessed, "the file itself isn't done yet on a chunk tick")
+	assert.Equal(t, 2, seen[1].ChunksProcessed)
+	assert.Equal(t, 2, seen[1].ChunksTotal)
+	assert.Equal(t, 1, seen[2].FilesProcessed, "the final tick reports the file, not a chunk")
+}
+
+func TestConfirmImport_stopsBeforePersisting_whenAChunkProgressTickFails(t *testing.T) {
+	// Given approved content with 2 chunks, and a consumer that rejects
+	// the very first progress tick
+	section := func(label string) string {
+		return strings.Repeat(label+" content long enough to clear the chunk floor on its own. ", 5)
+	}
+	approved := "## Section A\n\n" + section("Alpha") + "\n\n## Section B\n\n" + section("Beta")
+	root := fstest.MapFS{"go.md": {Data: []byte("raw")}}
+	ctx := context.Background()
+
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	ingestedFiles.EXPECT().ListBySession(ctx, testSessionID).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
+	llm := llmmocks.NewMockProvider(t)
+	llm.EXPECT().Embeddings(ctx, mock.Anything).Return(embeddingResponse(), nil).Once()
+	// No EXPECT() at all on chunks/items/tx: a second embedding call, or
+	// any persistence call, would fail the test by hitting an unmocked
+	// method — proving the abort happens before either.
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	items := knowledgemocks.NewMockRepository(t)
+	index := ingestmocks.NewMockIndexGuard(t)
+	index.EXPECT().BeginMutation().Return(nil)
+	index.EXPECT().EndMutation()
+	service := &Service{
+		chunks: chunks, ingestedFiles: ingestedFiles, items: items, llm: llm, index: index,
+	}
+
+	progressErr := errors.New("progress consumer gone")
+	onProgress := func(Progress) error { return progressErr }
+
+	// When confirming the import
+	_, err := service.ConfirmImport(ctx, testSessionID, root, testSourceRoot, "go.md", approved, onProgress)
+
+	// Then it stops immediately, before the second chunk is even embedded
+	require.Error(t, err)
+	assert.ErrorIs(t, err, progressErr)
 }
 
 func TestConfirmImport_blankSessionID_isRejectedBeforeReservingTheIndex(t *testing.T) {
@@ -143,10 +234,22 @@ func TestConfirmImport_stopsAndPropagatesOnProgressError(t *testing.T) {
 	ingestedFiles.EXPECT().Upsert(ctx, mock.Anything).Return(nil).Once()
 	service := newTestService(chunks, ingestedFiles, items, noOpDocuments(t), llm, tx, noOpReconciliationStore(t), passingIndexGuard(t))
 
+	// Fails only the final (file-level) tick, not the chunk tick that
+	// precedes it — this test is specifically about a failure *after*
+	// persistence already succeeded; a chunk-tick failure (which aborts
+	// *before* persistence) is TestConfirmImport_
+	// stopsBeforePersisting_whenAChunkProgressTickFails's job.
 	progressErr := errors.New("progress consumer gone")
-	onProgress := func(Progress) error { return progressErr }
+	var calls int
+	onProgress := func(Progress) error {
+		calls++
+		if calls == 2 {
+			return progressErr
+		}
+		return nil
+	}
 
-	// When the onProgress callback itself fails
+	// When the onProgress callback fails on its final call
 	summary, err := service.ConfirmImport(ctx, testSessionID, root, testSourceRoot, "go.md", approved, onProgress)
 
 	// Then the already-accumulated summary is still returned, alongside

@@ -17,8 +17,12 @@ import (
 //
 // There is no second skip-unchanged check here: the caller already went
 // through PreviewImport (which does check) and the user explicitly
-// approved, so ConfirmImport always imports. onProgress is called exactly
-// once, matching ImportFile's one-call-per-file contract.
+// approved, so ConfirmImport always imports. onProgress is called once per
+// chunk as it is embedded (ChunksProcessed/ChunksTotal set, FilesProcessed
+// still 0 — the file itself isn't done yet), then exactly once more for the
+// finished file (FilesProcessed: 1), matching ImportFile's one-call-per-
+// file contract for that final tick. A non-nil error from any call stops
+// the import immediately, before anything is persisted.
 func (s *Service) ConfirmImport(
 	ctx context.Context, sessionID string, root fs.FS, sourceRoot, filePath, approvedContent string,
 	onProgress func(Progress) error,
@@ -51,9 +55,19 @@ func (s *Service) ConfirmImport(
 
 	var summary Summary
 	summary.FilesScanned = 1
-	progress := Progress{FilesTotal: 1, CurrentFile: displayPath}
+	base := Progress{FilesTotal: 1, CurrentFile: displayPath}
 
-	chunksCreated, ingestErr := s.ingestContent(ctx, sessionID, candidate, displayPath, mtime, prev, hasPrev, approvedContent)
+	onChunkEmbedded := func(processed, total int) error {
+		tick := base
+		tick.ChunksProcessed = processed
+		tick.ChunksTotal = total
+		return onProgress(tick)
+	}
+
+	chunksCreated, ingestErr := s.ingestContent(
+		ctx, sessionID, candidate, displayPath, mtime, prev, hasPrev, approvedContent, onChunkEmbedded,
+	)
+	progress := base
 	applyIngestOutcome(&summary, &progress, displayPath, chunksCreated, ingestErr)
 	progress.FilesProcessed = 1
 
