@@ -1,4 +1,10 @@
-import { DownloadExampleNote, ImportFile, PickNotesFile } from '../../wailsjs/go/desktop/App'
+import {
+  ConfirmImport,
+  DownloadExampleNote,
+  ImportFile,
+  PickNotesFile,
+  PreviewImport,
+} from '../../wailsjs/go/desktop/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 
 export interface IngestProgress {
@@ -48,6 +54,63 @@ export async function downloadExampleNote(): Promise<string> {
 // onIngestError, so callers should subscribe to those before calling this.
 export async function importFile(sessionId: string, path: string): Promise<void> {
   await ImportFile(sessionId, path)
+}
+
+// ChunkPreview is one would-be chunk shown in the Review dialog before
+// import is approved — the exact text confirmImport's chunker will also
+// produce, since both run over the same approved content. See
+// specs/phases/phase-02-knowledge-engine/20-import-review-and-formatting.md.
+export interface ChunkPreview {
+  heading: string
+  content: string
+  charCount: number
+  estimatedTokens: number
+}
+
+// FormattingStats are deterministic, verifiable structure counts comparing
+// a note's original and formatted text — never a model's own narrated
+// claim about what it changed.
+export interface FormattingStats {
+  headingsBefore: number
+  headingsAfter: number
+  paragraphsBefore: number
+  paragraphsAfter: number
+}
+
+// ImportPreview is previewImport's result. skipped is true when the file
+// is unchanged since its last import — the Review dialog should not open
+// for it at all.
+export interface ImportPreview {
+  displayPath: string
+  originalContent: string
+  formattedContent: string
+  formattingFailed: boolean
+  stats: FormattingStats
+  chunks: ChunkPreview[]
+  skipped: boolean
+  skippedReason: string
+}
+
+// previewImport reformats and chunks the file at path for sessionId
+// without persisting anything — no embeddings, no database write. Pass its
+// formattedContent back into confirmImport once the user approves; never
+// call confirmImport with anything else, or the chunks the user reviewed
+// stop matching what actually gets persisted.
+export async function previewImport(sessionId: string, path: string): Promise<ImportPreview> {
+  return PreviewImport(sessionId, path)
+}
+
+// confirmImport persists exactly approvedContent — the formattedContent a
+// prior previewImport call returned and the user approved — as path's
+// chunks and shadow Item, owned by sessionId. Like importFile, it resolves
+// once the import has finished; progress and the final summary arrive via
+// the same onIngestProgress/onIngestDone/onIngestError events.
+export async function confirmImport(
+  sessionId: string,
+  path: string,
+  approvedContent: string,
+): Promise<void> {
+  await ConfirmImport(sessionId, path, approvedContent)
 }
 
 // EventsOn returns its own unsubscribe function. Callers must invoke it on

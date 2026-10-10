@@ -1,11 +1,26 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ImportFile, PickNotesFile } from '../../wailsjs/go/desktop/App'
+import {
+  ConfirmImport,
+  ImportFile,
+  PickNotesFile,
+  PreviewImport,
+} from '../../wailsjs/go/desktop/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
-import { importFile, onIngestDone, onIngestError, onIngestProgress, pickNotesFile } from './ingest'
+import {
+  confirmImport,
+  importFile,
+  onIngestDone,
+  onIngestError,
+  onIngestProgress,
+  pickNotesFile,
+  previewImport,
+} from './ingest'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
   PickNotesFile: vi.fn(),
   ImportFile: vi.fn(),
+  PreviewImport: vi.fn(),
+  ConfirmImport: vi.fn(),
 }))
 
 vi.mock('../../wailsjs/runtime/runtime', () => ({
@@ -35,6 +50,48 @@ describe('importFile', () => {
 
     // Then both the session and the path were forwarded
     expect(ImportFile).toHaveBeenCalledWith('session-1', '/home/user/notes/go.md')
+  })
+})
+
+describe('previewImport', () => {
+  it('forwards the owning session and the chosen path, returning the mapped preview', async () => {
+    // Given a preview call that resolves with a formatted chunk list
+    const preview = {
+      displayPath: 'go.md',
+      originalContent: 'raw',
+      formattedContent: '# Go\n\nFormatted.',
+      formattingFailed: false,
+      stats: { headingsBefore: 0, headingsAfter: 1, paragraphsBefore: 1, paragraphsAfter: 1 },
+      chunks: [{ heading: 'Go', content: 'Formatted.', charCount: 10, estimatedTokens: 2 }],
+      skipped: false,
+      skippedReason: '',
+    }
+    vi.mocked(PreviewImport).mockResolvedValueOnce(preview as never)
+
+    // When previewing an import
+    const result = await previewImport('session-1', '/home/user/notes/go.md')
+
+    // Then both the session and the path were forwarded, and the preview
+    // is returned as-is
+    expect(PreviewImport).toHaveBeenCalledWith('session-1', '/home/user/notes/go.md')
+    expect(result).toEqual(preview)
+  })
+})
+
+describe('confirmImport', () => {
+  it('forwards the owning session, the chosen path and the approved content', async () => {
+    // Given a confirm call that resolves
+    vi.mocked(ConfirmImport).mockResolvedValueOnce()
+
+    // When confirming an import
+    await confirmImport('session-1', '/home/user/notes/go.md', '# Go\n\nFormatted.')
+
+    // Then the session, path and approved content were all forwarded
+    expect(ConfirmImport).toHaveBeenCalledWith(
+      'session-1',
+      '/home/user/notes/go.md',
+      '# Go\n\nFormatted.',
+    )
   })
 })
 
