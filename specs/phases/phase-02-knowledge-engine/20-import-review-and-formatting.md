@@ -137,10 +137,13 @@ it produces — before committing it.
   inline notice instead of the original/formatted comparison. Footer: **Cancel** (calls
   `onCancel`, no backend call) / **Approve & import** (calls `onApprove`).
 - **`study-sources-panel.tsx`**: `handleAddClick` picks the file, then calls `previewImport`;
-  while in flight, **Add** stays disabled with a small inline "Formatting note…" state (no new
-  dialog for this step). `preview.skipped` reloads silently, same as today's silent skip.
-  Otherwise opens `ImportReviewDialog`. **Approve** stores the approved text and opens the
-  existing `IngestProgressDialog`; **Cancel** clears the preview state.
+  while in flight, **Add** stays disabled and a new `FormattingNoteDialog` (a small, non-
+  dismissible loading modal — nothing to cancel yet) is open, closing itself the instant the
+  same state update either opens `ImportReviewDialog`, finishes a silent skip, or surfaces an
+  error. An inline-only status text was tried first and revised after review: it was too easy to
+  miss, leaving the user unsure anything was happening. `preview.skipped` reloads silently, same
+  as today's silent skip. Otherwise opens `ImportReviewDialog`. **Approve** stores the approved
+  text and opens the existing `IngestProgressDialog`; **Cancel** clears the preview state.
 - **`ingest-progress-dialog.tsx`**: gains an optional `formattedContent?: string` prop — when
   set, its effect calls `confirmImport(sessionId, path, formattedContent)` instead of
   `importFile(sessionId, path)`. Everything else (progress/summary rendering, the
