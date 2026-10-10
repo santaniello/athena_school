@@ -247,13 +247,9 @@ func modTime(root fs.FS, readPath string) (int64, error) {
 	return info.ModTime().UnixNano(), nil
 }
 
-// ingestFile reads, chunks, embeds and replaces candidate's stored chunks
-// and shadow Item inside a single transaction. Embedding happens before
-// anything is deleted, so a failed or interrupted API call leaves the
-// previous chunks and Item intact. displayPath is the stable, root-relative
-// path used for BuildShadowItem, Chunk.FilePath, and provenance — the
-// source's first-import path, even when hasPrev came from another entry
-// point's sourceRoot.
+// ingestFile reads candidate's raw file content and delegates chunking,
+// embedding and persistence to ingestContent. displayPath/mtime/prev/hasPrev
+// are forwarded unchanged — see ingestContent for what they drive.
 func (s *Service) ingestFile(
 	ctx context.Context, sessionID string, root fs.FS, candidate importCandidate, displayPath string, mtime int64,
 	prev domainknowledge.IngestedFile, hasPrev bool,
@@ -262,8 +258,23 @@ func (s *Service) ingestFile(
 	if err != nil {
 		return 0, fmt.Errorf("reading file: %w", err)
 	}
-	content := string(raw)
+	return s.ingestContent(ctx, sessionID, candidate, displayPath, mtime, prev, hasPrev, string(raw))
+}
 
+// ingestContent chunks, embeds and replaces candidate's stored chunks and
+// shadow Item inside a single transaction, from already-available content —
+// either ingestFile's own freshly-read file (today's only caller) or, from
+// spec 2.20 on, PreviewImport's approved, already-formatted text, so
+// ConfirmImport never re-reads or re-formats the file it is persisting.
+// Embedding happens before anything is deleted, so a failed or interrupted
+// API call leaves the previous chunks and Item intact. displayPath is the
+// stable, root-relative path used for BuildShadowItem, Chunk.FilePath, and
+// provenance — the source's first-import path, even when hasPrev came from
+// another entry point's sourceRoot.
+func (s *Service) ingestContent(
+	ctx context.Context, sessionID string, candidate importCandidate, displayPath string, mtime int64,
+	prev domainknowledge.IngestedFile, hasPrev bool, content string,
+) (int, error) {
 	var chunkCandidates []ChunkCandidate
 	if strings.EqualFold(path.Ext(candidate.ReadPath), ".md") {
 		chunkCandidates = ChunkMarkdown(content)
