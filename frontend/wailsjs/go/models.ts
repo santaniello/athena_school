@@ -18,6 +18,24 @@ export namespace desktop {
 	        this.reason = source["reason"];
 	    }
 	}
+	export class ChunkPreviewResult {
+	    heading: string;
+	    content: string;
+	    charCount: number;
+	    estimatedTokens: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ChunkPreviewResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.heading = source["heading"];
+	        this.content = source["content"];
+	        this.charCount = source["charCount"];
+	        this.estimatedTokens = source["estimatedTokens"];
+	    }
+	}
 	export class FolderResult {
 	    id: string;
 	    name: string;
@@ -31,6 +49,68 @@ export namespace desktop {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	    }
+	}
+	export class FormattingStatsResult {
+	    headingsBefore: number;
+	    headingsAfter: number;
+	    paragraphsBefore: number;
+	    paragraphsAfter: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new FormattingStatsResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.headingsBefore = source["headingsBefore"];
+	        this.headingsAfter = source["headingsAfter"];
+	        this.paragraphsBefore = source["paragraphsBefore"];
+	        this.paragraphsAfter = source["paragraphsAfter"];
+	    }
+	}
+	export class ImportPreviewResult {
+	    displayPath: string;
+	    originalContent: string;
+	    formattedContent: string;
+	    formattingFailed: boolean;
+	    stats: FormattingStatsResult;
+	    chunks: ChunkPreviewResult[];
+	    skipped: boolean;
+	    skippedReason: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportPreviewResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.displayPath = source["displayPath"];
+	        this.originalContent = source["originalContent"];
+	        this.formattedContent = source["formattedContent"];
+	        this.formattingFailed = source["formattingFailed"];
+	        this.stats = this.convertValues(source["stats"], FormattingStatsResult);
+	        this.chunks = this.convertValues(source["chunks"], ChunkPreviewResult);
+	        this.skipped = source["skipped"];
+	        this.skippedReason = source["skippedReason"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class IndexStatusResult {
 	    state: string;
