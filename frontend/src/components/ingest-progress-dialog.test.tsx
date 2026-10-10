@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
+  confirmImport,
   importFile,
   onIngestDone,
   onIngestError,
@@ -16,6 +17,7 @@ vi.mock('@/lib/ingest', async (importOriginal) => {
   return {
     ...original,
     importFile: vi.fn(),
+    confirmImport: vi.fn(),
     onIngestProgress: vi.fn(),
     onIngestDone: vi.fn(),
     onIngestError: vi.fn(),
@@ -93,6 +95,33 @@ describe('IngestProgressDialog', () => {
     // explains that it is still processing
     expect(importFile).toHaveBeenCalledWith('session-1', '/home/user/notes/go.md')
     expect(screen.getByText('Processing the selected file.')).toBeInTheDocument()
+    void events
+  })
+
+  it('calls confirmImport instead of importFile when formattedContent is given', () => {
+    // Given a dialog opened for a file whose review was already approved
+    const events = setupSubscriptions()
+    vi.mocked(confirmImport).mockReturnValueOnce(new Promise<void>(() => {}))
+
+    // When rendering it open with the approved content
+    render(
+      <IngestProgressDialog
+        open
+        sessionId="session-1"
+        path="/home/user/notes/go.md"
+        formattedContent={'# Go\n\nApproved during review.'}
+        onClose={vi.fn()}
+      />,
+    )
+
+    // Then it confirms the already-reviewed import instead of starting a
+    // fresh (unreviewed) one
+    expect(confirmImport).toHaveBeenCalledWith(
+      'session-1',
+      '/home/user/notes/go.md',
+      '# Go\n\nApproved during review.',
+    )
+    expect(importFile).not.toHaveBeenCalled()
     void events
   })
 
