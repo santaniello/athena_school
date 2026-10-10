@@ -117,6 +117,14 @@ it produces — before committing it.
   `ImportFile`, but a single candidate, calling `ingestContent` directly with `approvedContent`
   instead of reading the file. Reports progress/summary the same shape `ImportFile` does, so the
   frontend's existing `IngestSummary` handling needs no change.
+  - **Revised after review:** a single-file confirm reported progress only once, at the very
+    end — the dialog's bar sat at "0 of 1 files" (0%) for the entire embedding run, then jumped
+    straight to 100%, which read as stuck. `Progress` gained `ChunksProcessed`/`ChunksTotal`
+    (0 for every tick `ImportFile`'s own multi-file batch loop reports — only `ConfirmImport`
+    sets them), and `ingestContent` takes an optional `onChunkEmbedded func(processed, total
+    int) error` callback, called after each chunk's embedding call succeeds; a non-nil error
+    aborts immediately, before anything is persisted. `ingestFile` (`ImportFile`'s own path)
+    passes `nil`, so its behavior and tests are unchanged.
 - `internal/interfaces/desktop/ingest.go`: `ImportPreviewResult`/`ChunkPreviewResult`/
   `FormattingStatsResult` DTOs; `PreviewImport(sessionID, selectedPath string)
   (ImportPreviewResult, error)` and `ConfirmImport(sessionID, selectedPath, approvedContent
@@ -148,6 +156,11 @@ it produces — before committing it.
   set, its effect calls `confirmImport(sessionId, path, formattedContent)` instead of
   `importFile(sessionId, path)`. Everything else (progress/summary rendering, the
   non-cancellable/non-dismissible-until-finished behavior) is unchanged.
+  - **Revised after review**, alongside the backend's `onChunkEmbedded` addition above:
+    `IngestProgress` gains optional `chunksProcessed`/`chunksTotal`. A chunk-progress tick takes
+    priority over the file-level count for both the label (`Embedding chunk X of Y`) and the
+    bar's percent — `ImportFile`'s own multi-file batch ticks never set `chunksTotal`, so they
+    fall back to the original `N of M files` label unchanged.
 
 ## Tasks
 
