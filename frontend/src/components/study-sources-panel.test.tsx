@@ -4,12 +4,14 @@ import userEvent from '@testing-library/user-event'
 import { StudySourcesPanel } from './study-sources-panel'
 import { getSessionSourceDocument, listSessionSources, removeSessionSource } from '@/lib/sources'
 import {
+  confirmImport,
   downloadExampleNote,
-  importFile,
   onIngestDone,
   onIngestError,
   onIngestProgress,
   pickNotesFile,
+  previewImport,
+  type ImportPreview,
   type IngestSummary,
 } from '@/lib/ingest'
 
@@ -25,15 +27,41 @@ vi.mock('@/lib/ingest', async (importOriginal) => {
     ...original,
     pickNotesFile: vi.fn(),
     downloadExampleNote: vi.fn(),
+    previewImport: vi.fn(),
+    // Overridden (not spread from the real module) purely so a stray call
+    // from IngestProgressDialog's own importFile branch — never reached
+    // once Add always provides formattedContent after approval — can
+    // never hit the real, unmocked Wails binding.
     importFile: vi.fn(),
+    confirmImport: vi.fn(),
     onIngestProgress: vi.fn(),
     onIngestDone: vi.fn(),
     onIngestError: vi.fn(),
   }
 })
 
+function defaultPreview(overrides: Partial<ImportPreview> = {}): ImportPreview {
+  return {
+    displayPath: 'go.md',
+    originalContent: 'raw go notes',
+    formattedContent: '# Go\n\nFormatted go notes.',
+    formattingFailed: false,
+    stats: { headingsBefore: 0, headingsAfter: 1, paragraphsBefore: 1, paragraphsAfter: 1 },
+    chunks: [{ heading: 'Go', content: 'Formatted go notes.', charCount: 19, estimatedTokens: 4 }],
+    skipped: false,
+    skippedReason: '',
+    ...overrides,
+  }
+}
+
+// Mocks a non-skipped preview resolving successfully — the default for
+// every test that needs to reach the Review dialog.
+function setupPreviewSuccess(overrides: Partial<ImportPreview> = {}) {
+  vi.mocked(previewImport).mockResolvedValueOnce(defaultPreview(overrides))
+}
+
 // IngestProgressDialog (rendered for real, not mocked) only reaches its
-// "finished" state via onIngestDone/onIngestError — importFile's own
+// "finished" state via onIngestDone/onIngestError — confirmImport's own
 // resolution just guards an unhandled rejection. Mirrors
 // ingest-progress-dialog.test.tsx's own setupSubscriptions helper.
 function setupIngestDialogSubscriptions() {
@@ -44,7 +72,7 @@ function setupIngestDialogSubscriptions() {
     return vi.fn()
   })
   vi.mocked(onIngestError).mockReturnValue(vi.fn())
-  vi.mocked(importFile).mockReturnValue(new Promise(() => {}))
+  vi.mocked(confirmImport).mockReturnValue(new Promise(() => {}))
   return {
     emitDone: (summary: IngestSummary) => act(() => doneHandler(summary)),
   }
@@ -425,11 +453,12 @@ describe('StudySourcesPanel', () => {
     expect(await screen.findByText('Rebuilding knowledge index…')).toBeInTheDocument()
   })
 
-  it('Add opens the file picker, then the import dialog with the picked path', async () => {
-    // Given a picker that resolves to a chosen file
+  it('Add opens the file picker, then the Review dialog once the preview resolves', async () => {
+    // Given a picker that resolves to a chosen file, and a preview that
+    // formats and chunks it without persisting anything
     vi.mocked(listSessionSources).mockResolvedValueOnce([])
     vi.mocked(pickNotesFile).mockResolvedValueOnce('/home/user/notes/go.md')
-    setupIngestDialogSubscriptions()
+    setupPreviewSuccess()
     const user = userEvent.setup()
     render(<StudySourcesPanel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
@@ -437,9 +466,116 @@ describe('StudySourcesPanel', () => {
     // When clicking Add
     await user.click(screen.getByRole('button', { name: 'Add source' }))
 
-    // Then the import dialog opens for that session and path
+    // Then the Review dialog opens for that session and path — not the
+    // import dialog, which no file reaches without being approved first
+    expect(await screen.findByText('Review import')).toBeInTheDocument()
+    expect(previewImport).toHaveBeenCalledWith('session-1', '/home/user/notes/go.md')
+    expect(screen.queryByText('Importing notes')).not.toBeInTheDocument()
+  })
+
+  it('approving the review opens the import dialog, confirming exactly the approved content', async () => {
+    // Given a reviewed preview the user is about to approve
+    vi.mocked(listSessionSources).mockResolvedValueOnce([])
+    vi.mocked(pickNotesFile).mockResolvedValueOnce('/home/user/notes/go.md')
+    setupPreviewSuccess({ formattedContent: '# Go\n\nApproved during review.' })
+    setupIngestDialogSubscriptions()
+    const user = userEvent.setup()
+    render(<StudySourcesPanel sessionId="session-1" />)
+    await screen.findByText('No sources imported yet.')
+    await user.click(screen.getByRole('button', { name: 'Add source' }))
+    await screen.findByText('Review import')
+
+    // When approving it
+    await user.click(screen.getByRole('button', { name: 'Approve & import' }))
+
+    // Then the import dialog opens and confirms exactly the approved text
+    // — never a re-read of the file
     expect(await screen.findByText('Importing notes')).toBeInTheDocument()
-    expect(importFile).toHaveBeenCalledWith('session-1', '/home/user/notes/go.md')
+    expect(confirmImport).toHaveBeenCalledWith(
+      'session-1',
+      '/home/user/notes/go.md',
+      '# Go\n\nApproved during review.',
+    )
+  })
+
+  it('cancelling the review discards the preview without importing anything', async () => {
+    // Given an open Review dialog
+    vi.mocked(listSessionSources).mockResolvedValueOnce([])
+    vi.mocked(pickNotesFile).mockResolvedValueOnce('/home/user/notes/go.md')
+    setupPreviewSuccess()
+    const user = userEvent.setup()
+    render(<StudySourcesPanel sessionId="session-1" />)
+    await screen.findByText('No sources imported yet.')
+    await user.click(screen.getByRole('button', { name: 'Add source' }))
+    await screen.findByText('Review import')
+
+    // When cancelling it
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    // Then it is simply dismissed — nothing was persisted during preview,
+    // so there is nothing to undo
+    expect(screen.queryByText('Review import')).not.toBeInTheDocument()
+    expect(screen.queryByText('Importing notes')).not.toBeInTheDocument()
+    expect(confirmImport).not.toHaveBeenCalled()
+  })
+
+  it('a file unchanged since its last import reloads silently, without opening the Review dialog', async () => {
+    // Given a picker that resolves to a file whose preview reports it as
+    // unchanged since its last import
+    vi.mocked(listSessionSources).mockResolvedValueOnce([])
+    vi.mocked(pickNotesFile).mockResolvedValueOnce('/home/user/notes/go.md')
+    setupPreviewSuccess({ skipped: true, skippedReason: 'unchanged since last import', chunks: [] })
+    vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
+    const user = userEvent.setup()
+    render(<StudySourcesPanel sessionId="session-1" />)
+    await screen.findByText('No sources imported yet.')
+
+    // When clicking Add
+    await user.click(screen.getByRole('button', { name: 'Add source' }))
+
+    // Then the panel just reloads — the same silent skip ImportFile always
+    // had — and no Review dialog ever opens
+    expect(await screen.findByText('Distributed Systems')).toBeInTheDocument()
+    expect(screen.queryByText('Review import')).not.toBeInTheDocument()
+  })
+
+  it('a failed preview shows the inline error copy', async () => {
+    // Given a picker that resolves, but whose preview call fails
+    vi.mocked(listSessionSources).mockResolvedValueOnce([])
+    vi.mocked(pickNotesFile).mockResolvedValueOnce('/home/user/notes/go.md')
+    vi.mocked(previewImport).mockRejectedValueOnce(new Error('index is loading'))
+    const user = userEvent.setup()
+    render(<StudySourcesPanel sessionId="session-1" />)
+    await screen.findByText('No sources imported yet.')
+
+    // When clicking Add
+    await user.click(screen.getByRole('button', { name: 'Add source' }))
+
+    // Then the existing inline error slot reports it, and no Review
+    // dialog opens
+    expect(
+      await screen.findByText('Failed to prepare the import. Please try again.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Review import')).not.toBeInTheDocument()
+  })
+
+  it('shows a status message and disables Add while the preview is loading', async () => {
+    // Given a picker that resolves, and a preview that never settles
+    // during this test
+    vi.mocked(listSessionSources).mockResolvedValueOnce([])
+    vi.mocked(pickNotesFile).mockResolvedValueOnce('/home/user/notes/go.md')
+    vi.mocked(previewImport).mockImplementationOnce(() => new Promise(() => {}))
+    const user = userEvent.setup()
+    render(<StudySourcesPanel sessionId="session-1" />)
+    await screen.findByText('No sources imported yet.')
+
+    // When clicking Add
+    await user.click(screen.getByRole('button', { name: 'Add source' }))
+
+    // Then a status message appears and Add is disabled — distinct from
+    // the index-retry tooltip, since the index isn't involved yet
+    expect(await screen.findByText('Formatting note…')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add source' })).toBeDisabled()
   })
 
   it('renders the header Add button with the default (primary) variant, unlike the outline empty-state one', async () => {
@@ -499,11 +635,11 @@ describe('StudySourcesPanel', () => {
 
     // When clicking Add again and the picker succeeds this time
     vi.mocked(pickNotesFile).mockResolvedValueOnce('/home/user/notes/go.md')
-    setupIngestDialogSubscriptions()
+    setupPreviewSuccess()
     await user.click(screen.getByRole('button', { name: 'Add source' }))
 
     // Then the stale error is cleared — not just replaced by different text
-    await screen.findByText('Importing notes')
+    await screen.findByText('Review import')
     expect(container.querySelector('.text-destructive')).toBeNull()
   })
 
@@ -518,8 +654,10 @@ describe('StudySourcesPanel', () => {
     // When clicking Add
     await user.click(screen.getByRole('button', { name: 'Add source' }))
 
-    // Then no import dialog opens
+    // Then no preview is even requested, and no dialog opens
     await waitFor(() => expect(pickNotesFile).toHaveBeenCalled())
+    expect(previewImport).not.toHaveBeenCalled()
+    expect(screen.queryByText('Review import')).not.toBeInTheDocument()
     expect(screen.queryByText('Importing notes')).not.toBeInTheDocument()
   })
 
@@ -538,7 +676,7 @@ describe('StudySourcesPanel', () => {
     expect(
       await screen.findByText('Failed to open the notes picker. Please try again.'),
     ).toBeInTheDocument()
-    expect(screen.queryByText('Importing notes')).not.toBeInTheDocument()
+    expect(screen.queryByText('Review import')).not.toBeInTheDocument()
   })
 
   it('clicking Example downloads the example note', async () => {
@@ -585,23 +723,27 @@ describe('StudySourcesPanel', () => {
 
     // When Add succeeds afterwards
     vi.mocked(pickNotesFile).mockResolvedValueOnce('/home/user/notes/go.md')
-    setupIngestDialogSubscriptions()
+    setupPreviewSuccess()
     await user.click(screen.getByRole('button', { name: 'Add a source' }))
 
     // Then the stale error is cleared
-    await screen.findByText('Importing notes')
+    await screen.findByText('Review import')
     expect(container.querySelector('.text-destructive')).toBeNull()
   })
 
   it('closing the import dialog reloads the sources list', async () => {
-    // Given a picker that resolves to a chosen file, and an import that finishes
+    // Given a picker that resolves to a chosen file, a preview that's
+    // approved, and an import that finishes
     vi.mocked(listSessionSources).mockResolvedValueOnce([])
     vi.mocked(pickNotesFile).mockResolvedValueOnce('/home/user/notes/go.md')
+    setupPreviewSuccess()
     const { emitDone } = setupIngestDialogSubscriptions()
     const user = userEvent.setup()
     render(<StudySourcesPanel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
     await user.click(screen.getByRole('button', { name: 'Add source' }))
+    await screen.findByText('Review import')
+    await user.click(screen.getByRole('button', { name: 'Approve & import' }))
     await screen.findByText('Importing notes')
     emitDone(EMPTY_SUMMARY)
 
