@@ -151,21 +151,21 @@ it produces — before committing it.
 Each slice keeps the build green and is committed on its own; backend slices are TDD with
 `_test.go`, frontend slices are TDD with Vitest.
 
-- [ ] `domain/llm`: `TaskNoteFormatting`, routed `TierMedium`
-- [ ] `application/ingest`: extract `ingestContent` from `ingestFile` (characterization —
+- [x] `domain/llm`: `TaskNoteFormatting`, routed `TierMedium`
+- [x] `application/ingest`: extract `ingestContent` from `ingestFile` (characterization —
       `ImportFile`'s existing tests must still pass unmodified)
-- [ ] `application/ingest`: `formatNote` (Chat call, blank/error fallback, extension-aware
+- [x] `application/ingest`: `formatNote` (Chat call, blank/error fallback, extension-aware
       prompt) and `computeFormattingStats`
-- [ ] `application/ingest`: `PreviewImport` (validation, skip check, formatting, chunking)
-- [ ] `application/ingest`: `ConfirmImport` (validation, mutation guard, `ingestContent`,
+- [x] `application/ingest`: `PreviewImport` (validation, skip check, formatting, chunking)
+- [x] `application/ingest`: `ConfirmImport` (validation, mutation guard, `ingestContent`,
       progress/summary)
-- [ ] Desktop bindings: DTOs, `PreviewImport`, `ConfirmImport`; regenerate `wailsjs`
-- [ ] `lib/ingest.ts`: types, `previewImport`, `confirmImport`
-- [ ] `ImportReviewDialog` component (tabs, expandable chunk cards, formatting-failed notice,
+- [x] Desktop bindings: DTOs, `PreviewImport`, `ConfirmImport`; regenerate `wailsjs`
+- [x] `lib/ingest.ts`: types, `previewImport`, `confirmImport`
+- [x] `ImportReviewDialog` component (tabs, expandable chunk cards, formatting-failed notice,
       Cancel/Approve) — matches the approved mockup
-- [ ] `study-sources-panel.tsx`: wire Add through preview → review → confirm
-- [ ] `IngestProgressDialog`: `formattedContent` prop, calls `confirmImport` when set
-- [ ] Docs: CHANGELOG, README, `lib/documentation.ts`
+- [x] `study-sources-panel.tsx`: wire Add through preview → review → confirm
+- [x] `IngestProgressDialog`: `formattedContent` prop, calls `confirmImport` when set
+- [x] Docs: CHANGELOG, README, `lib/documentation.ts`
 
 ## Acceptance Criteria
 
