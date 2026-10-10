@@ -1,4 +1,4 @@
-import { ImportFile, PickNotesFile } from '../../wailsjs/go/desktop/App'
+import { DownloadExampleNote, ImportFile, PickNotesFile } from '../../wailsjs/go/desktop/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 
 export interface IngestProgress {
@@ -30,6 +30,15 @@ export interface IngestSummary {
 // returns the chosen path, or "" if the user cancelled.
 export async function pickNotesFile(): Promise<string> {
   return PickNotesFile()
+}
+
+// downloadExampleNote opens the OS save dialog and writes a bundled
+// example note demonstrating the heading/one-paragraph-per-sub-topic
+// structure chunking works best with. Returns the chosen path, or "" if
+// the user cancelled. See
+// specs/phases/phase-02-knowledge-engine/19-example-note-template.md.
+export async function downloadExampleNote(): Promise<string> {
+  return DownloadExampleNote()
 }
 
 // importFile starts importing exactly one file at path into the study

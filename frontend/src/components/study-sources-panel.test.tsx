@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { StudySourcesPanel } from './study-sources-panel'
 import { getSessionSourceDocument, listSessionSources, removeSessionSource } from '@/lib/sources'
 import {
+  downloadExampleNote,
   importFile,
   onIngestDone,
   onIngestError,
@@ -23,6 +24,7 @@ vi.mock('@/lib/ingest', async (importOriginal) => {
   return {
     ...original,
     pickNotesFile: vi.fn(),
+    downloadExampleNote: vi.fn(),
     importFile: vi.fn(),
     onIngestProgress: vi.fn(),
     onIngestDone: vi.fn(),
@@ -537,6 +539,58 @@ describe('StudySourcesPanel', () => {
       await screen.findByText('Failed to open the notes picker. Please try again.'),
     ).toBeInTheDocument()
     expect(screen.queryByText('Importing notes')).not.toBeInTheDocument()
+  })
+
+  it('clicking Example downloads the example note', async () => {
+    // Given a save dialog that succeeds
+    vi.mocked(listSessionSources).mockResolvedValueOnce([])
+    vi.mocked(downloadExampleNote).mockResolvedValueOnce('/home/user/notes/example-note.md')
+    const user = userEvent.setup()
+    render(<StudySourcesPanel sessionId="session-1" />)
+    await screen.findByText('No sources imported yet.')
+
+    // When clicking Example
+    await user.click(screen.getByRole('button', { name: 'Download example note' }))
+
+    // Then the download was triggered
+    await waitFor(() => expect(downloadExampleNote).toHaveBeenCalled())
+  })
+
+  it('a failed example-note download shows the inline error copy', async () => {
+    // Given a save dialog that fails
+    vi.mocked(listSessionSources).mockResolvedValueOnce([])
+    vi.mocked(downloadExampleNote).mockRejectedValueOnce(new Error('dialog unavailable'))
+    const user = userEvent.setup()
+    render(<StudySourcesPanel sessionId="session-1" />)
+    await screen.findByText('No sources imported yet.')
+
+    // When clicking Example
+    await user.click(screen.getByRole('button', { name: 'Download example note' }))
+
+    // Then the inline error copy shows
+    expect(
+      await screen.findByText('Failed to save the example note. Please try again.'),
+    ).toBeInTheDocument()
+  })
+
+  it('clears a previous example-note download error once Add succeeds', async () => {
+    // Given a failed example-note download
+    vi.mocked(listSessionSources).mockResolvedValueOnce([])
+    vi.mocked(downloadExampleNote).mockRejectedValueOnce(new Error('dialog unavailable'))
+    const user = userEvent.setup()
+    const { container } = render(<StudySourcesPanel sessionId="session-1" />)
+    await screen.findByText('No sources imported yet.')
+    await user.click(screen.getByRole('button', { name: 'Download example note' }))
+    await screen.findByText('Failed to save the example note. Please try again.')
+
+    // When Add succeeds afterwards
+    vi.mocked(pickNotesFile).mockResolvedValueOnce('/home/user/notes/go.md')
+    setupIngestDialogSubscriptions()
+    await user.click(screen.getByRole('button', { name: 'Add a source' }))
+
+    // Then the stale error is cleared
+    await screen.findByText('Importing notes')
+    expect(container.querySelector('.text-destructive')).toBeNull()
   })
 
   it('closing the import dialog reloads the sources list', async () => {

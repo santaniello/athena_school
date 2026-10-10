@@ -9,6 +9,8 @@ export function DeleteFolder(arg1:string):Promise<void>;
 
 export function DeleteStudySession(arg1:string):Promise<void>;
 
+export function DownloadExampleNote():Promise<string>;
+
 export function GetKnowledgeIndexStatus():Promise<desktop.IndexStatusResult>;
 
 export function GetProfile():Promise<desktop.UserProfileInput>;

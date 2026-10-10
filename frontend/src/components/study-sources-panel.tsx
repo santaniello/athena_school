@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { ChangeEvent, ReactNode } from 'react'
-import { MoreVertical, Plus, Search, Trash2 } from 'lucide-react'
+import { Download, MoreVertical, Plus, Search, Trash2 } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,7 +23,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { IngestProgressDialog } from '@/components/ingest-progress-dialog'
 import { SourceViewer } from '@/components/source-viewer'
 import { useSessionSources } from '@/hooks/use-session-sources'
-import { pickNotesFile } from '@/lib/ingest'
+import { downloadExampleNote, pickNotesFile } from '@/lib/ingest'
 import { removeSessionSource, type SessionSource } from '@/lib/sources'
 
 interface StudySourcesPanelProps {
@@ -44,6 +44,12 @@ interface StudySourcesPanelProps {
 // The existing inline error copy for a picker that failed to open, carried
 // over from the pre-2.17 Knowledge screen's own "Import notes" action.
 const PICKER_ERROR_MESSAGE = 'Failed to open the notes picker. Please try again.'
+
+// Shares pickerError's same inline error slot below the search box — one
+// message display, not a second one, since both are triggered from the
+// same header row. See
+// specs/phases/phase-02-knowledge-engine/19-example-note-template.md.
+const DOWNLOAD_EXAMPLE_ERROR_MESSAGE = 'Failed to save the example note. Please try again.'
 
 // chunkCountLabel pluralizes "chunk" for a row's subtitle — "1 chunk",
 // "12 chunks".
@@ -185,6 +191,15 @@ function StudySourcesPanel({
     }
   }
 
+  async function handleDownloadExampleClick() {
+    setPickerError('')
+    try {
+      await downloadExampleNote()
+    } catch {
+      setPickerError(DOWNLOAD_EXAMPLE_ERROR_MESSAGE)
+    }
+  }
+
   function handleImportDialogClose() {
     setImportPath(null)
     reload()
@@ -257,13 +272,24 @@ function StudySourcesPanel({
               </h2>
               <p className="mt-0.5 text-[11px] text-muted-foreground">Imported into this session</p>
             </div>
-            <AddSourceButton
-              onClick={() => void handleAddClick()}
-              disabled={mutationsDisabled}
-              ariaLabel="Add source"
-            >
-              Add
-            </AddSourceButton>
+            <div className="flex items-center gap-1.5">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void handleDownloadExampleClick()}
+                aria-label="Download example note"
+              >
+                <Download className="size-3.5" aria-hidden="true" />
+                Example
+              </Button>
+              <AddSourceButton
+                onClick={() => void handleAddClick()}
+                disabled={mutationsDisabled}
+                ariaLabel="Add source"
+              >
+                Add
+              </AddSourceButton>
+            </div>
           </div>
 
           <label className="relative block">

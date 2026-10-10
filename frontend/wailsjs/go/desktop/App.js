@@ -14,6 +14,10 @@ export function DeleteStudySession(arg1) {
   return window['go']['desktop']['App']['DeleteStudySession'](arg1);
 }
 
+export function DownloadExampleNote() {
+  return window['go']['desktop']['App']['DownloadExampleNote']();
+}
+
 export function GetKnowledgeIndexStatus() {
   return window['go']['desktop']['App']['GetKnowledgeIndexStatus']();
 }
