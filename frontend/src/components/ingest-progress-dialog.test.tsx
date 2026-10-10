@@ -173,6 +173,37 @@ describe('IngestProgressDialog', () => {
     expect(indicator).toHaveStyle({ transform: 'translateX(-70%)' })
   })
 
+  it('shows per-chunk progress once a chunk tick arrives (ConfirmImport, spec 2.20)', () => {
+    // Given a dialog confirming a single file with several chunks
+    const events = setupSubscriptions()
+    vi.mocked(importFile).mockReturnValueOnce(new Promise<void>(() => {}))
+    render(
+      <IngestProgressDialog
+        open
+        sessionId="session-1"
+        path="/home/user/notes/go.md"
+        onClose={vi.fn()}
+      />,
+    )
+
+    // When a chunk-progress tick arrives (FilesProcessed is still 0 — the
+    // file itself isn't done)
+    events.emitProgress({
+      filesProcessed: 0,
+      filesTotal: 1,
+      chunksCreated: 0,
+      currentFile: 'go.md',
+      chunksProcessed: 2,
+      chunksTotal: 5,
+    })
+
+    // Then the bar and label reflect chunk progress (2 of 5 = 40%), not
+    // the file-level 0 of 1 that would otherwise show 0%
+    expect(screen.getByText('Embedding chunk 2 of 5')).toBeInTheDocument()
+    const indicator = document.querySelector('[data-slot="progress-indicator"]')
+    expect(indicator).toHaveStyle({ transform: 'translateX(-60%)' })
+  })
+
   it('keeps the progress bar at zero without dividing by zero when the file total has not arrived yet', () => {
     // Given a dialog mid-import, before any files have been counted
     const events = setupSubscriptions()

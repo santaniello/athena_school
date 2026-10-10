@@ -12,6 +12,12 @@ export interface IngestProgress {
   filesTotal: number
   chunksCreated: number
   currentFile: string
+  // Intra-file progress — only ConfirmImport (spec 2.20) ever sets these,
+  // as each chunk of the single file it is confirming gets embedded.
+  // Absent (or 0) on every tick ImportFile's own multi-file batch reports;
+  // a reader falls back to filesProcessed/filesTotal in that case.
+  chunksProcessed?: number
+  chunksTotal?: number
 }
 
 export interface IngestFailure {

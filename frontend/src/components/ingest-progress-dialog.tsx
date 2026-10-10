@@ -100,12 +100,22 @@ export function IngestProgressDialog({
 
   const finished = ingestSummary !== null || errorMessage !== ''
 
-  const progressLabel = ingestProgress
-    ? `${ingestProgress.filesProcessed} of ${ingestProgress.filesTotal} files`
-    : 'Starting...'
+  // A chunk tick (ConfirmImport, spec 2.20) takes priority over the
+  // file-level count: FilesProcessed/FilesTotal alone would show "0 of 1
+  // files" (0%) for a single-file confirm the entire time its chunks are
+  // being embedded, only ever jumping straight to 100% at the very end.
+  const hasChunkProgress = Boolean(ingestProgress?.chunksTotal)
+  const progressLabel = hasChunkProgress
+    ? `Embedding chunk ${ingestProgress?.chunksProcessed} of ${ingestProgress?.chunksTotal}`
+    : ingestProgress
+      ? `${ingestProgress.filesProcessed} of ${ingestProgress.filesTotal} files`
+      : 'Starting...'
   const currentLabel = ingestProgress?.currentFile
-  const percent =
-    ingestProgress && ingestProgress.filesTotal > 0
+  const percent = hasChunkProgress
+    ? Math.round(
+        ((ingestProgress?.chunksProcessed ?? 0) / (ingestProgress?.chunksTotal ?? 1)) * 100,
+      )
+    : ingestProgress && ingestProgress.filesTotal > 0
       ? Math.round((ingestProgress.filesProcessed / ingestProgress.filesTotal) * 100)
       : 0
 
