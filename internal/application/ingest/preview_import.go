@@ -13,25 +13,38 @@ import (
 // noteFormattingMarkdownPrompt asks the model to rewrite a .md source into
 // clean Markdown that chunks well: normalized heading hierarchy, one
 // paragraph per sub-topic, proper bullet syntax, export artifacts stripped
-// — and, critically, a blank line between any two list items that each
-// define a distinct term, so a tight list never stays one diluted chunk.
+// — and, critically, each item of a list that enumerates several distinct
+// terms gets the list's shared context folded into its own sentence, with
+// a blank line between items.
+//
 // Diagnosed from a real session (see TestNoteFormattingPrompts_
-// coverBundledListDefinitions): a cache note's eviction-policy bullets
-// (LRU/LFU/FIFO/RR, no blank line between them) chunked as one block, and
+// coverBundledListDefinitions, which caught v1 of this prompt failing a
+// real API call): a cache note's eviction-policy bullets (LRU/LFU/FIFO/RR)
+// had no blank line between them, so the whole list chunked as one block;
 // "FIFO"/"Random Replacement" scored below Sufficiency against it even
-// though "LRU"/"LFU" — listed first, more prominent — happened to clear
-// the bar. It must preserve meaning, facts, numbers and language exactly
-// — this is a rewrite for structure, never a summary. See
+// though "LRU"/"LFU" happened to clear the bar — generic terms (FIFO, a
+// queueing concept far outside caching too) dilute less cleanly than a
+// specific CS term already tightly tied to "cache" in embedding space. A
+// first fix (blank line only) was verified against the real OpenRouter API
+// and still produced 1 chunk, not 4: a one-line bullet like "- FIFO:
+// remove o mais antigo" is nowhere near minChunkChars (200 runes), so
+// mergeUndersized (chunking.go) cascades every short item straight back
+// into its neighbours regardless of the blank line between them. Asking
+// the model to pad each item with invented explanation would violate the
+// very next sentence below ("never add information") — instead, each item
+// pulls in context already stated once in the list's own heading/intro, so
+// it is self-contained and long enough to stand alone without introducing
+// a single new fact. See
 // specs/phases/phase-02-knowledge-engine/20-import-review-and-formatting.md.
-const noteFormattingMarkdownPrompt = "Rewrite the note below as clean Markdown to improve retrieval chunking: normalize heading levels (H1-H3), split run-on prose into one paragraph per sub-topic, and turn ad-hoc \"-\"/\"*\" lists into proper Markdown bullets. When a list enumerates several distinct, separately-definable items — one named policy, term or algorithm per item, each with its own explanation — put a blank line between every item so each becomes its own chunk; never leave two or more distinct definitions bundled into one paragraph just because they share a list. Strip page-break or export artifacts. Preserve the original meaning, facts, numbers and language exactly — never summarize, add, or remove information. Output only the rewritten Markdown, nothing else."
+const noteFormattingMarkdownPrompt = "Rewrite the note below as clean Markdown to improve retrieval chunking: normalize heading levels (H1-H3), split run-on prose into one paragraph per sub-topic, and turn ad-hoc \"-\"/\"*\" lists into proper Markdown bullets. When a list enumerates several distinct, separately-definable items under a shared heading or intro sentence (e.g. one named policy, term or algorithm per item) — restate that shared context inside each item's own sentence, not just in the surrounding heading, so every item is self-contained and long enough to stand as its own chunk, with a blank line between every item; never leave two or more distinct definitions bundled into one paragraph just because they share a list, and never invent an explanation the note does not already give — only make existing nearby context explicit within each item. Strip page-break or export artifacts. Preserve the original meaning, facts, numbers and language exactly — never summarize, add, or remove information. Output only the rewritten Markdown, nothing else."
 
 // noteFormattingPlainTextPrompt is noteFormattingMarkdownPrompt's
 // counterpart for a .txt source: ChunkText never interprets Markdown
 // syntax, so asking for headings/bullets here would just leave literal
 // "##"/"-" characters sitting in the stored text. It only asks for
-// well-structured plain-text paragraphs, with the same blank-line-between-
-// distinct-definitions rule.
-const noteFormattingPlainTextPrompt = "Rewrite the note below as well-structured plain text to improve retrieval chunking: split run-on prose into one paragraph per sub-topic. When a list enumerates several distinct, separately-definable items — one named policy, term or algorithm per item, each with its own explanation — put a blank line between every item so each becomes its own chunk; never leave two or more distinct definitions bundled into one paragraph just because they share a list. Strip page-break or export artifacts. Do not use Markdown syntax (no \"#\" headings, no \"-\"/\"*\" bullets) — plain paragraphs only. Preserve the original meaning, facts, numbers and language exactly — never summarize, add, or remove information. Output only the rewritten text, nothing else."
+// well-structured plain-text paragraphs, with the same contextual-
+// restatement rule (see noteFormattingMarkdownPrompt's comment for why).
+const noteFormattingPlainTextPrompt = "Rewrite the note below as well-structured plain text to improve retrieval chunking: split run-on prose into one paragraph per sub-topic. When a list enumerates several distinct, separately-definable items under a shared heading or intro sentence (e.g. one named policy, term or algorithm per item) — restate that shared context inside each item's own sentence, not just in the surrounding heading, so every item is self-contained and long enough to stand as its own chunk, with a blank line between every item; never leave two or more distinct definitions bundled into one paragraph just because they share a list, and never invent an explanation the note does not already give — only make existing nearby context explicit within each item. Strip page-break or export artifacts. Do not use Markdown syntax (no \"#\" headings, no \"-\"/\"*\" bullets) — plain paragraphs only. Preserve the original meaning, facts, numbers and language exactly — never summarize, add, or remove information. Output only the rewritten text, nothing else."
 
 // FormattingStats are deterministic, verifiable structure counts comparing
 // a note's original and formatted text — never a model's own narrated

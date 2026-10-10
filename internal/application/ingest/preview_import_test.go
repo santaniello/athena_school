@@ -304,8 +304,19 @@ func TestPreviewImport_formattingFails_fallsBackToChunkingTheOriginalContent(t *
 // proper Markdown syntax; the problem was never syntax, it was four
 // distinct definitions sharing one paragraph.
 func TestNoteFormattingPrompts_coverBundledListDefinitions(t *testing.T) {
-	assert.Contains(t, noteFormattingMarkdownPrompt, "blank line")
-	assert.Contains(t, noteFormattingPlainTextPrompt, "blank line")
+	for _, prompt := range []string{noteFormattingMarkdownPrompt, noteFormattingPlainTextPrompt} {
+		assert.Contains(t, prompt, "blank line")
+		// A blank line alone isn't enough: a one-line bullet
+		// ("- FIFO: removes the oldest item") is well under minChunkChars
+		// (200 runes), so mergeUndersized cascades it straight back into
+		// its neighbours regardless of the blank line between them —
+		// verified against the real OpenRouter API, which DID add blank
+		// lines on the prompt's first version but still produced 1 chunk,
+		// not 4, for exactly this reason. The prompt must also ask for
+		// each item to be expanded into its own explanation, long enough
+		// to clear that floor on its own.
+		assert.Contains(t, prompt, "sentence")
+	}
 }
 
 func TestComputeFormattingStats_countsHeadingsAndParagraphsBeforeAndAfter(t *testing.T) {
