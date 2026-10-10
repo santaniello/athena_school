@@ -67,6 +67,18 @@ func TestTierFor_returnsCheap_forQueryEnrichmentTask(t *testing.T) {
 	assert.Equal(t, TierCheap, tier)
 }
 
+func TestTierFor_returnsMedium_forNoteFormattingTask(t *testing.T) {
+	// Given the note-formatting task type (spec 2.20) — unlike
+	// TaskQueryEnrichment, its output is persisted and read by the user, so
+	// it is routed like a user-facing reply, not a hidden retrieval helper.
+
+	// When resolving its tier
+	tier := TierFor(TaskNoteFormatting)
+
+	// Then it is medium
+	assert.Equal(t, TierMedium, tier)
+}
+
 func TestTierFor_returnsMedium_forUnrecognizedTaskType(t *testing.T) {
 	// Given a task type that does not appear in the tier table
 	unknown := TaskType("something_future_specs_add_later")
