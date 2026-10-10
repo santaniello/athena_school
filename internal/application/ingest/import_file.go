@@ -76,16 +76,8 @@ type importCandidate struct {
 func (s *Service) ImportFile(
 	ctx context.Context, sessionID string, root fs.FS, sourceRoot, filePath string, onProgress func(Progress) error,
 ) (Summary, error) {
-	if strings.TrimSpace(sessionID) == "" {
-		return Summary{}, domainknowledge.ErrSessionRequired
-	}
-	if !fs.ValidPath(filePath) {
-		return Summary{}, fmt.Errorf("ingest: invalid file path %q", filePath)
-	}
-	switch strings.ToLower(path.Ext(filePath)) {
-	case ".md", ".txt":
-	default:
-		return Summary{}, fmt.Errorf("ingest: unsupported file type %q", path.Ext(filePath))
+	if err := validateImportTarget(sessionID, filePath); err != nil {
+		return Summary{}, err
 	}
 
 	if err := s.index.BeginMutation(); err != nil {
@@ -95,6 +87,27 @@ func (s *Service) ImportFile(
 
 	candidate := makeImportCandidate(sourceRoot, filePath)
 	return s.importCandidates(ctx, sessionID, root, []importCandidate{candidate}, onProgress)
+}
+
+// validateImportTarget checks sessionID and filePath the same way for
+// every entry point into the ingest pipeline (ImportFile, PreviewImport,
+// ConfirmImport). A blank sessionID is ErrSessionRequired — that the
+// session exists is enforced by the foreign key on every row this writes,
+// not checked here. filePath must be a valid fs.FS path with a supported
+// extension.
+func validateImportTarget(sessionID, filePath string) error {
+	if strings.TrimSpace(sessionID) == "" {
+		return domainknowledge.ErrSessionRequired
+	}
+	if !fs.ValidPath(filePath) {
+		return fmt.Errorf("ingest: invalid file path %q", filePath)
+	}
+	switch strings.ToLower(path.Ext(filePath)) {
+	case ".md", ".txt":
+		return nil
+	default:
+		return fmt.Errorf("ingest: unsupported file type %q", path.Ext(filePath))
+	}
 }
 
 // makeImportCandidate combines sourceRoot with readPath to form one

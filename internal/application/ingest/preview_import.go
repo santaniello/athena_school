@@ -2,6 +2,9 @@ package ingest
 
 import (
 	"context"
+	"fmt"
+	"io/fs"
+	"path"
 	"strings"
 
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
@@ -30,6 +33,119 @@ type FormattingStats struct {
 	HeadingsAfter    int
 	ParagraphsBefore int
 	ParagraphsAfter  int
+}
+
+// ChunkPreview is one would-be chunk shown to the user before import is
+// approved — the exact text ConfirmImport's chunker will also produce from
+// the same approved content, since both run the same ChunkMarkdown/
+// ChunkText over it (spec 2.20 decision 4).
+type ChunkPreview struct {
+	Heading         string
+	Content         string
+	CharCount       int
+	EstimatedTokens int
+}
+
+// ImportPreview is PreviewImport's result. Skipped is true when the file is
+// unchanged since its last import (same mtime, same embedding model) — in
+// that case FormattedContent/Chunks are empty and the caller should not
+// open the review dialog at all, the same silent-skip behavior ImportFile
+// already has.
+type ImportPreview struct {
+	DisplayPath      string
+	OriginalContent  string
+	FormattedContent string
+	// FormattingFailed is true when the formatter degraded to the original
+	// content instead of a rewrite (see formatNote).
+	FormattingFailed bool
+	Stats            FormattingStats
+	Chunks           []ChunkPreview
+	Skipped          bool
+	SkippedReason    string
+}
+
+// PreviewImport reformats and chunks filePath without persisting anything —
+// no embeddings, no database write, no VectorStore mutation. ConfirmImport
+// is PreviewImport's only valid follow-up: it must receive exactly the
+// FormattedContent this returns, never re-read or re-format the file
+// itself, so what the user reviews here is byte-for-byte what gets
+// embedded. Unlike ImportFile, this only checks — it never reserves — the
+// index: Preview and the eventual Confirm are two separate round-trips with
+// arbitrary user think-time in between, so holding BeginMutation open across
+// that gap would block unrelated index operations for as long as the review
+// dialog sits open (spec 2.20 decision 9).
+func (s *Service) PreviewImport(
+	ctx context.Context, sessionID string, root fs.FS, sourceRoot, filePath string,
+) (ImportPreview, error) {
+	if err := validateImportTarget(sessionID, filePath); err != nil {
+		return ImportPreview{}, err
+	}
+	if err := s.index.CheckMutationAllowed(); err != nil {
+		return ImportPreview{}, err
+	}
+
+	candidate := makeImportCandidate(sourceRoot, filePath)
+	displayPath := filePath
+
+	existing, err := s.ingestedFiles.ListBySession(ctx, sessionID)
+	if err != nil {
+		return ImportPreview{}, fmt.Errorf("ingest: listing previously ingested files: %w", err)
+	}
+	prev, hasPrev := existing[candidate.SourcePath]
+	if hasPrev {
+		displayPath = prev.Path
+	}
+
+	mtime, err := modTime(root, candidate.ReadPath)
+	if err != nil {
+		return ImportPreview{}, fmt.Errorf("ingest: reading file metadata: %w", err)
+	}
+
+	if hasPrev && prev.MTimeUnixNano == mtime && prev.EmbeddingModel == domainllm.EmbeddingModel {
+		skip, failure, checkErr := s.shouldSkipUnchanged(ctx, sessionID, prev)
+		if checkErr != nil {
+			return ImportPreview{}, fmt.Errorf("ingest: %s", failure)
+		}
+		if skip {
+			return ImportPreview{DisplayPath: displayPath, Skipped: true, SkippedReason: "unchanged since last import"}, nil
+		}
+	}
+
+	raw, err := fs.ReadFile(root, candidate.ReadPath)
+	if err != nil {
+		return ImportPreview{}, fmt.Errorf("ingest: reading file: %w", err)
+	}
+	original := string(raw)
+
+	isMarkdown := strings.EqualFold(path.Ext(candidate.ReadPath), ".md")
+	formatted, failed := s.formatNote(ctx, sessionID, original, isMarkdown)
+
+	var chunkCandidates []ChunkCandidate
+	if isMarkdown {
+		chunkCandidates = ChunkMarkdown(formatted)
+	} else {
+		chunkCandidates = ChunkText(formatted)
+	}
+
+	chunks := make([]ChunkPreview, len(chunkCandidates))
+	for i, c := range chunkCandidates {
+		charCount := runeLen(c.Content)
+		chunks[i] = ChunkPreview{
+			Heading:         c.Heading,
+			Content:         c.Content,
+			CharCount:       charCount,
+			EstimatedTokens: charCount / 4,
+		}
+	}
+
+	return ImportPreview{
+		DisplayPath:      displayPath,
+		OriginalContent:  original,
+		FormattedContent: formatted,
+		FormattingFailed: failed,
+		Stats:            computeFormattingStats(original, formatted),
+		Chunks:           chunks,
+	}, nil
 }
 
 // formatNote rewrites content into clean Markdown (isMarkdown) or
