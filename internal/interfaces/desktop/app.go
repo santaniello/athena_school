@@ -40,6 +40,10 @@ type App struct {
 	// real-runtime requirement as emit above. Tests override it with a
 	// fake to drive PickNotesFile without a real OS dialog.
 	openFile func(ctx context.Context, options wailsruntime.OpenDialogOptions) (string, error)
+	// saveFile defaults to wailsruntime.SaveFileDialog, which has the same
+	// real-runtime requirement as emit above. Tests override it with a
+	// fake to drive DownloadExampleNote without a real OS dialog.
+	saveFile func(ctx context.Context, options wailsruntime.SaveDialogOptions) (string, error)
 	// reloadApp defaults to wailsruntime.WindowReloadApp, which has the
 	// same real-runtime requirement as emit above. Tests override it with
 	// a fake to observe that ResetLocalData triggers a reload without a
@@ -77,6 +81,7 @@ func NewApp(
 		reset:         resetService,
 		emit:          wailsruntime.EventsEmit,
 		openFile:      wailsruntime.OpenFileDialog,
+		saveFile:      wailsruntime.SaveFileDialog,
 		reloadApp:     wailsruntime.WindowReloadApp,
 	}
 }

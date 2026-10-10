@@ -40,8 +40,16 @@ const (
 	// DefaultMinSimilarity discards chunks scoring below it.
 	DefaultMinSimilarity = 0.45
 	// DefaultSufficiency is the score a surviving chunk must meet or exceed
-	// for a RetrievalResult to be considered Sufficient.
-	DefaultSufficiency = 0.68
+	// for a RetrievalResult to be considered Sufficient. Recalibrated from
+	// 0.68 to 0.55: with strict-notes' query no longer carrying notes
+	// mode's "Topic: X" prefix (see
+	// specs/phases/phase-02-knowledge-engine/05-02-strict-notes-query-scope-and-sufficiency.md),
+	// real on/off-topic queries against the same note landed at ~0.60
+	// (on-topic floor) and ~0.47 (off-topic ceiling) — 0.55 sits at that
+	// margin's midpoint rather than hugging either edge. This is a global
+	// constant calibrated from one note's worth of real data, not a proven
+	// bound: see that spec's "Known risks".
+	DefaultSufficiency = 0.55
 )
 
 // ErrInvalidThresholds is returned by NewRetrievalThresholds when either
@@ -103,8 +111,14 @@ type RetrievalResult struct {
 }
 
 // Retriever performs one local-knowledge-base retrieval for a study
-// session's query. study.Service owns source-mode policy; every SourceMode
-// calls Retriever, so Retriever needs no mode parameter.
+// session, combining one or more query strings into a single result:
+// each is embedded and searched independently, then merged by chunk,
+// keeping the best score any one of them found — so a caller that wants to
+// search with more than one phrasing of the same question (see
+// QueryEnricher) never has to merge results itself. study.Service owns
+// source-mode policy; every SourceMode calls Retriever, so Retriever needs
+// no mode parameter, and no opinion on why a caller passed more than one
+// query.
 type Retriever interface {
-	Retrieve(ctx context.Context, sessionID, query string) (RetrievalResult, error)
+	Retrieve(ctx context.Context, sessionID string, queries []string) (RetrievalResult, error)
 }

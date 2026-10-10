@@ -8,6 +8,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// maxChunkChars no longer drives packParagraphs (its only production use —
+// see specs/phases/phase-02-knowledge-engine/03-01-chunking-by-paragraph.md
+// for why the multi-paragraph budget was removed). Kept here, test-only,
+// as a deliberately large size for exercising the still-unchanged "a
+// single paragraph is never split, however big" rule.
+const maxChunkChars = 2000
+
 func TestChunkMarkdown_singleSectionUnderBudget_isKeptWhole(t *testing.T) {
 	// Given a small document with one heading and a body well under the budget
 	source := "## Título\nCorpo curto o suficiente para não precisar de merge nem split, com bastante texto de enchimento para passar de duzentos caracteres no total do conteúdo desta seção única de teste."
@@ -102,6 +109,47 @@ func TestChunkMarkdown_sectionOverMaxChunkChars_splitsOnParagraphBoundary(t *tes
 	}
 }
 
+func TestChunkMarkdown_sectionBundlingTwoSubTopics_splitsOneChunkPerParagraph(t *testing.T) {
+	// Given the exact real-world heading section this spec was diagnosed
+	// against (trailing per-line spaces included — an Obsidian editing
+	// artifact that happens to be the difference between the "Invalidação"
+	// paragraph clearing minChunkChars or not; see
+	// specs/phases/phase-02-knowledge-engine/03-01-chunking-by-paragraph.md):
+	// an eviction-policy paragraph, an invalidation-policy paragraph, and a
+	// closing remark, each individually over minChunkChars
+	source := "### Políticas de Evicção e Invalidação do Cache  \n\n" +
+		"Políticas de Evicção:\n- Definem quais itens remover quando cache lota;\n" +
+		"\t- LRU: Remove o menos usado recentemente;    \n\t- LFU: Remove o menos usado frequentemente;    \n" +
+		"\t- FIFO: Remove o mais antigo;    \n\t- RR: Remove aleatoriamente \n\n" +
+		"Políticas de Invalidação do Cache:\n- Processo de remover ou marcar itens como inválidos    \n" +
+		"- Pode ser manual, lógica ou via TTL    \n- Consistência e atualização de dados    \n" +
+		"- Um dos maiores desafios de caching  \n\n" +
+		"OBS: É importante ter uma boa política de invalidação configurada para evitar que o cache " +
+		"lote e acabe entrando em uma política de evicção (evicção é um processo de defesa do cache " +
+		"fazendo com que o cache seja limpo e novos registros consigam ser cacheados) e acabe gastando " +
+		"mais processamento pois esse processo é mais custoso."
+
+	// When chunking it
+	chunks := ChunkMarkdown(source)
+
+	// Then it splits into three chunks — one per paragraph — instead of
+	// pooling both sub-topics (and the closing remark) into one diluted
+	// chunk, while every chunk still keeps the section's own heading. The
+	// heading line itself names both sub-topics ("Evicção e Invalidação"),
+	// so chunks[0] legitimately contains the word "Invalidação" as part of
+	// that shared heading text — what must not leak across chunks is the
+	// BODY content specific to the other sub-topic.
+	require.Len(t, chunks, 3)
+	assert.Contains(t, chunks[0].Content, "Políticas de Evicção:")
+	assert.NotContains(t, chunks[0].Content, "Políticas de Invalidação do Cache:")
+	assert.Contains(t, chunks[1].Content, "Políticas de Invalidação do Cache:")
+	assert.NotContains(t, chunks[1].Content, "LRU")
+	assert.Contains(t, chunks[2].Content, "OBS:")
+	for _, c := range chunks {
+		assert.Equal(t, "Políticas de Evicção e Invalidação do Cache", c.Heading)
+	}
+}
+
 func TestChunkMarkdown_sectionUnderMinChunkChars_mergesForwardIntoNext_dominantHeadingWins(t *testing.T) {
 	// Given a tiny stub section immediately followed by a much larger one
 	source := "## Stub\ntiny\n\n## Main\n" + exactlyNChars(1000)
@@ -128,6 +176,29 @@ func TestChunkMarkdown_shortFinalSection_mergesBackwardsIntoPredecessor(t *testi
 	assert.Equal(t, "Main", chunks[0].Heading)
 	assert.Contains(t, chunks[0].Content, "Stub")
 	assert.Contains(t, chunks[0].Content, "tiny")
+}
+
+func TestChunkMarkdown_sectionEndingInAShortParagraph_mergesBackwardWithinItsOwnSection_neverLeaksIntoTheNextSection(t *testing.T) {
+	// Given two heading sections, each with a paragraph well over
+	// minChunkChars on its own, where section A's own last paragraph is
+	// short enough to need merging — but A already has plenty of content
+	// of its own to merge backward into, so forward-merging into B's
+	// section is never actually necessary
+	source := "### Section A\n\n" + exactlyNChars(250) + "\n\nShort tail.\n\n### Section B\n\n" + exactlyNChars(250)
+
+	// When chunking it
+	chunks := ChunkMarkdown(source)
+
+	// Then the short tail merges backward into Section A's own chunk —
+	// never forward into Section B's, which would both mislabel it under
+	// the wrong heading and dilute Section B's chunk with A's unrelated
+	// content (the exact topic-dilution problem per-paragraph chunking was
+	// built to avoid)
+	require.Len(t, chunks, 2)
+	assert.Equal(t, "Section A", chunks[0].Heading)
+	assert.Contains(t, chunks[0].Content, "Short tail.")
+	assert.Equal(t, "Section B", chunks[1].Heading)
+	assert.NotContains(t, chunks[1].Content, "Short tail.")
 }
 
 func TestChunkMarkdown_onlySectionAndUndersized_isKeptAsIs(t *testing.T) {
@@ -255,9 +326,10 @@ func TestChunkMarkdown_sectionContent_includesItsOwnHeadingLineVerbatim(t *testi
 	assert.True(t, strings.HasPrefix(chunks[1].Content, "## Two\n"), "got: %q", chunks[1].Content)
 }
 
-func TestPackParagraphs_combinedParagraphsExactlyAtMaxChunkChars_packIntoOnePiece(t *testing.T) {
-	// Given two paragraphs whose combined length, plus the "\n\n" separator,
-	// is exactly maxChunkChars
+func TestPackParagraphs_twoSubstantialParagraphs_alwaysProduceSeparatePieces_evenWellUnderBudget(t *testing.T) {
+	// Given two paragraphs, each well over minChunkChars on its own, whose
+	// combined length (plus the "\n\n" separator) would have comfortably
+	// fit together under the old maxChunkChars budget
 	para1 := exactlyNChars(1000)
 	para2 := exactlyNChars(maxChunkChars - 1000 - 2)
 	content := para1 + "\n\n" + para2
@@ -265,22 +337,30 @@ func TestPackParagraphs_combinedParagraphsExactlyAtMaxChunkChars_packIntoOnePiec
 	// When packing them
 	pieces := packParagraphs(content, "H", 0)
 
-	// Then both paragraphs stay packed into a single piece
-	require.Len(t, pieces, 1)
-	assert.Equal(t, maxChunkChars, runeLen(pieces[0].Content))
+	// Then packing no longer combines them just because they'd fit — each
+	// substantial paragraph is its own piece, regardless of budget
+	require.Len(t, pieces, 2)
+	assert.Equal(t, para1, pieces[0].Content)
+	assert.Equal(t, para2, pieces[1].Content)
 }
 
-func TestPackParagraphs_combinedParagraphsOneOverMaxChunkChars_splitsIntoTwoPieces(t *testing.T) {
-	// Given the same two paragraphs, now one character over the budget
-	para1 := exactlyNChars(1000)
-	para2 := exactlyNChars(maxChunkChars - 1000 - 2 + 1)
+func TestPackParagraphs_paragraphsUnderMinChunkCharsAreNotSplitApart_packingIsNotInvolved(t *testing.T) {
+	// Given two tiny paragraphs, each individually under minChunkChars —
+	// packParagraphs itself never merges anything (that's mergeUndersized's
+	// job), so each still comes out as its own piece here
+	para1 := "tiny one"
+	para2 := "tiny two"
 	content := para1 + "\n\n" + para2
 
 	// When packing them
 	pieces := packParagraphs(content, "H", 0)
 
-	// Then they no longer fit together and split into two pieces
+	// Then packParagraphs emits one piece per paragraph regardless of size;
+	// merging small pieces back together is mergeUndersized's
+	// responsibility, exercised separately via ChunkMarkdown/ChunkText
 	require.Len(t, pieces, 2)
+	assert.Equal(t, para1, pieces[0].Content)
+	assert.Equal(t, para2, pieces[1].Content)
 }
 
 func TestChunkMarkdown_sectionExactlyAtMinChunkChars_isNotMerged(t *testing.T) {

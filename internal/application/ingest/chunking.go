@@ -15,15 +15,12 @@ import (
 	"github.com/yuin/goldmark/text"
 )
 
-// maxChunkChars/minChunkChars bound a chunk's size in characters (runes),
+// minChunkChars bounds a chunk's minimum size in characters (runes),
 // approximating tokens at ~4 chars/token (conservative for Portuguese,
-// which runs closer to 3.5 chars/token). A budget, not a hard ceiling: a
+// which runs closer to 3.5 chars/token). A floor, not a hard ceiling: a
 // merge that keeps short content from being dropped is allowed to push a
-// chunk over maxChunkChars.
-const (
-	maxChunkChars = 2000
-	minChunkChars = 200
-)
+// chunk arbitrarily large — see mergeUndersized.
+const minChunkChars = 200
 
 // ChunkCandidate is one heading- or paragraph-scoped slice of raw source
 // text produced by ChunkMarkdown or ChunkText, before it is assembled into
@@ -41,13 +38,20 @@ type ChunkCandidate struct {
 	Start, End int
 }
 
-// ChunkMarkdown splits raw markdown source into heading-scoped chunks
-// bounded by maxChunkChars/minChunkChars. Heading boundaries are flat: any
-// level 1-3 heading starts a new section regardless of nesting, so a
-// chunk's Heading is always the text of the single heading that opened its
-// section, never a breadcrumb. Text before the first heading (or the
-// entire document, when it has no H1-H3 at all) falls back to the
-// paragraph-splitting behaviour of ChunkText, with Heading = "".
+// ChunkMarkdown splits raw markdown source into heading-scoped chunks, one
+// per paragraph (see packParagraphs), folding anything under minChunkChars
+// into a neighbour (see mergeUndersized) — first within its own section, so
+// a section's own short trailing (or leading) paragraph merges backward (or
+// forward) into that same section's content before ever being considered
+// for a cross-section merge; only a section that is still undersized after
+// that first pass is folded into a neighbouring section. Heading boundaries
+// are flat: any level 1-3 heading starts a new section regardless of
+// nesting, so a chunk's Heading is always the text of the single heading
+// that opened its section, never a breadcrumb — so a section whose own
+// heading bundles more than one sub-topic still ends up as one chunk per
+// paragraph, not one diluted chunk for the whole section. Text before the
+// first heading (or the entire document, when it has no H1-H3 at all) falls
+// back to the paragraph-splitting behaviour of ChunkText, with Heading = "".
 func ChunkMarkdown(source string) []ChunkCandidate {
 	rawSections := findHeadingSections(source)
 	if rawSections == nil {
@@ -56,15 +60,16 @@ func ChunkMarkdown(source string) []ChunkCandidate {
 
 	var pieces []ChunkCandidate
 	for _, section := range rawSections {
-		pieces = append(pieces, packParagraphs(section.Content, section.Heading, section.Start)...)
+		sectionPieces := packParagraphs(section.Content, section.Heading, section.Start)
+		pieces = append(pieces, mergeUndersized(sectionPieces)...)
 	}
 	return mergeUndersized(pieces)
 }
 
 // ChunkText splits raw plain-text source on paragraph (blank-line)
-// boundaries under the same budget as ChunkMarkdown, with Heading always
-// "". Used for .txt files and as ChunkMarkdown's fallback for markdown
-// with no H1-H3 heading.
+// boundaries, the same way ChunkMarkdown does, with Heading always "".
+// Used for .txt files and as ChunkMarkdown's fallback for markdown with no
+// H1-H3 heading.
 func ChunkText(source string) []ChunkCandidate {
 	return mergeUndersized(packParagraphs(source, "", 0))
 }
@@ -216,58 +221,32 @@ func splitParagraphs(content string) []paragraphSpan {
 	return spans
 }
 
-// packParagraphs greedily packs content's paragraphs into pieces no larger
-// than maxChunkChars, never splitting a paragraph itself — a single
-// paragraph over budget is kept whole as its own oversized piece. Every
-// piece carries heading unchanged. baseOffset is content's own byte offset
-// within the ultimate document source, so each piece's Start/End — the
-// first paragraph's start and the last paragraph's end, per document order
-// — come out as absolute offsets into that source.
+// packParagraphs turns each of content's paragraphs into its own piece,
+// never combining two paragraphs into one regardless of their combined
+// size — a heading section whose own author bundled more than one
+// sub-topic into separate paragraphs ends up as one chunk per sub-topic,
+// not one diluted chunk covering all of them. An oversized single
+// paragraph is still never split; it is simply a large piece, the same way
+// it always has been. Every piece carries heading unchanged. baseOffset is
+// content's own byte offset within the ultimate document source, so each
+// piece's Start/End come out as absolute offsets into that source.
+// Folding anything under minChunkChars into a neighbour is
+// mergeUndersized's job, not this function's.
 func packParagraphs(content, heading string, baseOffset int) []ChunkCandidate {
 	paragraphs := splitParagraphs(content)
 	if len(paragraphs) == 0 {
 		return nil
 	}
 
-	var pieces []ChunkCandidate
-	var current []string
-	var currentStart, currentEnd int
-	currentLen := 0
-
-	flush := func() {
-		if len(current) == 0 {
-			return
-		}
-		pieces = append(pieces, ChunkCandidate{
+	pieces := make([]ChunkCandidate, len(paragraphs))
+	for i, p := range paragraphs {
+		pieces[i] = ChunkCandidate{
 			Heading: heading,
-			Content: strings.Join(current, "\n\n"),
-			Start:   baseOffset + currentStart,
-			End:     baseOffset + currentEnd,
-		})
-		current = nil
-		currentLen = 0
-	}
-
-	for _, p := range paragraphs {
-		pLen := runeLen(p.Text)
-		// current's own length guards this the same way flush does (a
-		// flush on an empty current is a no-op below), so the length
-		// check alone decides whether to close the piece being built.
-		if currentLen+2+pLen > maxChunkChars { // +2 for the "\n\n" separator
-			flush()
-		}
-		if len(current) == 0 {
-			currentStart = p.Start
-		}
-		current = append(current, p.Text)
-		currentEnd = p.End
-		if len(current) == 1 {
-			currentLen = pLen
-		} else {
-			currentLen += 2 + pLen
+			Content: p.Text,
+			Start:   baseOffset + p.Start,
+			End:     baseOffset + p.End,
 		}
 	}
-	flush()
 	return pieces
 }
 
