@@ -60,7 +60,12 @@ func TestHydeEnricher_propagatesProviderError(t *testing.T) {
 	// Given a provider whose Chat call fails
 	llm := llmmocks.NewMockProvider(t)
 	providerErr := errors.New("rate limited")
-	llm.EXPECT().Chat(mock.Anything, mock.AnythingOfType("llm.ChatRequest")).Return(domainllm.ChatResponse{}, providerErr).Once()
+	llm.EXPECT().
+		Chat(mock.Anything, mock.MatchedBy(func(req domainllm.ChatRequest) bool {
+			return req.SessionID == "session-1" && req.Task == domainllm.TaskQueryEnrichment
+		})).
+		Return(domainllm.ChatResponse{}, providerErr).
+		Once()
 	enricher := NewHydeEnricher(llm)
 
 	// When enriching a query
@@ -69,4 +74,21 @@ func TestHydeEnricher_propagatesProviderError(t *testing.T) {
 	// Then the error is propagated, wrapped
 	require.Error(t, err)
 	assert.ErrorIs(t, err, providerErr)
+}
+
+func TestHydeEnricher_returnsError_onBlankResponse(t *testing.T) {
+	// Given a provider that returns a whitespace-only (or empty) passage —
+	// a degenerate completion, not a real hypothetical passage
+	for _, content := range []string{"", "   ", "\n\t "} {
+		llm := llmmocks.NewMockProvider(t)
+		llm.EXPECT().Chat(mock.Anything, mock.Anything).Return(domainllm.ChatResponse{Content: content}, nil).Once()
+		enricher := NewHydeEnricher(llm)
+
+		// When enriching a query
+		_, err := enricher.Enrich(context.Background(), "session-1", "Redis", "Quais são as políticas de evicção")
+
+		// Then it errors instead of returning a blank query that would
+		// still pay for a useless embedding call downstream
+		require.Error(t, err, "content = %q", content)
+	}
 }

@@ -2,7 +2,9 @@ package knowledge
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
 )
@@ -29,7 +31,9 @@ func NewHydeEnricher(llm domainllm.Provider) *HydeEnricher {
 }
 
 // Enrich generates the hypothetical passage for topic/content via a single,
-// non-streamed, cheap-tier chat call.
+// non-streamed, cheap-tier chat call. A blank (or whitespace-only) response
+// errors instead of returning it as a usable query — Retrieve would still
+// embed and search with it, paying for a call that can't possibly help.
 func (e *HydeEnricher) Enrich(ctx context.Context, sessionID, topic, content string) (string, error) {
 	resp, err := e.llm.Chat(ctx, domainllm.ChatRequest{
 		SessionID: sessionID,
@@ -42,5 +46,9 @@ func (e *HydeEnricher) Enrich(ctx context.Context, sessionID, topic, content str
 	if err != nil {
 		return "", fmt.Errorf("knowledge: generating hypothetical passage: %w", err)
 	}
-	return resp.Content, nil
+	passage := strings.TrimSpace(resp.Content)
+	if passage == "" {
+		return "", errors.New("knowledge: generating hypothetical passage: empty response")
+	}
+	return passage, nil
 }

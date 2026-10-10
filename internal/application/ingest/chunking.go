@@ -40,14 +40,18 @@ type ChunkCandidate struct {
 
 // ChunkMarkdown splits raw markdown source into heading-scoped chunks, one
 // per paragraph (see packParagraphs), folding anything under minChunkChars
-// into a neighbour (see mergeUndersized). Heading boundaries are flat: any
-// level 1-3 heading starts a new section regardless of nesting, so a
-// chunk's Heading is always the text of the single heading that opened its
-// section, never a breadcrumb — so a section whose own heading bundles more
-// than one sub-topic still ends up as one chunk per paragraph, not one
-// diluted chunk for the whole section. Text before the first heading (or
-// the entire document, when it has no H1-H3 at all) falls back to the
-// paragraph-splitting behaviour of ChunkText, with Heading = "".
+// into a neighbour (see mergeUndersized) — first within its own section, so
+// a section's own short trailing (or leading) paragraph merges backward (or
+// forward) into that same section's content before ever being considered
+// for a cross-section merge; only a section that is still undersized after
+// that first pass is folded into a neighbouring section. Heading boundaries
+// are flat: any level 1-3 heading starts a new section regardless of
+// nesting, so a chunk's Heading is always the text of the single heading
+// that opened its section, never a breadcrumb — so a section whose own
+// heading bundles more than one sub-topic still ends up as one chunk per
+// paragraph, not one diluted chunk for the whole section. Text before the
+// first heading (or the entire document, when it has no H1-H3 at all) falls
+// back to the paragraph-splitting behaviour of ChunkText, with Heading = "".
 func ChunkMarkdown(source string) []ChunkCandidate {
 	rawSections := findHeadingSections(source)
 	if rawSections == nil {
@@ -56,7 +60,8 @@ func ChunkMarkdown(source string) []ChunkCandidate {
 
 	var pieces []ChunkCandidate
 	for _, section := range rawSections {
-		pieces = append(pieces, packParagraphs(section.Content, section.Heading, section.Start)...)
+		sectionPieces := packParagraphs(section.Content, section.Heading, section.Start)
+		pieces = append(pieces, mergeUndersized(sectionPieces)...)
 	}
 	return mergeUndersized(pieces)
 }

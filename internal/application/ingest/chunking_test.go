@@ -178,6 +178,29 @@ func TestChunkMarkdown_shortFinalSection_mergesBackwardsIntoPredecessor(t *testi
 	assert.Contains(t, chunks[0].Content, "tiny")
 }
 
+func TestChunkMarkdown_sectionEndingInAShortParagraph_mergesBackwardWithinItsOwnSection_neverLeaksIntoTheNextSection(t *testing.T) {
+	// Given two heading sections, each with a paragraph well over
+	// minChunkChars on its own, where section A's own last paragraph is
+	// short enough to need merging — but A already has plenty of content
+	// of its own to merge backward into, so forward-merging into B's
+	// section is never actually necessary
+	source := "### Section A\n\n" + exactlyNChars(250) + "\n\nShort tail.\n\n### Section B\n\n" + exactlyNChars(250)
+
+	// When chunking it
+	chunks := ChunkMarkdown(source)
+
+	// Then the short tail merges backward into Section A's own chunk —
+	// never forward into Section B's, which would both mislabel it under
+	// the wrong heading and dilute Section B's chunk with A's unrelated
+	// content (the exact topic-dilution problem per-paragraph chunking was
+	// built to avoid)
+	require.Len(t, chunks, 2)
+	assert.Equal(t, "Section A", chunks[0].Heading)
+	assert.Contains(t, chunks[0].Content, "Short tail.")
+	assert.Equal(t, "Section B", chunks[1].Heading)
+	assert.NotContains(t, chunks[1].Content, "Short tail.")
+}
+
 func TestChunkMarkdown_onlySectionAndUndersized_isKeptAsIs(t *testing.T) {
 	// Given a document with exactly one, tiny section
 	source := "## Lonely\ntiny body"
