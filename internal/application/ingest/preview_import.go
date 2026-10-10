@@ -12,18 +12,26 @@ import (
 
 // noteFormattingMarkdownPrompt asks the model to rewrite a .md source into
 // clean Markdown that chunks well: normalized heading hierarchy, one
-// paragraph per sub-topic, proper bullet syntax, export artifacts stripped.
-// It must preserve meaning, facts, numbers and language exactly — this is a
-// rewrite for structure, never a summary. See
+// paragraph per sub-topic, proper bullet syntax, export artifacts stripped
+// — and, critically, a blank line between any two list items that each
+// define a distinct term, so a tight list never stays one diluted chunk.
+// Diagnosed from a real session (see TestNoteFormattingPrompts_
+// coverBundledListDefinitions): a cache note's eviction-policy bullets
+// (LRU/LFU/FIFO/RR, no blank line between them) chunked as one block, and
+// "FIFO"/"Random Replacement" scored below Sufficiency against it even
+// though "LRU"/"LFU" — listed first, more prominent — happened to clear
+// the bar. It must preserve meaning, facts, numbers and language exactly
+// — this is a rewrite for structure, never a summary. See
 // specs/phases/phase-02-knowledge-engine/20-import-review-and-formatting.md.
-const noteFormattingMarkdownPrompt = "Rewrite the note below as clean Markdown to improve retrieval chunking: normalize heading levels (H1-H3), split run-on prose into one paragraph per sub-topic, turn ad-hoc \"-\"/\"*\" lists into proper Markdown bullets, and strip page-break or export artifacts. Preserve the original meaning, facts, numbers and language exactly — never summarize, add, or remove information. Output only the rewritten Markdown, nothing else."
+const noteFormattingMarkdownPrompt = "Rewrite the note below as clean Markdown to improve retrieval chunking: normalize heading levels (H1-H3), split run-on prose into one paragraph per sub-topic, and turn ad-hoc \"-\"/\"*\" lists into proper Markdown bullets. When a list enumerates several distinct, separately-definable items — one named policy, term or algorithm per item, each with its own explanation — put a blank line between every item so each becomes its own chunk; never leave two or more distinct definitions bundled into one paragraph just because they share a list. Strip page-break or export artifacts. Preserve the original meaning, facts, numbers and language exactly — never summarize, add, or remove information. Output only the rewritten Markdown, nothing else."
 
 // noteFormattingPlainTextPrompt is noteFormattingMarkdownPrompt's
 // counterpart for a .txt source: ChunkText never interprets Markdown
 // syntax, so asking for headings/bullets here would just leave literal
 // "##"/"-" characters sitting in the stored text. It only asks for
-// well-structured plain-text paragraphs.
-const noteFormattingPlainTextPrompt = "Rewrite the note below as well-structured plain text to improve retrieval chunking: split run-on prose into one paragraph per sub-topic, and strip page-break or export artifacts. Do not use Markdown syntax (no \"#\" headings, no \"-\"/\"*\" bullets) — plain paragraphs only. Preserve the original meaning, facts, numbers and language exactly — never summarize, add, or remove information. Output only the rewritten text, nothing else."
+// well-structured plain-text paragraphs, with the same blank-line-between-
+// distinct-definitions rule.
+const noteFormattingPlainTextPrompt = "Rewrite the note below as well-structured plain text to improve retrieval chunking: split run-on prose into one paragraph per sub-topic. When a list enumerates several distinct, separately-definable items — one named policy, term or algorithm per item, each with its own explanation — put a blank line between every item so each becomes its own chunk; never leave two or more distinct definitions bundled into one paragraph just because they share a list. Strip page-break or export artifacts. Do not use Markdown syntax (no \"#\" headings, no \"-\"/\"*\" bullets) — plain paragraphs only. Preserve the original meaning, facts, numbers and language exactly — never summarize, add, or remove information. Output only the rewritten text, nothing else."
 
 // FormattingStats are deterministic, verifiable structure counts comparing
 // a note's original and formatted text — never a model's own narrated

@@ -291,6 +291,23 @@ func TestPreviewImport_formattingFails_fallsBackToChunkingTheOriginalContent(t *
 	assert.Equal(t, original, preview.Chunks[0].Content)
 }
 
+// Diagnosed from a real study session (Day 05 - Estratégias de Cache.md,
+// see the "Cache" session's message_sources): LRU/LFU/FIFO/RR were all
+// listed as a single tight bulleted list with no blank line between
+// items, so chunking-by-paragraph (2.3.1) kept all four in one chunk —
+// "LRU" and "LFU" scored high enough to clear Sufficiency against that
+// diluted chunk, but "FIFO" and "Random Replacement" did not, producing
+// "Nenhum conhecimento local foi encontrado" for two policies covered by
+// the very same imported note. Both prompts must explicitly ask the
+// formatter to split this pattern — "turn ad-hoc lists into proper
+// Markdown bullets" alone does not, since the note's bullets were already
+// proper Markdown syntax; the problem was never syntax, it was four
+// distinct definitions sharing one paragraph.
+func TestNoteFormattingPrompts_coverBundledListDefinitions(t *testing.T) {
+	assert.Contains(t, noteFormattingMarkdownPrompt, "blank line")
+	assert.Contains(t, noteFormattingPlainTextPrompt, "blank line")
+}
+
 func TestComputeFormattingStats_countsHeadingsAndParagraphsBeforeAndAfter(t *testing.T) {
 	// Given a messy, heading-less original and a formatted version split
 	// into one heading and two paragraphs
