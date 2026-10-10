@@ -142,6 +142,132 @@ func (a *App) ImportFile(sessionID, selectedPath string) error {
 	return nil
 }
 
+// ChunkPreviewResult is the desktop-facing DTO for one would-be chunk shown
+// in the Review dialog before import is approved. See
+// specs/phases/phase-02-knowledge-engine/20-import-review-and-formatting.md.
+type ChunkPreviewResult struct {
+	Heading         string `json:"heading"`
+	Content         string `json:"content"`
+	CharCount       int    `json:"charCount"`
+	EstimatedTokens int    `json:"estimatedTokens"`
+}
+
+// FormattingStatsResult is the desktop-facing DTO for PreviewImport's
+// before/after structural counts.
+type FormattingStatsResult struct {
+	HeadingsBefore   int `json:"headingsBefore"`
+	HeadingsAfter    int `json:"headingsAfter"`
+	ParagraphsBefore int `json:"paragraphsBefore"`
+	ParagraphsAfter  int `json:"paragraphsAfter"`
+}
+
+// ImportPreviewResult is the desktop-facing DTO for PreviewImport's result.
+// Skipped is true when the file is unchanged since its last import — the
+// Review dialog is not opened for it at all.
+type ImportPreviewResult struct {
+	DisplayPath      string                `json:"displayPath"`
+	OriginalContent  string                `json:"originalContent"`
+	FormattedContent string                `json:"formattedContent"`
+	FormattingFailed bool                  `json:"formattingFailed"`
+	Stats            FormattingStatsResult `json:"stats"`
+	Chunks           []ChunkPreviewResult  `json:"chunks"`
+	Skipped          bool                  `json:"skipped"`
+	SkippedReason    string                `json:"skippedReason"`
+}
+
+func toImportPreviewResult(p ingest.ImportPreview) ImportPreviewResult {
+	chunks := make([]ChunkPreviewResult, len(p.Chunks))
+	for i, c := range p.Chunks {
+		chunks[i] = ChunkPreviewResult{
+			Heading: c.Heading, Content: c.Content, CharCount: c.CharCount, EstimatedTokens: c.EstimatedTokens,
+		}
+	}
+	return ImportPreviewResult{
+		DisplayPath:      p.DisplayPath,
+		OriginalContent:  p.OriginalContent,
+		FormattedContent: p.FormattedContent,
+		FormattingFailed: p.FormattingFailed,
+		Stats: FormattingStatsResult{
+			HeadingsBefore:   p.Stats.HeadingsBefore,
+			HeadingsAfter:    p.Stats.HeadingsAfter,
+			ParagraphsBefore: p.Stats.ParagraphsBefore,
+			ParagraphsAfter:  p.Stats.ParagraphsAfter,
+		},
+		Chunks:        chunks,
+		Skipped:       p.Skipped,
+		SkippedReason: p.SkippedReason,
+	}
+}
+
+// PreviewImport reformats and chunks selectedPath without persisting
+// anything — no embeddings, no database write. It opens the same os.Root
+// around the file's parent directory ImportFile does, but is a plain
+// request/response call: unlike ImportFile/ConfirmImport, it never emits
+// an "ingest:*" event, since nothing it does is a durable operation a
+// progress dialog would need to track.
+func (a *App) PreviewImport(sessionID, selectedPath string) (ImportPreviewResult, error) {
+	absolutePath, err := filepath.Abs(filepath.Clean(selectedPath))
+	if err != nil {
+		return ImportPreviewResult{}, err
+	}
+
+	dir := filepath.Dir(absolutePath)
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return ImportPreviewResult{}, err
+	}
+	defer func() {
+		if closeErr := root.Close(); closeErr != nil {
+			log.Printf("closing note preview root %q: %v", dir, closeErr)
+		}
+	}()
+
+	preview, err := a.ingest.PreviewImport(a.ctx, sessionID, root.FS(), filepath.ToSlash(dir), filepath.Base(absolutePath))
+	if err != nil {
+		return ImportPreviewResult{}, err
+	}
+	return toImportPreviewResult(preview), nil
+}
+
+// ConfirmImport persists exactly approvedContent — the text a prior
+// PreviewImport call returned and the user approved in the Review dialog
+// — as selectedPath's chunks and shadow Item, streaming progress via the
+// same "ingest:progress"/"ingest:done"/"ingest:error" events ImportFile
+// emits, so IngestProgressDialog needs no new event wiring.
+func (a *App) ConfirmImport(sessionID, selectedPath, approvedContent string) error {
+	absolutePath, err := filepath.Abs(filepath.Clean(selectedPath))
+	if err != nil {
+		a.emit(a.ctx, eventIngestError, err.Error())
+		return err
+	}
+
+	dir := filepath.Dir(absolutePath)
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		a.emit(a.ctx, eventIngestError, err.Error())
+		return err
+	}
+	defer func() {
+		if closeErr := root.Close(); closeErr != nil {
+			log.Printf("closing note confirm root %q: %v", dir, closeErr)
+		}
+	}()
+
+	summary, err := a.ingest.ConfirmImport(
+		a.ctx, sessionID, root.FS(), filepath.ToSlash(dir), filepath.Base(absolutePath), approvedContent,
+		func(p ingest.Progress) error {
+			a.emit(a.ctx, eventIngestProgress, toIngestProgressResult(p))
+			return nil
+		},
+	)
+	if err != nil {
+		a.emit(a.ctx, eventIngestError, err.Error())
+		return err
+	}
+	a.emit(a.ctx, eventIngestDone, toIngestSummaryResult(summary))
+	return nil
+}
+
 // SessionSourceResult is the desktop-facing DTO for one document a session
 // has imported, listed in the Sources panel. See
 // specs/phases/phase-02-knowledge-engine/17-session-sources-panel.md.
