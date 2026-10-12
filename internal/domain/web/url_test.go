@@ -19,6 +19,7 @@ func TestCanonicalURL_succeeds_normalizingEquivalentForms(t *testing.T) {
 		{"drops the default https port", "https://example.com:443/a", "https://example.com/a"},
 		{"drops the default http port", "http://example.com:80/a", "http://example.com/a"},
 		{"adds a root path to a bare host", "https://example.com", "https://example.com/"},
+		{"keeps the brackets of an IPv6 host", "http://[2001:DB8::1]:8080/a", "http://[2001:db8::1]:8080/a"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

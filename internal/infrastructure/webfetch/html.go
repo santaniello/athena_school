@@ -27,6 +27,38 @@ var blockElements = map[atom.Atom]bool{
 	atom.Hr: true,
 }
 
+// chromeRoles are ARIA roles of page furniture rather than content.
+var chromeRoles = map[string]bool{
+	"navigation": true, "banner": true, "contentinfo": true, "complementary": true, "search": true,
+}
+
+// isSkipped reports whether n is an element that never contributes readable
+// text: a noise tag, a region ARIA marks as page chrome, or one hidden from
+// everyone.
+func isSkipped(n *html.Node) bool {
+	if n.Type != html.ElementNode {
+		return false
+	}
+	if skippedElements[n.DataAtom] {
+		return true
+	}
+	for _, attr := range n.Attr {
+		switch attr.Key {
+		case "role":
+			if chromeRoles[strings.ToLower(attr.Val)] {
+				return true
+			}
+		case "hidden":
+			return true
+		case "aria-hidden":
+			if strings.EqualFold(attr.Val, "true") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 var headingLevels = map[atom.Atom]int{
 	atom.H1: 1, atom.H2: 2, atom.H3: 3, atom.H4: 4, atom.H5: 5, atom.H6: 6,
 }
@@ -109,7 +141,7 @@ func rawText(n *html.Node) string {
 	var b strings.Builder
 	var visit func(*html.Node)
 	visit = func(n *html.Node) {
-		if n.Type == html.ElementNode && skippedElements[n.DataAtom] {
+		if isSkipped(n) {
 			return
 		}
 		if n.Type == html.TextNode {
@@ -174,7 +206,7 @@ func (w *markdownWriter) walk(n *html.Node) {
 	case html.TextNode:
 		w.text(n.Data)
 	case html.ElementNode:
-		if skippedElements[n.DataAtom] {
+		if isSkipped(n) {
 			return
 		}
 		w.element(n)

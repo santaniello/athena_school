@@ -134,3 +134,36 @@ func TestHTMLToMarkdown_returnsEmptyMarkdown_whenThereIsNoReadableText(t *testin
 	assert.NoError(t, err)
 	assert.Empty(t, got)
 }
+
+func TestHTMLToMarkdown_dropsRegionsMarkedAsChromeOrHidden(t *testing.T) {
+	// Given a page whose navigation, banner, search and hidden regions are
+	// marked up with ARIA roles or the hidden attributes rather than tags
+	page := `<body>
+		<div role="navigation">Languages: English Deutsch</div>
+		<div role="banner">Site header</div>
+		<div role="search">Search box</div>
+		<div role="contentinfo">Legal</div>
+		<div role="complementary">Related</div>
+		<div hidden>Hidden text</div>
+		<div aria-hidden="true">Decorative</div>
+		<p>Real content.</p></body>`
+
+	// When converting it to Markdown
+	_, got, err := htmlToMarkdown(strings.NewReader(page))
+
+	// Then only the readable content remains
+	assert.NoError(t, err)
+	assert.Equal(t, "Real content.", got)
+}
+
+func TestHTMLToMarkdown_keepsRegionsWithOtherRolesOrAriaAttributes(t *testing.T) {
+	// Given content marked with roles that are not page chrome
+	page := `<body><div role="article">Kept article.</div><div aria-hidden="false">Kept too.</div></body>`
+
+	// When converting it to Markdown
+	_, got, err := htmlToMarkdown(strings.NewReader(page))
+
+	// Then nothing is dropped
+	assert.NoError(t, err)
+	assert.Equal(t, "Kept article.\n\nKept too.", got)
+}
