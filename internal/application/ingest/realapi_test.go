@@ -7,7 +7,6 @@ import (
 	"testing/fstest"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
@@ -41,7 +40,7 @@ func realAPIService(t *testing.T) *Service {
 	t.Helper()
 	client := openrouter.NewClient("", os.Getenv("OPENROUTER_API_KEY"), noOpUsageRecorder{})
 	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
-	ingestedFiles.EXPECT().ListBySession(mock.Anything, testSessionID).
+	ingestedFiles.EXPECT().ListBySession(context.Background(), testSessionID).
 		Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
 	return &Service{index: passingPreviewIndexGuard(t), ingestedFiles: ingestedFiles, llm: client}
 }
@@ -101,6 +100,18 @@ func TestRealAPI_PortugueseNote_IsNotTranslatedToEnglish(t *testing.T) {
 
 	t.Logf("formattingFailed=%v failedSections=%+v formatted=%q",
 		preview.FormattingFailed, preview.FailedSections, preview.FormattedContent)
+
+	// A fallback can also happen for an unrelated reason (a Provider error
+	// or timeout) — that would trivially leave FormattedContent in
+	// Portuguese too, without ever exercising the actual property this
+	// test diagnoses. Fail loudly in that case instead of letting an
+	// unrelated API hiccup masquerade as "translation correctly caught."
+	if preview.FormattingFailed {
+		require.NotEmpty(t, preview.FailedSections, "FormattingFailed but no FailedSections recorded")
+		reason := preview.FailedSections[0].Reason
+		require.Contains(t, reason, "language changed",
+			"formatting fell back for a reason other than a caught translation: %s", reason)
+	}
 
 	assert.Equal(t, "pt", detectDominantLanguage(preview.FormattedContent),
 		"the formatted text must stay Portuguese — a translation must be caught by fidelity validation and fall back")
