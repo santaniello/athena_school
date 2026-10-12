@@ -12,6 +12,7 @@ import {
 import { Progress } from '@/components/ui/progress'
 import {
   confirmImport,
+  confirmLinkImport,
   importFile,
   onIngestDone,
   onIngestError,
@@ -32,6 +33,11 @@ interface IngestProgressDialogProps {
   // dialog changes. See
   // specs/phases/phase-02-knowledge-engine/20-import-review-and-formatting.md.
   formattedContent?: string
+  // Set (with formattedContent) for a link import: the canonical URL a link
+  // preview returned. Its presence selects confirmLinkImport over
+  // confirmImport — path is unused for a link. See
+  // specs/phases/phase-02-knowledge-engine/21-add-link-source.md.
+  linkUrl?: string
   onClose: () => void
 }
 
@@ -45,6 +51,7 @@ export function IngestProgressDialog({
   sessionId,
   path,
   formattedContent,
+  linkUrl,
   onClose,
 }: IngestProgressDialogProps) {
   const [ingestProgress, setIngestProgress] = useState<IngestProgress | null>(null)
@@ -75,10 +82,14 @@ export function IngestProgressDialog({
     // confirmImport over importFile: it is only ever set once a Review
     // dialog's preview has been approved, so this call never re-reads or
     // re-formats the file — it persists exactly the approved text.
-    const run =
-      formattedContent !== undefined
-        ? confirmImport(sessionId ?? '', path ?? '', formattedContent)
-        : importFile(sessionId ?? '', path ?? '')
+    let run: Promise<void>
+    if (formattedContent !== undefined && linkUrl !== undefined) {
+      run = confirmLinkImport(sessionId ?? '', linkUrl, formattedContent)
+    } else if (formattedContent !== undefined) {
+      run = confirmImport(sessionId ?? '', path ?? '', formattedContent)
+    } else {
+      run = importFile(sessionId ?? '', path ?? '')
+    }
     void run.catch(() => {
       if (!active) return
       setErrorMessage((current) => current || 'Failed to import notes. Please try again.')
@@ -96,7 +107,7 @@ export function IngestProgressDialog({
       setIngestSummary(null)
       setErrorMessage('')
     }
-  }, [open, sessionId, path, formattedContent])
+  }, [open, sessionId, path, formattedContent, linkUrl])
 
   const finished = ingestSummary !== null || errorMessage !== ''
 

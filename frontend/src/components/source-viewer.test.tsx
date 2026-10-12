@@ -3,10 +3,16 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { SourceViewer } from './source-viewer'
 import { getSessionSourceDocument } from '@/lib/sources'
+import { openOriginalLink } from '@/lib/ingest'
 
 vi.mock('@/lib/sources', () => ({
   getSessionSourceDocument: vi.fn(),
 }))
+
+vi.mock('@/lib/ingest', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/ingest')>()
+  return { ...original, openOriginalLink: vi.fn() }
+})
 
 const document = {
   itemId: 'item-1',
@@ -17,6 +23,33 @@ const document = {
     { text: 'The scheduler multiplexes M:N goroutines.', chunkId: 'chunk-1' },
   ],
 }
+
+describe('SourceViewer — link sources', () => {
+  const linkDocument = { ...document, path: 'https://example.com/article' }
+
+  it('offers "Open original" for a source stored under an http(s) URL', async () => {
+    // Given a document whose stored path is a web URL
+    vi.mocked(getSessionSourceDocument).mockResolvedValueOnce(linkDocument)
+    const user = userEvent.setup()
+    render(<SourceViewer sessionId="session-1" itemId="item-1" onBack={vi.fn()} />)
+
+    // When clicking Open original
+    await user.click(await screen.findByRole('button', { name: 'Open original' }))
+
+    // Then the page opens in the system browser
+    expect(openOriginalLink).toHaveBeenCalledExactlyOnceWith('https://example.com/article')
+  })
+
+  it('does not offer "Open original" for a file source', async () => {
+    // Given a document imported from a file
+    vi.mocked(getSessionSourceDocument).mockResolvedValueOnce(document)
+    render(<SourceViewer sessionId="session-1" itemId="item-1" onBack={vi.fn()} />)
+
+    // Then there is no original page to open
+    await screen.findByText('Distributed Systems')
+    expect(screen.queryByRole('button', { name: 'Open original' })).not.toBeInTheDocument()
+  })
+})
 
 describe('SourceViewer', () => {
   it('shows a loading state while the document loads', () => {

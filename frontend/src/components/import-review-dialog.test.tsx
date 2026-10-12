@@ -7,6 +7,7 @@ import type { ImportPreview } from '@/lib/ingest'
 function preview(overrides: Partial<ImportPreview> = {}): ImportPreview {
   return {
     displayPath: 'eigenvectors-notes.md',
+    sourceUrl: '',
     originalContent: 'eigenvectors r vectors that dont change direction.',
     formattedContent:
       '## Eigenvectors\n\nAn eigenvector keeps its direction under the transformation.',

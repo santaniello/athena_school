@@ -1,6 +1,14 @@
 import { useMemo, useState } from 'react'
 import type { ChangeEvent, ReactNode } from 'react'
-import { Download, MoreVertical, Plus, Search, Trash2 } from 'lucide-react'
+import {
+  FileText,
+  Link as LinkIcon,
+  Download,
+  MoreVertical,
+  Plus,
+  Search,
+  Trash2,
+} from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,12 +28,20 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { AddLinkDialog } from '@/components/add-link-dialog'
 import { FormattingNoteDialog } from '@/components/formatting-note-dialog'
 import { ImportReviewDialog } from '@/components/import-review-dialog'
 import { IngestProgressDialog } from '@/components/ingest-progress-dialog'
 import { SourceViewer } from '@/components/source-viewer'
 import { useSessionSources } from '@/hooks/use-session-sources'
-import { downloadExampleNote, pickNotesFile, previewImport, type ImportPreview } from '@/lib/ingest'
+import {
+  downloadExampleNote,
+  linkErrorMessage,
+  pickNotesFile,
+  previewImport,
+  previewLinkImport,
+  type ImportPreview,
+} from '@/lib/ingest'
 import { removeSessionSource, type SessionSource } from '@/lib/sources'
 
 interface StudySourcesPanelProps {
@@ -72,7 +88,8 @@ function chunkCountLabel(chunkCount: number): string {
 }
 
 interface AddSourceButtonProps {
-  onClick: () => void
+  onAddMarkdown: () => void
+  onAddLink: () => void
   disabled: boolean
   children: ReactNode
   variant?: 'default' | 'outline'
@@ -93,7 +110,8 @@ interface AddSourceButtonProps {
 // empty-state actions keeps their disabled/tooltip behavior from drifting
 // apart.
 function AddSourceButton({
-  onClick,
+  onAddMarkdown,
+  onAddLink,
   disabled,
   children,
   variant = 'default',
@@ -101,18 +119,30 @@ function AddSourceButton({
   disabledReason = 'Rebuilding knowledge index…',
 }: AddSourceButtonProps) {
   const button = (
-    <Button
-      size="sm"
-      variant={variant}
-      disabled={disabled}
-      onClick={onClick}
-      aria-label={ariaLabel}
-    >
+    <Button size="sm" variant={variant} disabled={disabled} aria-label={ariaLabel}>
       <Plus className="size-3.5" aria-hidden="true" />
       {children}
     </Button>
   )
-  if (!disabled) return button
+  if (!disabled) {
+    // NotebookLM-style type selector: the same entry point picks a Markdown
+    // file (today's flow) or a web link (spec 2.21).
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>{button}</DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={onAddMarkdown}>
+            <FileText className="size-3.5" aria-hidden="true" />
+            Markdown file
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onAddLink}>
+            <LinkIcon className="size-3.5" aria-hidden="true" />
+            Link
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+  }
   return (
     <Tooltip>
       {/* A disabled <button> takes pointer-events: none (buttonVariants) and
@@ -161,6 +191,11 @@ function StudySourcesPanel({
   // through as formattedContent so the dialog calls confirmImport instead
   // of importFile.
   const [approvedContent, setApprovedContent] = useState<string | null>(null)
+  // Link flow (spec 2.21): whether the "Add a link" dialog is open, and —
+  // once a link's preview is ready — the canonical URL to echo back to
+  // confirmLinkImport. linkUrl is null for a file import.
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false)
+  const [linkUrl, setLinkUrl] = useState<string | null>(null)
   // The document a Remove confirmation targets — non-null opens the
   // AlertDialog. removeError is scoped to that one confirmation, not the
   // whole panel, so opening it for another document always starts clean.
@@ -247,6 +282,26 @@ function StudySourcesPanel({
     }
   }
 
+  function handleAddLinkClick() {
+    setPickerError('')
+    setLinkDialogOpen(true)
+  }
+
+  async function handleLinkSubmit(url: string) {
+    setLinkDialogOpen(false)
+    setPreviewing(true)
+    try {
+      const preview = await previewLinkImport(sessionId, url)
+      setLinkUrl(preview.sourceUrl)
+      setReviewPreview(preview)
+      setReviewToken((token) => token + 1)
+    } catch (error) {
+      setPickerError(linkErrorMessage(error))
+    } finally {
+      setPreviewing(false)
+    }
+  }
+
   async function handleDownloadExampleClick() {
     setPickerError('')
     try {
@@ -261,6 +316,7 @@ function StudySourcesPanel({
   function handleReviewCancel() {
     setReviewPreview(null)
     setImportPath(null)
+    setLinkUrl(null)
   }
 
   // Receives exactly preview.formattedContent (never anything else) from
@@ -274,6 +330,7 @@ function StudySourcesPanel({
 
   function handleImportDialogClose() {
     setImportPath(null)
+    setLinkUrl(null)
     setApprovedContent(null)
     reload()
   }
@@ -362,7 +419,8 @@ function StudySourcesPanel({
                 Example
               </Button>
               <AddSourceButton
-                onClick={() => void handleAddClick()}
+                onAddMarkdown={() => void handleAddClick()}
+                onAddLink={handleAddLinkClick}
                 disabled={addDisabled}
                 disabledReason={addDisabledReason}
                 ariaLabel="Add source"
@@ -408,7 +466,8 @@ function StudySourcesPanel({
                   The chat searches these documents when answering.
                 </p>
                 <AddSourceButton
-                  onClick={() => void handleAddClick()}
+                  onAddMarkdown={() => void handleAddClick()}
+                  onAddLink={handleAddLinkClick}
                   disabled={addDisabled}
                   disabledReason={addDisabledReason}
                   variant="outline"
@@ -484,6 +543,11 @@ function StudySourcesPanel({
           )}
         </div>
       </div>
+      <AddLinkDialog
+        open={linkDialogOpen}
+        onCancel={() => setLinkDialogOpen(false)}
+        onSubmit={(url) => void handleLinkSubmit(url)}
+      />
       <FormattingNoteDialog open={previewing} />
       <ImportReviewDialog
         key={reviewToken}
@@ -497,6 +561,7 @@ function StudySourcesPanel({
         sessionId={sessionId}
         path={importDialogPath}
         formattedContent={approvedContent ?? undefined}
+        linkUrl={linkUrl ?? undefined}
         onClose={handleImportDialogClose}
       />
       <AlertDialog open={removeTarget !== null} onOpenChange={handleRemoveDialogOpenChange}>

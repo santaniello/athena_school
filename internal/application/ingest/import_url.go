@@ -25,7 +25,9 @@ const urlReadPath = "link.md"
 //
 // The preview's SourceURL is the canonical URL the source will be stored
 // under and its DisplayPath is the page title, or the URL when the page has
-// none. onProgress has PreviewImport's contract.
+// none. A page whose text has no top-level heading gets its title prepended
+// as one, so the stored source is listed under that title. onProgress has
+// PreviewImport's contract.
 func (s *Service) PreviewURL(
 	ctx context.Context, sessionID, rawURL string, onProgress func(Progress) error,
 ) (ImportPreview, error) {
@@ -45,7 +47,8 @@ func (s *Service) PreviewURL(
 		return ImportPreview{}, fmt.Errorf("ingest: fetching %s: %w", canonical, err)
 	}
 
-	preview, err := s.buildPreview(ctx, sessionID, linkDisplayPath(page.Title, canonical), page.Markdown, true, onProgress)
+	original := withTitleHeading(page.Title, page.Markdown)
+	preview, err := s.buildPreview(ctx, sessionID, linkDisplayPath(page.Title, canonical), original, true, onProgress)
 	if err != nil {
 		return ImportPreview{}, err
 	}
@@ -57,12 +60,13 @@ func (s *Service) PreviewURL(
 // PreviewURL returned and the user approved — as the link's chunks and
 // shadow Item. It never fetches or formats again, so what the user reviewed
 // is what gets embedded. The URL is canonicalized here (never trusted from
-// the caller as already canonical) and is the source's identity: confirming
-// a URL that was imported before replaces that source instead of duplicating
-// it. Like ConfirmImport it reserves the index for its whole call, and its
-// progress and error contract is the same.
+// the caller as already canonical) and is both the source's identity and its
+// stored display path: confirming a URL that was imported before replaces
+// that source instead of duplicating it, and the Sources panel and viewer can
+// offer the original page from it. Like ConfirmImport it reserves the index
+// for its whole call, and its progress and error contract is the same.
 func (s *Service) ConfirmURLImport(
-	ctx context.Context, sessionID, rawURL, title, approvedContent string, onProgress func(Progress) error,
+	ctx context.Context, sessionID, rawURL, approvedContent string, onProgress func(Progress) error,
 ) (Summary, error) {
 	if strings.TrimSpace(sessionID) == "" {
 		return Summary{}, domainknowledge.ErrSessionRequired
@@ -88,9 +92,8 @@ func (s *Service) ConfirmURLImport(
 	prev, hasPrev := existing[canonical]
 
 	candidate := importCandidate{ReadPath: urlReadPath, SourcePath: canonical}
-	displayPath := linkDisplayPath(title, canonical)
 	return s.persistApproved(
-		ctx, sessionID, candidate, displayPath, time.Now().UnixNano(), prev, hasPrev, approvedContent, onProgress,
+		ctx, sessionID, candidate, canonical, time.Now().UnixNano(), prev, hasPrev, approvedContent, onProgress,
 	)
 }
 
@@ -101,4 +104,24 @@ func linkDisplayPath(title, canonicalURL string) string {
 		return trimmed
 	}
 	return canonicalURL
+}
+
+// withTitleHeading prepends title as a top-level heading unless markdown
+// already has one (or the page has no title), so BuildShadowItem derives the
+// source's listed title from the page rather than from its URL.
+func withTitleHeading(title, markdown string) string {
+	title = strings.TrimSpace(title)
+	if title == "" || hasTopLevelHeading(markdown) {
+		return markdown
+	}
+	return "# " + title + "\n\n" + markdown
+}
+
+func hasTopLevelHeading(markdown string) bool {
+	for _, line := range strings.Split(markdown, "\n") {
+		if strings.HasPrefix(line, "# ") {
+			return true
+		}
+	}
+	return false
 }

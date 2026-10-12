@@ -1,11 +1,13 @@
 import {
   ConfirmImport,
+  ConfirmLinkImport,
   DownloadExampleNote,
   ImportFile,
   PickNotesFile,
   PreviewImport,
+  PreviewLinkImport,
 } from '../../wailsjs/go/desktop/App'
-import { EventsOn } from '../../wailsjs/runtime/runtime'
+import { BrowserOpenURL, EventsOn } from '../../wailsjs/runtime/runtime'
 
 export interface IngestProgress {
   filesProcessed: number
@@ -112,6 +114,8 @@ export interface StructureWarning {
 // for it at all.
 export interface ImportPreview {
   displayPath: string
+  // The canonical URL of a link preview (previewLinkImport); empty for a file.
+  sourceUrl: string
   originalContent: string
   formattedContent: string
   formattingFailed: boolean
@@ -143,6 +147,58 @@ export async function confirmImport(
   approvedContent: string,
 ): Promise<void> {
   await ConfirmImport(sessionId, path, approvedContent)
+}
+
+// previewLinkImport fetches the page at url and formats and chunks it for
+// sessionId without persisting anything — the link counterpart of
+// previewImport. Pass its sourceUrl, displayPath and formattedContent back
+// into confirmLinkImport once the user approves.
+export async function previewLinkImport(sessionId: string, url: string): Promise<ImportPreview> {
+  return PreviewLinkImport(sessionId, url)
+}
+
+// confirmLinkImport persists exactly approvedContent — the formattedContent
+// a prior previewLinkImport returned and the user approved — as url's
+// source, owned by sessionId (the source is listed under its URL). Like confirmImport it resolves once the import
+// has finished; progress and the final summary arrive via the same
+// onIngestProgress/onIngestDone/onIngestError events.
+export async function confirmLinkImport(
+  sessionId: string,
+  url: string,
+  approvedContent: string,
+): Promise<void> {
+  await ConfirmLinkImport(sessionId, url, approvedContent)
+}
+
+// openOriginalLink opens a link source's page in the system browser.
+export function openOriginalLink(url: string): void {
+  BrowserOpenURL(url)
+}
+
+// linkErrorMessage turns a raw backend error from previewLinkImport into
+// copy that names the actionable cause. Wails rejects with the error's
+// message as a plain string, so both strings and Error instances are read.
+export function linkErrorMessage(error: unknown): string {
+  const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
+  if (raw.includes('host is not allowed')) {
+    return "Athena can't open addresses on a private or local network."
+  }
+  if (raw.includes('unsupported content type')) {
+    return "That link isn't a web page or text file."
+  }
+  if (raw.includes('page is too large')) {
+    return 'That page is too large to import.'
+  }
+  if (raw.includes('no readable text')) {
+    return 'No readable text was found. The page may need JavaScript or a login.'
+  }
+  if (raw.includes('invalid URL')) {
+    return 'Enter a valid http or https link.'
+  }
+  if (raw.includes('knowledge index is loading')) {
+    return 'The knowledge index is rebuilding. Please try again in a moment.'
+  }
+  return 'Failed to read the link. Please try again.'
 }
 
 // EventsOn returns its own unsubscribe function. Callers must invoke it on

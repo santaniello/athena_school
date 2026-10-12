@@ -29,7 +29,7 @@ func TestApp_PreviewLinkImport_returnsTheMappedPreview(t *testing.T) {
 	llm := llmmocks.NewMockProvider(t)
 	llm.EXPECT().Chat(ctx, mock.MatchedBy(func(req domainllm.ChatRequest) bool {
 		return req.Task == domainllm.TaskNoteFormatting
-	})).Return(domainllm.ChatResponse{Content: "# Go\n\nFormatted article, long enough to stand as its own chunk on its own."}, nil).Once()
+	})).Return(domainllm.ChatResponse{Content: "# Go Article\n\nFormatted article, long enough to stand as its own chunk on its own."}, nil).Once()
 	guard := ingestmocks.NewMockIndexGuard(t)
 	guard.EXPECT().CheckMutationAllowed().Return(nil).Once()
 	ingestService := applicationingest.NewService(nil, nil, nil, nil, llm, nil, nil, guard, fetcher)
@@ -50,7 +50,7 @@ func TestApp_PreviewLinkImport_returnsTheMappedPreview(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, testLinkURL, result.SourceURL)
 	assert.Equal(t, "Go Article", result.DisplayPath)
-	assert.Equal(t, "raw article", result.OriginalContent)
+	assert.Equal(t, "# Go Article\n\nraw article", result.OriginalContent)
 	assert.Contains(t, result.FormattedContent, "Formatted article")
 	require.Len(t, result.Chunks, 1)
 	require.Len(t, formattingProgress, 1)
@@ -99,12 +99,12 @@ func TestApp_ConfirmLinkImport_emitsProgressThenDone_onSuccess(t *testing.T) {
 	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, documents, llm, store)
 
 	// When confirming the link import through the desktop adapter
-	err := app.ConfirmLinkImport(testIngestSessionID, testLinkURL, "Go Article", approved)
+	err := app.ConfirmLinkImport(testIngestSessionID, testLinkURL, approved)
 
 	// Then it emits the same ingest:progress/ingest:done events a file import does
 	require.NoError(t, err)
 	require.Len(t, captured.progress, 2)
-	assert.Equal(t, "Go Article", captured.progress[1].CurrentFile)
+	assert.Equal(t, testLinkURL, captured.progress[1].CurrentFile)
 	require.NotNil(t, captured.done)
 	assert.Equal(t, 1, captured.done.FilesIngested)
 	assert.Empty(t, captured.errors)
@@ -115,7 +115,7 @@ func TestApp_ConfirmLinkImport_emitsError_whenTheURLIsInvalid(t *testing.T) {
 	app, captured := newTestIngestApp(t, nil, nil, nil, nil, nil, nil)
 
 	// When confirming it
-	err := app.ConfirmLinkImport(testIngestSessionID, "ftp://example.com/a", "Title", "content")
+	err := app.ConfirmLinkImport(testIngestSessionID, "ftp://example.com/a", "content")
 
 	// Then an "ingest:error" event is emitted and the error is returned
 	require.ErrorIs(t, err, web.ErrInvalidURL)

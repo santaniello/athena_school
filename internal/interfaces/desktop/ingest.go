@@ -339,9 +339,9 @@ func (a *App) PreviewLinkImport(sessionID, rawURL string) (ImportPreviewResult, 
 // PreviewLinkImport returned and the user approved — as rawURL's source,
 // streaming progress via the same "ingest:progress"/"ingest:done"/
 // "ingest:error" events ConfirmImport emits.
-func (a *App) ConfirmLinkImport(sessionID, rawURL, title, approvedContent string) error {
+func (a *App) ConfirmLinkImport(sessionID, rawURL, approvedContent string) error {
 	summary, err := a.ingest.ConfirmURLImport(
-		a.ctx, sessionID, rawURL, title, approvedContent,
+		a.ctx, sessionID, rawURL, approvedContent,
 		func(p ingest.Progress) error {
 			a.emit(a.ctx, eventIngestProgress, toIngestProgressResult(p))
 			return nil

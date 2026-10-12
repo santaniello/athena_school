@@ -6,6 +6,10 @@ export function ConfirmImport(arg1, arg2, arg3) {
   return window['go']['desktop']['App']['ConfirmImport'](arg1, arg2, arg3);
 }
 
+export function ConfirmLinkImport(arg1, arg2, arg3) {
+  return window['go']['desktop']['App']['ConfirmLinkImport'](arg1, arg2, arg3);
+}
+
 export function CreateFolder(arg1) {
   return window['go']['desktop']['App']['CreateFolder'](arg1);
 }
@@ -68,6 +72,10 @@ export function PickNotesFile() {
 
 export function PreviewImport(arg1, arg2) {
   return window['go']['desktop']['App']['PreviewImport'](arg1, arg2);
+}
+
+export function PreviewLinkImport(arg1, arg2) {
+  return window['go']['desktop']['App']['PreviewLinkImport'](arg1, arg2);
 }
 
 export function RemoveSessionSource(arg1, arg2) {

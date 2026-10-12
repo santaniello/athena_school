@@ -98,6 +98,7 @@ export namespace desktop {
 	}
 	export class ImportPreviewResult {
 	    displayPath: string;
+	    sourceUrl: string;
 	    originalContent: string;
 	    formattedContent: string;
 	    formattingFailed: boolean;
@@ -115,6 +116,7 @@ export namespace desktop {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.displayPath = source["displayPath"];
+	        this.sourceUrl = source["sourceUrl"];
 	        this.originalContent = source["originalContent"];
 	        this.formattedContent = source["formattedContent"];
 	        this.formattingFailed = source["formattingFailed"];

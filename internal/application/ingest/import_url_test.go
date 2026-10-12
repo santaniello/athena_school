@@ -3,6 +3,7 @@ package ingest
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -22,7 +23,7 @@ const (
 	testArticleURL = "https://example.com/article"
 	// A passage padded well past the 200-rune chunk floor, so it survives
 	// mergeUndersized as its own chunk.
-	testArticleFormatted = "## Eigenvectors\n\nAn eigenvector keeps its direction under the transformation, scaled by its eigenvalue — a passage padded well past the 200-rune chunk floor so it survives mergeUndersized as its own chunk."
+	testArticleFormatted = "In linear algebra, an eigenvector keeps its direction under the transformation, scaled by its eigenvalue — a passage padded well past the 200-rune chunk floor so it survives mergeUndersized as its own chunk."
 )
 
 func TestPreviewURL_blankSessionID_isRejectedBeforeAnythingElse(t *testing.T) {
@@ -87,10 +88,10 @@ func TestPreviewURL_returnsFormattedContentAndMatchingChunks(t *testing.T) {
 	llm.EXPECT().
 		Chat(mock.Anything, mock.MatchedBy(func(req domainllm.ChatRequest) bool {
 			return req.Task == domainllm.TaskNoteFormatting &&
-				req.Messages[0].Content == noteFormattingMarkdownPrompt &&
-				req.Messages[1].Content == original
+				strings.HasPrefix(req.Messages[0].Content, noteFormattingMarkdownPrompt) &&
+				req.Messages[1].Content == "# Linear Algebra\n\n"+original
 		})).
-		Return(domainllm.ChatResponse{Content: testArticleFormatted}, nil).Once()
+		Return(domainllm.ChatResponse{Content: "# Linear Algebra\n\n" + testArticleFormatted}, nil).Once()
 	// No Embeddings expectation: previewing must never embed or persist.
 	svc := &Service{index: passingPreviewIndexGuard(t), fetcher: fetcher, llm: llm}
 
@@ -103,12 +104,13 @@ func TestPreviewURL_returnsFormattedContentAndMatchingChunks(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, testArticleURL, preview.SourceURL)
 	assert.Equal(t, "Linear Algebra", preview.DisplayPath)
-	assert.Equal(t, original, preview.OriginalContent)
-	assert.Equal(t, testArticleFormatted, preview.FormattedContent)
+	assert.Equal(t, "# Linear Algebra\n\n"+original, preview.OriginalContent)
+	assert.Equal(t, "# Linear Algebra\n\n"+testArticleFormatted, preview.FormattedContent)
 	assert.False(t, preview.Skipped)
 	assert.False(t, preview.FormattingFailed)
 	require.Len(t, preview.Chunks, 1)
-	assert.Equal(t, ChunkMarkdown(testArticleFormatted)[0].Content, preview.Chunks[0].Content)
+	assert.Equal(t, ChunkMarkdown(preview.FormattedContent)[0].Content, preview.Chunks[0].Content)
+	assert.Equal(t, "Linear Algebra", preview.Chunks[0].Heading)
 }
 
 func TestPreviewURL_usesTheURLAsDisplayPath_whenThePageHasNoTitle(t *testing.T) {
@@ -158,7 +160,7 @@ func TestConfirmURLImport_blankSessionID_isRejected(t *testing.T) {
 	svc := &Service{index: ingestmocks.NewMockIndexGuard(t)}
 
 	// When confirming a link import
-	_, err := svc.ConfirmURLImport(context.Background(), "", testArticleURL, "Title", "approved", nil)
+	_, err := svc.ConfirmURLImport(context.Background(), "", testArticleURL, "approved", nil)
 
 	// Then it is rejected
 	assert.ErrorIs(t, err, domainknowledge.ErrSessionRequired)
@@ -169,7 +171,7 @@ func TestConfirmURLImport_invalidURL_isRejectedBeforeReservingTheIndex(t *testin
 	svc := &Service{index: ingestmocks.NewMockIndexGuard(t)}
 
 	// When confirming an import for a URL that is not http(s)
-	_, err := svc.ConfirmURLImport(context.Background(), testSessionID, "file:///etc/passwd", "Title", "approved", nil)
+	_, err := svc.ConfirmURLImport(context.Background(), testSessionID, "file:///etc/passwd", "approved", nil)
 
 	// Then it is rejected as an invalid URL
 	assert.ErrorIs(t, err, web.ErrInvalidURL)
@@ -183,7 +185,7 @@ func TestConfirmURLImport_returnsTheIndexError_whenTheIndexIsBusy(t *testing.T) 
 	svc := &Service{index: guard}
 
 	// When confirming a link import
-	_, err := svc.ConfirmURLImport(context.Background(), testSessionID, testArticleURL, "Title", "approved", nil)
+	_, err := svc.ConfirmURLImport(context.Background(), testSessionID, testArticleURL, "approved", nil)
 
 	// Then the index error is returned
 	assert.ErrorIs(t, err, busy)
@@ -208,17 +210,17 @@ func TestConfirmURLImport_persistsExactlyTheApprovedContent_underTheCanonicalURL
 		return len(cs) == 1 &&
 			cs[0].Content == approved &&
 			cs[0].SourcePath == testArticleURL &&
-			cs[0].FilePath == "Linear Algebra"
+			cs[0].FilePath == testArticleURL
 	})).Return(nil).Once()
 	items.EXPECT().Save(ctx, mock.Anything).Return(nil).Once()
 	ingestedFiles.EXPECT().Upsert(ctx, mock.MatchedBy(func(f domainknowledge.IngestedFile) bool {
-		return f.SourcePath == testArticleURL && f.Path == "Linear Algebra" && f.ChunkCount == 1
+		return f.SourcePath == testArticleURL && f.Path == testArticleURL && f.ChunkCount == 1
 	})).Return(nil).Once()
 	service := newTestService(chunks, ingestedFiles, items, noOpDocuments(t), llm, tx, noOpReconciliationStore(t), passingIndexGuard(t))
 
 	var seen []Progress
 	// When confirming the import
-	summary, err := service.ConfirmURLImport(ctx, testSessionID, "HTTPS://Example.com/article#top", "Linear Algebra", approved,
+	summary, err := service.ConfirmURLImport(ctx, testSessionID, "HTTPS://Example.com/article#top", approved,
 		func(p Progress) error {
 			seen = append(seen, p)
 			return nil
@@ -230,7 +232,7 @@ func TestConfirmURLImport_persistsExactlyTheApprovedContent_underTheCanonicalURL
 	assert.Equal(t, 1, summary.FilesIngested)
 	require.NotEmpty(t, seen)
 	assert.Equal(t, 1, seen[len(seen)-1].FilesProcessed)
-	assert.Equal(t, "Linear Algebra", seen[len(seen)-1].CurrentFile)
+	assert.Equal(t, testArticleURL, seen[len(seen)-1].CurrentFile)
 }
 
 func TestConfirmURLImport_reAddingTheSameURL_replacesTheExistingSource(t *testing.T) {
@@ -256,45 +258,19 @@ func TestConfirmURLImport_reAddingTheSameURL_replacesTheExistingSource(t *testin
 	items.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{ID: "item-1"}, nil).Once()
 	items.EXPECT().Update(ctx, mock.MatchedBy(func(item domainknowledge.Item) bool { return item.ID == "item-1" })).Return(nil).Once()
 	ingestedFiles.EXPECT().Upsert(ctx, mock.MatchedBy(func(f domainknowledge.IngestedFile) bool {
-		return f.ItemID == "item-1" && f.Path == "New title"
+		return f.ItemID == "item-1" && f.Path == testArticleURL
 	})).Return(nil).Once()
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().Remove(mock.Anything, []string{"old-chunk"}).Return(nil).Once()
 	store.EXPECT().Add(mock.Anything, mock.Anything).Return(nil).Once()
 	service := newTestService(chunks, ingestedFiles, items, noOpDocuments(t), llm, tx, store, passingIndexGuard(t))
 
-	// When confirming the same URL again with a new title
-	summary, err := service.ConfirmURLImport(ctx, testSessionID, testArticleURL, "New title", approved, nil)
+	// When confirming the same URL again
+	summary, err := service.ConfirmURLImport(ctx, testSessionID, testArticleURL, approved, nil)
 
-	// Then the existing item is reused (nothing is duplicated) and the title updated
+	// Then the existing item is reused (nothing is duplicated)
 	require.NoError(t, err)
 	assert.Equal(t, 1, summary.FilesIngested)
-}
-
-func TestConfirmURLImport_usesTheURLAsDisplayPath_whenTheTitleIsBlank(t *testing.T) {
-	// Given approved content and a blank title
-	ctx := context.Background()
-	chunks := knowledgemocks.NewMockChunkRepository(t)
-	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
-	items := knowledgemocks.NewMockRepository(t)
-	llm := llmmocks.NewMockProvider(t)
-	tx := ingestmocks.NewMockTransactor(t)
-	runWithinTx(tx)
-	ingestedFiles.EXPECT().ListBySession(ctx, testSessionID).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
-	llm.EXPECT().Embeddings(ctx, mock.Anything).Return(embeddingResponse(), nil).Once()
-	chunks.EXPECT().DeleteBySourcePath(ctx, testSessionID, testArticleURL).Return(nil, nil).Once()
-	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()
-	items.EXPECT().Save(ctx, mock.Anything).Return(nil).Once()
-	ingestedFiles.EXPECT().Upsert(ctx, mock.MatchedBy(func(f domainknowledge.IngestedFile) bool {
-		return f.Path == testArticleURL
-	})).Return(nil).Once()
-	service := newTestService(chunks, ingestedFiles, items, noOpDocuments(t), llm, tx, noOpReconciliationStore(t), passingIndexGuard(t))
-
-	// When confirming the import
-	_, err := service.ConfirmURLImport(ctx, testSessionID, testArticleURL, "  ", "Some approved text.", nil)
-
-	// Then the URL is the stored display path
-	require.NoError(t, err)
 }
 
 func TestConfirmURLImport_stopsWhenTheProgressCallbackFails(t *testing.T) {
@@ -308,9 +284,52 @@ func TestConfirmURLImport_stopsWhenTheProgressCallbackFails(t *testing.T) {
 	service := newTestService(nil, ingestedFiles, nil, nil, llm, nil, nil, passingIndexGuard(t))
 
 	// When confirming the import
-	_, err := service.ConfirmURLImport(ctx, testSessionID, testArticleURL, "Title", "Some approved text.",
+	_, err := service.ConfirmURLImport(ctx, testSessionID, testArticleURL, "Some approved text.",
 		func(Progress) error { return gone })
 
 	// Then the callback error propagates and nothing is persisted
 	assert.ErrorIs(t, err, gone)
+}
+
+func TestPreviewURL_prependsTheTitleAsAHeading_whenThePageTextHasNone(t *testing.T) {
+	// Given a fetched page whose text has no top-level heading
+	fetcher := webmocks.NewMockFetcher(t)
+	fetcher.EXPECT().Fetch(mock.Anything, testArticleURL).
+		Return(web.Page{URL: testArticleURL, Title: "Linear Algebra", Markdown: "Plain paragraph."}, nil).Once()
+	llm := llmmocks.NewMockProvider(t)
+	llm.EXPECT().
+		Chat(mock.Anything, mock.MatchedBy(func(req domainllm.ChatRequest) bool {
+			return req.Messages[1].Content == "# Linear Algebra\n\nPlain paragraph."
+		})).
+		Return(domainllm.ChatResponse{Content: "# Linear Algebra\n\nPlain paragraph."}, nil).Once()
+	svc := &Service{index: passingPreviewIndexGuard(t), fetcher: fetcher, llm: llm}
+
+	// When previewing the link
+	preview, err := svc.PreviewURL(context.Background(), testSessionID, testArticleURL, nil)
+
+	// Then the title heads the text that is formatted and shown as original
+	require.NoError(t, err)
+	assert.Equal(t, "# Linear Algebra\n\nPlain paragraph.", preview.OriginalContent)
+}
+
+func TestWithTitleHeading(t *testing.T) {
+	tests := []struct {
+		name, title, markdown, want string
+	}{
+		{"prepends when there is no heading", "Title", "text", "# Title\n\ntext"},
+		{"trims the title", "  Title  ", "text", "# Title\n\ntext"},
+		{"keeps text that already has a top-level heading", "Title", "intro\n\n# Own heading\n\ntext", "intro\n\n# Own heading\n\ntext"},
+		{"treats a deeper heading as no top-level heading", "Title", "## Section\n\ntext", "# Title\n\n## Section\n\ntext"},
+		{"leaves text alone when the title is blank", "  ", "text", "text"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given a page title and its Markdown
+			// When ensuring the text carries the title as a heading
+			got := withTitleHeading(tt.title, tt.markdown)
+
+			// Then the title is added only when it is missing and meaningful
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }
