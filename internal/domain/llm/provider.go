@@ -64,6 +64,32 @@ type EmbeddingResponse struct {
 	Usage     Usage
 }
 
+// EmbeddingBatchRequest is a request to Provider.EmbeddingsBatch — several
+// inputs embedded in a single round trip. A separate request type from
+// EmbeddingRequest (rather than widening Input to []string) because
+// EmbeddingRequest's only other caller (query embedding, in
+// application/knowledge) is single-text by nature and has no reason to
+// become batch-aware.
+type EmbeddingBatchRequest struct {
+	SessionID string
+	Inputs    []string
+}
+
+// EmbeddingResult is one EmbeddingBatchResponse entry, in the same order
+// as its request's Inputs.
+type EmbeddingResult struct {
+	Embedding []float64
+}
+
+// EmbeddingBatchResponse is the result of a successful
+// Provider.EmbeddingsBatch call. Usage is the batch's total — OpenRouter
+// reports one usage block per request, not per input.
+type EmbeddingBatchResponse struct {
+	Embeddings []EmbeddingResult
+	Model      string
+	Usage      Usage
+}
+
 // StreamResponse is the result of a successful Provider.ChatStream call:
 // the actual model that produced the response (which may differ from the
 // requested router alias, e.g. FreeFallbackModel) and its usage, reported
@@ -81,4 +107,5 @@ type Provider interface {
 	Chat(ctx context.Context, req ChatRequest) (ChatResponse, error)
 	ChatStream(ctx context.Context, req ChatRequest, handler func(chunk string) error) (StreamResponse, error)
 	Embeddings(ctx context.Context, req EmbeddingRequest) (EmbeddingResponse, error)
+	EmbeddingsBatch(ctx context.Context, req EmbeddingBatchRequest) (EmbeddingBatchResponse, error)
 }
