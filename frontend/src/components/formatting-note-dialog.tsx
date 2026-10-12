@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import {
   Dialog,
@@ -6,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { onFormattingProgress, type FormattingProgress } from '@/lib/ingest'
 
 interface FormattingNoteDialogProps {
   open: boolean
@@ -18,9 +20,24 @@ interface FormattingNoteDialogProps {
 // caller flips open to false, which happens in the very same state update
 // that either opens ImportReviewDialog or finishes the skip/error path —
 // never dismissible on its own, same as IngestProgressDialog's "nothing to
-// cancel yet" stretch. See
-// specs/phases/phase-02-knowledge-engine/20-import-review-and-formatting.md.
+// cancel yet" stretch. Subscribes to its own "ingest:formatting-progress"
+// ticks (the same self-contained pattern IngestProgressDialog uses for
+// "ingest:progress") now that PreviewImport formats a document section by
+// section instead of in one call, showing "Formatting section X of Y"
+// once more than one batch exists — a single-batch note never shows a
+// count, since "1 of 1" tells the user nothing a plain spinner doesn't.
+// See specs/phases/phase-02-knowledge-engine/20-import-review-and-formatting.md.
 function FormattingNoteDialog({ open }: FormattingNoteDialogProps) {
+  const [progress, setProgress] = useState<FormattingProgress | null>(null)
+
+  useEffect(() => {
+    if (!open) {
+      setProgress(null)
+      return
+    }
+    return onFormattingProgress(setProgress)
+  }, [open])
+
   return (
     <Dialog open={open} onOpenChange={() => {}}>
       <DialogContent
@@ -32,7 +49,9 @@ function FormattingNoteDialog({ open }: FormattingNoteDialogProps) {
         <DialogHeader>
           <DialogTitle>Formatting note…</DialogTitle>
           <DialogDescription>
-            Reformatting your note and preparing the chunks it will create.
+            {progress && progress.sectionsTotal > 1
+              ? `Formatting section ${progress.sectionsProcessed} of ${progress.sectionsTotal}…`
+              : 'Reformatting your note and preparing the chunks it will create.'}
           </DialogDescription>
         </DialogHeader>
         <div className="flex items-center justify-center py-2">

@@ -67,6 +67,24 @@ type ChunkPreview struct {
 	EstimatedTokens int
 }
 
+// FailedSection describes one formatting batch that fell back to its own
+// original content, so the Review dialog can tell the user which part of
+// the note was affected instead of just that FormattingFailed is true.
+type FailedSection struct {
+	Heading string
+	Reason  string
+}
+
+// StructureWarning flags one batch whose rewrite was accepted (it passed
+// fidelity validation — this is not a FailedSection) but still left a
+// detected named list collapsed into one chunk even after one corrective
+// retry (see validateFormattingStructure). Never computed as a reason to
+// fall back, only as a visible, honest signal in place of silent success.
+type StructureWarning struct {
+	Heading string
+	Message string
+}
+
 // ImportPreview is PreviewImport's result. Skipped is true when the file is
 // unchanged since its last import (same mtime, same embedding model) — in
 // that case FormattedContent/Chunks are empty and the caller should not
@@ -76,13 +94,21 @@ type ImportPreview struct {
 	DisplayPath      string
 	OriginalContent  string
 	FormattedContent string
-	// FormattingFailed is true when the formatter degraded to the original
-	// content instead of a rewrite (see formatNote).
+	// FormattingFailed is true when at least one formatting batch degraded
+	// to its own original content instead of a rewrite (see formatBatches,
+	// anyBatchFellBack).
 	FormattingFailed bool
-	Stats            FormattingStats
-	Chunks           []ChunkPreview
-	Skipped          bool
-	SkippedReason    string
+	// FailedSections lists each batch behind FormattingFailed, by heading
+	// and reason. Empty when FormattingFailed is false.
+	FailedSections []FailedSection
+	// StructureWarnings lists each accepted batch whose chunking outcome
+	// still looks unhealthy (see StructureWarning) — informational, not a
+	// subset of FailedSections.
+	StructureWarnings []StructureWarning
+	Stats             FormattingStats
+	Chunks            []ChunkPreview
+	Skipped           bool
+	SkippedReason     string
 }
 
 // PreviewImport reformats and chunks filePath without persisting anything —
@@ -95,8 +121,15 @@ type ImportPreview struct {
 // arbitrary user think-time in between, so holding BeginMutation open across
 // that gap would block unrelated index operations for as long as the review
 // dialog sits open (spec 2.20 decision 9).
+//
+// onProgress, when non-nil, is called after each formatting batch
+// completes with SectionsProcessed/SectionsTotal set (every other Progress
+// field left zero) — the desktop binding uses this to report "Formatting
+// section X of Y" while the call is in flight (spec 2.20.1). A nil value
+// means no such reporting is wanted.
 func (s *Service) PreviewImport(
 	ctx context.Context, sessionID string, root fs.FS, sourceRoot, filePath string,
+	onProgress func(Progress) error,
 ) (ImportPreview, error) {
 	if err := validateImportTarget(sessionID, filePath); err != nil {
 		return ImportPreview{}, err
@@ -139,7 +172,20 @@ func (s *Service) PreviewImport(
 	original := string(raw)
 
 	isMarkdown := strings.EqualFold(path.Ext(candidate.ReadPath), ".md")
-	formatted, failed := s.formatNote(ctx, sessionID, original, isMarkdown)
+	sections := splitIntoFormattingSections(original)
+	batches := packFormattingBatches(sections)
+	var onSectionFormatted func(processed, total int) error
+	if onProgress != nil {
+		onSectionFormatted = func(processed, total int) error {
+			return onProgress(Progress{SectionsProcessed: processed, SectionsTotal: total})
+		}
+	}
+	outcomes, err := s.formatBatches(ctx, sessionID, original, batches, isMarkdown, onSectionFormatted)
+	if err != nil {
+		return ImportPreview{}, err
+	}
+	formatted := reassembleFormattedContent(original, outcomes)
+	failed := anyBatchFellBack(outcomes)
 
 	var chunkCandidates []ChunkCandidate
 	if isMarkdown {
@@ -160,27 +206,52 @@ func (s *Service) PreviewImport(
 	}
 
 	return ImportPreview{
-		DisplayPath:      displayPath,
-		OriginalContent:  original,
-		FormattedContent: formatted,
-		FormattingFailed: failed,
-		Stats:            computeFormattingStats(original, formatted),
-		Chunks:           chunks,
+		DisplayPath:       displayPath,
+		OriginalContent:   original,
+		FormattedContent:  formatted,
+		FormattingFailed:  failed,
+		FailedSections:    failedSections(outcomes),
+		StructureWarnings: structureWarnings(outcomes),
+		Stats:             computeFormattingStats(original, formatted),
+		Chunks:            chunks,
 	}, nil
 }
 
-// formatNote rewrites content into clean Markdown (isMarkdown) or
-// well-structured plain text (!isMarkdown) via one non-streamed Chat call.
-// A Provider error or a blank response degrades to the original content
-// (failed = true) instead of blocking the import over a transient
-// formatting failure — mirroring HydeEnricher.Enrich's blank-response
-// guard (2.5.1), but falling back instead of erroring.
-func (s *Service) formatNote(ctx context.Context, sessionID, content string, isMarkdown bool) (formatted string, failed bool) {
+// correctiveListInstruction is appended to the system prompt for the one
+// bounded retry formatBatches allows when validateFormattingStructure
+// reports a detected named list still collapsed into one chunk — never
+// used on the first attempt, since most batches do not need it.
+const correctiveListInstruction = " The list below still reads as one block after a previous rewrite attempt: " +
+	"restate each item's shared heading or intro context inside its own sentence, with a full blank line " +
+	"between every item, so each one is long and self-contained enough to stand as its own chunk."
+
+// formattingPrompt builds formatBatch's system prompt: the extension-aware
+// base prompt (decision 3), plus breadcrumb context (decision 4) when
+// non-empty, plus the corrective list instruction when corrective is true
+// (decision from the structural-validation follow-up — one retry only,
+// see formatBatches).
+func formattingPrompt(breadcrumb string, isMarkdown, corrective bool) string {
 	prompt := noteFormattingPlainTextPrompt
 	if isMarkdown {
 		prompt = noteFormattingMarkdownPrompt
 	}
+	if breadcrumb != "" {
+		prompt += " This excerpt is part of a larger note, under the section \"" + breadcrumb +
+			"\" — use that only as context for restating shared meaning; never add it to, or repeat it verbatim inside, your output."
+	}
+	if corrective {
+		prompt += correctiveListInstruction
+	}
+	return prompt
+}
 
+// chatFormat is formatBatch's underlying Chat round-trip: one non-streamed
+// call with prompt as the system message. A Provider error or a blank
+// response degrades to the original content (failed = true) instead of
+// blocking the import over a transient formatting failure — mirroring
+// HydeEnricher.Enrich's blank-response guard (2.5.1), but falling back
+// instead of erroring.
+func (s *Service) chatFormat(ctx context.Context, sessionID, prompt, content string) (formatted string, failed bool) {
 	resp, err := s.llm.Chat(ctx, domainllm.ChatRequest{
 		SessionID: sessionID,
 		Task:      domainllm.TaskNoteFormatting,
@@ -198,6 +269,144 @@ func (s *Service) formatNote(ctx context.Context, sessionID, content string, isM
 		return content, true
 	}
 	return cleaned, false
+}
+
+// formatBatch rewrites one formatting batch's content into clean Markdown
+// (isMarkdown) or well-structured plain text (!isMarkdown) — the same
+// contract formatNote (pre-2.20.1) used for a whole document, now scoped
+// to a single batch. breadcrumb, when non-empty, is folded into the
+// system prompt as context only — never into the user message — so the
+// model never has reason to echo it back inside the rewritten text it
+// returns.
+func (s *Service) formatBatch(ctx context.Context, sessionID, breadcrumb, content string, isMarkdown bool) (formatted string, failed bool) {
+	return s.chatFormat(ctx, sessionID, formattingPrompt(breadcrumb, isMarkdown, false), content)
+}
+
+// formatBatchWithCorrection re-runs formatBatch's same batch with
+// correctiveListInstruction added — formatBatches' one bounded retry for a
+// batch whose first rewrite passed fidelity validation but still left a
+// detected named list collapsed into one chunk (see
+// validateFormattingStructure).
+func (s *Service) formatBatchWithCorrection(ctx context.Context, sessionID, breadcrumb, content string, isMarkdown bool) (formatted string, failed bool) {
+	return s.chatFormat(ctx, sessionID, formattingPrompt(breadcrumb, isMarkdown, true), content)
+}
+
+// formatBatches runs formatBatch over every batch in document order,
+// isolating each batch's failure to itself (spec 2.20.1) instead of the
+// whole-document fallback formatNote used to have. A batch whose Chat call
+// succeeds still has its result run through validateFormattingFidelity;
+// failing that deterministic check forces the same fallback-to-original
+// behavior as a Provider error or a blank response, since neither can be
+// trusted. A batch that passes fidelity validation but whose structure
+// check (validateFormattingStructure) reports a still-collapsed named
+// list gets exactly one corrective retry (formatBatchWithCorrection); if
+// that retry does not pass fidelity validation and improve the structure
+// verdict too, the batch keeps its first successful rewrite with
+// Structure.Improved left false — accepted, not fallen back to, but
+// flagged rather than reported as silent success (20-01 decision 6).
+// onSectionFormatted, when non-nil, is called with each batch's 1-based
+// position and the total batch count after that batch completes (whether
+// or not a corrective retry ran) — PreviewImport's desktop binding uses
+// this to report "Formatting section X of Y" progress; a nil value means
+// no such reporting is wanted.
+func (s *Service) formatBatches(
+	ctx context.Context, sessionID, source string, batches []FormattingBatch, isMarkdown bool,
+	onSectionFormatted func(processed, total int) error,
+) ([]BatchOutcome, error) {
+	outcomes := make([]BatchOutcome, len(batches))
+	for i, batch := range batches {
+		original := source[batch.Start:batch.End]
+		breadcrumb := batch.breadcrumb()
+		formatted, failed := s.formatBatch(ctx, sessionID, breadcrumb, original, isMarkdown)
+
+		var validation BatchValidation
+		var structure StructureCheck
+		if !failed {
+			validation = validateFormattingFidelity(original, formatted, batch.headings())
+			if !validation.Passed {
+				formatted = original
+				failed = true
+			}
+		}
+
+		if !failed {
+			structure = validateFormattingStructure(original, formatted, isMarkdown)
+			if !structure.Improved {
+				retryFormatted, retryFailed := s.formatBatchWithCorrection(ctx, sessionID, breadcrumb, original, isMarkdown)
+				if !retryFailed {
+					if retryValidation := validateFormattingFidelity(original, retryFormatted, batch.headings()); retryValidation.Passed {
+						if retryStructure := validateFormattingStructure(original, retryFormatted, isMarkdown); retryStructure.Improved {
+							formatted, validation, structure = retryFormatted, retryValidation, retryStructure
+						}
+					}
+				}
+			}
+		}
+
+		outcomes[i] = BatchOutcome{
+			Batch: batch, Original: original, Formatted: formatted, Fallback: failed,
+			Validation: validation, Structure: structure,
+		}
+
+		if onSectionFormatted != nil {
+			if err := onSectionFormatted(i+1, len(batches)); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return outcomes, nil
+}
+
+// anyBatchFellBack reports whether at least one batch's formatting
+// degraded to its original content — ImportPreview.FormattingFailed's
+// source of truth now that formatting runs per batch instead of once for
+// the whole document.
+func anyBatchFellBack(outcomes []BatchOutcome) bool {
+	for _, o := range outcomes {
+		if o.Fallback {
+			return true
+		}
+	}
+	return false
+}
+
+// defaultFailedSectionReason is used when a batch fell back without a
+// recorded BatchValidation reason — a Provider error or timeout, which
+// formatBatch degrades on without capturing the underlying error text.
+const defaultFailedSectionReason = "the formatter did not return a usable rewrite (provider error, timeout, or empty response)"
+
+// failedSections maps every fallen-back batch into a FailedSection, by
+// heading and reason, for ImportPreview.FailedSections.
+func failedSections(outcomes []BatchOutcome) []FailedSection {
+	var out []FailedSection
+	for _, o := range outcomes {
+		if !o.Fallback {
+			continue
+		}
+		reason := strings.Join(o.Validation.Reasons, "; ")
+		if reason == "" {
+			reason = defaultFailedSectionReason
+		}
+		out = append(out, FailedSection{Heading: o.Batch.breadcrumb(), Reason: reason})
+	}
+	return out
+}
+
+// structureWarnings maps every accepted-but-not-structurally-improved
+// batch into a StructureWarning for ImportPreview.StructureWarnings —
+// skipping any batch that fell back (already covered by failedSections).
+func structureWarnings(outcomes []BatchOutcome) []StructureWarning {
+	var out []StructureWarning
+	for _, o := range outcomes {
+		if o.Fallback || o.Structure.Improved {
+			continue
+		}
+		out = append(out, StructureWarning{
+			Heading: o.Batch.breadcrumb(),
+			Message: "a list of distinct items in this section may still be grouped into one chunk after formatting",
+		})
+	}
+	return out
 }
 
 // computeFormattingStats reports headingsBefore/After and paragraphsBefore/

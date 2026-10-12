@@ -35,7 +35,7 @@ func TestConfirmImport_persistsExactlyTheApprovedContent_notTheFileOnDisk(t *tes
 	runWithinTx(tx)
 
 	ingestedFiles.EXPECT().ListBySession(ctx, testSessionID).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
-	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: approved}).
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Go\n\n" + approved}).
 		Return(embeddingResponse(), nil).Once()
 	chunks.EXPECT().DeleteBySourcePath(ctx, testSessionID, srcPath("go.md")).Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
@@ -226,7 +226,7 @@ func TestConfirmImport_stopsAndPropagatesOnProgressError(t *testing.T) {
 	runWithinTx(tx)
 
 	ingestedFiles.EXPECT().ListBySession(ctx, testSessionID).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
-	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: approved}).
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Go\n\n" + approved}).
 		Return(embeddingResponse(), nil).Once()
 	chunks.EXPECT().DeleteBySourcePath(ctx, testSessionID, srcPath("go.md")).Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()

@@ -40,9 +40,10 @@ func normalizedSourceRoot(t *testing.T, dir string) string {
 // capturedIngestEvents records every ingest:* event emitted through
 // App.emit during a test.
 type capturedIngestEvents struct {
-	progress []IngestProgressResult
-	done     *IngestSummaryResult
-	errors   []string
+	progress           []IngestProgressResult
+	done               *IngestSummaryResult
+	errors             []string
+	formattingProgress []IngestProgressResult
 }
 
 func newTestIngestApp(
@@ -84,6 +85,9 @@ func newTestIngestApp(
 			captured.done = &s
 		case eventIngestError:
 			captured.errors = append(captured.errors, data[0].(string))
+		case eventIngestFormattingProgress:
+			p := data[0].(IngestProgressResult)
+			captured.formattingProgress = append(captured.formattingProgress, p)
 		}
 	}
 	return app, captured
@@ -160,7 +164,7 @@ func TestApp_ImportFile_emitsProgressThenDone_onSuccess(t *testing.T) {
 	ctx := context.Background()
 	sourcePath := path.Join(normalizedSourceRoot(t, dir), "go.md")
 	ingestedFiles.EXPECT().ListBySession(ctx, testIngestSessionID).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
-	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nBasics of Go."}).
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Go\n\n# Go\nBasics of Go."}).
 		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}, Model: domainllm.EmbeddingModel}, nil).Once()
 	chunks.EXPECT().DeleteBySourcePath(ctx, testIngestSessionID, sourcePath).Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
@@ -273,11 +277,19 @@ func TestApp_PreviewImport_returnsTheMappedPreview(t *testing.T) {
 	ingestService := applicationingest.NewService(nil, ingestedFiles, nil, nil, llm, nil, nil, guard)
 	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
 	app.Startup(ctx)
+	var formattingProgress []IngestProgressResult
+	app.emit = func(_ context.Context, eventName string, data ...interface{}) {
+		if eventName == eventIngestFormattingProgress {
+			formattingProgress = append(formattingProgress, data[0].(IngestProgressResult))
+		}
+	}
 
 	// When previewing the import through the desktop adapter
 	result, err := app.PreviewImport(testIngestSessionID, filePath)
 
-	// Then it returns the mapped preview — no "ingest:*" events at all,
+	// Then it returns the mapped preview, having emitted exactly one
+	// "ingest:formatting-progress" tick for the note's single formatting
+	// batch — no "ingest:progress"/"ingest:done"/"ingest:error" at all,
 	// since nothing was persisted (PreviewImport is a plain request/
 	// response call, not the progress-streaming ImportFile/ConfirmImport)
 	require.NoError(t, err)
@@ -287,6 +299,40 @@ func TestApp_PreviewImport_returnsTheMappedPreview(t *testing.T) {
 	assert.Contains(t, result.FormattedContent, "Formatted go notes")
 	require.Len(t, result.Chunks, 1)
 	assert.Equal(t, "Go", result.Chunks[0].Heading)
+	require.Len(t, formattingProgress, 1)
+	assert.Equal(t, 1, formattingProgress[0].SectionsProcessed)
+	assert.Equal(t, 1, formattingProgress[0].SectionsTotal)
+}
+
+func TestApp_PreviewImport_mapsFailedSections_whenTheProviderErrors(t *testing.T) {
+	// Given a real markdown file and a provider whose Chat call fails
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "go.md")
+	require.NoError(t, os.WriteFile(filePath, []byte("raw go notes, long enough to survive as its own chunk on its own."), 0o600))
+
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	ctx := context.Background()
+	ingestedFiles.EXPECT().ListBySession(ctx, testIngestSessionID).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
+	llm := llmmocks.NewMockProvider(t)
+	llm.EXPECT().Chat(ctx, mock.Anything).Return(domainllm.ChatResponse{}, errors.New("timeout")).Once()
+	guard := ingestmocks.NewMockIndexGuard(t)
+	guard.EXPECT().CheckMutationAllowed().Return(nil).Once()
+	ingestService := applicationingest.NewService(nil, ingestedFiles, nil, nil, llm, nil, nil, guard)
+	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
+	app.Startup(ctx)
+	app.emit = func(context.Context, string, ...interface{}) {}
+
+	// When previewing the import through the desktop adapter
+	result, err := app.PreviewImport(testIngestSessionID, filePath)
+
+	// Then the DTO carries the failed section's heading and reason, not
+	// just the aggregate flag
+	require.NoError(t, err)
+	assert.True(t, result.FormattingFailed)
+	require.Len(t, result.FailedSections, 1)
+	assert.Empty(t, result.FailedSections[0].Heading) // no heading: the file has no H1-H3
+	assert.NotEmpty(t, result.FailedSections[0].Reason)
+	assert.Empty(t, result.StructureWarnings)
 }
 
 func TestApp_PreviewImport_returnsTheServiceError(t *testing.T) {
@@ -321,7 +367,7 @@ func TestApp_ConfirmImport_emitsProgressThenDone_onSuccess(t *testing.T) {
 	ctx := context.Background()
 	sourcePath := path.Join(normalizedSourceRoot(t, dir), "go.md")
 	ingestedFiles.EXPECT().ListBySession(ctx, testIngestSessionID).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
-	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: approved}).
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Go\n\n" + approved}).
 		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}, Model: domainllm.EmbeddingModel}, nil).Once()
 	chunks.EXPECT().DeleteBySourcePath(ctx, testIngestSessionID, sourcePath).Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {

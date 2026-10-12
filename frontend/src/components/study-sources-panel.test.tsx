@@ -37,6 +37,11 @@ vi.mock('@/lib/ingest', async (importOriginal) => {
     onIngestProgress: vi.fn(),
     onIngestDone: vi.fn(),
     onIngestError: vi.fn(),
+    // Stubbed for the same reason as onIngestProgress/onIngestDone/
+    // onIngestError above — FormattingNoteDialog subscribes to this on
+    // mount whenever it renders open, and the real EventsOn binding
+    // throws outside a live Wails runtime.
+    onFormattingProgress: vi.fn(),
   }
 })
 
@@ -46,6 +51,8 @@ function defaultPreview(overrides: Partial<ImportPreview> = {}): ImportPreview {
     originalContent: 'raw go notes',
     formattedContent: '# Go\n\nFormatted go notes.',
     formattingFailed: false,
+    failedSections: [],
+    structureWarnings: [],
     stats: { headingsBefore: 0, headingsAfter: 1, paragraphsBefore: 1, paragraphsAfter: 1 },
     chunks: [{ heading: 'Go', content: 'Formatted go notes.', charCount: 19, estimatedTokens: 4 }],
     skipped: false,

@@ -11,6 +11,8 @@ function preview(overrides: Partial<ImportPreview> = {}): ImportPreview {
     formattedContent:
       '## Eigenvectors\n\nAn eigenvector keeps its direction under the transformation.',
     formattingFailed: false,
+    failedSections: [],
+    structureWarnings: [],
     stats: { headingsBefore: 0, headingsAfter: 1, paragraphsBefore: 1, paragraphsAfter: 1 },
     chunks: [
       {
@@ -139,6 +141,69 @@ describe('ImportReviewDialog', () => {
     // Then the notice appears, and the original text is shown only once
     expect(screen.getByText(/Formatting is unavailable right now/)).toBeInTheDocument()
     expect(screen.getAllByText(/eigenvectors r vectors that dont change direction/)).toHaveLength(1)
+  })
+
+  it('names the failing section and its reason, instead of the generic notice, when failedSections is set', () => {
+    // Given a preview where only one section (out of a larger note) fell back
+    render(
+      <ImportReviewDialog
+        open={true}
+        preview={preview({
+          formattingFailed: true,
+          failedSections: [{ heading: 'Eigenvectors', reason: 'language changed: pt -> en' }],
+        })}
+        onCancel={vi.fn()}
+        onApprove={vi.fn()}
+      />,
+    )
+
+    // Then the specific section and reason are shown, not the generic
+    // "Formatting is unavailable right now" copy
+    expect(screen.queryByText(/Formatting is unavailable right now/)).not.toBeInTheDocument()
+    expect(screen.getByText('Eigenvectors')).toBeInTheDocument()
+    expect(screen.getByText(/language changed: pt -> en/)).toBeInTheDocument()
+  })
+
+  it('shows every structure warning, even when formatting otherwise succeeded', () => {
+    // Given a preview with an accepted rewrite that still left a named
+    // list collapsed into one chunk (the LRU/LFU/FIFO/RR case)
+    render(
+      <ImportReviewDialog
+        open={true}
+        preview={preview({
+          structureWarnings: [
+            {
+              heading: 'Políticas de Evicção',
+              message:
+                'a list of distinct items in this section may still be grouped into one chunk after formatting',
+            },
+          ],
+        })}
+        onCancel={vi.fn()}
+        onApprove={vi.fn()}
+      />,
+    )
+
+    // Then the warning is visible even though formattingFailed is false
+    expect(screen.getByText('Políticas de Evicção')).toBeInTheDocument()
+    expect(screen.getByText(/may still be grouped into one chunk/)).toBeInTheDocument()
+  })
+
+  it('shows the deterministic headings/paragraphs stats line when formatting succeeded', () => {
+    // Given a preview whose stats reflect a real structural change
+    render(
+      <ImportReviewDialog
+        open={true}
+        preview={preview({
+          stats: { headingsBefore: 0, headingsAfter: 1, paragraphsBefore: 1, paragraphsAfter: 2 },
+        })}
+        onCancel={vi.fn()}
+        onApprove={vi.fn()}
+      />,
+    )
+
+    // Then the stats are shown as a single scannable, app-computed line
+    expect(screen.getByText('0 → 1 headings · 1 → 2 paragraphs')).toBeInTheDocument()
   })
 
   it('calls onCancel when dismissed via Escape, not just the explicit Cancel button', async () => {

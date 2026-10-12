@@ -13,6 +13,18 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { cn } from '@/lib/utils'
 import type { ChunkPreview, ImportPreview } from '@/lib/ingest'
 
+// statsLabel renders preview.stats as a single scannable line — every
+// number here is computed deterministically by the application (never
+// narrated by the model itself), per
+// specs/phases/phase-02-knowledge-engine/20-import-review-and-formatting.md
+// decision 8.
+function statsLabel(stats: ImportPreview['stats']): string {
+  return (
+    `${stats.headingsBefore} → ${stats.headingsAfter} headings · ` +
+    `${stats.paragraphsBefore} → ${stats.paragraphsAfter} paragraphs`
+  )
+}
+
 interface ImportReviewDialogProps {
   open: boolean
   // null while no file has been picked, or while its preview is still
@@ -119,10 +131,43 @@ function ImportReviewDialog({ open, preview, onCancel, onApprove }: ImportReview
         {preview.formattingFailed && (
           <Alert>
             <AlertDescription>
-              Formatting is unavailable right now — showing your original text. You can still import
-              it as-is.
+              {preview.failedSections.length > 0 ? (
+                <>
+                  Formatting couldn't be applied to{' '}
+                  {preview.failedSections.length === 1 ? 'one section' : 'some sections'} — showing
+                  the original text there. You can still import it as-is.
+                  <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[11px]">
+                    {preview.failedSections.map((section, index) => (
+                      <li key={index}>
+                        <strong>{section.heading || 'Untitled section'}</strong>: {section.reason}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                'Formatting is unavailable right now — showing your original text. You can still import it as-is.'
+              )}
             </AlertDescription>
           </Alert>
+        )}
+
+        {preview.structureWarnings.length > 0 && (
+          <Alert>
+            <AlertDescription>
+              Some sections may still group distinct items into one chunk after formatting:
+              <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[11px]">
+                {preview.structureWarnings.map((warning, index) => (
+                  <li key={index}>
+                    <strong>{warning.heading || 'Untitled section'}</strong>: {warning.message}
+                  </li>
+                ))}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {!preview.formattingFailed && (
+          <p className="text-[11px] text-muted-foreground">{statsLabel(preview.stats)}</p>
         )}
 
         <div className="flex gap-2">

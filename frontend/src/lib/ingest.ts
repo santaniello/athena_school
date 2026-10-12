@@ -20,6 +20,14 @@ export interface IngestProgress {
   chunksTotal?: number
 }
 
+// FormattingProgress is one "ingest:formatting-progress" tick — only
+// previewImport (spec 2.20.1) emits these, as each heading-bounded batch of
+// the file being previewed gets formatted.
+export interface FormattingProgress {
+  sectionsProcessed: number
+  sectionsTotal: number
+}
+
 export interface IngestFailure {
   path: string
   reason: string
@@ -83,6 +91,22 @@ export interface FormattingStats {
   paragraphsAfter: number
 }
 
+// FailedSection is one formatting batch that fell back to its own
+// original content, naming which part of the note was affected instead
+// of just the aggregate formattingFailed flag.
+export interface FailedSection {
+  heading: string
+  reason: string
+}
+
+// StructureWarning flags one accepted batch (not a FailedSection — it
+// passed fidelity validation) whose chunking outcome still looks
+// unhealthy, e.g. a list of distinct items still grouped into one chunk.
+export interface StructureWarning {
+  heading: string
+  message: string
+}
+
 // ImportPreview is previewImport's result. skipped is true when the file
 // is unchanged since its last import — the Review dialog should not open
 // for it at all.
@@ -91,6 +115,8 @@ export interface ImportPreview {
   originalContent: string
   formattedContent: string
   formattingFailed: boolean
+  failedSections: FailedSection[]
+  structureWarnings: StructureWarning[]
   stats: FormattingStats
   chunks: ChunkPreview[]
   skipped: boolean
@@ -124,6 +150,10 @@ export async function confirmImport(
 // as the study:* events in lib/study.ts).
 export function onIngestProgress(handler: (progress: IngestProgress) => void): () => void {
   return EventsOn('ingest:progress', (progress: IngestProgress) => handler(progress))
+}
+
+export function onFormattingProgress(handler: (progress: FormattingProgress) => void): () => void {
+  return EventsOn('ingest:formatting-progress', (progress: FormattingProgress) => handler(progress))
 }
 
 export function onIngestDone(handler: (summary: IngestSummary) => void): () => void {

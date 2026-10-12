@@ -15,23 +15,28 @@ import (
 // Wails events emitted while a notes import runs. The UI only ever has one
 // import active at a time.
 const (
-	eventIngestProgress = "ingest:progress"
-	eventIngestDone     = "ingest:done"
-	eventIngestError    = "ingest:error"
+	eventIngestProgress           = "ingest:progress"
+	eventIngestDone               = "ingest:done"
+	eventIngestError              = "ingest:error"
+	eventIngestFormattingProgress = "ingest:formatting-progress"
 )
 
 // IngestProgressResult is the desktop-facing DTO for ImportFile's/
-// ConfirmImport's progress callback. ChunksProcessed/ChunksTotal are 0 for
-// every tick ImportFile's own multi-file batch reports — only
-// ConfirmImport (spec 2.20) ever sets them, as each chunk of the single
-// file it is confirming gets embedded.
+// ConfirmImport's/PreviewImport's progress callback. ChunksProcessed/
+// ChunksTotal are 0 for every tick ImportFile's own multi-file batch
+// reports — only ConfirmImport (spec 2.20) ever sets them, as each chunk
+// of the single file it is confirming gets embedded. SectionsProcessed/
+// SectionsTotal are 0 everywhere except PreviewImport (spec 2.20.1), as each
+// heading-bounded batch of the file being previewed gets formatted.
 type IngestProgressResult struct {
-	FilesProcessed  int    `json:"filesProcessed"`
-	FilesTotal      int    `json:"filesTotal"`
-	ChunksCreated   int    `json:"chunksCreated"`
-	CurrentFile     string `json:"currentFile"`
-	ChunksProcessed int    `json:"chunksProcessed"`
-	ChunksTotal     int    `json:"chunksTotal"`
+	FilesProcessed    int    `json:"filesProcessed"`
+	FilesTotal        int    `json:"filesTotal"`
+	ChunksCreated     int    `json:"chunksCreated"`
+	CurrentFile       string `json:"currentFile"`
+	ChunksProcessed   int    `json:"chunksProcessed"`
+	ChunksTotal       int    `json:"chunksTotal"`
+	SectionsProcessed int    `json:"sectionsProcessed"`
+	SectionsTotal     int    `json:"sectionsTotal"`
 }
 
 // IngestFailureResult is the desktop-facing DTO for one file that failed
@@ -59,12 +64,14 @@ type IngestSummaryResult struct {
 
 func toIngestProgressResult(p ingest.Progress) IngestProgressResult {
 	return IngestProgressResult{
-		FilesProcessed:  p.FilesProcessed,
-		FilesTotal:      p.FilesTotal,
-		ChunksCreated:   p.ChunksCreated,
-		CurrentFile:     p.CurrentFile,
-		ChunksProcessed: p.ChunksProcessed,
-		ChunksTotal:     p.ChunksTotal,
+		FilesProcessed:    p.FilesProcessed,
+		FilesTotal:        p.FilesTotal,
+		ChunksCreated:     p.ChunksCreated,
+		CurrentFile:       p.CurrentFile,
+		ChunksProcessed:   p.ChunksProcessed,
+		ChunksTotal:       p.ChunksTotal,
+		SectionsProcessed: p.SectionsProcessed,
+		SectionsTotal:     p.SectionsTotal,
 	}
 }
 
@@ -168,18 +175,34 @@ type FormattingStatsResult struct {
 	ParagraphsAfter  int `json:"paragraphsAfter"`
 }
 
+// FailedSectionResult is the desktop-facing DTO for one formatting batch
+// that fell back to its own original content.
+type FailedSectionResult struct {
+	Heading string `json:"heading"`
+	Reason  string `json:"reason"`
+}
+
+// StructureWarningResult is the desktop-facing DTO for one accepted batch
+// whose chunking outcome still looks unhealthy (see ingest.StructureWarning).
+type StructureWarningResult struct {
+	Heading string `json:"heading"`
+	Message string `json:"message"`
+}
+
 // ImportPreviewResult is the desktop-facing DTO for PreviewImport's result.
 // Skipped is true when the file is unchanged since its last import — the
 // Review dialog is not opened for it at all.
 type ImportPreviewResult struct {
-	DisplayPath      string                `json:"displayPath"`
-	OriginalContent  string                `json:"originalContent"`
-	FormattedContent string                `json:"formattedContent"`
-	FormattingFailed bool                  `json:"formattingFailed"`
-	Stats            FormattingStatsResult `json:"stats"`
-	Chunks           []ChunkPreviewResult  `json:"chunks"`
-	Skipped          bool                  `json:"skipped"`
-	SkippedReason    string                `json:"skippedReason"`
+	DisplayPath       string                   `json:"displayPath"`
+	OriginalContent   string                   `json:"originalContent"`
+	FormattedContent  string                   `json:"formattedContent"`
+	FormattingFailed  bool                     `json:"formattingFailed"`
+	FailedSections    []FailedSectionResult    `json:"failedSections"`
+	StructureWarnings []StructureWarningResult `json:"structureWarnings"`
+	Stats             FormattingStatsResult    `json:"stats"`
+	Chunks            []ChunkPreviewResult     `json:"chunks"`
+	Skipped           bool                     `json:"skipped"`
+	SkippedReason     string                   `json:"skippedReason"`
 }
 
 func toImportPreviewResult(p ingest.ImportPreview) ImportPreviewResult {
@@ -189,11 +212,21 @@ func toImportPreviewResult(p ingest.ImportPreview) ImportPreviewResult {
 			Heading: c.Heading, Content: c.Content, CharCount: c.CharCount, EstimatedTokens: c.EstimatedTokens,
 		}
 	}
+	failedSections := make([]FailedSectionResult, len(p.FailedSections))
+	for i, f := range p.FailedSections {
+		failedSections[i] = FailedSectionResult{Heading: f.Heading, Reason: f.Reason}
+	}
+	structureWarnings := make([]StructureWarningResult, len(p.StructureWarnings))
+	for i, w := range p.StructureWarnings {
+		structureWarnings[i] = StructureWarningResult{Heading: w.Heading, Message: w.Message}
+	}
 	return ImportPreviewResult{
-		DisplayPath:      p.DisplayPath,
-		OriginalContent:  p.OriginalContent,
-		FormattedContent: p.FormattedContent,
-		FormattingFailed: p.FormattingFailed,
+		DisplayPath:       p.DisplayPath,
+		OriginalContent:   p.OriginalContent,
+		FormattedContent:  p.FormattedContent,
+		FormattingFailed:  p.FormattingFailed,
+		FailedSections:    failedSections,
+		StructureWarnings: structureWarnings,
 		Stats: FormattingStatsResult{
 			HeadingsBefore:   p.Stats.HeadingsBefore,
 			HeadingsAfter:    p.Stats.HeadingsAfter,
@@ -210,8 +243,10 @@ func toImportPreviewResult(p ingest.ImportPreview) ImportPreviewResult {
 // anything — no embeddings, no database write. It opens the same os.Root
 // around the file's parent directory ImportFile does, but is a plain
 // request/response call: unlike ImportFile/ConfirmImport, it never emits
-// an "ingest:*" event, since nothing it does is a durable operation a
-// progress dialog would need to track.
+// "ingest:progress"/"ingest:done"/"ingest:error", since nothing it does is
+// a durable operation those track. It does emit
+// "ingest:formatting-progress" while formatting is in flight (spec 2.20.1),
+// a distinct event FormattingNoteDialog alone subscribes to.
 func (a *App) PreviewImport(sessionID, selectedPath string) (ImportPreviewResult, error) {
 	absolutePath, err := filepath.Abs(filepath.Clean(selectedPath))
 	if err != nil {
@@ -229,7 +264,13 @@ func (a *App) PreviewImport(sessionID, selectedPath string) (ImportPreviewResult
 		}
 	}()
 
-	preview, err := a.ingest.PreviewImport(a.ctx, sessionID, root.FS(), filepath.ToSlash(dir), filepath.Base(absolutePath))
+	preview, err := a.ingest.PreviewImport(
+		a.ctx, sessionID, root.FS(), filepath.ToSlash(dir), filepath.Base(absolutePath),
+		func(p ingest.Progress) error {
+			a.emit(a.ctx, eventIngestFormattingProgress, toIngestProgressResult(p))
+			return nil
+		},
+	)
 	if err != nil {
 		return ImportPreviewResult{}, err
 	}

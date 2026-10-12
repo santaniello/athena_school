@@ -36,6 +36,20 @@ export namespace desktop {
 	        this.estimatedTokens = source["estimatedTokens"];
 	    }
 	}
+	export class FailedSectionResult {
+	    heading: string;
+	    reason: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new FailedSectionResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.heading = source["heading"];
+	        this.reason = source["reason"];
+	    }
+	}
 	export class FolderResult {
 	    id: string;
 	    name: string;
@@ -68,11 +82,27 @@ export namespace desktop {
 	        this.paragraphsAfter = source["paragraphsAfter"];
 	    }
 	}
+	export class StructureWarningResult {
+	    heading: string;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new StructureWarningResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.heading = source["heading"];
+	        this.message = source["message"];
+	    }
+	}
 	export class ImportPreviewResult {
 	    displayPath: string;
 	    originalContent: string;
 	    formattedContent: string;
 	    formattingFailed: boolean;
+	    failedSections: FailedSectionResult[];
+	    structureWarnings: StructureWarningResult[];
 	    stats: FormattingStatsResult;
 	    chunks: ChunkPreviewResult[];
 	    skipped: boolean;
@@ -88,6 +118,8 @@ export namespace desktop {
 	        this.originalContent = source["originalContent"];
 	        this.formattedContent = source["formattedContent"];
 	        this.formattingFailed = source["formattingFailed"];
+	        this.failedSections = this.convertValues(source["failedSections"], FailedSectionResult);
+	        this.structureWarnings = this.convertValues(source["structureWarnings"], StructureWarningResult);
 	        this.stats = this.convertValues(source["stats"], FormattingStatsResult);
 	        this.chunks = this.convertValues(source["chunks"], ChunkPreviewResult);
 	        this.skipped = source["skipped"];
@@ -218,6 +250,7 @@ export namespace desktop {
 		    return a;
 		}
 	}
+	
 	
 	export class StudyContextResult {
 	    state: string;

@@ -30,6 +30,12 @@ type Progress struct {
 	CurrentFile     string
 	ChunksProcessed int
 	ChunksTotal     int
+	// SectionsProcessed/SectionsTotal report intra-file formatting
+	// progress — only PreviewImport (spec 2.20.1) ever sets them, as each
+	// heading-bounded batch of the file being previewed gets formatted.
+	// 0 on every tick ImportFile/ConfirmImport report.
+	SectionsProcessed int
+	SectionsTotal     int
 }
 
 // FileFailure records why one file could not be imported.
@@ -328,7 +334,7 @@ func (s *Service) ingestContent(
 	now := time.Now().UTC()
 	chunks := make([]domainknowledge.Chunk, len(chunkCandidates))
 	for i, chunkCandidate := range chunkCandidates {
-		response, embedErr := s.llm.Embeddings(ctx, domainllm.EmbeddingRequest{Input: chunkCandidate.Content})
+		response, embedErr := s.llm.Embeddings(ctx, domainllm.EmbeddingRequest{Input: chunkCandidate.EmbeddingText()})
 		if embedErr != nil {
 			return 0, fmt.Errorf("embedding chunk %d: %w", i, embedErr)
 		}
