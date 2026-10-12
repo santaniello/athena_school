@@ -74,10 +74,12 @@ Heading-first with a character budget, not fixed-size: the mandated schema has a
 - Parse with goldmark, walk `*ast.Heading` levels 1–3, read line offsets via
   `node.Lines()`, and **slice the raw markdown between headings**. Do not render
   to HTML — markdown reads better to the LLM and the implementation is ~40 lines
-  instead of a renderer. Heading boundaries are **flat**: any level-1–3 heading
-  starts a new section regardless of nesting, so `Heading` on a stored chunk is
-  always the text of the single heading that opened its section — never a
-  breadcrumb like `"Física > Cinemática"`.
+  instead of a renderer. Any level-1–3 heading still starts a new section
+  regardless of nesting, but `Heading` on a stored chunk is the full **breadcrumb**
+  of every heading enclosing it — e.g. `"Física > Cinemática > Aceleração"` — kept
+  via a stack of currently-open headings, popped back to the right depth on a
+  shallower or sibling heading, not just the text of the single heading that
+  opened its own section.
 - `maxChunkChars = 2000`, `minChunkChars = 200`. **Token approximation without a
   tokenizer: 4 characters ≈ 1 token**, so ~500 tokens ≈ 2000 chars. Portuguese
   runs closer to 3.5 chars/token, which this budget absorbs conservatively.

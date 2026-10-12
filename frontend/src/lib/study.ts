@@ -56,6 +56,28 @@ export interface StudySource {
   excerpt: string
 }
 
+// truncateBreadcrumb caps a " > "-joined heading breadcrumb to maxLength,
+// keeping the last (most specific) segment intact and collapsing earlier
+// segments behind a leading "… > " instead of cutting mid-segment — a
+// breadcrumb like "Arquitetura > Monolito > Tradeoffs > Vantagens" stays
+// readable even when the full chain would otherwise overflow the citation
+// chip/strip it is shown in.
+export function truncateBreadcrumb(breadcrumb: string, maxLength = 60): string {
+  if (breadcrumb.length <= maxLength) {
+    return breadcrumb
+  }
+  const segments = breadcrumb.split(' > ')
+  let result = segments[segments.length - 1]
+  for (let i = segments.length - 2; i >= 0; i--) {
+    const candidate = `${segments[i]} > ${result}`
+    if (candidate.length + '… > '.length > maxLength) {
+      break
+    }
+    result = candidate
+  }
+  return result === breadcrumb ? result : `… > ${result}`
+}
+
 // Maps a Source to its display title/subtitle per
 // specs/phases/phase-02-knowledge-engine/05-rag-integration.md's three
 // source-type label variants. Used by LocalSourcesStrip, the per-message
@@ -69,7 +91,7 @@ export function sourceLabel(source: StudySource): { title: string; subtitle: str
     case 'athena':
       return { title: 'Athena Knowledge', subtitle: source.concept }
     default:
-      return { title: source.filePath, subtitle: source.heading }
+      return { title: source.filePath, subtitle: truncateBreadcrumb(source.heading) }
   }
 }
 

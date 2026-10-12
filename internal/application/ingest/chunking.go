@@ -27,15 +27,33 @@ const minChunkChars = 200
 // a persisted knowledge.Chunk (which also needs Source/Topic/ItemID/etc.,
 // filled in by the caller).
 type ChunkCandidate struct {
+	// Heading is the full breadcrumb of every heading enclosing this
+	// chunk (e.g. "Física > Cinemática > Aceleração"), joined with " > ",
+	// or "" for text with no enclosing heading at all. See
+	// findHeadingSections.
 	Heading string
 	Content string
 	// Start and End are byte offsets into the original source string, at
 	// UTF-8 boundaries, spanning the raw text this candidate was built
-	// from. Unlike Content — which normalizes paragraph joins to "\n\n"
-	// and is what gets embedded — source[Start:End] is the literal,
-	// unmodified slice: the source's original spacing survives here even
-	// where Content does not. Chunks stay ordered and non-overlapping.
+	// from. Unlike Content — which normalizes paragraph joins to "\n\n" —
+	// source[Start:End] is the literal, unmodified slice: the source's
+	// original spacing survives here even where Content does not. Chunks
+	// stay ordered and non-overlapping.
 	Start, End int
+}
+
+// EmbeddingText is the text sent to the embedding model for this
+// candidate — the breadcrumb prefixed onto Content, never Content alone.
+// A generic section heading like "Vantagens" carries little meaning on its
+// own; folding the full breadcrumb into the embedded text (while leaving
+// the persisted/displayed Content unprefixed) gives the embedding the
+// topic context it would otherwise lose, without changing what the user
+// reviews or what gets stored. Chunks with no heading embed Content as-is.
+func (c ChunkCandidate) EmbeddingText() string {
+	if c.Heading == "" {
+		return c.Content
+	}
+	return c.Heading + "\n\n" + c.Content
 }
 
 // ChunkMarkdown splits raw markdown source into heading-scoped chunks, one
@@ -44,12 +62,13 @@ type ChunkCandidate struct {
 // a section's own short trailing (or leading) paragraph merges backward (or
 // forward) into that same section's content before ever being considered
 // for a cross-section merge; only a section that is still undersized after
-// that first pass is folded into a neighbouring section. Heading boundaries
-// are flat: any level 1-3 heading starts a new section regardless of
-// nesting, so a chunk's Heading is always the text of the single heading
-// that opened its section, never a breadcrumb — so a section whose own
-// heading bundles more than one sub-topic still ends up as one chunk per
-// paragraph, not one diluted chunk for the whole section. Text before the
+// that first pass is folded into a neighbouring section. Any level 1-3
+// heading still starts a new section regardless of nesting (a section's
+// own heading bundling more than one sub-topic still ends up as one chunk
+// per paragraph, not one diluted chunk for the whole section), but a
+// chunk's Heading is now the full breadcrumb of every heading enclosing it
+// (e.g. "Física > Cinemática > Aceleração"), not just the single heading
+// that opened its own section — see findHeadingSections. Text before the
 // first heading (or the entire document, when it has no H1-H3 at all) falls
 // back to the paragraph-splitting behaviour of ChunkText, with Heading = "".
 func ChunkMarkdown(source string) []ChunkCandidate {
@@ -79,16 +98,27 @@ func ChunkText(source string) []ChunkCandidate {
 // since goldmark parses the real block structure rather than scanning
 // lines) and slices the raw markdown between them. Each section's Content
 // includes its own heading line, so a later merge never loses the losing
-// side's heading text. Returns nil when source has no H1-H3 heading at all.
+// side's heading text. Each boundary's breadcrumb is tracked via a stack of
+// currently-open headings (pushing a deeper/sibling level, popping back to
+// the right depth on a shallower or same-level heading) — a level 1-3
+// heading still always starts a new section, but the section's Heading
+// becomes the full breadcrumb of every heading enclosing it, e.g. "Física >
+// Cinemática > Aceleração", not just its own flat title. Returns nil when
+// source has no H1-H3 heading at all.
 func findHeadingSections(source string) []ChunkCandidate {
 	src := []byte(source)
 	doc := goldmark.DefaultParser().Parse(text.NewReader(src))
 
 	type boundary struct {
-		start int
+		start      int
+		breadcrumb string
+	}
+	type stackEntry struct {
+		level int
 		title string
 	}
 	var boundaries []boundary
+	var stack []stackEntry
 	walkErr := ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
 			return ast.WalkContinue, nil
@@ -109,9 +139,20 @@ func findHeadingSections(source string) []ChunkCandidate {
 		for lineStart > 0 && src[lineStart-1] != '\n' {
 			lineStart--
 		}
+		title := strings.TrimSpace(string(seg.Value(src)))
+
+		for len(stack) > 0 && stack[len(stack)-1].level >= heading.Level {
+			stack = stack[:len(stack)-1]
+		}
+		stack = append(stack, stackEntry{level: heading.Level, title: title})
+
+		titles := make([]string, len(stack))
+		for i, e := range stack {
+			titles[i] = e.title
+		}
 		boundaries = append(boundaries, boundary{
-			start: lineStart,
-			title: strings.TrimSpace(string(seg.Value(src))),
+			start:      lineStart,
+			breadcrumb: strings.Join(titles, " > "),
 		})
 		return ast.WalkSkipChildren, nil
 	})
@@ -147,7 +188,7 @@ func findHeadingSections(source string) []ChunkCandidate {
 		raw := string(src[b.start:end])
 		relStart, relEnd := trimSpaceOffsets(raw)
 		sections = append(sections, ChunkCandidate{
-			Heading: b.title,
+			Heading: b.breadcrumb,
 			Content: raw[relStart:relEnd],
 			Start:   b.start + relStart,
 			End:     b.start + relEnd,

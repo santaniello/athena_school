@@ -92,7 +92,7 @@ type Source struct {
 	ItemID     string
 	SourceType string // user_note | imported_doc | athena
 	FilePath   string
-	Heading    string
+	Heading    string // full heading breadcrumb, e.g. "Física > Cinemática"
 	Concept    string
 	Score      float32
 	Excerpt    string
