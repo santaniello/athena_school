@@ -41,7 +41,7 @@ vi.mock('@/lib/ingest', async (importOriginal) => {
     // onIngestError above — FormattingNoteDialog subscribes to this on
     // mount whenever it renders open, and the real EventsOn binding
     // throws outside a live Wails runtime.
-    onFormattingProgress: vi.fn(),
+    onFormattingProgress: vi.fn(() => vi.fn()),
   }
 })
 

@@ -31,11 +31,13 @@ function FormattingNoteDialog({ open }: FormattingNoteDialogProps) {
   const [progress, setProgress] = useState<FormattingProgress | null>(null)
 
   useEffect(() => {
-    if (!open) {
+    if (!open) return
+
+    const unsubscribe = onFormattingProgress(setProgress)
+    return () => {
+      unsubscribe()
       setProgress(null)
-      return
     }
-    return onFormattingProgress(setProgress)
   }, [open])
 
   return (
