@@ -526,6 +526,34 @@ describe('StudySourcesPanel', () => {
     expect(confirmImport).not.toHaveBeenCalled()
   })
 
+  it("a second, unrelated review starts fresh on the Formatted tab, not carrying over the previous review's tab selection", async () => {
+    // Given a first review where the user switches to the Chunks tab,
+    // then cancels
+    vi.mocked(listSessionSources).mockResolvedValueOnce([])
+    vi.mocked(pickNotesFile).mockResolvedValueOnce('/home/user/notes/go.md')
+    setupPreviewSuccess()
+    const user = userEvent.setup()
+    render(<StudySourcesPanel sessionId="session-1" />)
+    await screen.findByText('No sources imported yet.')
+    await user.click(screen.getByRole('button', { name: 'Add source' }))
+    await screen.findByText('Review import')
+    await user.click(screen.getByRole('button', { name: 'Chunks (1)' }))
+    expect(screen.getByText(/will be created from this document/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByText('Review import')).not.toBeInTheDocument())
+
+    // When a second, unrelated file is reviewed
+    vi.mocked(pickNotesFile).mockResolvedValueOnce('/home/user/notes/other.md')
+    setupPreviewSuccess()
+    await user.click(screen.getByRole('button', { name: 'Add source' }))
+    await screen.findByText('Review import')
+
+    // Then it opens on the default Formatted tab, not the Chunks tab left
+    // selected by the previous, unrelated review
+    expect(screen.queryByText(/will be created from this document/)).not.toBeInTheDocument()
+    expect(screen.getByText('Original')).toBeInTheDocument()
+  })
+
   it('a file unchanged since its last import reloads silently, without opening the Review dialog', async () => {
     // Given a picker that resolves to a file whose preview reports it as
     // unchanged since its last import

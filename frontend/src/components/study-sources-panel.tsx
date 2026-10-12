@@ -150,6 +150,12 @@ function StudySourcesPanel({
   // open. Nothing is persisted while this is non-null: Cancel just clears
   // it, with no backend call.
   const [reviewPreview, setReviewPreview] = useState<ImportPreview | null>(null)
+  // Bumped every time a new preview is set (handleAddClick below) — used
+  // as ImportReviewDialog's key so it always remounts on a new review,
+  // even re-importing the same path right after cancelling, instead of
+  // carrying over its previous tab/expandedChunk state from an unrelated
+  // review.
+  const [reviewToken, setReviewToken] = useState(0)
   // Set only once the Review dialog's preview is approved — its presence
   // (not importPath) is what opens IngestProgressDialog, and it is passed
   // through as formattedContent so the dialog calls confirmImport instead
@@ -230,6 +236,7 @@ function StudySourcesPanel({
         }
         setImportPath(path)
         setReviewPreview(preview)
+        setReviewToken((token) => token + 1)
       } catch {
         setPickerError(PREVIEW_ERROR_MESSAGE)
       } finally {
@@ -479,6 +486,7 @@ function StudySourcesPanel({
       </div>
       <FormattingNoteDialog open={previewing} />
       <ImportReviewDialog
+        key={reviewToken}
         open={reviewPreview !== null}
         preview={reviewPreview}
         onCancel={handleReviewCancel}
