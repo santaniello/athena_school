@@ -156,9 +156,9 @@ func (s *Service) PreviewImport(
 	}
 
 	if hasPrev && prev.MTimeUnixNano == mtime && prev.EmbeddingModel == domainllm.EmbeddingModel {
-		skip, failure, checkErr := s.shouldSkipUnchanged(ctx, sessionID, prev)
+		skip, _, checkErr := s.shouldSkipUnchanged(ctx, sessionID, prev)
 		if checkErr != nil {
-			return ImportPreview{}, fmt.Errorf("ingest: %s", failure)
+			return ImportPreview{}, fmt.Errorf("ingest: %w", checkErr)
 		}
 		if skip {
 			return ImportPreview{DisplayPath: displayPath, Skipped: true, SkippedReason: "unchanged since last import"}, nil

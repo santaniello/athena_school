@@ -103,7 +103,9 @@ func TestFormatBatch_foldsTheBreadcrumbIntoTheSystemPrompt_neverTheUserMessage(t
 func TestFormatBatch_fallsBackToTheOriginalContent_onProviderError(t *testing.T) {
 	// Given a provider whose Chat call fails
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Chat(mock.Anything, mock.Anything).
+	llm.EXPECT().Chat(context.Background(), mock.MatchedBy(func(req domainllm.ChatRequest) bool {
+		return req.SessionID == testSessionID && req.Task == domainllm.TaskNoteFormatting
+	})).
 		Return(domainllm.ChatResponse{}, errors.New("rate limited")).Once()
 	svc := &Service{llm: llm}
 
@@ -120,7 +122,9 @@ func TestFormatBatch_fallsBackToTheOriginalContent_onBlankResponse(t *testing.T)
 	// Given a provider that returns a whitespace-only response
 	for _, blank := range []string{"", "   ", "\n\t "} {
 		llm := llmmocks.NewMockProvider(t)
-		llm.EXPECT().Chat(mock.Anything, mock.Anything).
+		llm.EXPECT().Chat(context.Background(), mock.MatchedBy(func(req domainllm.ChatRequest) bool {
+			return req.SessionID == testSessionID && req.Task == domainllm.TaskNoteFormatting
+		})).
 			Return(domainllm.ChatResponse{Content: blank}, nil).Once()
 		svc := &Service{llm: llm}
 
@@ -221,6 +225,38 @@ func TestPreviewImport_unchangedFile_isSkipped_withoutCallingTheFormatter(t *tes
 	assert.Empty(t, preview.Chunks)
 }
 
+func TestPreviewImport_unchangedFile_whenItemLookupFailsForAnotherReason_wrapsTheUnderlyingError(t *testing.T) {
+	// Given a file that would otherwise be skipped, but whose restoration
+	// check hits a genuine repository error (not ErrItemNotFound)
+	const content = "# Go\nBasics of Go."
+
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	prev := domainknowledge.IngestedFile{
+		SessionID: testSessionID, SourcePath: srcPath("go.md"), Path: "go.md",
+		MTimeUnixNano: fixedModTime.UnixNano(), EmbeddingModel: domainllm.EmbeddingModel, ItemID: "item-1",
+	}
+	ingestedFiles.EXPECT().ListBySession(mock.Anything, testSessionID).
+		Return(map[string]domainknowledge.IngestedFile{srcPath("go.md"): prev}, nil).Once()
+
+	boom := errors.New("database unavailable")
+	items := knowledgemocks.NewMockRepository(t)
+	items.EXPECT().GetByID(mock.Anything, "item-1").Return(domainknowledge.Item{}, boom).Once()
+
+	svc := &Service{
+		index: passingPreviewIndexGuard(t), ingestedFiles: ingestedFiles, items: items,
+	}
+	realRoot := fstest.MapFS{"go.md": {Data: []byte(content), ModTime: fixedModTime}}
+
+	// When previewing an import
+	preview, err := svc.PreviewImport(context.Background(), testSessionID, realRoot, testSourceRoot, "go.md", nil)
+
+	// Then the underlying repository error is still reachable via
+	// errors.Is, not just flattened into a string
+	require.Error(t, err)
+	assert.ErrorIs(t, err, boom)
+	assert.Equal(t, ImportPreview{}, preview)
+}
+
 func TestPreviewImport_newMarkdownFile_returnsFormattedContentAndMatchingChunks(t *testing.T) {
 	// Given a never-before-seen markdown file and a provider that cleans it up
 	const original = "eigenvectors dont change direction. the eigenvalue is the scale."
@@ -296,7 +332,9 @@ func TestPreviewImport_formattingFails_fallsBackToChunkingTheOriginalContent(t *
 		Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
 
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Chat(mock.Anything, mock.Anything).
+	llm.EXPECT().Chat(context.Background(), mock.MatchedBy(func(req domainllm.ChatRequest) bool {
+		return req.SessionID == testSessionID && req.Task == domainllm.TaskNoteFormatting
+	})).
 		Return(domainllm.ChatResponse{}, errors.New("rate limited")).Once()
 
 	svc := &Service{index: passingPreviewIndexGuard(t), ingestedFiles: ingestedFiles, llm: llm}
@@ -431,7 +469,9 @@ func TestPreviewImport_formatterTranslatesTheNote_fidelityValidationFallsBackToT
 		Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
 
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Chat(mock.Anything, mock.Anything).
+	llm.EXPECT().Chat(context.Background(), mock.MatchedBy(func(req domainllm.ChatRequest) bool {
+		return req.SessionID == testSessionID && req.Task == domainllm.TaskNoteFormatting
+	})).
 		Return(domainllm.ChatResponse{Content: translated}, nil).Once()
 
 	svc := &Service{index: passingPreviewIndexGuard(t), ingestedFiles: ingestedFiles, llm: llm}
@@ -518,7 +558,9 @@ func TestPreviewImport_namedListStillCollapsed_correctiveRetryAlsoFails_keepsFir
 		Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
 
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Chat(mock.Anything, mock.Anything).
+	llm.EXPECT().Chat(context.Background(), mock.MatchedBy(func(req domainllm.ChatRequest) bool {
+		return req.SessionID == testSessionID && req.Task == domainllm.TaskNoteFormatting
+	})).
 		Return(domainllm.ChatResponse{Content: stillCollapsed}, nil).Twice()
 
 	svc := &Service{index: passingPreviewIndexGuard(t), ingestedFiles: ingestedFiles, llm: llm}
