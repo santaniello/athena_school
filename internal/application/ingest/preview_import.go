@@ -91,7 +91,10 @@ type StructureWarning struct {
 // open the review dialog at all, the same silent-skip behavior ImportFile
 // already has.
 type ImportPreview struct {
-	DisplayPath      string
+	DisplayPath string
+	// SourceURL is the canonical URL a link import (PreviewURL) will be
+	// stored under; empty for a file import.
+	SourceURL        string
 	OriginalContent  string
 	FormattedContent string
 	// FormattingFailed is true when at least one formatting batch degraded
@@ -169,9 +172,18 @@ func (s *Service) PreviewImport(
 	if err != nil {
 		return ImportPreview{}, fmt.Errorf("ingest: reading file: %w", err)
 	}
-	original := string(raw)
 
 	isMarkdown := strings.EqualFold(path.Ext(candidate.ReadPath), ".md")
+	return s.buildPreview(ctx, sessionID, displayPath, string(raw), isMarkdown, onProgress)
+}
+
+// buildPreview formats original section by section and chunks the result —
+// the half of a preview that is the same whether the text came from a file
+// (PreviewImport) or a fetched page (PreviewURL). It persists nothing.
+func (s *Service) buildPreview(
+	ctx context.Context, sessionID, displayPath, original string, isMarkdown bool,
+	onProgress func(Progress) error,
+) (ImportPreview, error) {
 	sections := splitIntoFormattingSections(original)
 	batches := packFormattingBatches(sections)
 	var onSectionFormatted func(processed, total int) error

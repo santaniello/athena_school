@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+
+	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 )
 
 // ConfirmImport persists exactly approvedContent — the text a
@@ -57,6 +59,17 @@ func (s *Service) ConfirmImport(
 		return Summary{}, fmt.Errorf("ingest: reading file metadata: %w", err)
 	}
 
+	return s.persistApproved(ctx, sessionID, candidate, displayPath, mtime, prev, hasPrev, approvedContent, onProgress)
+}
+
+// persistApproved embeds and stores approvedContent as candidate's chunks and
+// shadow Item, reporting progress per chunk and once for the finished source.
+// It is the write step shared by ConfirmImport (a file) and ConfirmURLImport
+// (a fetched page); the caller has already reserved the index.
+func (s *Service) persistApproved(
+	ctx context.Context, sessionID string, candidate importCandidate, displayPath string, mtime int64,
+	prev domainknowledge.IngestedFile, hasPrev bool, approvedContent string, onProgress func(Progress) error,
+) (Summary, error) {
 	var summary Summary
 	summary.FilesScanned = 1
 	base := Progress{FilesTotal: 1, CurrentFile: displayPath}

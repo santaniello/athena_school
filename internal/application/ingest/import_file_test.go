@@ -75,7 +75,7 @@ func newTestService(
 	store *knowledgemocks.MockVectorStore,
 	index IndexGuard,
 ) *Service {
-	return NewService(chunks, ingestedFiles, items, documents, llm, tx, store, index)
+	return NewService(chunks, ingestedFiles, items, documents, llm, tx, store, index, nil)
 }
 
 // noOpDocuments returns a DocumentRepository mock whose Save always
