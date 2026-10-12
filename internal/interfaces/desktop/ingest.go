@@ -193,7 +193,9 @@ type StructureWarningResult struct {
 // Skipped is true when the file is unchanged since its last import — the
 // Review dialog is not opened for it at all.
 type ImportPreviewResult struct {
-	DisplayPath       string                   `json:"displayPath"`
+	DisplayPath string `json:"displayPath"`
+	// SourceURL is the canonical URL of a link preview; empty for a file.
+	SourceURL         string                   `json:"sourceUrl"`
 	OriginalContent   string                   `json:"originalContent"`
 	FormattedContent  string                   `json:"formattedContent"`
 	FormattingFailed  bool                     `json:"formattingFailed"`
@@ -222,6 +224,7 @@ func toImportPreviewResult(p ingest.ImportPreview) ImportPreviewResult {
 	}
 	return ImportPreviewResult{
 		DisplayPath:       p.DisplayPath,
+		SourceURL:         p.SourceURL,
 		OriginalContent:   p.OriginalContent,
 		FormattedContent:  p.FormattedContent,
 		FormattingFailed:  p.FormattingFailed,
@@ -303,6 +306,42 @@ func (a *App) ConfirmImport(sessionID, selectedPath, approvedContent string) err
 
 	summary, err := a.ingest.ConfirmImport(
 		a.ctx, sessionID, root.FS(), filepath.ToSlash(dir), filepath.Base(absolutePath), approvedContent,
+		func(p ingest.Progress) error {
+			a.emit(a.ctx, eventIngestProgress, toIngestProgressResult(p))
+			return nil
+		},
+	)
+	if err != nil {
+		a.emit(a.ctx, eventIngestError, err.Error())
+		return err
+	}
+	a.emit(a.ctx, eventIngestDone, toIngestSummaryResult(summary))
+	return nil
+}
+
+// PreviewLinkImport fetches rawURL and reformats and chunks the page
+// without persisting anything — the link counterpart of PreviewImport,
+// emitting the same "ingest:formatting-progress" ticks while formatting is
+// in flight. Its result's SourceURL and DisplayPath are what the frontend
+// echoes back to ConfirmLinkImport.
+func (a *App) PreviewLinkImport(sessionID, rawURL string) (ImportPreviewResult, error) {
+	preview, err := a.ingest.PreviewURL(a.ctx, sessionID, rawURL, func(p ingest.Progress) error {
+		a.emit(a.ctx, eventIngestFormattingProgress, toIngestProgressResult(p))
+		return nil
+	})
+	if err != nil {
+		return ImportPreviewResult{}, err
+	}
+	return toImportPreviewResult(preview), nil
+}
+
+// ConfirmLinkImport persists exactly approvedContent — the text a prior
+// PreviewLinkImport returned and the user approved — as rawURL's source,
+// streaming progress via the same "ingest:progress"/"ingest:done"/
+// "ingest:error" events ConfirmImport emits.
+func (a *App) ConfirmLinkImport(sessionID, rawURL, title, approvedContent string) error {
+	summary, err := a.ingest.ConfirmURLImport(
+		a.ctx, sessionID, rawURL, title, approvedContent,
 		func(p ingest.Progress) error {
 			a.emit(a.ctx, eventIngestProgress, toIngestProgressResult(p))
 			return nil
