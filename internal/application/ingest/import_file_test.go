@@ -126,7 +126,7 @@ func TestImportFile_newFile_ingestsExactlyOneFileWithFilesTotalOne(t *testing.T)
 	runWithinTx(tx)
 
 	ingestedFiles.EXPECT().ListBySession(ctx, testSessionID).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
-	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: content}).
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Go\n\n" + content}).
 		Return(embeddingResponse(), nil).Once()
 	chunks.EXPECT().DeleteBySourcePath(ctx, testSessionID, srcPath("go.md")).Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
@@ -177,7 +177,7 @@ func TestImportFile_stampsTheSessionOnChunksShadowItemAndIngestedFile(t *testing
 	runWithinTx(tx)
 
 	ingestedFiles.EXPECT().ListBySession(ctx, testSessionID).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
-	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nBasics of Go."}).
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Go\n\n# Go\nBasics of Go."}).
 		Return(embeddingResponse(), nil).Once()
 	chunks.EXPECT().DeleteBySourcePath(ctx, testSessionID, srcPath("go.md")).Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
@@ -274,7 +274,7 @@ func TestImportFile_unchangedFile_withNoStoredDocumentText_isTreatedAsStale_notS
 	items.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{ID: "item-1"}, nil).Twice()
 	documents.EXPECT().Get(ctx, testSessionID, "item-1").Return("", domainknowledge.ErrDocumentNotFound).Once()
 	items.EXPECT().Update(ctx, mock.Anything).Return(nil).Once()
-	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nBasics of Go."}).
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Go\n\n# Go\nBasics of Go."}).
 		Return(embeddingResponse(), nil).Once()
 	chunks.EXPECT().DeleteBySourcePath(ctx, testSessionID, srcPath("go.md")).Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()
@@ -349,7 +349,7 @@ func TestImportFile_unchangedFile_withDeletedItem_restoresItUnderTheSameID(t *te
 	}, nil).Once()
 	items.EXPECT().GetByID(ctx, "item-1").
 		Return(domainknowledge.Item{}, domainknowledge.ErrItemNotFound).Twice()
-	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nBasics of Go."}).
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Go\n\n# Go\nBasics of Go."}).
 		Return(embeddingResponse(), nil).Once()
 	chunks.EXPECT().DeleteBySourcePath(ctx, testSessionID, srcPath("go.md")).Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
@@ -495,7 +495,7 @@ func TestImportFile_changedFile_reembedsAndUpdatesInPlace(t *testing.T) {
 			EmbeddingModel: domainllm.EmbeddingModel, ChunkCount: 1, ItemID: "item-1",
 		},
 	}, nil).Once()
-	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nUpdated body."}).
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Go\n\n# Go\nUpdated body."}).
 		Return(embeddingResponse(), nil).Once()
 	chunks.EXPECT().DeleteBySourcePath(ctx, testSessionID, srcPath("go.md")).Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()
@@ -526,7 +526,7 @@ func TestImportFile_caseInsensitiveExtension_isAccepted(t *testing.T) {
 	runWithinTx(tx)
 
 	ingestedFiles.EXPECT().ListBySession(ctx, testSessionID).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
-	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nBasics of Go."}).
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Go\n\n# Go\nBasics of Go."}).
 		Return(embeddingResponse(), nil).Once()
 	chunks.EXPECT().DeleteBySourcePath(ctx, testSessionID, srcPath("GO.MD")).Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()
@@ -618,7 +618,7 @@ func TestImportFile_perFileFailure_isRecordedInSummary_notAsATopLevelError(t *te
 
 	ingestedFiles.EXPECT().ListBySession(ctx, testSessionID).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
 	boom := errors.New("embedding provider unavailable")
-	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nBasics of Go."}).
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Go\n\n# Go\nBasics of Go."}).
 		Return(domainllm.EmbeddingResponse{}, boom).Once()
 
 	service := newTestService(chunks, ingestedFiles, items, nil, llm, tx, nil, passingIndexGuard(t))
@@ -675,7 +675,7 @@ func TestImportFile_reportsIndexingWarning_butStillCountsTheFileAsIngested(t *te
 	runWithinTx(tx)
 
 	ingestedFiles.EXPECT().ListBySession(ctx, testSessionID).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
-	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nBasics of Go."}).
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Go\n\n# Go\nBasics of Go."}).
 		Return(embeddingResponse(), nil).Once()
 	chunks.EXPECT().DeleteBySourcePath(ctx, testSessionID, srcPath("go.md")).Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.Anything).Return(nil).Once()

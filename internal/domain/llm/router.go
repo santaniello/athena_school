@@ -16,6 +16,12 @@ const (
 	// enrich a retrieval query (see domainknowledge.QueryEnricher) — never
 	// shown to the user, so it is routed cheap like onboarding.
 	TaskQueryEnrichment TaskType = "query_enrichment"
+	// TaskNoteFormatting rewrites an imported note into clean Markdown
+	// before chunking (see specs/phases/phase-02-knowledge-engine/
+	// 20-import-review-and-formatting.md). Unlike TaskQueryEnrichment, its
+	// output is persisted and read by the user, so it is routed medium like
+	// a user-facing reply, not cheap like a hidden retrieval helper.
+	TaskNoteFormatting TaskType = "note_formatting"
 )
 
 // Tier is a cost/capability class of model.
@@ -49,7 +55,7 @@ func TierFor(task TaskType) Tier {
 	switch task {
 	case TaskOnboarding, TaskQueryEnrichment:
 		return TierCheap
-	case TaskStudy, TaskChallengeFeedback:
+	case TaskStudy, TaskChallengeFeedback, TaskNoteFormatting:
 		return TierMedium
 	case TaskInterviewEvaluation, TaskComplexReasoning:
 		return TierPremium

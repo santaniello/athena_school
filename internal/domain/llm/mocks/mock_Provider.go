@@ -194,6 +194,63 @@ func (_c *MockProvider_Embeddings_Call) RunAndReturn(run func(context.Context, l
 	return _c
 }
 
+// EmbeddingsBatch provides a mock function with given fields: ctx, req
+func (_m *MockProvider) EmbeddingsBatch(ctx context.Context, req llm.EmbeddingBatchRequest) (llm.EmbeddingBatchResponse, error) {
+	ret := _m.Called(ctx, req)
+
+	if len(ret) == 0 {
+		panic("no return value specified for EmbeddingsBatch")
+	}
+
+	var r0 llm.EmbeddingBatchResponse
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, llm.EmbeddingBatchRequest) (llm.EmbeddingBatchResponse, error)); ok {
+		return rf(ctx, req)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, llm.EmbeddingBatchRequest) llm.EmbeddingBatchResponse); ok {
+		r0 = rf(ctx, req)
+	} else {
+		r0 = ret.Get(0).(llm.EmbeddingBatchResponse)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, llm.EmbeddingBatchRequest) error); ok {
+		r1 = rf(ctx, req)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockProvider_EmbeddingsBatch_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'EmbeddingsBatch'
+type MockProvider_EmbeddingsBatch_Call struct {
+	*mock.Call
+}
+
+// EmbeddingsBatch is a helper method to define mock.On call
+//   - ctx context.Context
+//   - req llm.EmbeddingBatchRequest
+func (_e *MockProvider_Expecter) EmbeddingsBatch(ctx interface{}, req interface{}) *MockProvider_EmbeddingsBatch_Call {
+	return &MockProvider_EmbeddingsBatch_Call{Call: _e.mock.On("EmbeddingsBatch", ctx, req)}
+}
+
+func (_c *MockProvider_EmbeddingsBatch_Call) Run(run func(ctx context.Context, req llm.EmbeddingBatchRequest)) *MockProvider_EmbeddingsBatch_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(llm.EmbeddingBatchRequest))
+	})
+	return _c
+}
+
+func (_c *MockProvider_EmbeddingsBatch_Call) Return(_a0 llm.EmbeddingBatchResponse, _a1 error) *MockProvider_EmbeddingsBatch_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockProvider_EmbeddingsBatch_Call) RunAndReturn(run func(context.Context, llm.EmbeddingBatchRequest) (llm.EmbeddingBatchResponse, error)) *MockProvider_EmbeddingsBatch_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockProvider creates a new instance of MockProvider. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockProvider(t interface {

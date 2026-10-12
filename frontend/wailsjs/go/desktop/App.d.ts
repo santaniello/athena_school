@@ -3,6 +3,8 @@
 import {desktop} from '../models';
 import {context} from '../models';
 
+export function ConfirmImport(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function CreateFolder(arg1:string):Promise<desktop.FolderResult>;
 
 export function DeleteFolder(arg1:string):Promise<void>;
@@ -32,6 +34,8 @@ export function ListStudySessionsByFolder(arg1:string):Promise<Array<desktop.Stu
 export function MoveStudySession(arg1:string,arg2:string):Promise<void>;
 
 export function PickNotesFile():Promise<string>;
+
+export function PreviewImport(arg1:string,arg2:string):Promise<desktop.ImportPreviewResult>;
 
 export function RemoveSessionSource(arg1:string,arg2:string):Promise<void>;
 

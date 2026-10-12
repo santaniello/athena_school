@@ -103,7 +103,7 @@ const DOCUMENTATION: DocSection[] = [
       {
         term: 'Import notes',
         description:
-          "Add a Markdown or text file from a session's Sources panel. Re-importing later skips a file that has not changed and never duplicates anything, and removing one only affects that session.",
+          "Add a Markdown or text file from a session's Sources panel. Athena reformats it and shows you the result, and the chunks it will create, before anything is saved — confirm to import, or cancel and nothing changes. Re-importing later skips a file that has not changed and never duplicates anything, and removing one only affects that session.",
       },
       {
         term: 'Search by meaning',

@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
 import {
+  confirmImport,
   importFile,
   onIngestDone,
   onIngestError,
@@ -25,6 +26,12 @@ interface IngestProgressDialogProps {
   // path.
   sessionId?: string
   path?: string
+  // Set only once a Review dialog's preview has been approved: the exact
+  // text that preview formatted and the user approved. Its presence is
+  // what selects confirmImport over importFile — nothing else about this
+  // dialog changes. See
+  // specs/phases/phase-02-knowledge-engine/20-import-review-and-formatting.md.
+  formattedContent?: string
   onClose: () => void
 }
 
@@ -37,6 +44,7 @@ export function IngestProgressDialog({
   open,
   sessionId,
   path,
+  formattedContent,
   onClose,
 }: IngestProgressDialogProps) {
   const [ingestProgress, setIngestProgress] = useState<IngestProgress | null>(null)
@@ -56,12 +64,22 @@ export function IngestProgressDialog({
     const unsubscribeError = onIngestError(setErrorMessage)
 
     // ingest:error is normally emitted with the details before this
-    // rejects (see App.ImportFile), so the catch is usually just
-    // preventing an unhandled promise rejection. But if the binding call
-    // itself fails before ever reaching that emit — e.g. an IPC error —
-    // no ingest:error ever fires; fall back to a generic message so the
-    // dialog still becomes closable rather than staying stuck forever.
-    void importFile(sessionId ?? '', path ?? '').catch(() => {
+    // rejects (see App.ImportFile/App.ConfirmImport), so the catch is
+    // usually just preventing an unhandled promise rejection. But if the
+    // binding call itself fails before ever reaching that emit — e.g. an
+    // IPC error — no ingest:error ever fires; fall back to a generic
+    // message so the dialog still becomes closable rather than staying
+    // stuck forever.
+    //
+    // formattedContent's presence (not path/sessionId) is what selects
+    // confirmImport over importFile: it is only ever set once a Review
+    // dialog's preview has been approved, so this call never re-reads or
+    // re-formats the file — it persists exactly the approved text.
+    const run =
+      formattedContent !== undefined
+        ? confirmImport(sessionId ?? '', path ?? '', formattedContent)
+        : importFile(sessionId ?? '', path ?? '')
+    void run.catch(() => {
       if (!active) return
       setErrorMessage((current) => current || 'Failed to import notes. Please try again.')
     })
@@ -78,16 +96,26 @@ export function IngestProgressDialog({
       setIngestSummary(null)
       setErrorMessage('')
     }
-  }, [open, sessionId, path])
+  }, [open, sessionId, path, formattedContent])
 
   const finished = ingestSummary !== null || errorMessage !== ''
 
-  const progressLabel = ingestProgress
-    ? `${ingestProgress.filesProcessed} of ${ingestProgress.filesTotal} files`
-    : 'Starting...'
+  // A chunk tick (ConfirmImport, spec 2.20) takes priority over the
+  // file-level count: FilesProcessed/FilesTotal alone would show "0 of 1
+  // files" (0%) for a single-file confirm the entire time its chunks are
+  // being embedded, only ever jumping straight to 100% at the very end.
+  const hasChunkProgress = Boolean(ingestProgress?.chunksTotal)
+  const progressLabel = hasChunkProgress
+    ? `Embedding chunk ${ingestProgress?.chunksProcessed} of ${ingestProgress?.chunksTotal}`
+    : ingestProgress
+      ? `${ingestProgress.filesProcessed} of ${ingestProgress.filesTotal} files`
+      : 'Starting...'
   const currentLabel = ingestProgress?.currentFile
-  const percent =
-    ingestProgress && ingestProgress.filesTotal > 0
+  const percent = hasChunkProgress
+    ? Math.round(
+        ((ingestProgress?.chunksProcessed ?? 0) / (ingestProgress?.chunksTotal ?? 1)) * 100,
+      )
+    : ingestProgress && ingestProgress.filesTotal > 0
       ? Math.round((ingestProgress.filesProcessed / ingestProgress.filesTotal) * 100)
       : 0
 

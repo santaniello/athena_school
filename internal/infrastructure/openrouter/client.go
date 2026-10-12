@@ -98,6 +98,11 @@ type embeddingsRequest struct {
 	Input string `json:"input"`
 }
 
+type embeddingsBatchRequest struct {
+	Model string   `json:"model"`
+	Input []string `json:"input"`
+}
+
 type embeddingsResponse struct {
 	Data []struct {
 		Embedding []float64 `json:"embedding"`
@@ -299,6 +304,58 @@ func (c *Client) Embeddings(ctx context.Context, req domainllm.EmbeddingRequest)
 		Embedding: embedding,
 		Model:     domainllm.EmbeddingModel,
 		Usage:     usageFrom(decoded.Usage),
+	}, nil
+}
+
+// EmbeddingsBatch requests vector embeddings for several input texts in a
+// single round trip, via the OpenAI-compatible "input" field accepting an
+// array (the same /api/v1/embeddings endpoint Embeddings uses). Results
+// come back in decoded.Data in request order — not yet relied upon by any
+// production call site (see ingest.ingestContent, still per-chunk) until
+// verified against the real OpenRouter API; see
+// specs/phases/phase-02-knowledge-engine/20-01-section-by-section-formatting-and-validation.md.
+func (c *Client) EmbeddingsBatch(ctx context.Context, req domainllm.EmbeddingBatchRequest) (domainllm.EmbeddingBatchResponse, error) {
+	if c.key() == "" {
+		return domainllm.EmbeddingBatchResponse{}, domainllm.ErrAPIKeyMissing
+	}
+
+	resp, err := c.post(ctx, "/api/v1/embeddings", embeddingsBatchRequest{
+		Model: domainllm.EmbeddingModel,
+		Input: req.Inputs,
+	})
+	if err != nil {
+		return domainllm.EmbeddingBatchResponse{}, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	var decoded embeddingsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
+		return domainllm.EmbeddingBatchResponse{}, fmt.Errorf("openrouter: decoding embeddings batch response: %w", err)
+	}
+
+	if err := c.record(ctx, req.SessionID, domainllm.EmbeddingModel, decoded.Usage); err != nil {
+		return domainllm.EmbeddingBatchResponse{}, err
+	}
+
+	// A 200 response with fewer (or more) entries than requested would
+	// otherwise silently misalign Embeddings[i] against req.Inputs[i] for
+	// every index from the first mismatch onward — the caller has no way
+	// to detect that on its own, since this is the only place that still
+	// has both counts.
+	if len(decoded.Data) != len(req.Inputs) {
+		return domainllm.EmbeddingBatchResponse{}, fmt.Errorf(
+			"openrouter: embeddings batch returned %d results for %d inputs", len(decoded.Data), len(req.Inputs),
+		)
+	}
+
+	embeddings := make([]domainllm.EmbeddingResult, len(decoded.Data))
+	for i, d := range decoded.Data {
+		embeddings[i] = domainllm.EmbeddingResult{Embedding: d.Embedding}
+	}
+	return domainllm.EmbeddingBatchResponse{
+		Embeddings: embeddings,
+		Model:      domainllm.EmbeddingModel,
+		Usage:      usageFrom(decoded.Usage),
 	}, nil
 }
 

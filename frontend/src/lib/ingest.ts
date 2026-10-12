@@ -1,4 +1,10 @@
-import { DownloadExampleNote, ImportFile, PickNotesFile } from '../../wailsjs/go/desktop/App'
+import {
+  ConfirmImport,
+  DownloadExampleNote,
+  ImportFile,
+  PickNotesFile,
+  PreviewImport,
+} from '../../wailsjs/go/desktop/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 
 export interface IngestProgress {
@@ -6,6 +12,20 @@ export interface IngestProgress {
   filesTotal: number
   chunksCreated: number
   currentFile: string
+  // Intra-file progress — only ConfirmImport (spec 2.20) ever sets these,
+  // as each chunk of the single file it is confirming gets embedded.
+  // Absent (or 0) on every tick ImportFile's own multi-file batch reports;
+  // a reader falls back to filesProcessed/filesTotal in that case.
+  chunksProcessed?: number
+  chunksTotal?: number
+}
+
+// FormattingProgress is one "ingest:formatting-progress" tick — only
+// previewImport (spec 2.20.1) emits these, as each heading-bounded batch of
+// the file being previewed gets formatted.
+export interface FormattingProgress {
+  sectionsProcessed: number
+  sectionsTotal: number
 }
 
 export interface IngestFailure {
@@ -50,11 +70,90 @@ export async function importFile(sessionId: string, path: string): Promise<void>
   await ImportFile(sessionId, path)
 }
 
+// ChunkPreview is one would-be chunk shown in the Review dialog before
+// import is approved — the exact text confirmImport's chunker will also
+// produce, since both run over the same approved content. See
+// specs/phases/phase-02-knowledge-engine/20-import-review-and-formatting.md.
+export interface ChunkPreview {
+  heading: string
+  content: string
+  charCount: number
+  estimatedTokens: number
+}
+
+// FormattingStats are deterministic, verifiable structure counts comparing
+// a note's original and formatted text — never a model's own narrated
+// claim about what it changed.
+export interface FormattingStats {
+  headingsBefore: number
+  headingsAfter: number
+  paragraphsBefore: number
+  paragraphsAfter: number
+}
+
+// FailedSection is one formatting batch that fell back to its own
+// original content, naming which part of the note was affected instead
+// of just the aggregate formattingFailed flag.
+export interface FailedSection {
+  heading: string
+  reason: string
+}
+
+// StructureWarning flags one accepted batch (not a FailedSection — it
+// passed fidelity validation) whose chunking outcome still looks
+// unhealthy, e.g. a list of distinct items still grouped into one chunk.
+export interface StructureWarning {
+  heading: string
+  message: string
+}
+
+// ImportPreview is previewImport's result. skipped is true when the file
+// is unchanged since its last import — the Review dialog should not open
+// for it at all.
+export interface ImportPreview {
+  displayPath: string
+  originalContent: string
+  formattedContent: string
+  formattingFailed: boolean
+  failedSections: FailedSection[]
+  structureWarnings: StructureWarning[]
+  stats: FormattingStats
+  chunks: ChunkPreview[]
+  skipped: boolean
+  skippedReason: string
+}
+
+// previewImport reformats and chunks the file at path for sessionId
+// without persisting anything — no embeddings, no database write. Pass its
+// formattedContent back into confirmImport once the user approves; never
+// call confirmImport with anything else, or the chunks the user reviewed
+// stop matching what actually gets persisted.
+export async function previewImport(sessionId: string, path: string): Promise<ImportPreview> {
+  return PreviewImport(sessionId, path)
+}
+
+// confirmImport persists exactly approvedContent — the formattedContent a
+// prior previewImport call returned and the user approved — as path's
+// chunks and shadow Item, owned by sessionId. Like importFile, it resolves
+// once the import has finished; progress and the final summary arrive via
+// the same onIngestProgress/onIngestDone/onIngestError events.
+export async function confirmImport(
+  sessionId: string,
+  path: string,
+  approvedContent: string,
+): Promise<void> {
+  await ConfirmImport(sessionId, path, approvedContent)
+}
+
 // EventsOn returns its own unsubscribe function. Callers must invoke it on
 // unmount to avoid leaking a listener across dialog opens (same discipline
 // as the study:* events in lib/study.ts).
 export function onIngestProgress(handler: (progress: IngestProgress) => void): () => void {
   return EventsOn('ingest:progress', (progress: IngestProgress) => handler(progress))
+}
+
+export function onFormattingProgress(handler: (progress: FormattingProgress) => void): () => void {
+  return EventsOn('ingest:formatting-progress', (progress: FormattingProgress) => handler(progress))
 }
 
 export function onIngestDone(handler: (summary: IngestSummary) => void): () => void {

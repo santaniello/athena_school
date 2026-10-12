@@ -739,6 +739,126 @@ func TestClient_Embeddings_returnsError_whenRecordingUsageFails(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// ---- EmbeddingsBatch ----
+
+func TestClient_EmbeddingsBatch_returnsEmbeddingsInRequestOrder(t *testing.T) {
+	// Given a fake OpenRouter that returns one embedding per input, in order
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{
+				{"embedding": []float64{0.1, 0.2}, "index": 0},
+				{"embedding": []float64{0.3, 0.4}, "index": 1},
+			},
+			"usage": map[string]any{"prompt_tokens": 8, "total_tokens": 8},
+		})
+	}))
+	defer server.Close()
+	recorder := mocks.NewMockUsageRecorder(t)
+	recorder.EXPECT().Record(context.Background(), usageEntryMatcher("sess-1", domainllm.EmbeddingModel, 8, 0, 0)).Return(nil).Once()
+	client := NewClient(server.URL, "sk-or-valid", recorder)
+
+	// When requesting embeddings for two inputs in one call
+	resp, err := client.EmbeddingsBatch(context.Background(), domainllm.EmbeddingBatchRequest{
+		SessionID: "sess-1", Inputs: []string{"first chunk", "second chunk"},
+	})
+
+	// Then both embeddings come back, in the same order as the inputs
+	require.NoError(t, err)
+	require.Len(t, resp.Embeddings, 2)
+	assert.Equal(t, []float64{0.1, 0.2}, resp.Embeddings[0].Embedding)
+	assert.Equal(t, []float64{0.3, 0.4}, resp.Embeddings[1].Embedding)
+	assert.Equal(t, domainllm.EmbeddingModel, resp.Model)
+}
+
+func TestClient_EmbeddingsBatch_sendsInputsAsAnArray(t *testing.T) {
+	// Given a fake OpenRouter that echoes the request body back, returning
+	// one result per input
+	var receivedBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedBody = decodeRequestBody(t, r)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{
+				{"embedding": []float64{0.1}, "index": 0},
+				{"embedding": []float64{0.2}, "index": 1},
+				{"embedding": []float64{0.3}, "index": 2},
+			},
+			"usage": map[string]any{"prompt_tokens": 3, "total_tokens": 3},
+		})
+	}))
+	defer server.Close()
+	recorder := mocks.NewMockUsageRecorder(t)
+	recorder.EXPECT().Record(context.Background(), usageEntryMatcher("sess-1", domainllm.EmbeddingModel, 3, 0, 0)).Return(nil).Once()
+	client := NewClient(server.URL, "sk-or-valid", recorder)
+
+	// When requesting embeddings for several inputs
+	_, err := client.EmbeddingsBatch(context.Background(), domainllm.EmbeddingBatchRequest{
+		SessionID: "sess-1", Inputs: []string{"one", "two", "three"},
+	})
+
+	// Then the request's "input" field is a JSON array, not a single string
+	require.NoError(t, err)
+	assert.Equal(t, domainllm.EmbeddingModel, receivedBody["model"])
+	assert.Equal(t, []any{"one", "two", "three"}, receivedBody["input"])
+}
+
+func TestClient_EmbeddingsBatch_returnsErrAPIKeyMissing_whenAPIKeyIsEmpty(t *testing.T) {
+	// Given a client with no API key configured
+	requestReachedServer := false
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		requestReachedServer = true
+	}))
+	defer server.Close()
+	recorder := mocks.NewMockUsageRecorder(t)
+	client := NewClient(server.URL, "", recorder)
+
+	// When requesting a batch of embeddings
+	_, err := client.EmbeddingsBatch(context.Background(), domainllm.EmbeddingBatchRequest{SessionID: "sess-1", Inputs: []string{"text"}})
+
+	// Then it fails with the missing-key sentinel without reaching OpenRouter
+	assert.ErrorIs(t, err, domainllm.ErrAPIKeyMissing)
+	assert.False(t, requestReachedServer)
+}
+
+func TestClient_EmbeddingsBatch_returnsErrInsufficientCredits_whenOpenRouterReturns402(t *testing.T) {
+	// Given a fake OpenRouter that rejects for lack of credits
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusPaymentRequired)
+	}))
+	defer server.Close()
+	recorder := mocks.NewMockUsageRecorder(t)
+	client := NewClient(server.URL, "sk-or-valid", recorder)
+
+	// When requesting a batch of embeddings
+	_, err := client.EmbeddingsBatch(context.Background(), domainllm.EmbeddingBatchRequest{SessionID: "sess-1", Inputs: []string{"text"}})
+
+	// Then it fails with the insufficient-credits sentinel directly
+	assert.ErrorIs(t, err, domainllm.ErrInsufficientCredits)
+}
+
+func TestClient_EmbeddingsBatch_returnsError_whenResultCountDoesNotMatchInputCount(t *testing.T) {
+	// Given a fake OpenRouter that returns a 200 with fewer results than
+	// inputs requested — a real response shape that would otherwise
+	// silently misalign Embeddings[i] against the caller's Inputs[i]
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data":  []map[string]any{{"embedding": []float64{0.1}, "index": 0}},
+			"usage": map[string]any{"prompt_tokens": 2, "total_tokens": 2},
+		})
+	}))
+	defer server.Close()
+	recorder := mocks.NewMockUsageRecorder(t)
+	recorder.EXPECT().Record(context.Background(), usageEntryMatcher("sess-1", domainllm.EmbeddingModel, 2, 0, 0)).Return(nil).Once()
+	client := NewClient(server.URL, "sk-or-valid", recorder)
+
+	// When requesting embeddings for two inputs
+	_, err := client.EmbeddingsBatch(context.Background(), domainllm.EmbeddingBatchRequest{
+		SessionID: "sess-1", Inputs: []string{"one", "two"},
+	})
+
+	// Then it fails instead of returning an incomplete, misaligned result
+	assert.Error(t, err)
+}
+
 // ---- SetAPIKey ----
 
 func TestClient_SetAPIKey_changesKeyUsedByLaterCalls(t *testing.T) {

@@ -28,7 +28,7 @@ func TestChunkMarkdown_singleSectionUnderBudget_isKeptWhole(t *testing.T) {
 	assert.Contains(t, chunks[0].Content, "Corpo curto")
 }
 
-func TestChunkMarkdown_headingBoundariesAreFlat_neverABreadcrumb(t *testing.T) {
+func TestChunkMarkdown_headingBoundariesTrackHierarchy_asABreadcrumb(t *testing.T) {
 	// Given a document with a level-1 heading containing nested level-2/3 headings
 	source := "# Física\n" + repeatFiller("intro física ", 20) +
 		"\n\n## Cinemática\n" + repeatFiller("corpo cinemática ", 20) +
@@ -37,14 +37,31 @@ func TestChunkMarkdown_headingBoundariesAreFlat_neverABreadcrumb(t *testing.T) {
 	// When chunking it
 	chunks := ChunkMarkdown(source)
 
-	// Then each chunk's Heading is only its own single title, never a breadcrumb
+	// Then each chunk's Heading is the full breadcrumb of every heading
+	// enclosing it, not just its own single title
 	require.Len(t, chunks, 3)
 	assert.Equal(t, "Física", chunks[0].Heading)
-	assert.Equal(t, "Cinemática", chunks[1].Heading)
-	assert.Equal(t, "Aceleração", chunks[2].Heading)
-	for _, c := range chunks {
-		assert.NotContains(t, c.Heading, ">")
-	}
+	assert.Equal(t, "Física > Cinemática", chunks[1].Heading)
+	assert.Equal(t, "Física > Cinemática > Aceleração", chunks[2].Heading)
+}
+
+func TestChunkMarkdown_siblingHeadingAfterDeeperOne_resetsTheBreadcrumbToTheRightDepth(t *testing.T) {
+	// Given a level-1 heading, a level-3 heading nested under it, and then
+	// a second level-2 heading sibling that should pop back past the
+	// level-3 one rather than appending to it
+	source := "# Química\n" + repeatFiller("intro química ", 20) +
+		"\n\n### Ligações\n" + repeatFiller("corpo ligações ", 20) +
+		"\n\n## Reações\n" + repeatFiller("corpo reações ", 20)
+
+	// When chunking it
+	chunks := ChunkMarkdown(source)
+
+	// Then the sibling "Reações" breadcrumb resets to its own parent
+	// ("Química"), never carrying the unrelated "Ligações" segment
+	require.Len(t, chunks, 3)
+	assert.Equal(t, "Química", chunks[0].Heading)
+	assert.Equal(t, "Química > Ligações", chunks[1].Heading)
+	assert.Equal(t, "Química > Reações", chunks[2].Heading)
 }
 
 func TestChunkMarkdown_ignoresHashInsideFencedCodeBlock(t *testing.T) {

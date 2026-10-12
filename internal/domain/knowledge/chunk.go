@@ -25,8 +25,12 @@ type Chunk struct {
 	// captured on the source's first import — it does not change when the
 	// same source is later reached through a different folder root.
 	FilePath string
-	Heading  string
-	Content  string
+	// Heading is the full breadcrumb of every heading enclosing this
+	// chunk in its source document (e.g. "Física > Cinemática"), or ""
+	// when the chunk has no enclosing heading. Set by the chunker
+	// (application/ingest) at import time.
+	Heading string
+	Content string
 	// StartOffset/EndOffset are byte offsets, at UTF-8 boundaries, into the
 	// source document's full stored text (knowledge_documents) spanning the
 	// raw passage this chunk was built from — set by the chunker

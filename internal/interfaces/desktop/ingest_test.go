@@ -40,9 +40,10 @@ func normalizedSourceRoot(t *testing.T, dir string) string {
 // capturedIngestEvents records every ingest:* event emitted through
 // App.emit during a test.
 type capturedIngestEvents struct {
-	progress []IngestProgressResult
-	done     *IngestSummaryResult
-	errors   []string
+	progress           []IngestProgressResult
+	done               *IngestSummaryResult
+	errors             []string
+	formattingProgress []IngestProgressResult
 }
 
 func newTestIngestApp(
@@ -84,6 +85,9 @@ func newTestIngestApp(
 			captured.done = &s
 		case eventIngestError:
 			captured.errors = append(captured.errors, data[0].(string))
+		case eventIngestFormattingProgress:
+			p := data[0].(IngestProgressResult)
+			captured.formattingProgress = append(captured.formattingProgress, p)
 		}
 	}
 	return app, captured
@@ -160,7 +164,7 @@ func TestApp_ImportFile_emitsProgressThenDone_onSuccess(t *testing.T) {
 	ctx := context.Background()
 	sourcePath := path.Join(normalizedSourceRoot(t, dir), "go.md")
 	ingestedFiles.EXPECT().ListBySession(ctx, testIngestSessionID).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
-	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "# Go\nBasics of Go."}).
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Go\n\n# Go\nBasics of Go."}).
 		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}, Model: domainllm.EmbeddingModel}, nil).Once()
 	chunks.EXPECT().DeleteBySourcePath(ctx, testIngestSessionID, sourcePath).Return(nil, nil).Once()
 	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
@@ -253,6 +257,163 @@ func TestApp_ImportFile_emitsError_whenExtensionIsUnsupported(t *testing.T) {
 	require.Len(t, captured.errors, 1)
 	assert.Nil(t, captured.done)
 	ingestedFiles.AssertNotCalled(t, "ListBySession", mock.Anything, mock.Anything)
+}
+
+func TestApp_PreviewImport_returnsTheMappedPreview(t *testing.T) {
+	// Given a real markdown file, and a provider that formats it
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "go.md")
+	require.NoError(t, os.WriteFile(filePath, []byte("raw go notes"), 0o600))
+
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	ctx := context.Background()
+	ingestedFiles.EXPECT().ListBySession(ctx, testIngestSessionID).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
+	llm := llmmocks.NewMockProvider(t)
+	llm.EXPECT().Chat(ctx, mock.MatchedBy(func(req domainllm.ChatRequest) bool {
+		return req.Task == domainllm.TaskNoteFormatting
+	})).Return(domainllm.ChatResponse{Content: "# Go\n\nFormatted go notes, long enough to stand as its own chunk on its own."}, nil).Once()
+	guard := ingestmocks.NewMockIndexGuard(t)
+	guard.EXPECT().CheckMutationAllowed().Return(nil).Once()
+	ingestService := applicationingest.NewService(nil, ingestedFiles, nil, nil, llm, nil, nil, guard)
+	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
+	app.Startup(ctx)
+	var formattingProgress []IngestProgressResult
+	app.emit = func(_ context.Context, eventName string, data ...interface{}) {
+		if eventName == eventIngestFormattingProgress {
+			formattingProgress = append(formattingProgress, data[0].(IngestProgressResult))
+		}
+	}
+
+	// When previewing the import through the desktop adapter
+	result, err := app.PreviewImport(testIngestSessionID, filePath)
+
+	// Then it returns the mapped preview, having emitted exactly one
+	// "ingest:formatting-progress" tick for the note's single formatting
+	// batch — no "ingest:progress"/"ingest:done"/"ingest:error" at all,
+	// since nothing was persisted (PreviewImport is a plain request/
+	// response call, not the progress-streaming ImportFile/ConfirmImport)
+	require.NoError(t, err)
+	assert.False(t, result.Skipped)
+	assert.False(t, result.FormattingFailed)
+	assert.Equal(t, "raw go notes", result.OriginalContent)
+	assert.Contains(t, result.FormattedContent, "Formatted go notes")
+	require.Len(t, result.Chunks, 1)
+	assert.Equal(t, "Go", result.Chunks[0].Heading)
+	require.Len(t, formattingProgress, 1)
+	assert.Equal(t, 1, formattingProgress[0].SectionsProcessed)
+	assert.Equal(t, 1, formattingProgress[0].SectionsTotal)
+}
+
+func TestApp_PreviewImport_mapsFailedSections_whenTheProviderErrors(t *testing.T) {
+	// Given a real markdown file and a provider whose Chat call fails
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "go.md")
+	require.NoError(t, os.WriteFile(filePath, []byte("raw go notes, long enough to survive as its own chunk on its own."), 0o600))
+
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	ctx := context.Background()
+	ingestedFiles.EXPECT().ListBySession(ctx, testIngestSessionID).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
+	llm := llmmocks.NewMockProvider(t)
+	llm.EXPECT().Chat(ctx, mock.Anything).Return(domainllm.ChatResponse{}, errors.New("timeout")).Once()
+	guard := ingestmocks.NewMockIndexGuard(t)
+	guard.EXPECT().CheckMutationAllowed().Return(nil).Once()
+	ingestService := applicationingest.NewService(nil, ingestedFiles, nil, nil, llm, nil, nil, guard)
+	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
+	app.Startup(ctx)
+	app.emit = func(context.Context, string, ...interface{}) {}
+
+	// When previewing the import through the desktop adapter
+	result, err := app.PreviewImport(testIngestSessionID, filePath)
+
+	// Then the DTO carries the failed section's heading and reason, not
+	// just the aggregate flag
+	require.NoError(t, err)
+	assert.True(t, result.FormattingFailed)
+	require.Len(t, result.FailedSections, 1)
+	assert.Empty(t, result.FailedSections[0].Heading) // no heading: the file has no H1-H3
+	assert.NotEmpty(t, result.FailedSections[0].Reason)
+	assert.Empty(t, result.StructureWarnings)
+}
+
+func TestApp_PreviewImport_returnsTheServiceError(t *testing.T) {
+	// Given a path that does not exist on disk
+	guard := ingestmocks.NewMockIndexGuard(t)
+	ingestService := applicationingest.NewService(nil, nil, nil, nil, nil, nil, nil, guard)
+	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
+	app.Startup(context.Background())
+
+	// When previewing it
+	_, err := app.PreviewImport(testIngestSessionID, filepath.Join(t.TempDir(), "does-not-exist", "go.md"))
+
+	// Then the error propagates — no event is emitted either way, since
+	// PreviewImport never emits
+	require.Error(t, err)
+}
+
+func TestApp_ConfirmImport_emitsProgressThenDone_onSuccess(t *testing.T) {
+	// Given a real file on disk, and approved (already-formatted) text
+	// that differs from it — ConfirmImport must persist the approved text,
+	// not re-read the file
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "go.md")
+	require.NoError(t, os.WriteFile(filePath, []byte("raw unformatted text"), 0o600))
+	const approved = "# Go\nBasics of Go, approved during review."
+
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	items := knowledgemocks.NewMockRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+
+	ctx := context.Background()
+	sourcePath := path.Join(normalizedSourceRoot(t, dir), "go.md")
+	ingestedFiles.EXPECT().ListBySession(ctx, testIngestSessionID).Return(map[string]domainknowledge.IngestedFile{}, nil).Once()
+	llm.EXPECT().Embeddings(ctx, domainllm.EmbeddingRequest{Input: "Go\n\n" + approved}).
+		Return(domainllm.EmbeddingResponse{Embedding: []float64{0.1}, Model: domainllm.EmbeddingModel}, nil).Once()
+	chunks.EXPECT().DeleteBySourcePath(ctx, testIngestSessionID, sourcePath).Return(nil, nil).Once()
+	chunks.EXPECT().SaveAll(ctx, mock.MatchedBy(func(cs []domainknowledge.Chunk) bool {
+		return len(cs) == 1 && cs[0].Content == approved && cs[0].SourcePath == sourcePath
+	})).Return(nil).Once()
+	items.EXPECT().Save(ctx, mock.Anything).Return(nil).Once()
+	ingestedFiles.EXPECT().Upsert(ctx, mock.Anything).Return(nil).Once()
+	store := knowledgemocks.NewMockVectorStore(t)
+	store.EXPECT().Remove(mock.Anything, ([]string)(nil)).Return(nil).Once()
+	store.EXPECT().Add(mock.Anything, mock.Anything).Return(nil).Once()
+	documents := knowledgemocks.NewMockDocumentRepository(t)
+	documents.EXPECT().Save(ctx, mock.Anything, testIngestSessionID, approved).Return(nil).Once()
+
+	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, documents, llm, store)
+
+	// When confirming the import through the desktop adapter
+	err := app.ConfirmImport(testIngestSessionID, filePath, approved)
+
+	// Then it emits the same ingest:progress/ingest:done events ImportFile
+	// does — IngestProgressDialog needs no new event wiring — plus one
+	// intra-file chunk-progress tick (spec 2.20) before the final one
+	require.NoError(t, err)
+	require.Len(t, captured.progress, 2)
+	assert.Equal(t, 1, captured.progress[0].ChunksProcessed)
+	assert.Equal(t, 1, captured.progress[0].ChunksTotal)
+	assert.Equal(t, "go.md", captured.progress[1].CurrentFile)
+	require.NotNil(t, captured.done)
+	assert.Equal(t, 1, captured.done.FilesIngested)
+	assert.Empty(t, captured.errors)
+}
+
+func TestApp_ConfirmImport_emitsError_whenFileDoesNotExist(t *testing.T) {
+	// Given a path that does not exist on disk
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	ingestedFiles := knowledgemocks.NewMockIngestedFileRepository(t)
+	items := knowledgemocks.NewMockRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	app, captured := newTestIngestApp(t, chunks, ingestedFiles, items, nil, llm, nil)
+
+	// When confirming it
+	err := app.ConfirmImport(testIngestSessionID, filepath.Join(t.TempDir(), "does-not-exist", "go.md"), "content")
+
+	// Then an "ingest:error" event is emitted and the error is returned
+	require.Error(t, err)
+	require.Len(t, captured.errors, 1)
+	assert.Nil(t, captured.done)
 }
 
 func TestApp_ListSessionSources_returnsTheMappedResults(t *testing.T) {

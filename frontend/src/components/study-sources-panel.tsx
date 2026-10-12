@@ -20,10 +20,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { FormattingNoteDialog } from '@/components/formatting-note-dialog'
+import { ImportReviewDialog } from '@/components/import-review-dialog'
 import { IngestProgressDialog } from '@/components/ingest-progress-dialog'
 import { SourceViewer } from '@/components/source-viewer'
 import { useSessionSources } from '@/hooks/use-session-sources'
-import { downloadExampleNote, pickNotesFile } from '@/lib/ingest'
+import { downloadExampleNote, pickNotesFile, previewImport, type ImportPreview } from '@/lib/ingest'
 import { removeSessionSource, type SessionSource } from '@/lib/sources'
 
 interface StudySourcesPanelProps {
@@ -51,6 +53,18 @@ const PICKER_ERROR_MESSAGE = 'Failed to open the notes picker. Please try again.
 // specs/phases/phase-02-knowledge-engine/19-example-note-template.md.
 const DOWNLOAD_EXAMPLE_ERROR_MESSAGE = 'Failed to save the example note. Please try again.'
 
+// Shares the same inline error slot too — PreviewImport never reaches the
+// LLM/formatting step for a picker failure, so this is always a distinct
+// cause from PICKER_ERROR_MESSAGE even though both render in the same
+// place. See
+// specs/phases/phase-02-knowledge-engine/20-import-review-and-formatting.md.
+const PREVIEW_ERROR_MESSAGE = 'Failed to prepare the import. Please try again.'
+
+// Shown next to Add while previewImport is in flight — distinct from the
+// index-retry tooltip below, since nothing about the knowledge index is
+// involved yet.
+const PREVIEWING_LABEL = 'Formatting note…'
+
 // chunkCountLabel pluralizes "chunk" for a row's subtitle — "1 chunk",
 // "12 chunks".
 function chunkCountLabel(chunkCount: number): string {
@@ -67,18 +81,24 @@ interface AddSourceButtonProps {
   // empty state's own, differently-labeled action); the empty state's
   // "Add a source" button is fine relying on its own visible text.
   ariaLabel?: string
+  // Why it's disabled, shown as its tooltip. Defaults to the index-retry
+  // reason, the only one that existed before previewImport added a second
+  // (previewing) cause.
+  disabledReason?: string
 }
 
-// Add is disabled only while mutationsDisabled — Remove stays disabled
-// unconditionally until its own increment wires it up (see the file
-// comment). Sharing this between the header and empty-state actions keeps
-// their disabled/tooltip behavior from drifting apart.
+// Add is disabled while mutationsDisabled or while previewImport is in
+// flight — Remove stays disabled unconditionally until its own increment
+// wires it up (see the file comment). Sharing this between the header and
+// empty-state actions keeps their disabled/tooltip behavior from drifting
+// apart.
 function AddSourceButton({
   onClick,
   disabled,
   children,
   variant = 'default',
   ariaLabel,
+  disabledReason = 'Rebuilding knowledge index…',
 }: AddSourceButtonProps) {
   const button = (
     <Button
@@ -103,7 +123,7 @@ function AddSourceButton({
       <TooltipTrigger asChild>
         <span>{button}</span>
       </TooltipTrigger>
-      <TooltipContent>Rebuilding knowledge index…</TooltipContent>
+      <TooltipContent>{disabledReason}</TooltipContent>
     </Tooltip>
   )
 }
@@ -122,6 +142,25 @@ function StudySourcesPanel({
   const [query, setQuery] = useState('')
   const [importPath, setImportPath] = useState<string | null>(null)
   const [pickerError, setPickerError] = useState('')
+  // True only while previewImport is in flight, between the picker
+  // resolving and the Review dialog (or a silent skip) taking over. See
+  // specs/phases/phase-02-knowledge-engine/20-import-review-and-formatting.md.
+  const [previewing, setPreviewing] = useState(false)
+  // The preview a Review dialog shows — null means no Review dialog is
+  // open. Nothing is persisted while this is non-null: Cancel just clears
+  // it, with no backend call.
+  const [reviewPreview, setReviewPreview] = useState<ImportPreview | null>(null)
+  // Bumped every time a new preview is set (handleAddClick below) — used
+  // as ImportReviewDialog's key so it always remounts on a new review,
+  // even re-importing the same path right after cancelling, instead of
+  // carrying over its previous tab/expandedChunk state from an unrelated
+  // review.
+  const [reviewToken, setReviewToken] = useState(0)
+  // Set only once the Review dialog's preview is approved — its presence
+  // (not importPath) is what opens IngestProgressDialog, and it is passed
+  // through as formattedContent so the dialog calls confirmImport instead
+  // of importFile.
+  const [approvedContent, setApprovedContent] = useState<string | null>(null)
   // The document a Remove confirmation targets — non-null opens the
   // AlertDialog. removeError is scoped to that one confirmation, not the
   // whole panel, so opening it for another document always starts clean.
@@ -185,7 +224,24 @@ function StudySourcesPanel({
     setPickerError('')
     try {
       const path = await pickNotesFile()
-      if (path) setImportPath(path)
+      if (!path) return
+      setPreviewing(true)
+      try {
+        const preview = await previewImport(sessionId, path)
+        // Unchanged since its last import: the same silent skip ImportFile
+        // always had, with no Review dialog ever opening for it.
+        if (preview.skipped) {
+          reload()
+          return
+        }
+        setImportPath(path)
+        setReviewPreview(preview)
+        setReviewToken((token) => token + 1)
+      } catch {
+        setPickerError(PREVIEW_ERROR_MESSAGE)
+      } finally {
+        setPreviewing(false)
+      }
     } catch {
       setPickerError(PICKER_ERROR_MESSAGE)
     }
@@ -200,8 +256,25 @@ function StudySourcesPanel({
     }
   }
 
+  // Nothing was persisted during preview, so there is nothing to undo —
+  // this just discards the in-memory preview state.
+  function handleReviewCancel() {
+    setReviewPreview(null)
+    setImportPath(null)
+  }
+
+  // Receives exactly preview.formattedContent (never anything else) from
+  // ImportReviewDialog's onApprove — opening IngestProgressDialog with it
+  // as formattedContent, which is what selects confirmImport over
+  // importFile.
+  function handleReviewApprove(formattedContent: string) {
+    setReviewPreview(null)
+    setApprovedContent(formattedContent)
+  }
+
   function handleImportDialogClose() {
     setImportPath(null)
+    setApprovedContent(null)
     reload()
   }
 
@@ -239,12 +312,18 @@ function StudySourcesPanel({
     }
   }
 
-  // Stryker disable next-line StringLiteral: only read when importPath is
-  // null, i.e. IngestProgressDialog's own `open` prop is false — its effect
-  // bails via `if (!open) return` before path ever drives anything
+  // Stryker disable next-line StringLiteral: only read when approvedContent
+  // is null, i.e. IngestProgressDialog's own `open` prop is false — its
+  // effect bails via `if (!open) return` before path ever drives anything
   // observable, so this fallback exists purely to satisfy the required
   // (non-optional) prop type.
   const importDialogPath = importPath ?? ''
+
+  // Add is disabled by the index retrying or by a preview already in
+  // flight — each gets its own tooltip reason, since neither cause implies
+  // the other.
+  const addDisabled = mutationsDisabled || previewing
+  const addDisabledReason = mutationsDisabled ? 'Rebuilding knowledge index…' : PREVIEWING_LABEL
 
   if (viewing !== null) {
     return (
@@ -284,7 +363,8 @@ function StudySourcesPanel({
               </Button>
               <AddSourceButton
                 onClick={() => void handleAddClick()}
-                disabled={mutationsDisabled}
+                disabled={addDisabled}
+                disabledReason={addDisabledReason}
                 ariaLabel="Add source"
               >
                 Add
@@ -329,7 +409,8 @@ function StudySourcesPanel({
                 </p>
                 <AddSourceButton
                   onClick={() => void handleAddClick()}
-                  disabled={mutationsDisabled}
+                  disabled={addDisabled}
+                  disabledReason={addDisabledReason}
                   variant="outline"
                 >
                   Add a source
@@ -403,10 +484,19 @@ function StudySourcesPanel({
           )}
         </div>
       </div>
+      <FormattingNoteDialog open={previewing} />
+      <ImportReviewDialog
+        key={reviewToken}
+        open={reviewPreview !== null}
+        preview={reviewPreview}
+        onCancel={handleReviewCancel}
+        onApprove={handleReviewApprove}
+      />
       <IngestProgressDialog
-        open={importPath !== null}
+        open={approvedContent !== null}
         sessionId={sessionId}
         path={importDialogPath}
+        formattedContent={approvedContent ?? undefined}
         onClose={handleImportDialogClose}
       />
       <AlertDialog open={removeTarget !== null} onOpenChange={handleRemoveDialogOpenChange}>
