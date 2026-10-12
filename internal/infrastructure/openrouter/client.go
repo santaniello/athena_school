@@ -337,6 +337,17 @@ func (c *Client) EmbeddingsBatch(ctx context.Context, req domainllm.EmbeddingBat
 		return domainllm.EmbeddingBatchResponse{}, err
 	}
 
+	// A 200 response with fewer (or more) entries than requested would
+	// otherwise silently misalign Embeddings[i] against req.Inputs[i] for
+	// every index from the first mismatch onward — the caller has no way
+	// to detect that on its own, since this is the only place that still
+	// has both counts.
+	if len(decoded.Data) != len(req.Inputs) {
+		return domainllm.EmbeddingBatchResponse{}, fmt.Errorf(
+			"openrouter: embeddings batch returned %d results for %d inputs", len(decoded.Data), len(req.Inputs),
+		)
+	}
+
 	embeddings := make([]domainllm.EmbeddingResult, len(decoded.Data))
 	for i, d := range decoded.Data {
 		embeddings[i] = domainllm.EmbeddingResult{Embedding: d.Embedding}
