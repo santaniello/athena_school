@@ -4,6 +4,10 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/text"
 )
 
 // minFormattingSizeRatio rejects a batch's rewrite when the formatted text
@@ -113,11 +117,38 @@ func extractNumbersPercentsURLsVersions(text string) []string {
 	return matches
 }
 
-var codeBlockPattern = regexp.MustCompile("(?s)```.*?```")
+// extractCodeBlocks returns every fenced code block's content in text
+// (the lines between the fence markers, not the fence markers
+// themselves), verbatim. Parses with goldmark rather than a hand-rolled
+// regex: CommonMark fences can use "~~~" as well as backticks, can be
+// longer than three characters, and a fence only closes on a line with at
+// least as many of the same fence character — a naive
+// "```.*?```" pattern misreads a fence containing its own triple
+// backticks (e.g. a four-backtick fence wrapping a snippet that itself
+// shows ``` as an example) as closing early.
+func extractCodeBlocks(source string) []string {
+	src := []byte(source)
+	doc := goldmark.DefaultParser().Parse(text.NewReader(src))
 
-// extractCodeBlocks returns every fenced code block in text, verbatim.
-func extractCodeBlocks(text string) []string {
-	return codeBlockPattern.FindAllString(text, -1)
+	var blocks []string
+	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		fenced, ok := n.(*ast.FencedCodeBlock)
+		if !ok {
+			return ast.WalkContinue, nil
+		}
+		lines := fenced.Lines()
+		if lines.Len() == 0 {
+			return ast.WalkSkipChildren, nil
+		}
+		start := lines.At(0).Start
+		end := lines.At(lines.Len() - 1).Stop
+		blocks = append(blocks, string(src[start:end]))
+		return ast.WalkSkipChildren, nil
+	})
+	return blocks
 }
 
 // sizeRatio is formatted's rune length as a fraction of original's. An

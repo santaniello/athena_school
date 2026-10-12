@@ -36,10 +36,28 @@ func TestExtractNumbersPercentsURLsVersions_findsEachKind(t *testing.T) {
 	assert.Contains(t, tokens, "200")
 }
 
-func TestExtractCodeBlocks_returnsFencedBlocksVerbatim(t *testing.T) {
+func TestExtractCodeBlocks_returnsTheFenceContentVerbatim_notTheFenceMarkers(t *testing.T) {
 	text := "Explicação.\n\n```go\nfunc main() {}\n```\n\nMais texto."
 	blocks := extractCodeBlocks(text)
-	assert.Equal(t, []string{"```go\nfunc main() {}\n```"}, blocks)
+	assert.Equal(t, []string{"func main() {}\n"}, blocks)
+}
+
+func TestExtractCodeBlocks_tildeFence_isRecognized(t *testing.T) {
+	// Given a CommonMark fence using "~~~" instead of backticks — a naive
+	// "```...```"-only pattern would miss this entirely
+	text := "~~~go\nfunc main() {}\n~~~\n"
+	blocks := extractCodeBlocks(text)
+	assert.Equal(t, []string{"func main() {}\n"}, blocks)
+}
+
+func TestExtractCodeBlocks_longerFenceWithEmbeddedTripleBackticks_closesAtTheRealFence(t *testing.T) {
+	// Given a 4-backtick fence wrapping a snippet that itself shows ``` as
+	// an example — a "```.*?```" regex would close at that inner triple,
+	// truncating the block; a real CommonMark parser requires the closing
+	// fence to have at least as many backticks as the opening one
+	text := "````markdown\nUse ``` to open a code fence.\n````\n"
+	blocks := extractCodeBlocks(text)
+	assert.Equal(t, []string{"Use ``` to open a code fence.\n"}, blocks)
 }
 
 func TestSizeRatio_shrunkenText_isBelowOne(t *testing.T) {
