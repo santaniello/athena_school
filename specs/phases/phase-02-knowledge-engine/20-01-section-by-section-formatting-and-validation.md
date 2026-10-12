@@ -81,9 +81,10 @@ improvements around it. `ConfirmImport`/`ingestContent`'s contract is unchanged.
 6. **`FormattingFailed` is now "did any batch fall back," computed from real outcomes, not a
    single whole-document flag.** `anyBatchFellBack(outcomes)` ORs every batch's own fallback —
    semantically the same field the Review dialog already reads, just sourced from granular data.
-   Per-batch failure detail (`FailedSections`) and a structural-health signal for the
-   still-collapsed-list case are tracked for a follow-up UI pass (see Known risks) rather than
-   bundled into this spec's first slice.
+   Per-batch failure detail (`FailedSections`) and the structural-health signal for the
+   still-collapsed-list case (`StructureWarnings`) are also delivered in this same PR — see
+   decision/surface sections below and the Frontend design section for how the Review dialog
+   renders them.
 7. **The embedding call for every chunk is prefixed with its own heading breadcrumb — the
    `Content` field persisted and shown to the user stays unprefixed.** `ChunkCandidate.
    EmbeddingText()` returns `Heading + "\n\n" + Content` (or `Content` alone when `Heading ==
