@@ -145,15 +145,30 @@ func TestConfirmImport_stopsBeforePersisting_whenAChunkProgressTickFails(t *test
 		chunks: chunks, ingestedFiles: ingestedFiles, items: items, llm: llm, index: index,
 	}
 
+	// onProgress fails only on its first call and would succeed on any
+	// later one — proving the first tick's own error propagates on its
+	// own, not by coincidence of some later call also failing (which
+	// previously masked this: the failing tick's error was recorded as an
+	// ordinary Summary.Failures entry, and the *next* onProgress call —
+	// succeeding here — produced a nil top-level error).
 	progressErr := errors.New("progress consumer gone")
-	onProgress := func(Progress) error { return progressErr }
+	var calls int
+	onProgress := func(Progress) error {
+		calls++
+		if calls == 1 {
+			return progressErr
+		}
+		return nil
+	}
 
 	// When confirming the import
 	_, err := service.ConfirmImport(ctx, testSessionID, root, testSourceRoot, "go.md", approved, onProgress)
 
-	// Then it stops immediately, before the second chunk is even embedded
+	// Then it stops immediately, before the second chunk is even embedded,
+	// and onProgress is never called again after the failing tick
 	require.Error(t, err)
 	assert.ErrorIs(t, err, progressErr)
+	assert.Equal(t, 1, calls)
 }
 
 func TestConfirmImport_blankSessionID_isRejectedBeforeReservingTheIndex(t *testing.T) {

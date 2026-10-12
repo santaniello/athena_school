@@ -22,7 +22,11 @@ import (
 // still 0 — the file itself isn't done yet), then exactly once more for the
 // finished file (FilesProcessed: 1), matching ImportFile's one-call-per-
 // file contract for that final tick. A non-nil error from any call stops
-// the import immediately, before anything is persisted.
+// the import immediately, before anything is persisted, and propagates
+// directly as this call's own error — never downgraded into an ordinary
+// per-file Summary.Failures entry the way an embedding/chunking failure
+// is, since a failing progress callback means the caller itself can no
+// longer be reached, not that this file failed to import.
 func (s *Service) ConfirmImport(
 	ctx context.Context, sessionID string, root fs.FS, sourceRoot, filePath, approvedContent string,
 	onProgress func(Progress) error,
@@ -57,16 +61,31 @@ func (s *Service) ConfirmImport(
 	summary.FilesScanned = 1
 	base := Progress{FilesTotal: 1, CurrentFile: displayPath}
 
+	// progressErr captures a failure from onProgress itself (e.g. the
+	// consumer on the other side of the IPC channel is gone) as distinct
+	// from an ingestErr caused by embedding/chunking/persistence — the
+	// former must propagate directly, never get recorded as an ordinary
+	// per-file failure in summary via applyIngestOutcome, which would let
+	// a later, successful onProgress call mask it into a nil-error return.
+	var progressErr error
 	onChunkEmbedded := func(processed, total int) error {
 		tick := base
 		tick.ChunksProcessed = processed
 		tick.ChunksTotal = total
-		return onProgress(tick)
+		if err := onProgress(tick); err != nil {
+			progressErr = err
+			return err
+		}
+		return nil
 	}
 
 	chunksCreated, ingestErr := s.ingestContent(
 		ctx, sessionID, candidate, displayPath, mtime, prev, hasPrev, approvedContent, onChunkEmbedded,
 	)
+	if progressErr != nil {
+		return Summary{}, progressErr
+	}
+
 	progress := base
 	applyIngestOutcome(&summary, &progress, displayPath, chunksCreated, ingestErr)
 	progress.FilesProcessed = 1
