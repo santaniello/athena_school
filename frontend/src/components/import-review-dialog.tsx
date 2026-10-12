@@ -222,7 +222,8 @@ function ImportReviewDialog({ open, preview, onCancel, onApprove }: ImportReview
             <div className="flex flex-col gap-2">
               <p className="text-xs text-muted-foreground">
                 {chunkCountLabel(preview.chunks.length)} will be created from this document — each
-                is exactly the text that gets embedded and retrieved later in chat.
+                is the passage retrieved later in chat. Its embedding also includes the section
+                heading shown above it, for context.
               </p>
               {preview.chunks.map((chunk, index) => (
                 <ChunkCard

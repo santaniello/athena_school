@@ -25,6 +25,7 @@ import {
   resumeStudySession,
   sendStudyMessage,
   startStudySession,
+  truncateBreadcrumb,
   type StudyContextUsage,
 } from './study'
 
@@ -391,5 +392,38 @@ describe('onStudySources', () => {
     // Then the handler received the sessionId and sources
     expect(EventsOn).toHaveBeenCalledWith('study:sources', expect.any(Function))
     expect(handler).toHaveBeenCalledWith({ sessionId: 'session-1', sources })
+  })
+})
+
+describe('truncateBreadcrumb', () => {
+  it('returns the breadcrumb unchanged when already within maxLength', () => {
+    expect(truncateBreadcrumb('Física > Cinemática', 60)).toBe('Física > Cinemática')
+  })
+
+  it('collapses earlier segments behind an ellipsis, keeping the leaf intact', () => {
+    const breadcrumb = 'Arquitetura > Monolito > Tradeoffs > Vantagens'
+    expect(truncateBreadcrumb(breadcrumb, 20)).toBe('… > Vantagens')
+  })
+
+  it('keeps as many ancestor segments as fit under the budget', () => {
+    const breadcrumb = 'Arquitetura > Monolito > Tradeoffs > Vantagens'
+    expect(truncateBreadcrumb(breadcrumb, 30)).toBe('… > Tradeoffs > Vantagens')
+  })
+
+  it('never exceeds maxLength even when the leaf segment alone already fills it', () => {
+    // Given a breadcrumb whose last segment alone is already longer than
+    // maxLength — collapsing ancestors can't help here
+    const longLeaf = 'A'.repeat(80)
+    const breadcrumb = `Parent > ${longLeaf}`
+
+    const result = truncateBreadcrumb(breadcrumb, 60)
+
+    expect(result.length).toBeLessThanOrEqual(60)
+    expect(result.endsWith('…')).toBe(true)
+  })
+
+  it('does not prepend an ellipsis for a single segment with no ancestors to collapse', () => {
+    const longLeaf = 'A'.repeat(80)
+    expect(truncateBreadcrumb(longLeaf, 60)).toBe(`${'A'.repeat(59)}…`)
   })
 })

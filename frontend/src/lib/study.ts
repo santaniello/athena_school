@@ -61,21 +61,30 @@ export interface StudySource {
 // segments behind a leading "… > " instead of cutting mid-segment — a
 // breadcrumb like "Arquitetura > Monolito > Tradeoffs > Vantagens" stays
 // readable even when the full chain would otherwise overflow the citation
-// chip/strip it is shown in.
+// chip/strip it is shown in. When the leaf segment alone already fills the
+// budget, it is hard-truncated with a trailing "…" instead — collapsing
+// ancestors can't help there, and exceeding maxLength just to keep one
+// long segment whole would defeat the point of capping it at all.
 export function truncateBreadcrumb(breadcrumb: string, maxLength = 60): string {
   if (breadcrumb.length <= maxLength) {
     return breadcrumb
   }
+  const ellipsisPrefix = '… > '
   const segments = breadcrumb.split(' > ')
-  let result = segments[segments.length - 1]
+  const lastSegment = segments[segments.length - 1]
+  if (lastSegment.length >= maxLength) {
+    return `${lastSegment.slice(0, Math.max(0, maxLength - 1))}…`
+  }
+
+  let result = lastSegment
   for (let i = segments.length - 2; i >= 0; i--) {
     const candidate = `${segments[i]} > ${result}`
-    if (candidate.length + '… > '.length > maxLength) {
+    if (candidate.length + ellipsisPrefix.length > maxLength) {
       break
     }
     result = candidate
   }
-  return result === breadcrumb ? result : `… > ${result}`
+  return result === breadcrumb ? result : `${ellipsisPrefix}${result}`
 }
 
 // Maps a Source to its display title/subtitle per
