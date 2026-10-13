@@ -15,7 +15,7 @@ function IndexFailedScreen({ lastError, retrying, onRetry, onContinue }: IndexFa
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background px-6 text-center">
       <p className="text-sm font-medium text-foreground">Knowledge index could not be loaded.</p>
-      {lastError && <p className="max-w-sm text-xs text-muted-foreground">{lastError}</p>}
+      {lastError && <p className="max-w-sm text-sm text-muted-foreground">{lastError}</p>}
       <div className="flex gap-2 pt-2">
         <Button onClick={onRetry} disabled={retrying}>
           Retry

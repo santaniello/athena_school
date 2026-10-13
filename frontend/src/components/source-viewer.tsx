@@ -80,10 +80,10 @@ function SourceViewer({ sessionId, itemId, onBack, chunkId, reopenToken }: Sourc
         </Button>
         {document && (
           <div className="min-w-0">
-            <h2 className="truncate font-heading text-base font-bold text-foreground">
+            <h2 className="truncate font-heading text-lg font-semibold text-foreground">
               {document.title}
             </h2>
-            <p className="truncate text-[11px] text-muted-foreground">{document.path}</p>
+            <p className="truncate text-xs text-muted-foreground">{document.path}</p>
             {/* A link source is stored under its URL (spec 2.21), so its path
                 doubles as the original page to open. */}
             {isHttpUrl(document.path) && (
@@ -103,20 +103,20 @@ function SourceViewer({ sessionId, itemId, onBack, chunkId, reopenToken }: Sourc
 
       <div className="thin-scroll min-h-0 flex-1 overflow-y-auto p-3">
         {loading ? (
-          <p className="p-4 text-center text-xs text-muted-foreground">Loading document…</p>
+          <p className="p-4 text-center text-sm text-muted-foreground">Loading document…</p>
         ) : error?.includes(TEXT_UNAVAILABLE_MESSAGE) ? (
           <div className="flex flex-col items-center gap-2 p-4 text-center">
-            <p className="text-xs text-foreground">Re-import this document to open it here.</p>
+            <p className="text-sm text-foreground">Re-import this document to open it here.</p>
           </div>
         ) : error?.includes(NOT_FOUND_MESSAGE) ? (
           <div className="flex flex-col items-center gap-2 p-4 text-center">
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               This source was removed from the session.
             </p>
           </div>
         ) : error ? (
           <div className="flex flex-col items-center gap-2 p-4 text-center">
-            <p className="text-xs text-destructive">{error}</p>
+            <p className="text-sm text-destructive">{error}</p>
             <Button size="sm" variant="outline" onClick={reload}>
               Retry
             </Button>
@@ -124,7 +124,7 @@ function SourceViewer({ sessionId, itemId, onBack, chunkId, reopenToken }: Sourc
         ) : (
           <div
             ref={segmentsRef}
-            className="whitespace-pre-wrap text-xs leading-relaxed text-foreground"
+            className="whitespace-pre-wrap text-sm leading-relaxed text-foreground"
           >
             {/* Stryker disable next-line OptionalChaining: this branch only
                 renders once loading is false and error is falsy, which only

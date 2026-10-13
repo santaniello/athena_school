@@ -26,7 +26,7 @@ function LocalSourcesStrip({ sources, onOpenCitation }: LocalSourcesStripProps) 
   if (sources.length === 0) return null
 
   return (
-    <div data-slot="local-sources-strip" className="mt-1 max-w-[75%] self-start text-xs">
+    <div data-slot="local-sources-strip" className="mt-1 max-w-[75%] self-start text-sm">
       <button
         type="button"
         onClick={() => setExpanded((previous) => !previous)}

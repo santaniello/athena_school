@@ -6,11 +6,13 @@
    black glaze), marble and laurel gold — there is no light-mode toggle. */
 
 html {
+  font-size: 16px;
   background-color: oklch(0.14 0.015 50);
 }
 
 body {
   margin: 0;
+  line-height: 1.6;
   font-family:
     'Nunito',
     -apple-system,

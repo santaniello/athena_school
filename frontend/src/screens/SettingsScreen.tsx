@@ -77,9 +77,7 @@ function SettingsScreen({ profile, onProfileUpdated }: SettingsScreenProps) {
   return (
     <div className="thin-scroll mx-auto flex w-full max-w-lg flex-col gap-8 overflow-y-auto pr-2">
       <div className="flex flex-col gap-4">
-        <h2 className="font-heading text-sm font-bold tracking-[0.14em] text-foreground uppercase">
-          Profile
-        </h2>
+        <h2 className="font-heading text-lg font-semibold text-foreground">Profile</h2>
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
           <div className="flex flex-col gap-1.5 text-left">
             <Label htmlFor="settings-name">Name</Label>
@@ -181,9 +179,7 @@ function SettingsScreen({ profile, onProfileUpdated }: SettingsScreenProps) {
       </div>
 
       <div className="flex flex-col gap-4 border-t border-border pt-8">
-        <h2 className="font-heading text-sm font-bold tracking-[0.14em] text-foreground uppercase">
-          OpenRouter key
-        </h2>
+        <h2 className="font-heading text-lg font-semibold text-foreground">OpenRouter key</h2>
         {hasKey !== null && (
           <p className="text-sm text-muted-foreground">
             {hasKey
@@ -195,9 +191,7 @@ function SettingsScreen({ profile, onProfileUpdated }: SettingsScreenProps) {
       </div>
 
       <div className="flex flex-col gap-4 border-t border-border pt-8">
-        <h2 className="font-heading text-sm font-bold tracking-[0.14em] text-destructive uppercase">
-          Danger zone
-        </h2>
+        <h2 className="font-heading text-lg font-semibold text-destructive">Danger zone</h2>
         <p className="text-sm text-muted-foreground">
           Permanently delete every study session, every folder you created, and your entire
           knowledge base. Your OpenRouter key and profile are not affected.

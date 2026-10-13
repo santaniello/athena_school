@@ -57,7 +57,7 @@ interface MessageBubbleProps {
 const COPIED_RESET_DELAY_MS = 2000
 
 const messageBubbleVariants = cva(
-  'max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed break-words',
+  'max-w-[75%] rounded-2xl px-4 py-2.5 text-base leading-relaxed break-words',
   {
     variants: {
       role: {
@@ -109,16 +109,32 @@ function CodeRenderer({ className, children, ...props }: ComponentProps<'code'>)
   )
 }
 
+// The user bubble is solid primary (gold), so primary-coloured links and
+// headings vanish into it; these overrides use a deep amber that stays readable.
+const userMarkdownComponents: Components = {
+  a: (props) => (
+    <a
+      className="font-semibold text-[oklch(0.3_0.08_55)] underline underline-offset-2 hover:text-[oklch(0.22_0.06_55)]"
+      target="_blank"
+      rel="noreferrer"
+      {...props}
+    />
+  ),
+  h3: (props) => (
+    <h4 className="mb-1 font-heading text-base font-semibold text-primary-foreground" {...props} />
+  ),
+}
+
 const baseMarkdownComponents: Components = {
   p: (props) => <p className="mb-2 last:mb-0" {...props} />,
   h1: (props) => (
-    <h2 className="mb-2 font-heading text-base font-semibold text-foreground" {...props} />
+    <h2 className="mb-2 font-heading text-xl font-semibold text-foreground" {...props} />
   ),
   h2: (props) => (
-    <h3 className="mb-2 font-heading text-sm font-semibold text-foreground" {...props} />
+    <h3 className="mb-2 font-heading text-lg font-semibold text-foreground" {...props} />
   ),
   h3: (props) => (
-    <h4 className="mb-1 font-heading text-sm font-semibold text-foreground" {...props} />
+    <h4 className="mb-1 font-heading text-base font-semibold text-primary" {...props} />
   ),
   ul: (props) => <ul className="mb-2 list-disc space-y-1 pl-5 last:mb-0" {...props} />,
   ol: (props) => <ol className="mb-2 list-decimal space-y-1 pl-5 last:mb-0" {...props} />,
@@ -139,7 +155,7 @@ const baseMarkdownComponents: Components = {
     />
   ),
   hr: () => <hr className="my-3 border-border" />,
-  table: (props) => <table className="mb-2 w-full border-collapse text-xs last:mb-0" {...props} />,
+  table: (props) => <table className="mb-2 w-full border-collapse text-sm last:mb-0" {...props} />,
   th: (props) => (
     <th className="border border-border px-2 py-1 text-left font-semibold" {...props} />
   ),
@@ -159,6 +175,7 @@ function MessageBubble({
   const components = useMemo<Components>(
     () => ({
       ...baseMarkdownComponents,
+      ...(role === 'user' ? userMarkdownComponents : {}),
       [CITATION_TAG_NAME]: (props: { citationIndex?: number }) => (
         <CitationChip
           citationIndex={props.citationIndex ?? 0}
@@ -167,7 +184,7 @@ function MessageBubble({
         />
       ),
     }),
-    [sources, onOpenCitation],
+    [role, sources, onOpenCitation],
   )
 
   async function handleCopy() {
@@ -190,7 +207,7 @@ function MessageBubble({
           type="button"
           onClick={() => void handleCopy()}
           aria-label={copied ? 'Copied' : 'Copy message'}
-          className="mt-1.5 flex cursor-pointer items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          className="mt-1.5 flex cursor-pointer items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           {copied ? (
             <Check className="size-3.5" aria-hidden="true" />

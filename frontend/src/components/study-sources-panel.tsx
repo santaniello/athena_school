@@ -403,10 +403,10 @@ function StudySourcesPanel({
         <div className="flex flex-col gap-3 border-b border-border p-3">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <h2 className="font-heading text-base font-bold text-foreground">
+              <h2 className="font-heading text-lg font-semibold text-foreground">
                 Sources ({sources.length})
               </h2>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">Imported into this session</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Imported into this session</p>
             </div>
             <div className="flex items-center gap-1.5">
               <Button
@@ -441,19 +441,19 @@ function StudySourcesPanel({
               value={query}
               onChange={handleQueryChange}
               placeholder="Search sources"
-              className="pl-8 text-xs"
+              className="pl-8 text-sm"
             />
           </label>
 
-          {pickerError && <p className="text-xs text-destructive">{pickerError}</p>}
+          {pickerError && <p className="text-sm text-destructive">{pickerError}</p>}
         </div>
 
         <div className="thin-scroll flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-2">
           {loading ? (
-            <p className="p-4 text-center text-xs text-muted-foreground">Loading sources…</p>
+            <p className="p-4 text-center text-sm text-muted-foreground">Loading sources…</p>
           ) : error ? (
             <div className="flex flex-col items-center gap-2 p-4 text-center">
-              <p className="text-xs text-destructive">{error}</p>
+              <p className="text-sm text-destructive">{error}</p>
               <Button size="sm" variant="outline" onClick={reload}>
                 Retry
               </Button>
@@ -461,8 +461,8 @@ function StudySourcesPanel({
           ) : filtered.length === 0 ? (
             sources.length === 0 ? (
               <div className="flex flex-col items-center gap-2 p-4 text-center">
-                <p className="text-xs font-semibold text-foreground">No sources imported yet.</p>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-sm font-semibold text-foreground">No sources imported yet.</p>
+                <p className="text-sm text-muted-foreground">
                   The chat searches these documents when answering.
                 </p>
                 <AddSourceButton
@@ -476,7 +476,7 @@ function StudySourcesPanel({
                 </AddSourceButton>
               </div>
             ) : (
-              <p className="p-4 text-center text-xs text-muted-foreground">
+              <p className="p-4 text-center text-sm text-muted-foreground">
                 No sources match your search.
               </p>
             )
@@ -492,8 +492,8 @@ function StudySourcesPanel({
                   onClick={() => openViewing(source.itemId)}
                   className="min-w-0 flex-1 text-left"
                 >
-                  <p className="truncate text-xs font-semibold text-foreground">{source.title}</p>
-                  <p className="truncate text-[11px] text-muted-foreground">
+                  <p className="truncate text-sm font-semibold text-foreground">{source.title}</p>
+                  <p className="truncate text-xs text-muted-foreground">
                     {source.path} · {chunkCountLabel(source.chunkCount)}
                   </p>
                 </button>

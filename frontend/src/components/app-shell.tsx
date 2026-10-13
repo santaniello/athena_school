@@ -356,10 +356,10 @@ function AppShell() {
         {section === 'study' && activeSession ? (
           <>
             <div className="min-w-0">
-              <p className="truncate text-[11px] text-muted-foreground">
+              <p className="truncate text-sm text-muted-foreground">
                 Study / {activeSession.folderName}
               </p>
-              <h1 className="font-heading truncate text-base font-bold text-foreground">
+              <h1 className="font-heading truncate text-lg font-semibold text-foreground">
                 {activeSession.topic}
               </h1>
             </div>
@@ -394,9 +394,7 @@ function AppShell() {
             </div>
           </>
         ) : (
-          <h1 className="font-heading text-xs font-bold tracking-[0.14em] text-foreground uppercase">
-            {activeItem.label}
-          </h1>
+          <h1 className="font-heading text-lg font-semibold text-foreground">{activeItem.label}</h1>
         )}
       </header>
       <IndexStatusBanner
@@ -524,7 +522,7 @@ function AppShell() {
             </div>
 
             <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
-              <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary font-heading text-xs font-bold text-primary-foreground">
+              <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary font-heading text-sm font-bold text-primary-foreground">
                 {profile?.name.charAt(0).toUpperCase()}
               </div>
               <div className="min-w-0 flex-1">

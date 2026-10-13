@@ -30,7 +30,7 @@ function HomeScreen({ profile, studyLocked, onStartStudy, now = new Date() }: Ho
       </div>
       <div className="flex flex-col items-start gap-5">
         <div className="flex flex-col gap-1">
-          <h2 className="font-heading text-2xl font-bold text-balance text-foreground animate-greeting-glow">
+          <h2 className="font-heading text-3xl font-bold text-balance text-foreground animate-greeting-glow">
             {timeOfDayGreeting(now.getHours())}, {profile.name}.
           </h2>
           <p className="text-muted-foreground animate-greeting-glow">
@@ -42,7 +42,7 @@ function HomeScreen({ profile, studyLocked, onStartStudy, now = new Date() }: Ho
             Start a study session
           </Button>
           {studyLocked && (
-            <p className="text-xs text-muted-foreground italic">Locked until Study Mode ships</p>
+            <p className="text-sm text-muted-foreground italic">Locked until Study Mode ships</p>
           )}
         </div>
       </div>
