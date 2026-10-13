@@ -42,7 +42,7 @@ about the article without ever pasting the link again.
   `ErrTooLarge`, `ErrEmptyContent`.
 - `infrastructure/webfetch`: the HTTP adapter.
 - `application/ingest`: `PreviewURL`, `ConfirmURLImport`; `Service` gains a `web.Fetcher`.
-- Desktop bindings: `PreviewLinkImport(sessionID, url)`, `ConfirmLinkImport(sessionID, url, title,
+- Desktop bindings: `PreviewLinkImport(sessionID, url)`, `ConfirmLinkImport(sessionID, url,
   approvedContent)`, reusing the `ingest:*` events.
 
 ## Frontend design
