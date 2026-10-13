@@ -133,7 +133,7 @@ function AddSourceButton({
         <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={onAddMarkdown}>
             <FileText className="size-3.5" aria-hidden="true" />
-            Markdown file
+            Markdown
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onAddLink}>
             <LinkIcon className="size-3.5" aria-hidden="true" />

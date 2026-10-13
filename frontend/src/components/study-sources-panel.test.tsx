@@ -50,10 +50,10 @@ vi.mock('@/lib/ingest', async (importOriginal) => {
 })
 
 // Add is a type selector (spec 2.21): the Markdown flow starts from its
-// "Markdown file" menu item, the link flow from "Link".
+// "Markdown" menu item, the link flow from "Link".
 async function addMarkdownFrom(user: ReturnType<typeof userEvent.setup>, buttonName: string) {
   await user.click(screen.getByRole('button', { name: buttonName }))
-  await user.click(await screen.findByRole('menuitem', { name: 'Markdown file' }))
+  await user.click(await screen.findByRole('menuitem', { name: 'Markdown' }))
 }
 
 function defaultPreview(overrides: Partial<ImportPreview> = {}): ImportPreview {
@@ -1015,7 +1015,7 @@ describe('StudySourcesPanel — Add → Link (spec 2.21)', () => {
     })
   }
 
-  it('offers Markdown file and Link from the Add button', async () => {
+  it('offers Markdown and Link from the Add button', async () => {
     // Given an empty panel
     vi.mocked(listSessionSources).mockResolvedValueOnce([])
     const user = userEvent.setup()
@@ -1026,7 +1026,7 @@ describe('StudySourcesPanel — Add → Link (spec 2.21)', () => {
     await user.click(screen.getByRole('button', { name: 'Add source' }))
 
     // Then both source types are offered
-    expect(await screen.findByRole('menuitem', { name: 'Markdown file' })).toBeInTheDocument()
+    expect(await screen.findByRole('menuitem', { name: 'Markdown' })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: 'Link' })).toBeInTheDocument()
   })
 
