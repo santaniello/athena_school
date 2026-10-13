@@ -21,7 +21,7 @@ function excerptPreview(excerpt: string): string {
 }
 
 // CitationChip renders one inline [n] citation marker as a small
-// hoverable/clickable superscript. See
+// hoverable/clickable superscript circle. See
 // specs/phases/phase-02-knowledge-engine/18-01-inline-citations-in-chat.md.
 function CitationChip({ citationIndex, sources, onOpenCitation }: CitationChipProps) {
   const source = sources[citationIndex - 1]
@@ -37,7 +37,7 @@ function CitationChip({ citationIndex, sources, onOpenCitation }: CitationChipPr
             type="button"
             data-slot="citation-chip"
             onClick={() => onOpenCitation?.(source)}
-            className="mx-0.5 cursor-pointer rounded bg-primary/15 px-1 text-[0.7em] font-semibold text-primary hover:bg-primary/25"
+            className="mx-0.5 inline-flex size-4 cursor-pointer items-center justify-center rounded-full bg-primary text-[10px] leading-none font-bold text-primary-foreground hover:bg-primary/80"
           >
             {citationIndex}
           </button>
