@@ -3,12 +3,14 @@
 package webfetch
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"mime"
 	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"syscall"
 	"time"
@@ -140,7 +142,7 @@ func (c *Client) Fetch(ctx context.Context, rawURL string) (web.Page, error) {
 		return web.Page{}, web.ErrTooLarge
 	}
 
-	text, err := charset.NewReader(strings.NewReader(string(body)), resp.Header.Get("Content-Type"))
+	text, err := charset.NewReader(bytes.NewReader(body), resp.Header.Get("Content-Type"))
 	if err != nil {
 		return web.Page{}, fmt.Errorf("webfetch: decoding body: %w", err)
 	}
@@ -171,21 +173,41 @@ func truncateRunes(s string, limit int) string {
 	return strings.TrimSpace(string(runes[:limit]))
 }
 
-// isCGNAT reports the carrier-grade NAT range 100.64.0.0/10, which net.IP.IsPrivate
-// does not cover.
-func isCGNAT(ip4 net.IP) bool { return ip4[0] == 100 && ip4[1]&0xC0 == 0x40 }
+// nat64Prefix is the well-known NAT64 prefix; hosts behind DNS64 resolve to it with an
+// IPv4 address embedded in the last 32 bits.
+var nat64Prefix = netip.MustParsePrefix("64:ff9b::/96")
+
+// blockedPrefixes lists the non-routable ranges that the netip.Addr predicates
+// (loopback, private, link-local, multicast, unspecified) do not cover.
+var blockedPrefixes = []netip.Prefix{
+	netip.MustParsePrefix("100.64.0.0/10"), // carrier-grade NAT
+	netip.MustParsePrefix("192.0.0.0/24"),  // IETF protocol assignments
+	netip.MustParsePrefix("198.18.0.0/15"), // benchmarking
+	netip.MustParsePrefix("240.0.0.0/4"),   // reserved, includes the broadcast address
+}
 
 // isBlockedIP reports whether ip is anything but a public unicast address.
 func isBlockedIP(ip net.IP) bool {
-	if ip == nil {
+	addr, ok := netip.AddrFromSlice(ip)
+	if !ok {
 		return true
 	}
-	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
-		ip.IsMulticast() || ip.IsUnspecified() {
+	return isBlockedAddr(addr.Unmap())
+}
+
+func isBlockedAddr(addr netip.Addr) bool {
+	if addr.IsLoopback() || addr.IsPrivate() || addr.IsLinkLocalUnicast() || addr.IsLinkLocalMulticast() ||
+		addr.IsMulticast() || addr.IsUnspecified() {
 		return true
 	}
-	if ip4 := ip.To4(); ip4 != nil && isCGNAT(ip4) {
-		return true
+	if nat64Prefix.Contains(addr) {
+		b := addr.As16()
+		return isBlockedAddr(netip.AddrFrom4([4]byte(b[12:])))
+	}
+	for _, prefix := range blockedPrefixes {
+		if prefix.Contains(addr) {
+			return true
+		}
 	}
 	return false
 }
