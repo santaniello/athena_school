@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useSourceDocument } from '@/hooks/use-source-document'
+import { openOriginalLink } from '@/lib/ingest'
+import { isHttpUrl } from '@/lib/utils'
 
 interface SourceViewerProps {
   sessionId: string
@@ -82,6 +84,19 @@ function SourceViewer({ sessionId, itemId, onBack, chunkId, reopenToken }: Sourc
               {document.title}
             </h2>
             <p className="truncate text-[11px] text-muted-foreground">{document.path}</p>
+            {/* A link source is stored under its URL (spec 2.21), so its path
+                doubles as the original page to open. */}
+            {isHttpUrl(document.path) && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => openOriginalLink(document.path)}
+                className="mt-2 w-fit gap-1"
+              >
+                <ExternalLink className="size-3.5" aria-hidden="true" />
+                Open original
+              </Button>
+            )}
           </div>
         )}
       </div>

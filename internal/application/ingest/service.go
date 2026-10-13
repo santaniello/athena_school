@@ -6,6 +6,7 @@ import (
 
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
+	"github.com/santaniello/athena/internal/domain/web"
 )
 
 // Transactor runs fn inside a single atomic unit of work, so the chunk/
@@ -43,6 +44,7 @@ type Service struct {
 	tx            Transactor
 	store         domainknowledge.VectorStore
 	index         IndexGuard
+	fetcher       web.Fetcher
 }
 
 // NewService creates a notes-import Service.
@@ -55,10 +57,11 @@ func NewService(
 	tx Transactor,
 	store domainknowledge.VectorStore,
 	index IndexGuard,
+	fetcher web.Fetcher,
 ) *Service {
 	return &Service{
 		chunks: chunks, ingestedFiles: ingestedFiles, items: items, documents: documents, llm: llm, tx: tx,
-		store: store, index: index,
+		store: store, index: index, fetcher: fetcher,
 	}
 }
 

@@ -29,6 +29,7 @@ import (
 	"github.com/santaniello/athena/internal/infrastructure/profilefile"
 	"github.com/santaniello/athena/internal/infrastructure/sqlite"
 	"github.com/santaniello/athena/internal/infrastructure/vectorstore"
+	"github.com/santaniello/athena/internal/infrastructure/webfetch"
 	"github.com/santaniello/athena/internal/interfaces/desktop"
 )
 
@@ -102,6 +103,7 @@ func main() {
 	knowledgeDocuments := sqlite.NewDocumentRepository(db)
 	ingestService := applicationingest.NewService(
 		knowledgeChunks, ingestedFiles, knowledgeItems, knowledgeDocuments, llmClient, transactor, vectorStore, indexLoader,
+		webfetch.New(),
 	)
 
 	resetter := sqlite.NewResetter(db)

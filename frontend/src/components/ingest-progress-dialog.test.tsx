@@ -3,6 +3,7 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
   confirmImport,
+  confirmLinkImport,
   importFile,
   onIngestDone,
   onIngestError,
@@ -18,6 +19,7 @@ vi.mock('@/lib/ingest', async (importOriginal) => {
     ...original,
     importFile: vi.fn(),
     confirmImport: vi.fn(),
+    confirmLinkImport: vi.fn(),
     onIngestProgress: vi.fn(),
     onIngestDone: vi.fn(),
     onIngestError: vi.fn(),
@@ -123,6 +125,53 @@ describe('IngestProgressDialog', () => {
     )
     expect(importFile).not.toHaveBeenCalled()
     void events
+  })
+
+  it('calls confirmLinkImport when a link is given, never the file paths', () => {
+    // Given a dialog opened for a link whose review was already approved
+    const events = setupSubscriptions()
+    vi.mocked(confirmLinkImport).mockReturnValueOnce(new Promise<void>(() => {}))
+
+    // When rendering it open with the approved content and the link's URL
+    render(
+      <IngestProgressDialog
+        open
+        sessionId="session-1"
+        linkUrl="https://example.com/a"
+        formattedContent={'# Go\n\nApproved during review.'}
+        onClose={vi.fn()}
+      />,
+    )
+
+    // Then the link import is confirmed with exactly the approved text
+    expect(confirmLinkImport).toHaveBeenCalledWith(
+      'session-1',
+      'https://example.com/a',
+      '# Go\n\nApproved during review.',
+    )
+    expect(confirmImport).not.toHaveBeenCalled()
+    expect(importFile).not.toHaveBeenCalled()
+    void events
+  })
+
+  it('shows a generic link error when confirmLinkImport rejects before emitting one', async () => {
+    // Given a link confirm that rejects without any ingest:error event
+    setupSubscriptions()
+    vi.mocked(confirmLinkImport).mockRejectedValueOnce(new Error('ipc down'))
+
+    // When the dialog runs it
+    render(
+      <IngestProgressDialog
+        open
+        sessionId="session-1"
+        linkUrl="https://example.com/a"
+        formattedContent="approved"
+        onClose={vi.fn()}
+      />,
+    )
+
+    // Then the dialog becomes closable with a generic message
+    expect(await screen.findByText('Failed to import notes. Please try again.')).toBeInTheDocument()
   })
 
   it('does not start an import while closed', () => {

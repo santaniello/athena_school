@@ -70,7 +70,7 @@ func newTestIngestApp(
 	// file that doesn't exist) never calls the guard at all.
 	guard.EXPECT().BeginMutation().Return(nil).Maybe()
 	guard.EXPECT().EndMutation().Maybe()
-	ingestService := applicationingest.NewService(chunks, ingestedFiles, items, documents, llm, tx, store, guard)
+	ingestService := applicationingest.NewService(chunks, ingestedFiles, items, documents, llm, tx, store, guard, nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
 	app.Startup(context.Background())
 
@@ -274,7 +274,7 @@ func TestApp_PreviewImport_returnsTheMappedPreview(t *testing.T) {
 	})).Return(domainllm.ChatResponse{Content: "# Go\n\nFormatted go notes, long enough to stand as its own chunk on its own."}, nil).Once()
 	guard := ingestmocks.NewMockIndexGuard(t)
 	guard.EXPECT().CheckMutationAllowed().Return(nil).Once()
-	ingestService := applicationingest.NewService(nil, ingestedFiles, nil, nil, llm, nil, nil, guard)
+	ingestService := applicationingest.NewService(nil, ingestedFiles, nil, nil, llm, nil, nil, guard, nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
 	app.Startup(ctx)
 	var formattingProgress []IngestProgressResult
@@ -317,7 +317,7 @@ func TestApp_PreviewImport_mapsFailedSections_whenTheProviderErrors(t *testing.T
 	llm.EXPECT().Chat(ctx, mock.Anything).Return(domainllm.ChatResponse{}, errors.New("timeout")).Once()
 	guard := ingestmocks.NewMockIndexGuard(t)
 	guard.EXPECT().CheckMutationAllowed().Return(nil).Once()
-	ingestService := applicationingest.NewService(nil, ingestedFiles, nil, nil, llm, nil, nil, guard)
+	ingestService := applicationingest.NewService(nil, ingestedFiles, nil, nil, llm, nil, nil, guard, nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
 	app.Startup(ctx)
 	app.emit = func(context.Context, string, ...interface{}) {}
@@ -338,7 +338,7 @@ func TestApp_PreviewImport_mapsFailedSections_whenTheProviderErrors(t *testing.T
 func TestApp_PreviewImport_returnsTheServiceError(t *testing.T) {
 	// Given a path that does not exist on disk
 	guard := ingestmocks.NewMockIndexGuard(t)
-	ingestService := applicationingest.NewService(nil, nil, nil, nil, nil, nil, nil, guard)
+	ingestService := applicationingest.NewService(nil, nil, nil, nil, nil, nil, nil, guard, nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
 	app.Startup(context.Background())
 
@@ -425,7 +425,7 @@ func TestApp_ListSessionSources_returnsTheMappedResults(t *testing.T) {
 		{ItemID: "item-1", Title: "CAP theorem", Path: "cap.md", ChunkCount: 4, IngestedAt: ingestedAt},
 	}, nil).Once()
 	guard := ingestmocks.NewMockIndexGuard(t)
-	ingestService := applicationingest.NewService(nil, ingestedFiles, nil, nil, nil, nil, nil, guard)
+	ingestService := applicationingest.NewService(nil, ingestedFiles, nil, nil, nil, nil, nil, guard, nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -446,7 +446,7 @@ func TestApp_ListSessionSources_returnsTheServiceError(t *testing.T) {
 	boom := errors.New("database unavailable")
 	ingestedFiles.EXPECT().ListSourcesBySession(ctx, testIngestSessionID).Return(nil, boom).Once()
 	guard := ingestmocks.NewMockIndexGuard(t)
-	ingestService := applicationingest.NewService(nil, ingestedFiles, nil, nil, nil, nil, nil, guard)
+	ingestService := applicationingest.NewService(nil, ingestedFiles, nil, nil, nil, nil, nil, guard, nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -478,7 +478,7 @@ func TestApp_RemoveSessionSource_delegatesToTheIngestService(t *testing.T) {
 	guard := ingestmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	ingestService := applicationingest.NewService(chunks, ingestedFiles, items, documents, nil, tx, store, guard)
+	ingestService := applicationingest.NewService(chunks, ingestedFiles, items, documents, nil, tx, store, guard, nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -497,7 +497,7 @@ func TestApp_RemoveSessionSource_returnsErrSourceNotFound_forAnotherSessionsDocu
 	guard := ingestmocks.NewMockIndexGuard(t)
 	guard.EXPECT().BeginMutation().Return(nil).Once()
 	guard.EXPECT().EndMutation().Once()
-	ingestService := applicationingest.NewService(nil, nil, items, nil, nil, nil, nil, guard)
+	ingestService := applicationingest.NewService(nil, nil, items, nil, nil, nil, nil, guard, nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -522,7 +522,7 @@ func TestApp_GetSessionSourceDocument_returnsTheMappedDocument(t *testing.T) {
 		{ID: "chunk-1", FilePath: "cap.md", StartOffset: &start, EndOffset: &end},
 	}, nil).Once()
 	guard := ingestmocks.NewMockIndexGuard(t)
-	ingestService := applicationingest.NewService(chunks, nil, items, documents, nil, nil, nil, guard)
+	ingestService := applicationingest.NewService(chunks, nil, items, documents, nil, nil, nil, guard, nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -546,7 +546,7 @@ func TestApp_GetSessionSourceDocument_returnsErrSourceNotFound_forAnotherSession
 	items := knowledgemocks.NewMockRepository(t)
 	items.EXPECT().GetByID(ctx, "item-1").Return(domainknowledge.Item{ID: "item-1", SessionID: "other-session"}, nil).Once()
 	guard := ingestmocks.NewMockIndexGuard(t)
-	ingestService := applicationingest.NewService(nil, nil, items, nil, nil, nil, nil, guard)
+	ingestService := applicationingest.NewService(nil, nil, items, nil, nil, nil, nil, guard, nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
 	app.Startup(ctx)
 
@@ -565,7 +565,7 @@ func TestApp_GetSessionSourceDocument_returnsErrSourceTextUnavailable_whenNoText
 	documents := knowledgemocks.NewMockDocumentRepository(t)
 	documents.EXPECT().Get(ctx, testIngestSessionID, "item-1").Return("", domainknowledge.ErrDocumentNotFound).Once()
 	guard := ingestmocks.NewMockIndexGuard(t)
-	ingestService := applicationingest.NewService(nil, nil, items, documents, nil, nil, nil, guard)
+	ingestService := applicationingest.NewService(nil, nil, items, documents, nil, nil, nil, guard, nil)
 	app := NewApp(nil, nil, nil, nil, nil, nil, ingestService, nil, nil, nil)
 	app.Startup(ctx)
 

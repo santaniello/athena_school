@@ -11,6 +11,8 @@ import {
   onIngestProgress,
   pickNotesFile,
   previewImport,
+  previewLinkImport,
+  confirmLinkImport,
   type ImportPreview,
   type IngestSummary,
 } from '@/lib/ingest'
@@ -28,6 +30,8 @@ vi.mock('@/lib/ingest', async (importOriginal) => {
     pickNotesFile: vi.fn(),
     downloadExampleNote: vi.fn(),
     previewImport: vi.fn(),
+    previewLinkImport: vi.fn(),
+    confirmLinkImport: vi.fn(),
     // Overridden (not spread from the real module) purely so a stray call
     // from IngestProgressDialog's own importFile branch — never reached
     // once Add always provides formattedContent after approval — can
@@ -45,9 +49,17 @@ vi.mock('@/lib/ingest', async (importOriginal) => {
   }
 })
 
+// Add is a type selector (spec 2.21): the Markdown flow starts from its
+// "Markdown" menu item, the link flow from "Link".
+async function addMarkdownFrom(user: ReturnType<typeof userEvent.setup>, buttonName: string) {
+  await user.click(screen.getByRole('button', { name: buttonName }))
+  await user.click(await screen.findByRole('menuitem', { name: 'Markdown' }))
+}
+
 function defaultPreview(overrides: Partial<ImportPreview> = {}): ImportPreview {
   return {
     displayPath: 'go.md',
+    sourceUrl: '',
     originalContent: 'raw go notes',
     formattedContent: '# Go\n\nFormatted go notes.',
     formattingFailed: false,
@@ -471,7 +483,7 @@ describe('StudySourcesPanel', () => {
     await screen.findByText('No sources imported yet.')
 
     // When clicking Add
-    await user.click(screen.getByRole('button', { name: 'Add source' }))
+    await addMarkdownFrom(user, 'Add source')
 
     // Then the Review dialog opens for that session and path — not the
     // import dialog, which no file reaches without being approved first
@@ -489,7 +501,7 @@ describe('StudySourcesPanel', () => {
     const user = userEvent.setup()
     render(<StudySourcesPanel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
-    await user.click(screen.getByRole('button', { name: 'Add source' }))
+    await addMarkdownFrom(user, 'Add source')
     await screen.findByText('Review import')
 
     // When approving it
@@ -513,7 +525,7 @@ describe('StudySourcesPanel', () => {
     const user = userEvent.setup()
     render(<StudySourcesPanel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
-    await user.click(screen.getByRole('button', { name: 'Add source' }))
+    await addMarkdownFrom(user, 'Add source')
     await screen.findByText('Review import')
 
     // When cancelling it
@@ -535,7 +547,7 @@ describe('StudySourcesPanel', () => {
     const user = userEvent.setup()
     render(<StudySourcesPanel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
-    await user.click(screen.getByRole('button', { name: 'Add source' }))
+    await addMarkdownFrom(user, 'Add source')
     await screen.findByText('Review import')
     await user.click(screen.getByRole('button', { name: 'Chunks (1)' }))
     expect(screen.getByText(/will be created from this document/)).toBeInTheDocument()
@@ -545,7 +557,7 @@ describe('StudySourcesPanel', () => {
     // When a second, unrelated file is reviewed
     vi.mocked(pickNotesFile).mockResolvedValueOnce('/home/user/notes/other.md')
     setupPreviewSuccess()
-    await user.click(screen.getByRole('button', { name: 'Add source' }))
+    await addMarkdownFrom(user, 'Add source')
     await screen.findByText('Review import')
 
     // Then it opens on the default Formatted tab, not the Chunks tab left
@@ -566,7 +578,7 @@ describe('StudySourcesPanel', () => {
     await screen.findByText('No sources imported yet.')
 
     // When clicking Add
-    await user.click(screen.getByRole('button', { name: 'Add source' }))
+    await addMarkdownFrom(user, 'Add source')
 
     // Then the panel just reloads — the same silent skip ImportFile always
     // had — and no Review dialog ever opens
@@ -584,7 +596,7 @@ describe('StudySourcesPanel', () => {
     await screen.findByText('No sources imported yet.')
 
     // When clicking Add
-    await user.click(screen.getByRole('button', { name: 'Add source' }))
+    await addMarkdownFrom(user, 'Add source')
 
     // Then the existing inline error slot reports it, and no Review
     // dialog opens
@@ -605,7 +617,7 @@ describe('StudySourcesPanel', () => {
     await screen.findByText('No sources imported yet.')
 
     // When clicking Add
-    await user.click(screen.getByRole('button', { name: 'Add source' }))
+    await addMarkdownFrom(user, 'Add source')
 
     // Then the FormattingNoteDialog opens (a real Radix modal, so the
     // background panel — Add included — is hidden from the accessibility
@@ -667,13 +679,13 @@ describe('StudySourcesPanel', () => {
     const user = userEvent.setup()
     const { container } = render(<StudySourcesPanel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
-    await user.click(screen.getByRole('button', { name: 'Add source' }))
+    await addMarkdownFrom(user, 'Add source')
     await screen.findByText('Failed to open the notes picker. Please try again.')
 
     // When clicking Add again and the picker succeeds this time
     vi.mocked(pickNotesFile).mockResolvedValueOnce('/home/user/notes/go.md')
     setupPreviewSuccess()
-    await user.click(screen.getByRole('button', { name: 'Add source' }))
+    await addMarkdownFrom(user, 'Add source')
 
     // Then the stale error is cleared — not just replaced by different text
     await screen.findByText('Review import')
@@ -689,7 +701,7 @@ describe('StudySourcesPanel', () => {
     await screen.findByText('No sources imported yet.')
 
     // When clicking Add
-    await user.click(screen.getByRole('button', { name: 'Add source' }))
+    await addMarkdownFrom(user, 'Add source')
 
     // Then no preview is even requested, and no dialog opens
     await waitFor(() => expect(pickNotesFile).toHaveBeenCalled())
@@ -707,7 +719,7 @@ describe('StudySourcesPanel', () => {
     await screen.findByText('No sources imported yet.')
 
     // When clicking Add
-    await user.click(screen.getByRole('button', { name: 'Add source' }))
+    await addMarkdownFrom(user, 'Add source')
 
     // Then the existing inline error copy shows, and no dialog opens
     expect(
@@ -761,7 +773,7 @@ describe('StudySourcesPanel', () => {
     // When Add succeeds afterwards
     vi.mocked(pickNotesFile).mockResolvedValueOnce('/home/user/notes/go.md')
     setupPreviewSuccess()
-    await user.click(screen.getByRole('button', { name: 'Add a source' }))
+    await addMarkdownFrom(user, 'Add a source')
 
     // Then the stale error is cleared
     await screen.findByText('Review import')
@@ -778,7 +790,7 @@ describe('StudySourcesPanel', () => {
     const user = userEvent.setup()
     render(<StudySourcesPanel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
-    await user.click(screen.getByRole('button', { name: 'Add source' }))
+    await addMarkdownFrom(user, 'Add source')
     await screen.findByText('Review import')
     await user.click(screen.getByRole('button', { name: 'Approve & import' }))
     await screen.findByText('Importing notes')
@@ -804,7 +816,7 @@ describe('StudySourcesPanel', () => {
     await screen.findByText('No sources imported yet.')
 
     // When clicking the empty state's own Add action
-    await user.click(screen.getByRole('button', { name: 'Add a source' }))
+    await addMarkdownFrom(user, 'Add a source')
 
     // Then it opens the same picker
     expect(pickNotesFile).toHaveBeenCalledOnce()
@@ -978,5 +990,154 @@ describe('StudySourcesPanel', () => {
     // Then the list stays shown, not the viewer
     await screen.findByText('Distributed Systems')
     expect(screen.getByPlaceholderText('Search sources')).toBeInTheDocument()
+  })
+})
+
+describe('StudySourcesPanel — Add → Link (spec 2.21)', () => {
+  const LINK_URL = 'https://example.com/article'
+
+  async function openLinkDialog(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole('button', { name: 'Add source' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Link' }))
+  }
+
+  async function submitLink(user: ReturnType<typeof userEvent.setup>, url = LINK_URL) {
+    await user.type(await screen.findByLabelText('Link URL'), url)
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+  }
+
+  function linkPreview(overrides: Partial<ImportPreview> = {}): ImportPreview {
+    return defaultPreview({
+      displayPath: 'Go Article',
+      sourceUrl: LINK_URL,
+      formattedContent: '# Go\n\nApproved link text.',
+      ...overrides,
+    })
+  }
+
+  it('offers Markdown and Link from the Add button', async () => {
+    // Given an empty panel
+    vi.mocked(listSessionSources).mockResolvedValueOnce([])
+    const user = userEvent.setup()
+    render(<StudySourcesPanel sessionId="session-1" />)
+    await screen.findByText('No sources imported yet.')
+
+    // When opening the Add menu
+    await user.click(screen.getByRole('button', { name: 'Add source' }))
+
+    // Then both source types are offered
+    expect(await screen.findByRole('menuitem', { name: 'Markdown' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Link' })).toBeInTheDocument()
+  })
+
+  it('Link opens the URL dialog without touching the file picker', async () => {
+    // Given an empty panel
+    vi.mocked(listSessionSources).mockResolvedValueOnce([])
+    const user = userEvent.setup()
+    render(<StudySourcesPanel sessionId="session-1" />)
+    await screen.findByText('No sources imported yet.')
+
+    // When choosing Link
+    await openLinkDialog(user)
+
+    // Then the URL dialog is shown and no file picker was opened
+    expect(await screen.findByLabelText('Link URL')).toBeInTheDocument()
+    expect(pickNotesFile).not.toHaveBeenCalled()
+  })
+
+  it('submitting a URL previews it, then opens the Review dialog', async () => {
+    // Given a link whose preview resolves
+    vi.mocked(listSessionSources).mockResolvedValueOnce([])
+    vi.mocked(previewLinkImport).mockResolvedValueOnce(linkPreview())
+    const user = userEvent.setup()
+    render(<StudySourcesPanel sessionId="session-1" />)
+    await screen.findByText('No sources imported yet.')
+
+    // When submitting the URL
+    await openLinkDialog(user)
+    await submitLink(user)
+
+    // Then the Review dialog opens for the previewed page, nothing persisted yet
+    expect(await screen.findByText('Review import')).toBeInTheDocument()
+    expect(previewLinkImport).toHaveBeenCalledWith('session-1', LINK_URL)
+    expect(confirmLinkImport).not.toHaveBeenCalled()
+  })
+
+  it('approving the review confirms the link import with the echoed URL and exact content', async () => {
+    // Given a reviewed link preview about to be approved
+    vi.mocked(listSessionSources).mockResolvedValueOnce([])
+    vi.mocked(previewLinkImport).mockResolvedValueOnce(linkPreview())
+    vi.mocked(confirmLinkImport).mockReturnValue(new Promise(() => {}))
+    setupIngestDialogSubscriptions()
+    const user = userEvent.setup()
+    render(<StudySourcesPanel sessionId="session-1" />)
+    await screen.findByText('No sources imported yet.')
+    await openLinkDialog(user)
+    await submitLink(user)
+    await screen.findByText('Review import')
+
+    // When approving it
+    await user.click(screen.getByRole('button', { name: /import/i }))
+
+    // Then the link — not a file — is confirmed, with exactly the reviewed text
+    await waitFor(() =>
+      expect(confirmLinkImport).toHaveBeenCalledWith(
+        'session-1',
+        LINK_URL,
+        '# Go\n\nApproved link text.',
+      ),
+    )
+    expect(confirmImport).not.toHaveBeenCalled()
+  })
+
+  it('shows friendly copy when the link cannot be read', async () => {
+    // Given a link the backend refuses as a private address
+    vi.mocked(listSessionSources).mockResolvedValueOnce([])
+    vi.mocked(previewLinkImport).mockRejectedValueOnce(
+      'ingest: fetching x: web: host is not allowed',
+    )
+    const user = userEvent.setup()
+    render(<StudySourcesPanel sessionId="session-1" />)
+    await screen.findByText('No sources imported yet.')
+
+    // When submitting it
+    await openLinkDialog(user)
+    await submitLink(user, 'http://192.168.0.1/admin')
+
+    // Then the actionable reason is shown and no Review dialog opens
+    expect(await screen.findByText(/private or local network/)).toBeInTheDocument()
+    expect(screen.queryByText('Review import')).not.toBeInTheDocument()
+  })
+
+  it('cancelling the Review dialog clears the link so a later file import is not mistaken for it', async () => {
+    // Given a link preview that is then cancelled in Review
+    vi.mocked(listSessionSources).mockResolvedValue([])
+    vi.mocked(previewLinkImport).mockResolvedValueOnce(linkPreview())
+    vi.mocked(pickNotesFile).mockResolvedValueOnce('/home/user/notes/go.md')
+    setupPreviewSuccess({ formattedContent: '# File\n\nApproved file text.' })
+    vi.mocked(confirmLinkImport).mockClear()
+    setupIngestDialogSubscriptions()
+    const user = userEvent.setup()
+    render(<StudySourcesPanel sessionId="session-1" />)
+    await screen.findByText('No sources imported yet.')
+    await openLinkDialog(user)
+    await submitLink(user)
+    await screen.findByText('Review import')
+    await user.click(screen.getByRole('button', { name: /cancel/i }))
+
+    // When importing a Markdown file afterwards and approving it
+    await addMarkdownFrom(user, 'Add source')
+    await screen.findByText('Review import')
+    await user.click(screen.getByRole('button', { name: /import/i }))
+
+    // Then the file path is confirmed, never the earlier link
+    await waitFor(() =>
+      expect(confirmImport).toHaveBeenCalledWith(
+        'session-1',
+        '/home/user/notes/go.md',
+        '# File\n\nApproved file text.',
+      ),
+    )
+    expect(confirmLinkImport).not.toHaveBeenCalled()
   })
 })

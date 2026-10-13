@@ -70,12 +70,14 @@ function ChunkCard({ index, chunk, expanded, onToggle }: ChunkCardProps) {
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-semibold text-foreground">
-          <span className="mr-1.5 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground">
+        <div className="flex min-w-0 items-start gap-1.5">
+          <span className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
             {index + 1}
           </span>
-          {chunk.heading || 'Untitled passage'}
-        </p>
+          <p className="min-w-0 break-words text-xs font-semibold leading-4 text-foreground">
+            {chunk.heading || 'Untitled passage'}
+          </p>
+        </div>
         <span className="shrink-0 text-[11px] text-muted-foreground">
           {chunk.charCount} chars · ~{chunk.estimatedTokens} tokens
         </span>
