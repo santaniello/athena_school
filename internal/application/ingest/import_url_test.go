@@ -67,7 +67,7 @@ func TestPreviewURL_returnsTheIndexError_whenTheIndexIsBusy(t *testing.T) {
 func TestPreviewURL_propagatesFetchErrors(t *testing.T) {
 	// Given a fetcher that reports a blocked host
 	fetcher := webmocks.NewMockFetcher(t)
-	fetcher.EXPECT().Fetch(mock.Anything, testArticleURL).Return(web.Page{}, web.ErrBlockedHost).Once()
+	fetcher.EXPECT().Fetch(context.Background(), testArticleURL).Return(web.Page{}, web.ErrBlockedHost).Once()
 	svc := &Service{index: passingPreviewIndexGuard(t), fetcher: fetcher}
 
 	// When previewing the link
@@ -82,11 +82,11 @@ func TestPreviewURL_returnsFormattedContentAndMatchingChunks(t *testing.T) {
 	// Given a fetched article and a provider that cleans it up
 	const original = "eigenvectors dont change direction. the eigenvalue is the scale."
 	fetcher := webmocks.NewMockFetcher(t)
-	fetcher.EXPECT().Fetch(mock.Anything, testArticleURL).
+	fetcher.EXPECT().Fetch(context.Background(), testArticleURL).
 		Return(web.Page{URL: testArticleURL, Title: "Linear Algebra", Markdown: original}, nil).Once()
 	llm := llmmocks.NewMockProvider(t)
 	llm.EXPECT().
-		Chat(mock.Anything, mock.MatchedBy(func(req domainllm.ChatRequest) bool {
+		Chat(context.Background(), mock.MatchedBy(func(req domainllm.ChatRequest) bool {
 			return req.Task == domainllm.TaskNoteFormatting &&
 				strings.HasPrefix(req.Messages[0].Content, noteFormattingMarkdownPrompt) &&
 				req.Messages[1].Content == "# Linear Algebra\n\n"+original
@@ -116,10 +116,10 @@ func TestPreviewURL_returnsFormattedContentAndMatchingChunks(t *testing.T) {
 func TestPreviewURL_usesTheURLAsDisplayPath_whenThePageHasNoTitle(t *testing.T) {
 	// Given a fetched page without a title
 	fetcher := webmocks.NewMockFetcher(t)
-	fetcher.EXPECT().Fetch(mock.Anything, testArticleURL).
+	fetcher.EXPECT().Fetch(context.Background(), testArticleURL).
 		Return(web.Page{URL: testArticleURL, Markdown: "text"}, nil).Once()
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Chat(mock.Anything, mock.Anything).
+	llm.EXPECT().Chat(context.Background(), mock.MatchedBy(isNoteFormattingRequest)).
 		Return(domainllm.ChatResponse{Content: "text"}, nil).Once()
 	svc := &Service{index: passingPreviewIndexGuard(t), fetcher: fetcher, llm: llm}
 
@@ -134,10 +134,10 @@ func TestPreviewURL_usesTheURLAsDisplayPath_whenThePageHasNoTitle(t *testing.T) 
 func TestPreviewURL_reportsFormattingProgress(t *testing.T) {
 	// Given a fetched article that formats in one batch
 	fetcher := webmocks.NewMockFetcher(t)
-	fetcher.EXPECT().Fetch(mock.Anything, testArticleURL).
+	fetcher.EXPECT().Fetch(context.Background(), testArticleURL).
 		Return(web.Page{URL: testArticleURL, Markdown: "text"}, nil).Once()
 	llm := llmmocks.NewMockProvider(t)
-	llm.EXPECT().Chat(mock.Anything, mock.Anything).
+	llm.EXPECT().Chat(context.Background(), mock.MatchedBy(isNoteFormattingRequest)).
 		Return(domainllm.ChatResponse{Content: "text"}, nil).Once()
 	svc := &Service{index: passingPreviewIndexGuard(t), fetcher: fetcher, llm: llm}
 
@@ -294,11 +294,11 @@ func TestConfirmURLImport_stopsWhenTheProgressCallbackFails(t *testing.T) {
 func TestPreviewURL_prependsTheTitleAsAHeading_whenThePageTextHasNone(t *testing.T) {
 	// Given a fetched page whose text has no top-level heading
 	fetcher := webmocks.NewMockFetcher(t)
-	fetcher.EXPECT().Fetch(mock.Anything, testArticleURL).
+	fetcher.EXPECT().Fetch(context.Background(), testArticleURL).
 		Return(web.Page{URL: testArticleURL, Title: "Linear Algebra", Markdown: "Plain paragraph."}, nil).Once()
 	llm := llmmocks.NewMockProvider(t)
 	llm.EXPECT().
-		Chat(mock.Anything, mock.MatchedBy(func(req domainllm.ChatRequest) bool {
+		Chat(context.Background(), mock.MatchedBy(func(req domainllm.ChatRequest) bool {
 			return req.Messages[1].Content == "# Linear Algebra\n\nPlain paragraph."
 		})).
 		Return(domainllm.ChatResponse{Content: "# Linear Algebra\n\nPlain paragraph."}, nil).Once()
@@ -332,4 +332,8 @@ func TestWithTitleHeading(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func isNoteFormattingRequest(req domainllm.ChatRequest) bool {
+	return req.Task == domainllm.TaskNoteFormatting
 }
