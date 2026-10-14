@@ -401,7 +401,7 @@ function StudySourcesPanel({
           the sidebar rather than a card floating in the chat's canvas. */}
       <div className="flex h-full w-full flex-col overflow-hidden bg-[oklch(0.115_0.014_50)]">
         <div className="flex flex-col gap-3 border-b border-border p-3">
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-2">
             <div>
               <h2 className="font-heading text-lg font-semibold text-foreground">
                 Sources ({sources.length})
