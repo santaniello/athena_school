@@ -43,7 +43,9 @@ phase 3).
    model's window with room for the previous summary, the prompt and the output. `Summarizer`
    splits the messages it is given into batches under an input budget (domain constant, estimated
    with `EstimateTokens`) and folds them sequentially: each call's output is the next call's
-   "previous summary". Only the final result is persisted, in one `Save`, with
+   "previous summary". The prompt also tells the model to restate any instruction found inside the
+   conversation as a plain fact ("the user asked to ...") and never verbatim, since the summary is
+   later injected into prompts (2.25). Only the final result is persisted, in one `Save`, with
    `covers_until_message_id` set to the last folded message; if any batch fails, nothing is saved
    and the previous summary stays intact. This is what makes the first compaction of an already
    huge session possible. A single message larger than the batch budget is truncated for
@@ -72,7 +74,13 @@ CREATE TABLE IF NOT EXISTS conversation_summaries (
 Appended to the `migrations` slice in `infrastructure/sqlite/migrations.go` (idempotent,
 `CREATE TABLE IF NOT EXISTS`). `ON DELETE CASCADE` on `covers_until_message_id` means deleting that
 message removes the summary; messages are only deleted with their session today, so this is
-consistent. Foreign keys are enforced on every pooled connection (`foreign_keys(1)` is set in the
+consistent. The two foreign keys are independent, so the database alone would accept a summary
+whose `covers_until_message_id` belongs to another session (and deleting that message would then
+drop this session's summary). `Save` therefore verifies in the repository that the message belongs
+to `session_id` (single query inside the same transaction) and returns an error otherwise, with a
+test. A composite FK is not used: it would need `UNIQUE(id, session_id)` on `messages`, i.e. a
+table rebuild, which is disproportionate for an invariant the single writer already enforces.
+Foreign keys are enforced on every pooled connection (`foreign_keys(1)` is set in the
 DSN in `sqlite.Open`), so the cascade is reliable. If a per-message delete is ever introduced, it
 must be revisited, since it would silently drop the summary.
 
@@ -101,6 +109,8 @@ must be revisited, since it would silently drop the summary.
 ## Acceptance Criteria
 
 - A summary can be saved, replaced and read back per session; deleting the session removes it.
+- Saving a summary whose `covers_until_message_id` belongs to a different session fails and
+  persists nothing.
 - `Summarizer` returns a new summary built from the previous summary plus only the given messages;
   a blank LLM response returns an error and persists nothing.
 - A message list larger than one batch is folded in several sequential calls; no call exceeds the

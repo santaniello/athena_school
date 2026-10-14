@@ -26,8 +26,14 @@ and gives the visibility needed to validate compaction (2.25) later.
    (tokens and cost). Accumulated tokens are never used to decide anything about context.
 4. **`usage.session_id` is `ON DELETE SET NULL`.** Deleting a session drops its totals from this
    view; that is acceptable and not changed here.
-5. **Cost can be unknown.** Free-model calls and providers that omit `cost` record 0; the UI
-   shows "—" for a session whose total cost is 0 and total tokens is 0, and the value otherwise.
+5. **Unknown cost is not zero cost.** `usage.cost` stores `0` both for free-model calls and for
+   providers that omit `cost`, and this spec does not change the column (no migration). So the
+   aggregate also reports `UnpricedCalls`: the number of rows with tokens > 0 and `cost = 0`
+   (`UsageTotals{InputTokens, OutputTokens, Cost, UnpricedCalls}`). The UI shows: "—" when the
+   session has no recorded calls; the exact total (including 0) when `UnpricedCalls == 0`; and
+   "≥ US$ X" with a tooltip ("some calls have no reported cost") when `UnpricedCalls > 0`. This is
+   deliberately conservative: a genuinely free call also marks the total as a lower bound. A
+   nullable `cost` that separates the two cases is a possible follow-up if that proves noisy.
 6. **No new Wails event.** Totals are fetched on resume and refreshed after `study:done` /
    `study:error`; the context meter is driven by the existing `study:context-*` events plus the
    `StudySession.context` returned on resume.
@@ -61,7 +67,10 @@ and gives the visibility needed to validate compaction (2.25) later.
   estimated measurement is marked as such; an unresolved limit shows no percentage.
 - After each completed turn the meter and the session totals update without reopening the session.
 - Totals include HyDE and embedding calls recorded for the session and exclude other sessions.
-- A session with no recorded usage shows zero/"—", not an error.
+- A session with no recorded usage shows "—", not an error.
+- A session containing a call with tokens but no reported cost shows the cost as a lower bound
+  ("≥ US$ X"), never as an exact figure; a session whose calls all report a cost shows the exact
+  total.
 - Accumulated tokens never appear in the context meter and vice versa.
 
 ## Out of Scope

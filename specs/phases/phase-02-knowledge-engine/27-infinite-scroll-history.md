@@ -16,9 +16,11 @@ automatically as the user scrolls to the top, without losing their place.
 3. **Coexists with sticky-bottom.** The 80px follow-the-stream behavior (2.23) is unchanged.
    Prepending older messages never re-enables following; streaming keeps working while older pages
    load.
-4. **Single in-flight page request.** Repeated scroll events do not trigger duplicate fetches; a
-   page is requested at most once per cursor. Switching sessions cancels/ignores a stale response
-   (compare the session id on arrival, as chunk events already do).
+4. **Single in-flight page request.** Repeated scroll events do not trigger duplicate fetches:
+   at most one request per cursor is in flight at a time. The dedup applies only to concurrent
+   calls; a failed request leaves the cursor available so retry (decision 1) can request it again,
+   and a successful one advances to `nextCursor`. Switching sessions cancels/ignores a stale
+   response (compare the session id on arrival, as chunk events already do).
 5. **Dedup by message id.** If a message already exists locally (e.g. a just-sent message that
    also appears in a late page), it is not inserted twice.
 6. **DOM still grows with scrolling.** This is accepted: it only grows as the user explicitly
@@ -32,7 +34,8 @@ automatically as the user scrolls to the top, without losing their place.
   result carries `hasMore` / `nextCursor`.
 - `StudyChatScreen` (or a `useMessageHistory` hook extracted from it): owns messages, `hasMore`,
   `nextCursor`, loading/error state, the top-sentinel/scroll handler and the scroll-restoration
-  logic. Keep the hook testable independent of layout.
+  logic. Keep the hook testable independent of layout. Test: a failed page load followed by retry
+  issues a second request for the same cursor.
 - Tests need layout mocks: `setup.ts` already polyfills `ResizeObserver` and `getBoundingClientRect`;
   scroll metrics (`scrollHeight`, `scrollTop`) are stubbed per test.
 
