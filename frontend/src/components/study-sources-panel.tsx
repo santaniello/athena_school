@@ -441,7 +441,7 @@ function StudySourcesPanel({
               value={query}
               onChange={handleQueryChange}
               placeholder="Search sources"
-              className="pl-8 text-sm"
+              className="pl-8"
             />
           </label>
 
