@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Typography now follows Claude web's scale: chat messages, inputs and the textarea are 16px; the sidebar, Sources panel, dialog bodies and import-review text are 14px; metadata stays 12px. Titles gain a clearer hierarchy — page, section and dialog titles (including confirmation dialogs) are 18px semibold in normal case, chat markdown headings are 20/18/16px, and the Home greeting is 30px. `@fontsource/cinzel/600.css` is imported so `font-semibold` titles actually render a 600 weight.
+
 ### Fixed
+- Links and markdown headings in the gold user message bubble were unreadable (gold or light text on gold); they now use a dark amber link style and the dark foreground colour. Bare URLs were already detected as links by `remark-gfm`.
 - The note-formatting progress dialog now clears its previous section count while cleaning up its event subscription, avoiding a synchronous state update in the effect body that caused the frontend ESLint quality gate to fail.
 - Phase 2.20's note-formatting prompts now ask the model to restate a list's shared heading/intro context inside each item's own sentence, with a blank line between items — diagnosed from a real session where a cache note's eviction-policy bullets (LRU/LFU/FIFO/RR) chunked as one diluted block: "LRU"/"LFU" scored above `Sufficiency` against it, but "FIFO" and "Random Replacement" did not, producing a false "Nenhum conhecimento local foi encontrado" for content the note actually covers. A first attempt (blank line only) was verified against the real OpenRouter API and still produced one chunk — a one-line bullet is far under the chunker's 200-rune floor, so short items cascade-merge back together regardless of the blank line between them. Padding each item with invented explanation would have violated the same prompt's "never add information" rule, so each item instead reuses context the list already states once in its heading, making it self-contained without a new fact. Re-verified end-to-end against the real API with the session's exact chunk and queries (raw + HyDE, matching `Retrieve`'s own best-of-chunk logic): "O que é FIFO ?" 0.42 → 0.67, "e Random Replacemente ?" 0.34 → 0.59 — both now clear the 0.55 bar.
 

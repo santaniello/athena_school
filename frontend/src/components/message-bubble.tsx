@@ -120,6 +120,12 @@ const userMarkdownComponents: Components = {
       {...props}
     />
   ),
+  h1: (props) => (
+    <h2 className="mb-2 font-heading text-xl font-semibold text-primary-foreground" {...props} />
+  ),
+  h2: (props) => (
+    <h3 className="mb-2 font-heading text-lg font-semibold text-primary-foreground" {...props} />
+  ),
   h3: (props) => (
     <h4 className="mb-1 font-heading text-base font-semibold text-primary-foreground" {...props} />
   ),
