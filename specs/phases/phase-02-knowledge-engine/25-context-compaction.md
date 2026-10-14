@@ -54,9 +54,14 @@ safety net** that exists only when compaction failed or is impossible.
    - Only when even a compacted prompt cannot fit (see 8) does the session stay blocked, and
      `Start new session` remains the last-resort alternative.
 7. **Output reserve.** The budget is `contextLength − outputReserve − (system + knowledge
-   messages) − summary`. `outputReserve` is a domain constant (initial value fixed in the plan
-   step, e.g. 10% of the window, bounded) because today no reserve exists and no `max_tokens` is
-   set.
+   messages) − summary`. Today no reserve exists and no `max_tokens` is sent. `outputReserve` is a
+   pure domain function of the window, not a per-model setting:
+   `outputReserve(window) = min(max(window / 10, 2048), 16384, window / 4)` tokens (integer
+   math). 10% of the window with a 2,048 floor and a 16,384 ceiling fits the tutor's short
+   Socratic replies; the `window / 4` cap keeps tiny windows usable. It is a planning budget, not
+   an enforced limit: the provider is still free to produce more, and sending `max_tokens` is out
+   of scope. Boundary tests cover each branch (floor, ceiling, quarter cap and the exact
+   switchover points). A per-model override is a possible follow-up if a model proves to need it.
 8. **Context Builder is pure domain logic.** `domain/study.BuildContext(...)` takes the summary
    (optional), the persisted messages after `covers_until_message_id`, **the pending user message
    (not yet persisted — it is always kept verbatim and counted in the budget, and if it alone does

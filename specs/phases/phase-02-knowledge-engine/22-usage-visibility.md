@@ -40,7 +40,7 @@ and gives the visibility needed to validate compaction (2.25) later.
 
 ## New/changed backend surface
 
-- `domain/llm`: `UsageTotals{InputTokens, OutputTokens, Cost}` and `UsageReader`.
+- `domain/llm`: `UsageTotals{InputTokens, OutputTokens, Cost, UnpricedCalls}` and `UsageReader`.
 - `infrastructure/sqlite/usage_repository.go`: `SessionTotals`.
 - `application/study`: `Service.SessionUsage(ctx, sessionID)`.
 - Desktop binding: `GetStudySessionUsage(sessionID)`.
