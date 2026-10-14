@@ -55,7 +55,7 @@ function IndexReviewDialog({ open, issues, onClose }: IndexReviewDialogProps) {
                 {issue.filePath || issue.chunkId}
               </p>
               <p className="text-muted-foreground">{reasonLabel(issue.reason)}</p>
-              <p className="text-xs text-muted-foreground">{GUIDANCE}</p>
+              <p className="text-sm text-muted-foreground">{GUIDANCE}</p>
             </div>
           ))}
         </div>

@@ -74,15 +74,15 @@ function ChunkCard({ index, chunk, expanded, onToggle }: ChunkCardProps) {
           <span className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
             {index + 1}
           </span>
-          <p className="min-w-0 break-words text-xs font-semibold leading-4 text-foreground">
+          <p className="min-w-0 break-words text-sm font-semibold leading-4 text-foreground">
             {chunk.heading || 'Untitled passage'}
           </p>
         </div>
-        <span className="shrink-0 text-[11px] text-muted-foreground">
+        <span className="shrink-0 text-xs text-muted-foreground">
           {chunk.charCount} chars · ~{chunk.estimatedTokens} tokens
         </span>
       </div>
-      <p className="mt-1.5 text-xs leading-relaxed text-foreground">
+      <p className="mt-1.5 text-sm leading-relaxed text-foreground">
         {expanded ? chunk.content : truncate(chunk.content, CHUNK_PREVIEW_LENGTH)}
       </p>
       {isTruncated && (
@@ -91,7 +91,7 @@ function ChunkCard({ index, chunk, expanded, onToggle }: ChunkCardProps) {
           size="sm"
           variant="outline"
           onClick={onToggle}
-          className="mt-2 h-6 gap-1 rounded-full px-2.5 text-[11px]"
+          className="mt-2 h-6 gap-1 rounded-full px-2.5 text-xs"
         >
           <ChevronDown
             className={cn('size-2.5 transition-transform', expanded && 'rotate-180')}
@@ -138,7 +138,7 @@ function ImportReviewDialog({ open, preview, onCancel, onApprove }: ImportReview
                   Formatting couldn't be applied to{' '}
                   {preview.failedSections.length === 1 ? 'one section' : 'some sections'} — showing
                   the original text there. You can still import it as-is.
-                  <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[11px]">
+                  <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-sm">
                     {preview.failedSections.map((section, index) => (
                       <li key={index}>
                         <strong>{section.heading || 'Untitled section'}</strong>: {section.reason}
@@ -157,7 +157,7 @@ function ImportReviewDialog({ open, preview, onCancel, onApprove }: ImportReview
           <Alert>
             <AlertDescription>
               Some sections may still group distinct items into one chunk after formatting:
-              <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[11px]">
+              <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-sm">
                 {preview.structureWarnings.map((warning, index) => (
                   <li key={index}>
                     <strong>{warning.heading || 'Untitled section'}</strong>: {warning.message}
@@ -169,7 +169,7 @@ function ImportReviewDialog({ open, preview, onCancel, onApprove }: ImportReview
         )}
 
         {!preview.formattingFailed && (
-          <p className="text-[11px] text-muted-foreground">{statsLabel(preview.stats)}</p>
+          <p className="text-xs text-muted-foreground">{statsLabel(preview.stats)}</p>
         )}
 
         <div className="flex gap-2">
@@ -196,24 +196,24 @@ function ImportReviewDialog({ open, preview, onCancel, onApprove }: ImportReview
         <div className="thin-scroll min-h-0 flex-1 overflow-y-auto">
           {tab === 'formatted' &&
             (preview.formattingFailed ? (
-              <div className="rounded-lg border border-border p-3 text-xs leading-relaxed whitespace-pre-wrap text-foreground">
+              <div className="rounded-lg border border-border p-3 text-sm leading-relaxed whitespace-pre-wrap text-foreground">
                 {preview.formattedContent}
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                  <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                     Original
                   </p>
-                  <div className="h-64 overflow-y-auto rounded-lg border border-border p-2.5 text-[11px] leading-relaxed whitespace-pre-wrap text-muted-foreground">
+                  <div className="h-64 overflow-y-auto rounded-lg border border-border p-2.5 text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground">
                     {preview.originalContent}
                   </div>
                 </div>
                 <div>
-                  <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-primary uppercase">
+                  <p className="mb-1.5 text-xs font-semibold tracking-wide text-primary uppercase">
                     Formatted
                   </p>
-                  <div className="h-64 overflow-y-auto rounded-lg border border-primary/30 bg-primary/5 p-2.5 text-xs leading-relaxed whitespace-pre-wrap text-foreground">
+                  <div className="h-64 overflow-y-auto rounded-lg border border-primary/30 bg-primary/5 p-2.5 text-sm leading-relaxed whitespace-pre-wrap text-foreground">
                     {preview.formattedContent}
                   </div>
                 </div>

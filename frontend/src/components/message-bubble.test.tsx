@@ -252,6 +252,41 @@ describe('MessageBubble', () => {
     expect(screen.getByRole('cell', { name: 'a1' })).toBeInTheDocument()
   })
 
+  describe('readability on the gold user bubble', () => {
+    it('renders a bare URL as a dark link instead of gold-on-gold', () => {
+      // Given a user message containing a bare URL
+      render(<MessageBubble role="user" content="Read https://example.com/article please" />)
+
+      // Then it becomes a link that does not use the primary (gold) colour
+      const link = screen.getByRole('link', { name: 'https://example.com/article' })
+      expect(link).toHaveAttribute('href', 'https://example.com/article')
+      expect(link.className).not.toContain('text-primary')
+      expect(link.className).toContain('underline')
+    })
+
+    it.each([
+      ['# Title', 'Title'],
+      ['## Title', 'Title'],
+      ['### Title', 'Title'],
+    ])('uses the dark foreground for the user heading %s', (markdown, name) => {
+      // Given a user message with a markdown heading
+      render(<MessageBubble role="user" content={markdown} />)
+
+      // Then the heading is readable on the gold background
+      const heading = screen.getByRole('heading', { name })
+      expect(heading.className).toContain('text-primary-foreground')
+      expect(heading.className).not.toMatch(/text-foreground|text-primary(?!-)/)
+    })
+
+    it('keeps assistant links gold on the dark card', () => {
+      // Given an assistant message with a link
+      render(<MessageBubble role="assistant" content="See https://example.com/doc" />)
+
+      // Then the link keeps the primary colour
+      expect(screen.getByRole('link').className).toContain('text-primary')
+    })
+  })
+
   describe('citations', () => {
     it('renders a citation chip for a valid index', () => {
       // Given a reply citing its one source

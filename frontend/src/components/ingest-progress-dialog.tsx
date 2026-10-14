@@ -184,7 +184,7 @@ export function IngestProgressDialog({
             {ingestSummary.failures.length > 0 && (
               <div className="thin-scroll max-h-40 space-y-1 overflow-y-auto rounded-lg border p-2">
                 {ingestSummary.failures.map((failure) => (
-                  <p key={failure.path} className="text-xs text-destructive">
+                  <p key={failure.path} className="text-sm text-destructive">
                     <span className="font-medium">{failure.path}</span>: {failure.reason}
                   </p>
                 ))}
@@ -192,10 +192,10 @@ export function IngestProgressDialog({
             )}
             {ingestSummary.indexWarnings.length > 0 && (
               <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Imported, but not yet searchable:</p>
+                <p className="text-sm text-muted-foreground">Imported, but not yet searchable:</p>
                 <div className="thin-scroll max-h-40 space-y-1 overflow-y-auto rounded-lg border p-2">
                   {ingestSummary.indexWarnings.map((warning) => (
-                    <p key={warning.path} className="text-xs text-muted-foreground">
+                    <p key={warning.path} className="text-sm text-muted-foreground">
                       <span className="font-medium">{warning.path}</span>
                     </p>
                   ))}

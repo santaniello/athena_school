@@ -1,16 +1,19 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import '@fontsource/cinzel/700.css';
+@import '@fontsource/cinzel/600.css';
 
 /* Athena is a fixed dark theme evoking black-figure pottery (potter's
    black glaze), marble and laurel gold — there is no light-mode toggle. */
 
 html {
+  font-size: 16px;
   background-color: oklch(0.14 0.015 50);
 }
 
 body {
   margin: 0;
+  line-height: 1.6;
   font-family:
     'Nunito',
     -apple-system,

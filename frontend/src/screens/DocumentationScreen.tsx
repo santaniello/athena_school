@@ -11,9 +11,7 @@ function DocumentationScreen() {
   return (
     <div className="thin-scroll mx-auto flex w-full max-w-3xl flex-col gap-10 overflow-y-auto pr-2">
       <header className="flex flex-col gap-2">
-        <p className="font-mono text-[11px] tracking-[0.16em] text-primary uppercase">
-          Documentation
-        </p>
+        <p className="font-mono text-xs tracking-[0.16em] text-primary uppercase">Documentation</p>
         <h2 className="font-heading text-2xl font-bold text-balance text-foreground">
           A study companion that remembers what you learn
         </h2>
@@ -26,7 +24,7 @@ function DocumentationScreen() {
         aria-label="Contents"
         className="flex flex-col gap-2 rounded-lg border border-border p-4"
       >
-        <p className="font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+        <p className="font-mono text-xs tracking-[0.12em] text-muted-foreground uppercase">
           Contents
         </p>
         {DOCUMENTATION.map((section, index) => (
@@ -37,7 +35,7 @@ function DocumentationScreen() {
           >
             {/* Decorative ordinal: hidden from the accessible name so the
                 link reads as just the section title. */}
-            <span className="font-mono text-[11px] text-primary" aria-hidden="true">
+            <span className="font-mono text-xs text-primary" aria-hidden="true">
               {String(index + 1).padStart(2, '0')}
             </span>
             {section.title}
@@ -51,7 +49,7 @@ function DocumentationScreen() {
             <div className="flex items-center gap-2.5">
               <h3 className="font-heading text-xl font-bold text-foreground">{section.title}</h3>
               {section.status === 'planned' && (
-                <span className="rounded-full border border-primary/40 px-2 py-0.5 font-mono text-[10px] tracking-[0.08em] text-primary uppercase">
+                <span className="rounded-full border border-primary/40 px-2 py-0.5 font-mono text-xs tracking-[0.08em] text-primary uppercase">
                   Planned
                 </span>
               )}

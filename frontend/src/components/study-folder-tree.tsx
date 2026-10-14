@@ -313,7 +313,7 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
           key={session.id}
           session={session}
           className={cn(
-            'group flex cursor-pointer items-center gap-1.5 rounded-md py-1 pr-3 pl-10 text-xs hover:bg-accent',
+            'group flex cursor-pointer items-center gap-1.5 rounded-md py-1 pr-3 pl-10 text-sm hover:bg-accent',
             selected && 'bg-secondary',
           )}
           onClick={() => onSelectSession(session, folder.name)}
@@ -370,7 +370,7 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
             <div key={folder.id}>
               <DroppableFolderHeader
                 folderId={folder.id}
-                className="group flex cursor-pointer items-center gap-1.5 rounded-md py-1 pr-3 pl-6 text-xs hover:bg-accent"
+                className="group flex cursor-pointer items-center gap-1.5 rounded-md py-1 pr-3 pl-6 text-sm hover:bg-accent"
                 onClick={() => toggleFolder(folder)}
               >
                 <ChevronRight
@@ -392,7 +392,7 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
                       if (event.key === 'Escape') setRenamingFolderId(null)
                     }}
                     onBlur={() => void handleRenameSubmit(folder.id)}
-                    className="h-6 flex-1 text-xs"
+                    className="h-6 flex-1 text-sm"
                   />
                 ) : (
                   <span className="flex-1 truncate font-medium text-foreground">{folder.name}</span>
@@ -449,7 +449,7 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
 
                   <button
                     type="button"
-                    className="flex cursor-pointer items-center gap-1.5 py-1 pr-1 pl-10 text-xs text-muted-foreground hover:text-primary"
+                    className="flex cursor-pointer items-center gap-1.5 py-1 pr-1 pl-10 text-sm text-muted-foreground hover:text-primary"
                     onClick={() => {
                       setNewSessionFolderId(folder.id)
                       setNewSessionTopic('')
@@ -467,7 +467,7 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
           <Button
             variant="ghost"
             size="sm"
-            className="mx-1 mt-0.5 justify-start gap-1.5 px-2 text-xs text-muted-foreground"
+            className="mx-1 mt-0.5 justify-start gap-1.5 px-2 text-sm text-muted-foreground"
             onClick={() => setIsNewFolderDialogOpen(true)}
           >
             <Plus className="size-3.5" aria-hidden="true" />
@@ -597,7 +597,7 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
 
         <DragOverlay>
           {draggingSession && (
-            <div className="flex items-center gap-1.5 rounded-md border bg-popover px-3 py-1 text-xs shadow-lg">
+            <div className="flex items-center gap-1.5 rounded-md border bg-popover px-3 py-1 text-sm shadow-lg">
               <span
                 className="size-1.5 shrink-0 rounded-full bg-muted-foreground"
                 aria-hidden="true"

@@ -24,6 +24,16 @@ describe('ResetLocalDataDialog', () => {
     expect(screen.getByText(/OpenRouter key and profile are not affected/)).toBeInTheDocument()
   })
 
+  it('styles its title like the regular dialog title', () => {
+    // Given the dialog is open
+    render(<ResetLocalDataDialog open pending={false} onCancel={vi.fn()} onConfirm={vi.fn()} />)
+
+    // Then the confirmation title follows the shared 18px semibold hierarchy
+    const title = screen.getByText('Reset local data?')
+    expect(title.className).toContain('text-lg')
+    expect(title.className).toContain('font-semibold')
+  })
+
   it('calls onConfirm when the destructive action is clicked', async () => {
     // Given an open dialog
     const onConfirm = vi.fn()

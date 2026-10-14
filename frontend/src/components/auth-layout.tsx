@@ -19,9 +19,7 @@ function AuthLayout({ title, children }: AuthLayoutProps) {
           <GreekKeyDivider />
           <div className="flex items-center justify-center gap-2">
             <AthenaLogo className="h-9 w-9 shrink-0" />
-            <h1 className="font-heading text-2xl font-bold tracking-[0.15em] text-primary uppercase">
-              {title}
-            </h1>
+            <h1 className="font-heading text-2xl font-semibold text-primary">{title}</h1>
           </div>
           <GreekKeyDivider className="scale-y-[-1]" />
         </CardHeader>
