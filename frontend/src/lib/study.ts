@@ -1,5 +1,6 @@
 import {
   DeleteStudySession,
+  GetStudySessionUsage,
   ListStudySessionsByFolder,
   MoveStudySession,
   RequestOpeningTurn,
@@ -163,6 +164,31 @@ function toStudySession(result: {
     folderId: result.folderId,
     goal: result.goal,
     startedAt: result.startedAt,
+    context: { ...result.context, state: result.context.state as StudyContextUsage['state'] },
+  }
+}
+
+// StudySessionUsage is the tokens and cost accumulated by every recorded LLM
+// call of a session (chat, HyDE, embeddings) — never the context window
+// occupancy. cost is a lower bound when unpricedCalls > 0; calls === 0 means
+// nothing was recorded. Interrupted calls leave no record, so it only covers
+// completed ones. See specs/phases/phase-02-knowledge-engine/22-usage-visibility.md.
+export interface StudySessionUsage {
+  inputTokens: number
+  outputTokens: number
+  cost: number
+  unpricedCalls: number
+  calls: number
+  // The session's persisted context occupancy — a separate metric from the
+  // totals above, returned alongside because study:context-* events only
+  // fire on state transitions, not after every turn.
+  context: StudyContextUsage
+}
+
+export async function getStudySessionUsage(sessionId: string): Promise<StudySessionUsage> {
+  const result = await GetStudySessionUsage(sessionId)
+  return {
+    ...result,
     context: { ...result.context, state: result.context.state as StudyContextUsage['state'] },
   }
 }

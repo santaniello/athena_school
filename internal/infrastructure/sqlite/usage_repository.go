@@ -32,3 +32,19 @@ func (r *UsageRepository) Record(ctx context.Context, entry domainllm.UsageEntry
 	}
 	return nil
 }
+
+// SessionTotals sums every usage row attributed to sessionID. A session
+// without rows yields the zero UsageTotals.
+func (r *UsageRepository) SessionTotals(ctx context.Context, sessionID string) (domainllm.UsageTotals, error) {
+	var totals domainllm.UsageTotals
+	err := r.db.QueryRowContext(ctx,
+		`SELECT COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0), COALESCE(SUM(cost), 0),
+			COALESCE(SUM(CASE WHEN cost = 0 AND (input_tokens > 0 OR output_tokens > 0) THEN 1 ELSE 0 END), 0),
+			COUNT(*)
+		FROM usage WHERE session_id = ?`, sessionID,
+	).Scan(&totals.InputTokens, &totals.OutputTokens, &totals.Cost, &totals.UnpricedCalls, &totals.Calls)
+	if err != nil {
+		return domainllm.UsageTotals{}, fmt.Errorf("sqlite: reading session usage totals: %w", err)
+	}
+	return totals, nil
+}

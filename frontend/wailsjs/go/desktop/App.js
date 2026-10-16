@@ -38,6 +38,10 @@ export function GetSessionSourceDocument(arg1, arg2) {
   return window['go']['desktop']['App']['GetSessionSourceDocument'](arg1, arg2);
 }
 
+export function GetStudySessionUsage(arg1) {
+  return window['go']['desktop']['App']['GetStudySessionUsage'](arg1);
+}
+
 export function HasOpenRouterKey() {
   return window['go']['desktop']['App']['HasOpenRouterKey']();
 }

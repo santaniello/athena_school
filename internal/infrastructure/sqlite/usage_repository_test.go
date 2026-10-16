@@ -97,3 +97,73 @@ func TestUsageRepository_Record_returnsError_whenIDAlreadyExists(t *testing.T) {
 	// Then it fails instead of silently overwriting or being swallowed
 	assert.Error(t, err)
 }
+
+func TestUsageRepository_SessionTotals_sumsOnlyTheRequestedSession(t *testing.T) {
+	// Given usage rows for two sessions, including an embedding-style row
+	// (input tokens only)
+	repo, _ := newTestUsageRepository(t)
+	ctx := context.Background()
+	for _, entry := range []domainllm.UsageEntry{
+		{ID: "u1", SessionID: "sess-1", Model: "m", InputTokens: 10, OutputTokens: 5, Cost: 0.01},
+		{ID: "u2", SessionID: "sess-1", Model: "e", InputTokens: 7, Cost: 0.002},
+		{ID: "u3", SessionID: "sess-2", Model: "m", InputTokens: 100, OutputTokens: 100, Cost: 1},
+	} {
+		require.NoError(t, repo.Record(ctx, entry))
+	}
+
+	// When reading sess-1 totals
+	totals, err := repo.SessionTotals(ctx, "sess-1")
+
+	// Then only sess-1 rows are summed and every call had a reported cost
+	require.NoError(t, err)
+	assert.Equal(t, 17, totals.InputTokens)
+	assert.Equal(t, 5, totals.OutputTokens)
+	assert.InDelta(t, 0.012, totals.Cost, 1e-9)
+	assert.Equal(t, 0, totals.UnpricedCalls)
+	assert.Equal(t, 2, totals.Calls)
+}
+
+func TestUsageRepository_SessionTotals_countsCallsWithTokensButNoCostAsUnpriced(t *testing.T) {
+	// Given a priced call, an unpriced call with tokens and an all-zero row
+	repo, _ := newTestUsageRepository(t)
+	ctx := context.Background()
+	for _, entry := range []domainllm.UsageEntry{
+		{ID: "u1", SessionID: "sess-1", Model: "m", InputTokens: 10, OutputTokens: 5, Cost: 0.01},
+		{ID: "u2", SessionID: "sess-1", Model: "m", InputTokens: 3, OutputTokens: 4},
+		{ID: "u3", SessionID: "sess-1", Model: "m"},
+	} {
+		require.NoError(t, repo.Record(ctx, entry))
+	}
+
+	// When reading the totals
+	totals, err := repo.SessionTotals(ctx, "sess-1")
+
+	// Then only the row with tokens and cost 0 is unpriced
+	require.NoError(t, err)
+	assert.Equal(t, 1, totals.UnpricedCalls)
+	assert.Equal(t, 3, totals.Calls)
+}
+
+func TestUsageRepository_SessionTotals_returnsZeroValue_whenSessionHasNoUsage(t *testing.T) {
+	// Given a session without any recorded call
+	repo, _ := newTestUsageRepository(t)
+
+	// When reading its totals
+	totals, err := repo.SessionTotals(context.Background(), "sess-1")
+
+	// Then it is an empty total, not an error
+	require.NoError(t, err)
+	assert.Equal(t, domainllm.UsageTotals{}, totals)
+}
+
+func TestUsageRepository_SessionTotals_returnsError_whenQueryFails(t *testing.T) {
+	// Given a repository whose database is closed
+	repo, db := newTestUsageRepository(t)
+	require.NoError(t, db.Close())
+
+	// When reading totals
+	_, err := repo.SessionTotals(context.Background(), "sess-1")
+
+	// Then the failure is surfaced
+	assert.Error(t, err)
+}

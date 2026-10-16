@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
+  getStudySessionUsage,
   onStudyChunk,
   onStudyContextLimitReached,
   onStudyContextLimitUnavailable,
@@ -30,6 +31,7 @@ vi.mock('@/lib/study', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/study')>()
   return {
     ...original,
+    getStudySessionUsage: vi.fn(),
     requestOpeningTurn: vi.fn(),
     resumeStudySession: vi.fn(),
     sendStudyMessage: vi.fn(),
@@ -1346,23 +1348,10 @@ describe('StudyChatScreen — context limits', () => {
     expect(sendStudyMessage).not.toHaveBeenCalled()
   })
 
-  it('calls onStartNewSession from the warning banner, disabled while starting', async () => {
-    const onStartNewSession = vi.fn()
-    const handlers = setupSubscriptions()
-    vi.mocked(requestOpeningTurn).mockResolvedValueOnce()
-    render(
-      <StudyChatScreen
-        sessionId="session-1"
-        initialTopic="Distributed systems"
-        mode="new"
-        onStartNewSession={onStartNewSession}
-        startingNewSession={false}
-      />,
-    )
-    await screen.findByRole('status', { name: /thinking/i })
+  it('shows the warning banner in orange without a "Start new session" button', async () => {
+    const handlers = await renderSettledSession()
+
     act(() => {
-      handlers.chunk?.({ sessionId: 'session-1', content: 'Welcome!' })
-      handlers.done?.({ sessionId: 'session-1' })
       handlers.contextWarning?.({
         sessionId: 'session-1',
         usedTokens: 8000,
@@ -1370,11 +1359,10 @@ describe('StudyChatScreen — context limits', () => {
         estimated: false,
       })
     })
-    const user = userEvent.setup()
 
-    await user.click(await screen.findByRole('button', { name: 'Start new session' }))
-
-    expect(onStartNewSession).toHaveBeenCalledOnce()
+    const message = await screen.findByText(/approaching the model's context limit/)
+    expect(message).toHaveClass('text-orange-600')
+    expect(screen.queryByRole('button', { name: 'Start new session' })).not.toBeInTheDocument()
   })
 
   it('disables the "Start new session" button while startingNewSession is true', async () => {
@@ -1523,5 +1511,143 @@ describe('StudyChatScreen — context limits', () => {
     // this kind of failure, so it's not reconciled away
     expect(await screen.findByText('retrieval failed')).toBeInTheDocument()
     expect(within(transcript).getByText('What is CAP theorem?')).toBeInTheDocument()
+  })
+})
+
+describe('StudyChatScreen — session usage visibility', () => {
+  const resumedHistory = {
+    session: {
+      id: 'session-1',
+      topic: 'Distributed systems',
+      folderId: 'folder-1',
+      goal: 'Ace the SQL interview',
+      startedAt: '2026-08-16T10:00:00Z',
+      context: {
+        state: 'normal' as const,
+        model: 'anthropic/claude',
+        usedTokens: 5000,
+        contextLength: 100000,
+        estimated: true,
+      },
+    },
+    messages: [],
+  }
+  const totals = {
+    inputTokens: 8000,
+    outputTokens: 2000,
+    cost: 0.5,
+    unpricedCalls: 0,
+    calls: 2,
+    context: resumedHistory.session.context,
+  }
+
+  function renderResumed() {
+    render(
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic=""
+        mode="resume"
+        {...newSessionActionProps()}
+      />,
+    )
+  }
+
+  it('shows the persisted context and the accumulated usage on resume', async () => {
+    // Given a resumed session with persisted context and recorded usage
+    setupSubscriptions()
+    vi.mocked(resumeStudySession).mockResolvedValueOnce(resumedHistory)
+    vi.mocked(getStudySessionUsage).mockResolvedValueOnce(totals)
+
+    // When the chat screen mounts in "resume" mode
+    renderResumed()
+
+    // Then both metrics render, kept apart
+    expect(await screen.findByText('~5k / 100k tokens · 5%')).toBeInTheDocument()
+    expect(await screen.findByText('10k tokens · US$ 0.50')).toBeInTheDocument()
+    expect(getStudySessionUsage).toHaveBeenCalledWith('session-1')
+  })
+
+  it('refreshes the meter and the totals after a completed turn without reopening', async () => {
+    // Given a resumed session
+    const handlers = setupSubscriptions()
+    vi.mocked(resumeStudySession).mockResolvedValueOnce(resumedHistory)
+    vi.mocked(getStudySessionUsage).mockResolvedValueOnce(totals)
+    renderResumed()
+    await screen.findByText('10k tokens · US$ 0.50')
+
+    // When a turn completes with a new context measurement and new totals
+    // (the state stays "normal", so the backend emits no study:context-*
+    // event — the meter must refresh from the fetched snapshot alone)
+    vi.mocked(getStudySessionUsage).mockResolvedValueOnce({
+      ...totals,
+      inputTokens: 18000,
+      cost: 0.75,
+      calls: 4,
+      context: { ...totals.context, usedTokens: 20000, estimated: false },
+    })
+    act(() => {
+      handlers.done?.({ sessionId: 'session-1' })
+    })
+
+    // Then the meter and the totals both update
+    expect(await screen.findByText('20k / 100k tokens · 20%')).toBeInTheDocument()
+    expect(await screen.findByText('20k tokens · US$ 0.75')).toBeInTheDocument()
+  })
+
+  it('refreshes the totals after a failed turn, which may have recorded embedding calls', async () => {
+    // Given a resumed session
+    const handlers = setupSubscriptions()
+    vi.mocked(resumeStudySession).mockResolvedValueOnce(resumedHistory)
+    vi.mocked(getStudySessionUsage).mockResolvedValueOnce(totals)
+    renderResumed()
+    await screen.findByText('10k tokens · US$ 0.50')
+
+    // When a turn fails after its embedding call was recorded
+    vi.mocked(getStudySessionUsage).mockResolvedValueOnce({ ...totals, cost: 0.51, calls: 3 })
+    act(() => {
+      handlers.error?.(studyErrorEvent('session-1', 'stream failed'))
+    })
+
+    // Then the totals are fetched again
+    expect(await screen.findByText('10k tokens · US$ 0.51')).toBeInTheDocument()
+    expect(getStudySessionUsage).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the chat working and shows a dash when the usage fetch fails', async () => {
+    // Given a usage fetch that fails
+    setupSubscriptions()
+    vi.mocked(resumeStudySession).mockResolvedValueOnce(resumedHistory)
+    vi.mocked(getStudySessionUsage).mockRejectedValueOnce(new Error('db down'))
+
+    // When the chat screen mounts in "resume" mode
+    renderResumed()
+
+    // Then the context meter still renders and no error banner appears
+    expect(await screen.findByText('~5k / 100k tokens · 5%')).toBeInTheDocument()
+    expect(screen.queryByText('db down')).not.toBeInTheDocument()
+  })
+
+  it('shows text only, with no bar, for a resumed session whose limit is unresolved', async () => {
+    // Given a resumed session with tokens but no context length
+    setupSubscriptions()
+    vi.mocked(resumeStudySession).mockResolvedValueOnce({
+      ...resumedHistory,
+      session: {
+        ...resumedHistory.session,
+        context: { ...resumedHistory.session.context, contextLength: 0 },
+      },
+    })
+    vi.mocked(getStudySessionUsage).mockResolvedValueOnce({
+      ...totals,
+      calls: 0,
+      context: { ...totals.context, contextLength: 0 },
+    })
+
+    // When the chat screen mounts in "resume" mode
+    renderResumed()
+
+    // Then no percentage or bar is shown
+    expect(await screen.findByText('~5k tokens · limit unknown')).toBeInTheDocument()
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
   })
 })

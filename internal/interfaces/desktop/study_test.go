@@ -570,3 +570,53 @@ func TestApp_ListStudySessionsByFolder_returnsEverySessionInThatFolder(t *testin
 	require.Len(t, results, 2)
 	assert.Equal(t, "Cache invalidation", results[0].Topic)
 }
+
+func newUsageApp(t *testing.T, sessions domainstudy.SessionRepository, reader domainllm.UsageReader) *App {
+	t.Helper()
+	studyService := study.NewService(sessions, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, study.WithUsageReader(reader))
+	app := NewApp(nil, nil, nil, studyService, nil, nil, nil, nil, nil, nil)
+	app.Startup(context.Background())
+	return app
+}
+
+func TestApp_GetStudySessionUsage_mapsTotalsAndContextToResult(t *testing.T) {
+	// Given an App whose session has recorded usage and a persisted context
+	sessions := studymocks.NewMockSessionRepository(t)
+	sessions.EXPECT().GetByID(mock.Anything, "session-1").Return(domainstudy.Session{
+		ID: "session-1",
+		Context: domainstudy.ContextUsage{
+			State: domainstudy.ContextStateWarning, Model: "m", UsedTokens: 8000, ContextLength: 10000, Estimated: true,
+		},
+	}, nil).Once()
+	reader := llmmocks.NewMockUsageReader(t)
+	reader.EXPECT().SessionTotals(mock.Anything, "session-1").Return(domainllm.UsageTotals{
+		InputTokens: 10, OutputTokens: 5, Cost: 0.0123, UnpricedCalls: 1, Calls: 3,
+	}, nil).Once()
+	app := newUsageApp(t, sessions, reader)
+
+	// When reading the session usage
+	result, err := app.GetStudySessionUsage("session-1")
+
+	// Then every total and the context are exposed to the frontend
+	require.NoError(t, err)
+	assert.Equal(t, StudySessionUsageResult{
+		InputTokens: 10, OutputTokens: 5, Cost: 0.0123, UnpricedCalls: 1, Calls: 3,
+		Context: StudyContextResult{State: "warning", Model: "m", UsedTokens: 8000, ContextLength: 10000, Estimated: true},
+	}, result)
+}
+
+func TestApp_GetStudySessionUsage_returnsError_whenReaderFails(t *testing.T) {
+	// Given a usage reader that fails
+	readerErr := errors.New("db down")
+	sessions := studymocks.NewMockSessionRepository(t)
+	sessions.EXPECT().GetByID(mock.Anything, "session-1").Return(domainstudy.Session{ID: "session-1"}, nil).Once()
+	reader := llmmocks.NewMockUsageReader(t)
+	reader.EXPECT().SessionTotals(mock.Anything, "session-1").Return(domainllm.UsageTotals{}, readerErr).Once()
+	app := newUsageApp(t, sessions, reader)
+
+	// When reading the session usage
+	_, err := app.GetStudySessionUsage("session-1")
+
+	// Then the cause is surfaced
+	require.ErrorIs(t, err, readerErr)
+}

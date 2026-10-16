@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   DeleteStudySession,
+  GetStudySessionUsage,
   ListStudySessionsByFolder,
   MoveStudySession,
   RequestOpeningTurn,
@@ -11,6 +12,7 @@ import {
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import {
   deleteStudySession,
+  getStudySessionUsage,
   listStudySessionsByFolder,
   moveStudySession,
   onStudyChunk,
@@ -42,6 +44,7 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   RequestOpeningTurn: vi.fn(),
   SendStudyMessage: vi.fn(),
   DeleteStudySession: vi.fn(),
+  GetStudySessionUsage: vi.fn(),
   ResumeStudySession: vi.fn(),
   MoveStudySession: vi.fn(),
   ListStudySessionsByFolder: vi.fn(),
@@ -107,6 +110,28 @@ describe('startStudySession', () => {
       '',
       'Ace the SQL interview',
     )
+  })
+})
+
+describe('getStudySessionUsage', () => {
+  it('returns the accumulated usage for the session', async () => {
+    // Given a GetStudySessionUsage call that succeeds
+    const usage = {
+      inputTokens: 10,
+      outputTokens: 5,
+      cost: 0.01,
+      unpricedCalls: 0,
+      calls: 2,
+      context: { ...CONTEXT_NORMAL, usedTokens: 5000, contextLength: 100000 },
+    }
+    vi.mocked(GetStudySessionUsage).mockResolvedValueOnce(usage as never)
+
+    // When reading the session usage
+    const result = await getStudySessionUsage('session-1')
+
+    // Then it forwarded the sessionId and returned the totals
+    expect(GetStudySessionUsage).toHaveBeenCalledWith('session-1')
+    expect(result).toEqual(usage)
   })
 })
 

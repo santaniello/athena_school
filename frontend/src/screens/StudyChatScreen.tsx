@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ChangeEvent, KeyboardEvent, UIEvent } from 'react'
 import { ArrowUp } from 'lucide-react'
@@ -10,7 +10,9 @@ import { MessageBubble } from '@/components/message-bubble'
 import { ThinkingIndicator } from '@/components/thinking-indicator'
 import { SourceModeSelect } from '@/components/source-mode-select'
 import { LocalSourcesStrip } from '@/components/local-sources-strip'
+import { SessionUsageBar } from '@/components/session-usage-bar'
 import {
+  getStudySessionUsage,
   onStudyChunk,
   onStudyContextLimitReached,
   onStudyContextLimitUnavailable,
@@ -23,6 +25,8 @@ import {
   resumeStudySession,
   sendStudyMessage,
   type SourceMode,
+  type StudyContextEvent,
+  type StudySessionUsage,
   type StudySource,
 } from '@/lib/study'
 
@@ -55,6 +59,26 @@ interface StudyChatScreenProps {
 // ContextState mirrors the persisted study.ContextState the backend tracks
 // per session (see StudyContextUsage in lib/study.ts).
 type ContextState = 'normal' | 'warning' | 'blocked'
+
+// A failed or empty fetch resolves to null so callers keep the previous
+// totals — usage is informational and must never break the chat.
+async function fetchSessionUsage(sessionId: string): Promise<StudySessionUsage | null> {
+  try {
+    return (await getStudySessionUsage(sessionId)) ?? null
+  } catch {
+    return null
+  }
+}
+
+function contextTokensFrom(
+  event: Pick<StudyContextEvent, 'usedTokens' | 'contextLength' | 'estimated'>,
+) {
+  return {
+    usedTokens: event.usedTokens,
+    contextLength: event.contextLength,
+    estimated: event.estimated,
+  }
+}
 
 // Error codes carried by StudyErrorEvent that mean the failure happened
 // before the user message was persisted — see StudyErrorEvent.code in
@@ -102,6 +126,16 @@ function StudyChatScreen({
   // next handleSend. See
   // specs/phases/phase-02-knowledge-engine/06-study-context-limits.md.
   const [contextState, setContextState] = useState<ContextState>('normal')
+  // Numeric context occupancy behind the meter; the unresolved-limit case
+  // is contextLength === 0. Never fed from the accumulated usage below.
+  const [contextTokens, setContextTokens] = useState({
+    usedTokens: 0,
+    contextLength: 0,
+    estimated: false,
+  })
+  // Accumulated consumption of the session's completed LLM calls; null until
+  // the first fetch resolves or when it failed (the bar then shows "—").
+  const [sessionUsage, setSessionUsage] = useState<StudySessionUsage | null>(null)
   const [contextUnavailable, setContextUnavailable] = useState<string | null>(null)
   const streamingTextRef = useRef('')
   // Holds the sources emitted by "study:sources" for the turn currently in
@@ -128,6 +162,20 @@ function StudyChatScreen({
   // StrictMode's dev-only double-invoke of this effect (mount → cleanup →
   // mount) doesn't fire two independent LLM generations for one session.
   const openingTurnRequestedRef = useRef<string | null>(null)
+
+  // Fetched on resume and again when a turn ends (study:done / study:error):
+  // a failed turn may still have recorded its embedding / HyDE calls.
+  const refreshSessionUsage = useCallback(() => {
+    void fetchSessionUsage(sessionId).then((usage) => {
+      if (!usage) return
+      setSessionUsage(usage)
+      // The persisted context is the source of truth after a turn:
+      // study:context-* events only fire on state transitions, so a turn
+      // that stays "normal" would otherwise leave the meter stale.
+      setContextState(usage.context.state)
+      setContextTokens(contextTokensFrom(usage.context))
+    })
+  }, [sessionId])
 
   function clearContextUnavailable() {
     contextUnavailableShownRef.current = false
@@ -165,6 +213,12 @@ function StudyChatScreen({
         setSessionTopic(history.session.topic)
         onTopicResolved?.(history.session.topic)
         setContextState(history.session.context.state)
+        setContextTokens({
+          usedTokens: history.session.context.usedTokens,
+          contextLength: history.session.context.contextLength,
+          estimated: history.session.context.estimated,
+        })
+        refreshSessionUsage()
         setMessages(
           history.messages.map((message) => ({
             role: message.role as ChatMessage['role'],
@@ -203,12 +257,14 @@ function StudyChatScreen({
       setMessages((previous) => [...previous, { role: 'assistant', content, sources }])
       setStreamingText('')
       setIsStreaming(false)
+      refreshSessionUsage()
     })
     const offError = onStudyError((event) => {
       if (event.sessionId !== sessionId) return
       streamingTextRef.current = ''
       setStreamingText('')
       setIsStreaming(false)
+      refreshSessionUsage()
       // A pre-persistence error (the turn was rejected before the user
       // message was ever saved) only applies to a send actually in flight —
       // an opening turn never sets pendingSendRef, so it falls through to
@@ -231,16 +287,19 @@ function StudyChatScreen({
     const offContextNormal = onStudyContextNormal((event) => {
       if (event.sessionId !== sessionId) return
       setContextState('normal')
+      setContextTokens(contextTokensFrom(event))
       clearContextUnavailable()
     })
     const offContextWarning = onStudyContextWarning((event) => {
       if (event.sessionId !== sessionId) return
       setContextState('warning')
+      setContextTokens(contextTokensFrom(event))
       clearContextUnavailable()
     })
     const offContextLimitReached = onStudyContextLimitReached((event) => {
       if (event.sessionId !== sessionId) return
       setContextState('blocked')
+      setContextTokens(contextTokensFrom(event))
       clearContextUnavailable()
     })
     const offContextLimitUnavailable = onStudyContextLimitUnavailable((event) => {
@@ -263,7 +322,7 @@ function StudyChatScreen({
       offContextLimitReached()
       offContextLimitUnavailable()
     }
-  }, [sessionId])
+  }, [sessionId, refreshSessionUsage])
 
   async function handleSend() {
     const content = draft.trim()
@@ -322,6 +381,7 @@ function StudyChatScreen({
 
   return (
     <div className="flex h-full w-full flex-col gap-3">
+      <SessionUsageBar context={{ state: contextState, ...contextTokens }} usage={sessionUsage} />
       <div
         ref={transcriptRef}
         onScroll={handleTranscriptScroll}
@@ -361,19 +421,9 @@ function StudyChatScreen({
       )}
       {contextState === 'warning' && (
         <Alert>
-          <AlertDescription className="flex items-center justify-between gap-3">
-            <span>
-              This session is approaching the model&apos;s context limit. Start a new session on the
-              same topic to keep responses reliable.
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={startingNewSession}
-              onClick={() => void onStartNewSession()}
-            >
-              Start new session
-            </Button>
+          <AlertDescription className="text-orange-600 dark:text-orange-400">
+            This session is approaching the model&apos;s context limit. Start a new session on the
+            same topic to keep responses reliable.
           </AlertDescription>
         </Alert>
       )}

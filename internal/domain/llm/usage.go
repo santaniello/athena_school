@@ -20,3 +20,21 @@ type UsageEntry struct {
 type UsageRecorder interface {
 	Record(ctx context.Context, entry UsageEntry) error
 }
+
+// UsageTotals aggregates every recorded call of one session. UnpricedCalls
+// counts calls with tokens but a stored cost of 0: usage.cost is 0 both for
+// free-model calls and for providers that omit cost, so Cost is only a
+// lower bound when UnpricedCalls > 0. Calls is the number of recorded rows
+// (0 means the session has no recorded usage).
+type UsageTotals struct {
+	InputTokens   int
+	OutputTokens  int
+	Cost          float64
+	UnpricedCalls int
+	Calls         int
+}
+
+// UsageReader reads the usage recorded by a UsageRecorder.
+type UsageReader interface {
+	SessionTotals(ctx context.Context, sessionID string) (UsageTotals, error)
+}

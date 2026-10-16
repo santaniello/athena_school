@@ -52,6 +52,7 @@ type Service struct {
 	messageSources domainknowledge.MessageSourceRepository
 	knowledge      KnowledgeCascade
 	enricher       domainknowledge.QueryEnricher
+	usage          domainllm.UsageReader
 	inFlight       *inFlightCoordinator
 }
 
@@ -68,12 +69,17 @@ func NewService(
 	messageSources domainknowledge.MessageSourceRepository,
 	knowledge KnowledgeCascade,
 	enricher domainknowledge.QueryEnricher,
+	options ...Option,
 ) *Service {
-	return &Service{
+	service := &Service{
 		sessions: sessions, messages: messages, llm: llm,
 		profiles: profiles, folders: folders, retriever: retriever,
 		tx: tx, catalog: catalog, messageSources: messageSources, knowledge: knowledge,
 		enricher: enricher,
 		inFlight: newInFlightCoordinator(),
 	}
+	for _, option := range options {
+		option(service)
+	}
+	return service
 }
