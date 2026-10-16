@@ -6,7 +6,7 @@ import {
   deleteStudySession,
   listStudySessionsByFolder,
   onStudyChunk,
-  onStudyContextWarning,
+  onStudyContextLimitReached,
   onStudyDone,
   onStudySources,
   requestOpeningTurn,
@@ -683,9 +683,9 @@ describe('AppShell', () => {
   it('starts a new session on the same topic and folder from the context-limit warning banner, refreshing the sidebar tree', async () => {
     // Given a session open in Study, already reporting a warning-level
     // context usage (see specs/phases/phase-02-knowledge-engine/06-study-context-limits.md)
-    let contextWarningHandler: ((event: StudyContextEvent) => void) | undefined
-    vi.mocked(onStudyContextWarning).mockImplementationOnce((handler) => {
-      contextWarningHandler = handler
+    let contextLimitHandler: ((event: StudyContextEvent) => void) | undefined
+    vi.mocked(onStudyContextLimitReached).mockImplementationOnce((handler) => {
+      contextLimitHandler = handler
       return vi.fn()
     })
     const user = userEvent.setup()
@@ -718,15 +718,15 @@ describe('AppShell', () => {
     expect(await screen.findByText('Study / General')).toBeInTheDocument()
 
     act(() => {
-      contextWarningHandler?.({
+      contextLimitHandler?.({
         sessionId: 'session-original',
-        usedTokens: 8000,
+        usedTokens: 9500,
         contextLength: 10000,
         estimated: false,
       })
     })
 
-    // When starting a new session from the warning banner
+    // When starting a new session from the blocked banner
     const newSession: StudySession = {
       id: 'session-continued',
       topic: 'Distributed systems',
@@ -757,9 +757,9 @@ describe('AppShell', () => {
   it('shows the fallback error, re-enables the button, and clears the error on retry when starting a new session fails', async () => {
     // Given a session open in Study, already reporting a warning-level
     // context usage — same setup as the success path above
-    let contextWarningHandler: ((event: StudyContextEvent) => void) | undefined
-    vi.mocked(onStudyContextWarning).mockImplementationOnce((handler) => {
-      contextWarningHandler = handler
+    let contextLimitHandler: ((event: StudyContextEvent) => void) | undefined
+    vi.mocked(onStudyContextLimitReached).mockImplementationOnce((handler) => {
+      contextLimitHandler = handler
       return vi.fn()
     })
     const user = userEvent.setup()
@@ -791,9 +791,9 @@ describe('AppShell', () => {
     expect(await screen.findByText('Study / General')).toBeInTheDocument()
 
     act(() => {
-      contextWarningHandler?.({
+      contextLimitHandler?.({
         sessionId: 'session-original',
-        usedTokens: 8000,
+        usedTokens: 9500,
         contextLength: 10000,
         estimated: false,
       })
@@ -820,11 +820,11 @@ describe('AppShell', () => {
   })
 
   it('hides the new-session error banner once the user navigates away from Study', async () => {
-    // Given a session open in Study, reporting a warning-level context
+    // Given a session open in Study, reporting a blocked context
     // usage, whose "Start new session" attempt failed
-    let contextWarningHandler: ((event: StudyContextEvent) => void) | undefined
-    vi.mocked(onStudyContextWarning).mockImplementationOnce((handler) => {
-      contextWarningHandler = handler
+    let contextLimitHandler: ((event: StudyContextEvent) => void) | undefined
+    vi.mocked(onStudyContextLimitReached).mockImplementationOnce((handler) => {
+      contextLimitHandler = handler
       return vi.fn()
     })
     const user = userEvent.setup()
@@ -856,9 +856,9 @@ describe('AppShell', () => {
     expect(await screen.findByText('Study / General')).toBeInTheDocument()
 
     act(() => {
-      contextWarningHandler?.({
+      contextLimitHandler?.({
         sessionId: 'session-original',
-        usedTokens: 8000,
+        usedTokens: 9500,
         contextLength: 10000,
         estimated: false,
       })

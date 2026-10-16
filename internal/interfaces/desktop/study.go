@@ -238,6 +238,35 @@ func (a *App) ResumeStudySession(sessionID string) (StudySessionHistoryResult, e
 	return StudySessionHistoryResult{Session: toStudySessionResult(session), Messages: messages}, nil
 }
 
+// StudySessionUsageResult is the desktop-facing DTO for the tokens and cost
+// accumulated by every recorded LLM call of a session. Cost is a lower bound
+// when UnpricedCalls > 0, and Calls == 0 means nothing was recorded.
+type StudySessionUsageResult struct {
+	InputTokens   int     `json:"inputTokens"`
+	OutputTokens  int     `json:"outputTokens"`
+	Cost          float64 `json:"cost"`
+	UnpricedCalls int     `json:"unpricedCalls"`
+	Calls         int     `json:"calls"`
+	// Context is the session's persisted context occupancy, a separate
+	// metric from the totals above. Returned here because study:context-*
+	// events only fire on state transitions, not on every measurement.
+	Context StudyContextResult `json:"context"`
+}
+
+// GetStudySessionUsage returns the accumulated consumption of sessionID.
+func (a *App) GetStudySessionUsage(sessionID string) (StudySessionUsageResult, error) {
+	snapshot, err := a.study.SessionUsage(a.ctx, sessionID)
+	if err != nil {
+		return StudySessionUsageResult{}, err
+	}
+	totals := snapshot.Totals
+	return StudySessionUsageResult{
+		InputTokens: totals.InputTokens, OutputTokens: totals.OutputTokens, Cost: totals.Cost,
+		UnpricedCalls: totals.UnpricedCalls, Calls: totals.Calls,
+		Context: toStudySessionResult(domainstudy.Session{Context: snapshot.Context}).Context,
+	}, nil
+}
+
 // MoveStudySession reassigns sessionID to folderID.
 func (a *App) MoveStudySession(sessionID, folderID string) error {
 	return a.study.MoveToFolder(a.ctx, sessionID, folderID)

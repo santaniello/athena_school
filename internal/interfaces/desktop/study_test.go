@@ -187,7 +187,7 @@ func TestApp_RequestOpeningTurn_streamsChunksAndSignalsDone(t *testing.T) {
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
 	messages.EXPECT().ListBySession(mock.Anything, "session-1").Return(nil, nil).Once()
-	sessions.EXPECT().GetByID(mock.Anything, "session-1").Return(normalSession, nil).Once()
+	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(normalSession, nil).Once()
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}, nil)
 	llm.EXPECT().
 		ChatStream(mock.Anything, mock.AnythingOfType("llm.ChatRequest"), mock.AnythingOfType("func(string) error")).
@@ -226,7 +226,7 @@ func TestApp_RequestOpeningTurn_emitsErrorEvent_onFailure(t *testing.T) {
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
 	messages.EXPECT().ListBySession(mock.Anything, "session-1").Return(nil, nil).Once()
-	sessions.EXPECT().GetByID(mock.Anything, "session-1").Return(normalSession, nil).Once()
+	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(normalSession, nil).Once()
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{}, errors.New("profile not found"))
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
@@ -252,7 +252,7 @@ func TestApp_RequestOpeningTurn_blockedSession_emitsContextLimitReachedCode(t *t
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
 	messages.EXPECT().ListBySession(mock.Anything, "session-1").Return(nil, nil).Once()
-	sessions.EXPECT().GetByID(mock.Anything, "session-1").
+	sessions.EXPECT().GetByID(context.Background(), "session-1").
 		Return(domainstudy.Session{ID: "session-1", Context: domainstudy.ContextUsage{State: domainstudy.ContextStateBlocked}}, nil).
 		Once()
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
@@ -275,7 +275,7 @@ func TestApp_SendStudyMessage_streamsReplyAndSignalsDone(t *testing.T) {
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
-	sessions.EXPECT().GetByID(mock.Anything, "session-1").Return(normalSession, nil).Once()
+	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(normalSession, nil).Once()
 	sessions.EXPECT().UpdateContext(mock.Anything, "session-1", mock.Anything).Return(nil).Twice()
 	messages.EXPECT().Append(mock.Anything, mock.AnythingOfType("study.Message")).Return(nil).Twice()
 	messages.EXPECT().ListBySession(mock.Anything, "session-1").Return(nil, nil).Once()
@@ -338,7 +338,7 @@ func TestApp_SendStudyMessage_blockedSession_emitsContextLimitReachedCode_withou
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
-	sessions.EXPECT().GetByID(mock.Anything, "session-1").
+	sessions.EXPECT().GetByID(context.Background(), "session-1").
 		Return(domainstudy.Session{ID: "session-1", Context: domainstudy.ContextUsage{State: domainstudy.ContextStateBlocked}}, nil).
 		Once()
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
@@ -364,7 +364,7 @@ func TestApp_SendStudyMessage_emitsPostCapSourcesEvent_notes(t *testing.T) {
 	retriever := knowledgemocks.NewMockRetriever(t)
 	catalog := llmmocks.NewMockModelContextResolver(t)
 
-	sessions.EXPECT().GetByID(mock.Anything, "session-1").Return(normalSession, nil).Once()
+	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(normalSession, nil).Once()
 	sessions.EXPECT().UpdateContext(mock.Anything, "session-1", mock.Anything).Return(nil).Twice()
 	messages.EXPECT().Append(mock.Anything, mock.AnythingOfType("study.Message")).Return(nil).Twice()
 	messages.EXPECT().ListBySession(mock.Anything, "session-1").Return(nil, nil).Once()
@@ -422,7 +422,7 @@ func TestApp_SendStudyMessage_emitsErrorEvent_onFailure(t *testing.T) {
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
-	sessions.EXPECT().GetByID(mock.Anything, "session-1").Return(normalSession, nil).Once()
+	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(normalSession, nil).Once()
 	sessions.EXPECT().UpdateContext(mock.Anything, "session-1", mock.Anything).Return(nil).Once()
 	messages.EXPECT().Append(mock.Anything, mock.AnythingOfType("study.Message")).Return(nil).Once()
 	messages.EXPECT().ListBySession(mock.Anything, "session-1").Return(nil, nil).Once()
@@ -472,7 +472,7 @@ func TestApp_ResumeStudySession_returnsSessionAndHistory(t *testing.T) {
 	profiles := profilemocks.NewMockStore(t)
 	folders := foldermocks.NewMockRepository(t)
 	session := domainstudy.Session{ID: "session-1", Topic: "Distributed systems", FolderID: "default", Context: domainstudy.ContextUsage{State: domainstudy.ContextStateNormal}}
-	sessions.EXPECT().GetByID(mock.Anything, "session-1").Return(session, nil).Once()
+	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(session, nil).Once()
 	messages.EXPECT().
 		ListBySession(mock.Anything, "session-1").
 		Return([]domainstudy.Message{{Role: domainstudy.RoleUser, Content: "Hi"}}, nil).
@@ -504,7 +504,7 @@ func TestApp_ResumeStudySession_attachesPersistedSourcesToTheirMessage(t *testin
 	retriever := knowledgemocks.NewMockRetriever(t)
 	catalog := llmmocks.NewMockModelContextResolver(t)
 	session := domainstudy.Session{ID: "session-1", Topic: "Go", FolderID: "default", Context: domainstudy.ContextUsage{State: domainstudy.ContextStateNormal}}
-	sessions.EXPECT().GetByID(mock.Anything, "session-1").Return(session, nil).Once()
+	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(session, nil).Once()
 	messages.EXPECT().
 		ListBySession(mock.Anything, "session-1").
 		Return([]domainstudy.Message{{ID: "message-1", Role: domainstudy.RoleAssistant, Content: "Goroutines are cheap."}}, nil).
@@ -569,4 +569,54 @@ func TestApp_ListStudySessionsByFolder_returnsEverySessionInThatFolder(t *testin
 	require.NoError(t, err)
 	require.Len(t, results, 2)
 	assert.Equal(t, "Cache invalidation", results[0].Topic)
+}
+
+func newUsageApp(t *testing.T, sessions domainstudy.SessionRepository, reader domainllm.UsageReader) *App {
+	t.Helper()
+	studyService := study.NewService(sessions, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, study.WithUsageReader(reader))
+	app := NewApp(nil, nil, nil, studyService, nil, nil, nil, nil, nil, nil)
+	app.Startup(context.Background())
+	return app
+}
+
+func TestApp_GetStudySessionUsage_mapsTotalsAndContextToResult(t *testing.T) {
+	// Given an App whose session has recorded usage and a persisted context
+	sessions := studymocks.NewMockSessionRepository(t)
+	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(domainstudy.Session{
+		ID: "session-1",
+		Context: domainstudy.ContextUsage{
+			State: domainstudy.ContextStateWarning, Model: "m", UsedTokens: 8000, ContextLength: 10000, Estimated: true,
+		},
+	}, nil).Once()
+	reader := llmmocks.NewMockUsageReader(t)
+	reader.EXPECT().SessionTotals(context.Background(), "session-1").Return(domainllm.UsageTotals{
+		InputTokens: 10, OutputTokens: 5, Cost: 0.0123, UnpricedCalls: 1, Calls: 3,
+	}, nil).Once()
+	app := newUsageApp(t, sessions, reader)
+
+	// When reading the session usage
+	result, err := app.GetStudySessionUsage("session-1")
+
+	// Then every total and the context are exposed to the frontend
+	require.NoError(t, err)
+	assert.Equal(t, StudySessionUsageResult{
+		InputTokens: 10, OutputTokens: 5, Cost: 0.0123, UnpricedCalls: 1, Calls: 3,
+		Context: StudyContextResult{State: "warning", Model: "m", UsedTokens: 8000, ContextLength: 10000, Estimated: true},
+	}, result)
+}
+
+func TestApp_GetStudySessionUsage_returnsError_whenReaderFails(t *testing.T) {
+	// Given a usage reader that fails
+	readerErr := errors.New("db down")
+	sessions := studymocks.NewMockSessionRepository(t)
+	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(domainstudy.Session{ID: "session-1"}, nil).Once()
+	reader := llmmocks.NewMockUsageReader(t)
+	reader.EXPECT().SessionTotals(context.Background(), "session-1").Return(domainllm.UsageTotals{}, readerErr).Once()
+	app := newUsageApp(t, sessions, reader)
+
+	// When reading the session usage
+	_, err := app.GetStudySessionUsage("session-1")
+
+	// Then the cause is surfaced
+	require.ErrorIs(t, err, readerErr)
 }

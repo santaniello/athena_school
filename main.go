@@ -94,8 +94,9 @@ func main() {
 	queryEnricher := applicationknowledge.NewHydeEnricher(llmClient)
 	catalogService := modelcatalog.NewService(llmClient)
 	studyService := study.NewService(
-		studySessions, studyMessages, llmClient, profiles, folders, knowledgeService, transactor, catalogService,
+		studySessions, studyMessages, llmClient, profiles, folders, knowledgeService, transactor, newContextResolver(catalogService),
 		messageSources, knowledgeService, queryEnricher,
+		study.WithUsageReader(usageRepo),
 	)
 	folderService := folder.NewService(folders, studySessions, knowledgeService)
 
