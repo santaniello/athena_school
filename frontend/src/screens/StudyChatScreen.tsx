@@ -242,6 +242,10 @@ function StudyChatScreen({
 
   const registerStreamPush = useCallback((push: ((text: string) => void) | null) => {
     streamPushRef.current = push
+    // Replays chunks that arrived before the turn mounted: sendStudyMessage is
+    // invoked before StreamingTurn's effect registers, and the binding may
+    // already have emitted study:chunk by then.
+    if (push) push(streamingTextRef.current)
   }, [])
 
   function clearContextUnavailable() {

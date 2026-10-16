@@ -107,4 +107,60 @@ describe('StudyChatScreen — render cost while streaming', () => {
     expect(markdownRenders.get('first question')).toBe(1)
     expect(markdownRenders.get('first answer')).toBe(1)
   })
+
+  it('shows a chunk emitted while sendStudyMessage is still being called', async () => {
+    // Given a resumed session whose send emits a chunk synchronously, before
+    // the streaming turn has mounted and registered itself
+    let chunk: ((event: StudyChunkEvent) => void) | undefined
+    vi.mocked(onStudyChunk).mockImplementation((handler) => {
+      chunk = handler
+      return vi.fn()
+    })
+    for (const subscribe of [
+      onStudyDone,
+      onStudyError,
+      onStudySources,
+      onStudyContextNormal,
+      onStudyContextWarning,
+      onStudyContextLimitReached,
+      onStudyContextLimitUnavailable,
+    ]) {
+      vi.mocked(subscribe as () => () => void).mockReturnValue(vi.fn())
+    }
+    vi.mocked(getStudySessionUsage).mockResolvedValue(null as never)
+    vi.mocked(resumeStudySession).mockResolvedValueOnce({
+      session: {
+        id: 'session-1',
+        topic: 'Caches',
+        folderId: 'folder-1',
+        goal: '',
+        startedAt: '2026-08-16T10:00:00Z',
+        context: { state: 'normal', model: '', usedTokens: 0, contextLength: 0, estimated: false },
+      },
+      messages: [{ id: 'm1', role: 'user', content: 'earlier', createdAt: '', sources: [] }],
+    })
+    vi.mocked(sendStudyMessage).mockImplementation(() => {
+      chunk?.({ sessionId: 'session-1', content: 'early chunk' })
+      return new Promise(() => {})
+    })
+    render(
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic=""
+        mode="resume"
+        onStartNewSession={vi.fn()}
+        startingNewSession={false}
+      />,
+    )
+    await screen.findByText('earlier')
+
+    // When the user sends a message
+    fireEvent.change(screen.getByPlaceholderText('Type your answer...'), {
+      target: { value: 'question' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    // Then the early chunk is shown without waiting for another one
+    expect(await screen.findByText('early chunk')).toBeInTheDocument()
+  })
 })
