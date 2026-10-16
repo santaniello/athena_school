@@ -52,8 +52,17 @@ type ConversationSummaryRepository interface {
 	Save(ctx context.Context, summary ConversationSummary) error
 }
 
+// ErrMessageNotInSession is returned by ListAfter when the cursor message does
+// not exist or belongs to another session.
+var ErrMessageNotInSession = errors.New("message does not belong to the session")
+
 // MessageRepository persists the Messages exchanged within a study Session.
 type MessageRepository interface {
 	Append(ctx context.Context, message Message) error
 	ListBySession(ctx context.Context, sessionID string) ([]Message, error)
+	// ListAfter returns the session's messages that come after afterMessageID,
+	// in conversation order. An empty afterMessageID returns every message. It
+	// returns ErrMessageNotInSession when the cursor is not a message of the
+	// session.
+	ListAfter(ctx context.Context, sessionID, afterMessageID string) ([]Message, error)
 }
