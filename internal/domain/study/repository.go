@@ -33,6 +33,25 @@ type SessionRepository interface {
 	UpdateContext(ctx context.Context, sessionID string, usage ContextUsage) error
 }
 
+var (
+	// ErrConversationSummaryNotFound is returned when a session has no summary yet.
+	ErrConversationSummaryNotFound = errors.New("conversation summary not found")
+	// ErrSummaryMessageNotInSession is returned by Save when the summary's
+	// CoversUntilMessageID does not belong to its session.
+	ErrSummaryMessageNotInSession = errors.New("summary message does not belong to the session")
+)
+
+// ConversationSummaryRepository persists the single current ConversationSummary
+// of each session.
+type ConversationSummaryRepository interface {
+	// Get returns the session's summary, or ErrConversationSummaryNotFound.
+	Get(ctx context.Context, sessionID string) (ConversationSummary, error)
+	// Save inserts or replaces the session's summary. It returns
+	// ErrSummaryMessageNotInSession, persisting nothing, when
+	// CoversUntilMessageID belongs to another session or does not exist.
+	Save(ctx context.Context, summary ConversationSummary) error
+}
+
 // MessageRepository persists the Messages exchanged within a study Session.
 type MessageRepository interface {
 	Append(ctx context.Context, message Message) error

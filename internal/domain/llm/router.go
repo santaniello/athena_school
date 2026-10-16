@@ -22,6 +22,11 @@ const (
 	// output is persisted and read by the user, so it is routed medium like
 	// a user-facing reply, not cheap like a hidden retrieval helper.
 	TaskNoteFormatting TaskType = "note_formatting"
+	// TaskConversationSummary folds old study messages into the persisted
+	// conversation summary (see specs/phases/phase-02-knowledge-engine/
+	// 24-conversation-summary.md). It is a background, non-streamed call whose
+	// output is never shown as a reply, so it is routed cheap.
+	TaskConversationSummary TaskType = "conversation_summary"
 )
 
 // Tier is a cost/capability class of model.
@@ -53,7 +58,7 @@ var tierModels = map[Tier]string{
 // defaults to TierMedium rather than leaving it unrouted.
 func TierFor(task TaskType) Tier {
 	switch task {
-	case TaskOnboarding, TaskQueryEnrichment:
+	case TaskOnboarding, TaskQueryEnrichment, TaskConversationSummary:
 		return TierCheap
 	case TaskStudy, TaskChallengeFeedback, TaskNoteFormatting:
 		return TierMedium

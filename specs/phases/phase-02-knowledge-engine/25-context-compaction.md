@@ -110,6 +110,16 @@ safety net** that exists only when compaction failed or is impossible.
 15. **Cost visibility.** Summarization calls are recorded in `usage` (2.24) and appear in the 2.22
     session totals.
 
+16. **A compaction failure is never silent.** Whatever the session state (including below 95%,
+    where the turn proceeds with the full history), a failed compaction is (a) logged by the desktop
+    binding with the session id and the error kind and (b) shown to the user as a prominent,
+    auto-dismissing toast (see Frontend design). `internal/application` stays free of logging
+    (Planning.md); `Summarizer` (2.24) only returns distinguishable errors: `ErrInvalidSummaryFormat`,
+    `ErrSummaryTooLarge`, `ErrInvalidSummaryInput` and wrapped provider errors. The binding maps them
+    to a short user-facing reason (invalid format, summary too large, provider unavailable) and keeps
+    the raw error in the log only. There is no automatic retry of a malformed summary: the next send
+    tries again.
+
 ## New/changed backend surface
 
 - `domain/study`: `BuildContext` + budget types, `CompactionTargetRatio`, `ErrBudgetImpossible`;
@@ -121,7 +131,9 @@ safety net** that exists only when compaction failed or is impossible.
   in-flight guard); `study:context-compacted` callback.
 - `infrastructure/sqlite/message_repository.go`: `ListAfter` (order by `created_at, rowid`).
 - Desktop: binding `CompactStudySession(sessionID)`; new events `study:context-compacting`
-  (started) and `study:context-compacted` with `{sessionId, usedTokens, contextLength}`.
+  (started), `study:context-compacted` with `{sessionId, usedTokens, contextLength}` and
+  `study:compaction-failed` with `{sessionId, reason}` (`reason` is a short user-facing kind, never the raw
+  error); the binding also `log.Printf`s the failure with session id and raw error.
 - Spec 2.6 gets an "Amended by 2.25" note on the no-summarization and permanent-`blocked` lines.
 
 ## Frontend design
@@ -134,6 +146,14 @@ safety net** that exists only when compaction failed or is impossible.
 - The warning alert is cleared when `study:context-compacted` arrives; a transient notice shows
   "Older messages were summarized to keep the conversation going". During a compaction a
   "Summarizing earlier messages…" state replaces the plain thinking indicator.
+- **Failure toast (decision 16).** `study:compaction-failed` shows a toast that must be impossible to
+  miss: top-center of the window over the chat (not a bottom corner or the edge of the window),
+  at least ~360px wide (full width minus gutters on narrow windows), body text at least 14px, warning
+  color with an icon and a close button, `role="alert"` so screen readers announce it. It auto-dismisses
+  after ~10s for failures (the success notice can use ~5s), pauses while hovered or focused, and
+  stacked toasts do not overlap. Copy example: "Could not summarize the conversation (invalid
+  format). Continuing with the full history." One generic `Toast` component serves both the failure
+  and the success notice; it does not replace the persistent `blocked` alert.
 - `lib/study.ts`: event wrappers and `compactStudySession`. Visual transcript marker is 2.28.
 
 ## Tasks
@@ -146,7 +166,9 @@ safety net** that exists only when compaction failed or is impossible.
    the send continues, failure keeps 2.6 behavior (blocked → `ErrSessionContextLimitReached`
    without persisting), summary system message, single transaction.
 4. `Service.CompactSession` + binding + events.
-5. Frontend: non-blocking composer, new alert copy and actions, notice, compacting state.
+5. Frontend: non-blocking composer, new alert copy and actions, notice, compacting state, generic
+   `Toast` and the `study:compaction-failed` toast (position, size, duration per Frontend design).
+   Backend: `study:compaction-failed` event and the logged failure in the binding.
 6. Amend spec 2.6; `CHANGELOG.md`; README if it describes context limits.
 
 ## Acceptance Criteria
@@ -171,6 +193,9 @@ safety net** that exists only when compaction failed or is impossible.
 - A `warning` session whose compaction fails and whose candidate prompt (including the pending
   message) exceeds the window is rejected with `ErrBudgetImpossible` before anything is persisted;
   one that fits still proceeds with the full history.
+- Every compaction failure, in any session state, is logged by the binding (session id, error
+  kind) and emits `study:compaction-failed`; the UI shows the top-center toast, which closes by
+  itself after ~10s, stays while hovered, and never carries the raw error text.
 - Boundary tests: exactly at threshold; `ErrBudgetImpossible` (no loop, session stays blocked,
   `Start new session` available); model/limit unresolved (no compaction, 2.6 behavior); a single
   oversized message is rejected without blocking the session.

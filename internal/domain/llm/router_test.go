@@ -67,6 +67,17 @@ func TestTierFor_returnsCheap_forQueryEnrichmentTask(t *testing.T) {
 	assert.Equal(t, TierCheap, tier)
 }
 
+func TestTierFor_returnsCheap_forConversationSummaryTask(t *testing.T) {
+	// Given the conversation-summary task type (spec 2.24) — a background
+	// fold of old messages, never shown to the user as a reply
+
+	// When resolving its tier
+	tier := TierFor(TaskConversationSummary)
+
+	// Then it is cheap
+	assert.Equal(t, TierCheap, tier)
+}
+
 func TestTierFor_returnsMedium_forNoteFormattingTask(t *testing.T) {
 	// Given the note-formatting task type (spec 2.20) — unlike
 	// TaskQueryEnrichment, its output is persisted and read by the user, so
