@@ -110,7 +110,7 @@ safety net** that exists only when compaction failed or is impossible.
 15. **Cost visibility.** Summarization calls are recorded in `usage` (2.24) and appear in the 2.22
     session totals.
 
-14. **A compaction failure is never silent.** Whatever the session state (including below 95%,
+16. **A compaction failure is never silent.** Whatever the session state (including below 95%,
     where the turn proceeds with the full history), a failed compaction is (a) logged by the desktop
     binding with the session id and the error kind and (b) shown to the user as a prominent,
     auto-dismissing toast (see Frontend design). `internal/application` stays free of logging
@@ -146,7 +146,7 @@ safety net** that exists only when compaction failed or is impossible.
 - The warning alert is cleared when `study:context-compacted` arrives; a transient notice shows
   "Older messages were summarized to keep the conversation going". During a compaction a
   "Summarizing earlier messages…" state replaces the plain thinking indicator.
-- **Failure toast (decision 14).** `study:compaction-failed` shows a toast that must be impossible to
+- **Failure toast (decision 16).** `study:compaction-failed` shows a toast that must be impossible to
   miss: top-center of the window over the chat (not a bottom corner or the edge of the window),
   at least ~360px wide (full width minus gutters on narrow windows), body text at least 14px, warning
   color with an icon and a close button, `role="alert"` so screen readers announce it. It auto-dismisses
