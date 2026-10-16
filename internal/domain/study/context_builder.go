@@ -33,6 +33,12 @@ func OutputReserve(window int) int {
 	return min(max(window/10, minOutputReserveTokens), maxOutputReserveTokens, window/4)
 }
 
+// PromptBudget returns the tokens a prompt may occupy: the window minus the
+// output reserve.
+func PromptBudget(window int) int {
+	return window - OutputReserve(window)
+}
+
 // NeedsCompaction reports whether an estimated prompt size has reached the
 // 80% warning threshold of the window (inclusive).
 func NeedsCompaction(estimatedTokens, window int) bool {
@@ -63,6 +69,9 @@ type BuildInput struct {
 
 // ContextPlan is the result of BuildContext.
 type ContextPlan struct {
+	// UnfoldedTokens is the estimated size of the prompt as it stands, with
+	// nothing folded.
+	UnfoldedTokens int
 	// FoldCount is how many of the oldest input Messages are folded into the
 	// summary. Zero means nothing is folded.
 	FoldCount int
@@ -80,7 +89,7 @@ type ContextPlan struct {
 // does not fit by itself and ErrBudgetImpossible when the best achievable
 // prompt does not fit; it never retries.
 func BuildContext(input BuildInput) (ContextPlan, error) {
-	budget := input.ContextLength - OutputReserve(input.ContextLength)
+	budget := PromptBudget(input.ContextLength)
 	target := CompactionTarget(input.ContextLength)
 
 	if input.FixedTokens+input.PendingTokens > budget {
@@ -120,5 +129,5 @@ func BuildContext(input BuildInput) (ContextPlan, error) {
 	if total(chosen) > budget {
 		return ContextPlan{}, ErrBudgetImpossible
 	}
-	return ContextPlan{FoldCount: chosen, EstimatedTokens: total(chosen)}, nil
+	return ContextPlan{UnfoldedTokens: total(0), FoldCount: chosen, EstimatedTokens: total(chosen)}, nil
 }

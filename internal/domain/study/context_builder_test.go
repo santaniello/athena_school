@@ -129,6 +129,14 @@ func TestBuildContext_foldsTheSmallestPrefixThatReachesTheTarget(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, plan.FoldCount)
 	assert.Equal(t, 44_400, plan.EstimatedTokens)
+	assert.Equal(t, 80_400, plan.UnfoldedTokens)
+}
+
+func TestPromptBudget_isTheWindowMinusTheOutputReserve(t *testing.T) {
+	// Given a 100,000 window whose reserve is 10,000
+	// When computing the prompt budget
+	// Then it is 90,000
+	assert.Equal(t, 90_000, PromptBudget(100_000))
 }
 
 func TestBuildContext_existingLargerSummaryRaisesTheProjectedSummarySize(t *testing.T) {
