@@ -489,3 +489,36 @@ func TestSummarizer_Summarize_rejectsACondensedSummaryOneTokenOverTheHardCap(t *
 	// Then
 	assert.ErrorIs(t, err, ErrSummaryTooLarge)
 }
+
+func TestSummarizer_Summarize_rejectsInputsFromAnotherSession_beforeAnyExternalCall(t *testing.T) {
+	foreignPrevious := &domainstudy.ConversationSummary{SessionID: "other", Content: "x", CoversUntilMessageID: "m0"}
+	tests := []struct {
+		name      string
+		sessionID string
+		previous  *domainstudy.ConversationSummary
+		messages  []domainstudy.Message
+	}{
+		{"empty session id", "", nil, []domainstudy.Message{msg("m1", "user", "hi")}},
+		{"previous summary of another session", "s1", foreignPrevious, []domainstudy.Message{msg("m1", "user", "hi")}},
+		{"message of another session first", "s1", nil, []domainstudy.Message{
+			{ID: "x1", SessionID: "other", Role: "user", Content: "leak"}, msg("m2", "user", "hi"),
+		}},
+		{"message of another session last", "s1", nil, []domainstudy.Message{
+			msg("m1", "user", "hi"), {ID: "x2", SessionID: "other", Role: "user", Content: "leak"},
+		}},
+		{"message without id", "s1", nil, []domainstudy.Message{{SessionID: "s1", Role: "user", Content: "hi"}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given a provider and profile store that must never be touched
+			s := NewSummarizer(llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t))
+
+			// When summarizing
+			got, err := s.Summarize(context.Background(), tt.sessionID, tt.previous, tt.messages)
+
+			// Then the input is rejected up front
+			assert.ErrorIs(t, err, ErrInvalidSummaryInput)
+			assert.Equal(t, domainstudy.ConversationSummary{}, got)
+		})
+	}
+}

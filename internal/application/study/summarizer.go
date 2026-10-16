@@ -47,6 +47,9 @@ func (s *Summarizer) Summarize(ctx context.Context, sessionID string, previous *
 	if len(messages) == 0 {
 		return domainstudy.ConversationSummary{}, ErrNoMessagesToSummarize
 	}
+	if err := validateSummaryInput(sessionID, previous, messages); err != nil {
+		return domainstudy.ConversationSummary{}, err
+	}
 	profile, err := s.profiles.Load()
 	if err != nil {
 		return domainstudy.ConversationSummary{}, fmt.Errorf("study: loading profile: %w", err)
@@ -70,6 +73,23 @@ func (s *Summarizer) Summarize(ctx context.Context, sessionID string, previous *
 	}
 
 	return domainstudy.NewConversationSummary(sessionID, content, lastID, domainstudy.EstimateTokens(content), s.now())
+}
+
+// validateSummaryInput rejects a previous summary or messages that are not
+// the session's own, so a summary can never mix memory across sessions.
+func validateSummaryInput(sessionID string, previous *domainstudy.ConversationSummary, messages []domainstudy.Message) error {
+	if sessionID == "" {
+		return fmt.Errorf("%w: empty session id", ErrInvalidSummaryInput)
+	}
+	if previous != nil && previous.SessionID != sessionID {
+		return fmt.Errorf("%w: previous summary belongs to session %q", ErrInvalidSummaryInput, previous.SessionID)
+	}
+	for _, m := range messages {
+		if m.ID == "" || m.SessionID != sessionID {
+			return fmt.Errorf("%w: message %q belongs to session %q", ErrInvalidSummaryInput, m.ID, m.SessionID)
+		}
+	}
+	return nil
 }
 
 // enforceCap returns content when it fits the hard cap; otherwise it runs one

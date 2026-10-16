@@ -26,3 +26,9 @@ var ErrNoMessagesToSummarize = errors.New("study: no messages to summarize")
 // ErrSummaryTooLarge is returned by Summarizer.Summarize when the summary is
 // still over the hard size cap after one condensing pass.
 var ErrSummaryTooLarge = errors.New("study: conversation summary exceeds the size cap")
+
+// ErrInvalidSummaryInput is returned by Summarizer.Summarize when the session
+// id is empty, or the previous summary or any message is missing its id or
+// belongs to another session. It is checked before any external call so
+// memory never crosses sessions.
+var ErrInvalidSummaryInput = errors.New("study: summary input does not belong to the session")
