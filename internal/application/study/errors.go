@@ -32,3 +32,8 @@ var ErrSummaryTooLarge = errors.New("study: conversation summary exceeds the siz
 // belongs to another session. It is checked before any external call so
 // memory never crosses sessions.
 var ErrInvalidSummaryInput = errors.New("study: summary input does not belong to the session")
+
+// ErrInvalidSummaryFormat is returned by Summarizer.Summarize when the model's
+// summary does not contain the four fixed sections exactly once and in order.
+// The call is not retried; the caller keeps the previous summary.
+var ErrInvalidSummaryFormat = errors.New("study: conversation summary does not have the required sections")

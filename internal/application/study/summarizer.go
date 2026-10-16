@@ -65,6 +65,9 @@ func (s *Summarizer) Summarize(ctx context.Context, sessionID string, previous *
 		if err != nil {
 			return domainstudy.ConversationSummary{}, err
 		}
+		if err := validateSummaryFormat(folded); err != nil {
+			return domainstudy.ConversationSummary{}, err
+		}
 		content, err = s.enforceCap(ctx, sessionID, profile.AssistantLanguage, folded)
 		if err != nil {
 			return domainstudy.ConversationSummary{}, err
@@ -102,6 +105,9 @@ func (s *Summarizer) enforceCap(ctx context.Context, sessionID, language, conten
 	}
 	condensed, err := s.chat(ctx, sessionID, buildCondensePrompt(language, s.targetTokens), buildCondenseUserPrompt(content))
 	if err != nil {
+		return "", err
+	}
+	if err := validateSummaryFormat(condensed); err != nil {
 		return "", err
 	}
 	if domainstudy.EstimateTokens(condensed) > hardCap {

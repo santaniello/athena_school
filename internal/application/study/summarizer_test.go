@@ -42,12 +42,22 @@ func (c *scriptedChat) respond(_ context.Context, req domainllm.ChatRequest) (do
 func newTestSummarizer(t *testing.T, language string, chat *scriptedChat) *Summarizer {
 	t.Helper()
 	provider := llmmocks.NewMockProvider(t)
-	provider.EXPECT().Chat(context.Background(), mock.AnythingOfType("llm.ChatRequest")).RunAndReturn(chat.respond).Maybe()
+	provider.EXPECT().Chat(context.Background(), mock.MatchedBy(isSummaryRequestFor("s1"))).RunAndReturn(chat.respond).Maybe()
 	profiles := profilemocks.NewMockStore(t)
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{AssistantLanguage: language}, nil).Maybe()
 	s := NewSummarizer(provider, profiles)
 	s.now = func() time.Time { return summaryTestNow }
 	return s
+}
+
+const summarySkeleton = "## Progress\n- none\n## Open difficulties\n- none\n## Pending\n- none\n## Discussion log\n"
+
+// validSummary is a well-formed summary whose Discussion log mentions note.
+func validSummary(note string) string { return summarySkeleton + "- " + note }
+
+// paddedSummary is a well-formed summary of exactly runes characters.
+func paddedSummary(runes int) string {
+	return summarySkeleton + strings.Repeat("a", runes-len(summarySkeleton))
 }
 
 func msg(id, role, content string) domainstudy.Message {
@@ -59,7 +69,7 @@ func userOf(req domainllm.ChatRequest) string   { return req.Messages[len(req.Me
 
 func TestSummarizer_Summarize_foldsPreviousSummaryAndNewMessages(t *testing.T) {
 	// Given a previous summary and two new messages
-	chat := &scriptedChat{replies: []chatReply{{content: "  ## Progress\n- pointers\n  "}}}
+	chat := &scriptedChat{replies: []chatReply{{content: "  " + validSummary("pointers") + "\n  "}}}
 	s := newTestSummarizer(t, domainprofile.AssistantLanguageEnglish, chat)
 	previous := &domainstudy.ConversationSummary{SessionID: "s1", Content: "PREVIOUS-SUMMARY", CoversUntilMessageID: "m0"}
 	messages := []domainstudy.Message{msg("m1", "user", "What is a pointer?"), msg("m2", "assistant", "An address.")}
@@ -71,9 +81,9 @@ func TestSummarizer_Summarize_foldsPreviousSummaryAndNewMessages(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, domainstudy.ConversationSummary{
 		SessionID:            "s1",
-		Content:              "## Progress\n- pointers",
+		Content:              validSummary("pointers"),
 		CoversUntilMessageID: "m2",
-		TokenEstimate:        domainstudy.EstimateTokens("## Progress\n- pointers"),
+		TokenEstimate:        domainstudy.EstimateTokens(validSummary("pointers")),
 		UpdatedAt:            summaryTestNow,
 	}, got)
 
@@ -93,7 +103,7 @@ func TestSummarizer_Summarize_foldsPreviousSummaryAndNewMessages(t *testing.T) {
 
 func TestSummarizer_Summarize_marksEmptyPreviousSummary(t *testing.T) {
 	// Given no previous summary
-	chat := &scriptedChat{replies: []chatReply{{content: "ok"}}}
+	chat := &scriptedChat{replies: []chatReply{{content: validSummary("")}}}
 	s := newTestSummarizer(t, "", chat)
 
 	// When summarizing
@@ -115,7 +125,7 @@ func TestSummarizer_Summarize_localizesTheSummaryLanguage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.language, func(t *testing.T) {
 			// Given a profile with that assistant language
-			chat := &scriptedChat{replies: []chatReply{{content: "ok"}}}
+			chat := &scriptedChat{replies: []chatReply{{content: validSummary("")}}}
 			s := newTestSummarizer(t, tt.language, chat)
 
 			// When summarizing
@@ -131,7 +141,7 @@ func TestSummarizer_Summarize_localizesTheSummaryLanguage(t *testing.T) {
 
 func TestSummarizer_Summarize_instructsAgainstVerbatimInstructionsAndOverclaiming(t *testing.T) {
 	// Given any run
-	chat := &scriptedChat{replies: []chatReply{{content: "ok"}}}
+	chat := &scriptedChat{replies: []chatReply{{content: validSummary("")}}}
 	s := newTestSummarizer(t, "", chat)
 
 	// When summarizing
@@ -212,7 +222,7 @@ func threeEqualMessages() []domainstudy.Message {
 func TestSummarizer_Summarize_foldsInSequentialBatches_whenInputExceedsTheBudget(t *testing.T) {
 	// Given a budget that fits exactly two of three messages
 	messages := threeEqualMessages()
-	chat := &scriptedChat{replies: []chatReply{{content: "after-batch-1"}, {content: "final"}}}
+	chat := &scriptedChat{replies: []chatReply{{content: validSummary("after-batch-1")}, {content: validSummary("final")}}}
 	s := newTestSummarizer(t, "", chat)
 	s.inputBudget = lineCost(messages[0]) + lineCost(messages[1])
 
@@ -228,14 +238,14 @@ func TestSummarizer_Summarize_foldsInSequentialBatches_whenInputExceedsTheBudget
 	assert.Contains(t, userOf(chat.requests[1]), "after-batch-1")
 	assert.Contains(t, userOf(chat.requests[1]), strings.Repeat("c", 90))
 	assert.NotContains(t, userOf(chat.requests[1]), strings.Repeat("a", 90))
-	assert.Equal(t, "final", got.Content)
+	assert.Equal(t, validSummary("final"), got.Content)
 	assert.Equal(t, "m3", got.CoversUntilMessageID)
 }
 
 func TestSummarizer_Summarize_splitsOneMessagePerBatch_whenBudgetIsOneTokenShort(t *testing.T) {
 	// Given a budget one token short of fitting two messages
 	messages := threeEqualMessages()
-	chat := &scriptedChat{replies: []chatReply{{content: "1"}, {content: "2"}, {content: "3"}}}
+	chat := &scriptedChat{replies: []chatReply{{content: validSummary("1")}, {content: validSummary("2")}, {content: validSummary("3")}}}
 	s := newTestSummarizer(t, "", chat)
 	s.inputBudget = lineCost(messages[0]) + lineCost(messages[1]) - 1
 
@@ -255,7 +265,7 @@ func TestSummarizer_Summarize_keepsEveryCallWithinTheInputBudget(t *testing.T) {
 	}
 	replies := make([]chatReply, 20)
 	for i := range replies {
-		replies[i] = chatReply{content: "s"}
+		replies[i] = chatReply{content: validSummary("s")}
 	}
 	chat := &scriptedChat{replies: replies}
 	s := newTestSummarizer(t, "", chat)
@@ -274,7 +284,7 @@ func TestSummarizer_Summarize_keepsEveryCallWithinTheInputBudget(t *testing.T) {
 func TestSummarizer_Summarize_truncatesAMessageLargerThanTheBudgetForThePromptOnly(t *testing.T) {
 	// Given one message far larger than the budget
 	huge := msg("m1", "user", strings.Repeat("Q", 5_000))
-	chat := &scriptedChat{replies: []chatReply{{content: "ok"}}}
+	chat := &scriptedChat{replies: []chatReply{{content: validSummary("")}}}
 	s := newTestSummarizer(t, "", chat)
 	s.inputBudget = 100
 
@@ -294,7 +304,7 @@ func TestSummarizer_Summarize_stopsAndReturnsError_whenALaterBatchFails(t *testi
 	// Given the second of two batches fails
 	boom := errors.New("rate limited")
 	messages := threeEqualMessages()
-	chat := &scriptedChat{replies: []chatReply{{content: "partial"}, {err: boom}}}
+	chat := &scriptedChat{replies: []chatReply{{content: validSummary("partial")}, {err: boom}}}
 	s := newTestSummarizer(t, "", chat)
 	s.inputBudget = lineCost(messages[0]) + lineCost(messages[1])
 
@@ -314,7 +324,7 @@ func smallCapSummarizer(t *testing.T, chat *scriptedChat) *Summarizer {
 
 func TestSummarizer_Summarize_acceptsASummaryExactlyAtTheHardCap(t *testing.T) {
 	// Given a summary whose estimate equals the hard cap (125)
-	atCap := strings.Repeat("a", 351)
+	atCap := paddedSummary(351)
 	require.Equal(t, 125, domainstudy.EstimateTokens(atCap))
 	chat := &scriptedChat{replies: []chatReply{{content: atCap}}}
 	s := smallCapSummarizer(t, chat)
@@ -330,9 +340,9 @@ func TestSummarizer_Summarize_acceptsASummaryExactlyAtTheHardCap(t *testing.T) {
 
 func TestSummarizer_Summarize_condensesOnce_whenTheSummaryIsOverTheHardCap(t *testing.T) {
 	// Given a summary one token over the hard cap, and a condensed answer
-	overCap := strings.Repeat("a", 352)
+	overCap := paddedSummary(352)
 	require.Equal(t, 126, domainstudy.EstimateTokens(overCap))
-	chat := &scriptedChat{replies: []chatReply{{content: overCap}, {content: "condensed"}}}
+	chat := &scriptedChat{replies: []chatReply{{content: overCap}, {content: validSummary("condensed")}}}
 	s := smallCapSummarizer(t, chat)
 
 	// When summarizing
@@ -347,13 +357,13 @@ func TestSummarizer_Summarize_condensesOnce_whenTheSummaryIsOverTheHardCap(t *te
 	assert.Contains(t, userOf(condense), overCap)
 	assert.NotContains(t, userOf(condense), "<conversation>")
 	assert.Contains(t, systemOf(condense), "Discussion log")
-	assert.Equal(t, "condensed", got.Content)
-	assert.Equal(t, domainstudy.EstimateTokens("condensed"), got.TokenEstimate)
+	assert.Equal(t, validSummary("condensed"), got.Content)
+	assert.Equal(t, domainstudy.EstimateTokens(validSummary("condensed")), got.TokenEstimate)
 }
 
 func TestSummarizer_Summarize_returnsErrSummaryTooLarge_whenCondensingIsNotEnough(t *testing.T) {
 	// Given a model that cannot shrink the summary
-	overCap := strings.Repeat("a", 400)
+	overCap := paddedSummary(400)
 	chat := &scriptedChat{replies: []chatReply{{content: overCap}, {content: overCap}}}
 	s := smallCapSummarizer(t, chat)
 
@@ -369,7 +379,7 @@ func TestSummarizer_Summarize_returnsErrSummaryTooLarge_whenCondensingIsNotEnoug
 func TestSummarizer_Summarize_returnsError_whenCondensingFails(t *testing.T) {
 	// Given the condensing call fails
 	boom := errors.New("timeout")
-	chat := &scriptedChat{replies: []chatReply{{content: strings.Repeat("a", 400)}, {err: boom}}}
+	chat := &scriptedChat{replies: []chatReply{{content: paddedSummary(400)}, {err: boom}}}
 	s := smallCapSummarizer(t, chat)
 
 	// When summarizing
@@ -381,7 +391,7 @@ func TestSummarizer_Summarize_returnsError_whenCondensingFails(t *testing.T) {
 
 func TestSummarizer_Summarize_returnsError_whenCondensingReturnsBlank(t *testing.T) {
 	// Given the condensing call returns blank
-	chat := &scriptedChat{replies: []chatReply{{content: strings.Repeat("a", 400)}, {content: "  "}}}
+	chat := &scriptedChat{replies: []chatReply{{content: paddedSummary(400)}, {content: "  "}}}
 	s := smallCapSummarizer(t, chat)
 
 	// When summarizing
@@ -393,18 +403,18 @@ func TestSummarizer_Summarize_returnsError_whenCondensingReturnsBlank(t *testing
 }
 
 func TestSummarizer_Summarize_keepsTokenEstimateUnderTheCap_acrossManyIncrementalRuns(t *testing.T) {
-	// Given a synthetic model that appends to the summary on every fold and
-	// can condense when asked
+	// Given a synthetic model that appends one line to the Discussion log on
+	// every fold and returns a short summary when asked to condense
 	s := newTestSummarizer(t, "", &scriptedChat{})
 	provider := llmmocks.NewMockProvider(t)
-	provider.EXPECT().Chat(context.Background(), mock.AnythingOfType("llm.ChatRequest")).RunAndReturn(
+	provider.EXPECT().Chat(context.Background(), mock.MatchedBy(isSummaryRequestFor("s1"))).RunAndReturn(
 		func(_ context.Context, req domainllm.ChatRequest) (domainllm.ChatResponse, error) {
 			if !strings.Contains(userOf(req), "<conversation>") {
-				return domainllm.ChatResponse{Content: userOf(req)[:100]}, nil
+				return domainllm.ChatResponse{Content: validSummary("condensed")}, nil
 			}
-			previous := strings.TrimSpace(strings.SplitN(strings.SplitN(userOf(req), "<conversation>", 2)[0], "Previous summary:", 2)[1])
+			previous := previousSummaryOf(userOf(req))
 			if previous == "(none)" {
-				previous = ""
+				previous = validSummary("start")
 			}
 			return domainllm.ChatResponse{Content: previous + "\n- discussed one more topic in some detail"}, nil
 		},
@@ -425,6 +435,21 @@ func TestSummarizer_Summarize_keepsTokenEstimateUnderTheCap_acrossManyIncrementa
 	}
 }
 
+// previousSummaryOf extracts the previous summary from a fold request's user
+// message.
+func previousSummaryOf(user string) string {
+	_, rest, _ := strings.Cut(user, "Previous summary:\n")
+	body, _, _ := strings.Cut(rest, "\n\n<conversation>")
+	return body
+}
+
+// isSummaryRequestFor matches every summarization request of a session.
+func isSummaryRequestFor(sessionID string) func(domainllm.ChatRequest) bool {
+	return func(r domainllm.ChatRequest) bool {
+		return r.SessionID == sessionID && r.Task == domainllm.TaskConversationSummary
+	}
+}
+
 // conversationOf extracts the transcript between the <conversation> tags of
 // a fold request's user message.
 func conversationOf(user string) string {
@@ -436,7 +461,7 @@ func conversationOf(user string) string {
 func TestSummarizer_Summarize_doesNotTruncateAMessageThatExactlyFitsTheBudget(t *testing.T) {
 	// Given a message whose line costs exactly the budget
 	m := msg("m1", "user", strings.Repeat("y", 90))
-	chat := &scriptedChat{replies: []chatReply{{content: "ok"}}}
+	chat := &scriptedChat{replies: []chatReply{{content: validSummary("")}}}
 	s := newTestSummarizer(t, "", chat)
 	s.inputBudget = lineCost(m)
 
@@ -452,7 +477,7 @@ func TestSummarizer_Summarize_doesNotTruncateAMessageThatExactlyFitsTheBudget(t 
 
 func TestSummarizer_Summarize_survivesABudgetSmallerThanTheTruncationMarker(t *testing.T) {
 	// Given a budget too small to hold any content next to the marker
-	chat := &scriptedChat{replies: []chatReply{{content: "ok"}}}
+	chat := &scriptedChat{replies: []chatReply{{content: validSummary("")}}}
 	s := newTestSummarizer(t, "", chat)
 	s.inputBudget = 10
 
@@ -466,8 +491,8 @@ func TestSummarizer_Summarize_survivesABudgetSmallerThanTheTruncationMarker(t *t
 
 func TestSummarizer_Summarize_acceptsACondensedSummaryExactlyAtTheHardCap(t *testing.T) {
 	// Given a condensing pass that lands exactly on the hard cap (125)
-	atCap := strings.Repeat("a", 351)
-	chat := &scriptedChat{replies: []chatReply{{content: strings.Repeat("a", 400)}, {content: atCap}}}
+	atCap := paddedSummary(351)
+	chat := &scriptedChat{replies: []chatReply{{content: paddedSummary(400)}, {content: atCap}}}
 	s := smallCapSummarizer(t, chat)
 
 	// When summarizing
@@ -480,7 +505,7 @@ func TestSummarizer_Summarize_acceptsACondensedSummaryExactlyAtTheHardCap(t *tes
 
 func TestSummarizer_Summarize_rejectsACondensedSummaryOneTokenOverTheHardCap(t *testing.T) {
 	// Given a condensing pass that lands one token over (126)
-	chat := &scriptedChat{replies: []chatReply{{content: strings.Repeat("a", 400)}, {content: strings.Repeat("a", 352)}}}
+	chat := &scriptedChat{replies: []chatReply{{content: paddedSummary(400)}, {content: paddedSummary(352)}}}
 	s := smallCapSummarizer(t, chat)
 
 	// When summarizing
@@ -521,4 +546,57 @@ func TestSummarizer_Summarize_rejectsInputsFromAnotherSession_beforeAnyExternalC
 			assert.Equal(t, domainstudy.ConversationSummary{}, got)
 		})
 	}
+}
+
+func TestSummarizer_Summarize_rejectsAResultWithoutTheFixedSections(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+	}{
+		{"plain text", "ok"},
+		{"missing section", "## Progress\n- a\n## Open difficulties\n- b\n## Discussion log\n- c"},
+		{"duplicated section", validSummary("x") + "\n## Pending\n- again"},
+		{"out of order", "## Open difficulties\n- b\n## Progress\n- a\n## Pending\n- c\n## Discussion log\n- d"},
+		{"heading only inline", "see ## Progress ## Open difficulties ## Pending ## Discussion log"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given a fold that returns a malformed summary
+			chat := &scriptedChat{replies: []chatReply{{content: tt.content}}}
+			s := newTestSummarizer(t, "", chat)
+
+			// When summarizing
+			got, err := s.Summarize(context.Background(), "s1", nil, []domainstudy.Message{msg("m1", "user", "hi")})
+
+			// Then it fails without a second attempt
+			assert.ErrorIs(t, err, ErrInvalidSummaryFormat)
+			assert.Len(t, chat.requests, 1)
+			assert.Equal(t, domainstudy.ConversationSummary{}, got)
+		})
+	}
+}
+
+func TestSummarizer_Summarize_acceptsWindowsLineEndingsAndTrailingSpacesInHeadings(t *testing.T) {
+	// Given a well-formed summary with CRLF line endings and trailing spaces
+	content := strings.ReplaceAll(validSummary("x"), "\n", " \r\n")
+	chat := &scriptedChat{replies: []chatReply{{content: content}}}
+	s := newTestSummarizer(t, "", chat)
+
+	// When summarizing
+	_, err := s.Summarize(context.Background(), "s1", nil, []domainstudy.Message{msg("m1", "user", "hi")})
+
+	// Then it is accepted
+	require.NoError(t, err)
+}
+
+func TestSummarizer_Summarize_rejectsAMalformedCondensedSummary(t *testing.T) {
+	// Given a condensing pass that drops the sections
+	chat := &scriptedChat{replies: []chatReply{{content: paddedSummary(400)}, {content: "short but malformed"}}}
+	s := smallCapSummarizer(t, chat)
+
+	// When summarizing
+	_, err := s.Summarize(context.Background(), "s1", nil, []domainstudy.Message{msg("m1", "user", "hi")})
+
+	// Then
+	assert.ErrorIs(t, err, ErrInvalidSummaryFormat)
 }
