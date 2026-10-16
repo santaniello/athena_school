@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { BookOpen, PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { AthenaLogo } from '@/components/athena-logo'
 import { NavItem } from '@/components/nav-item'
@@ -176,7 +176,7 @@ function AppShell() {
 
   // Opens the Sources panel at source's document, at the exact cited
   // passage, expanding the panel first if it's currently collapsed.
-  function handleOpenCitation(source: StudySource) {
+  const handleOpenCitation = useCallback((source: StudySource) => {
     const panel = sourcesPanelRef.current
     if (!panel) return
     // Stryker disable next-line ConditionalExpression: same as the header
@@ -186,7 +186,7 @@ function AppShell() {
     // by this suite.
     if (panel.isCollapsed()) panel.expand()
     setOpenCitationRequest({ itemId: source.itemId, chunkId: source.chunkId })
-  }
+  }, [])
 
   async function handleRetryIndex() {
     setRetryingIndex(true)

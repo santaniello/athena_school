@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ChangeEvent, KeyboardEvent, UIEvent } from 'react'
 import { ArrowUp } from 'lucide-react'
@@ -86,11 +86,68 @@ function contextTokensFrom(
 const PRE_PERSISTENCE_ERROR_CODES = new Set(['context_limit_reached', 'turn_in_progress'])
 
 interface ChatMessage {
+  // Persisted id for resumed messages; client-generated for the optimistic
+  // user message and the streamed assistant message. Used as the list key.
+  id: string
   role: 'user' | 'assistant'
   content: string
   // Only ever set on a completed assistant message; undefined for the
   // opening turn (no retrieval) and for user messages.
   sources?: StudySource[]
+}
+
+// One finished message plus, when the reply used local knowledge, its sources
+// strip. Memoized so a finished message never re-renders while another one
+// streams: its props only change if the message itself does.
+const MessageRow = memo(function MessageRow({
+  message,
+  onOpenCitation,
+}: {
+  message: ChatMessage
+  onOpenCitation?: (source: StudySource) => void
+}) {
+  if (message.role === 'assistant' && message.sources && message.sources.length > 0) {
+    return (
+      <div className="flex flex-col items-start gap-1">
+        <MessageBubble
+          role={message.role}
+          content={message.content}
+          sources={message.sources}
+          onOpenCitation={onOpenCitation}
+        />
+        <LocalSourcesStrip sources={message.sources} onOpenCitation={onOpenCitation} />
+      </div>
+    )
+  }
+  return <MessageBubble role={message.role} content={message.content} />
+})
+
+// The in-flight assistant turn. It owns the accumulated text, so each chunk
+// re-renders only this component instead of the whole screen. The parent
+// pushes chunks through `registerPush` and keeps its own ref for the final
+// text handed to study:done.
+function StreamingTurn({
+  sources,
+  registerPush,
+  onContentChange,
+}: {
+  sources: StudySource[]
+  registerPush: (push: ((text: string) => void) | null) => void
+  onContentChange: () => void
+}) {
+  const [text, setText] = useState('')
+
+  useEffect(() => {
+    registerPush(setText)
+    return () => registerPush(null)
+  }, [registerPush])
+
+  useEffect(() => {
+    onContentChange()
+  }, [text, onContentChange])
+
+  if (!text) return <ThinkingIndicator />
+  return <MessageBubble role="assistant" content={text} isStreaming sources={sources} />
 }
 
 // How close to the bottom of the transcript the user has to be for it to
@@ -116,7 +173,6 @@ function StudyChatScreen({
 }: StudyChatScreenProps) {
   const [sessionTopic, setSessionTopic] = useState(initialTopic)
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [streamingText, setStreamingText] = useState('')
   const [isStreaming, setIsStreaming] = useState(mode === 'new')
   const [sourceMode, setSourceMode] = useState<SourceMode>('notes')
   const [draft, setDraft] = useState('')
@@ -138,6 +194,8 @@ function StudyChatScreen({
   const [sessionUsage, setSessionUsage] = useState<StudySessionUsage | null>(null)
   const [contextUnavailable, setContextUnavailable] = useState<string | null>(null)
   const streamingTextRef = useRef('')
+  // Setter of the mounted StreamingTurn, if any; chunks are pushed through it.
+  const streamPushRef = useRef<((text: string) => void) | null>(null)
   // Holds the sources emitted by "study:sources" for the turn currently in
   // flight, until "study:done" attaches them to the completed assistant
   // message and clears this back to empty.
@@ -182,6 +240,10 @@ function StudyChatScreen({
     })
   }, [sessionId])
 
+  const registerStreamPush = useCallback((push: ((text: string) => void) | null) => {
+    streamPushRef.current = push
+  }, [])
+
   function clearContextUnavailable() {
     contextUnavailableShownRef.current = false
     setContextUnavailable(null)
@@ -190,12 +252,16 @@ function StudyChatScreen({
   // Keeps the newest content in view as messages arrive and the answer
   // streams in — but only while the user is still parked at the bottom, so
   // scrolling up to re-read an earlier explanation isn't yanked back down by
-  // the next chunk.
-  useEffect(() => {
+  // the next chunk. StreamingTurn calls this on every chunk.
+  const scrollToBottomIfFollowing = useCallback(() => {
     const el = transcriptRef.current
     if (!el || !followTranscriptRef.current) return
     el.scrollTop = el.scrollHeight
-  }, [messages, streamingText])
+  }, [])
+
+  useEffect(() => {
+    scrollToBottomIfFollowing()
+  }, [messages, scrollToBottomIfFollowing])
 
   // Focuses the reply textarea as soon as the chat view mounts, so the user
   // can start typing immediately instead of clicking into it first.
@@ -226,6 +292,7 @@ function StudyChatScreen({
         refreshSessionUsage()
         setMessages(
           history.messages.map((message) => ({
+            id: message.id,
             role: message.role as ChatMessage['role'],
             content: message.content,
             sources: message.sources,
@@ -249,7 +316,7 @@ function StudyChatScreen({
     const offChunk = onStudyChunk((event) => {
       if (event.sessionId !== sessionId) return
       streamingTextRef.current += event.content
-      setStreamingText(streamingTextRef.current)
+      streamPushRef.current?.(streamingTextRef.current)
     })
     const offDone = onStudyDone((event) => {
       if (event.sessionId !== sessionId) return
@@ -259,15 +326,16 @@ function StudyChatScreen({
       pendingSourcesRef.current = []
       setStreamingSources([])
       pendingSendRef.current = null
-      setMessages((previous) => [...previous, { role: 'assistant', content, sources }])
-      setStreamingText('')
+      setMessages((previous) => [
+        ...previous,
+        { id: crypto.randomUUID(), role: 'assistant', content, sources },
+      ])
       setIsStreaming(false)
       refreshSessionUsage()
     })
     const offError = onStudyError((event) => {
       if (event.sessionId !== sessionId) return
       streamingTextRef.current = ''
-      setStreamingText('')
       setIsStreaming(false)
       refreshSessionUsage()
       // A pre-persistence error (the turn was rejected before the user
@@ -336,7 +404,7 @@ function StudyChatScreen({
     const content = draft.trim()
     if (!content) return
     pendingSendRef.current = content
-    setMessages((previous) => [...previous, { role: 'user', content }])
+    setMessages((previous) => [...previous, { id: crypto.randomUUID(), role: 'user', content }])
     setDraft('')
     setError(null)
     setIsStreaming(true)
@@ -397,28 +465,14 @@ function StudyChatScreen({
         aria-label="Conversation"
         className="thin-scroll flex min-h-0 flex-1 transform-gpu flex-col gap-3 overflow-y-auto pr-2"
       >
-        {messages.map((message, index) =>
-          message.role === 'assistant' && message.sources && message.sources.length > 0 ? (
-            <div key={index} className="flex flex-col items-start gap-1">
-              <MessageBubble
-                role={message.role}
-                content={message.content}
-                sources={message.sources}
-                onOpenCitation={onOpenCitation}
-              />
-              <LocalSourcesStrip sources={message.sources} onOpenCitation={onOpenCitation} />
-            </div>
-          ) : (
-            <MessageBubble key={index} role={message.role} content={message.content} />
-          ),
-        )}
-        {isStreaming && !streamingText && <ThinkingIndicator />}
-        {isStreaming && streamingText && (
-          <MessageBubble
-            role="assistant"
-            content={streamingText}
-            isStreaming
+        {messages.map((message) => (
+          <MessageRow key={message.id} message={message} onOpenCitation={onOpenCitation} />
+        ))}
+        {isStreaming && (
+          <StreamingTurn
             sources={streamingSources}
+            registerPush={registerStreamPush}
+            onContentChange={scrollToBottomIfFollowing}
           />
         )}
       </div>
