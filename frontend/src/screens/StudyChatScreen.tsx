@@ -154,6 +154,9 @@ function StudyChatScreen({
   const pendingSendRef = useRef<string | null>(null)
   // The unavailable notice shows at most once per mounted screen instance.
   const contextUnavailableShownRef = useRef(false)
+  // Bumped by every study:context-* event. A usage snapshot fetched before a
+  // newer event must not overwrite that event's state with older context.
+  const contextVersionRef = useRef(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const transcriptRef = useRef<HTMLDivElement>(null)
   // Starts pinned so a resumed session opens on its most recent message.
@@ -166,9 +169,11 @@ function StudyChatScreen({
   // Fetched on resume and again when a turn ends (study:done / study:error):
   // a failed turn may still have recorded its embedding / HyDE calls.
   const refreshSessionUsage = useCallback(() => {
+    const versionAtRequest = contextVersionRef.current
     void fetchSessionUsage(sessionId).then((usage) => {
       if (!usage) return
       setSessionUsage(usage)
+      if (contextVersionRef.current !== versionAtRequest) return
       // The persisted context is the source of truth after a turn:
       // study:context-* events only fire on state transitions, so a turn
       // that stays "normal" would otherwise leave the meter stale.
@@ -286,18 +291,21 @@ function StudyChatScreen({
     })
     const offContextNormal = onStudyContextNormal((event) => {
       if (event.sessionId !== sessionId) return
+      contextVersionRef.current += 1
       setContextState('normal')
       setContextTokens(contextTokensFrom(event))
       clearContextUnavailable()
     })
     const offContextWarning = onStudyContextWarning((event) => {
       if (event.sessionId !== sessionId) return
+      contextVersionRef.current += 1
       setContextState('warning')
       setContextTokens(contextTokensFrom(event))
       clearContextUnavailable()
     })
     const offContextLimitReached = onStudyContextLimitReached((event) => {
       if (event.sessionId !== sessionId) return
+      contextVersionRef.current += 1
       setContextState('blocked')
       setContextTokens(contextTokensFrom(event))
       clearContextUnavailable()

@@ -1613,6 +1613,41 @@ describe('StudyChatScreen — session usage visibility', () => {
     expect(getStudySessionUsage).toHaveBeenCalledTimes(2)
   })
 
+  it('does not let a stale usage snapshot overwrite a newer context event', async () => {
+    // Given a resumed session whose post-turn usage fetch is still pending
+    const handlers = setupSubscriptions()
+    vi.mocked(resumeStudySession).mockResolvedValueOnce(resumedHistory)
+    vi.mocked(getStudySessionUsage).mockResolvedValueOnce(totals)
+    renderResumed()
+    await screen.findByText('10k tokens · US$ 0.50')
+    let resolveStale: (value: typeof totals) => void = () => {}
+    vi.mocked(getStudySessionUsage).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveStale = resolve
+      }),
+    )
+    act(() => {
+      handlers.done?.({ sessionId: 'session-1' })
+    })
+
+    // When a context event arrives, then the older snapshot resolves
+    act(() => {
+      handlers.contextLimitReached?.({
+        sessionId: 'session-1',
+        usedTokens: 9500,
+        contextLength: 10000,
+        estimated: false,
+      })
+    })
+    await act(async () => {
+      resolveStale({ ...totals, cost: 0.9 })
+    })
+
+    // Then the blocked state stays, while the fresher totals are still applied
+    expect(screen.getByText(/This session has reached its context limit/)).toBeInTheDocument()
+    expect(screen.getByText('10k tokens · US$ 0.90')).toBeInTheDocument()
+  })
+
   it('keeps the chat working and shows a dash when the usage fetch fails', async () => {
     // Given a usage fetch that fails
     setupSubscriptions()

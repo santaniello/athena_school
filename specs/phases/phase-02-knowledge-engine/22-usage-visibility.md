@@ -64,7 +64,7 @@ and gives the visibility needed to validate compaction (2.25) later.
 
 ## New/changed backend surface
 
-- `domain/llm`: `UsageTotals{InputTokens, OutputTokens, Cost, UnpricedCalls}` and `UsageReader`.
+- `domain/llm`: `UsageTotals{InputTokens, OutputTokens, Cost, UnpricedCalls, Calls}` and `UsageReader`.
 - `infrastructure/sqlite/usage_repository.go`: `SessionTotals`.
 - `application/study`: `Service.SessionUsage(ctx, sessionID)` (returns the totals plus the session's persisted
   `ContextUsage`), wired through the variadic
