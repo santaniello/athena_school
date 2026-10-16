@@ -59,6 +59,16 @@ phase 3).
     over, the call returns `ErrSummaryTooLarge` and nothing is saved. `token_estimate` is stored
     so the Context Builder (2.25) can subtract it from the budget.
 
+11. **Strict validation, distinguishable errors** (amended after review). Before any external call
+    `Summarize` rejects an empty session id, a `previous` summary or any message that is not the
+    session's own (`ErrInvalidSummaryInput`), so memory never crosses sessions. Each model result
+    (fold and condensation) must contain `## Progress`, `## Open difficulties`, `## Pending` and
+    `## Discussion log` exactly once and in order, otherwise `ErrInvalidSummaryFormat` with no retry.
+    Untrusted text (previous summary, summary being condensed, message content) is wrapped in
+    `<previous_summary>`, `<conversation>`/`<message role="...">` and `<summary>` tags with `<`
+    escaped as `&lt;`, so it cannot close a block or fake a role. `Summarizer` does no logging
+    (`internal/application` stays log-free); the binding that calls it in 2.25 logs and surfaces failures.
+
 ## Schema
 
 ```sql
