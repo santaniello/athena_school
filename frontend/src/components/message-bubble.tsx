@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import type { ComponentProps } from 'react'
 import { Check, Copy } from 'lucide-react'
 import ReactMarkdown, { type Components } from 'react-markdown'
@@ -55,6 +55,10 @@ interface MessageBubbleProps {
 }
 
 const COPIED_RESET_DELAY_MS = 2000
+
+// A module-level default keeps `sources` referentially stable across renders,
+// which the memo() on MessageBubble relies on.
+const EMPTY_SOURCES: StudySource[] = []
 
 const messageBubbleVariants = cva(
   'max-w-[75%] rounded-2xl px-4 py-2.5 text-base leading-relaxed break-words',
@@ -169,11 +173,11 @@ const baseMarkdownComponents: Components = {
   code: CodeRenderer,
 }
 
-function MessageBubble({
+function MessageBubbleImpl({
   role,
   content,
   isStreaming = false,
-  sources = [],
+  sources = EMPTY_SOURCES,
   onOpenCitation,
 }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false)
@@ -225,5 +229,8 @@ function MessageBubble({
     </div>
   )
 }
+
+// Memoized: a finished message must not re-render while another one streams.
+const MessageBubble = memo(MessageBubbleImpl)
 
 export { MessageBubble }

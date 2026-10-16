@@ -475,7 +475,7 @@ func TestApp_ResumeStudySession_returnsSessionAndHistory(t *testing.T) {
 	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(session, nil).Once()
 	messages.EXPECT().
 		ListBySession(mock.Anything, "session-1").
-		Return([]domainstudy.Message{{Role: domainstudy.RoleUser, Content: "Hi"}}, nil).
+		Return([]domainstudy.Message{{ID: "message-1", Role: domainstudy.RoleUser, Content: "Hi"}}, nil).
 		Once()
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
@@ -489,6 +489,7 @@ func TestApp_ResumeStudySession_returnsSessionAndHistory(t *testing.T) {
 	assert.Equal(t, "session-1", result.Session.ID)
 	assert.Equal(t, string(domainstudy.ContextStateNormal), result.Session.Context.State)
 	require.Len(t, result.Messages, 1)
+	assert.Equal(t, "message-1", result.Messages[0].ID)
 	assert.Equal(t, "Hi", result.Messages[0].Content)
 	require.Len(t, captured.contextUnavailable, 1)
 	assert.Equal(t, "session-1", captured.contextUnavailable[0].SessionID)

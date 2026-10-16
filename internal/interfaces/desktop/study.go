@@ -171,6 +171,7 @@ type StudySessionResult struct {
 // message that used local knowledge — see
 // specs/phases/phase-02-knowledge-engine/09-persistent-provenance.md.
 type StudyMessageResult struct {
+	ID        string              `json:"id"`
 	Role      string              `json:"role"`
 	Content   string              `json:"content"`
 	CreatedAt string              `json:"createdAt"`
@@ -229,6 +230,7 @@ func (a *App) ResumeStudySession(sessionID string) (StudySessionHistoryResult, e
 	messages := make([]StudyMessageResult, len(history))
 	for i, m := range history {
 		messages[i] = StudyMessageResult{
+			ID:        m.ID,
 			Role:      m.Role,
 			Content:   m.Content,
 			CreatedAt: m.CreatedAt.Format(time.RFC3339),

@@ -296,8 +296,14 @@ describe('StudyChatScreen — resuming a session', () => {
         context: CONTEXT_NORMAL,
       },
       messages: [
-        { role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z', sources: [] },
-        { role: 'assistant', content: 'Hello!', createdAt: '2026-08-16T10:00:01Z', sources: [] },
+        { id: 'm1', role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z', sources: [] },
+        {
+          id: 'm2',
+          role: 'assistant',
+          content: 'Hello!',
+          createdAt: '2026-08-16T10:00:01Z',
+          sources: [],
+        },
       ],
     })
 
@@ -336,12 +342,14 @@ describe('StudyChatScreen — resuming a session', () => {
       },
       messages: [
         {
+          id: 'm3',
           role: 'user',
           content: 'What is CAP theorem?',
           createdAt: '2026-08-16T10:00:00Z',
           sources: [],
         },
         {
+          id: 'm4',
           role: 'assistant',
           content: 'It stands for...',
           createdAt: '2026-08-16T10:00:01Z',
@@ -389,7 +397,13 @@ describe('StudyChatScreen — resuming a session', () => {
         context: CONTEXT_NORMAL,
       },
       messages: [
-        { role: 'assistant', content: 'Hello!', createdAt: '2026-08-16T10:00:01Z', sources: [] },
+        {
+          id: 'm5',
+          role: 'assistant',
+          content: 'Hello!',
+          createdAt: '2026-08-16T10:00:01Z',
+          sources: [],
+        },
       ],
     })
 
@@ -480,7 +494,9 @@ describe('StudyChatScreen — resuming a session', () => {
         startedAt: '2026-08-16T10:00:00Z',
         context: CONTEXT_NORMAL,
       },
-      messages: [{ role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z', sources: [] }],
+      messages: [
+        { id: 'm6', role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z', sources: [] },
+      ],
     })
 
     // When the chat screen mounts in "resume" mode
@@ -509,7 +525,9 @@ describe('StudyChatScreen — resuming a session', () => {
         startedAt: '2026-08-16T10:00:00Z',
         context: CONTEXT_NORMAL,
       },
-      messages: [{ role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z', sources: [] }],
+      messages: [
+        { id: 'm7', role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z', sources: [] },
+      ],
     })
     const { rerender } = render(
       <StudyChatScreen
@@ -534,7 +552,13 @@ describe('StudyChatScreen — resuming a session', () => {
         context: CONTEXT_NORMAL,
       },
       messages: [
-        { role: 'user', content: 'Hello again', createdAt: '2026-08-16T11:00:00Z', sources: [] },
+        {
+          id: 'm8',
+          role: 'user',
+          content: 'Hello again',
+          createdAt: '2026-08-16T11:00:00Z',
+          sources: [],
+        },
       ],
     })
     rerender(

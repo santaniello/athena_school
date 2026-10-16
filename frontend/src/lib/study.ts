@@ -30,6 +30,7 @@ export interface StudySession {
 }
 
 export interface StudyMessage {
+  id: string
   role: string
   content: string
   createdAt: string
@@ -234,6 +235,7 @@ export async function resumeStudySession(sessionId: string): Promise<StudySessio
   return {
     session: toStudySession(result.session),
     messages: result.messages.map((message) => ({
+      id: message.id,
       role: message.role,
       content: message.content,
       createdAt: message.createdAt,
