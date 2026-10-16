@@ -11,9 +11,14 @@ import { ThinkingIndicator } from '@/components/thinking-indicator'
 import { SourceModeSelect } from '@/components/source-mode-select'
 import { LocalSourcesStrip } from '@/components/local-sources-strip'
 import { SessionUsageBar } from '@/components/session-usage-bar'
+import { ToastViewport, type ToastItem } from '@/components/toast'
 import {
+  compactStudySession,
   getStudySessionUsage,
   onStudyChunk,
+  onStudyCompactionFailed,
+  onStudyContextCompacted,
+  onStudyContextCompacting,
   onStudyContextLimitReached,
   onStudyContextLimitUnavailable,
   onStudyContextNormal,
@@ -83,7 +88,28 @@ function contextTokensFrom(
 // Error codes carried by StudyErrorEvent that mean the failure happened
 // before the user message was persisted — see StudyErrorEvent.code in
 // internal/interfaces/desktop/study.go.
-const PRE_PERSISTENCE_ERROR_CODES = new Set(['context_limit_reached', 'turn_in_progress'])
+const PRE_PERSISTENCE_ERROR_CODES = new Set([
+  'context_limit_reached',
+  'turn_in_progress',
+  'budget_impossible',
+  'message_too_large',
+])
+
+// Of those, the codes whose rejection has no dedicated alert of its own (the
+// blocked alert already explains context_limit_reached, and a turn already
+// in progress needs no explanation): the user must be told why the message
+// came back.
+const REJECTION_MESSAGES: Record<string, string> = {
+  budget_impossible:
+    "This conversation no longer fits the model's context window, even summarized. Start a new session on the same topic to continue.",
+  message_too_large:
+    "This message is too long for the model's context window. Shorten it and try again.",
+}
+
+// Toast durations: a failure stays long enough to read, a success notice is
+// brief (spec 2.25, Frontend design).
+const FAILURE_TOAST_MS = 10_000
+const SUCCESS_TOAST_MS = 5_000
 
 interface ChatMessage {
   // Persisted id for resumed messages; client-generated for the optimistic
@@ -130,10 +156,12 @@ function StreamingTurn({
   sources,
   registerPush,
   onContentChange,
+  compacting,
 }: {
   sources: StudySource[]
   registerPush: (push: ((text: string) => void) | null) => void
   onContentChange: () => void
+  compacting: boolean
 }) {
   const [text, setText] = useState('')
 
@@ -146,7 +174,9 @@ function StreamingTurn({
     onContentChange()
   }, [text, onContentChange])
 
-  if (!text) return <ThinkingIndicator />
+  if (!text) {
+    return <ThinkingIndicator caption={compacting ? 'Summarizing earlier messages…' : undefined} />
+  }
   return <MessageBubble role="assistant" content={text} isStreaming sources={sources} />
 }
 
@@ -193,6 +223,17 @@ function StudyChatScreen({
   // the first fetch resolves or when it failed (the bar then shows "—").
   const [sessionUsage, setSessionUsage] = useState<StudySessionUsage | null>(null)
   const [contextUnavailable, setContextUnavailable] = useState<string | null>(null)
+  // True from study:context-compacting until the compaction succeeds or fails.
+  const [compacting, setCompacting] = useState(false)
+  // Short reason of the last failed compaction, shown by the blocked alert;
+  // null when none failed since the last success (or after a reload).
+  const [compactionFailure, setCompactionFailure] = useState<string | null>(null)
+  const [toasts, setToasts] = useState<ToastItem[]>([])
+  // Mirrors contextState for event handlers subscribed once per session.
+  const contextStateRef = useRef<ContextState>('normal')
+  // Set when a study:compaction-failed arrives during a manual retry, so the
+  // retry does not toast a second, generic failure on top of it.
+  const retryFailureReportedRef = useRef(false)
   const streamingTextRef = useRef('')
   // Setter of the mounted StreamingTurn, if any; chunks are pushed through it.
   const streamPushRef = useRef<((text: string) => void) | null>(null)
@@ -246,6 +287,18 @@ function StudyChatScreen({
     // invoked before StreamingTurn's effect registers, and the binding may
     // already have emitted study:chunk by then.
     if (push) push(streamingTextRef.current)
+  }, [])
+
+  useEffect(() => {
+    contextStateRef.current = contextState
+  }, [contextState])
+
+  const pushToast = useCallback((tone: ToastItem['tone'], message: string, durationMs: number) => {
+    setToasts((previous) => [...previous, { id: crypto.randomUUID(), tone, message, durationMs }])
+  }, [])
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((previous) => previous.filter((toast) => toast.id !== id))
   }, [])
 
   function clearContextUnavailable() {
@@ -335,12 +388,14 @@ function StudyChatScreen({
         { id: crypto.randomUUID(), role: 'assistant', content, sources },
       ])
       setIsStreaming(false)
+      setCompacting(false)
       refreshSessionUsage()
     })
     const offError = onStudyError((event) => {
       if (event.sessionId !== sessionId) return
       streamingTextRef.current = ''
       setIsStreaming(false)
+      setCompacting(false)
       refreshSessionUsage()
       // A pre-persistence error (the turn was rejected before the user
       // message was ever saved) only applies to a send actually in flight —
@@ -351,6 +406,8 @@ function StudyChatScreen({
         pendingSendRef.current = null
         setMessages((previous) => previous.slice(0, -1))
         setDraft(restored)
+        const rejection = REJECTION_MESSAGES[event.code]
+        if (rejection) setError(rejection)
         return
       }
       pendingSendRef.current = null
@@ -388,6 +445,43 @@ function StudyChatScreen({
       contextUnavailableShownRef.current = true
       setContextUnavailable(event.message)
     })
+    const offCompacting = onStudyContextCompacting((event) => {
+      if (event.sessionId !== sessionId) return
+      setCompacting(true)
+    })
+    const offCompacted = onStudyContextCompacted((event) => {
+      if (event.sessionId !== sessionId) return
+      contextVersionRef.current += 1
+      setCompacting(false)
+      setCompactionFailure(null)
+      setContextState('normal')
+      setContextTokens({
+        usedTokens: event.usedTokens,
+        contextLength: event.contextLength,
+        estimated: true,
+      })
+      pushToast(
+        'info',
+        'Older messages were summarized to keep the conversation going',
+        SUCCESS_TOAST_MS,
+      )
+      // The persisted state is the source of truth (a compacted prompt can
+      // still sit above 80% on a tiny window).
+      refreshSessionUsage()
+    })
+    const offCompactionFailed = onStudyCompactionFailed((event) => {
+      if (event.sessionId !== sessionId) return
+      retryFailureReportedRef.current = true
+      setCompacting(false)
+      setCompactionFailure(event.reason)
+      const continuation =
+        contextStateRef.current === 'blocked' ? '' : ' Continuing with the full history.'
+      pushToast(
+        'warning',
+        `Could not summarize the conversation (${event.reason}).${continuation}`,
+        FAILURE_TOAST_MS,
+      )
+    })
 
     // First use of Wails runtime events in this codebase: EventsOn returns
     // its own unsubscribe function, which must run on unmount to avoid
@@ -401,8 +495,31 @@ function StudyChatScreen({
       offContextWarning()
       offContextLimitReached()
       offContextLimitUnavailable()
+      offCompacting()
+      offCompacted()
+      offCompactionFailed()
     }
-  }, [sessionId, refreshSessionUsage])
+  }, [sessionId, refreshSessionUsage, pushToast])
+
+  // The blocked alert's primary action: compaction progress and outcome come
+  // back as events; a rejection without a failure event (nothing to compact,
+  // a turn in progress) still needs to reach the user.
+  async function handleRetryCompaction() {
+    retryFailureReportedRef.current = false
+    try {
+      await compactStudySession(sessionId)
+    } catch (err) {
+      setCompacting(false)
+      if (!retryFailureReportedRef.current) {
+        pushToast(
+          'warning',
+          err instanceof Error ? err.message : 'Could not compact the conversation.',
+          FAILURE_TOAST_MS,
+        )
+      }
+    }
+    refreshSessionUsage()
+  }
 
   async function handleSend() {
     const content = draft.trim()
@@ -447,20 +564,17 @@ function StudyChatScreen({
   function handleDraftKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key !== 'Enter' || event.shiftKey) return
     event.preventDefault()
-    if (!draft.trim() || isStreaming || contextState === 'blocked') return
+    if (!draft.trim() || isStreaming) return
     void handleSend()
   }
 
   const sourceModeSelect = (
-    <SourceModeSelect
-      value={sourceMode}
-      onValueChange={setSourceMode}
-      disabled={isStreaming || contextState === 'blocked'}
-    />
+    <SourceModeSelect value={sourceMode} onValueChange={setSourceMode} disabled={isStreaming} />
   )
 
   return (
     <div className="flex h-full w-full flex-col gap-3">
+      <ToastViewport toasts={toasts} onDismiss={dismissToast} />
       <SessionUsageBar context={{ state: contextState, ...contextTokens }} usage={sessionUsage} />
       <div
         ref={transcriptRef}
@@ -477,6 +591,7 @@ function StudyChatScreen({
             sources={streamingSources}
             registerPush={registerStreamPush}
             onContentChange={scrollToBottomIfFollowing}
+            compacting={compacting}
           />
         )}
       </div>
@@ -497,17 +612,27 @@ function StudyChatScreen({
         <Alert variant="destructive">
           <AlertDescription className="flex items-center justify-between gap-3">
             <span>
-              This session has reached its context limit. Start a new session on the same topic to
-              continue.
+              {compactionFailure
+                ? `Could not compact the conversation (${compactionFailure}). Try again.`
+                : 'Could not compact the conversation. Try again.'}
             </span>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={startingNewSession}
-              onClick={() => void onStartNewSession()}
-            >
-              Start new session
-            </Button>
+            <span className="flex shrink-0 gap-2">
+              <Button
+                size="sm"
+                disabled={compacting || isStreaming}
+                onClick={() => void handleRetryCompaction()}
+              >
+                {compacting ? 'Compacting…' : 'Try to compact again'}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={startingNewSession}
+                onClick={() => void onStartNewSession()}
+              >
+                Start new session
+              </Button>
+            </span>
           </AlertDescription>
         </Alert>
       )}
@@ -532,7 +657,6 @@ function StudyChatScreen({
           value={draft}
           onChange={handleDraftChange}
           onKeyDown={handleDraftKeyDown}
-          readOnly={contextState === 'blocked'}
           placeholder="Type your answer..."
           className="min-h-24 max-h-[200px] resize-none overflow-y-auto pb-11"
         />
@@ -543,7 +667,7 @@ function StudyChatScreen({
               <Button
                 size="icon-sm"
                 aria-label="Send"
-                disabled={!draft.trim() || isStreaming || contextState === 'blocked'}
+                disabled={!draft.trim() || isStreaming}
                 onClick={() => void handleSend()}
               >
                 <ArrowUp className="size-4" aria-hidden="true" />

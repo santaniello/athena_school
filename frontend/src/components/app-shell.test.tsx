@@ -66,6 +66,10 @@ vi.mock('@/lib/study', async (importOriginal) => {
     onStudyContextWarning: vi.fn(() => vi.fn()),
     onStudyContextLimitReached: vi.fn(() => vi.fn()),
     onStudyContextLimitUnavailable: vi.fn(() => vi.fn()),
+    onStudyContextCompacting: vi.fn(() => vi.fn()),
+    onStudyContextCompacted: vi.fn(() => vi.fn()),
+    onStudyCompactionFailed: vi.fn(() => vi.fn()),
+    compactStudySession: vi.fn(),
   }
 })
 

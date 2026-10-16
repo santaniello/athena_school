@@ -1,4 +1,5 @@
 import {
+  CompactStudySession,
   DeleteStudySession,
   GetStudySessionUsage,
   ListStudySessionsByFolder,
@@ -142,6 +143,27 @@ export interface StudyContextUnavailableEvent {
   message: string
 }
 
+// StudyContextCompactedEvent is study:context-compacted's payload: the
+// context usage after older messages were folded into the summary.
+export interface StudyContextCompactedEvent {
+  sessionId: string
+  usedTokens: number
+  contextLength: number
+}
+
+// StudyContextCompactingEvent is study:context-compacting's payload.
+export interface StudyContextCompactingEvent {
+  sessionId: string
+}
+
+// StudyCompactionFailedEvent is study:compaction-failed's payload. reason is
+// a short user-facing kind ("invalid format", "provider unavailable", …),
+// never a raw error.
+export interface StudyCompactionFailedEvent {
+  sessionId: string
+  reason: string
+}
+
 // The generated StudyContextResult types `state` as a plain string (Wails
 // has no way to carry the Go ContextState enum's exact values into the
 // binding); the backend only ever sends 'normal' | 'warning' | 'blocked'.
@@ -228,6 +250,14 @@ export async function deleteStudySession(sessionId: string): Promise<void> {
   await DeleteStudySession(sessionId)
 }
 
+// compactStudySession folds the session's oldest messages into its summary
+// (the blocked alert's retry action). Progress and the outcome arrive as
+// study:context-compacting / -compacted / compaction-failed events; the
+// promise rejects when nothing was compacted.
+export async function compactStudySession(sessionId: string): Promise<void> {
+  await CompactStudySession(sessionId)
+}
+
 // resumeStudySession returns sessionId's full message history, so the chat
 // view can hydrate from it and let the user keep chatting.
 export async function resumeStudySession(sessionId: string): Promise<StudySessionHistory> {
@@ -294,4 +324,24 @@ export function onStudyContextLimitUnavailable(
   return EventsOn('study:context-limit-unavailable', (event: StudyContextUnavailableEvent) =>
     handler(event),
   )
+}
+
+export function onStudyContextCompacting(
+  handler: (event: StudyContextCompactingEvent) => void,
+): () => void {
+  return EventsOn('study:context-compacting', (event: StudyContextCompactingEvent) =>
+    handler(event),
+  )
+}
+
+export function onStudyContextCompacted(
+  handler: (event: StudyContextCompactedEvent) => void,
+): () => void {
+  return EventsOn('study:context-compacted', (event: StudyContextCompactedEvent) => handler(event))
+}
+
+export function onStudyCompactionFailed(
+  handler: (event: StudyCompactionFailedEvent) => void,
+): () => void {
+  return EventsOn('study:compaction-failed', (event: StudyCompactionFailedEvent) => handler(event))
 }
