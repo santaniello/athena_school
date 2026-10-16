@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS conversation_summaries (
     content                 TEXT NOT NULL,
     covers_until_message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
     token_estimate          INTEGER NOT NULL,
-    updated_at              TEXT NOT NULL
+    updated_at              DATETIME NOT NULL
 )
 ```
 

@@ -87,6 +87,17 @@ var migrations = []func(*sql.DB) error{
 		content    TEXT NOT NULL
 	)`),
 	addKnowledgeChunksOffsetColumns,
+	// conversation_summaries holds the single current incremental summary of
+	// a session (spec 2.24). It is a derived artifact: messages stay the
+	// source of truth. Deleting the covered message drops the summary, which
+	// is consistent because messages are only deleted with their session.
+	execSQL(`CREATE TABLE IF NOT EXISTS conversation_summaries (
+		session_id              TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+		content                 TEXT NOT NULL,
+		covers_until_message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+		token_estimate          INTEGER NOT NULL,
+		updated_at              DATETIME NOT NULL
+	)`),
 }
 
 // addSessionsFolderIDColumn adds sessions.folder_id if it does not already
