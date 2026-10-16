@@ -7,6 +7,12 @@ prevent further sends before reliability collapses. The user can continue by
 opening a new session in the same folder and on the same topic; Athena never
 silently deletes, truncates, or summarizes the existing conversation.
 
+> **Amended by [2.25](25-context-compaction.md):** the stored history is still
+> never deleted, truncated or edited, but Athena now summarizes the *prompt*
+> automatically: at the 80% threshold the oldest messages are folded into the
+> persisted summary (2.24) and `summary + recent messages` is sent. `blocked` is
+> no longer a terminal product limit; it is a recoverable safety net.
+
 This is separate from Phase 2.5's `maxContextChars = 8000`. That cap applies only
 to the transient RAG data block rebuilt for one turn. This specification manages
 the full model request, whose persisted conversation history grows every turn.
@@ -55,6 +61,16 @@ This session has reached its context limit.
 Start a new session on the same topic to continue.
 ```
 
+> **Amended by [2.25](25-context-compaction.md):** the blocked alert now reads
+> "Could not compact the conversation (reason). Try again." with **Try to
+> compact again** as the primary action and **Start new session** as the
+> secondary one. The composer is no longer disabled or read-only: sending is the
+> recovery trigger, because every send attempt and the retry action try to
+> compact first. A successful compaction lowers `blocked`/`warning` to `normal`.
+> The list below describes the original 2.6 behavior and applies only to the
+> backend guard (`ErrSessionContextLimitReached`), which still fires when
+> compaction failed or is impossible.
+
 The blocked state:
 
 - disables the send button;
@@ -68,12 +84,20 @@ The blocked state:
 - does not prevent reading, navigating, or extracting knowledge from the
   session.
 
+> **Amended by [2.25](25-context-compaction.md):** monotonicity holds for every
+> measurement except a successful compaction, which recomputes the state from the
+> size of the compacted prompt (`ContextUsageAfterCompaction`).
+
 The context state is monotonic while both the resolved model ID and its context
 length remain unchanged. A later native measurement can replace a larger
 provisional estimate while the already-reached state remains unchanged. If the
 resolved model or its catalog context length changes, recompute the state from
 the new measurement and boundary; that recomputation may move in either
 direction, including `warning` to `normal`.
+
+> **Amended by [2.25](25-context-compaction.md):** automatic summarization of the
+> prompt is now the normal path (history truncation and deletion remain
+> forbidden).
 
 There is no automatic history truncation, deletion, or summarization. If a
 provider rejects a request before Athena has observed enough usage to warn, the
@@ -471,12 +495,12 @@ durable.
 - A known occupancy below 80% is `normal`; exactly 80% is `warning`; exactly 95% is `blocked`.
 - State is monotonic for an unchanged model/limit even when a real measurement replaces a larger estimate; a resolved-model or catalog-length change recomputes it in either direction.
 - A warning is persistent, non-blocking, and restored immediately on resume; a cache-resolvable previously unknown limit is persisted before the resume DTO returns.
-- A blocked session makes the textarea read-only, disables button, Enter, and source-mode selection, and a direct backend send returns `study.ErrSessionContextLimitReached` from `internal/domain/study` before persisting a message or calling retrieval/provider ports.
+- *(Amended by 2.25: the composer stays usable; only the backend guard remains, after compaction was tried.)* A blocked session makes the textarea read-only, disables button, Enter, and source-mode selection, and a direct backend send returns `study.ErrSessionContextLimitReached` from `internal/domain/study` before persisting a message or calling retrieval/provider ports.
 - A second concurrent turn for one session returns `ErrStudyTurnInProgress` without waiting or doing repository/provider work, while different sessions remain independent.
 - Invalid source mode and blank content validation precede in-flight and persisted-state guards; the blocked read, user append, and provisional increment share one transaction.
 - A turn accepted below 95% continues after its provisional increment reaches `blocked`; its state event is emitted immediately after commit and blocks only later turns.
 - Both alert states offer a new session with the same topic and folder, no copied draft/history/sources, default `notes` selection, and the ordinary opening turn; creation failure stays on the old session, while opening failure keeps the new session.
-- No history is truncated, deleted, or summarized automatically.
+- No history is truncated or deleted automatically. *(Amended by 2.25: the prompt is summarized automatically; the stored history is untouched.)*
 - A strict no-match turn adds `ceil(runes/3)+8` for both persisted messages; profile language does not change the formula.
 - A persisted user message followed by a technical failure retains its provisional estimate and creates no assistant message.
 - The next successful stream replaces accumulated estimates with native usage; missing stream usage estimates every assembled request message—including system/RAG messages—and the assistant response without failing the response.
