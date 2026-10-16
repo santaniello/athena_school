@@ -301,6 +301,7 @@ export namespace desktop {
 	    }
 	}
 	export class StudyMessageResult {
+	    id: string;
 	    role: string;
 	    content: string;
 	    createdAt: string;
@@ -312,6 +313,7 @@ export namespace desktop {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
 	        this.role = source["role"];
 	        this.content = source["content"];
 	        this.createdAt = source["createdAt"];
