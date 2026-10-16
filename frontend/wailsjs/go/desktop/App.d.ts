@@ -3,6 +3,8 @@
 import {desktop} from '../models';
 import {context} from '../models';
 
+export function CompactStudySession(arg1:string):Promise<void>;
+
 export function ConfirmImport(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function ConfirmLinkImport(arg1:string,arg2:string,arg3:string):Promise<void>;

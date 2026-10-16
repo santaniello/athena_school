@@ -97,6 +97,8 @@ func main() {
 		studySessions, studyMessages, llmClient, profiles, folders, knowledgeService, transactor, newContextResolver(catalogService),
 		messageSources, knowledgeService, queryEnricher,
 		study.WithUsageReader(usageRepo),
+		study.WithSummarizer(study.NewSummarizer(llmClient, profiles)),
+		study.WithSummaries(sqlite.NewConversationSummaryRepository(db)),
 	)
 	folderService := folder.NewService(folders, studySessions, knowledgeService)
 

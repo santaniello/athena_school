@@ -64,11 +64,14 @@ type capturedEvents struct {
 	contextWarning      []StudyContextEvent
 	contextLimitReached []StudyContextEvent
 	contextUnavailable  []StudyContextUnavailableEvent
+	compacting          []StudyCompactingEvent
+	compacted           []StudyCompactedEvent
+	compactionFailed    []StudyCompactionFailedEvent
 	// done/gone bools kept for tests that only check whether it fired.
 	done bool
 }
 
-func newTestStudyApp(t *testing.T, sessions domainstudy.SessionRepository, messages domainstudy.MessageRepository, llm domainllm.Provider, profiles domainprofile.Store, folders domainfolder.Repository) (*App, *capturedEvents) {
+func newTestStudyApp(t *testing.T, sessions domainstudy.SessionRepository, messages domainstudy.MessageRepository, llm domainllm.Provider, profiles domainprofile.Store, folders domainfolder.Repository, options ...study.Option) (*App, *capturedEvents) {
 	t.Helper()
 	retriever := knowledgemocks.NewMockRetriever(t)
 	retriever.EXPECT().Retrieve(mock.Anything, mock.Anything, mock.Anything).
@@ -77,7 +80,7 @@ func newTestStudyApp(t *testing.T, sessions domainstudy.SessionRepository, messa
 	messageSources := knowledgemocks.NewMockMessageSourceRepository(t)
 	messageSources.EXPECT().Save(context.Background(), mock.Anything, mock.Anything).Return(nil).Maybe()
 	messageSources.EXPECT().ListBySession(context.Background(), mock.Anything).Return(map[string][]domainknowledge.Source{}, nil).Maybe()
-	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog, messageSources, passthroughKnowledgeCascade{}, nil)
+	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog, messageSources, passthroughKnowledgeCascade{}, nil, options...)
 	folderService := folder.NewService(folders, sessions, passthroughKnowledgeCascade{})
 	app := NewApp(nil, nil, nil, studyService, folderService, nil, nil, nil, nil, nil)
 	app.Startup(context.Background())
@@ -102,6 +105,12 @@ func newTestStudyApp(t *testing.T, sessions domainstudy.SessionRepository, messa
 			captured.contextLimitReached = append(captured.contextLimitReached, data[0].(StudyContextEvent))
 		case eventStudyContextLimitUnavailable:
 			captured.contextUnavailable = append(captured.contextUnavailable, data[0].(StudyContextUnavailableEvent))
+		case eventStudyContextCompacting:
+			captured.compacting = append(captured.compacting, data[0].(StudyCompactingEvent))
+		case eventStudyContextCompacted:
+			captured.compacted = append(captured.compacted, data[0].(StudyCompactedEvent))
+		case eventStudyCompactionFailed:
+			captured.compactionFailed = append(captured.compactionFailed, data[0].(StudyCompactionFailedEvent))
 		}
 	}
 	return app, captured
