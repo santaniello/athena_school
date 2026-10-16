@@ -146,7 +146,16 @@ describe('resumeStudySession', () => {
         startedAt: '2026-08-16T10:00:00Z',
         context: CONTEXT_NORMAL,
       },
-      messages: [{ role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z' }],
+      messages: [
+        { id: 'm1', role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z', sources: [] },
+        {
+          id: 'm2',
+          role: 'assistant',
+          content: 'Hello!',
+          createdAt: '2026-08-16T10:00:01Z',
+          sources: [],
+        },
+      ],
     } as never)
 
     // When resuming a session
@@ -155,8 +164,16 @@ describe('resumeStudySession', () => {
     // Then it forwarded the sessionId and returned the session and history
     expect(ResumeStudySession).toHaveBeenCalledWith('session-1')
     expect(result.session.id).toBe('session-1')
-    expect(result.messages).toEqual([
-      { role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z' },
+    // toStrictEqual so a dropped id or sources (undefined) cannot slip through
+    expect(result.messages).toStrictEqual([
+      { id: 'm1', role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z', sources: [] },
+      {
+        id: 'm2',
+        role: 'assistant',
+        content: 'Hello!',
+        createdAt: '2026-08-16T10:00:01Z',
+        sources: [],
+      },
     ])
   })
 })
