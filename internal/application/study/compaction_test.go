@@ -564,3 +564,86 @@ func TestCompactSession_unknownSession_returnsTheRepositoryError(t *testing.T) {
 	// Then the error is propagated
 	require.ErrorIs(t, err, domainstudy.ErrSessionNotFound)
 }
+
+func TestCompactSession_succeedsWithoutAnyHooks(t *testing.T) {
+	// Given a compaction that succeeds and a caller that registered no hooks
+	f := newCompactionFixture(t)
+	history := heavyHistory(6, 9000)
+	summary := newSummaryOf("m2")
+	f.sessions.EXPECT().GetByID(context.Background(), "session-1").Return(compactionSession(domainstudy.ContextStateNormal, 57_000), nil).Once()
+	f.summaries.EXPECT().Get(context.Background(), "session-1").Return(domainstudy.ConversationSummary{}, domainstudy.ErrConversationSummaryNotFound).Once()
+	f.messages.EXPECT().ListAfter(context.Background(), "session-1", "").Return(history, nil).Once()
+	f.summarizer.EXPECT().Summarize(context.Background(), "session-1", (*domainstudy.ConversationSummary)(nil), history[:2]).Return(summary, nil).Once()
+	f.summaries.EXPECT().Save(context.Background(), summary).Return(nil).Once()
+	f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", mock.AnythingOfType("study.ContextUsage")).Return(nil).Once()
+
+	// When compacting
+	err := f.service.CompactSession(context.Background(), "session-1", CompactionHooks{})
+
+	// Then nil hooks are skipped, not called
+	require.NoError(t, err)
+}
+
+func TestCompactSession_failsWithoutAnyHooks(t *testing.T) {
+	// Given a failing summarizer and a caller that registered no hooks
+	f := newCompactionFixture(t)
+	history := heavyHistory(6, 9000)
+	f.sessions.EXPECT().GetByID(context.Background(), "session-1").Return(compactionSession(domainstudy.ContextStateNormal, 57_000), nil).Once()
+	f.summaries.EXPECT().Get(context.Background(), "session-1").Return(domainstudy.ConversationSummary{}, domainstudy.ErrConversationSummaryNotFound).Once()
+	f.messages.EXPECT().ListAfter(context.Background(), "session-1", "").Return(history, nil).Once()
+	f.summarizer.EXPECT().Summarize(context.Background(), "session-1", (*domainstudy.ConversationSummary)(nil), history[:2]).
+		Return(domainstudy.ConversationSummary{}, ErrSummaryTooLarge).Once()
+
+	// When compacting
+	err := f.service.CompactSession(context.Background(), "session-1", CompactionHooks{})
+
+	// Then the cause is returned without calling a nil hook
+	require.ErrorIs(t, err, ErrSummaryTooLarge)
+}
+
+func TestSendMessage_compaction_promptExactlyAtTheBudgetStillProceedsWhenTheSummarizerFails(t *testing.T) {
+	// The unfolded prompt is fixed + history + pending; size the first
+	// message so it lands exactly on window - reserve (90,000), then one over.
+	pending := domainstudy.EstimateTokens(compactionPrompt)
+	budget := domainstudy.PromptBudget(compactionWindow)
+	exactFirst := budget - fixedCompactionTokens() - pending - 3*50
+	for _, c := range []struct {
+		name    string
+		extra   int
+		fitsOut bool
+	}{
+		{"exactly at the budget proceeds", 0, true},
+		{"one token over is rejected", 1, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			// Given a warning session whose summarizer fails
+			f := newCompactionFixture(t)
+			history := []domainstudy.Message{
+				tokenMessage("m1", domainstudy.RoleUser, exactFirst+c.extra),
+				tokenMessage("m2", domainstudy.RoleAssistant, 50),
+				tokenMessage("m3", domainstudy.RoleUser, 50),
+				tokenMessage("m4", domainstudy.RoleAssistant, 50),
+			}
+			f.sessions.EXPECT().GetByID(context.Background(), "session-1").Return(compactionSession(domainstudy.ContextStateWarning, 85_000), nil).Times(map[bool]int{true: 2, false: 1}[c.fitsOut])
+			f.summaries.EXPECT().Get(context.Background(), "session-1").Return(domainstudy.ConversationSummary{}, domainstudy.ErrConversationSummaryNotFound).Once()
+			f.messages.EXPECT().ListAfter(context.Background(), "session-1", "").Return(history, nil).Once()
+			f.summarizer.EXPECT().Summarize(context.Background(), "session-1", (*domainstudy.ConversationSummary)(nil), history[:1]).
+				Return(domainstudy.ConversationSummary{}, errors.New("provider down")).Once()
+			if c.fitsOut {
+				f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", mock.AnythingOfType("study.ContextUsage")).Return(nil)
+				f.messages.EXPECT().ListBySession(context.Background(), "session-1").Return(history, nil).Once()
+				f.expectTurnCompletes(nil)
+			}
+
+			// When sending a message
+			err := f.send(CompactionHooks{}, compactionPrompt)
+
+			// Then only a prompt over the budget is rejected
+			if c.fitsOut {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, domainstudy.ErrBudgetImpossible)
+			}
+		})
+	}
+}

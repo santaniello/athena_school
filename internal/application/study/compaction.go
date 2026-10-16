@@ -94,10 +94,9 @@ func (s *Service) compact(ctx context.Context, sessionID, pendingContent string,
 	outcome := compactionOutcome{session: session}
 
 	summary, err := s.summaries.Get(ctx, sessionID)
-	switch {
-	case err == nil:
+	if err == nil {
 		outcome.summary = &summary
-	case !errors.Is(err, domainstudy.ErrConversationSummaryNotFound):
+	} else if !errors.Is(err, domainstudy.ErrConversationSummaryNotFound) {
 		return compactionOutcome{}, fmt.Errorf("study: loading summary: %w", err)
 	}
 
@@ -132,10 +131,10 @@ func (s *Service) compact(ctx context.Context, sessionID, pendingContent string,
 	}
 
 	plan, err := domainstudy.BuildContext(input)
-	switch {
-	case errors.Is(err, domainstudy.ErrBudgetImpossible):
+	if errors.Is(err, domainstudy.ErrBudgetImpossible) {
 		return s.failCompaction(outcome, err, true, hooks), nil
-	case err != nil:
+	}
+	if err != nil {
 		return compactionOutcome{}, err
 	}
 

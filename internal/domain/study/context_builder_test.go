@@ -139,6 +139,61 @@ func TestPromptBudget_isTheWindowMinusTheOutputReserve(t *testing.T) {
 	assert.Equal(t, 90_000, PromptBudget(100_000))
 }
 
+func TestBuildContext_promptExactlyAtTheTargetIsNotFolded(t *testing.T) {
+	// Given a 100,000 window (target 50,000) and a prompt of exactly 50,000
+	// that has foldable history: 40,000 + 3 x 100 + pending 9,700
+	input := BuildInput{
+		ContextLength: 100_000,
+		PendingTokens: 9_700,
+		Messages:      messagesOfTokens(40_000, 100, 100, 100),
+	}
+
+	// When building the context
+	plan, err := BuildContext(input)
+
+	// Then the target is met as it stands, so nothing is folded
+	require.NoError(t, err)
+	assert.Equal(t, 50_000, plan.UnfoldedTokens)
+	assert.Equal(t, 0, plan.FoldCount)
+}
+
+func TestBuildContext_foldedPromptExactlyAtTheTargetIsAcceptedWithoutFoldingMore(t *testing.T) {
+	// Given folding one message lands exactly on the 50,000 target
+	// (4,000 summary + 100 pending + 45,600 + 3 x 100), and folding a second
+	// one would also be allowed
+	input := BuildInput{
+		ContextLength: 100_000,
+		PendingTokens: 100,
+		Messages:      messagesOfTokens(20_000, 45_600, 100, 100, 100),
+	}
+
+	// When building the context
+	plan, err := BuildContext(input)
+
+	// Then the smallest prefix that reaches the target is chosen
+	require.NoError(t, err)
+	assert.Equal(t, 1, plan.FoldCount)
+	assert.Equal(t, 50_000, plan.EstimatedTokens)
+}
+
+func TestBuildContext_doesNotFoldWhenTheFoldedPromptWouldBeExactlyAsBig(t *testing.T) {
+	// Given a 20,000 window (target 10,000, budget 17,952) whose foldable
+	// message is exactly as big as the 4,000-token projected summary
+	input := BuildInput{
+		ContextLength: 20_000,
+		PendingTokens: 11_000,
+		Messages:      messagesOfTokens(4_000, 8, 8, 8),
+	}
+
+	// When building the context
+	plan, err := BuildContext(input)
+
+	// Then folding gains nothing, so it is skipped
+	require.NoError(t, err)
+	assert.Equal(t, 0, plan.FoldCount)
+	assert.Equal(t, 15_024, plan.EstimatedTokens)
+}
+
 func TestBuildContext_existingLargerSummaryRaisesTheProjectedSummarySize(t *testing.T) {
 	// Given an existing 4,500-token summary (above the 4,000 default target)
 	// and enough history that folding is needed: 4,500 + 60,400 = 64,900
