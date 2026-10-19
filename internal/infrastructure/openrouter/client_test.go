@@ -956,3 +956,84 @@ func TestClient_ChatStream_returnsStalledError_whenProviderGoesQuiet(t *testing.
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "stream stalled")
 }
+
+func TestClient_nonStreamingCalls_failWhenTheProviderStallsTheResponseBody(t *testing.T) {
+	calls := map[string]func(*Client) error{
+		"Chat": func(c *Client) error {
+			_, err := c.Chat(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy})
+			return err
+		},
+		"Embeddings": func(c *Client) error {
+			_, err := c.Embeddings(context.Background(), domainllm.EmbeddingRequest{SessionID: "sess-1", Input: "x"})
+			return err
+		},
+		"EmbeddingsBatch": func(c *Client) error {
+			_, err := c.EmbeddingsBatch(context.Background(), domainllm.EmbeddingBatchRequest{SessionID: "sess-1", Inputs: []string{"x"}})
+			return err
+		},
+	}
+	for name, call := range calls {
+		t.Run(name, func(t *testing.T) {
+			// Given a provider that sends the headers and half of the JSON
+			// body and then goes silent, and a caller context with no deadline
+			release := make(chan struct{})
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"choices":[`))
+				w.(http.Flusher).Flush()
+				select {
+				case <-release:
+				case <-r.Context().Done():
+				}
+			}))
+			defer server.Close()
+			defer close(release)
+			client := NewClient(server.URL, "sk-or-valid", mocks.NewMockUsageRecorder(t))
+			client.requestTimeout = 50 * time.Millisecond
+
+			// When making the call
+			err := call(client)
+
+			// Then it fails with a decoding error caused by the deadline
+			// instead of blocking on the body forever
+			require.ErrorIs(t, err, context.DeadlineExceeded)
+			assert.Contains(t, err.Error(), "decoding")
+		})
+	}
+}
+
+func TestClient_ChatStream_keepsReading_whenOneLineArrivesInPiecesSlowerThanTheIdleTimeoutInTotal(t *testing.T) {
+	// Given a frame delivered in six pieces 40ms apart: every gap is below the
+	// 100ms idle timeout but the line only completes after 200ms
+	frame := `data: {"choices":[{"delta":{"content":"x"}}]}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		step := len(frame) / 6
+		for i := 0; i < 6; i++ {
+			end := (i + 1) * step
+			if i == 5 {
+				end = len(frame)
+			}
+			_, _ = w.Write([]byte(frame[i*step : end]))
+			w.(http.Flusher).Flush()
+			time.Sleep(40 * time.Millisecond)
+		}
+		_, _ = w.Write([]byte("\n\n"))
+		sseFrame(w, `[DONE]`)
+	}))
+	defer server.Close()
+	recorder := mocks.NewMockUsageRecorder(t)
+	recorder.EXPECT().Record(mock.Anything, mock.AnythingOfType("llm.UsageEntry")).Return(nil).Once()
+	client := NewClient(server.URL, "sk-or-valid", recorder)
+	client.streamIdleTimeout = 100 * time.Millisecond
+
+	// When streaming
+	var received []string
+	_, err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(chunk string) error {
+		received = append(received, chunk)
+		return nil
+	})
+
+	// Then the bytes of the incomplete line counted as activity
+	require.NoError(t, err)
+	assert.Equal(t, []string{"x"}, received)
+}
