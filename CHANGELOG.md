@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Phase 2.25: the 80% context warning no longer tells the user to start a new session; it says older messages will be summarized automatically on the next message.
 - Phase 2.25: the blocked (95%) state of a study session is now recoverable instead of terminal. The composer, Send, Enter and the source-mode selector stay usable on a blocked session, and the alert offers **Try to compact again** (primary) and **Start new session** (secondary) with the copy "Could not compact the conversation (reason). Try again." `SendMessage` tries to compact before rejecting with `ErrSessionContextLimitReached`, and a pending message that cannot fit the window is rejected before it is persisted (`ErrMessageTooLarge`, `ErrBudgetImpossible`). Spec 2.6 carries "Amended by 2.25" notes.
 - Typography now follows Claude web's scale: chat messages, inputs and the textarea are 16px; the sidebar, Sources panel, dialog bodies and import-review text are 14px; metadata stays 12px. Titles gain a clearer hierarchy — page, section and dialog titles (including confirmation dialogs) are 18px semibold in normal case, chat markdown headings are 20/18/16px, and the Home greeting is 30px. `@fontsource/cinzel/600.css` is imported so `font-semibold` titles actually render a 600 weight.
 

@@ -598,8 +598,8 @@ function StudyChatScreen({
       {contextState === 'warning' && (
         <Alert>
           <AlertDescription className="text-orange-600 dark:text-orange-400">
-            This session is approaching the model&apos;s context limit. Start a new session on the
-            same topic to keep responses reliable.
+            This session is approaching the model&apos;s context limit. Older messages will be
+            summarized automatically when you send your next message.
           </AlertDescription>
         </Alert>
       )}

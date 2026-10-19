@@ -54,6 +54,10 @@ This session is approaching the model's context limit.
 Start a new session on the same topic to keep responses reliable.
 ```
 
+> **Amended by [2.25](25-context-compaction.md):** the second line now reads
+> "Older messages will be summarized automatically when you send your next
+> message.", since compaction replaces the start-a-new-session advice.
+
 At `blocked`, replace it with:
 
 ```text
