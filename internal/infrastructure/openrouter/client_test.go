@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -902,4 +903,56 @@ func TestClient_Chat_returnsErrAPIKeyMissing_afterSetAPIKeyClearsKey(t *testing.
 	// Then it fails with the missing-key sentinel without reaching OpenRouter
 	assert.ErrorIs(t, err, domainllm.ErrAPIKeyMissing)
 	assert.False(t, requestReachedServer)
+}
+
+func TestClient_ChatStream_keepsReading_whenAnswerOutlastsIdleTimeoutButKeepsFlowing(t *testing.T) {
+	// Given a stream whose total duration exceeds the idle timeout, with
+	// every gap between frames shorter than it
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		for range 5 {
+			sseFrame(w, `{"choices":[{"delta":{"content":"x"}}]}`)
+			time.Sleep(40 * time.Millisecond)
+		}
+		sseFrame(w, `[DONE]`)
+	}))
+	defer server.Close()
+	recorder := mocks.NewMockUsageRecorder(t)
+	recorder.EXPECT().Record(mock.Anything, mock.AnythingOfType("llm.UsageEntry")).Return(nil).Once()
+	client := NewClient(server.URL, "sk-or-valid", recorder)
+	client.streamIdleTimeout = 150 * time.Millisecond
+
+	// When streaming
+	var received []string
+	_, err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(chunk string) error {
+		received = append(received, chunk)
+		return nil
+	})
+
+	// Then the whole answer is delivered
+	require.NoError(t, err)
+	assert.Len(t, received, 5)
+}
+
+func TestClient_ChatStream_returnsStalledError_whenProviderGoesQuiet(t *testing.T) {
+	// Given a stream that sends one chunk and then stops talking
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sseFrame(w, `{"choices":[{"delta":{"content":"x"}}]}`)
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	}))
+	defer server.Close()
+	defer close(release)
+	recorder := mocks.NewMockUsageRecorder(t)
+	client := NewClient(server.URL, "sk-or-valid", recorder)
+	client.streamIdleTimeout = 50 * time.Millisecond
+
+	// When streaming
+	_, err := client.ChatStream(context.Background(), domainllm.ChatRequest{SessionID: "sess-1", Task: domainllm.TaskStudy}, func(string) error { return nil })
+
+	// Then it fails with a stall error instead of hanging
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "stream stalled")
 }

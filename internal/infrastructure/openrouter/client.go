@@ -25,7 +25,18 @@ type Client struct {
 	apiKeyMu   sync.RWMutex
 	httpClient *http.Client
 	recorder   domainllm.UsageRecorder
+	// streamIdleTimeout bounds the silence between two lines of a streamed
+	// response; a long answer is fine as long as it keeps flowing.
+	streamIdleTimeout time.Duration
 }
+
+const (
+	// responseHeaderTimeout bounds the wait for the provider to start
+	// answering. A non-streaming call only answers once the whole completion
+	// is ready, so it must leave room for a long one.
+	responseHeaderTimeout = 120 * time.Second
+	defaultStreamIdle     = 60 * time.Second
+)
 
 // NewClient creates a Client against baseURL, authenticating with apiKey
 // and recording usage via recorder. An empty baseURL defaults to the real
@@ -34,11 +45,16 @@ func NewClient(baseURL, apiKey string, recorder domainllm.UsageRecorder) *Client
 	if baseURL == "" {
 		baseURL = defaultBaseURL
 	}
+	// No overall http.Client.Timeout: it would also cap how long a streamed
+	// answer may take to arrive.
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.ResponseHeaderTimeout = responseHeaderTimeout
 	return &Client{
-		baseURL:    baseURL,
-		apiKey:     apiKey,
-		httpClient: &http.Client{Timeout: 60 * time.Second},
-		recorder:   recorder,
+		baseURL:           baseURL,
+		apiKey:            apiKey,
+		httpClient:        &http.Client{Transport: transport},
+		recorder:          recorder,
+		streamIdleTimeout: defaultStreamIdle,
 	}
 }
 
@@ -213,6 +229,8 @@ type streamResult struct {
 }
 
 func (c *Client) streamChatCompletion(ctx context.Context, model string, messages []domainllm.Message, handler func(chunk string) error) (streamResult, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	resp, err := c.post(ctx, "/api/v1/chat/completions", chatCompletionRequest{
 		Model:    model,
 		Messages: toChatMessages(messages),
@@ -223,11 +241,23 @@ func (c *Client) streamChatCompletion(ctx context.Context, model string, message
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	// Cancel the request when the provider goes quiet for too long.
+	stalled := false
+	var stalledMu sync.Mutex
+	idle := time.AfterFunc(c.streamIdleTimeout, func() {
+		stalledMu.Lock()
+		stalled = true
+		stalledMu.Unlock()
+		cancel()
+	})
+	defer idle.Stop()
+
 	var lastUsage openRouterUsage
 	var resolvedModel string
 	modelConflict := false
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
+		idle.Reset(c.streamIdleTimeout)
 		data, ok := strings.CutPrefix(scanner.Text(), "data: ")
 		if !ok {
 			continue
@@ -261,6 +291,12 @@ func (c *Client) streamChatCompletion(ctx context.Context, model string, message
 		}
 	}
 	if err := scanner.Err(); err != nil {
+		stalledMu.Lock()
+		wasStalled := stalled
+		stalledMu.Unlock()
+		if wasStalled {
+			return streamResult{}, fmt.Errorf("openrouter: stream stalled for %s without data: %w", c.streamIdleTimeout, err)
+		}
 		return streamResult{}, fmt.Errorf("openrouter: reading stream: %w", err)
 	}
 	if modelConflict {
