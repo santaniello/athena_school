@@ -6,23 +6,25 @@ export interface ToastItem {
   id: string
   tone: 'warning' | 'info'
   message: string
-  durationMs: number
+  // Omitted: the toast stays until the user dismisses it.
+  durationMs?: number
 }
 
 interface ToastProps {
   tone: ToastItem['tone']
   message: string
-  durationMs: number
+  durationMs?: number
   onDismiss: () => void
 }
 
-// A transient notice that dismisses itself after durationMs. The countdown
+// A notice that dismisses itself after durationMs, or stays until the user
+// closes it when durationMs is omitted. The countdown
 // pauses while the pointer is over it or focus is inside it (so it can be
 // read or acted on), and resumes with the time that was left. A warning is
 // announced as an alert, a plain notice as a status.
 function Toast({ tone, message, durationMs, onDismiss }: ToastProps) {
   const onDismissRef = useRef(onDismiss)
-  const remainingRef = useRef(durationMs)
+  const remainingRef = useRef(durationMs ?? 0)
   const startedAtRef = useRef(0)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hoveredRef = useRef(false)
@@ -33,6 +35,7 @@ function Toast({ tone, message, durationMs, onDismiss }: ToastProps) {
   }, [onDismiss])
 
   function start() {
+    if (durationMs === undefined) return
     startedAtRef.current = Date.now()
     timerRef.current = setTimeout(() => onDismissRef.current(), remainingRef.current)
   }

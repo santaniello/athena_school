@@ -32,6 +32,24 @@ describe('Toast', () => {
     expect(screen.getByRole('alert')).toHaveClass('text-sm')
   })
 
+  it('stays until the user closes it when it has no duration', () => {
+    // Given a toast without a duration
+    const onDismiss = vi.fn()
+    render(<Toast tone="info" message="x" onDismiss={onDismiss} />)
+
+    // When a long time passes
+    act(() => vi.advanceTimersByTime(10 * 60_000))
+
+    // Then it is still there
+    expect(onDismiss).not.toHaveBeenCalled()
+
+    // When the user clicks the close button
+    fireEvent.click(screen.getByRole('button', { name: /dismiss/i }))
+
+    // Then it is dismissed
+    expect(onDismiss).toHaveBeenCalledTimes(1)
+  })
+
   it('dismisses itself after its duration', () => {
     // Given a 10s toast
     const onDismiss = vi.fn()

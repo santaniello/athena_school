@@ -106,10 +106,9 @@ const REJECTION_MESSAGES: Record<string, string> = {
     "This message is too long for the model's context window. Shorten it and try again.",
 }
 
-// Toast durations: a failure stays long enough to read, a success notice is
-// brief (spec 2.25, Frontend design).
+// A failure toast stays long enough to read; the compaction success notice
+// has no timeout and stays until the user closes it.
 const FAILURE_TOAST_MS = 10_000
-const SUCCESS_TOAST_MS = 5_000
 
 interface ChatMessage {
   // Persisted id for resumed messages; client-generated for the optimistic
@@ -293,7 +292,7 @@ function StudyChatScreen({
     contextStateRef.current = contextState
   }, [contextState])
 
-  const pushToast = useCallback((tone: ToastItem['tone'], message: string, durationMs: number) => {
+  const pushToast = useCallback((tone: ToastItem['tone'], message: string, durationMs?: number) => {
     setToasts((previous) => [...previous, { id: crypto.randomUUID(), tone, message, durationMs }])
   }, [])
 
@@ -460,11 +459,7 @@ function StudyChatScreen({
         contextLength: event.contextLength,
         estimated: true,
       })
-      pushToast(
-        'info',
-        'Older messages were summarized to keep the conversation going',
-        SUCCESS_TOAST_MS,
-      )
+      pushToast('info', 'Older messages were summarized to keep the conversation going')
       // The persisted state is the source of truth (a compacted prompt can
       // still sit above 80% on a tiny window).
       refreshSessionUsage()
