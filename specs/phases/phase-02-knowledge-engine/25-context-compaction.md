@@ -51,6 +51,11 @@ safety net** that exists only when compaction failed or is impossible.
      compaction then applies if it still does not fit.
    - A single message that cannot fit: it is rejected before being persisted; the session itself
      is not blocked by it and the user shortens the text.
+   - Native usage counts the reply as well as the prompt, so it can leave a session
+     `warning`/`blocked` while the next prompt, re-estimated, fits. When nothing can be folded
+     (only the protected recent messages remain) the re-estimated usage is still persisted, which
+     lowers the state; `CompactSession` reports that as success, and `ErrNothingToCompact` only
+     when the state did not change.
    - Only when even a compacted prompt cannot fit (see 8) does the session stay blocked, and
      `Start new session` remains the last-resort alternative.
 7. **Output reserve.** The budget is `contextLength − outputReserve − (system + knowledge
@@ -77,7 +82,10 @@ safety net** that exists only when compaction failed or is impossible.
    "compacting…" state. If any call fails or the result is invalid, nothing is persisted and the
    previous summary stays intact. A compaction failure never fails the user's turn by itself
    unless the session is already `blocked` (decision 5); below 95% the turn proceeds with the full
-   history as before.
+   history as before. The summarizer accepts a summary up to its hard cap, which can exceed the
+   size the planner projected; after summarizing, the real prompt (new summary, kept messages and
+   the pending message) is checked against the budget and, when it does not fit, nothing is
+   persisted and compaction fails with `ErrBudgetImpossible`.
 10. **Summary message framing.** The summary is sent as an additional `system` message after the
     knowledge message and before the history, wrapped like `prompt_context.go` wraps retrieved
     data: explicitly marked as untrusted conversation memory, to be used as context about what the

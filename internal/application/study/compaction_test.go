@@ -94,6 +94,23 @@ func (f *compactionFixture) expectTurnCompletes(request *domainllm.ChatRequest) 
 		Return(domainllm.StreamResponse{}, nil).Once()
 }
 
+// expectReplyContexts sets the two context writes of a successful turn that
+// carries no usage: the provisional one for the user message, then the one
+// estimated from the prompt actually sent (system message, optional summary
+// message, sent) plus the empty reply, with an unresolved window. prior is the
+// context the session holds when the turn starts persisting.
+func (f *compactionFixture) expectReplyContexts(prior domainstudy.ContextUsage, summary *domainstudy.ConversationSummary, sent []domainstudy.Message) {
+	provisional := domainstudy.NextContextUsage(
+		prior, prior.Model, prior.UsedTokens+domainstudy.EstimateTokens(compactionPrompt), prior.ContextLength, true)
+	replyTokens := domainstudy.EstimateTokens(buildSystemPrompt(compactionProfile, compactionTopic, "")) +
+		tokensOf(sent) + domainstudy.EstimateTokens("")
+	if summary != nil {
+		replyTokens += domainstudy.EstimateTokens(buildSummaryContext(summary.Content, domainknowledge.SourceModeNotes).Content)
+	}
+	f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", provisional).Return(nil).Once()
+	f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", domainstudy.NextContextUsage(provisional, "", replyTokens, 0, true)).Return(nil).Once()
+}
+
 func compactionSession(state domainstudy.ContextState, used int) domainstudy.Session {
 	return domainstudy.Session{
 		ID: "session-1", Topic: compactionTopic,
@@ -156,8 +173,8 @@ func TestSendMessage_compaction_foldsOldestMessages_andSendsSummaryBeforeRecentM
 			f.summarizer.EXPECT().Summarize(context.Background(), "session-1", (*domainstudy.ConversationSummary)(nil), history[:6]).Return(summary, nil).Once()
 			f.summaries.EXPECT().Save(context.Background(), summary).Return(nil).Once()
 			f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", resetUsage).Return(nil).Once()
-			f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", mock.AnythingOfType("study.ContextUsage")).Return(nil)
 			tail := append(append([]domainstudy.Message{}, history[6:]...), tokenMessage("m11", domainstudy.RoleUser, 20))
+			f.expectReplyContexts(resetUsage, &summary, tail)
 			f.messages.EXPECT().ListAfter(context.Background(), "session-1", "m6").Return(tail, nil).Once()
 			var request domainllm.ChatRequest
 			f.expectTurnCompletes(&request)
@@ -221,9 +238,9 @@ func TestSendMessage_compaction_warningSessionWhoseSummarizerFails_proceedsWithT
 	f.sessions.EXPECT().GetByID(context.Background(), "session-1").Return(warning, nil).Twice()
 	f.summaries.EXPECT().Get(context.Background(), "session-1").Return(domainstudy.ConversationSummary{}, domainstudy.ErrConversationSummaryNotFound).Once()
 	f.messages.EXPECT().ListAfter(context.Background(), "session-1", "").Return(history, nil).Once()
-	f.summarizer.EXPECT().Summarize(context.Background(), "session-1", (*domainstudy.ConversationSummary)(nil), mock.AnythingOfType("[]study.Message")).
+	f.summarizer.EXPECT().Summarize(context.Background(), "session-1", (*domainstudy.ConversationSummary)(nil), history[:4]).
 		Return(domainstudy.ConversationSummary{}, ErrSummaryTooLarge).Once()
-	f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", mock.AnythingOfType("study.ContextUsage")).Return(nil)
+	f.expectReplyContexts(warning.Context, nil, history)
 	f.messages.EXPECT().ListBySession(context.Background(), "session-1").Return(history, nil).Once()
 	var request domainllm.ChatRequest
 	f.expectTurnCompletes(&request)
@@ -312,7 +329,7 @@ func TestSendMessage_compaction_unresolvedWindow_skipsCompactionAndKeepsTheOldBe
 	f := newCompactionFixture(t)
 	unknown := domainstudy.Session{ID: "session-1", Topic: compactionTopic, Context: domainstudy.ContextUsage{State: domainstudy.ContextStateNormal}}
 	f.sessions.EXPECT().GetByID(context.Background(), "session-1").Return(unknown, nil).Twice()
-	f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", mock.AnythingOfType("study.ContextUsage")).Return(nil)
+	f.expectReplyContexts(unknown.Context, nil, nil)
 	f.summaries.EXPECT().Get(context.Background(), "session-1").Return(domainstudy.ConversationSummary{}, domainstudy.ErrConversationSummaryNotFound).Once()
 	f.messages.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil).Once()
 	f.expectTurnCompletes(nil)
@@ -329,7 +346,7 @@ func TestSendMessage_compaction_normalSessionBelowTheThreshold_doesNotCompact(t 
 	f := newCompactionFixture(t)
 	history := heavyHistory(4, 1000)
 	f.sessions.EXPECT().GetByID(context.Background(), "session-1").Return(compactionSession(domainstudy.ContextStateNormal, 5_000), nil).Twice()
-	f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", mock.AnythingOfType("study.ContextUsage")).Return(nil)
+	f.expectReplyContexts(compactionSession(domainstudy.ContextStateNormal, 5_000).Context, nil, history)
 	f.summaries.EXPECT().Get(context.Background(), "session-1").Return(domainstudy.ConversationSummary{}, domainstudy.ErrConversationSummaryNotFound).Once()
 	f.messages.EXPECT().ListAfter(context.Background(), "session-1", "").Return(history, nil).Once()
 	f.messages.EXPECT().ListBySession(context.Background(), "session-1").Return(history, nil).Once()
@@ -374,7 +391,7 @@ func TestSendMessage_compaction_triggersExactlyAtEightyPercentOfTheWindow(t *tes
 				f.summarizer.EXPECT().Summarize(context.Background(), "session-1", (*domainstudy.ConversationSummary)(nil), history[:1]).
 					Return(domainstudy.ConversationSummary{}, errors.New("stop here")).Once()
 			}
-			f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", mock.AnythingOfType("study.ContextUsage")).Return(nil)
+			f.expectReplyContexts(compactionSession(domainstudy.ContextStateNormal, 1).Context, nil, history)
 			f.messages.EXPECT().ListBySession(context.Background(), "session-1").Return(history, nil).Once()
 			f.expectTurnCompletes(nil)
 			started := 0
@@ -394,7 +411,7 @@ func TestSendMessage_compaction_existingSummary_isSentEvenWhenNoNewCompactionIsN
 	summary := newSummaryOf("m3")
 	tail := heavyHistory(2, 1000)
 	f.sessions.EXPECT().GetByID(context.Background(), "session-1").Return(compactionSession(domainstudy.ContextStateNormal, 6_000), nil).Twice()
-	f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", mock.AnythingOfType("study.ContextUsage")).Return(nil)
+	f.expectReplyContexts(compactionSession(domainstudy.ContextStateNormal, 6_000).Context, &summary, tail)
 	f.summaries.EXPECT().Get(context.Background(), "session-1").Return(summary, nil).Once()
 	f.messages.EXPECT().ListAfter(context.Background(), "session-1", "m3").Return(tail, nil).Twice()
 	var request domainllm.ChatRequest
@@ -430,9 +447,9 @@ func TestSendMessage_compaction_persistenceFailure_isReportedAndNothingIsSaved(t
 	f.sessions.EXPECT().GetByID(context.Background(), "session-1").Return(compactionSession(domainstudy.ContextStateWarning, 85_000), nil).Twice()
 	f.summaries.EXPECT().Get(context.Background(), "session-1").Return(domainstudy.ConversationSummary{}, domainstudy.ErrConversationSummaryNotFound).Once()
 	f.messages.EXPECT().ListAfter(context.Background(), "session-1", "").Return(history, nil).Once()
-	f.summarizer.EXPECT().Summarize(context.Background(), "session-1", (*domainstudy.ConversationSummary)(nil), mock.AnythingOfType("[]study.Message")).Return(summary, nil).Once()
+	f.summarizer.EXPECT().Summarize(context.Background(), "session-1", (*domainstudy.ConversationSummary)(nil), history[:4]).Return(summary, nil).Once()
 	f.summaries.EXPECT().Save(context.Background(), summary).Return(errors.New("disk")).Once()
-	f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", mock.AnythingOfType("study.ContextUsage")).Return(nil)
+	f.expectReplyContexts(compactionSession(domainstudy.ContextStateWarning, 85_000).Context, nil, history)
 	f.messages.EXPECT().ListBySession(context.Background(), "session-1").Return(history, nil).Once()
 	f.expectTurnCompletes(nil)
 	var failures []error
@@ -570,12 +587,16 @@ func TestCompactSession_succeedsWithoutAnyHooks(t *testing.T) {
 	f := newCompactionFixture(t)
 	history := heavyHistory(6, 9000)
 	summary := newSummaryOf("m2")
+	reset := domainstudy.ContextUsage{
+		State: domainstudy.ContextStateNormal, Model: "m", ContextLength: compactionWindow, Estimated: true,
+		UsedTokens: fixedCompactionTokens() + summary.TokenEstimate + tokensOf(history[2:]),
+	}
 	f.sessions.EXPECT().GetByID(context.Background(), "session-1").Return(compactionSession(domainstudy.ContextStateNormal, 57_000), nil).Once()
 	f.summaries.EXPECT().Get(context.Background(), "session-1").Return(domainstudy.ConversationSummary{}, domainstudy.ErrConversationSummaryNotFound).Once()
 	f.messages.EXPECT().ListAfter(context.Background(), "session-1", "").Return(history, nil).Once()
 	f.summarizer.EXPECT().Summarize(context.Background(), "session-1", (*domainstudy.ConversationSummary)(nil), history[:2]).Return(summary, nil).Once()
 	f.summaries.EXPECT().Save(context.Background(), summary).Return(nil).Once()
-	f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", mock.AnythingOfType("study.ContextUsage")).Return(nil).Once()
+	f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", reset).Return(nil).Once()
 
 	// When compacting
 	err := f.service.CompactSession(context.Background(), "session-1", CompactionHooks{})
@@ -630,7 +651,7 @@ func TestSendMessage_compaction_promptExactlyAtTheBudgetStillProceedsWhenTheSumm
 			f.summarizer.EXPECT().Summarize(context.Background(), "session-1", (*domainstudy.ConversationSummary)(nil), history[:1]).
 				Return(domainstudy.ConversationSummary{}, errors.New("provider down")).Once()
 			if c.fitsOut {
-				f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", mock.AnythingOfType("study.ContextUsage")).Return(nil)
+				f.expectReplyContexts(compactionSession(domainstudy.ContextStateWarning, 85_000).Context, nil, history)
 				f.messages.EXPECT().ListBySession(context.Background(), "session-1").Return(history, nil).Once()
 				f.expectTurnCompletes(nil)
 			}
@@ -646,4 +667,188 @@ func TestSendMessage_compaction_promptExactlyAtTheBudgetStillProceedsWhenTheSumm
 			}
 		})
 	}
+}
+
+func TestSendMessage_compaction_blockedSessionWithNothingToFold_isUnblockedByTheRecomputedUsage(t *testing.T) {
+	// Given a session blocked by native usage (96,000 of 100,000) whose
+	// history is only the protected tail, so no message can be folded, but
+	// whose estimated prompt is far below the window
+	f := newCompactionFixture(t)
+	history := heavyHistory(3, 100)
+	blocked := compactionSession(domainstudy.ContextStateBlocked, 96_000)
+	reset := domainstudy.ContextUsage{
+		State: domainstudy.ContextStateNormal, Model: "m", ContextLength: compactionWindow, Estimated: true,
+		UsedTokens: fixedCompactionTokens() + tokensOf(history),
+	}
+	f.sessions.EXPECT().GetByID(context.Background(), "session-1").Return(blocked, nil).Once()
+	f.sessions.EXPECT().GetByID(context.Background(), "session-1").Return(
+		domainstudy.Session{ID: "session-1", Topic: compactionTopic, Context: reset}, nil).Once()
+	f.summaries.EXPECT().Get(context.Background(), "session-1").Return(domainstudy.ConversationSummary{}, domainstudy.ErrConversationSummaryNotFound).Once()
+	f.messages.EXPECT().ListAfter(context.Background(), "session-1", "").Return(history, nil).Once()
+	f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", reset).Return(nil).Once()
+	provisional := domainstudy.NextContextUsage(
+		reset, "m", reset.UsedTokens+domainstudy.EstimateTokens(compactionPrompt), compactionWindow, true)
+	f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", provisional).Return(nil).Once()
+	// The reply carries no usage or model, so its measurement is estimated
+	// from the stored history plus the empty reply, with an unresolved window.
+	replyTokens := domainstudy.EstimateTokens(buildSystemPrompt(compactionProfile, compactionTopic, "")) +
+		tokensOf(history) + domainstudy.EstimateTokens("")
+	f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", domainstudy.NextContextUsage(provisional, "", replyTokens, 0, true)).Return(nil).Once()
+	f.messages.EXPECT().ListBySession(context.Background(), "session-1").Return(history, nil).Once()
+	f.expectTurnCompletes(nil)
+
+	// When sending a message
+	err := f.send(CompactionHooks{
+		OnStarted:   func() { t.Error("nothing was summarized") },
+		OnCompacted: func(ContextEvent) { t.Error("nothing was compacted") },
+		OnFailed:    func(err error) { t.Errorf("unexpected failure: %v", err) },
+	}, compactionPrompt)
+
+	// Then the recomputed usage is persisted and the turn is no longer blocked
+	require.NoError(t, err)
+}
+
+func TestCompactSession_blockedSessionWithNothingToFold_isRecoveredByTheRecomputedUsage(t *testing.T) {
+	// Given a session blocked by native usage whose estimated prompt fits
+	f := newCompactionFixture(t)
+	history := heavyHistory(3, 100)
+	reset := domainstudy.ContextUsage{
+		State: domainstudy.ContextStateNormal, Model: "m", ContextLength: compactionWindow, Estimated: true,
+		UsedTokens: fixedCompactionTokens() + tokensOf(history),
+	}
+	f.sessions.EXPECT().GetByID(context.Background(), "session-1").Return(compactionSession(domainstudy.ContextStateBlocked, 96_000), nil).Once()
+	f.summaries.EXPECT().Get(context.Background(), "session-1").Return(domainstudy.ConversationSummary{}, domainstudy.ErrConversationSummaryNotFound).Once()
+	f.messages.EXPECT().ListAfter(context.Background(), "session-1", "").Return(history, nil).Once()
+	f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", reset).Return(nil).Once()
+
+	// When retrying the compaction
+	err := f.service.CompactSession(context.Background(), "session-1", CompactionHooks{})
+
+	// Then recovering the state counts as success, not as "nothing to compact"
+	require.NoError(t, err)
+}
+
+func TestCompactSession_warningSessionWhoseRecomputedUsageStaysWarning_hasNothingToCompact(t *testing.T) {
+	// Given a warning session whose estimated protected tail alone is above
+	// 80% of the window but still inside the budget
+	f := newCompactionFixture(t)
+	history := heavyHistory(3, 28_000)
+	same := domainstudy.ContextUsage{
+		State: domainstudy.ContextStateWarning, Model: "m", ContextLength: compactionWindow, Estimated: true,
+		UsedTokens: fixedCompactionTokens() + tokensOf(history),
+	}
+	f.sessions.EXPECT().GetByID(context.Background(), "session-1").Return(compactionSession(domainstudy.ContextStateWarning, 85_000), nil).Once()
+	f.summaries.EXPECT().Get(context.Background(), "session-1").Return(domainstudy.ConversationSummary{}, domainstudy.ErrConversationSummaryNotFound).Once()
+	f.messages.EXPECT().ListAfter(context.Background(), "session-1", "").Return(history, nil).Once()
+	f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", same).Return(nil).Once()
+
+	// When retrying the compaction
+	err := f.service.CompactSession(context.Background(), "session-1", CompactionHooks{})
+
+	// Then the state did not recover, so there is still nothing to compact
+	require.ErrorIs(t, err, ErrNothingToCompact)
+}
+
+func TestCompactSession_blockedSessionWithNothingToFoldWhoseUpdateFails_returnsTheCause(t *testing.T) {
+	// Given the same recoverable blocked session, but the update fails
+	f := newCompactionFixture(t)
+	history := heavyHistory(3, 100)
+	reset := domainstudy.ContextUsage{
+		State: domainstudy.ContextStateNormal, Model: "m", ContextLength: compactionWindow, Estimated: true,
+		UsedTokens: fixedCompactionTokens() + tokensOf(history),
+	}
+	f.sessions.EXPECT().GetByID(context.Background(), "session-1").Return(compactionSession(domainstudy.ContextStateBlocked, 96_000), nil).Once()
+	f.summaries.EXPECT().Get(context.Background(), "session-1").Return(domainstudy.ConversationSummary{}, domainstudy.ErrConversationSummaryNotFound).Once()
+	f.messages.EXPECT().ListAfter(context.Background(), "session-1", "").Return(history, nil).Once()
+	f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", reset).Return(errors.New("disk")).Once()
+	var failures []error
+
+	// When retrying the compaction
+	err := f.service.CompactSession(context.Background(), "session-1", CompactionHooks{OnFailed: func(err error) { failures = append(failures, err) }})
+
+	// Then the cause is returned and reported
+	require.ErrorContains(t, err, "persisting compaction")
+	require.Len(t, failures, 1)
+}
+
+func TestCompactSession_summaryLargerThanProjected_isRejectedWhenThePromptWouldExceedTheBudget(t *testing.T) {
+	// The first three messages are folded and the last three are protected;
+	// the protected tail is sized so the prompt lands exactly on the budget
+	// with the projected summary size, and one token over with a bigger one.
+	projected := domainstudy.SummaryTargetTokens(domainstudy.SummaryModelWindowTokens)
+	rest := domainstudy.PromptBudget(compactionWindow) - fixedCompactionTokens() - projected
+	for _, c := range []struct {
+		name  string
+		extra int
+		fits  bool
+	}{
+		{"summary exactly as projected is persisted", 0, true},
+		{"summary one token larger is rejected", 1, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			// Given a warning session whose summarizer returns that summary
+			f := newCompactionFixture(t)
+			history := append(heavyHistory(3, 9000),
+				tokenMessage("m4", domainstudy.RoleAssistant, rest-200),
+				tokenMessage("m5", domainstudy.RoleUser, 100),
+				tokenMessage("m6", domainstudy.RoleAssistant, 100),
+			)
+			summary := newSummaryOf("m3")
+			summary.TokenEstimate = projected + c.extra
+			f.sessions.EXPECT().GetByID(context.Background(), "session-1").Return(compactionSession(domainstudy.ContextStateWarning, 85_000), nil).Once()
+			f.summaries.EXPECT().Get(context.Background(), "session-1").Return(domainstudy.ConversationSummary{}, domainstudy.ErrConversationSummaryNotFound).Once()
+			f.messages.EXPECT().ListAfter(context.Background(), "session-1", "").Return(history, nil).Once()
+			f.summarizer.EXPECT().Summarize(context.Background(), "session-1", (*domainstudy.ConversationSummary)(nil), history[:3]).Return(summary, nil).Once()
+			if c.fits {
+				f.summaries.EXPECT().Save(context.Background(), summary).Return(nil).Once()
+				f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", domainstudy.ContextUsageAfterCompaction(
+					compactionSession(domainstudy.ContextStateWarning, 85_000).Context,
+					fixedCompactionTokens()+summary.TokenEstimate+tokensOf(history[3:]), compactionWindow,
+				)).Return(nil).Once()
+			}
+			var failures []error
+
+			// When retrying the compaction
+			err := f.service.CompactSession(context.Background(), "session-1", CompactionHooks{OnFailed: func(err error) { failures = append(failures, err) }})
+
+			// Then only a prompt that fits the budget is persisted
+			if c.fits {
+				require.NoError(t, err)
+				assert.Empty(t, failures)
+			} else {
+				require.ErrorIs(t, err, domainstudy.ErrBudgetImpossible)
+				require.Len(t, failures, 1)
+			}
+		})
+	}
+}
+
+func TestSendMessage_compaction_summaryLargerThanProjected_countsThePendingMessageAgainstTheBudget(t *testing.T) {
+	// Given a 3,000-token pending message and a protected tail sized so that
+	// tail + pending + fixed + a summary one token above the projection lands
+	// exactly one token over the budget
+	const pendingTokens = 3000
+	pending := strings.Repeat("x", (pendingTokens-8)*3)
+	projected := domainstudy.SummaryTargetTokens(domainstudy.SummaryModelWindowTokens)
+	rest := domainstudy.PromptBudget(compactionWindow) - fixedCompactionTokens() - pendingTokens - projected
+	f := newCompactionFixture(t)
+	history := append(heavyHistory(3, 9000),
+		tokenMessage("m4", domainstudy.RoleAssistant, rest-200),
+		tokenMessage("m5", domainstudy.RoleUser, 100),
+		tokenMessage("m6", domainstudy.RoleAssistant, 100),
+	)
+	summary := newSummaryOf("m3")
+	summary.TokenEstimate = projected + 1
+	f.sessions.EXPECT().GetByID(context.Background(), "session-1").Return(compactionSession(domainstudy.ContextStateWarning, 85_000), nil).Once()
+	f.summaries.EXPECT().Get(context.Background(), "session-1").Return(domainstudy.ConversationSummary{}, domainstudy.ErrConversationSummaryNotFound).Once()
+	f.messages.EXPECT().ListAfter(context.Background(), "session-1", "").Return(history, nil).Once()
+	f.summarizer.EXPECT().Summarize(context.Background(), "session-1", (*domainstudy.ConversationSummary)(nil), history[:3]).Return(summary, nil).Once()
+	failed := 0
+
+	// When sending the message
+	err := f.send(CompactionHooks{OnFailed: func(error) { failed++ }}, pending)
+
+	// Then the summary is not persisted and the turn fails before sending
+	require.ErrorIs(t, err, domainstudy.ErrBudgetImpossible)
+	assert.Equal(t, 1, failed)
 }

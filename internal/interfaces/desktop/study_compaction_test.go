@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/santaniello/athena/internal/application/study"
@@ -107,7 +106,7 @@ func TestApp_CompactStudySession_failure_returnsTheErrorEmitsFailedEventAndLogsI
 		})
 	}
 	messages.EXPECT().ListAfter(context.Background(), "session-1", "").Return(history, nil)
-	summarizer.EXPECT().Summarize(context.Background(), "session-1", (*domainstudy.ConversationSummary)(nil), mock.AnythingOfType("[]study.Message")).
+	summarizer.EXPECT().Summarize(context.Background(), "session-1", (*domainstudy.ConversationSummary)(nil), history[:6]).
 		Return(domainstudy.ConversationSummary{}, fmt.Errorf("raw detail: %w", study.ErrInvalidSummaryFormat))
 	app, captured := newTestStudyApp(t, sessions, messages, llmmocks.NewMockProvider(t), profiles, foldermocks.NewMockRepository(t),
 		study.WithSummarizer(summarizer), study.WithSummaries(summaries))

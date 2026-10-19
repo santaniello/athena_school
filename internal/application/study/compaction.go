@@ -71,6 +71,10 @@ type compactionOutcome struct {
 	session domainstudy.Session
 	// compacted is true when this call folded messages into the summary.
 	compacted bool
+	// stateReset is true when nothing could be folded but re-measuring the
+	// prompt lowered a warning/blocked state (typically one set by native
+	// usage that counted the reply as well).
+	stateReset bool
 	// cause is why compaction was needed but did not happen; nil otherwise.
 	cause error
 	// overBudget is true when, with cause set, the prompt as it stands does
@@ -140,8 +144,11 @@ func (s *Service) compact(ctx context.Context, sessionID, pendingContent string,
 
 	needed := force || session.Context.State != domainstudy.ContextStateNormal ||
 		domainstudy.NeedsCompaction(plan.UnfoldedTokens, window)
-	if !needed || plan.FoldCount == 0 {
+	if !needed {
 		return outcome, nil
+	}
+	if plan.FoldCount == 0 {
+		return s.remeasure(ctx, sessionID, session, plan.UnfoldedTokens-input.PendingTokens, window, outcome, hooks), nil
 	}
 
 	overBudget := plan.UnfoldedTokens > domainstudy.PromptBudget(window)
@@ -155,8 +162,12 @@ func (s *Service) compact(ctx context.Context, sessionID, pendingContent string,
 	}
 
 	// The pending message is counted by SendMessage's own provisional
-	// increment, so it is excluded from the reset measurement.
+	// increment, so it is excluded from the reset measurement. The summary may
+	// be larger than BuildContext projected, so the prompt is checked again.
 	used := input.FixedTokens + newSummary.TokenEstimate + tokensOf(history[plan.FoldCount:])
+	if used+input.PendingTokens > domainstudy.PromptBudget(window) {
+		return s.failCompaction(outcome, domainstudy.ErrBudgetImpossible, true, hooks), nil
+	}
 	newUsage := domainstudy.ContextUsageAfterCompaction(session.Context, used, window)
 	err = s.tx.WithinTx(ctx, func(ctx context.Context) error {
 		if err := s.summaries.Save(ctx, newSummary); err != nil {
@@ -178,6 +189,23 @@ func (s *Service) compact(ctx context.Context, sessionID, pendingContent string,
 		})
 	}
 	return outcome, nil
+}
+
+// remeasure handles a non-normal session with nothing to fold: it persists the
+// usage re-estimated from the actual prompt, which is the only way out of a
+// state set by native usage (input + output) that overstates the next prompt.
+// A normal session is left untouched.
+func (s *Service) remeasure(ctx context.Context, sessionID string, session domainstudy.Session, used, window int, outcome compactionOutcome, hooks CompactionHooks) compactionOutcome {
+	if session.Context.State == domainstudy.ContextStateNormal {
+		return outcome
+	}
+	usage := domainstudy.ContextUsageAfterCompaction(session.Context, used, window)
+	if err := s.sessions.UpdateContext(ctx, sessionID, usage); err != nil {
+		return s.failCompaction(outcome, fmt.Errorf("study: persisting compaction: %w", err), false, hooks)
+	}
+	outcome.session.Context = usage
+	outcome.stateReset = usage.State != session.Context.State
+	return outcome
 }
 
 func (s *Service) failCompaction(outcome compactionOutcome, cause error, overBudget bool, hooks CompactionHooks) compactionOutcome {
@@ -209,7 +237,7 @@ func (s *Service) CompactSession(ctx context.Context, sessionID string, hooks Co
 	if outcome.cause != nil {
 		return outcome.cause
 	}
-	if !outcome.compacted {
+	if !outcome.compacted && !outcome.stateReset {
 		return ErrNothingToCompact
 	}
 	return nil
