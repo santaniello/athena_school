@@ -124,11 +124,11 @@ func TestBuildContext_foldsTheSmallestPrefixThatReachesTheTarget(t *testing.T) {
 	// When building the context
 	plan, err := BuildContext(input)
 
-	// Then folding one message is not enough (4,000 projected summary +
-	// 60,400 = 64,400) but folding two is (44,400 <= 50,000)
+	// Then folding one message is not enough (5,000 projected summary +
+	// 60,400 = 65,400) but folding two is (45,400 <= 50,000)
 	require.NoError(t, err)
 	assert.Equal(t, 2, plan.FoldCount)
-	assert.Equal(t, 44_400, plan.EstimatedTokens)
+	assert.Equal(t, 45_400, plan.EstimatedTokens)
 	assert.Equal(t, 80_400, plan.UnfoldedTokens)
 }
 
@@ -159,12 +159,12 @@ func TestBuildContext_promptExactlyAtTheTargetIsNotFolded(t *testing.T) {
 
 func TestBuildContext_foldedPromptExactlyAtTheTargetIsAcceptedWithoutFoldingMore(t *testing.T) {
 	// Given folding one message lands exactly on the 50,000 target
-	// (4,000 summary + 100 pending + 45,600 + 3 x 100), and folding a second
+	// (5,000 summary + 100 pending + 44,600 + 3 x 100), and folding a second
 	// one would also be allowed
 	input := BuildInput{
 		ContextLength: 100_000,
 		PendingTokens: 100,
-		Messages:      messagesOfTokens(20_000, 45_600, 100, 100, 100),
+		Messages:      messagesOfTokens(20_000, 44_600, 100, 100, 100),
 	}
 
 	// When building the context
@@ -178,11 +178,11 @@ func TestBuildContext_foldedPromptExactlyAtTheTargetIsAcceptedWithoutFoldingMore
 
 func TestBuildContext_doesNotFoldWhenTheFoldedPromptWouldBeExactlyAsBig(t *testing.T) {
 	// Given a 20,000 window (target 10,000, budget 17,952) whose foldable
-	// message is exactly as big as the 4,000-token projected summary
+	// message is exactly as big as the 5,000-token projected summary
 	input := BuildInput{
 		ContextLength: 20_000,
 		PendingTokens: 11_000,
-		Messages:      messagesOfTokens(4_000, 8, 8, 8),
+		Messages:      messagesOfTokens(5_000, 8, 8, 8),
 	}
 
 	// When building the context
@@ -191,15 +191,15 @@ func TestBuildContext_doesNotFoldWhenTheFoldedPromptWouldBeExactlyAsBig(t *testi
 	// Then folding gains nothing, so it is skipped
 	require.NoError(t, err)
 	assert.Equal(t, 0, plan.FoldCount)
-	assert.Equal(t, 15_024, plan.EstimatedTokens)
+	assert.Equal(t, 16_024, plan.EstimatedTokens)
 }
 
 func TestBuildContext_existingLargerSummaryRaisesTheProjectedSummarySize(t *testing.T) {
-	// Given an existing 4,500-token summary (above the 4,000 default target)
-	// and enough history that folding is needed: 4,500 + 60,400 = 64,900
+	// Given an existing 5,500-token summary (above the 5,000 projection)
+	// and enough history that folding is needed: 5,500 + 60,400 = 65,900
 	input := BuildInput{
 		ContextLength: 100_000,
-		SummaryTokens: 4_500,
+		SummaryTokens: 5_500,
 		PendingTokens: 100,
 		Messages:      messagesOfTokens(20_000, 20_000, 20_000, 100, 100, 100),
 	}
@@ -208,10 +208,10 @@ func TestBuildContext_existingLargerSummaryRaisesTheProjectedSummarySize(t *test
 	plan, err := BuildContext(input)
 
 	// Then the projection keeps the larger existing size: folding one leaves
-	// 4,500 + 40,000 + 300 + 100 = 44,900 (not the 4,000-based 44,400)
+	// 5,500 + 40,000 + 300 + 100 = 45,900 (not the 5,000-based 45,400)
 	require.NoError(t, err)
 	assert.Equal(t, 1, plan.FoldCount)
-	assert.Equal(t, 44_900, plan.EstimatedTokens)
+	assert.Equal(t, 45_900, plan.EstimatedTokens)
 }
 
 func TestBuildContext_keepsTheMinimumRecentMessagesVerbatim(t *testing.T) {
@@ -255,7 +255,7 @@ func TestBuildContext_existingSummaryCountsTowardTheTotal(t *testing.T) {
 func TestBuildContext_foldsAsMuchAsAllowedWhenTargetIsUnreachableButBudgetFits(t *testing.T) {
 	// Given a 20,000 window (reserve 2,048 → budget 17,952, target 10,000)
 	// whose protected tail alone (3 x 3,000 + pending 1,000 + fixed 1,000
-	// + projected summary 4,000 = 15,000) is above the target but within budget
+	// + projected summary 5,000 = 16,000) is above the target but within budget
 	input := BuildInput{
 		ContextLength: 20_000,
 		FixedTokens:   1_000,
@@ -269,13 +269,13 @@ func TestBuildContext_foldsAsMuchAsAllowedWhenTargetIsUnreachableButBudgetFits(t
 	// Then the only foldable message is folded and the result is accepted
 	require.NoError(t, err)
 	assert.Equal(t, 1, plan.FoldCount)
-	assert.Equal(t, 15_000, plan.EstimatedTokens)
+	assert.Equal(t, 16_000, plan.EstimatedTokens)
 }
 
 func TestBuildContext_doesNotFoldWhenTheProjectedSummaryWouldNotShrinkThePrompt(t *testing.T) {
 	// Given a prompt above the target made of a big pending message and tiny
 	// history: folding the single foldable 8-token message would add a
-	// 4,000-token summary and make the prompt bigger (10,024 vs 6,032)
+	// 5,000-token summary and make the prompt bigger (11,024 vs 6,032)
 	input := BuildInput{
 		ContextLength: 10_000,
 		PendingTokens: 6_000,

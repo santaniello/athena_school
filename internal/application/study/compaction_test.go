@@ -772,10 +772,12 @@ func TestCompactSession_blockedSessionWithNothingToFoldWhoseUpdateFails_returnsT
 }
 
 func TestCompactSession_summaryLargerThanProjected_isRejectedWhenThePromptWouldExceedTheBudget(t *testing.T) {
+	// The planner projects the summarizer's hard cap, so a larger summary
+	// breaks the Summarizer contract; the check is a safety net.
 	// The first three messages are folded and the last three are protected;
 	// the protected tail is sized so the prompt lands exactly on the budget
 	// with the projected summary size, and one token over with a bigger one.
-	projected := domainstudy.SummaryTargetTokens(domainstudy.SummaryModelWindowTokens)
+	projected := domainstudy.SummaryHardCapTokens(domainstudy.SummaryTargetTokens(domainstudy.SummaryModelWindowTokens))
 	rest := domainstudy.PromptBudget(compactionWindow) - fixedCompactionTokens() - projected
 	for _, c := range []struct {
 		name  string
@@ -829,7 +831,7 @@ func TestSendMessage_compaction_summaryLargerThanProjected_countsThePendingMessa
 	// exactly one token over the budget
 	const pendingTokens = 3000
 	pending := strings.Repeat("x", (pendingTokens-8)*3)
-	projected := domainstudy.SummaryTargetTokens(domainstudy.SummaryModelWindowTokens)
+	projected := domainstudy.SummaryHardCapTokens(domainstudy.SummaryTargetTokens(domainstudy.SummaryModelWindowTokens))
 	rest := domainstudy.PromptBudget(compactionWindow) - fixedCompactionTokens() - pendingTokens - projected
 	f := newCompactionFixture(t)
 	history := append(heavyHistory(3, 9000),

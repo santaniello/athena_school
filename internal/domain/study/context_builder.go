@@ -97,7 +97,9 @@ func BuildContext(input BuildInput) (ContextPlan, error) {
 	}
 
 	maxFold := max(0, len(input.Messages)-(MinRecentMessages-1))
-	projectedSummary := max(input.SummaryTokens, SummaryTargetTokens(SummaryModelWindowTokens))
+	// The summarizer may return up to the hard cap, so that is what a new
+	// summary is assumed to take.
+	projectedSummary := max(input.SummaryTokens, SummaryHardCapTokens(SummaryTargetTokens(SummaryModelWindowTokens)))
 
 	// suffix[k] is the token size of Messages[k:].
 	suffix := make([]int, len(input.Messages)+1)

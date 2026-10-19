@@ -82,9 +82,10 @@ safety net** that exists only when compaction failed or is impossible.
    "compacting…" state. If any call fails or the result is invalid, nothing is persisted and the
    previous summary stays intact. A compaction failure never fails the user's turn by itself
    unless the session is already `blocked` (decision 5); below 95% the turn proceeds with the full
-   history as before. The summarizer accepts a summary up to its hard cap, which can exceed the
-   size the planner projected; after summarizing, the real prompt (new summary, kept messages and
-   the pending message) is checked against the budget and, when it does not fit, nothing is
+   history as before. The summarizer accepts a summary up to its hard cap, so the planner
+   projects a new summary at that cap (not at the target size) when deciding how much to fold.
+   After summarizing, the real prompt (new summary, kept messages and the pending message) is
+   still checked against the budget as a safety net and, when it does not fit, nothing is
    persisted and compaction fails with `ErrBudgetImpossible`.
 10. **Summary message framing.** The summary is sent as an additional `system` message after the
     knowledge message and before the history, wrapped like `prompt_context.go` wraps retrieved
