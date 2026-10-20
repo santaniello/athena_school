@@ -28,18 +28,25 @@ import (
 // before a response is produced.
 //
 // Checks run in this order: source mode, then content, then the per-session
-// in-flight reservation, then — inside one transaction with the user
-// message append — the session's persisted blocked state. A session already
-// at domainstudy.ContextStateBlocked rejects the turn with
-// domainstudy.ErrSessionContextLimitReached before anything is persisted. A
-// concurrent turn for the same session returns ErrStudyTurnInProgress
-// before any repository/retrieval/provider work.
+// in-flight reservation, then context compaction (when the service is wired
+// for it; see compact), then — inside one transaction with the user message
+// append — the session's persisted blocked state. A session still at
+// domainstudy.ContextStateBlocked after compaction was tried rejects the turn
+// with domainstudy.ErrSessionContextLimitReached before anything is
+// persisted; a successful compaction lowers it and the turn proceeds. When
+// compaction fails on a session that is not blocked, a prompt that exceeds
+// the window fails with domainstudy.ErrBudgetImpossible, and a pending
+// message that cannot fit by itself with domainstudy.ErrMessageTooLarge, both
+// before anything is persisted. A concurrent turn for the same session
+// returns ErrStudyTurnInProgress before any repository/retrieval/provider
+// work.
 func (s *Service) SendMessage(
 	ctx context.Context, sessionID, topic, content, sourceMode string,
 	onSources func([]domainknowledge.Source) error,
 	onChunk func(chunk string) error,
 	onContext ContextCallback,
 	onContextUnavailable ContextUnavailableCallback,
+	options ...SendOption,
 ) error {
 	if !isValidSourceMode(sourceMode) {
 		return domainknowledge.ErrInvalidSourceMode
@@ -54,6 +61,23 @@ func (s *Service) SendMessage(
 		return err
 	}
 	defer s.inFlight.end(sessionID)
+
+	var config sendConfig
+	for _, option := range options {
+		option(&config)
+	}
+
+	var summary *domainstudy.ConversationSummary
+	if s.compactionEnabled() {
+		outcome, err := s.compact(ctx, sessionID, content, false, config.compaction)
+		if err != nil {
+			return err
+		}
+		if outcome.cause != nil && outcome.overBudget && outcome.session.Context.State != domainstudy.ContextStateBlocked {
+			return domainstudy.ErrBudgetImpossible
+		}
+		summary = outcome.summary
+	}
 
 	userMessage := domainstudy.Message{
 		ID:        uuid.NewString(),
@@ -156,7 +180,12 @@ func (s *Service) SendMessage(
 		sources = result.Sources
 	}
 
-	history, err := s.messages.ListBySession(ctx, sessionID)
+	var history []domainstudy.Message
+	if summary != nil {
+		history, err = s.messages.ListAfter(ctx, sessionID, summary.CoversUntilMessageID)
+	} else {
+		history, err = s.messages.ListBySession(ctx, sessionID)
+	}
 	if err != nil {
 		return fmt.Errorf("study: loading history: %w", err)
 	}
@@ -166,10 +195,13 @@ func (s *Service) SendMessage(
 		return fmt.Errorf("study: loading profile: %w", err)
 	}
 
-	llmMessages := make([]domainllm.Message, 0, len(history)+2)
+	llmMessages := make([]domainllm.Message, 0, len(history)+3)
 	llmMessages = append(llmMessages, domainllm.Message{Role: "system", Content: buildSystemPrompt(profile, topic, sessionGoal)})
 	if knowledgeMessage != nil {
 		llmMessages = append(llmMessages, *knowledgeMessage)
+	}
+	if summary != nil {
+		llmMessages = append(llmMessages, buildSummaryContext(summary.Content, sourceMode))
 	}
 	for _, message := range history {
 		content := message.Content

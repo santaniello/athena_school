@@ -34,4 +34,22 @@ describe('ThinkingIndicator', () => {
     const delays = leaves.map((leaf) => (leaf as HTMLElement).style.animationDelay)
     expect(new Set(delays).size).toBe(3)
   })
+
+  it('shows a caption, used as its accessible name, when one is given', () => {
+    // Given the indicator with a caption for a longer step
+    render(<ThinkingIndicator caption="Summarizing earlier messages…" />)
+
+    // Then the caption is visible and names the status region
+    expect(screen.getByRole('status', { name: 'Summarizing earlier messages…' })).toHaveTextContent(
+      'Summarizing earlier messages…',
+    )
+  })
+
+  it('shows no caption text by default', () => {
+    // Given the default indicator
+    render(<ThinkingIndicator />)
+
+    // Then it has no visible text
+    expect(screen.getByRole('status')).toHaveTextContent('')
+  })
 })

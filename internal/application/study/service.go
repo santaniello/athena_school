@@ -53,6 +53,8 @@ type Service struct {
 	knowledge      KnowledgeCascade
 	enricher       domainknowledge.QueryEnricher
 	usage          domainllm.UsageReader
+	summarizer     ConversationSummarizer
+	summaries      domainstudy.ConversationSummaryRepository
 	inFlight       *inFlightCoordinator
 }
 

@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"errors"
+	"log"
 	"time"
 
 	applicationstudy "github.com/santaniello/athena/internal/application/study"
@@ -24,6 +25,10 @@ const (
 	eventStudyContextWarning          = "study:context-warning"
 	eventStudyContextLimitReached     = "study:context-limit-reached"
 	eventStudyContextLimitUnavailable = "study:context-limit-unavailable"
+
+	eventStudyContextCompacting = "study:context-compacting"
+	eventStudyContextCompacted  = "study:context-compacted"
+	eventStudyCompactionFailed  = "study:compaction-failed"
 )
 
 // StudyChunkEvent is study:chunk's payload.
@@ -52,6 +57,8 @@ type StudyErrorEvent struct {
 const (
 	errorCodeContextLimitReached = "context_limit_reached"
 	errorCodeTurnInProgress      = "turn_in_progress"
+	errorCodeBudgetImpossible    = "budget_impossible"
+	errorCodeMessageTooLarge     = "message_too_large"
 )
 
 // errorCode maps a study error to its stable wire code, or "" if it isn't
@@ -62,6 +69,10 @@ func errorCode(err error) string {
 		return errorCodeContextLimitReached
 	case errors.Is(err, applicationstudy.ErrStudyTurnInProgress):
 		return errorCodeTurnInProgress
+	case errors.Is(err, domainstudy.ErrBudgetImpossible):
+		return errorCodeBudgetImpossible
+	case errors.Is(err, domainstudy.ErrMessageTooLarge):
+		return errorCodeMessageTooLarge
 	default:
 		return ""
 	}
@@ -81,6 +92,66 @@ type StudyContextEvent struct {
 type StudyContextUnavailableEvent struct {
 	SessionID string `json:"sessionId"`
 	Message   string `json:"message"`
+}
+
+// StudyCompactingEvent is study:context-compacting's payload: a compaction
+// started.
+type StudyCompactingEvent struct {
+	SessionID string `json:"sessionId"`
+}
+
+// StudyCompactedEvent is study:context-compacted's payload: the context usage
+// after the conversation was folded into the summary.
+type StudyCompactedEvent struct {
+	SessionID     string `json:"sessionId"`
+	UsedTokens    int    `json:"usedTokens"`
+	ContextLength int    `json:"contextLength"`
+}
+
+// StudyCompactionFailedEvent is study:compaction-failed's payload. Reason is a
+// short user-facing kind (see compactionFailureReason), never the raw error.
+type StudyCompactionFailedEvent struct {
+	SessionID string `json:"sessionId"`
+	Reason    string `json:"reason"`
+}
+
+// compactionFailureReason maps a failed compaction's error to the short
+// reason shown to the user. The raw error only goes to the log. Anything that
+// is not one of the known summary/budget errors is reported as a provider
+// problem, which is what a failed summarizer call almost always is.
+func compactionFailureReason(err error) string {
+	switch {
+	case errors.Is(err, applicationstudy.ErrInvalidSummaryFormat):
+		return "invalid format"
+	case errors.Is(err, applicationstudy.ErrSummaryTooLarge):
+		return "summary too large"
+	case errors.Is(err, domainstudy.ErrBudgetImpossible):
+		return "conversation too large"
+	default:
+		return "provider unavailable"
+	}
+}
+
+// compactionHooks wires a compaction's notifications to the Wails events and
+// logs every failure with the session id and the raw error, since
+// internal/application stays free of logging.
+func (a *App) compactionHooks(sessionID string) applicationstudy.CompactionHooks {
+	return applicationstudy.CompactionHooks{
+		OnStarted: func() {
+			a.emit(a.ctx, eventStudyContextCompacting, StudyCompactingEvent{SessionID: sessionID})
+		},
+		OnCompacted: func(event applicationstudy.ContextEvent) {
+			a.emit(a.ctx, eventStudyContextCompacted, StudyCompactedEvent{
+				SessionID: sessionID, UsedTokens: event.UsedTokens, ContextLength: event.ContextLength,
+			})
+		},
+		OnFailed: func(err error) {
+			log.Printf("study compaction for session %q failed: %v", sessionID, err)
+			a.emit(a.ctx, eventStudyCompactionFailed, StudyCompactionFailedEvent{
+				SessionID: sessionID, Reason: compactionFailureReason(err),
+			})
+		},
+	}
 }
 
 // contextEventName maps a ContextState to the event name that reports it.
@@ -328,6 +399,7 @@ func (a *App) SendStudyMessage(sessionID, topic, content, sourceMode string) err
 		},
 		func(event applicationstudy.ContextEvent) { a.emitContextEvent(sessionID, event) },
 		func(message string) { a.emitContextUnavailable(sessionID, message) },
+		applicationstudy.WithCompactionHooks(a.compactionHooks(sessionID)),
 	)
 	if err != nil {
 		a.emit(a.ctx, eventStudyError, StudyErrorEvent{SessionID: sessionID, Message: err.Error(), Code: errorCode(err)})
@@ -335,6 +407,14 @@ func (a *App) SendStudyMessage(sessionID, topic, content, sourceMode string) err
 	}
 	a.emit(a.ctx, eventStudyDone, StudyDoneEvent{SessionID: sessionID})
 	return nil
+}
+
+// CompactStudySession folds the oldest messages of sessionID into its summary
+// on request (the retry action of the blocked alert). It emits
+// "study:context-compacting" and then "study:context-compacted" or
+// "study:compaction-failed", and returns the error when nothing was compacted.
+func (a *App) CompactStudySession(sessionID string) error {
+	return a.study.CompactSession(a.ctx, sessionID, a.compactionHooks(sessionID))
 }
 
 // DeleteStudySession permanently deletes sessionID and every message in it.

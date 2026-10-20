@@ -69,6 +69,66 @@ func (_c *MockMessageRepository_Append_Call) RunAndReturn(run func(context.Conte
 	return _c
 }
 
+// ListAfter provides a mock function with given fields: ctx, sessionID, afterMessageID
+func (_m *MockMessageRepository) ListAfter(ctx context.Context, sessionID string, afterMessageID string) ([]study.Message, error) {
+	ret := _m.Called(ctx, sessionID, afterMessageID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListAfter")
+	}
+
+	var r0 []study.Message
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) ([]study.Message, error)); ok {
+		return rf(ctx, sessionID, afterMessageID)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) []study.Message); ok {
+		r0 = rf(ctx, sessionID, afterMessageID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]study.Message)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = rf(ctx, sessionID, afterMessageID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockMessageRepository_ListAfter_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListAfter'
+type MockMessageRepository_ListAfter_Call struct {
+	*mock.Call
+}
+
+// ListAfter is a helper method to define mock.On call
+//   - ctx context.Context
+//   - sessionID string
+//   - afterMessageID string
+func (_e *MockMessageRepository_Expecter) ListAfter(ctx interface{}, sessionID interface{}, afterMessageID interface{}) *MockMessageRepository_ListAfter_Call {
+	return &MockMessageRepository_ListAfter_Call{Call: _e.mock.On("ListAfter", ctx, sessionID, afterMessageID)}
+}
+
+func (_c *MockMessageRepository_ListAfter_Call) Run(run func(ctx context.Context, sessionID string, afterMessageID string)) *MockMessageRepository_ListAfter_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *MockMessageRepository_ListAfter_Call) Return(_a0 []study.Message, _a1 error) *MockMessageRepository_ListAfter_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockMessageRepository_ListAfter_Call) RunAndReturn(run func(context.Context, string, string) ([]study.Message, error)) *MockMessageRepository_ListAfter_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListBySession provides a mock function with given fields: ctx, sessionID
 func (_m *MockMessageRepository) ListBySession(ctx context.Context, sessionID string) ([]study.Message, error) {
 	ret := _m.Called(ctx, sessionID)

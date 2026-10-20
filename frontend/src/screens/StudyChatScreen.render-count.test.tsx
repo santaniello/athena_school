@@ -3,6 +3,9 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import {
   getStudySessionUsage,
   onStudyChunk,
+  onStudyCompactionFailed,
+  onStudyContextCompacted,
+  onStudyContextCompacting,
   onStudyContextLimitReached,
   onStudyContextLimitUnavailable,
   onStudyContextNormal,
@@ -43,6 +46,10 @@ vi.mock('@/lib/study', async (importOriginal) => {
     onStudyContextWarning: vi.fn(),
     onStudyContextLimitReached: vi.fn(),
     onStudyContextLimitUnavailable: vi.fn(),
+    onStudyContextCompacting: vi.fn(),
+    onStudyContextCompacted: vi.fn(),
+    onStudyCompactionFailed: vi.fn(),
+    compactStudySession: vi.fn(),
   }
 })
 
@@ -62,6 +69,9 @@ describe('StudyChatScreen — render cost while streaming', () => {
       onStudyContextWarning,
       onStudyContextLimitReached,
       onStudyContextLimitUnavailable,
+      onStudyContextCompacting,
+      onStudyContextCompacted,
+      onStudyCompactionFailed,
     ]) {
       vi.mocked(subscribe as () => () => void).mockReturnValue(vi.fn())
     }
@@ -124,6 +134,9 @@ describe('StudyChatScreen — render cost while streaming', () => {
       onStudyContextWarning,
       onStudyContextLimitReached,
       onStudyContextLimitUnavailable,
+      onStudyContextCompacting,
+      onStudyContextCompacted,
+      onStudyCompactionFailed,
     ]) {
       vi.mocked(subscribe as () => () => void).mockReturnValue(vi.fn())
     }

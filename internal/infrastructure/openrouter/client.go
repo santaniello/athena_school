@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -25,7 +26,22 @@ type Client struct {
 	apiKeyMu   sync.RWMutex
 	httpClient *http.Client
 	recorder   domainllm.UsageRecorder
+	// streamIdleTimeout bounds the silence between two lines of a streamed
+	// response; a long answer is fine as long as it keeps flowing.
+	streamIdleTimeout time.Duration
+	// requestTimeout bounds a whole non-streaming call, response body
+	// included, when the caller's context carries no earlier deadline.
+	requestTimeout time.Duration
 }
+
+const (
+	// responseHeaderTimeout bounds the wait for the provider to start
+	// answering. A non-streaming call only answers once the whole completion
+	// is ready, so it must leave room for a long one.
+	responseHeaderTimeout = 120 * time.Second
+	defaultStreamIdle     = 60 * time.Second
+	defaultRequestTimeout = 5 * time.Minute
+)
 
 // NewClient creates a Client against baseURL, authenticating with apiKey
 // and recording usage via recorder. An empty baseURL defaults to the real
@@ -34,11 +50,17 @@ func NewClient(baseURL, apiKey string, recorder domainllm.UsageRecorder) *Client
 	if baseURL == "" {
 		baseURL = defaultBaseURL
 	}
+	// No overall http.Client.Timeout: it would also cap how long a streamed
+	// answer may take to arrive.
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.ResponseHeaderTimeout = responseHeaderTimeout
 	return &Client{
-		baseURL:    baseURL,
-		apiKey:     apiKey,
-		httpClient: &http.Client{Timeout: 60 * time.Second},
-		recorder:   recorder,
+		baseURL:           baseURL,
+		apiKey:            apiKey,
+		httpClient:        &http.Client{Transport: transport},
+		recorder:          recorder,
+		streamIdleTimeout: defaultStreamIdle,
+		requestTimeout:    defaultRequestTimeout,
 	}
 }
 
@@ -146,19 +168,14 @@ func (c *Client) Chat(ctx context.Context, req domainllm.ChatRequest) (domainllm
 }
 
 func (c *Client) chatCompletion(ctx context.Context, model string, messages []domainllm.Message, stream bool) (chatCompletionResponse, error) {
-	resp, err := c.post(ctx, "/api/v1/chat/completions", chatCompletionRequest{
+	var decoded chatCompletionResponse
+	err := c.postJSON(ctx, "/api/v1/chat/completions", chatCompletionRequest{
 		Model:    model,
 		Messages: toChatMessages(messages),
 		Stream:   stream,
-	})
+	}, &decoded, "chat completion")
 	if err != nil {
 		return chatCompletionResponse{}, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	var decoded chatCompletionResponse
-	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
-		return chatCompletionResponse{}, fmt.Errorf("openrouter: decoding chat completion response: %w", err)
 	}
 	return decoded, nil
 }
@@ -212,7 +229,24 @@ type streamResult struct {
 	usage openRouterUsage
 }
 
+// idleResetReader restarts the idle timer whenever the stream delivers bytes.
+type idleResetReader struct {
+	reader  io.Reader
+	idle    *time.Timer
+	timeout time.Duration
+}
+
+func (r *idleResetReader) Read(p []byte) (int, error) {
+	n, err := r.reader.Read(p)
+	if n > 0 {
+		r.idle.Reset(r.timeout)
+	}
+	return n, err
+}
+
 func (c *Client) streamChatCompletion(ctx context.Context, model string, messages []domainllm.Message, handler func(chunk string) error) (streamResult, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	resp, err := c.post(ctx, "/api/v1/chat/completions", chatCompletionRequest{
 		Model:    model,
 		Messages: toChatMessages(messages),
@@ -223,11 +257,25 @@ func (c *Client) streamChatCompletion(ctx context.Context, model string, message
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	// Cancel the request when the provider goes quiet for too long.
+	stalled := false
+	var stalledMu sync.Mutex
+	idle := time.AfterFunc(c.streamIdleTimeout, func() {
+		stalledMu.Lock()
+		stalled = true
+		stalledMu.Unlock()
+		cancel()
+	})
+	defer idle.Stop()
+
 	var lastUsage openRouterUsage
 	var resolvedModel string
 	modelConflict := false
-	scanner := bufio.NewScanner(resp.Body)
+	// Any bytes count as activity, even those of a line that is not complete
+	// yet: Scan only returns once a whole line has arrived.
+	scanner := bufio.NewScanner(&idleResetReader{reader: resp.Body, idle: idle, timeout: c.streamIdleTimeout})
 	for scanner.Scan() {
+		idle.Reset(c.streamIdleTimeout)
 		data, ok := strings.CutPrefix(scanner.Text(), "data: ")
 		if !ok {
 			continue
@@ -261,6 +309,12 @@ func (c *Client) streamChatCompletion(ctx context.Context, model string, message
 		}
 	}
 	if err := scanner.Err(); err != nil {
+		stalledMu.Lock()
+		wasStalled := stalled
+		stalledMu.Unlock()
+		if wasStalled {
+			return streamResult{}, fmt.Errorf("openrouter: stream stalled for %s without data: %w", c.streamIdleTimeout, err)
+		}
 		return streamResult{}, fmt.Errorf("openrouter: reading stream: %w", err)
 	}
 	if modelConflict {
@@ -278,18 +332,13 @@ func (c *Client) Embeddings(ctx context.Context, req domainllm.EmbeddingRequest)
 		return domainllm.EmbeddingResponse{}, domainllm.ErrAPIKeyMissing
 	}
 
-	resp, err := c.post(ctx, "/api/v1/embeddings", embeddingsRequest{
+	var decoded embeddingsResponse
+	err := c.postJSON(ctx, "/api/v1/embeddings", embeddingsRequest{
 		Model: domainllm.EmbeddingModel,
 		Input: req.Input,
-	})
+	}, &decoded, "embeddings")
 	if err != nil {
 		return domainllm.EmbeddingResponse{}, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	var decoded embeddingsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
-		return domainllm.EmbeddingResponse{}, fmt.Errorf("openrouter: decoding embeddings response: %w", err)
 	}
 
 	if err := c.record(ctx, req.SessionID, domainllm.EmbeddingModel, decoded.Usage); err != nil {
@@ -319,18 +368,13 @@ func (c *Client) EmbeddingsBatch(ctx context.Context, req domainllm.EmbeddingBat
 		return domainllm.EmbeddingBatchResponse{}, domainllm.ErrAPIKeyMissing
 	}
 
-	resp, err := c.post(ctx, "/api/v1/embeddings", embeddingsBatchRequest{
+	var decoded embeddingsResponse
+	err := c.postJSON(ctx, "/api/v1/embeddings", embeddingsBatchRequest{
 		Model: domainllm.EmbeddingModel,
 		Input: req.Inputs,
-	})
+	}, &decoded, "embeddings batch")
 	if err != nil {
 		return domainllm.EmbeddingBatchResponse{}, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	var decoded embeddingsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
-		return domainllm.EmbeddingBatchResponse{}, fmt.Errorf("openrouter: decoding embeddings batch response: %w", err)
 	}
 
 	if err := c.record(ctx, req.SessionID, domainllm.EmbeddingModel, decoded.Usage); err != nil {
@@ -357,6 +401,27 @@ func (c *Client) EmbeddingsBatch(ctx context.Context, req domainllm.EmbeddingBat
 		Model:      domainllm.EmbeddingModel,
 		Usage:      usageFrom(decoded.Usage),
 	}, nil
+}
+
+// postJSON is post for the non-streaming endpoints: it decodes the whole
+// response body into out, under requestTimeout. ResponseHeaderTimeout only
+// covers the headers, so without this deadline a provider that keeps the body
+// open would block the read for as long as the caller's context lives. Never
+// move this deadline into post: streamed answers also go through it and are
+// bounded by idle time instead. what names the response in the error.
+func (c *Client) postJSON(ctx context.Context, path string, body, out any, what string) error {
+	ctx, cancel := context.WithTimeout(ctx, c.requestTimeout)
+	defer cancel()
+	resp, err := c.post(ctx, path, body)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		return fmt.Errorf("openrouter: decoding %s response: %w", what, err)
+	}
+	return nil
 }
 
 // post sends a JSON-encoded body to path and maps well-known error status

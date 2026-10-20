@@ -10,11 +10,14 @@ const LEAF_DELAYS_MS = [0, 150, 300]
 // laurel leaves, the same shape as AthenaLogo's wreath, bouncing in
 // sequence instead of a generic spinner or an external image/gif, per
 // specs/phases/phase-01-desktop-mvp/06-study-mode.md.
-function ThinkingIndicator() {
+//
+// An optional caption replaces the generic label while a longer step runs
+// (e.g. summarizing earlier messages before the reply can start).
+function ThinkingIndicator({ caption }: { caption?: string }) {
   return (
     <div
       role="status"
-      aria-label="Athena is thinking"
+      aria-label={caption ?? 'Athena is thinking'}
       data-slot="thinking-indicator"
       className="flex max-w-[75%] items-center gap-1.5 self-start rounded-2xl rounded-bl-sm bg-card px-4 py-3 ring-1 ring-foreground/10"
     >
@@ -30,6 +33,7 @@ function ThinkingIndicator() {
           <path d={LEAF_PATH} fill="currentColor" />
         </svg>
       ))}
+      {caption && <span className="pl-1 text-sm text-muted-foreground">{caption}</span>}
     </div>
   )
 }

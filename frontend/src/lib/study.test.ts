@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  CompactStudySession,
   DeleteStudySession,
   GetStudySessionUsage,
   ListStudySessionsByFolder,
@@ -11,11 +12,15 @@ import {
 } from '../../wailsjs/go/desktop/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import {
+  compactStudySession,
   deleteStudySession,
   getStudySessionUsage,
   listStudySessionsByFolder,
   moveStudySession,
   onStudyChunk,
+  onStudyCompactionFailed,
+  onStudyContextCompacted,
+  onStudyContextCompacting,
   onStudyContextLimitReached,
   onStudyContextLimitUnavailable,
   onStudyContextNormal,
@@ -40,6 +45,7 @@ const CONTEXT_NORMAL: StudyContextUsage = {
 }
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
+  CompactStudySession: vi.fn(),
   StartStudySession: vi.fn(),
   RequestOpeningTurn: vi.fn(),
   SendStudyMessage: vi.fn(),
@@ -230,6 +236,59 @@ describe('requestOpeningTurn', () => {
 
     // Then it forwarded both arguments
     expect(RequestOpeningTurn).toHaveBeenCalledWith('session-1', 'Distributed systems')
+  })
+})
+
+describe('compactStudySession', () => {
+  it('forwards the session id to the binding', async () => {
+    // Given a CompactStudySession call that succeeds
+    vi.mocked(CompactStudySession).mockResolvedValueOnce()
+
+    // When compacting
+    await compactStudySession('session-1')
+
+    // Then the binding received the id
+    expect(CompactStudySession).toHaveBeenCalledWith('session-1')
+  })
+
+  it('rejects with the binding error when nothing was compacted', async () => {
+    // Given a binding that fails
+    vi.mocked(CompactStudySession).mockRejectedValueOnce(new Error('study: nothing to compact'))
+
+    // When compacting
+    // Then the error reaches the caller
+    await expect(compactStudySession('session-1')).rejects.toThrow('nothing to compact')
+  })
+})
+
+describe('compaction event wrappers', () => {
+  it.each([
+    ['study:context-compacting', onStudyContextCompacting, { sessionId: 's1' }],
+    [
+      'study:context-compacted',
+      onStudyContextCompacted,
+      { sessionId: 's1', usedTokens: 40, contextLength: 100 },
+    ],
+    [
+      'study:compaction-failed',
+      onStudyCompactionFailed,
+      { sessionId: 's1', reason: 'invalid format' },
+    ],
+  ])('%s subscribes and forwards the payload', (eventName, subscribe, payload) => {
+    // Given a handler and a mocked EventsOn
+    const unsubscribe = vi.fn()
+    vi.mocked(EventsOn).mockReturnValueOnce(unsubscribe)
+    const handler = vi.fn()
+
+    // When subscribing and the event fires
+    const result = (subscribe as (h: (e: unknown) => void) => () => void)(handler)
+    const [name, callback] = vi.mocked(EventsOn).mock.calls.at(-1)!
+    callback(payload)
+
+    // Then it listens to the right event, forwards the payload and hands back the unsubscribe
+    expect(name).toBe(eventName)
+    expect(handler).toHaveBeenCalledWith(payload)
+    expect(result).toBe(unsubscribe)
   })
 })
 

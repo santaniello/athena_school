@@ -37,3 +37,7 @@ var ErrInvalidSummaryInput = errors.New("study: summary input does not belong to
 // summary does not contain the four fixed sections exactly once and in order.
 // The call is not retried; the caller keeps the previous summary.
 var ErrInvalidSummaryFormat = errors.New("study: conversation summary does not have the required sections")
+
+// ErrNothingToCompact is returned by CompactSession when there is nothing
+// that could be folded into the summary (or the context window is unknown).
+var ErrNothingToCompact = errors.New("study: nothing to compact")

@@ -3,8 +3,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
+  compactStudySession,
   getStudySessionUsage,
   onStudyChunk,
+  onStudyCompactionFailed,
+  onStudyContextCompacted,
+  onStudyContextCompacting,
   onStudyContextLimitReached,
   onStudyContextLimitUnavailable,
   onStudyContextNormal,
@@ -16,6 +20,9 @@ import {
   resumeStudySession,
   sendStudyMessage,
   type StudyChunkEvent,
+  type StudyCompactionFailedEvent,
+  type StudyContextCompactedEvent,
+  type StudyContextCompactingEvent,
   type StudyContextEvent,
   type StudyContextUnavailableEvent,
   type StudyContextUsage,
@@ -31,6 +38,7 @@ vi.mock('@/lib/study', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/study')>()
   return {
     ...original,
+    compactStudySession: vi.fn(),
     getStudySessionUsage: vi.fn(),
     requestOpeningTurn: vi.fn(),
     resumeStudySession: vi.fn(),
@@ -43,6 +51,9 @@ vi.mock('@/lib/study', async (importOriginal) => {
     onStudyContextWarning: vi.fn(),
     onStudyContextLimitReached: vi.fn(),
     onStudyContextLimitUnavailable: vi.fn(),
+    onStudyContextCompacting: vi.fn(),
+    onStudyContextCompacted: vi.fn(),
+    onStudyCompactionFailed: vi.fn(),
   }
 })
 
@@ -68,6 +79,9 @@ function setupSubscriptions() {
     contextWarning: vi.fn(),
     contextLimitReached: vi.fn(),
     contextLimitUnavailable: vi.fn(),
+    compacting: vi.fn(),
+    compacted: vi.fn(),
+    compactionFailed: vi.fn(),
   }
   const handlers: {
     chunk?: (event: StudyChunkEvent) => void
@@ -78,6 +92,9 @@ function setupSubscriptions() {
     contextWarning?: (event: StudyContextEvent) => void
     contextLimitReached?: (event: StudyContextEvent) => void
     contextLimitUnavailable?: (event: StudyContextUnavailableEvent) => void
+    compacting?: (event: StudyContextCompactingEvent) => void
+    compacted?: (event: StudyContextCompactedEvent) => void
+    compactionFailed?: (event: StudyCompactionFailedEvent) => void
     unsubscribe: typeof unsubscribe
   } = { unsubscribe }
   vi.mocked(onStudyChunk).mockImplementation((handler) => {
@@ -111,6 +128,18 @@ function setupSubscriptions() {
   vi.mocked(onStudyContextLimitUnavailable).mockImplementation((handler) => {
     handlers.contextLimitUnavailable = handler
     return unsubscribe.contextLimitUnavailable
+  })
+  vi.mocked(onStudyContextCompacting).mockImplementation((handler) => {
+    handlers.compacting = handler
+    return unsubscribe.compacting
+  })
+  vi.mocked(onStudyContextCompacted).mockImplementation((handler) => {
+    handlers.compacted = handler
+    return unsubscribe.compacted
+  })
+  vi.mocked(onStudyCompactionFailed).mockImplementation((handler) => {
+    handlers.compactionFailed = handler
+    return unsubscribe.compactionFailed
   })
   return handlers
 }
@@ -1343,7 +1372,7 @@ describe('StudyChatScreen — context limits', () => {
     expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled()
   })
 
-  it('blocks the composer on study:context-limit-reached: read-only textarea, disabled send/source-mode, Enter does nothing', async () => {
+  it('keeps the composer usable on study:context-limit-reached and offers to retry the compaction', async () => {
     const handlers = await renderSettledSession()
     const user = userEvent.setup()
 
@@ -1356,20 +1385,27 @@ describe('StudyChatScreen — context limits', () => {
       })
     })
 
+    // The alert asks to retry; it no longer says the session is over
     expect(
-      await screen.findByText(/This session has reached its context limit/),
+      await screen.findByText('Could not compact the conversation. Try again.'),
     ).toBeInTheDocument()
-    const textarea = screen.getByPlaceholderText(/type your answer/i)
-    expect(textarea).toHaveAttribute('readonly')
-    expect(screen.getByRole('combobox', { name: 'Source mode' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Try to compact again' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Start new session' })).toBeEnabled()
 
-    // Typing is blocked by readOnly in a real browser; jsdom still lets
-    // userEvent write to it, so type a non-empty draft to prove Enter's
-    // guard — not the empty-draft check — is what blocks the send.
+    // Sending is the recovery trigger, so the composer stays fully usable
+    const textarea = screen.getByPlaceholderText(/type your answer/i)
+    expect(textarea).not.toHaveAttribute('readonly')
+    expect(screen.getByRole('combobox', { name: 'Source mode' })).toBeEnabled()
+    vi.mocked(sendStudyMessage).mockReturnValueOnce(new Promise(() => {}))
     await user.type(textarea, 'What is CAP theorem?')
+    expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled()
     await user.keyboard('{Enter}')
-    expect(sendStudyMessage).not.toHaveBeenCalled()
+    expect(sendStudyMessage).toHaveBeenCalledWith(
+      'session-1',
+      'Distributed systems',
+      'What is CAP theorem?',
+      'notes',
+    )
   })
 
   it('shows the warning banner in orange without a "Start new session" button', async () => {
@@ -1668,7 +1704,7 @@ describe('StudyChatScreen — session usage visibility', () => {
     })
 
     // Then the blocked state stays, while the fresher totals are still applied
-    expect(screen.getByText(/This session has reached its context limit/)).toBeInTheDocument()
+    expect(screen.getByText(/Could not compact the conversation/)).toBeInTheDocument()
     expect(screen.getByText('10k tokens · US$ 0.90')).toBeInTheDocument()
   })
 
@@ -1708,5 +1744,224 @@ describe('StudyChatScreen — session usage visibility', () => {
     // Then no percentage or bar is shown
     expect(await screen.findByText('~5k tokens · limit unknown')).toBeInTheDocument()
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
+  })
+})
+
+describe('StudyChatScreen — context compaction', () => {
+  const blocked = {
+    sessionId: 'session-1',
+    usedTokens: 9500,
+    contextLength: 10000,
+    estimated: false,
+  }
+
+  it('retries the compaction from the blocked alert and reflects progress while it runs', async () => {
+    // Given a blocked session and a compaction that stays in flight
+    const handlers = await renderSettledSession()
+    let finish: () => void = () => {}
+    vi.mocked(compactStudySession).mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finish = resolve
+      }),
+    )
+    act(() => handlers.contextLimitReached?.(blocked))
+    const user = userEvent.setup()
+
+    // When retrying
+    await user.click(await screen.findByRole('button', { name: 'Try to compact again' }))
+    expect(compactStudySession).toHaveBeenCalledWith('session-1')
+    act(() => handlers.compacting?.({ sessionId: 'session-1' }))
+
+    // Then the action is disabled and says it is working
+    expect(await screen.findByRole('button', { name: 'Compacting…' })).toBeDisabled()
+
+    // And when it succeeds the blocked alert goes away and the notice appears
+    vi.mocked(getStudySessionUsage).mockResolvedValue(null as never)
+    act(() => {
+      handlers.compacted?.({ sessionId: 'session-1', usedTokens: 4000, contextLength: 10000 })
+      finish()
+    })
+    expect(screen.queryByText(/Could not compact the conversation/)).not.toBeInTheDocument()
+    expect(
+      await screen.findByText('Older messages were summarized to keep the conversation going'),
+    ).toBeInTheDocument()
+  })
+
+  it('clears the warning alert when the conversation is compacted', async () => {
+    // Given a session in the warning state
+    const handlers = await renderSettledSession()
+    vi.mocked(getStudySessionUsage).mockResolvedValue(null as never)
+    act(() =>
+      handlers.contextWarning?.({
+        sessionId: 'session-1',
+        usedTokens: 8000,
+        contextLength: 10000,
+        estimated: false,
+      }),
+    )
+    expect(await screen.findByText(/approaching the model's context limit/)).toBeInTheDocument()
+
+    // When it is compacted
+    act(() =>
+      handlers.compacted?.({ sessionId: 'session-1', usedTokens: 4000, contextLength: 10000 }),
+    )
+
+    // Then the warning is gone and the success notice is a status, not an alert
+    expect(screen.queryByText(/approaching the model's context limit/)).not.toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Older messages were summarized')
+  })
+
+  it('shows a top-center warning toast with the reason when a compaction fails below the limit', async () => {
+    // Given a normal session
+    const handlers = await renderSettledSession()
+
+    // When a compaction fails
+    act(() => handlers.compactionFailed?.({ sessionId: 'session-1', reason: 'invalid format' }))
+
+    // Then an alert toast explains it and says the turn continues with the full history
+    const toast = await screen.findByRole('alert')
+    expect(toast).toHaveTextContent(
+      'Could not summarize the conversation (invalid format). Continuing with the full history.',
+    )
+    expect(screen.getByRole('region', { name: /notifications/i })).toHaveClass('top-4')
+  })
+
+  it('does not promise to continue when the failure leaves the session blocked', async () => {
+    // Given a blocked session
+    const handlers = await renderSettledSession()
+    act(() => handlers.contextLimitReached?.(blocked))
+    await screen.findByText('Could not compact the conversation. Try again.')
+
+    // When the compaction fails
+    act(() =>
+      handlers.compactionFailed?.({ sessionId: 'session-1', reason: 'provider unavailable' }),
+    )
+
+    // Then the toast has no "continuing" promise and the alert names the reason
+    const toast = await screen.findByText(
+      'Could not summarize the conversation (provider unavailable).',
+    )
+    expect(toast).not.toHaveTextContent('Continuing')
+    expect(
+      screen.getByText('Could not compact the conversation (provider unavailable). Try again.'),
+    ).toBeInTheDocument()
+  })
+
+  it('never shows the raw error text from a failure event', async () => {
+    // Given a failure event
+    const handlers = await renderSettledSession()
+
+    // When it arrives
+    act(() => handlers.compactionFailed?.({ sessionId: 'session-1', reason: 'summary too large' }))
+
+    // Then only the short reason is visible
+    expect(await screen.findByRole('alert')).toHaveTextContent('(summary too large)')
+  })
+
+  it('shows "Summarizing earlier messages…" instead of the thinking indicator while compacting a send', async () => {
+    // Given a send in flight
+    const handlers = await renderSettledSession()
+    vi.mocked(sendStudyMessage).mockReturnValueOnce(new Promise(() => {}))
+    const user = userEvent.setup()
+    await user.type(screen.getByPlaceholderText(/type your answer/i), 'What is CAP theorem?')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+    expect(await screen.findByRole('status', { name: /thinking/i })).toBeInTheDocument()
+
+    // When the backend starts compacting
+    act(() => handlers.compacting?.({ sessionId: 'session-1' }))
+
+    // Then the indicator is captioned with the compaction step
+    expect(
+      await screen.findByRole('status', { name: 'Summarizing earlier messages…' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('status', { name: /thinking/i })).not.toBeInTheDocument()
+  })
+
+  it('ignores compaction events of another session', async () => {
+    // Given a normal session
+    const handlers = await renderSettledSession()
+
+    // When events for a different session arrive
+    act(() => {
+      handlers.compacting?.({ sessionId: 'other' })
+      handlers.compacted?.({ sessionId: 'other', usedTokens: 1, contextLength: 2 })
+      handlers.compactionFailed?.({ sessionId: 'other', reason: 'invalid format' })
+    })
+
+    // Then nothing is shown
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Older messages were summarized/)).not.toBeInTheDocument()
+  })
+
+  it('toasts the rejection when a retry fails without a failure event', async () => {
+    // Given a blocked session whose retry is rejected as "nothing to compact"
+    const handlers = await renderSettledSession()
+    vi.mocked(getStudySessionUsage).mockResolvedValue(null as never)
+    vi.mocked(compactStudySession).mockRejectedValueOnce(new Error('study: nothing to compact'))
+    act(() => handlers.contextLimitReached?.(blocked))
+    const user = userEvent.setup()
+
+    // When retrying
+    await user.click(await screen.findByRole('button', { name: 'Try to compact again' }))
+
+    // Then the reason reaches the user
+    expect(await screen.findByText('study: nothing to compact')).toBeInTheDocument()
+  })
+
+  it('does not add a second toast when the retry already reported its failure', async () => {
+    // Given a retry whose failure event arrives before the rejection
+    const handlers = await renderSettledSession()
+    vi.mocked(getStudySessionUsage).mockResolvedValue(null as never)
+    act(() => handlers.contextLimitReached?.(blocked))
+    vi.mocked(compactStudySession).mockImplementationOnce(async () => {
+      handlers.compactionFailed?.({ sessionId: 'session-1', reason: 'invalid format' })
+      throw new Error('study: conversation summary does not have the required sections')
+    })
+    const user = userEvent.setup()
+
+    // When retrying
+    await user.click(await screen.findByRole('button', { name: 'Try to compact again' }))
+
+    // Then exactly one toast is shown, with the short reason only
+    await waitFor(() => expect(screen.getAllByRole('alert').length).toBeGreaterThan(0))
+    expect(screen.queryByText(/required sections/)).not.toBeInTheDocument()
+    expect(screen.getAllByText(/Could not summarize the conversation/)).toHaveLength(1)
+  })
+
+  it.each([
+    ['message_too_large', /too long for the model's context window/],
+    ['budget_impossible', /no longer fits the model's context window/],
+  ])('restores the draft and explains a %s rejection', async (code, text) => {
+    // Given a send rejected before the message was persisted
+    const handlers = await renderSettledSession()
+    vi.mocked(sendStudyMessage).mockReturnValueOnce(new Promise(() => {}))
+    const user = userEvent.setup()
+    await user.type(screen.getByPlaceholderText(/type your answer/i), 'A very long question')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+
+    // When the backend rejects it
+    act(() => handlers.error?.(studyErrorEvent('session-1', 'raw backend text', code)))
+
+    // Then the draft is back and the user is told why, in plain language
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText(/type your answer/i)).toHaveValue('A very long question'),
+    )
+    expect(screen.getByText(text)).toBeInTheDocument()
+    expect(screen.queryByText('raw backend text')).not.toBeInTheDocument()
+  })
+
+  it('unsubscribes from the compaction events on unmount', async () => {
+    // Given a mounted session
+    const handlers = setupSubscriptions()
+    vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
+    const { unmount } = renderNewSession()
+
+    // When the screen unmounts
+    unmount()
+
+    // Then every compaction listener is released
+    expect(handlers.unsubscribe.compacting).toHaveBeenCalledTimes(1)
+    expect(handlers.unsubscribe.compacted).toHaveBeenCalledTimes(1)
+    expect(handlers.unsubscribe.compactionFailed).toHaveBeenCalledTimes(1)
   })
 })

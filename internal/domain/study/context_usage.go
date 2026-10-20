@@ -68,6 +68,26 @@ func NextContextUsage(previous ContextUsage, model string, usedTokens, contextLe
 	}
 }
 
+// ContextUsageAfterCompaction returns the ContextUsage that replaces previous
+// once the prompt has been compacted: the state is recomputed from the new
+// (estimated) size, so blocked and warning can drop back to normal. This is
+// the only operation allowed to lower the state of an unchanged model and
+// window; NextContextUsage stays monotonic. With an unresolved window
+// (contextLength <= 0) the state cannot be judged and previous.State is kept.
+func ContextUsageAfterCompaction(previous ContextUsage, usedTokens, contextLength int) ContextUsage {
+	state := previous.State
+	if contextLength > 0 {
+		state = ComputeContextState(usedTokens, contextLength)
+	}
+	return ContextUsage{
+		State:         state,
+		Model:         previous.Model,
+		UsedTokens:    usedTokens,
+		ContextLength: max(contextLength, 0),
+		Estimated:     true,
+	}
+}
+
 // EstimateTokens is the conservative per-message token estimate used
 // whenever a turn has no usable native usage: ceil(code points / 3) + 8,
 // computed with integer arithmetic (no floats). The +8 covers per-message
