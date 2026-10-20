@@ -22,6 +22,65 @@ func (_m *MockMessageSourceRepository) EXPECT() *MockMessageSourceRepository_Exp
 	return &MockMessageSourceRepository_Expecter{mock: &_m.Mock}
 }
 
+// ListByMessageIDs provides a mock function with given fields: ctx, messageIDs
+func (_m *MockMessageSourceRepository) ListByMessageIDs(ctx context.Context, messageIDs []string) (map[string][]knowledge.Source, error) {
+	ret := _m.Called(ctx, messageIDs)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListByMessageIDs")
+	}
+
+	var r0 map[string][]knowledge.Source
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, []string) (map[string][]knowledge.Source, error)); ok {
+		return rf(ctx, messageIDs)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, []string) map[string][]knowledge.Source); ok {
+		r0 = rf(ctx, messageIDs)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[string][]knowledge.Source)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, []string) error); ok {
+		r1 = rf(ctx, messageIDs)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockMessageSourceRepository_ListByMessageIDs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListByMessageIDs'
+type MockMessageSourceRepository_ListByMessageIDs_Call struct {
+	*mock.Call
+}
+
+// ListByMessageIDs is a helper method to define mock.On call
+//   - ctx context.Context
+//   - messageIDs []string
+func (_e *MockMessageSourceRepository_Expecter) ListByMessageIDs(ctx interface{}, messageIDs interface{}) *MockMessageSourceRepository_ListByMessageIDs_Call {
+	return &MockMessageSourceRepository_ListByMessageIDs_Call{Call: _e.mock.On("ListByMessageIDs", ctx, messageIDs)}
+}
+
+func (_c *MockMessageSourceRepository_ListByMessageIDs_Call) Run(run func(ctx context.Context, messageIDs []string)) *MockMessageSourceRepository_ListByMessageIDs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].([]string))
+	})
+	return _c
+}
+
+func (_c *MockMessageSourceRepository_ListByMessageIDs_Call) Return(_a0 map[string][]knowledge.Source, _a1 error) *MockMessageSourceRepository_ListByMessageIDs_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockMessageSourceRepository_ListByMessageIDs_Call) RunAndReturn(run func(context.Context, []string) (map[string][]knowledge.Source, error)) *MockMessageSourceRepository_ListByMessageIDs_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListBySession provides a mock function with given fields: ctx, sessionID
 func (_m *MockMessageSourceRepository) ListBySession(ctx context.Context, sessionID string) (map[string][]knowledge.Source, error) {
 	ret := _m.Called(ctx, sessionID)

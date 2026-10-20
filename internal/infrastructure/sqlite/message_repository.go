@@ -71,18 +71,71 @@ func (r *MessageRepository) ListAfter(ctx context.Context, sessionID, afterMessa
 	if len(messages) == 0 {
 		// Either the cursor was the last message or it is not in the session;
 		// the row-value comparison is NULL for an unknown cursor, so check it.
-		var exists bool
-		if err := execer(ctx, r.db).QueryRowContext(ctx,
-			`SELECT EXISTS(SELECT 1 FROM messages WHERE id = ? AND session_id = ?)`,
-			afterMessageID, sessionID,
-		).Scan(&exists); err != nil {
-			return nil, fmt.Errorf("sqlite: checking message cursor: %w", err)
-		}
-		if !exists {
-			return nil, study.ErrMessageNotInSession
+		if err := r.requireMessageInSession(ctx, sessionID, afterMessageID); err != nil {
+			return nil, err
 		}
 	}
 	return messages, nil
+}
+
+// ListPage returns up to limit messages of sessionID that precede before,
+// newest first, ordered by (created_at, rowid) so messages sharing a
+// timestamp keep their insertion order. A nil before starts at the latest
+// message; a cursor that is not a message of the session yields
+// study.ErrMessageNotInSession.
+func (r *MessageRepository) ListPage(ctx context.Context, sessionID string, before *study.MessageCursor, limit int) ([]study.Message, error) {
+	if before == nil {
+		rows, err := execer(ctx, r.db).QueryContext(ctx,
+			`SELECT id, session_id, role, content, created_at FROM messages
+			 WHERE session_id = ?
+			 ORDER BY created_at DESC, rowid DESC
+			 LIMIT ?`,
+			sessionID, limit,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("sqlite: listing latest messages: %w", err)
+		}
+		return scanMessages(rows)
+	}
+
+	rows, err := execer(ctx, r.db).QueryContext(ctx,
+		`SELECT id, session_id, role, content, created_at FROM messages
+		 WHERE session_id = ?1
+		   AND (created_at, rowid) < (SELECT created_at, rowid FROM messages WHERE id = ?2 AND session_id = ?1)
+		 ORDER BY created_at DESC, rowid DESC
+		 LIMIT ?3`,
+		sessionID, before.MessageID(), limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: listing messages before %q: %w", before.MessageID(), err)
+	}
+	messages, err := scanMessages(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(messages) == 0 {
+		// Either nothing is older than the cursor or it is not in the session.
+		if err := r.requireMessageInSession(ctx, sessionID, before.MessageID()); err != nil {
+			return nil, err
+		}
+	}
+	return messages, nil
+}
+
+// requireMessageInSession returns study.ErrMessageNotInSession unless
+// messageID is a message of sessionID.
+func (r *MessageRepository) requireMessageInSession(ctx context.Context, sessionID, messageID string) error {
+	var exists bool
+	if err := execer(ctx, r.db).QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM messages WHERE id = ? AND session_id = ?)`,
+		messageID, sessionID,
+	).Scan(&exists); err != nil {
+		return fmt.Errorf("sqlite: checking message cursor: %w", err)
+	}
+	if !exists {
+		return study.ErrMessageNotInSession
+	}
+	return nil
 }
 
 // listOrdered is ListBySession with the deterministic (created_at,

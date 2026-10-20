@@ -12,10 +12,14 @@ most recent page.
 1. **New read method; `ListBySession` is untouched.** `SendMessage` uses `ListBySession` to build
    the LLM request (and 2.25 uses `ListAfter`). The UI uses the new paged method. They must not
    share a code path.
-2. **Cursor is `(created_at, rowid)`.** Message ids are `TEXT` (not sequential), so order and
-   cursor use `created_at` with SQLite's `rowid` as tiebreaker for stable ordering when timestamps
-   collide. The cursor is opaque to the frontend (`"<created_at>|<rowid>"` encoded, validated in
-   the backend; a malformed cursor is an error, not an empty page).
+2. **Cursor is a message id; order is `(created_at, rowid)`.** Message ids are `TEXT` (not
+   sequential), so ordering uses `created_at` with SQLite's `rowid` as tiebreaker when timestamps
+   collide. The cursor handed to the frontend is the id of the oldest message in the page (opaque
+   to the frontend). The repository resolves `(created_at, rowid)` with a subselect scoped by
+   `session_id`, the same pattern as `ListAfter`; an empty cursor id is invalid, and an id that is
+   not a message of the session yields `study.ErrMessageNotInSession` (an error, never an empty
+   page). `messages` has an implicit `rowid` (`id TEXT PRIMARY KEY`) that `VACUUM` may renumber,
+   so the `rowid` is used only as an in-query tiebreaker and never leaves the database.
 3. **Page shape.** `MessagePage{Messages (chronological), NextCursor (older), HasMore}`. Default
    page size 50, maximum 200, enforced in the application layer.
 4. **Resume returns the latest page.** `ResumeStudySession` returns the session, the last 50
@@ -32,11 +36,13 @@ most recent page.
 
 ## New/changed backend surface
 
-- `domain/study`: `MessagePage`, `MessageCursor` (encode/decode/validate),
+- `domain/study`: `MessagePage`, `MessageCursor` (thin wrapper over a message id; non-empty),
   `MessageRepository.ListPage(ctx, sessionID, before *MessageCursor, limit int)`.
 - `domain/knowledge`: `MessageSourceRepository.ListByMessageIDs`.
 - `application/study`: `Service.ListMessagesBefore(ctx, sessionID, cursor, limit)`; `Resume` uses
-  the latest page.
+  the latest page. **`Service.Resume` changes signature**: it returns the session plus a page
+  (messages with sources, `HasMore`, `NextCursor`) instead of `[]MessageWithSources`; update its
+  callers and mocks.
 - `infrastructure/sqlite`: index migration, `ListPage`, `ListByMessageIDs`.
 - Desktop: `ListStudyMessagesBefore(sessionID, cursor, limit)` binding; `ResumeStudySession`
   DTO gains `hasMore` and `nextCursor`; regenerate `wailsjs`.
@@ -46,7 +52,8 @@ most recent page.
 1. Cursor type + validation tests (domain).
 2. Migration (index) + `ListPage` + `ListByMessageIDs` (real-DB tests: ordering with equal
    timestamps, page boundaries, exact multiples of the limit, empty session, session isolation,
-   migration on a legacy DB).
+   a cursor id from another session or unknown → `ErrMessageNotInSession`, migration on a legacy
+   DB creating the index without altering existing messages).
 3. Application use case with limit clamping; `Resume` returns the latest page.
 4. Binding + DTO + `wailsjs` regeneration.
 5. Docs: `CHANGELOG.md`.

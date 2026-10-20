@@ -66,6 +66,10 @@ export function ListSessionSources(arg1) {
   return window['go']['desktop']['App']['ListSessionSources'](arg1);
 }
 
+export function ListStudyMessagesBefore(arg1, arg2, arg3) {
+  return window['go']['desktop']['App']['ListStudyMessagesBefore'](arg1, arg2, arg3);
+}
+
 export function ListStudySessionsByFolder(arg1) {
   return window['go']['desktop']['App']['ListStudySessionsByFolder'](arg1);
 }

@@ -18,4 +18,8 @@ type MessageSourceRepository interface {
 	// received them. A message with no persisted sources is absent from
 	// the map, never present with an empty slice.
 	ListBySession(ctx context.Context, sessionID string) (map[string][]Source, error)
+	// ListByMessageIDs is ListBySession restricted to the given messages, so
+	// a paged history read loads sources only for the messages it returns.
+	// With no ids it returns an empty map.
+	ListByMessageIDs(ctx context.Context, messageIDs []string) (map[string][]Source, error)
 }

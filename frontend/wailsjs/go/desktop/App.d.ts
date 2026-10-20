@@ -35,6 +35,8 @@ export function ListFolders():Promise<Array<desktop.FolderResult>>;
 
 export function ListSessionSources(arg1:string):Promise<Array<desktop.SessionSourceResult>>;
 
+export function ListStudyMessagesBefore(arg1:string,arg2:string,arg3:number):Promise<desktop.StudyMessagePageResult>;
+
 export function ListStudySessionsByFolder(arg1:string):Promise<Array<desktop.StudySessionResult>>;
 
 export function MoveStudySession(arg1:string,arg2:string):Promise<void>;

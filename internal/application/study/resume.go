@@ -20,8 +20,9 @@ type MessageWithSources struct {
 	Sources []domainknowledge.Source
 }
 
-// Resume returns sessionID's full message history, so the user can keep
-// chatting in it. Never makes an LLM call and never waits on catalog I/O:
+// Resume returns sessionID and the most recent page of its message history
+// (DefaultMessagePageSize messages; older ones are read with
+// ListMessagesBefore), so the user can keep chatting in it. Never makes an LLM call and never waits on catalog I/O:
 // if the session's ContextLength is unresolved (0), a cache hit is
 // recomputed and persisted before this returns so the DTO already reflects
 // it; a cache miss with a known model starts or joins a background refresh
@@ -35,23 +36,15 @@ type MessageWithSources struct {
 func (s *Service) Resume(
 	ctx context.Context, sessionID string,
 	onContext ContextCallback, onContextUnavailable ContextUnavailableCallback,
-) (domainstudy.Session, []MessageWithSources, error) {
+) (domainstudy.Session, MessageHistoryPage, error) {
 	session, err := s.sessions.GetByID(ctx, sessionID)
 	if err != nil {
-		return domainstudy.Session{}, nil, fmt.Errorf("study: finding session: %w", err)
+		return domainstudy.Session{}, MessageHistoryPage{}, fmt.Errorf("study: finding session: %w", err)
 	}
 
-	history, err := s.messages.ListBySession(ctx, sessionID)
+	page, err := s.readMessagePage(ctx, sessionID, nil, DefaultMessagePageSize)
 	if err != nil {
-		return domainstudy.Session{}, nil, fmt.Errorf("study: loading history: %w", err)
-	}
-	sourcesByMessage, err := s.messageSources.ListBySession(ctx, sessionID)
-	if err != nil {
-		return domainstudy.Session{}, nil, fmt.Errorf("study: loading message sources: %w", err)
-	}
-	historyWithSources := make([]MessageWithSources, len(history))
-	for i, message := range history {
-		historyWithSources[i] = MessageWithSources{Message: message, Sources: sourcesByMessage[message.ID]}
+		return domainstudy.Session{}, MessageHistoryPage{}, err
 	}
 
 	if session.Context.ContextLength == 0 {
@@ -80,5 +73,5 @@ func (s *Service) Resume(
 		}
 	}
 
-	return session, historyWithSources, nil
+	return session, page, nil
 }
