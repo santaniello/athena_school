@@ -485,7 +485,7 @@ func TestApp_ResumeStudySession_returnsSessionAndHistory(t *testing.T) {
 	session := domainstudy.Session{ID: "session-1", Topic: "Distributed systems", FolderID: "default", Context: domainstudy.ContextUsage{State: domainstudy.ContextStateNormal}}
 	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(session, nil).Once()
 	messages.EXPECT().
-		ListPage(mock.Anything, "session-1", (*domainstudy.MessageCursor)(nil), study.DefaultMessagePageSize+1).
+		ListPage(context.Background(), "session-1", (*domainstudy.MessageCursor)(nil), study.DefaultMessagePageSize+1).
 		Return([]domainstudy.Message{{ID: "message-1", Role: domainstudy.RoleUser, Content: "Hi"}}, nil).
 		Once()
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
@@ -520,7 +520,7 @@ func TestApp_ResumeStudySession_attachesPersistedSourcesToTheirMessage(t *testin
 	session := domainstudy.Session{ID: "session-1", Topic: "Go", FolderID: "default", Context: domainstudy.ContextUsage{State: domainstudy.ContextStateNormal}}
 	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(session, nil).Once()
 	messages.EXPECT().
-		ListPage(mock.Anything, "session-1", (*domainstudy.MessageCursor)(nil), study.DefaultMessagePageSize+1).
+		ListPage(context.Background(), "session-1", (*domainstudy.MessageCursor)(nil), study.DefaultMessagePageSize+1).
 		Return([]domainstudy.Message{{ID: "message-1", Role: domainstudy.RoleAssistant, Content: "Goroutines are cheap."}}, nil).
 		Once()
 	messageSources := knowledgemocks.NewMockMessageSourceRepository(t)
@@ -557,7 +557,7 @@ func TestApp_ResumeStudySession_withOlderHistory_returnsHasMoreAndACursor(t *tes
 		newestFirst = append(newestFirst, domainstudy.Message{ID: fmt.Sprintf("message-%d", i)})
 	}
 	messages.EXPECT().
-		ListPage(mock.Anything, "session-1", (*domainstudy.MessageCursor)(nil), study.DefaultMessagePageSize+1).
+		ListPage(context.Background(), "session-1", (*domainstudy.MessageCursor)(nil), study.DefaultMessagePageSize+1).
 		Return(newestFirst, nil).
 		Once()
 	app, _ := newTestStudyApp(t, sessions, messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t))
@@ -579,7 +579,7 @@ func TestApp_ListStudyMessagesBefore_returnsTheOlderPage(t *testing.T) {
 	cursor, err := domainstudy.NewMessageCursor("message-3")
 	require.NoError(t, err)
 	messages.EXPECT().
-		ListPage(mock.Anything, "session-1", &cursor, 11).
+		ListPage(context.Background(), "session-1", &cursor, 11).
 		Return([]domainstudy.Message{
 			{ID: "message-2", Role: domainstudy.RoleAssistant, Content: "Hello"},
 			{ID: "message-1", Role: domainstudy.RoleUser, Content: "Hi"},
