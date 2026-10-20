@@ -188,6 +188,67 @@ func (_c *MockMessageRepository_ListBySession_Call) RunAndReturn(run func(contex
 	return _c
 }
 
+// ListPage provides a mock function with given fields: ctx, sessionID, before, limit
+func (_m *MockMessageRepository) ListPage(ctx context.Context, sessionID string, before *study.MessageCursor, limit int) ([]study.Message, error) {
+	ret := _m.Called(ctx, sessionID, before, limit)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListPage")
+	}
+
+	var r0 []study.Message
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, *study.MessageCursor, int) ([]study.Message, error)); ok {
+		return rf(ctx, sessionID, before, limit)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string, *study.MessageCursor, int) []study.Message); ok {
+		r0 = rf(ctx, sessionID, before, limit)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]study.Message)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string, *study.MessageCursor, int) error); ok {
+		r1 = rf(ctx, sessionID, before, limit)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockMessageRepository_ListPage_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListPage'
+type MockMessageRepository_ListPage_Call struct {
+	*mock.Call
+}
+
+// ListPage is a helper method to define mock.On call
+//   - ctx context.Context
+//   - sessionID string
+//   - before *study.MessageCursor
+//   - limit int
+func (_e *MockMessageRepository_Expecter) ListPage(ctx interface{}, sessionID interface{}, before interface{}, limit interface{}) *MockMessageRepository_ListPage_Call {
+	return &MockMessageRepository_ListPage_Call{Call: _e.mock.On("ListPage", ctx, sessionID, before, limit)}
+}
+
+func (_c *MockMessageRepository_ListPage_Call) Run(run func(ctx context.Context, sessionID string, before *study.MessageCursor, limit int)) *MockMessageRepository_ListPage_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(*study.MessageCursor), args[3].(int))
+	})
+	return _c
+}
+
+func (_c *MockMessageRepository_ListPage_Call) Return(_a0 []study.Message, _a1 error) *MockMessageRepository_ListPage_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockMessageRepository_ListPage_Call) RunAndReturn(run func(context.Context, string, *study.MessageCursor, int) ([]study.Message, error)) *MockMessageRepository_ListPage_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockMessageRepository creates a new instance of MockMessageRepository. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockMessageRepository(t interface {

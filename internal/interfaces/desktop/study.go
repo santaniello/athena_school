@@ -250,10 +250,35 @@ type StudyMessageResult struct {
 }
 
 // StudySessionHistoryResult is returned by ResumeStudySession: the session
-// itself plus every message exchanged in it so far.
+// itself plus the most recent page of its messages. When HasMore is true,
+// pass NextCursor to ListStudyMessagesBefore to read the older ones.
 type StudySessionHistoryResult struct {
-	Session  StudySessionResult   `json:"session"`
-	Messages []StudyMessageResult `json:"messages"`
+	Session    StudySessionResult   `json:"session"`
+	Messages   []StudyMessageResult `json:"messages"`
+	HasMore    bool                 `json:"hasMore"`
+	NextCursor string               `json:"nextCursor"`
+}
+
+// StudyMessagePageResult is returned by ListStudyMessagesBefore: a
+// chronological page of older messages and the cursor for the page before it.
+type StudyMessagePageResult struct {
+	Messages   []StudyMessageResult `json:"messages"`
+	HasMore    bool                 `json:"hasMore"`
+	NextCursor string               `json:"nextCursor"`
+}
+
+func toStudyMessageResults(history []applicationstudy.MessageWithSources) []StudyMessageResult {
+	messages := make([]StudyMessageResult, len(history))
+	for i, m := range history {
+		messages[i] = StudyMessageResult{
+			ID:        m.ID,
+			Role:      m.Role,
+			Content:   m.Content,
+			CreatedAt: m.CreatedAt.Format(time.RFC3339),
+			Sources:   toStudySourceResults(m.Sources),
+		}
+	}
+	return messages
 }
 
 func toStudySessionResult(s domainstudy.Session) StudySessionResult {
@@ -285,30 +310,40 @@ func (a *App) StartStudySession(topic, folderID, goal string) (StudySessionResul
 	return toStudySessionResult(session), nil
 }
 
-// ResumeStudySession returns sessionID's full message history, so the user
-// can keep chatting in it. May emit study:context-limit-unavailable (if the
+// ResumeStudySession returns sessionID and the most recent page of its
+// message history, so the user can keep chatting in it. May emit study:context-limit-unavailable (if the
 // session's context limit is unresolved and no cached model matches) or a
 // study:context-* transition later, in the background, once a triggered
 // catalog refresh completes.
 func (a *App) ResumeStudySession(sessionID string) (StudySessionHistoryResult, error) {
-	session, history, err := a.study.Resume(a.ctx, sessionID,
+	session, page, err := a.study.Resume(a.ctx, sessionID,
 		func(event applicationstudy.ContextEvent) { a.emitContextEvent(sessionID, event) },
 		func(message string) { a.emitContextUnavailable(sessionID, message) },
 	)
 	if err != nil {
 		return StudySessionHistoryResult{}, err
 	}
-	messages := make([]StudyMessageResult, len(history))
-	for i, m := range history {
-		messages[i] = StudyMessageResult{
-			ID:        m.ID,
-			Role:      m.Role,
-			Content:   m.Content,
-			CreatedAt: m.CreatedAt.Format(time.RFC3339),
-			Sources:   toStudySourceResults(m.Sources),
-		}
+	return StudySessionHistoryResult{
+		Session:    toStudySessionResult(session),
+		Messages:   toStudyMessageResults(page.Messages),
+		HasMore:    page.HasMore,
+		NextCursor: page.NextCursor,
+	}, nil
+}
+
+// ListStudyMessagesBefore returns up to limit messages of sessionID that
+// precede the message cursor, in chronological order (limit defaults to 50
+// and is capped at 200). cursor is the NextCursor of a previous page.
+func (a *App) ListStudyMessagesBefore(sessionID, cursor string, limit int) (StudyMessagePageResult, error) {
+	page, err := a.study.ListMessagesBefore(a.ctx, sessionID, cursor, limit)
+	if err != nil {
+		return StudyMessagePageResult{}, err
 	}
-	return StudySessionHistoryResult{Session: toStudySessionResult(session), Messages: messages}, nil
+	return StudyMessagePageResult{
+		Messages:   toStudyMessageResults(page.Messages),
+		HasMore:    page.HasMore,
+		NextCursor: page.NextCursor,
+	}, nil
 }
 
 // StudySessionUsageResult is the desktop-facing DTO for the tokens and cost

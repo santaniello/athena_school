@@ -98,6 +98,11 @@ var migrations = []func(*sql.DB) error{
 		token_estimate          INTEGER NOT NULL,
 		updated_at              DATETIME NOT NULL
 	)`),
+	// idx_messages_session_created serves the paged history reads and
+	// ListAfter, which filter by session and order by (created_at, rowid):
+	// the rowid is implicitly the last column of every index. messages had
+	// no index before (spec 2.26).
+	execSQL(`CREATE INDEX IF NOT EXISTS idx_messages_session_created ON messages(session_id, created_at)`),
 }
 
 // addSessionsFolderIDColumn adds sessions.folder_id if it does not already

@@ -20,19 +20,31 @@ import (
 )
 
 // mockNoMessageSources returns a MockMessageSourceRepository expecting
-// exactly one ListBySession call for sessionID, returning no persisted
+// exactly one ListByMessageIDs call for messageIDs, returning no persisted
 // sources for any message.
-func mockNoMessageSources(t *testing.T, sessionID string) *knowledgemocks.MockMessageSourceRepository {
+func mockNoMessageSources(t *testing.T, messageIDs ...string) *knowledgemocks.MockMessageSourceRepository {
 	t.Helper()
+	if messageIDs == nil {
+		messageIDs = []string{}
+	}
 	messageSources := knowledgemocks.NewMockMessageSourceRepository(t)
 	messageSources.EXPECT().
-		ListBySession(context.Background(), sessionID).
+		ListByMessageIDs(context.Background(), messageIDs).
 		Return(map[string][]domainknowledge.Source{}, nil).
 		Once()
 	return messageSources
 }
 
-func TestResume_returnsSessionAndFullHistory(t *testing.T) {
+// expectLatestPage expects the cursor-less ListPage call Resume makes: one more than
+// the default page size, to learn whether older history exists.
+func expectLatestPage(messages *studymocks.MockMessageRepository, newestFirst []domainstudy.Message) {
+	messages.EXPECT().
+		ListPage(context.Background(), "session-1", (*domainstudy.MessageCursor)(nil), DefaultMessagePageSize+1).
+		Return(newestFirst, nil).
+		Once()
+}
+
+func TestResume_returnsSessionAndItsLatestPage(t *testing.T) {
 	// Given a service with a session that has two prior messages and no
 	// resolved model yet (zero-value Context)
 	sessions := studymocks.NewMockSessionRepository(t)
@@ -42,20 +54,22 @@ func TestResume_returnsSessionAndFullHistory(t *testing.T) {
 	folders := foldermocks.NewMockRepository(t)
 	session := domainstudy.Session{ID: "session-1", Topic: "Topic", FolderID: "default"}
 	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(session, nil).Once()
-	history := []domainstudy.Message{{Role: domainstudy.RoleUser, Content: "Hi"}}
-	messages.EXPECT().ListBySession(context.Background(), "session-1").Return(history, nil).Once()
+	history := []domainstudy.Message{{ID: "message-1", Role: domainstudy.RoleUser, Content: "Hi"}}
+	expectLatestPage(messages, history)
 	retriever := knowledgemocks.NewMockRetriever(t)
-	messageSources := mockNoMessageSources(t, "session-1")
+	messageSources := mockNoMessageSources(t, "message-1")
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, messageSources, nil, nil)
 
 	// When resuming the session
-	got, msgs, err := service.Resume(context.Background(), "session-1", nil, nil)
+	got, page, err := service.Resume(context.Background(), "session-1", nil, nil)
 
-	// Then the session and its full history are returned; no model is
+	// Then the session and its only page are returned; no model is
 	// resolved (Model == "") so no catalog/tx call happens either
 	require.NoError(t, err)
 	require.Equal(t, session, got)
-	require.Equal(t, []MessageWithSources{{Message: history[0]}}, msgs)
+	require.Equal(t, []MessageWithSources{{Message: history[0]}}, page.Messages)
+	require.False(t, page.HasMore)
+	require.Empty(t, page.NextCursor)
 }
 
 func TestResume_attachesPersistedSourcesToTheMessagesThatHaveThem(t *testing.T) {
@@ -73,18 +87,18 @@ func TestResume_attachesPersistedSourcesToTheMessagesThatHaveThem(t *testing.T) 
 		{ID: "message-2", Role: domainstudy.RoleAssistant, Content: "Lightweight threads."},
 		{ID: "message-3", Role: domainstudy.RoleAssistant, Content: "General knowledge answer."},
 	}
-	messages.EXPECT().ListBySession(context.Background(), "session-1").Return(history, nil).Once()
+	expectLatestPage(messages, []domainstudy.Message{history[2], history[1], history[0]})
 	persistedSources := []domainknowledge.Source{{ChunkID: "chunk-1", Concept: "Goroutines", Score: 0.9}}
 	messageSources := knowledgemocks.NewMockMessageSourceRepository(t)
 	messageSources.EXPECT().
-		ListBySession(context.Background(), "session-1").
+		ListByMessageIDs(context.Background(), []string{"message-1", "message-2", "message-3"}).
 		Return(map[string][]domainknowledge.Source{"message-2": persistedSources}, nil).
 		Once()
 	retriever := knowledgemocks.NewMockRetriever(t)
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, messageSources, nil, nil)
 
 	// When resuming the session
-	_, msgs, err := service.Resume(context.Background(), "session-1", nil, nil)
+	_, page, err := service.Resume(context.Background(), "session-1", nil, nil)
 
 	// Then only the message with persisted sources carries them
 	require.NoError(t, err)
@@ -92,7 +106,7 @@ func TestResume_attachesPersistedSourcesToTheMessagesThatHaveThem(t *testing.T) 
 		{Message: history[0]},
 		{Message: history[1], Sources: persistedSources},
 		{Message: history[2]},
-	}, msgs)
+	}, page.Messages)
 }
 
 func TestResume_propagatesSessionNotFound(t *testing.T) {
@@ -122,10 +136,10 @@ func TestResume_propagatesMessageSourcesListError(t *testing.T) {
 	folders := foldermocks.NewMockRepository(t)
 	session := domainstudy.Session{ID: "session-1"}
 	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(session, nil).Once()
-	messages.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil).Once()
+	expectLatestPage(messages, nil)
 	listErr := errors.New("database unavailable")
 	messageSources := knowledgemocks.NewMockMessageSourceRepository(t)
-	messageSources.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, listErr).Once()
+	messageSources.EXPECT().ListByMessageIDs(context.Background(), []string{}).Return(nil, listErr).Once()
 	retriever := knowledgemocks.NewMockRetriever(t)
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, messageSources, nil, nil)
 
@@ -145,9 +159,9 @@ func TestResume_unresolvedContextLength_emptyModel_callsOnContextUnavailable_wit
 	folders := foldermocks.NewMockRepository(t)
 	session := domainstudy.Session{ID: "session-1", Context: domainstudy.ContextUsage{State: domainstudy.ContextStateNormal, Model: ""}}
 	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(session, nil).Once()
-	messages.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil).Once()
+	expectLatestPage(messages, nil)
 	retriever := knowledgemocks.NewMockRetriever(t)
-	messageSources := mockNoMessageSources(t, "session-1")
+	messageSources := mockNoMessageSources(t)
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, messageSources, nil, nil)
 
 	var unavailableMsg string
@@ -180,7 +194,7 @@ func TestResume_unresolvedContextLength_cacheHit_recomputesAndPersistsBeforeRetu
 		},
 	}
 	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(session, nil).Once()
-	messages.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil).Once()
+	expectLatestPage(messages, nil)
 	catalog.EXPECT().CachedContextLength("model-a").Return(1000, true).Once()
 	sessions.EXPECT().
 		UpdateContext(context.Background(), "session-1", mock.MatchedBy(func(usage domainstudy.ContextUsage) bool {
@@ -190,7 +204,7 @@ func TestResume_unresolvedContextLength_cacheHit_recomputesAndPersistsBeforeRetu
 		Once()
 
 	retriever := knowledgemocks.NewMockRetriever(t)
-	messageSources := mockNoMessageSources(t, "session-1")
+	messageSources := mockNoMessageSources(t)
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, catalog, messageSources, nil, nil)
 
 	// When resuming
@@ -217,7 +231,7 @@ func TestResume_unresolvedContextLength_cacheMiss_startsBackgroundRefresh_withou
 		Context: domainstudy.ContextUsage{State: domainstudy.ContextStateNormal, Model: "model-a", ContextLength: 0},
 	}
 	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(session, nil).Once()
-	messages.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil).Once()
+	expectLatestPage(messages, nil)
 	catalog.EXPECT().CachedContextLength("model-a").Return(0, false).Once()
 	// Returning (0, nil) — still unresolved after the refresh — routes the
 	// background goroutine into the unavailable-notice branch, which we use
@@ -226,7 +240,7 @@ func TestResume_unresolvedContextLength_cacheMiss_startsBackgroundRefresh_withou
 	catalog.EXPECT().RefreshContextLength(mock.Anything, "model-a").Return(0, nil).Once()
 
 	retriever := knowledgemocks.NewMockRetriever(t)
-	messageSources := mockNoMessageSources(t, "session-1")
+	messageSources := mockNoMessageSources(t)
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, catalog, messageSources, nil, nil)
 
 	done := make(chan struct{})

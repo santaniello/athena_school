@@ -118,3 +118,65 @@ func TestMessageSourceRepository_Save_replacesAnyPreviouslySavedSourcesForTheSam
 	require.Len(t, result["message-1"], 1)
 	assert.Equal(t, "fresh-chunk", result["message-1"][0].ChunkID)
 }
+
+func TestMessageSourceRepository_ListByMessageIDs_returnsOnlyTheRequestedMessages(t *testing.T) {
+	// Given two messages that each have persisted sources
+	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	setupMessageSourceFixture(t, db)
+	repo := NewMessageSourceRepository(db)
+	require.NoError(t, repo.Save(context.Background(), "message-1", []domainknowledge.Source{
+		{ChunkID: "chunk-1", ItemID: "item-1", SourceType: "athena", Score: 0.9},
+		{ChunkID: "chunk-2", ItemID: "item-2", SourceType: "athena", Score: 0.6},
+	}))
+	require.NoError(t, repo.Save(context.Background(), "message-2", []domainknowledge.Source{
+		{ChunkID: "chunk-3", ItemID: "item-3", SourceType: "athena", Score: 0.7},
+	}))
+
+	// When listing the sources of message-1 only
+	result, err := repo.ListByMessageIDs(context.Background(), []string{"message-1"})
+
+	// Then only that message is present, with its sources in saved order
+	require.NoError(t, err)
+	require.Len(t, result, 1)
+	require.Len(t, result["message-1"], 2)
+	assert.Equal(t, "chunk-1", result["message-1"][0].ChunkID)
+	assert.Equal(t, "chunk-2", result["message-1"][1].ChunkID)
+}
+
+func TestMessageSourceRepository_ListByMessageIDs_omitsMessagesWithoutSources(t *testing.T) {
+	// Given message-2 has no persisted sources
+	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	setupMessageSourceFixture(t, db)
+	repo := NewMessageSourceRepository(db)
+	require.NoError(t, repo.Save(context.Background(), "message-1", []domainknowledge.Source{
+		{ChunkID: "chunk-1", ItemID: "item-1", SourceType: "athena", Score: 0.9},
+	}))
+
+	// When listing both messages
+	result, err := repo.ListByMessageIDs(context.Background(), []string{"message-1", "message-2"})
+
+	// Then the message without sources is absent, not an empty entry
+	require.NoError(t, err)
+	assert.Contains(t, result, "message-1")
+	assert.NotContains(t, result, "message-2")
+}
+
+func TestMessageSourceRepository_ListByMessageIDs_withNoIDsReturnsAnEmptyMap(t *testing.T) {
+	// Given a repository
+	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	repo := NewMessageSourceRepository(db)
+
+	// When listing no message ids
+	result, err := repo.ListByMessageIDs(context.Background(), nil)
+
+	// Then the result is an empty, non-nil map
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Empty(t, result)
+}

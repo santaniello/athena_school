@@ -3,6 +3,7 @@ package desktop
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -80,6 +81,7 @@ func newTestStudyApp(t *testing.T, sessions domainstudy.SessionRepository, messa
 	messageSources := knowledgemocks.NewMockMessageSourceRepository(t)
 	messageSources.EXPECT().Save(context.Background(), mock.Anything, mock.Anything).Return(nil).Maybe()
 	messageSources.EXPECT().ListBySession(context.Background(), mock.Anything).Return(map[string][]domainknowledge.Source{}, nil).Maybe()
+	messageSources.EXPECT().ListByMessageIDs(context.Background(), mock.Anything).Return(map[string][]domainknowledge.Source{}, nil).Maybe()
 	studyService := study.NewService(sessions, messages, llm, profiles, folders, retriever, passthroughTransactor{}, catalog, messageSources, passthroughKnowledgeCascade{}, nil, options...)
 	folderService := folder.NewService(folders, sessions, passthroughKnowledgeCascade{})
 	app := NewApp(nil, nil, nil, studyService, folderService, nil, nil, nil, nil, nil)
@@ -483,7 +485,7 @@ func TestApp_ResumeStudySession_returnsSessionAndHistory(t *testing.T) {
 	session := domainstudy.Session{ID: "session-1", Topic: "Distributed systems", FolderID: "default", Context: domainstudy.ContextUsage{State: domainstudy.ContextStateNormal}}
 	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(session, nil).Once()
 	messages.EXPECT().
-		ListBySession(mock.Anything, "session-1").
+		ListPage(mock.Anything, "session-1", (*domainstudy.MessageCursor)(nil), study.DefaultMessagePageSize+1).
 		Return([]domainstudy.Message{{ID: "message-1", Role: domainstudy.RoleUser, Content: "Hi"}}, nil).
 		Once()
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
@@ -497,6 +499,8 @@ func TestApp_ResumeStudySession_returnsSessionAndHistory(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "session-1", result.Session.ID)
 	assert.Equal(t, string(domainstudy.ContextStateNormal), result.Session.Context.State)
+	assert.False(t, result.HasMore)
+	assert.Empty(t, result.NextCursor)
 	require.Len(t, result.Messages, 1)
 	assert.Equal(t, "message-1", result.Messages[0].ID)
 	assert.Equal(t, "Hi", result.Messages[0].Content)
@@ -516,12 +520,12 @@ func TestApp_ResumeStudySession_attachesPersistedSourcesToTheirMessage(t *testin
 	session := domainstudy.Session{ID: "session-1", Topic: "Go", FolderID: "default", Context: domainstudy.ContextUsage{State: domainstudy.ContextStateNormal}}
 	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(session, nil).Once()
 	messages.EXPECT().
-		ListBySession(mock.Anything, "session-1").
+		ListPage(mock.Anything, "session-1", (*domainstudy.MessageCursor)(nil), study.DefaultMessagePageSize+1).
 		Return([]domainstudy.Message{{ID: "message-1", Role: domainstudy.RoleAssistant, Content: "Goroutines are cheap."}}, nil).
 		Once()
 	messageSources := knowledgemocks.NewMockMessageSourceRepository(t)
 	messageSources.EXPECT().
-		ListBySession(context.Background(), "session-1").
+		ListByMessageIDs(context.Background(), []string{"message-1"}).
 		Return(map[string][]domainknowledge.Source{
 			"message-1": {{ChunkID: "chunk-1", SourceType: domainknowledge.SourceImportedDoc, Concept: "Goroutines", Score: 0.9}},
 		}, nil).
@@ -540,6 +544,70 @@ func TestApp_ResumeStudySession_attachesPersistedSourcesToTheirMessage(t *testin
 	require.Len(t, result.Messages, 1)
 	require.Len(t, result.Messages[0].Sources, 1)
 	assert.Equal(t, "Goroutines", result.Messages[0].Sources[0].Concept)
+}
+
+func TestApp_ResumeStudySession_withOlderHistory_returnsHasMoreAndACursor(t *testing.T) {
+	// Given a session with one more message than a page holds
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	session := domainstudy.Session{ID: "session-1", Topic: "Go", FolderID: "default", Context: domainstudy.ContextUsage{State: domainstudy.ContextStateNormal}}
+	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(session, nil).Once()
+	newestFirst := make([]domainstudy.Message, 0, study.DefaultMessagePageSize+1)
+	for i := study.DefaultMessagePageSize + 1; i >= 1; i-- {
+		newestFirst = append(newestFirst, domainstudy.Message{ID: fmt.Sprintf("message-%d", i)})
+	}
+	messages.EXPECT().
+		ListPage(mock.Anything, "session-1", (*domainstudy.MessageCursor)(nil), study.DefaultMessagePageSize+1).
+		Return(newestFirst, nil).
+		Once()
+	app, _ := newTestStudyApp(t, sessions, messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t))
+
+	// When resuming the session
+	result, err := app.ResumeStudySession("session-1")
+
+	// Then the latest page is returned with the flag and cursor for older history
+	require.NoError(t, err)
+	require.Len(t, result.Messages, study.DefaultMessagePageSize)
+	assert.True(t, result.HasMore)
+	assert.Equal(t, "message-2", result.NextCursor)
+}
+
+func TestApp_ListStudyMessagesBefore_returnsTheOlderPage(t *testing.T) {
+	// Given a session with two messages before message-3
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	cursor, err := domainstudy.NewMessageCursor("message-3")
+	require.NoError(t, err)
+	messages.EXPECT().
+		ListPage(mock.Anything, "session-1", &cursor, 11).
+		Return([]domainstudy.Message{
+			{ID: "message-2", Role: domainstudy.RoleAssistant, Content: "Hello"},
+			{ID: "message-1", Role: domainstudy.RoleUser, Content: "Hi"},
+		}, nil).
+		Once()
+	app, _ := newTestStudyApp(t, sessions, messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t))
+
+	// When asking for ten messages before message-3
+	result, err := app.ListStudyMessagesBefore("session-1", "message-3", 10)
+
+	// Then they come back chronologically, with nothing older left
+	require.NoError(t, err)
+	require.Len(t, result.Messages, 2)
+	assert.Equal(t, "message-1", result.Messages[0].ID)
+	assert.Equal(t, "message-2", result.Messages[1].ID)
+	assert.False(t, result.HasMore)
+	assert.Empty(t, result.NextCursor)
+}
+
+func TestApp_ListStudyMessagesBefore_rejectsAMalformedCursor(t *testing.T) {
+	// Given an App whose repositories must not be read
+	app, _ := newTestStudyApp(t, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t))
+
+	// When asking for a page with an empty cursor
+	_, err := app.ListStudyMessagesBefore("session-1", "", 10)
+
+	// Then it fails as an invalid cursor
+	require.ErrorIs(t, err, domainstudy.ErrInvalidMessageCursor)
 }
 
 func TestApp_MoveStudySession_movesTheSession(t *testing.T) {

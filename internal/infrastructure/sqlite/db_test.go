@@ -805,3 +805,61 @@ func TestOpen_serializesConcurrentWrites_withoutDatabaseLockedErrors(t *testing.
 		assert.NoError(t, execErr)
 	}
 }
+
+func TestOpen_createsTheMessagesSessionCreatedIndex(t *testing.T) {
+	// Given a path to a database file that does not exist yet
+	path := filepath.Join(t.TempDir(), "athena.db")
+
+	// When opening the database
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Then the index serving paged history reads exists, on (session_id, created_at)
+	var name string
+	require.NoError(t, db.QueryRow(
+		`SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_messages_session_created'`,
+	).Scan(&name))
+	var columns []string
+	rows, err := db.Query(`PRAGMA index_info(idx_messages_session_created)`)
+	require.NoError(t, err)
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var seqno, cid int
+		var column string
+		require.NoError(t, rows.Scan(&seqno, &cid, &column))
+		columns = append(columns, column)
+	}
+	require.NoError(t, rows.Err())
+	assert.Equal(t, []string{"session_id", "created_at"}, columns)
+}
+
+func TestOpen_addsTheMessagesIndexToALegacyDatabaseWithoutTouchingItsMessages(t *testing.T) {
+	// Given a database from before the index, holding one message
+	path := filepath.Join(t.TempDir(), "athena.db")
+	first, err := Open(path)
+	require.NoError(t, err)
+	_, err = first.Exec(`
+		INSERT INTO folders (id, name, created_at) VALUES ('folder-1', 'General', CURRENT_TIMESTAMP);
+		INSERT INTO sessions (id, topic, mode, folder_id, started_at) VALUES ('session-1', 'Go', 'socratic', 'folder-1', CURRENT_TIMESTAMP);
+		INSERT INTO messages (id, session_id, role, content, created_at) VALUES ('message-1', 'session-1', 'user', 'kept', CURRENT_TIMESTAMP);
+		DROP INDEX idx_messages_session_created;
+	`)
+	require.NoError(t, err)
+	require.NoError(t, first.Close())
+
+	// When opening it again through the current migration path
+	db, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Then the index is back and the message is unchanged
+	var indexCount int
+	require.NoError(t, db.QueryRow(
+		`SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_messages_session_created'`,
+	).Scan(&indexCount))
+	assert.Equal(t, 1, indexCount)
+	var content string
+	require.NoError(t, db.QueryRow(`SELECT content FROM messages WHERE id = 'message-1'`).Scan(&content))
+	assert.Equal(t, "kept", content)
+}

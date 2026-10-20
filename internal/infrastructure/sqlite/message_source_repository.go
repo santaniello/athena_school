@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 )
@@ -63,6 +64,48 @@ func (r *MessageSourceRepository) ListBySession(ctx context.Context, sessionID s
 	defer func() { _ = rows.Close() }()
 
 	result := make(map[string][]domainknowledge.Source)
+	for rows.Next() {
+		var messageID string
+		var source domainknowledge.Source
+		if err := rows.Scan(
+			&messageID, &source.ChunkID, &source.ItemID, &source.SourceType,
+			&source.FilePath, &source.Heading, &source.Concept, &source.Score, &source.Excerpt,
+		); err != nil {
+			return nil, fmt.Errorf("sqlite: scanning message source: %w", err)
+		}
+		result[messageID] = append(result[messageID], source)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sqlite: iterating message sources: %w", err)
+	}
+	return result, nil
+}
+
+// ListByMessageIDs returns the persisted sources of the given messages, keyed
+// by message ID, ordered by position within each message. Messages without
+// sources are absent from the map.
+func (r *MessageSourceRepository) ListByMessageIDs(ctx context.Context, messageIDs []string) (map[string][]domainknowledge.Source, error) {
+	result := make(map[string][]domainknowledge.Source)
+	if len(messageIDs) == 0 {
+		return result, nil
+	}
+
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(messageIDs)), ",")
+	args := make([]any, len(messageIDs))
+	for i, id := range messageIDs {
+		args[i] = id
+	}
+	rows, err := execer(ctx, r.db).QueryContext(ctx, `
+		SELECT message_id, chunk_id, item_id, source_type, file_path, heading, concept, score, excerpt
+		FROM message_sources
+		WHERE message_id IN (`+placeholders+`)
+		ORDER BY message_id, position`, args...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: listing message sources by message: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
 	for rows.Next() {
 		var messageID string
 		var source domainknowledge.Source
