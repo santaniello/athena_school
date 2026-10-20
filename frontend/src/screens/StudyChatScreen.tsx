@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ChangeEvent, KeyboardEvent, UIEvent } from 'react'
 import { ArrowUp } from 'lucide-react'
@@ -12,6 +12,7 @@ import { SourceModeSelect } from '@/components/source-mode-select'
 import { LocalSourcesStrip } from '@/components/local-sources-strip'
 import { SessionUsageBar } from '@/components/session-usage-bar'
 import { ToastViewport, type ToastItem } from '@/components/toast'
+import { useMessageHistory } from '@/hooks/use-message-history'
 import {
   compactStudySession,
   getStudySessionUsage,
@@ -31,6 +32,7 @@ import {
   sendStudyMessage,
   type SourceMode,
   type StudyContextEvent,
+  type StudyMessage,
   type StudySessionUsage,
   type StudySource,
 } from '@/lib/study'
@@ -121,6 +123,15 @@ interface ChatMessage {
   sources?: StudySource[]
 }
 
+function toChatMessage(message: StudyMessage): ChatMessage {
+  return {
+    id: message.id,
+    role: message.role as ChatMessage['role'],
+    content: message.content,
+    sources: message.sources,
+  }
+}
+
 // One finished message plus, when the reply used local knowledge, its sources
 // strip. Memoized so a finished message never re-renders while another one
 // streams: its props only change if the message itself does.
@@ -182,6 +193,10 @@ function StreamingTurn({
 // How close to the bottom of the transcript the user has to be for it to
 // count as "following along", and keep auto-scrolling with the stream.
 const STICKY_BOTTOM_THRESHOLD_PX = 80
+
+// How far above the transcript's top edge the sentinel counts as reached, so
+// the next page of earlier messages starts loading before the user hits it.
+const HISTORY_TRIGGER_MARGIN_PX = 200
 
 // The chat-style Study Mode screen: exchange messages with the LLM, whose
 // reply streams in over Wails events (see lib/study.ts) rather than
@@ -263,6 +278,31 @@ function StudyChatScreen({
   // StrictMode's dev-only double-invoke of this effect (mount → cleanup →
   // mount) doesn't fire two independent LLM generations for one session.
   const openingTurnRequestedRef = useRef<string | null>(null)
+  // Empty element at the top of the transcript, watched to load earlier messages.
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  // Scroll metrics captured just before an older page is prepended, consumed
+  // by the layout effect below to keep the viewport on the same message.
+  const pendingPrependRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null)
+  const firstMessageIdRef = useRef<string | undefined>(undefined)
+
+  // Older pages are added above the existing messages; one already shown
+  // (same id) is skipped.
+  const prependPage = useCallback((page: StudyMessage[]) => {
+    const el = transcriptRef.current
+    if (el) pendingPrependRef.current = { scrollHeight: el.scrollHeight, scrollTop: el.scrollTop }
+    setMessages((previous) => {
+      const known = new Set(previous.map((message) => message.id))
+      const fresh = page.filter((message) => !known.has(message.id)).map(toChatMessage)
+      return fresh.length === 0 ? previous : [...fresh, ...previous]
+    })
+  }, [])
+  const {
+    hasMore: hasEarlierMessages,
+    status: earlierStatus,
+    error: earlierError,
+    start: startHistory,
+    loadOlder: loadEarlierMessages,
+  } = useMessageHistory(sessionId, prependPage)
 
   // Fetched on resume and again when a turn ends (study:done / study:error):
   // a failed turn may still have recorded its embedding / HyDE calls.
@@ -315,9 +355,40 @@ function StudyChatScreen({
     el.scrollTop = el.scrollHeight
   }, [])
 
-  useEffect(() => {
+  // A prepended page must leave the viewport on the message the user was
+  // reading, and must never drag them to the bottom; everything else (the
+  // initial hydration, a sent message, the stream) follows the bottom.
+  useLayoutEffect(() => {
+    const pending = pendingPrependRef.current
+    pendingPrependRef.current = null
+    const firstId = messages[0]?.id
+    const previousFirstId = firstMessageIdRef.current
+    firstMessageIdRef.current = firstId
+    const el = transcriptRef.current
+    if (pending && el && previousFirstId !== undefined && firstId !== previousFirstId) {
+      el.scrollTop = pending.scrollTop + (el.scrollHeight - pending.scrollHeight)
+      return
+    }
     scrollToBottomIfFollowing()
   }, [messages, scrollToBottomIfFollowing])
+
+  // Loads the next older page whenever the sentinel is in view. The observer
+  // is re-created after every load (status goes loading -> idle), which makes
+  // it report the sentinel's current visibility again: a page too short to
+  // push the sentinel out of view keeps loading without any scroll event. It
+  // is not armed after a failure, so only the Retry button asks again.
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    if (!sentinel || !hasEarlierMessages || earlierStatus !== 'idle') return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) void loadEarlierMessages()
+      },
+      { root: transcriptRef.current, rootMargin: `${HISTORY_TRIGGER_MARGIN_PX}px 0px 0px 0px` },
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [hasEarlierMessages, earlierStatus, loadEarlierMessages])
 
   // Focuses the reply textarea as soon as the chat view mounts, so the user
   // can start typing immediately instead of clicking into it first.
@@ -335,8 +406,10 @@ function StudyChatScreen({
       })
       return
     }
+    let cancelled = false
     resumeStudySession(sessionId)
       .then((history) => {
+        if (cancelled) return
         setSessionTopic(history.session.topic)
         onTopicResolved?.(history.session.topic)
         setContextState(history.session.context.state)
@@ -346,18 +419,16 @@ function StudyChatScreen({
           estimated: history.session.context.estimated,
         })
         refreshSessionUsage()
-        setMessages(
-          history.messages.map((message) => ({
-            id: message.id,
-            role: message.role as ChatMessage['role'],
-            content: message.content,
-            sources: message.sources,
-          })),
-        )
+        setMessages(history.messages.map(toChatMessage))
+        startHistory(history.hasMore, history.nextCursor)
       })
       .catch((err: unknown) => {
+        if (cancelled) return
         setError(err instanceof Error ? err.message : 'Failed to load the session.')
       })
+    return () => {
+      cancelled = true
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId])
 
@@ -576,8 +647,25 @@ function StudyChatScreen({
         onScroll={handleTranscriptScroll}
         role="log"
         aria-label="Conversation"
-        className="thin-scroll flex min-h-0 flex-1 transform-gpu flex-col gap-3 overflow-y-auto pr-2"
+        className="thin-scroll flex min-h-0 flex-1 transform-gpu flex-col gap-3 overflow-y-auto pr-2 [overflow-anchor:none]"
       >
+        {hasEarlierMessages && (
+          <div
+            ref={sentinelRef}
+            aria-live="polite"
+            className="flex min-h-px shrink-0 justify-center text-xs text-muted-foreground"
+          >
+            {earlierStatus === 'loading' && <span>Loading earlier messages…</span>}
+            {earlierStatus === 'error' && (
+              <div className="flex items-center gap-2">
+                <span>{earlierError}</span>
+                <Button variant="outline" size="sm" onClick={() => void loadEarlierMessages()}>
+                  Retry
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
         {messages.map((message) => (
           <MessageRow key={message.id} message={message} onOpenCitation={onOpenCitation} />
         ))}

@@ -3,6 +3,7 @@ import {
   CompactStudySession,
   DeleteStudySession,
   GetStudySessionUsage,
+  ListStudyMessagesBefore,
   ListStudySessionsByFolder,
   MoveStudySession,
   RequestOpeningTurn,
@@ -15,6 +16,7 @@ import {
   compactStudySession,
   deleteStudySession,
   getStudySessionUsage,
+  listMessagesBefore,
   listStudySessionsByFolder,
   moveStudySession,
   onStudyChunk,
@@ -54,6 +56,7 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   ResumeStudySession: vi.fn(),
   MoveStudySession: vi.fn(),
   ListStudySessionsByFolder: vi.fn(),
+  ListStudyMessagesBefore: vi.fn(),
 }))
 
 vi.mock('../../wailsjs/runtime/runtime', () => ({
@@ -162,6 +165,8 @@ describe('resumeStudySession', () => {
           sources: [],
         },
       ],
+      hasMore: true,
+      nextCursor: 'm1',
     } as never)
 
     // When resuming a session
@@ -170,6 +175,9 @@ describe('resumeStudySession', () => {
     // Then it forwarded the sessionId and returned the session and history
     expect(ResumeStudySession).toHaveBeenCalledWith('session-1')
     expect(result.session.id).toBe('session-1')
+    // And the cursor to the older messages the latest page did not include
+    expect(result.hasMore).toBe(true)
+    expect(result.nextCursor).toBe('m1')
     // toStrictEqual so a dropped id or sources (undefined) cannot slip through
     expect(result.messages).toStrictEqual([
       { id: 'm1', role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z', sources: [] },
@@ -526,5 +534,44 @@ describe('truncateBreadcrumb', () => {
   it('does not prepend an ellipsis for a single segment with no ancestors to collapse', () => {
     const longLeaf = 'A'.repeat(80)
     expect(truncateBreadcrumb(longLeaf, 60)).toBe(`${'A'.repeat(59)}…`)
+  })
+})
+
+describe('listMessagesBefore', () => {
+  it('forwards the cursor and limit and returns the older page', async () => {
+    // Given an older page with one more page behind it
+    vi.mocked(ListStudyMessagesBefore).mockResolvedValueOnce({
+      messages: [
+        {
+          id: 'm0',
+          role: 'user',
+          content: 'Earlier',
+          createdAt: '2026-08-16T09:59:00Z',
+          sources: [],
+        },
+      ],
+      hasMore: true,
+      nextCursor: 'm0',
+    } as never)
+
+    // When requesting the messages before cursor m1
+    const page = await listMessagesBefore('session-1', 'm1', 50)
+
+    // Then the binding got the session, cursor and limit
+    expect(ListStudyMessagesBefore).toHaveBeenCalledWith('session-1', 'm1', 50)
+    // And the page carries its messages and the next cursor
+    expect(page).toStrictEqual({
+      messages: [
+        {
+          id: 'm0',
+          role: 'user',
+          content: 'Earlier',
+          createdAt: '2026-08-16T09:59:00Z',
+          sources: [],
+        },
+      ],
+      hasMore: true,
+      nextCursor: 'm0',
+    })
   })
 })
