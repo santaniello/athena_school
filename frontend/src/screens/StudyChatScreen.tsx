@@ -284,6 +284,13 @@ function StudyChatScreen({
   // by the layout effect below to keep the viewport on the same message.
   const pendingPrependRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null)
   const firstMessageIdRef = useRef<string | undefined>(undefined)
+  // The session this screen currently displays, updated in a layout effect so
+  // it already holds the new id when the commit that switched sessions ends —
+  // before any response of the previous session can resolve.
+  const currentSessionIdRef = useRef(sessionId)
+  useLayoutEffect(() => {
+    currentSessionIdRef.current = sessionId
+  }, [sessionId])
 
   // Older pages are added above the existing messages; one already shown
   // (same id) is skipped.
@@ -406,10 +413,9 @@ function StudyChatScreen({
       })
       return
     }
-    let cancelled = false
     resumeStudySession(sessionId)
       .then((history) => {
-        if (cancelled) return
+        if (currentSessionIdRef.current !== sessionId) return
         setSessionTopic(history.session.topic)
         onTopicResolved?.(history.session.topic)
         setContextState(history.session.context.state)
@@ -423,12 +429,9 @@ function StudyChatScreen({
         startHistory(history.hasMore, history.nextCursor)
       })
       .catch((err: unknown) => {
-        if (cancelled) return
+        if (currentSessionIdRef.current !== sessionId) return
         setError(err instanceof Error ? err.message : 'Failed to load the session.')
       })
-    return () => {
-      cancelled = true
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId])
 

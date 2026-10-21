@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { listMessagesBefore, type StudyMessage } from '@/lib/study'
 
 // How many older messages each request asks for (the backend default).
@@ -52,7 +52,10 @@ export function useMessageHistory(
     onPageRef.current = onPage
   }, [onPage])
 
-  useEffect(() => {
+  // A layout effect, not a passive one: it runs synchronously in the commit
+  // that brings the new sessionId, so no promise of the previous session can
+  // resolve between that commit and the invalidation.
+  useLayoutEffect(() => {
     generationRef.current += 1
     cursorRef.current = ''
     inFlightRef.current = false
