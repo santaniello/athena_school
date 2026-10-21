@@ -1,8 +1,19 @@
 import '@testing-library/jest-dom/vitest'
 import { afterEach } from 'vitest'
 import { cleanup, configure } from '@testing-library/react'
+import {
+  installIntersectionObserverMock,
+  resetIntersectionObserverMock,
+} from './intersection-observer'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  resetIntersectionObserverMock()
+})
+
+// jsdom does not implement IntersectionObserver, which the chat transcript's
+// top sentinel uses to load earlier messages. See ./intersection-observer.
+installIntersectionObserverMock()
 
 // App's boot splash holds the initial view for a minimum of 1.4s (see
 // App.tsx's MIN_SPLASH_MS) before any post-auth screen appears, which

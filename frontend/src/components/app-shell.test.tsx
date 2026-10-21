@@ -631,6 +631,8 @@ describe('AppShell', () => {
     vi.mocked(resumeStudySession).mockResolvedValueOnce({
       session: { ...cachedSession, topic: 'Real topic' },
       messages: [],
+      hasMore: false,
+      nextCursor: '',
     })
     await user.click(screen.getByText('General'))
     await user.click(await screen.findByText('Cached topic'))

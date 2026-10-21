@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import {
   compactStudySession,
   getStudySessionUsage,
+  listMessagesBefore,
   onStudyChunk,
   onStudyCompactionFailed,
   onStudyContextCompacted,
@@ -28,8 +29,10 @@ import {
   type StudyContextUsage,
   type StudyDoneEvent,
   type StudyErrorEvent,
+  type StudyMessagePage,
   type StudySourcesEvent,
 } from '@/lib/study'
+import { setSentinelVisible, setSentinelVisibleOnObserve } from '@/test/intersection-observer'
 import StudyChatScreen from './StudyChatScreen'
 
 // importOriginal keeps pure helpers (e.g. sourceLabel, used by
@@ -40,6 +43,7 @@ vi.mock('@/lib/study', async (importOriginal) => {
     ...original,
     compactStudySession: vi.fn(),
     getStudySessionUsage: vi.fn(),
+    listMessagesBefore: vi.fn(),
     requestOpeningTurn: vi.fn(),
     resumeStudySession: vi.fn(),
     sendStudyMessage: vi.fn(),
@@ -334,6 +338,8 @@ describe('StudyChatScreen — resuming a session', () => {
           sources: [],
         },
       ],
+      hasMore: false,
+      nextCursor: '',
     })
 
     // When the chat screen mounts in "resume" mode
@@ -396,6 +402,8 @@ describe('StudyChatScreen — resuming a session', () => {
           ],
         },
       ],
+      hasMore: false,
+      nextCursor: '',
     })
 
     // When the chat screen mounts in "resume" mode
@@ -434,6 +442,8 @@ describe('StudyChatScreen — resuming a session', () => {
           sources: [],
         },
       ],
+      hasMore: false,
+      nextCursor: '',
     })
 
     // When the chat screen mounts in "resume" mode
@@ -526,6 +536,8 @@ describe('StudyChatScreen — resuming a session', () => {
       messages: [
         { id: 'm6', role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z', sources: [] },
       ],
+      hasMore: false,
+      nextCursor: '',
     })
 
     // When the chat screen mounts in "resume" mode
@@ -557,6 +569,8 @@ describe('StudyChatScreen — resuming a session', () => {
       messages: [
         { id: 'm7', role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z', sources: [] },
       ],
+      hasMore: false,
+      nextCursor: '',
     })
     const { rerender } = render(
       <StudyChatScreen
@@ -589,6 +603,8 @@ describe('StudyChatScreen — resuming a session', () => {
           sources: [],
         },
       ],
+      hasMore: false,
+      nextCursor: '',
     })
     rerender(
       <StudyChatScreen
@@ -1004,6 +1020,8 @@ describe('StudyChatScreen — source modes and local sources', () => {
         context: CONTEXT_NORMAL,
       },
       messages: [],
+      hasMore: false,
+      nextCursor: '',
     })
     render(
       <StudyChatScreen
@@ -1335,6 +1353,8 @@ describe('StudyChatScreen — context limits', () => {
         },
       },
       messages: [],
+      hasMore: false,
+      nextCursor: '',
     })
 
     // When the chat screen mounts in "resume" mode
@@ -1591,6 +1611,8 @@ describe('StudyChatScreen — session usage visibility', () => {
       },
     },
     messages: [],
+    hasMore: false,
+    nextCursor: '',
   }
   const totals = {
     inputTokens: 8000,
@@ -1731,6 +1753,8 @@ describe('StudyChatScreen — session usage visibility', () => {
         ...resumedHistory.session,
         context: { ...resumedHistory.session.context, contextLength: 0 },
       },
+      hasMore: false,
+      nextCursor: '',
     })
     vi.mocked(getStudySessionUsage).mockResolvedValueOnce({
       ...totals,
@@ -1963,5 +1987,420 @@ describe('StudyChatScreen — context compaction', () => {
     expect(handlers.unsubscribe.compacting).toHaveBeenCalledTimes(1)
     expect(handlers.unsubscribe.compacted).toHaveBeenCalledTimes(1)
     expect(handlers.unsubscribe.compactionFailed).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('StudyChatScreen — earlier messages', () => {
+  const SESSION = {
+    id: 'session-1',
+    topic: 'Cache invalidation',
+    folderId: 'folder-1',
+    goal: 'Ace the SQL interview',
+    startedAt: '2026-08-16T10:00:00Z',
+    context: CONTEXT_NORMAL,
+  }
+
+  function msg(id: string, role: 'user' | 'assistant' = 'user') {
+    return { id, role, content: id, createdAt: '2026-08-16T10:00:00Z', sources: [] }
+  }
+
+  function olderPage(ids: string[], hasMore: boolean, nextCursor = ''): StudyMessagePage {
+    return { messages: ids.map((id) => msg(id)), hasMore, nextCursor }
+  }
+
+  function deferred<T>() {
+    let resolve!: (value: T) => void
+    let reject!: (reason: unknown) => void
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res
+      reject = rej
+    })
+    return { promise, resolve, reject }
+  }
+
+  // A resumed session whose latest page is m51-m52, with older ones behind m51.
+  async function renderResumedWithHistory(hasMore = true) {
+    setupSubscriptions()
+    vi.mocked(resumeStudySession).mockResolvedValueOnce({
+      session: SESSION,
+      messages: [msg('m51'), msg('m52', 'assistant')],
+      hasMore,
+      nextCursor: hasMore ? 'm51' : '',
+    })
+    const view = render(
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic=""
+        mode="resume"
+        {...newSessionActionProps()}
+      />,
+    )
+    await screen.findByText('m52')
+    return view
+  }
+
+  function transcriptTexts() {
+    const transcript = screen.getByRole('log', { name: 'Conversation' })
+    return within(transcript)
+      .queryAllByText(/^[a-z]\d+$/)
+      .map((element) => element.textContent)
+  }
+
+  // Each rendered message is 100px tall, so the transcript's scrollHeight
+  // follows the DOM the way a real layout would when a page is prepended.
+  function stubGrowingScrollMetrics(transcript: HTMLElement, clientHeight: number) {
+    let scrollTop = 0
+    Object.defineProperty(transcript, 'scrollHeight', {
+      configurable: true,
+      get: () => within(transcript).queryAllByText(/^[a-z]\d+$/).length * 100,
+    })
+    Object.defineProperty(transcript, 'clientHeight', { value: clientHeight, configurable: true })
+    Object.defineProperty(transcript, 'scrollTop', {
+      configurable: true,
+      get: () => scrollTop,
+      set: (value: number) => {
+        scrollTop = value
+      },
+    })
+  }
+
+  it('loads the page before the cursor and shows it above the existing messages', async () => {
+    // Given a resumed session with older messages behind m51
+    await renderResumedWithHistory()
+    vi.mocked(listMessagesBefore).mockResolvedValueOnce(olderPage(['m49', 'm50'], false))
+
+    // When the top of the transcript comes into view
+    setSentinelVisible(true)
+
+    // Then the older page is requested at that cursor and rendered first
+    expect(await screen.findByText('m49')).toBeInTheDocument()
+    expect(listMessagesBefore).toHaveBeenCalledWith('session-1', 'm51', 50)
+    expect(transcriptTexts()).toEqual(['m49', 'm50', 'm51', 'm52'])
+  })
+
+  it('shows a loading row while the older page is being fetched', async () => {
+    // Given an older page that has not resolved yet
+    await renderResumedWithHistory()
+    const inFlight = deferred<StudyMessagePage>()
+    vi.mocked(listMessagesBefore).mockReturnValueOnce(inFlight.promise)
+
+    // When the top of the transcript comes into view
+    setSentinelVisible(true)
+
+    // Then the loading row is shown, then removed once the page lands
+    expect(await screen.findByText('Loading earlier messages…')).toBeInTheDocument()
+    await act(async () => {
+      inFlight.resolve(olderPage(['m50'], false))
+    })
+    await screen.findByText('m50')
+    expect(screen.queryByText('Loading earlier messages…')).not.toBeInTheDocument()
+  })
+
+  it('requests only once while the top stays in view during a load', async () => {
+    // Given an older page that has not resolved yet
+    await renderResumedWithHistory()
+    const inFlight = deferred<StudyMessagePage>()
+    vi.mocked(listMessagesBefore).mockReturnValueOnce(inFlight.promise)
+
+    // When the sentinel reports visible several times meanwhile
+    setSentinelVisible(true)
+    setSentinelVisible(true)
+    setSentinelVisible(true)
+
+    // Then a single request was made
+    await screen.findByText('Loading earlier messages…')
+    expect(listMessagesBefore).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      inFlight.resolve(olderPage(['m50'], false))
+    })
+    await screen.findByText('m50')
+  })
+
+  it('keeps loading while a short page leaves the top in view, then stops', async () => {
+    // Given the top stays in view after every page (the content never fills the viewport)
+    await renderResumedWithHistory()
+    vi.mocked(listMessagesBefore)
+      .mockResolvedValueOnce(olderPage(['m50'], true, 'm50'))
+      .mockResolvedValueOnce(olderPage(['m49'], false))
+
+    // When the top comes into view
+    setSentinelVisible(true)
+
+    // Then the next page is requested from the new cursor without any scroll
+    await screen.findByText('m49')
+    expect(listMessagesBefore).toHaveBeenNthCalledWith(1, 'session-1', 'm51', 50)
+    expect(listMessagesBefore).toHaveBeenNthCalledWith(2, 'session-1', 'm50', 50)
+
+    // And once hasMore is false no further request is made
+    await act(async () => {})
+    expect(listMessagesBefore).toHaveBeenCalledTimes(2)
+  })
+
+  it('starts loading when the top is already in view as the history appears', async () => {
+    // Given a viewport that already shows the top when the screen mounts
+    setSentinelVisibleOnObserve(true)
+    vi.mocked(listMessagesBefore).mockResolvedValueOnce(olderPage(['m50'], false))
+
+    // When the latest page arrives with older messages behind it
+    await renderResumedWithHistory()
+
+    // Then the older page loads on its own
+    expect(await screen.findByText('m50')).toBeInTheDocument()
+  })
+
+  it('makes no request for a session that has no older messages', async () => {
+    // Given a resumed session whose whole history fit in the first page
+    await renderResumedWithHistory(false)
+
+    // When the top comes into view
+    setSentinelVisible(true)
+
+    // Then nothing is requested and no loading row appears
+    await act(async () => {})
+    expect(listMessagesBefore).not.toHaveBeenCalled()
+    expect(screen.queryByText('Loading earlier messages…')).not.toBeInTheDocument()
+  })
+
+  it('makes no request for a brand new session', async () => {
+    // Given a new session (no history to page through)
+    await renderStartedSession()
+
+    // When the top comes into view
+    setSentinelVisible(true)
+
+    // Then nothing is requested
+    await act(async () => {})
+    expect(listMessagesBefore).not.toHaveBeenCalled()
+  })
+
+  it('shows an inline retry on failure, keeps the messages and does not retry by itself', async () => {
+    // Given an older page that fails to load
+    await renderResumedWithHistory()
+    vi.mocked(listMessagesBefore).mockRejectedValueOnce(new Error('network down'))
+
+    // When the top comes into view
+    setSentinelVisible(true)
+
+    // Then the failure is shown inline with a retry, and the messages stay
+    expect(await screen.findByText('network down')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+    expect(transcriptTexts()).toEqual(['m51', 'm52'])
+
+    // And the top still being in view does not fire another request
+    setSentinelVisible(true)
+    await act(async () => {})
+    expect(listMessagesBefore).toHaveBeenCalledTimes(1)
+  })
+
+  it('requests the same page again when retry is clicked', async () => {
+    // Given a failed older-page load
+    await renderResumedWithHistory()
+    vi.mocked(listMessagesBefore).mockRejectedValueOnce(new Error('network down'))
+    setSentinelVisible(true)
+    await screen.findByText('network down')
+
+    // When the user clicks Retry and the request now succeeds
+    vi.mocked(listMessagesBefore).mockResolvedValueOnce(olderPage(['m50'], false))
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
+
+    // Then the same cursor was requested twice and the page is shown
+    expect(await screen.findByText('m50')).toBeInTheDocument()
+    expect(listMessagesBefore).toHaveBeenNthCalledWith(1, 'session-1', 'm51', 50)
+    expect(listMessagesBefore).toHaveBeenNthCalledWith(2, 'session-1', 'm51', 50)
+    expect(screen.queryByText('network down')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
+  })
+
+  it('does not mix a page failure into the global error alert', async () => {
+    // Given a failed older-page load
+    await renderResumedWithHistory()
+    vi.mocked(listMessagesBefore).mockRejectedValueOnce(new Error('network down'))
+
+    // When the top comes into view
+    setSentinelVisible(true)
+    await screen.findByText('network down')
+
+    // Then the screen-level alert is not used for it
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('keeps the message under the viewport in place when an older page is prepended', async () => {
+    // Given a user reading near the top, with the transcript following by default
+    await renderResumedWithHistory()
+    const transcript = screen.getByRole('log', { name: 'Conversation' })
+    stubGrowingScrollMetrics(transcript, 150)
+    transcript.scrollTop = 10
+    fireEvent.scroll(transcript)
+    vi.mocked(listMessagesBefore).mockResolvedValueOnce(olderPage(['m49', 'm50'], false))
+
+    // When two older messages (200px) are inserted above
+    setSentinelVisible(true)
+    await screen.findByText('m49')
+
+    // Then the scroll offset grows by exactly that height, not jumping to the bottom
+    await waitFor(() => expect(transcript.scrollTop).toBe(210))
+  })
+
+  it('does not scroll to the bottom on a prepend even when the user is within the sticky threshold', async () => {
+    // Given a short transcript that is both at the top and within 80px of the bottom
+    await renderResumedWithHistory()
+    const transcript = screen.getByRole('log', { name: 'Conversation' })
+    stubGrowingScrollMetrics(transcript, 150)
+    transcript.scrollTop = 0
+    fireEvent.scroll(transcript)
+    vi.mocked(listMessagesBefore).mockResolvedValueOnce(olderPage(['m49', 'm50'], false))
+
+    // When older messages are prepended
+    setSentinelVisible(true)
+    await screen.findByText('m49')
+
+    // Then the viewport stays on the same message instead of following the bottom
+    await waitFor(() => expect(transcript.scrollTop).toBe(200))
+    expect(transcript.scrollTop).not.toBe(transcript.scrollHeight)
+  })
+
+  it('keeps following the bottom for a message appended after older pages were loaded', async () => {
+    // Given older messages were prepended and the user is back at the bottom
+    const handlers = setupSubscriptions()
+    vi.mocked(resumeStudySession).mockResolvedValueOnce({
+      session: SESSION,
+      messages: [msg('m51'), msg('m52', 'assistant')],
+      hasMore: true,
+      nextCursor: 'm51',
+    })
+    render(
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic=""
+        mode="resume"
+        {...newSessionActionProps()}
+      />,
+    )
+    await screen.findByText('m52')
+    const transcript = screen.getByRole('log', { name: 'Conversation' })
+    stubGrowingScrollMetrics(transcript, 150)
+    vi.mocked(listMessagesBefore).mockResolvedValueOnce(olderPage(['m50'], false))
+    setSentinelVisible(true)
+    await screen.findByText('m50')
+    transcript.scrollTop = transcript.scrollHeight
+    fireEvent.scroll(transcript)
+
+    // When the assistant streams a new answer
+    act(() => {
+      handlers.chunk?.({ sessionId: 'session-1', content: 'Streaming' })
+    })
+
+    // Then the transcript still follows it to the bottom
+    await waitFor(() => expect(transcript.scrollTop).toBe(transcript.scrollHeight))
+  })
+
+  it('does not insert a message that is already in the transcript twice', async () => {
+    // Given an older page that repeats m51, which is already shown
+    await renderResumedWithHistory()
+    vi.mocked(listMessagesBefore).mockResolvedValueOnce(olderPage(['m50', 'm51'], false))
+
+    // When it loads
+    setSentinelVisible(true)
+    await screen.findByText('m50')
+
+    // Then m51 appears once
+    expect(transcriptTexts()).toEqual(['m50', 'm51', 'm52'])
+  })
+
+  it('does not disturb the scroll position when a page adds nothing new', async () => {
+    // Given an older page made only of messages already shown
+    await renderResumedWithHistory()
+    const transcript = screen.getByRole('log', { name: 'Conversation' })
+    stubGrowingScrollMetrics(transcript, 150)
+    transcript.scrollTop = 40
+    fireEvent.scroll(transcript)
+    vi.mocked(listMessagesBefore).mockResolvedValueOnce(olderPage(['m51'], false))
+
+    // When it loads
+    setSentinelVisible(true)
+    await waitFor(() => expect(listMessagesBefore).toHaveBeenCalledTimes(1))
+    await act(async () => {})
+
+    // Then the position is untouched
+    expect(transcript.scrollTop).toBe(40)
+  })
+
+  it('ignores an older page that resolves after switching sessions', async () => {
+    // Given an older page in flight for session-1
+    const view = await renderResumedWithHistory()
+    const inFlight = deferred<StudyMessagePage>()
+    vi.mocked(listMessagesBefore).mockReturnValueOnce(inFlight.promise)
+    setSentinelVisible(true)
+    await screen.findByText('Loading earlier messages…')
+
+    // When the user opens session-2 and the old page then resolves
+    vi.mocked(resumeStudySession).mockResolvedValueOnce({
+      session: { ...SESSION, id: 'session-2' },
+      messages: [msg('n1')],
+      hasMore: false,
+      nextCursor: '',
+    })
+    view.rerender(
+      <StudyChatScreen
+        sessionId="session-2"
+        initialTopic=""
+        mode="resume"
+        {...newSessionActionProps()}
+      />,
+    )
+    await screen.findByText('n1')
+    await act(async () => {
+      inFlight.resolve(olderPage(['m50'], false))
+    })
+
+    // Then session-1's page never shows up in session-2
+    expect(screen.queryByText('m50')).not.toBeInTheDocument()
+    expect(screen.queryByText('Loading earlier messages…')).not.toBeInTheDocument()
+  })
+
+  it('ignores a resume that resolves after switching sessions', async () => {
+    // Given session-1's resume still pending
+    setupSubscriptions()
+    const slow = deferred<Awaited<ReturnType<typeof resumeStudySession>>>()
+    vi.mocked(resumeStudySession).mockReturnValueOnce(slow.promise)
+    const view = render(
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic=""
+        mode="resume"
+        {...newSessionActionProps()}
+      />,
+    )
+
+    // When the user opens session-2 and session-1's history then arrives
+    vi.mocked(resumeStudySession).mockResolvedValueOnce({
+      session: { ...SESSION, id: 'session-2' },
+      messages: [msg('n1')],
+      hasMore: false,
+      nextCursor: '',
+    })
+    view.rerender(
+      <StudyChatScreen
+        sessionId="session-2"
+        initialTopic=""
+        mode="resume"
+        {...newSessionActionProps()}
+      />,
+    )
+    await screen.findByText('n1')
+    await act(async () => {
+      slow.resolve({
+        session: SESSION,
+        messages: [msg('m51')],
+        hasMore: true,
+        nextCursor: 'm51',
+      })
+    })
+
+    // Then only session-2's messages are shown and no older page is offered
+    expect(transcriptTexts()).toEqual(['n1'])
+    setSentinelVisible(true)
+    await act(async () => {})
+    expect(listMessagesBefore).not.toHaveBeenCalled()
   })
 })

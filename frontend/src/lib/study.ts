@@ -2,6 +2,7 @@ import {
   CompactStudySession,
   DeleteStudySession,
   GetStudySessionUsage,
+  ListStudyMessagesBefore,
   ListStudySessionsByFolder,
   MoveStudySession,
   RequestOpeningTurn,
@@ -38,9 +39,17 @@ export interface StudyMessage {
   sources: StudySource[]
 }
 
-export interface StudySessionHistory {
-  session: StudySession
+// StudyMessagePage is one chronological page of a session's history.
+// nextCursor is opaque: hand it back to listMessagesBefore to get the page
+// of messages older than this one (only meaningful while hasMore is true).
+export interface StudyMessagePage {
   messages: StudyMessage[]
+  hasMore: boolean
+  nextCursor: string
+}
+
+export interface StudySessionHistory extends StudyMessagePage {
+  session: StudySession
 }
 
 // SourceMode controls whether and how a study turn consults local
@@ -258,19 +267,49 @@ export async function compactStudySession(sessionId: string): Promise<void> {
   await CompactStudySession(sessionId)
 }
 
-// resumeStudySession returns sessionId's full message history, so the chat
-// view can hydrate from it and let the user keep chatting.
+function toStudyMessages(
+  messages: {
+    id: string
+    role: string
+    content: string
+    createdAt: string
+    sources: StudySource[]
+  }[],
+): StudyMessage[] {
+  return messages.map((message) => ({
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    createdAt: message.createdAt,
+    sources: message.sources,
+  }))
+}
+
+// resumeStudySession returns sessionId's latest page of messages, so the chat
+// view can hydrate from it and let the user keep chatting; older messages come
+// from listMessagesBefore via the returned nextCursor.
 export async function resumeStudySession(sessionId: string): Promise<StudySessionHistory> {
   const result = await ResumeStudySession(sessionId)
   return {
     session: toStudySession(result.session),
-    messages: result.messages.map((message) => ({
-      id: message.id,
-      role: message.role,
-      content: message.content,
-      createdAt: message.createdAt,
-      sources: message.sources,
-    })),
+    messages: toStudyMessages(result.messages),
+    hasMore: result.hasMore,
+    nextCursor: result.nextCursor,
+  }
+}
+
+// listMessagesBefore returns the page of up to limit messages older than the
+// message identified by cursor, in chronological order.
+export async function listMessagesBefore(
+  sessionId: string,
+  cursor: string,
+  limit: number,
+): Promise<StudyMessagePage> {
+  const result = await ListStudyMessagesBefore(sessionId, cursor, limit)
+  return {
+    messages: toStudyMessages(result.messages),
+    hasMore: result.hasMore,
+    nextCursor: result.nextCursor,
   }
 }
 
