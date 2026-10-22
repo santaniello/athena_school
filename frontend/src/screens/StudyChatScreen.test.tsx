@@ -2816,6 +2816,38 @@ describe('StudyChatScreen — find in conversation', () => {
     expect(screen.getByText('1 of 3')).toBeInTheDocument()
   })
 
+  it('finds a phrase that runs across bold text, and does not match a code block label', async () => {
+    setupSubscriptions()
+    vi.mocked(resumeStudySession).mockResolvedValueOnce({
+      session: SESSION,
+      messages: [msg('m1', 'Prefer **Cache eviction** policies.\n\n```go\npackage main\n```')],
+      hasMore: false,
+      nextCursor: '',
+      summaryCoversUntilMessageId: '',
+    })
+    render(
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic=""
+        mode="resume"
+        {...newSessionActionProps()}
+      />,
+    )
+    await screen.findByText('policies.', { exact: false })
+    const user = userEvent.setup()
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true }))
+    })
+
+    await user.type(findInput(), 'cache eviction policies')
+    expect(screen.getByText('1 of 1')).toBeInTheDocument()
+
+    // "go" is only the code block's language label, which is not searched
+    await user.clear(findInput())
+    await user.type(findInput(), 'go')
+    expect(screen.getByText('No results')).toBeInTheDocument()
+  })
+
   it('does not search its own chrome or the transcript controls', async () => {
     await renderResumed()
     const user = userEvent.setup()

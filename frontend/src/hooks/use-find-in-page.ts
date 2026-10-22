@@ -6,6 +6,16 @@ import { findTextRanges } from '@/lib/find-in-page'
 // text is not re-scanned on every mutation.
 const RECOMPUTE_DEBOUNCE_MS = 100
 
+// Scrolls the container so the match itself, not the block that holds it, sits
+// in the middle: a block taller than the viewport would otherwise be aligned
+// by its edge and could leave the match off screen.
+function scrollRangeToCenter(container: HTMLElement | null, range: Range): void {
+  if (!container) return
+  const rect = range.getBoundingClientRect()
+  const box = container.getBoundingClientRect()
+  container.scrollTop += rect.top - box.top - (container.clientHeight - rect.height) / 2
+}
+
 export interface UseFindInPageOptions {
   containerRef: RefObject<HTMLElement | null>
   // Called when the user jumps to a match, so the screen can stop following
@@ -113,10 +123,10 @@ export function useFindInPage({
       if (ranges.length === 0) return
       const index = (activeRef.current + delta + ranges.length) % ranges.length
       commit(ranges, index)
-      ranges[index].startContainer.parentElement?.scrollIntoView({ block: 'center' })
+      scrollRangeToCenter(containerRef.current, ranges[index])
       onNavigateRef.current?.()
     },
-    [commit],
+    [commit, containerRef],
   )
   const next = useCallback(() => move(1), [move])
   const prev = useCallback(() => move(-1), [move])

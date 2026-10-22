@@ -75,3 +75,10 @@ Element.prototype.getBoundingClientRect = function (this: Element) {
   }
   return getBoundingClientRect.call(this)
 }
+
+// jsdom does not implement layout for Range, which the find bar reads to
+// centre the active match. A zero rect keeps it from throwing; a test that
+// cares about the position mocks it.
+if (!Range.prototype.getBoundingClientRect) {
+  Range.prototype.getBoundingClientRect = () => new DOMRect()
+}

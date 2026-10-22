@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useFindInPage } from './use-find-in-page'
 
 function setup(html: string) {
@@ -12,15 +12,8 @@ function setup(html: string) {
 }
 
 describe('useFindInPage', () => {
-  let scrollIntoView: ReturnType<typeof vi.fn>
-
-  beforeEach(() => {
-    scrollIntoView = vi.fn()
-    Element.prototype.scrollIntoView =
-      scrollIntoView as unknown as typeof Element.prototype.scrollIntoView
-  })
-
   afterEach(() => {
+    vi.restoreAllMocks()
     document.body.innerHTML = ''
   })
 
@@ -52,14 +45,33 @@ describe('useFindInPage', () => {
     expect(result.current.activeIndex).toBe(2)
   })
 
-  it('scrolls to the active match and tells the screen to stop following the bottom', () => {
+  it('centres the active match in the container, even deep inside a tall block', () => {
+    const { result, container } = setup('<p>a a</p>')
+    // The container is 400px tall, starts at y=100 and is scrolled by 50px.
+    container.getBoundingClientRect = () => ({ top: 100, height: 400 }) as DOMRect
+    Object.defineProperty(container, 'clientHeight', { value: 400, configurable: true })
+    container.scrollTop = 50
+    // The next match sits 1000px below the container's top edge, 20px tall.
+    vi.spyOn(Range.prototype, 'getBoundingClientRect').mockReturnValue({
+      top: 1100,
+      height: 20,
+    } as DOMRect)
+    act(() => result.current.open())
+    act(() => result.current.setQuery('a'))
+
+    act(() => result.current.next())
+
+    // Centred: 50 + (1100 - 100) - (400 - 20) / 2 = 860
+    expect(container.scrollTop).toBe(860)
+  })
+
+  it('tells the screen to stop following the bottom when jumping to a match', () => {
     const { result, onNavigate } = setup('<p>a a</p>')
     act(() => result.current.open())
     act(() => result.current.setQuery('a'))
 
     act(() => result.current.next())
 
-    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' })
     expect(onNavigate).toHaveBeenCalled()
   })
 

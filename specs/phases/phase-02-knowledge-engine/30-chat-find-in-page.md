@@ -13,14 +13,16 @@ highlighted in a different colour and the user can jump between them, as in a br
    and focuses its input, preventing the webview's default. Esc closes it, clears the highlights and
    returns focus to the composer. The shortcut is only active while the study chat is mounted.
 2. **Search.** Case- and accent-insensitive substring search over the text of every message
-   (user and assistant, including code blocks). Headers, buttons and other controls ("Copy code",
-   "Copy message", citation chips' chrome) are not searched.
+   (user and assistant, including code blocks). A phrase may run across inline formatting
+   (`Cache **eviction**`, syntax-highlighter tokens) but never across blocks, messages, buttons or
+   ignored elements. Headers, buttons and other controls ("Copy code", "Copy message", the code
+   block's language label, citation chips' chrome) are not searched.
 3. **Highlight.** All matches get one highlight colour and the current match a stronger one, using
    the CSS Custom Highlight API so the DOM is not mutated. Without that API the search and the
    navigation still work, only without colour.
 4. **Navigate.** The bar shows "N of M" or "No results". Enter / the Next button go to the next
    match, Shift+Enter / the Previous button to the previous one; both wrap around. The current
-   match is scrolled to the centre of the transcript.
+   match itself (not the block holding it) is scrolled to the centre of the transcript.
 5. **Whole history.** Opening the bar loads every earlier page of the history (the chat is
    paginated by 50), showing "Loading history…" meanwhile. A failed page shows a warning and the
    search keeps working over what is loaded. Closing the bar stops the loading.
