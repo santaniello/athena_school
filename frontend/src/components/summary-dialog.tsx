@@ -22,9 +22,12 @@ type SummaryState =
   | { status: 'ready'; summary: StudySummary }
 
 // The summary is untrusted LLM output: react-markdown never renders raw HTML,
-// and links are flattened to their text so nothing in it is clickable.
+// links are flattened to their text so nothing in it is clickable, and images
+// are replaced by their alt text so opening the dialog never calls a remote
+// host (a poisoned summary could otherwise carry conversation data in a URL).
 const SUMMARY_COMPONENTS = {
   a: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+  img: ({ alt }: { alt?: string }) => <span>{alt}</span>,
 }
 
 // Mounted only while the dialog is open, so every opening reads the current
