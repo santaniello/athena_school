@@ -264,6 +264,108 @@ describe('MessageBubble', () => {
     expect(container.querySelector('[data-slot="code-block"]')).toBeNull()
   })
 
+  describe('code block header and copy', () => {
+    it('labels a fenced code block with its language', () => {
+      // Given a fenced code block with a language
+      const content = ['```go', 'package main', '```'].join('\n')
+      const { container } = render(<MessageBubble role="assistant" content={content} />)
+
+      // Then the header names the language
+      const header = container.querySelector('[data-slot="code-block-header"]')
+      expect(header).toHaveTextContent('go')
+    })
+
+    it('renders a fenced block without a language as a labelled code block', () => {
+      // Given a fenced block with no language tag
+      const content = ['```', 'plain text', '```'].join('\n')
+      const { container } = render(<MessageBubble role="assistant" content={content} />)
+
+      // Then it is a block (not inline code) labelled "text"
+      expect(container.querySelector('[data-slot="inline-code"]')).toBeNull()
+      expect(container.querySelector('[data-slot="code-block"]')?.textContent).toBe('plain text')
+      expect(container.querySelector('[data-slot="code-block-header"]')).toHaveTextContent('text')
+    })
+
+    it('does not add a header or copy button to inline code', () => {
+      // Given inline code
+      const { container } = render(
+        <MessageBubble role="assistant" content="Use the `useState` hook." />,
+      )
+
+      // Then there is no code block chrome
+      expect(container.querySelector('[data-slot="code-block-header"]')).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Copy code' })).not.toBeInTheDocument()
+    })
+
+    it('copies exactly the block code and confirms it', async () => {
+      // Given a multi-line fenced block
+      const user = userEvent.setup()
+      const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
+      const content = ['```go', 'package main', '', 'func main() {}', '```'].join('\n')
+      render(<MessageBubble role="assistant" content={content} />)
+
+      // When clicking the block's copy button
+      await user.click(screen.getByRole('button', { name: 'Copy code' }))
+
+      // Then only the code is copied, without the trailing newline, and the button confirms it
+      expect(writeText).toHaveBeenCalledWith('package main\n\nfunc main() {}')
+      expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument()
+    })
+
+    it('reverts the block confirmation after a moment', async () => {
+      // Given a block that was just copied
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime })
+      vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
+      render(<MessageBubble role="assistant" content={['```go', 'x', '```'].join('\n')} />)
+      await user.click(screen.getByRole('button', { name: 'Copy code' }))
+      await screen.findByRole('button', { name: 'Copied' })
+
+      // When enough time passes
+      vi.advanceTimersByTime(2000)
+
+      // Then the button is back to "Copy code"
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Copy code' })).toBeInTheDocument(),
+      )
+      vi.useRealTimers()
+    })
+
+    it('keeps the button unchanged when the clipboard write fails', async () => {
+      // Given a clipboard that rejects the write
+      const user = userEvent.setup()
+      vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('denied'))
+      render(<MessageBubble role="assistant" content={['```go', 'x', '```'].join('\n')} />)
+
+      // When clicking copy
+      await user.click(screen.getByRole('button', { name: 'Copy code' }))
+
+      // Then nothing is confirmed and nothing throws
+      expect(screen.getByRole('button', { name: 'Copy code' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Copied' })).not.toBeInTheDocument()
+    })
+
+    it('keeps the message copy button distinguishable from the block copy button', () => {
+      // Given a settled assistant message containing a code block
+      render(<MessageBubble role="assistant" content={['```go', 'x', '```'].join('\n')} />)
+
+      // Then each button is unique by accessible name
+      expect(screen.getAllByRole('button', { name: 'Copy message' })).toHaveLength(1)
+      expect(screen.getAllByRole('button', { name: 'Copy code' })).toHaveLength(1)
+    })
+
+    it('syntax highlights a markdown block', async () => {
+      // Given a fenced markdown block near the viewport
+      setSentinelVisibleOnObserve(true)
+      const content = ['````markdown', '# Title', '', '- item', '````'].join('\n')
+      const { container } = render(<MessageBubble role="assistant" content={content} />)
+
+      // Then the markdown grammar tokenized it
+      const codeBlock = container.querySelector('[data-slot="code-block"]')
+      await waitFor(() => expect(codeBlock?.querySelectorAll('.token').length).toBeGreaterThan(0))
+    })
+  })
+
   it('renders nested headings, ordered lists, blockquotes, horizontal rules and GFM tables', () => {
     // Given content covering every remaining Markdown element the bubble supports
     const content = [
