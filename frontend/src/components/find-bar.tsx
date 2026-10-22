@@ -53,7 +53,7 @@ export function FindBar({
   return (
     <div
       role="search"
-      className="flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-2 py-1.5"
+      className="flex w-full max-w-sm shrink-0 items-center gap-2 self-end rounded-lg border border-border bg-card px-2 py-1.5"
     >
       <Input
         ref={inputRef}
