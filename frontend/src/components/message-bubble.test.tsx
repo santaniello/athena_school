@@ -275,6 +275,31 @@ describe('MessageBubble', () => {
       expect(header).toHaveTextContent('go')
     })
 
+    it.each(['c++', 'objective-c', 'shell-session', 'c#'])(
+      'shows the whole language identifier %s in the header',
+      (language) => {
+        // Given a fenced block whose language has non-alphanumeric characters
+        const content = ['```' + language, 'x', '```'].join('\n')
+        const { container } = render(<MessageBubble role="assistant" content={content} />)
+
+        // Then the header shows it untruncated
+        expect(container.querySelector('[data-slot="code-block-header"]')?.textContent).toBe(
+          language,
+        )
+      },
+    )
+
+    it('keeps the header out of the find-in-conversation search', () => {
+      // Given a fenced block
+      const content = ['```go', 'package main', '```'].join('\n')
+      const { container } = render(<MessageBubble role="assistant" content={content} />)
+
+      // Then the language label is marked to be skipped by the search
+      expect(
+        container.querySelector('[data-slot="code-block-header"] [data-find-ignore]'),
+      ).toHaveTextContent('go')
+    })
+
     it('renders a fenced block without a language as a labelled code block', () => {
       // Given a fenced block with no language tag
       const content = ['```', 'plain text', '```'].join('\n')

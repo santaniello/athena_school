@@ -22,6 +22,7 @@ import tsx from 'react-syntax-highlighter/dist/esm/languages/prism/tsx'
 import typescript from 'react-syntax-highlighter/dist/esm/languages/prism/typescript'
 import yaml from 'react-syntax-highlighter/dist/esm/languages/prism/yaml'
 import { cva } from 'class-variance-authority'
+import { FIND_IGNORE_PROPS } from '@/lib/find-in-page'
 import { cn } from '@/lib/utils'
 
 // Stryker disable StringLiteral: react-syntax-highlighter's registerLanguage
@@ -91,7 +92,9 @@ function PreRenderer({ children }: ComponentProps<'pre'>) {
   const codeElement = Children.toArray(children).find(isValidElement) as
     ReactElement<ComponentProps<'code'>> | undefined
   const { className, children: codeChildren } = codeElement?.props ?? {}
-  const language = (className && /language-(\w+)/.exec(className)?.[1]) || DEFAULT_CODE_LANGUAGE
+  // The whole token after `language-`: `c++`, `objective-c` and `c#` stay intact.
+  const language =
+    (className && /(?:^|\s)language-(\S+)/.exec(className)?.[1]) || DEFAULT_CODE_LANGUAGE
 
   return <CodeBlock language={language} code={String(codeChildren ?? '').replace(/\n$/, '')} />
 }
@@ -173,7 +176,7 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
         data-slot="code-block-header"
         className="flex items-center justify-between border-b border-border bg-card px-4 py-1.5 text-xs text-muted-foreground"
       >
-        <span>{language}</span>
+        <span {...FIND_IGNORE_PROPS}>{language}</span>
         <button
           type="button"
           onClick={() => void copy(code)}
