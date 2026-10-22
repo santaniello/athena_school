@@ -1,38 +1,57 @@
-# Phase 2.28 — Compaction UX (optional)
+# Phase 2.28 — Compaction UX
 
-> **Status: optional.** Do this only after 2.25 is in use and the transient notice proves
-> insufficient. Re-grill the scope before implementing.
+> **Status: scoped.** Scope re-grilled and reduced after 2.25 shipped (PR #114). Product reference:
+> ChatGPT / Claude, where compaction is automatic and has no manual controls.
 
 ## Goal
 
-Make compaction legible and controllable. After 2.25 the model "forgets" older turns verbatim and
-works from a summary; the user should be able to see where that happened, read what Athena
-remembers, trigger it deliberately, and be re-oriented when they return to an old session.
+Make compaction legible. After 2.25 the model works from a summary instead of the older turns
+verbatim; the user should be able to see where that happened and read what Athena remembers.
 
-## Candidate scope
+## Scope
 
-1. **Transcript marker.** A divider at the point covered by the summary ("Earlier messages were
-   summarized") derived from `covers_until_message_id`. Requires returning the summary metadata
-   with the resume DTO.
-2. **View summary.** A read-only panel/dialog showing the current summary (the fixed sections from
-   2.24: progress, open difficulties, pending). Read-only first; editing is a separate decision
-   because user-edited LLM memory raises its own questions.
-3. **Compact now.** A manual action next to the context meter (2.22) that runs the same compaction
-   path as 2.25 on demand, with the same fallback behavior.
-4. **Session recap on reopen.** When a session is reopened after a configurable idle period, the
-   tutor may open with a short recap built from the summary's `Open difficulties` / `Pending`
-   sections ("Last time you struggled with X; there is a pending exercise on Y"). This is a new
-   kind of opening turn and needs its own prompt and a rule against fabricating progress that is
-   not in the summary.
+1. **Transcript marker.** A divider ("Earlier messages were summarized") placed right after the
+   message identified by `covers_until_message_id`. Requires returning the summary cursor with the
+   resume DTO and updating it live when a compaction happens.
+   - Cut message loaded: the marker goes right after it.
+   - Whole loaded window is after the cut: the marker goes above the first loaded message (after
+     the history sentinel once `hasMore` is false).
+   - No summary: no marker.
+   - Must not break the `scrollTop` restore or the `IntersectionObserver` of the paginated
+     history (2.26/2.27).
+2. **View summary.** The marker opens a read-only dialog with the current summary and its fixed
+   sections from 2.24 (`Progress`, `Open difficulties`, `Pending`, `Discussion log`). The content
+   is untrusted LLM output: rendered without raw HTML. No editing.
+
+## Not planned
+
+- **Compact now button.** Automatic compaction (2.25) plus the existing retry action is enough;
+  ChatGPT/Claude expose no manual control. Revisit only if automatic compaction proves unreliable.
+- **Session recap on reopen.** A new kind of tutor turn (own prompt, idle threshold, opt-out, rule
+  against fabricating progress). Not wanted for the product; the marker and the viewer re-orient
+  the user at no LLM cost.
 
 ## Constraints carried from earlier specs
 
 - The summary is untrusted LLM output and never a citable source (2.24, 2.25).
 - No structured learning progress table and no cross-session memory (2.24 product premise).
-- Business logic stays in `domain`/`application`; bindings stay thin.
+- Business logic stays in `domain`/`application`; bindings stay thin (ADR-001).
 
-## Open questions (resolve before implementing)
+## Design
 
-- Is the marker enough, or is the viewer needed?
-- Should "compact now" exist at all if automatic compaction is reliable?
-- Idle threshold and opt-out for the recap.
+### Backend
+- `application/study` `Resume` also receives the `ConversationSummaryRepository` and returns the
+  summary's `CoversUntilMessageID` next to the history page; a missing summary
+  (`ErrConversationSummaryNotFound`) means "no marker", not an error.
+- New read use case returning `Content`, `CoversUntilMessageID` and `UpdatedAt`; not found yields
+  an empty result.
+- `StudySessionHistoryResult` gains an optional `summaryCoversUntilMessageId`; new thin binding
+  `GetStudySessionSummary`.
+
+### Frontend
+- Marker row in `StudyChatScreen`, refreshed from the `study:context-compacted` handler.
+- Read-only summary dialog opened from the marker; wrappers in `lib/study.ts`.
+
+## Open questions
+
+None.
