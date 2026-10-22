@@ -1,6 +1,7 @@
 import {
   CompactStudySession,
   DeleteStudySession,
+  GetStudySessionSummary,
   GetStudySessionUsage,
   ListStudyMessagesBefore,
   ListStudySessionsByFolder,
@@ -50,6 +51,18 @@ export interface StudyMessagePage {
 
 export interface StudySessionHistory extends StudyMessagePage {
   session: StudySession
+  // The last message folded into the session's summary; empty when the
+  // session has none.
+  summaryCoversUntilMessageId: string
+}
+
+// StudySummary is a session's current conversation summary. found is false
+// when it has none. content is untrusted LLM output: show it as data.
+export interface StudySummary {
+  found: boolean
+  content: string
+  coversUntilMessageId: string
+  updatedAt: string
 }
 
 // SourceMode controls whether and how a study turn consults local
@@ -295,6 +308,18 @@ export async function resumeStudySession(sessionId: string): Promise<StudySessio
     messages: toStudyMessages(result.messages),
     hasMore: result.hasMore,
     nextCursor: result.nextCursor,
+    summaryCoversUntilMessageId: result.summaryCoversUntilMessageId,
+  }
+}
+
+// getStudySessionSummary returns the session's current conversation summary.
+export async function getStudySessionSummary(sessionId: string): Promise<StudySummary> {
+  const result = await GetStudySessionSummary(sessionId)
+  return {
+    found: result.found,
+    content: result.content,
+    coversUntilMessageId: result.coversUntilMessageId,
+    updatedAt: result.updatedAt,
   }
 }
 

@@ -8,6 +8,7 @@ import (
 	"log"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -124,4 +125,75 @@ func TestApp_CompactStudySession_failure_returnsTheErrorEmitsFailedEventAndLogsI
 	assert.NotContains(t, captured.compactionFailed[0].Reason, "raw detail")
 	assert.Contains(t, logs.String(), "raw detail")
 	assert.Empty(t, captured.compacted)
+}
+
+func TestApp_ResumeStudySession_withASummary_returnsItsCursor(t *testing.T) {
+	// Given a session compacted up to message-3
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	summaries := studymocks.NewMockConversationSummaryRepository(t)
+	sessions.EXPECT().GetByID(context.Background(), "session-1").
+		Return(domainstudy.Session{ID: "session-1", Context: domainstudy.ContextUsage{State: domainstudy.ContextStateNormal}}, nil).Once()
+	messages.EXPECT().
+		ListPage(context.Background(), "session-1", (*domainstudy.MessageCursor)(nil), study.DefaultMessagePageSize+1).
+		Return(nil, nil).Once()
+	summaries.EXPECT().Get(context.Background(), "session-1").
+		Return(domainstudy.ConversationSummary{SessionID: "session-1", Content: "## Progress", CoversUntilMessageID: "message-3"}, nil).Once()
+	app, _ := newTestStudyApp(t, sessions, messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t),
+		study.WithSummaries(summaries))
+
+	// When resuming the session
+	result, err := app.ResumeStudySession("session-1")
+
+	// Then the DTO carries the cursor of the summary
+	require.NoError(t, err)
+	assert.Equal(t, "message-3", result.SummaryCoversUntilMessageID)
+}
+
+func TestApp_GetStudySessionSummary_returnsTheSummary(t *testing.T) {
+	// Given a session with a summary
+	summaries := studymocks.NewMockConversationSummaryRepository(t)
+	updatedAt := time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
+	summaries.EXPECT().Get(context.Background(), "session-1").
+		Return(domainstudy.ConversationSummary{SessionID: "session-1", Content: "## Progress", CoversUntilMessageID: "message-3", UpdatedAt: updatedAt}, nil).Once()
+	app, _ := newTestStudyApp(t, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t),
+		profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t), study.WithSummaries(summaries))
+
+	// When reading it
+	result, err := app.GetStudySessionSummary("session-1")
+
+	// Then the DTO exposes content, cursor and timestamp
+	require.NoError(t, err)
+	assert.Equal(t, StudySummaryResult{Found: true, Content: "## Progress", CoversUntilMessageID: "message-3", UpdatedAt: "2026-10-21T12:00:00Z"}, result)
+}
+
+func TestApp_GetStudySessionSummary_withoutSummary_returnsNotFound(t *testing.T) {
+	// Given a session that was never compacted
+	summaries := studymocks.NewMockConversationSummaryRepository(t)
+	summaries.EXPECT().Get(context.Background(), "session-1").
+		Return(domainstudy.ConversationSummary{}, domainstudy.ErrConversationSummaryNotFound).Once()
+	app, _ := newTestStudyApp(t, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t),
+		profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t), study.WithSummaries(summaries))
+
+	// When reading its summary
+	result, err := app.GetStudySessionSummary("session-1")
+
+	// Then it is reported as not found without an error
+	require.NoError(t, err)
+	assert.Equal(t, StudySummaryResult{}, result)
+}
+
+func TestApp_GetStudySessionSummary_propagatesReadError(t *testing.T) {
+	// Given a summary repository that fails
+	readErr := errors.New("database unavailable")
+	summaries := studymocks.NewMockConversationSummaryRepository(t)
+	summaries.EXPECT().Get(context.Background(), "session-1").Return(domainstudy.ConversationSummary{}, readErr).Once()
+	app, _ := newTestStudyApp(t, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t),
+		profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t), study.WithSummaries(summaries))
+
+	// When reading the summary
+	_, err := app.GetStudySessionSummary("session-1")
+
+	// Then the error propagates
+	require.ErrorIs(t, err, readErr)
 }

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   CompactStudySession,
   DeleteStudySession,
+  GetStudySessionSummary,
   GetStudySessionUsage,
   ListStudyMessagesBefore,
   ListStudySessionsByFolder,
@@ -15,6 +16,7 @@ import { EventsOn } from '../../wailsjs/runtime/runtime'
 import {
   compactStudySession,
   deleteStudySession,
+  getStudySessionSummary,
   getStudySessionUsage,
   listMessagesBefore,
   listStudySessionsByFolder,
@@ -52,6 +54,7 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   RequestOpeningTurn: vi.fn(),
   SendStudyMessage: vi.fn(),
   DeleteStudySession: vi.fn(),
+  GetStudySessionSummary: vi.fn(),
   GetStudySessionUsage: vi.fn(),
   ResumeStudySession: vi.fn(),
   MoveStudySession: vi.fn(),
@@ -167,6 +170,7 @@ describe('resumeStudySession', () => {
       ],
       hasMore: true,
       nextCursor: 'm1',
+      summaryCoversUntilMessageId: 'm1',
     } as never)
 
     // When resuming a session
@@ -178,6 +182,8 @@ describe('resumeStudySession', () => {
     // And the cursor to the older messages the latest page did not include
     expect(result.hasMore).toBe(true)
     expect(result.nextCursor).toBe('m1')
+    // And the cursor of the session's summary
+    expect(result.summaryCoversUntilMessageId).toBe('m1')
     // toStrictEqual so a dropped id or sources (undefined) cannot slip through
     expect(result.messages).toStrictEqual([
       { id: 'm1', role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z', sources: [] },
@@ -189,6 +195,30 @@ describe('resumeStudySession', () => {
         sources: [],
       },
     ])
+  })
+})
+
+describe('getStudySessionSummary', () => {
+  it('returns the summary of the session', async () => {
+    // Given a GetStudySessionSummary call that finds a summary
+    vi.mocked(GetStudySessionSummary).mockResolvedValueOnce({
+      found: true,
+      content: '## Progress',
+      coversUntilMessageId: 'm3',
+      updatedAt: '2026-10-21T12:00:00Z',
+    } as never)
+
+    // When reading it
+    const result = await getStudySessionSummary('session-1')
+
+    // Then it forwarded the sessionId and returned every field
+    expect(GetStudySessionSummary).toHaveBeenCalledWith('session-1')
+    expect(result).toStrictEqual({
+      found: true,
+      content: '## Progress',
+      coversUntilMessageId: 'm3',
+      updatedAt: '2026-10-21T12:00:00Z',
+    })
   })
 })
 

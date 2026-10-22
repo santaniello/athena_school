@@ -20,6 +20,15 @@ type MessageWithSources struct {
 	Sources []domainknowledge.Source
 }
 
+// SessionHistory is the page Resume returns: the latest slice of the history
+// plus the cursor of the session's summary, so the transcript can mark where
+// older messages were folded into it. SummaryCoversUntilMessageID is empty
+// when the session has no summary.
+type SessionHistory struct {
+	MessageHistoryPage
+	SummaryCoversUntilMessageID string
+}
+
 // Resume returns sessionID and the most recent page of its message history
 // (DefaultMessagePageSize messages; older ones are read with
 // ListMessagesBefore), so the user can keep chatting in it. Never makes an LLM call and never waits on catalog I/O:
@@ -30,21 +39,30 @@ type MessageWithSources struct {
 // session with no resolved model at all just surfaces the transient
 // unavailable notice, since there is no trustworthy ID to refresh against.
 // Resume is a read: a failure to persist a freshly resolved context length
-// degrades to the transient unavailable notice instead of denying access to
-// the session/history already loaded — the next real measurement persists
-// it again regardless.
+// degrades to the transient unavailable notice, and a failure to read the
+// summary to no marker, instead of denying access to the session/history
+// already loaded — the next real measurement persists it again regardless.
 func (s *Service) Resume(
 	ctx context.Context, sessionID string,
 	onContext ContextCallback, onContextUnavailable ContextUnavailableCallback,
-) (domainstudy.Session, MessageHistoryPage, error) {
+) (domainstudy.Session, SessionHistory, error) {
 	session, err := s.sessions.GetByID(ctx, sessionID)
 	if err != nil {
-		return domainstudy.Session{}, MessageHistoryPage{}, fmt.Errorf("study: finding session: %w", err)
+		return domainstudy.Session{}, SessionHistory{}, fmt.Errorf("study: finding session: %w", err)
 	}
 
 	page, err := s.readMessagePage(ctx, sessionID, nil, DefaultMessagePageSize)
 	if err != nil {
-		return domainstudy.Session{}, MessageHistoryPage{}, err
+		return domainstudy.Session{}, SessionHistory{}, err
+	}
+
+	// The summary only places the transcript marker: failing to read it must
+	// not deny access to a session whose history already loaded, so it
+	// degrades to "no marker". GetSummary reports the error to whoever asks
+	// for the summary explicitly.
+	summary, _, err := s.GetSummary(ctx, sessionID)
+	if err != nil {
+		summary = domainstudy.ConversationSummary{}
 	}
 
 	if session.Context.ContextLength == 0 {
@@ -73,5 +91,5 @@ func (s *Service) Resume(
 		}
 	}
 
-	return session, page, nil
+	return session, SessionHistory{MessageHistoryPage: page, SummaryCoversUntilMessageID: summary.CoversUntilMessageID}, nil
 }

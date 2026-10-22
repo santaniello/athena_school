@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -256,4 +257,71 @@ func TestResume_unresolvedContextLength_cacheMiss_startsBackgroundRefresh_withou
 	// (and mockery's t.Cleanup expectation check) exits, so the goroutine's
 	// mock call can never race with it.
 	<-done
+}
+
+func TestResume_returnsTheSummaryCursorWhenTheSessionHasASummary(t *testing.T) {
+	// Given a session that was compacted up to message-3
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	session := domainstudy.Session{ID: "session-1"}
+	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(session, nil).Once()
+	expectLatestPage(messages, nil)
+	summaries := studymocks.NewMockConversationSummaryRepository(t)
+	summaries.EXPECT().Get(context.Background(), "session-1").
+		Return(domainstudy.ConversationSummary{SessionID: "session-1", Content: "## Progress", CoversUntilMessageID: "message-3", UpdatedAt: time.Now()}, nil).
+		Once()
+	service := NewService(sessions, messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t),
+		knowledgemocks.NewMockRetriever(t), nil, nil, mockNoMessageSources(t), nil, nil, WithSummaries(summaries))
+
+	// When resuming the session
+	_, history, err := service.Resume(context.Background(), "session-1", nil, nil)
+
+	// Then the history carries the cursor of the summary
+	require.NoError(t, err)
+	require.Equal(t, "message-3", history.SummaryCoversUntilMessageID)
+}
+
+func TestResume_hasNoSummaryCursorWhenTheSessionHasNoSummary(t *testing.T) {
+	// Given a session that was never compacted
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(domainstudy.Session{ID: "session-1"}, nil).Once()
+	expectLatestPage(messages, nil)
+	summaries := studymocks.NewMockConversationSummaryRepository(t)
+	summaries.EXPECT().Get(context.Background(), "session-1").
+		Return(domainstudy.ConversationSummary{}, domainstudy.ErrConversationSummaryNotFound).Once()
+	service := NewService(sessions, messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t),
+		knowledgemocks.NewMockRetriever(t), nil, nil, mockNoMessageSources(t), nil, nil, WithSummaries(summaries))
+
+	// When resuming the session
+	_, history, err := service.Resume(context.Background(), "session-1", nil, nil)
+
+	// Then resume succeeds without a cursor
+	require.NoError(t, err)
+	require.Empty(t, history.SummaryCoversUntilMessageID)
+}
+
+func TestResume_degradesToNoSummaryCursorWhenTheSummaryCannotBeRead(t *testing.T) {
+	// Given a summary repository that fails to read, for a session whose
+	// history loads fine
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	session := domainstudy.Session{ID: "session-1"}
+	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(session, nil).Once()
+	history := []domainstudy.Message{{ID: "message-1", Role: domainstudy.RoleUser, Content: "Hi"}}
+	expectLatestPage(messages, history)
+	summaries := studymocks.NewMockConversationSummaryRepository(t)
+	summaries.EXPECT().Get(context.Background(), "session-1").
+		Return(domainstudy.ConversationSummary{SessionID: "session-1", CoversUntilMessageID: "message-1"}, errors.New("database unavailable")).Once()
+	service := NewService(sessions, messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t),
+		knowledgemocks.NewMockRetriever(t), nil, nil, mockNoMessageSources(t, "message-1"), nil, nil, WithSummaries(summaries))
+
+	// When resuming the session
+	got, page, err := service.Resume(context.Background(), "session-1", nil, nil)
+
+	// Then the session stays usable: history is returned and there is no cursor
+	require.NoError(t, err)
+	require.Equal(t, session, got)
+	require.Equal(t, []MessageWithSources{{Message: history[0]}}, page.Messages)
+	require.Empty(t, page.SummaryCoversUntilMessageID)
 }
