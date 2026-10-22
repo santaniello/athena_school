@@ -49,6 +49,7 @@ body {
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
   --color-muted: var(--muted);
+  --color-code: var(--code);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
@@ -82,6 +83,7 @@ body {
   --secondary: oklch(0.28 0.015 50);
   --secondary-foreground: oklch(0.96 0.008 85);
   --muted: oklch(0.22 0.015 50);
+  --code: oklch(0.12 0.005 50);
   --muted-foreground: oklch(0.68 0.02 80);
   /* Terracotta-tinted hover accent */
   --accent: oklch(0.3 0.05 40);

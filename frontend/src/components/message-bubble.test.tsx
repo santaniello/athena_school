@@ -172,7 +172,7 @@ describe('MessageBubble', () => {
     expect(codeBlock?.textContent).toBe('const x = 1')
     expect(codeBlock?.querySelectorAll('.token')).toHaveLength(0)
     const plainBox = codeBlock?.firstElementChild as HTMLElement
-    expect(plainBox.style.background).toBe('var(--color-muted)')
+    expect(plainBox.style.background).toBe('var(--color-code)')
     expect(plainBox.style.padding).toBe('0.75rem 1rem')
 
     // And once it nears the viewport it is highlighted
@@ -203,7 +203,7 @@ describe('MessageBubble', () => {
     // Athena CSS-variable overrides, not the syntax highlighter's own
     // built-in chrome
     const wrapper = container.querySelector('[data-slot="code-block"] > div') as HTMLElement
-    expect(wrapper.style.background).toBe('var(--color-muted)')
+    expect(wrapper.style.background).toBe('var(--color-code)')
     expect(wrapper.style.margin).toBe('0px')
     expect(wrapper.style.padding).toBe('0.75rem 1rem')
     expect(wrapper.style.fontSize).toBe('0.8125rem')

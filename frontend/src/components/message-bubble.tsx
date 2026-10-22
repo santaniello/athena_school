@@ -131,7 +131,7 @@ function CopyIcon({ copied }: { copied: boolean }) {
 const HIGHLIGHT_ROOT_MARGIN = '400px 0px'
 
 const CODE_BLOCK_STYLE = {
-  background: 'var(--color-muted)',
+  background: 'var(--color-code)',
   margin: 0,
   padding: '0.75rem 1rem',
   fontSize: '0.8125rem',
@@ -171,7 +171,7 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
     >
       <div
         data-slot="code-block-header"
-        className="flex items-center justify-between border-b border-border bg-muted px-4 py-1.5 text-xs text-muted-foreground"
+        className="flex items-center justify-between border-b border-border bg-card px-4 py-1.5 text-xs text-muted-foreground"
       >
         <span>{language}</span>
         <button
