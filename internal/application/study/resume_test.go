@@ -301,21 +301,27 @@ func TestResume_hasNoSummaryCursorWhenTheSessionHasNoSummary(t *testing.T) {
 	require.Empty(t, history.SummaryCoversUntilMessageID)
 }
 
-func TestResume_propagatesSummaryReadError(t *testing.T) {
-	// Given a summary repository that fails to read
+func TestResume_degradesToNoSummaryCursorWhenTheSummaryCannotBeRead(t *testing.T) {
+	// Given a summary repository that fails to read, for a session whose
+	// history loads fine
 	sessions := studymocks.NewMockSessionRepository(t)
 	messages := studymocks.NewMockMessageRepository(t)
-	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(domainstudy.Session{ID: "session-1"}, nil).Once()
-	expectLatestPage(messages, nil)
-	readErr := errors.New("database unavailable")
+	session := domainstudy.Session{ID: "session-1"}
+	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(session, nil).Once()
+	history := []domainstudy.Message{{ID: "message-1", Role: domainstudy.RoleUser, Content: "Hi"}}
+	expectLatestPage(messages, history)
 	summaries := studymocks.NewMockConversationSummaryRepository(t)
-	summaries.EXPECT().Get(context.Background(), "session-1").Return(domainstudy.ConversationSummary{}, readErr).Once()
+	summaries.EXPECT().Get(context.Background(), "session-1").
+		Return(domainstudy.ConversationSummary{SessionID: "session-1", CoversUntilMessageID: "message-1"}, errors.New("database unavailable")).Once()
 	service := NewService(sessions, messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t),
-		knowledgemocks.NewMockRetriever(t), nil, nil, mockNoMessageSources(t), nil, nil, WithSummaries(summaries))
+		knowledgemocks.NewMockRetriever(t), nil, nil, mockNoMessageSources(t, "message-1"), nil, nil, WithSummaries(summaries))
 
 	// When resuming the session
-	_, _, err := service.Resume(context.Background(), "session-1", nil, nil)
+	got, page, err := service.Resume(context.Background(), "session-1", nil, nil)
 
-	// Then the error propagates
-	require.ErrorIs(t, err, readErr)
+	// Then the session stays usable: history is returned and there is no cursor
+	require.NoError(t, err)
+	require.Equal(t, session, got)
+	require.Equal(t, []MessageWithSources{{Message: history[0]}}, page.Messages)
+	require.Empty(t, page.SummaryCoversUntilMessageID)
 }

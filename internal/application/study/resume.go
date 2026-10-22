@@ -39,9 +39,9 @@ type SessionHistory struct {
 // session with no resolved model at all just surfaces the transient
 // unavailable notice, since there is no trustworthy ID to refresh against.
 // Resume is a read: a failure to persist a freshly resolved context length
-// degrades to the transient unavailable notice instead of denying access to
-// the session/history already loaded — the next real measurement persists
-// it again regardless.
+// degrades to the transient unavailable notice, and a failure to read the
+// summary to no marker, instead of denying access to the session/history
+// already loaded — the next real measurement persists it again regardless.
 func (s *Service) Resume(
 	ctx context.Context, sessionID string,
 	onContext ContextCallback, onContextUnavailable ContextUnavailableCallback,
@@ -56,9 +56,13 @@ func (s *Service) Resume(
 		return domainstudy.Session{}, SessionHistory{}, err
 	}
 
+	// The summary only places the transcript marker: failing to read it must
+	// not deny access to a session whose history already loaded, so it
+	// degrades to "no marker". GetSummary reports the error to whoever asks
+	// for the summary explicitly.
 	summary, _, err := s.GetSummary(ctx, sessionID)
 	if err != nil {
-		return domainstudy.Session{}, SessionHistory{}, err
+		summary = domainstudy.ConversationSummary{}
 	}
 
 	if session.Context.ContextLength == 0 {
