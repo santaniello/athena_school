@@ -22,8 +22,11 @@ import { LocalSourcesStrip } from '@/components/local-sources-strip'
 import { SessionUsageBar } from '@/components/session-usage-bar'
 import { SummaryDialog } from '@/components/summary-dialog'
 import { SummaryMarker } from '@/components/summary-marker'
+import { FindBar } from '@/components/find-bar'
 import { ToastViewport, type ToastItem } from '@/components/toast'
+import { useFindInPage } from '@/hooks/use-find-in-page'
 import { useMessageHistory } from '@/hooks/use-message-history'
+import { FIND_IGNORE_PROPS } from '@/lib/find-in-page'
 import {
   compactStudySession,
   getStudySessionSummary,
@@ -341,6 +344,37 @@ function StudyChatScreen({
     start: startHistory,
     loadOlder: loadEarlierMessages,
   } = useMessageHistory(sessionId, prependPage)
+
+  // Jumping to a match must not be undone by the follow-the-bottom scroll.
+  const stopFollowingTranscript = useCallback(() => {
+    followTranscriptRef.current = false
+  }, [])
+  const find = useFindInPage({ containerRef: transcriptRef, onNavigate: stopFollowingTranscript })
+  const { isOpen: findOpen, open: openFind, close: closeFindBar } = find
+
+  const closeFind = useCallback(() => {
+    closeFindBar()
+    textareaRef.current?.focus()
+  }, [closeFindBar])
+
+  // Ctrl+F (Cmd+F on macOS) opens the find bar instead of the webview's own.
+  useEffect(() => {
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
+        event.preventDefault()
+        openFind()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [openFind])
+
+  // A search covers the whole conversation, so while the bar is open every
+  // earlier page is fetched, one after another (status goes loading -> idle
+  // between pages). A failed page stops the chain; Retry or closing resets it.
+  useEffect(() => {
+    if (findOpen && hasEarlierMessages && earlierStatus === 'idle') void loadEarlierMessages()
+  }, [findOpen, hasEarlierMessages, earlierStatus, loadEarlierMessages])
 
   // Fetched on resume and again when a turn ends (study:done / study:error):
   // a failed turn may still have recorded its embedding / HyDE calls.
@@ -685,7 +719,11 @@ function StudyChatScreen({
   const summaryMarkerIndex = summaryCoversUntilId
     ? messages.findIndex((message) => message.id === summaryCoversUntilId)
     : -1
-  const summaryMarker = <SummaryMarker />
+  const summaryMarker = (
+    <div className="contents" {...FIND_IGNORE_PROPS}>
+      <SummaryMarker />
+    </div>
+  )
 
   // The summary belongs to the whole session, so its button lives with the
   // other session-level controls, to the left of the source-mode selector. It
@@ -713,6 +751,20 @@ function StudyChatScreen({
         onClose={() => setSummaryOpen(false)}
       />
       <SessionUsageBar context={{ state: contextState, ...contextTokens }} usage={sessionUsage} />
+      {findOpen && (
+        <FindBar
+          query={find.query}
+          matchCount={find.matchCount}
+          activeIndex={find.activeIndex}
+          loadingHistory={hasEarlierMessages && earlierStatus === 'loading'}
+          historyError={earlierStatus === 'error' ? earlierError : null}
+          inputRef={find.inputRef}
+          onQueryChange={find.setQuery}
+          onNext={find.next}
+          onPrev={find.prev}
+          onClose={closeFind}
+        />
+      )}
       <div
         ref={transcriptRef}
         onScroll={handleTranscriptScroll}
@@ -724,6 +776,7 @@ function StudyChatScreen({
           <div
             ref={sentinelRef}
             aria-live="polite"
+            {...FIND_IGNORE_PROPS}
             className="flex min-h-px shrink-0 justify-center text-xs text-muted-foreground"
           >
             {earlierStatus === 'loading' && <span>Loading earlier messages…</span>}

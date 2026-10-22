@@ -84,6 +84,10 @@ body {
   --secondary-foreground: oklch(0.96 0.008 85);
   --muted: oklch(0.22 0.015 50);
   --code: oklch(0.12 0.005 50);
+  /* Find in conversation: blue and orange stay readable on the gold user bubble,
+     the dark assistant bubble and the near-black code blocks. */
+  --find-match: oklch(0.55 0.17 250);
+  --find-match-active: oklch(0.75 0.18 55);
   --muted-foreground: oklch(0.68 0.02 80);
   /* Terracotta-tinted hover accent */
   --accent: oklch(0.3 0.05 40);
@@ -248,4 +252,14 @@ body {
   html {
     @apply font-sans;
   }
+}
+
+::highlight(find-match) {
+  background-color: var(--find-match);
+  color: white;
+}
+
+::highlight(find-match-active) {
+  background-color: var(--find-match-active);
+  color: black;
 }
