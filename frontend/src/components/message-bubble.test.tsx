@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { setSentinelVisible, setSentinelVisibleOnObserve } from '@/test/intersection-observer'
@@ -22,6 +22,11 @@ function testSource(overrides: Partial<StudySource>): StudySource {
 }
 
 describe('MessageBubble', () => {
+  // A stubbed global must not leak into later tests when an assertion fails.
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('shows a copy button for a settled assistant message', () => {
     // Given a settled (non-streaming) assistant message
     render(<MessageBubble role="assistant" content="Hi there" />)
@@ -187,7 +192,6 @@ describe('MessageBubble', () => {
     // Then it is highlighted right away
     const codeBlock = container.querySelector('[data-slot="code-block"]')
     expect(codeBlock?.querySelectorAll('.token').length).toBeGreaterThan(0)
-    vi.unstubAllGlobals()
   })
 
   it('themes the code block chrome and inner code element with the Athena design tokens', () => {
