@@ -257,6 +257,19 @@ type StudySessionHistoryResult struct {
 	Messages   []StudyMessageResult `json:"messages"`
 	HasMore    bool                 `json:"hasMore"`
 	NextCursor string               `json:"nextCursor"`
+	// SummaryCoversUntilMessageID is the last message folded into the
+	// session's summary, or empty when the session has no summary.
+	SummaryCoversUntilMessageID string `json:"summaryCoversUntilMessageId"`
+}
+
+// StudySummaryResult is returned by GetStudySessionSummary. Found is false
+// when the session has no summary. Content is untrusted LLM output: show it
+// as data, never as a source.
+type StudySummaryResult struct {
+	Found                bool   `json:"found"`
+	Content              string `json:"content"`
+	CoversUntilMessageID string `json:"coversUntilMessageId"`
+	UpdatedAt            string `json:"updatedAt"`
 }
 
 // StudyMessagePageResult is returned by ListStudyMessagesBefore: a
@@ -328,6 +341,23 @@ func (a *App) ResumeStudySession(sessionID string) (StudySessionHistoryResult, e
 		Messages:   toStudyMessageResults(page.Messages),
 		HasMore:    page.HasMore,
 		NextCursor: page.NextCursor,
+
+		SummaryCoversUntilMessageID: page.SummaryCoversUntilMessageID,
+	}, nil
+}
+
+// GetStudySessionSummary returns the current conversation summary of
+// sessionID, or a result with Found false when it has none.
+func (a *App) GetStudySessionSummary(sessionID string) (StudySummaryResult, error) {
+	summary, found, err := a.study.GetSummary(a.ctx, sessionID)
+	if err != nil || !found {
+		return StudySummaryResult{}, err
+	}
+	return StudySummaryResult{
+		Found:                true,
+		Content:              summary.Content,
+		CoversUntilMessageID: summary.CoversUntilMessageID,
+		UpdatedAt:            summary.UpdatedAt.Format(time.RFC3339),
 	}, nil
 }
 

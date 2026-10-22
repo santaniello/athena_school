@@ -20,6 +20,15 @@ type MessageWithSources struct {
 	Sources []domainknowledge.Source
 }
 
+// SessionHistory is the page Resume returns: the latest slice of the history
+// plus the cursor of the session's summary, so the transcript can mark where
+// older messages were folded into it. SummaryCoversUntilMessageID is empty
+// when the session has no summary.
+type SessionHistory struct {
+	MessageHistoryPage
+	SummaryCoversUntilMessageID string
+}
+
 // Resume returns sessionID and the most recent page of its message history
 // (DefaultMessagePageSize messages; older ones are read with
 // ListMessagesBefore), so the user can keep chatting in it. Never makes an LLM call and never waits on catalog I/O:
@@ -36,15 +45,20 @@ type MessageWithSources struct {
 func (s *Service) Resume(
 	ctx context.Context, sessionID string,
 	onContext ContextCallback, onContextUnavailable ContextUnavailableCallback,
-) (domainstudy.Session, MessageHistoryPage, error) {
+) (domainstudy.Session, SessionHistory, error) {
 	session, err := s.sessions.GetByID(ctx, sessionID)
 	if err != nil {
-		return domainstudy.Session{}, MessageHistoryPage{}, fmt.Errorf("study: finding session: %w", err)
+		return domainstudy.Session{}, SessionHistory{}, fmt.Errorf("study: finding session: %w", err)
 	}
 
 	page, err := s.readMessagePage(ctx, sessionID, nil, DefaultMessagePageSize)
 	if err != nil {
-		return domainstudy.Session{}, MessageHistoryPage{}, err
+		return domainstudy.Session{}, SessionHistory{}, err
+	}
+
+	summary, _, err := s.GetSummary(ctx, sessionID)
+	if err != nil {
+		return domainstudy.Session{}, SessionHistory{}, err
 	}
 
 	if session.Context.ContextLength == 0 {
@@ -73,5 +87,5 @@ func (s *Service) Resume(
 		}
 	}
 
-	return session, page, nil
+	return session, SessionHistory{MessageHistoryPage: page, SummaryCoversUntilMessageID: summary.CoversUntilMessageID}, nil
 }
