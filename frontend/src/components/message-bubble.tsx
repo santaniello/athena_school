@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { ComponentProps } from 'react'
 import { Check, Copy } from 'lucide-react'
 import ReactMarkdown, { type Components } from 'react-markdown'
@@ -88,27 +88,66 @@ function CodeRenderer({ className, children, ...props }: ComponentProps<'code'>)
     )
   }
 
+  return <CodeBlock language={match[1]} code={String(children).replace(/\n$/, '')} />
+}
+
+// How far outside the viewport a code block still gets highlighted, so it is
+// ready before it scrolls into view.
+const HIGHLIGHT_ROOT_MARGIN = '400px 0px'
+
+const CODE_BLOCK_STYLE = {
+  background: 'var(--color-muted)',
+  margin: 0,
+  padding: '0.75rem 1rem',
+  fontSize: '0.8125rem',
+}
+const CODE_TAG_STYLE = {
+  fontFamily: 'var(--font-mono, ui-monospace, monospace)',
+  color: 'var(--color-foreground)',
+}
+
+// Prism highlighting is the expensive part of a message: a long session holds
+// hundreds of blocks, and highlighting them all while it opens freezes the
+// window for seconds. A block is shown as plain monospace text, with the same
+// box as the highlighted one, until it is near the viewport.
+function CodeBlock({ language, code }: { language: string; code: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [highlight, setHighlight] = useState(typeof IntersectionObserver === 'undefined')
+
+  useEffect(() => {
+    const element = ref.current
+    if (highlight || !element) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setHighlight(true)
+      },
+      { rootMargin: HIGHLIGHT_ROOT_MARGIN },
+    )
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [highlight])
+
   return (
-    <div data-slot="code-block" className="my-2 overflow-hidden rounded-md border border-border">
-      <SyntaxHighlighter
-        language={match[1]}
-        PreTag="div"
-        style={oneDark}
-        customStyle={{
-          background: 'var(--color-muted)',
-          margin: 0,
-          padding: '0.75rem 1rem',
-          fontSize: '0.8125rem',
-        }}
-        codeTagProps={{
-          style: {
-            fontFamily: 'var(--font-mono, ui-monospace, monospace)',
-            color: 'var(--color-foreground)',
-          },
-        }}
-      >
-        {String(children).replace(/\n$/, '')}
-      </SyntaxHighlighter>
+    <div
+      ref={ref}
+      data-slot="code-block"
+      className="my-2 overflow-hidden rounded-md border border-border"
+    >
+      {highlight ? (
+        <SyntaxHighlighter
+          language={language}
+          PreTag="div"
+          style={oneDark}
+          customStyle={CODE_BLOCK_STYLE}
+          codeTagProps={{ style: CODE_TAG_STYLE }}
+        >
+          {code}
+        </SyntaxHighlighter>
+      ) : (
+        <div style={{ ...CODE_BLOCK_STYLE, overflow: 'auto', lineHeight: 1.5 }}>
+          <code style={{ ...CODE_TAG_STYLE, whiteSpace: 'pre' }}>{code}</code>
+        </div>
+      )}
     </div>
   )
 }

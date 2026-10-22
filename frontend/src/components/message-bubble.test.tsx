@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { setSentinelVisible, setSentinelVisibleOnObserve } from '@/test/intersection-observer'
 import { MessageBubble } from './message-bubble'
 import type { StudySource } from '@/lib/study'
 
@@ -138,8 +139,9 @@ describe('MessageBubble', () => {
     expect(screen.queryByText(/\*\*/)).not.toBeInTheDocument()
   })
 
-  it('renders a fenced code block through the syntax highlighter, not as raw text', () => {
-    // Given a fenced code block with a known language
+  it('renders a fenced code block through the syntax highlighter, not as raw text', async () => {
+    // Given a fenced code block with a known language, near the viewport
+    setSentinelVisibleOnObserve(true)
     const content = ['```typescript', 'const x = 1', '```'].join('\n')
     const { container } = render(<MessageBubble role="assistant" content={content} />)
 
@@ -152,7 +154,40 @@ describe('MessageBubble', () => {
     // And the "typescript" grammar actually tokenized the code (proves the
     // full language name was captured and a registered grammar was used,
     // not just that the raw text happens to be present)
+    await waitFor(() => expect(codeBlock?.querySelectorAll('.token').length).toBeGreaterThan(0))
+  })
+
+  it('shows a code block as plain text until it nears the viewport, then highlights it', async () => {
+    // Given a fenced code block far from the viewport
+    const content = ['```typescript', 'const x = 1', '```'].join('\n')
+    const { container } = render(<MessageBubble role="assistant" content={content} />)
+    const codeBlock = container.querySelector('[data-slot="code-block"]')
+
+    // Then its code is already readable, but not tokenized yet
+    expect(codeBlock?.textContent).toBe('const x = 1')
+    expect(codeBlock?.querySelectorAll('.token')).toHaveLength(0)
+    const plainBox = codeBlock?.firstElementChild as HTMLElement
+    expect(plainBox.style.background).toBe('var(--color-muted)')
+    expect(plainBox.style.padding).toBe('0.75rem 1rem')
+
+    // And once it nears the viewport it is highlighted
+    setSentinelVisible(true)
+    await waitFor(() => expect(codeBlock?.querySelectorAll('.token').length).toBeGreaterThan(0))
+    expect(codeBlock?.textContent).toBe('const x = 1')
+  })
+
+  it('highlights immediately where IntersectionObserver is unavailable', () => {
+    // Given a runtime without IntersectionObserver
+    vi.stubGlobal('IntersectionObserver', undefined)
+    const content = ['```typescript', 'const x = 1', '```'].join('\n')
+
+    // When rendering a fenced code block
+    const { container } = render(<MessageBubble role="assistant" content={content} />)
+
+    // Then it is highlighted right away
+    const codeBlock = container.querySelector('[data-slot="code-block"]')
     expect(codeBlock?.querySelectorAll('.token').length).toBeGreaterThan(0)
+    vi.unstubAllGlobals()
   })
 
   it('themes the code block chrome and inner code element with the Athena design tokens', () => {
@@ -197,16 +232,20 @@ describe('MessageBubble', () => {
     ['sql', 'SELECT * FROM t'],
     ['tsx', 'const x: number = 1'],
     ['yaml', 'key: value'],
-  ])('registers the "%s" language grammar for real syntax highlighting', (language, snippet) => {
-    // Given a fenced code block for each language the bubble registers
-    const content = ['```' + language, snippet, '```'].join('\n')
-    const { container } = render(<MessageBubble role="assistant" content={content} />)
+  ])(
+    'registers the "%s" language grammar for real syntax highlighting',
+    async (language, snippet) => {
+      // Given a fenced code block for each language the bubble registers
+      setSentinelVisibleOnObserve(true)
+      const content = ['```' + language, snippet, '```'].join('\n')
+      const { container } = render(<MessageBubble role="assistant" content={content} />)
 
-    // Then Prism actually tokenized it (an unregistered language renders as
-    // one plain, un-tokenized span instead)
-    const codeBlock = container.querySelector('[data-slot="code-block"]')
-    expect(codeBlock?.querySelectorAll('.token').length).toBeGreaterThan(0)
-  })
+      // Then Prism actually tokenized it (an unregistered language renders as
+      // one plain, un-tokenized span instead)
+      const codeBlock = container.querySelector('[data-slot="code-block"]')
+      await waitFor(() => expect(codeBlock?.querySelectorAll('.token').length).toBeGreaterThan(0))
+    },
+  )
 
   it('renders inline code as a plain code element, not through the syntax highlighter', () => {
     // Given inline code (no language fence)
