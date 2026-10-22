@@ -1,4 +1,13 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  Fragment,
+  memo,
+  startTransition,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import { createPortal } from 'react-dom'
 import type { ChangeEvent, KeyboardEvent, UIEvent } from 'react'
 import { ArrowUp } from 'lucide-react'
@@ -11,10 +20,13 @@ import { ThinkingIndicator } from '@/components/thinking-indicator'
 import { SourceModeSelect } from '@/components/source-mode-select'
 import { LocalSourcesStrip } from '@/components/local-sources-strip'
 import { SessionUsageBar } from '@/components/session-usage-bar'
+import { SummaryDialog } from '@/components/summary-dialog'
+import { SummaryMarker } from '@/components/summary-marker'
 import { ToastViewport, type ToastItem } from '@/components/toast'
 import { useMessageHistory } from '@/hooks/use-message-history'
 import {
   compactStudySession,
+  getStudySessionSummary,
   getStudySessionUsage,
   onStudyChunk,
   onStudyCompactionFailed,
@@ -72,6 +84,18 @@ type ContextState = 'normal' | 'warning' | 'blocked'
 async function fetchSessionUsage(sessionId: string): Promise<StudySessionUsage | null> {
   try {
     return (await getStudySessionUsage(sessionId)) ?? null
+  } catch {
+    return null
+  }
+}
+
+// The cursor of the session's current summary, or null when it could not be
+// read or there is none — the marker then stays as it was, since it is
+// informational and must never break the chat.
+async function fetchSummaryCursor(sessionId: string): Promise<string | null> {
+  try {
+    const summary = await getStudySessionSummary(sessionId)
+    return summary?.found ? summary.coversUntilMessageId : null
   } catch {
     return null
   }
@@ -218,6 +242,9 @@ function StudyChatScreen({
   const [sessionTopic, setSessionTopic] = useState(initialTopic)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(mode === 'new')
+  // True from the mount of a resumed session until its history arrives or
+  // fails. The screen is keyed by session, so the initial value is enough.
+  const [loadingHistory, setLoadingHistory] = useState(mode === 'resume')
   const [sourceMode, setSourceMode] = useState<SourceMode>('notes')
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -243,6 +270,10 @@ function StudyChatScreen({
   // null when none failed since the last success (or after a reload).
   const [compactionFailure, setCompactionFailure] = useState<string | null>(null)
   const [toasts, setToasts] = useState<ToastItem[]>([])
+  // The last message folded into the session's summary; empty when none. The
+  // transcript shows a marker right after it.
+  const [summaryCoversUntilId, setSummaryCoversUntilId] = useState('')
+  const [summaryOpen, setSummaryOpen] = useState(false)
   // Mirrors contextState for event handlers subscribed once per session.
   const contextStateRef = useRef<ContextState>('normal')
   // Set when a study:compaction-failed arrives during a manual retry, so the
@@ -425,11 +456,20 @@ function StudyChatScreen({
           estimated: history.session.context.estimated,
         })
         refreshSessionUsage()
-        setMessages(history.messages.map(toChatMessage))
         startHistory(history.hasMore, history.nextCursor)
+        // Rendering a long history (markdown of every message) is the slow
+        // part of opening a session. As a transition it is rendered in
+        // slices, so the loading indicator keeps animating until the whole
+        // history is committed in one go.
+        startTransition(() => {
+          setMessages(history.messages.map(toChatMessage))
+          setSummaryCoversUntilId(history.summaryCoversUntilMessageId)
+          setLoadingHistory(false)
+        })
       })
       .catch((err: unknown) => {
         if (currentSessionIdRef.current !== sessionId) return
+        setLoadingHistory(false)
         setError(err instanceof Error ? err.message : 'Failed to load the session.')
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -534,6 +574,11 @@ function StudyChatScreen({
         estimated: true,
       })
       pushToast('info', 'Older messages were summarized to keep the conversation going')
+      void fetchSummaryCursor(sessionId).then((cursor) => {
+        if (cursor !== null && currentSessionIdRef.current === sessionId) {
+          setSummaryCoversUntilId(cursor)
+        }
+      })
       // The persisted state is the source of truth (a compacted prompt can
       // still sit above 80% on a tiny window).
       refreshSessionUsage()
@@ -637,13 +682,36 @@ function StudyChatScreen({
     void handleSend()
   }
 
-  const sourceModeSelect = (
-    <SourceModeSelect value={sourceMode} onValueChange={setSourceMode} disabled={isStreaming} />
+  const summaryMarkerIndex = summaryCoversUntilId
+    ? messages.findIndex((message) => message.id === summaryCoversUntilId)
+    : -1
+  const summaryMarker = <SummaryMarker />
+
+  // The summary belongs to the whole session, so its button lives with the
+  // other session-level controls, to the left of the source-mode selector. It
+  // stays visible but disabled until a compaction creates the summary.
+  const sessionControls = (
+    <div className="flex items-center gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={!summaryCoversUntilId}
+        onClick={() => setSummaryOpen(true)}
+      >
+        View summary
+      </Button>
+      <SourceModeSelect value={sourceMode} onValueChange={setSourceMode} disabled={isStreaming} />
+    </div>
   )
 
   return (
     <div className="flex h-full w-full flex-col gap-3">
       <ToastViewport toasts={toasts} onDismiss={dismissToast} />
+      <SummaryDialog
+        open={summaryOpen}
+        sessionId={sessionId}
+        onClose={() => setSummaryOpen(false)}
+      />
       <SessionUsageBar context={{ state: contextState, ...contextTokens }} usage={sessionUsage} />
       <div
         ref={transcriptRef}
@@ -669,8 +737,15 @@ function StudyChatScreen({
             )}
           </div>
         )}
-        {messages.map((message) => (
-          <MessageRow key={message.id} message={message} onOpenCitation={onOpenCitation} />
+        {loadingHistory && <ThinkingIndicator caption="Loading conversation…" />}
+        {/* A summarized message older than the loaded page is not in the list:
+            the marker then sits above the first loaded message. */}
+        {summaryCoversUntilId && summaryMarkerIndex === -1 && summaryMarker}
+        {messages.map((message, index) => (
+          <Fragment key={message.id}>
+            <MessageRow message={message} onOpenCitation={onOpenCitation} />
+            {index === summaryMarkerIndex && summaryMarker}
+          </Fragment>
         ))}
         {isStreaming && (
           <StreamingTurn
@@ -736,7 +811,7 @@ function StudyChatScreen({
           selector sits at the top of the page instead of floating over the
           composer; falls back to the composer when no slot is given (e.g.
           this screen rendered standalone, as in its own tests). */}
-      {sourceModeSlot && createPortal(sourceModeSelect, sourceModeSlot)}
+      {sourceModeSlot && createPortal(sessionControls, sourceModeSlot)}
       <div className="relative">
         <Textarea
           ref={textareaRef}
@@ -746,7 +821,7 @@ function StudyChatScreen({
           placeholder="Type your answer..."
           className="min-h-24 max-h-[200px] resize-none overflow-y-auto pb-11"
         />
-        {!sourceModeSlot && <div className="absolute bottom-2 left-2">{sourceModeSelect}</div>}
+        {!sourceModeSlot && <div className="absolute bottom-2 left-2">{sessionControls}</div>}
         <div className="absolute right-2 bottom-2 flex items-center gap-2">
           <Tooltip>
             <TooltipTrigger asChild>

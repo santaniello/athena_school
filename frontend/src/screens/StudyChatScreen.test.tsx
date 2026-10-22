@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event'
 import {
   compactStudySession,
+  getStudySessionSummary,
   getStudySessionUsage,
   listMessagesBefore,
   onStudyChunk,
@@ -42,6 +43,7 @@ vi.mock('@/lib/study', async (importOriginal) => {
   return {
     ...original,
     compactStudySession: vi.fn(),
+    getStudySessionSummary: vi.fn(),
     getStudySessionUsage: vi.fn(),
     listMessagesBefore: vi.fn(),
     requestOpeningTurn: vi.fn(),
@@ -340,6 +342,7 @@ describe('StudyChatScreen — resuming a session', () => {
       ],
       hasMore: false,
       nextCursor: '',
+      summaryCoversUntilMessageId: '',
     })
 
     // When the chat screen mounts in "resume" mode
@@ -404,6 +407,7 @@ describe('StudyChatScreen — resuming a session', () => {
       ],
       hasMore: false,
       nextCursor: '',
+      summaryCoversUntilMessageId: '',
     })
 
     // When the chat screen mounts in "resume" mode
@@ -444,6 +448,7 @@ describe('StudyChatScreen — resuming a session', () => {
       ],
       hasMore: false,
       nextCursor: '',
+      summaryCoversUntilMessageId: '',
     })
 
     // When the chat screen mounts in "resume" mode
@@ -538,6 +543,7 @@ describe('StudyChatScreen — resuming a session', () => {
       ],
       hasMore: false,
       nextCursor: '',
+      summaryCoversUntilMessageId: '',
     })
 
     // When the chat screen mounts in "resume" mode
@@ -571,6 +577,7 @@ describe('StudyChatScreen — resuming a session', () => {
       ],
       hasMore: false,
       nextCursor: '',
+      summaryCoversUntilMessageId: '',
     })
     const { rerender } = render(
       <StudyChatScreen
@@ -605,6 +612,7 @@ describe('StudyChatScreen — resuming a session', () => {
       ],
       hasMore: false,
       nextCursor: '',
+      summaryCoversUntilMessageId: '',
     })
     rerender(
       <StudyChatScreen
@@ -1022,6 +1030,7 @@ describe('StudyChatScreen — source modes and local sources', () => {
       messages: [],
       hasMore: false,
       nextCursor: '',
+      summaryCoversUntilMessageId: '',
     })
     render(
       <StudyChatScreen
@@ -1355,6 +1364,7 @@ describe('StudyChatScreen — context limits', () => {
       messages: [],
       hasMore: false,
       nextCursor: '',
+      summaryCoversUntilMessageId: '',
     })
 
     // When the chat screen mounts in "resume" mode
@@ -1613,6 +1623,7 @@ describe('StudyChatScreen — session usage visibility', () => {
     messages: [],
     hasMore: false,
     nextCursor: '',
+    summaryCoversUntilMessageId: '',
   }
   const totals = {
     inputTokens: 8000,
@@ -1755,6 +1766,7 @@ describe('StudyChatScreen — session usage visibility', () => {
       },
       hasMore: false,
       nextCursor: '',
+      summaryCoversUntilMessageId: '',
     })
     vi.mocked(getStudySessionUsage).mockResolvedValueOnce({
       ...totals,
@@ -2026,6 +2038,7 @@ describe('StudyChatScreen — earlier messages', () => {
       messages: [msg('m51'), msg('m52', 'assistant')],
       hasMore,
       nextCursor: hasMore ? 'm51' : '',
+      summaryCoversUntilMessageId: '',
     })
     const view = render(
       <StudyChatScreen
@@ -2267,6 +2280,7 @@ describe('StudyChatScreen — earlier messages', () => {
       messages: [msg('m51'), msg('m52', 'assistant')],
       hasMore: true,
       nextCursor: 'm51',
+      summaryCoversUntilMessageId: '',
     })
     render(
       <StudyChatScreen
@@ -2339,6 +2353,7 @@ describe('StudyChatScreen — earlier messages', () => {
       messages: [msg('n1')],
       hasMore: false,
       nextCursor: '',
+      summaryCoversUntilMessageId: '',
     })
     view.rerender(
       <StudyChatScreen
@@ -2378,6 +2393,7 @@ describe('StudyChatScreen — earlier messages', () => {
       messages: [msg('n1')],
       hasMore: false,
       nextCursor: '',
+      summaryCoversUntilMessageId: '',
     })
     view.rerender(
       <StudyChatScreen
@@ -2394,6 +2410,7 @@ describe('StudyChatScreen — earlier messages', () => {
         messages: [msg('m51')],
         hasMore: true,
         nextCursor: 'm51',
+        summaryCoversUntilMessageId: '',
       })
     })
 
@@ -2402,5 +2419,321 @@ describe('StudyChatScreen — earlier messages', () => {
     setSentinelVisible(true)
     await act(async () => {})
     expect(listMessagesBefore).not.toHaveBeenCalled()
+  })
+})
+
+describe('StudyChatScreen — summary marker', () => {
+  const SESSION = {
+    id: 'session-1',
+    topic: 'Cache invalidation',
+    folderId: 'folder-1',
+    goal: 'Ace the SQL interview',
+    startedAt: '2026-08-16T10:00:00Z',
+    context: CONTEXT_NORMAL,
+  }
+  const MARKER_TEXT = 'Earlier messages were summarized'
+
+  function msg(id: string) {
+    return { id, role: 'user', content: id, createdAt: '2026-08-16T10:00:00Z', sources: [] }
+  }
+
+  async function renderResumed(
+    messageIds: string[],
+    summaryCoversUntilMessageId: string,
+    hasMore = false,
+  ) {
+    const handlers = setupSubscriptions()
+    vi.mocked(resumeStudySession).mockResolvedValueOnce({
+      session: SESSION,
+      messages: messageIds.map(msg),
+      hasMore,
+      nextCursor: hasMore ? messageIds[0] : '',
+      summaryCoversUntilMessageId,
+    })
+    render(
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic=""
+        mode="resume"
+        {...newSessionActionProps()}
+      />,
+    )
+    await screen.findByText(messageIds[messageIds.length - 1])
+    return handlers
+  }
+
+  function precedes(first: HTMLElement, second: HTMLElement) {
+    return Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING)
+  }
+
+  it('places the marker right after the last summarized message', async () => {
+    // Given a resumed session summarized up to its second message
+    await renderResumed(['m1', 'm2', 'm3'], 'm2')
+
+    // Then the marker sits between m2 and m3
+    const marker = await screen.findByText(MARKER_TEXT)
+    expect(precedes(screen.getByText('m2'), marker)).toBe(true)
+    expect(precedes(marker, screen.getByText('m3'))).toBe(true)
+  })
+
+  it('places the marker above the loaded messages when the summarized one is older', async () => {
+    // Given a resumed session whose summary covers a message outside the loaded page
+    await renderResumed(['m5', 'm6'], 'm2', true)
+
+    // Then the marker sits above the first loaded message
+    const marker = await screen.findByText(MARKER_TEXT)
+    expect(precedes(marker, screen.getByText('m5'))).toBe(true)
+  })
+
+  it('shows no marker for a session without a summary', async () => {
+    // Given a resumed session that was never compacted
+    await renderResumed(['m1', 'm2'], '')
+
+    // Then there is no marker
+    expect(screen.queryByText(MARKER_TEXT)).not.toBeInTheDocument()
+  })
+
+  it('shows the marker as soon as a compaction finishes', async () => {
+    // Given a resumed session without a summary
+    const handlers = await renderResumed(['m1', 'm2', 'm3'], '')
+    vi.mocked(getStudySessionUsage).mockResolvedValue(null as never)
+    vi.mocked(getStudySessionSummary).mockResolvedValueOnce({
+      found: true,
+      content: '## Progress',
+      coversUntilMessageId: 'm1',
+      updatedAt: '2026-10-21T12:00:00Z',
+    })
+
+    // When a compaction of this session finishes
+    act(() =>
+      handlers.compacted?.({ sessionId: 'session-1', usedTokens: 4000, contextLength: 10000 }),
+    )
+
+    // Then the marker appears right after the newly summarized message
+    const marker = await screen.findByText(MARKER_TEXT)
+    expect(getStudySessionSummary).toHaveBeenCalledWith('session-1')
+    expect(precedes(screen.getByText('m1'), marker)).toBe(true)
+    expect(precedes(marker, screen.getByText('m2'))).toBe(true)
+  })
+
+  it('shows no marker when the summary cannot be read after a compaction', async () => {
+    // Given a resumed session without a summary
+    const handlers = await renderResumed(['m1', 'm2'], '')
+    vi.mocked(getStudySessionUsage).mockResolvedValue(null as never)
+    vi.mocked(getStudySessionSummary).mockRejectedValueOnce(new Error('database unavailable'))
+
+    // When a compaction finishes but reading the summary fails
+    act(() =>
+      handlers.compacted?.({ sessionId: 'session-1', usedTokens: 4000, contextLength: 10000 }),
+    )
+    await screen.findByText('Older messages were summarized to keep the conversation going')
+
+    // Then the chat keeps working without a marker
+    await waitFor(() => expect(getStudySessionSummary).toHaveBeenCalled())
+    expect(screen.queryByText(MARKER_TEXT)).not.toBeInTheDocument()
+  })
+
+  it('keeps the previous marker when a compaction reports no summary', async () => {
+    // Given a resumed session summarized up to m1
+    const handlers = await renderResumed(['m1', 'm2'], 'm1')
+    vi.mocked(getStudySessionUsage).mockResolvedValue(null as never)
+    vi.mocked(getStudySessionSummary).mockResolvedValueOnce({
+      found: false,
+      content: '',
+      coversUntilMessageId: '',
+      updatedAt: '',
+    })
+
+    // When a compaction finishes and the read finds no summary
+    act(() =>
+      handlers.compacted?.({ sessionId: 'session-1', usedTokens: 4000, contextLength: 10000 }),
+    )
+    await waitFor(() => expect(getStudySessionSummary).toHaveBeenCalled())
+
+    // Then the marker stays where it was
+    expect(screen.getByText(MARKER_TEXT)).toBeInTheDocument()
+  })
+
+  it('ignores a compaction of another session', async () => {
+    // Given a resumed session without a summary
+    const handlers = await renderResumed(['m1', 'm2'], '')
+    vi.mocked(getStudySessionUsage).mockResolvedValue(null as never)
+
+    // When a compaction of another session finishes
+    act(() =>
+      handlers.compacted?.({ sessionId: 'session-2', usedTokens: 4000, contextLength: 10000 }),
+    )
+
+    // Then nothing is read and no marker appears
+    expect(getStudySessionSummary).not.toHaveBeenCalled()
+    expect(screen.queryByText(MARKER_TEXT)).not.toBeInTheDocument()
+  })
+
+  it('keeps View summary disabled for a session without a summary', async () => {
+    // Given a resumed session that was never compacted
+    await renderResumed(['m1', 'm2'], '')
+
+    // Then the header shows the button, but it cannot be used yet
+    expect(screen.getByRole('button', { name: 'View summary' })).toBeDisabled()
+  })
+
+  it('enables View summary for a session that has one', async () => {
+    // Given a resumed session with a summary
+    await renderResumed(['m1', 'm2'], 'm1')
+
+    // Then the button is usable
+    expect(screen.getByRole('button', { name: 'View summary' })).toBeEnabled()
+  })
+
+  it('offers View summary next to the source mode selector', async () => {
+    // Given a resumed session with a summary, rendered with the header slot
+    const slot = document.createElement('div')
+    document.body.appendChild(slot)
+    setupSubscriptions()
+    vi.mocked(resumeStudySession).mockResolvedValueOnce({
+      session: SESSION,
+      messages: [msg('m1'), msg('m2')],
+      hasMore: false,
+      nextCursor: '',
+      summaryCoversUntilMessageId: 'm1',
+    })
+    render(
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic=""
+        mode="resume"
+        sourceModeSlot={slot}
+        {...newSessionActionProps()}
+      />,
+    )
+    await screen.findByText('m2')
+
+    // Then the button sits in the header slot, before the selector
+    const button = within(slot).getByRole('button', { name: 'View summary' })
+    expect(precedes(button, within(slot).getByRole('combobox'))).toBe(true)
+    slot.remove()
+  })
+
+  it('enables the button as soon as a compaction creates the summary', async () => {
+    // Given a resumed session without a summary
+    const handlers = await renderResumed(['m1', 'm2'], '')
+    vi.mocked(getStudySessionUsage).mockResolvedValue(null as never)
+    vi.mocked(getStudySessionSummary).mockResolvedValueOnce({
+      found: true,
+      content: '## Progress',
+      coversUntilMessageId: 'm1',
+      updatedAt: '2026-10-21T12:00:00Z',
+    })
+    expect(screen.getByRole('button', { name: 'View summary' })).toBeDisabled()
+
+    // When a compaction finishes
+    act(() =>
+      handlers.compacted?.({ sessionId: 'session-1', usedTokens: 4000, contextLength: 10000 }),
+    )
+
+    // Then the button is unlocked
+    await waitFor(() => expect(screen.getByRole('button', { name: 'View summary' })).toBeEnabled())
+  })
+
+  it('opens the read-only summary from the header button', async () => {
+    // Given a resumed session with a summary
+    const user = userEvent.setup()
+    await renderResumed(['m1', 'm2'], 'm1')
+    vi.mocked(getStudySessionSummary).mockResolvedValueOnce({
+      found: true,
+      content: '## Progress\n- covered B-trees',
+      coversUntilMessageId: 'm1',
+      updatedAt: '2026-10-21T12:00:00Z',
+    })
+
+    // When clicking View summary
+    await user.click(screen.getByRole('button', { name: 'View summary' }))
+
+    // Then the summary is shown in a dialog
+    expect(await screen.findByRole('heading', { name: 'Progress' })).toBeInTheDocument()
+    expect(screen.getByText('covered B-trees')).toBeInTheDocument()
+
+    // And closing it returns to the chat
+    await user.click(screen.getAllByRole('button', { name: 'Close' })[0])
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+})
+
+describe('StudyChatScreen — loading a resumed session', () => {
+  const SESSION = {
+    id: 'session-1',
+    topic: 'Cache invalidation',
+    folderId: 'folder-1',
+    goal: 'Ace the SQL interview',
+    startedAt: '2026-08-16T10:00:00Z',
+    context: CONTEXT_NORMAL,
+  }
+
+  function renderResume() {
+    return render(
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic=""
+        mode="resume"
+        {...newSessionActionProps()}
+      />,
+    )
+  }
+
+  it('shows an animated loading indicator until the history arrives', async () => {
+    // Given a resume that has not answered yet
+    setupSubscriptions()
+    let finish!: (history: Awaited<ReturnType<typeof resumeStudySession>>) => void
+    vi.mocked(resumeStudySession).mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+    )
+
+    // When the screen mounts
+    renderResume()
+
+    // Then the loading indicator is on screen
+    expect(screen.getByRole('status', { name: 'Loading conversation…' })).toBeInTheDocument()
+
+    // And once the history arrives it is replaced by the messages
+    await act(async () => {
+      finish({
+        session: SESSION,
+        messages: [
+          { id: 'm1', role: 'user', content: 'Hi', createdAt: '2026-08-16T10:00:00Z', sources: [] },
+        ],
+        hasMore: false,
+        nextCursor: '',
+        summaryCoversUntilMessageId: '',
+      })
+    })
+    expect(await screen.findByText('Hi')).toBeInTheDocument()
+    expect(screen.queryByRole('status', { name: 'Loading conversation…' })).not.toBeInTheDocument()
+  })
+
+  it('stops the indicator when the session fails to load', async () => {
+    // Given a resume that fails
+    setupSubscriptions()
+    vi.mocked(resumeStudySession).mockRejectedValueOnce(new Error('session not found'))
+
+    // When the screen mounts
+    renderResume()
+
+    // Then the error is shown and the indicator is gone
+    expect(await screen.findByText('session not found')).toBeInTheDocument()
+    expect(screen.queryByRole('status', { name: 'Loading conversation…' })).not.toBeInTheDocument()
+  })
+
+  it('shows no loading indicator for a new session', () => {
+    // Given a new session
+    setupSubscriptions()
+    vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
+
+    // When the screen mounts
+    renderNewSession()
+
+    // Then only the thinking indicator is shown
+    expect(screen.queryByRole('status', { name: 'Loading conversation…' })).not.toBeInTheDocument()
   })
 })

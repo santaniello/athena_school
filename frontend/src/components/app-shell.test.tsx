@@ -633,6 +633,7 @@ describe('AppShell', () => {
       messages: [],
       hasMore: false,
       nextCursor: '',
+      summaryCoversUntilMessageId: '',
     })
     await user.click(screen.getByText('General'))
     await user.click(await screen.findByText('Cached topic'))

@@ -91,6 +91,7 @@ describe('StudyChatScreen — render cost while streaming', () => {
       ],
       hasMore: false,
       nextCursor: '',
+      summaryCoversUntilMessageId: '',
     })
     render(
       <StudyChatScreen
@@ -155,6 +156,7 @@ describe('StudyChatScreen — render cost while streaming', () => {
       messages: [{ id: 'm1', role: 'user', content: 'earlier', createdAt: '', sources: [] }],
       hasMore: false,
       nextCursor: '',
+      summaryCoversUntilMessageId: '',
     })
     vi.mocked(sendStudyMessage).mockImplementation(() => {
       chunk?.({ sessionId: 'session-1', content: 'early chunk' })

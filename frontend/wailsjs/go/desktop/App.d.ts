@@ -23,6 +23,8 @@ export function GetProfile():Promise<desktop.UserProfileInput>;
 
 export function GetSessionSourceDocument(arg1:string,arg2:string):Promise<desktop.SourceDocumentResult>;
 
+export function GetStudySessionSummary(arg1:string):Promise<desktop.StudySummaryResult>;
+
 export function GetStudySessionUsage(arg1:string):Promise<desktop.StudySessionUsageResult>;
 
 export function HasOpenRouterKey():Promise<boolean>;

@@ -418,6 +418,7 @@ export namespace desktop {
 	    messages: StudyMessageResult[];
 	    hasMore: boolean;
 	    nextCursor: string;
+	    summaryCoversUntilMessageId: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new StudySessionHistoryResult(source);
@@ -429,6 +430,7 @@ export namespace desktop {
 	        this.messages = this.convertValues(source["messages"], StudyMessageResult);
 	        this.hasMore = source["hasMore"];
 	        this.nextCursor = source["nextCursor"];
+	        this.summaryCoversUntilMessageId = source["summaryCoversUntilMessageId"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -491,6 +493,24 @@ export namespace desktop {
 		}
 	}
 	
+	export class StudySummaryResult {
+	    found: boolean;
+	    content: string;
+	    coversUntilMessageId: string;
+	    updatedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new StudySummaryResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.found = source["found"];
+	        this.content = source["content"];
+	        this.coversUntilMessageId = source["coversUntilMessageId"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	}
 	export class UserProfileInput {
 	    name: string;
 	    assistantName: string;
