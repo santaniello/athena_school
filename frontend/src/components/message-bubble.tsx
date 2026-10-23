@@ -1,5 +1,5 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import type { ComponentProps } from 'react'
+import { Children, isValidElement, memo, useEffect, useMemo, useRef, useState } from 'react'
+import type { ComponentProps, ReactElement } from 'react'
 import { Check, Copy } from 'lucide-react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -14,6 +14,7 @@ import go from 'react-syntax-highlighter/dist/esm/languages/prism/go'
 import javascript from 'react-syntax-highlighter/dist/esm/languages/prism/javascript'
 import json from 'react-syntax-highlighter/dist/esm/languages/prism/json'
 import jsx from 'react-syntax-highlighter/dist/esm/languages/prism/jsx'
+import markdown from 'react-syntax-highlighter/dist/esm/languages/prism/markdown'
 import markup from 'react-syntax-highlighter/dist/esm/languages/prism/markup'
 import python from 'react-syntax-highlighter/dist/esm/languages/prism/python'
 import sql from 'react-syntax-highlighter/dist/esm/languages/prism/sql'
@@ -21,6 +22,7 @@ import tsx from 'react-syntax-highlighter/dist/esm/languages/prism/tsx'
 import typescript from 'react-syntax-highlighter/dist/esm/languages/prism/typescript'
 import yaml from 'react-syntax-highlighter/dist/esm/languages/prism/yaml'
 import { cva } from 'class-variance-authority'
+import { FIND_IGNORE_PROPS } from '@/lib/find-in-page'
 import { cn } from '@/lib/utils'
 
 // Stryker disable StringLiteral: react-syntax-highlighter's registerLanguage
@@ -34,6 +36,7 @@ SyntaxHighlighter.registerLanguage('go', go)
 SyntaxHighlighter.registerLanguage('javascript', javascript)
 SyntaxHighlighter.registerLanguage('json', json)
 SyntaxHighlighter.registerLanguage('jsx', jsx)
+SyntaxHighlighter.registerLanguage('markdown', markdown)
 SyntaxHighlighter.registerLanguage('markup', markup)
 SyntaxHighlighter.registerLanguage('python', python)
 SyntaxHighlighter.registerLanguage('sql', sql)
@@ -73,22 +76,57 @@ const messageBubbleVariants = cva(
   },
 )
 
-function CodeRenderer({ className, children, ...props }: ComponentProps<'code'>) {
-  const match = className ? /language-(\w+)/.exec(className) : null
+function InlineCode(props: ComponentProps<'code'>) {
+  return (
+    <code
+      data-slot="inline-code"
+      className="rounded bg-muted px-1 py-0.5 font-mono text-[0.8em] text-primary"
+      {...props}
+    />
+  )
+}
 
-  if (!match) {
-    return (
-      <code
-        data-slot="inline-code"
-        className="rounded bg-muted px-1 py-0.5 font-mono text-[0.8em] text-primary"
-        {...props}
-      >
-        {children}
-      </code>
-    )
+// react-markdown v10 has no `inline` flag: a fenced block is a <pre> whose only
+// child is a <code>, which is how it is told apart from inline code.
+function PreRenderer({ children }: ComponentProps<'pre'>) {
+  const codeElement = Children.toArray(children).find(isValidElement) as
+    ReactElement<ComponentProps<'code'>> | undefined
+  const { className, children: codeChildren } = codeElement?.props ?? {}
+  // The whole token after `language-`: `c++`, `objective-c` and `c#` stay intact.
+  const language =
+    (className && /(?:^|\s)language-(\S+)/.exec(className)?.[1]) || DEFAULT_CODE_LANGUAGE
+
+  return <CodeBlock language={language} code={String(codeChildren ?? '').replace(/\n$/, '')} />
+}
+
+const DEFAULT_CODE_LANGUAGE = 'text'
+
+function useCopyToClipboard() {
+  const [copied, setCopied] = useState(false)
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  useEffect(() => () => clearTimeout(timer.current), [])
+
+  async function copy(text: string) {
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      return
+    }
+    setCopied(true)
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => setCopied(false), COPIED_RESET_DELAY_MS)
   }
 
-  return <CodeBlock language={match[1]} code={String(children).replace(/\n$/, '')} />
+  return { copied, copy }
+}
+
+function CopyIcon({ copied }: { copied: boolean }) {
+  return copied ? (
+    <Check className="size-3.5" aria-hidden="true" />
+  ) : (
+    <Copy className="size-3.5" aria-hidden="true" />
+  )
 }
 
 // How far outside the viewport a code block still gets highlighted, so it is
@@ -96,7 +134,7 @@ function CodeRenderer({ className, children, ...props }: ComponentProps<'code'>)
 const HIGHLIGHT_ROOT_MARGIN = '400px 0px'
 
 const CODE_BLOCK_STYLE = {
-  background: 'var(--color-muted)',
+  background: 'var(--color-code)',
   margin: 0,
   padding: '0.75rem 1rem',
   fontSize: '0.8125rem',
@@ -112,6 +150,7 @@ const CODE_TAG_STYLE = {
 // box as the highlighted one, until it is near the viewport.
 function CodeBlock({ language, code }: { language: string; code: string }) {
   const ref = useRef<HTMLDivElement>(null)
+  const { copied, copy } = useCopyToClipboard()
   const [highlight, setHighlight] = useState(typeof IntersectionObserver === 'undefined')
 
   useEffect(() => {
@@ -130,24 +169,40 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
   return (
     <div
       ref={ref}
-      data-slot="code-block"
+      data-slot="code-block-container"
       className="my-2 overflow-hidden rounded-md border border-border"
     >
-      {highlight ? (
-        <SyntaxHighlighter
-          language={language}
-          PreTag="div"
-          style={oneDark}
-          customStyle={CODE_BLOCK_STYLE}
-          codeTagProps={{ style: CODE_TAG_STYLE }}
+      <div
+        data-slot="code-block-header"
+        className="flex items-center justify-between border-b border-border bg-card px-4 py-1.5 text-xs text-muted-foreground"
+      >
+        <span {...FIND_IGNORE_PROPS}>{language}</span>
+        <button
+          type="button"
+          onClick={() => void copy(code)}
+          aria-label={copied ? 'Copied' : 'Copy code'}
+          className="flex cursor-pointer items-center gap-1 hover:text-foreground"
         >
-          {code}
-        </SyntaxHighlighter>
-      ) : (
-        <div style={{ ...CODE_BLOCK_STYLE, overflow: 'auto', lineHeight: 1.5 }}>
-          <code style={{ ...CODE_TAG_STYLE, whiteSpace: 'pre' }}>{code}</code>
-        </div>
-      )}
+          <CopyIcon copied={copied} />
+        </button>
+      </div>
+      <div data-slot="code-block">
+        {highlight ? (
+          <SyntaxHighlighter
+            language={language}
+            PreTag="div"
+            style={oneDark}
+            customStyle={CODE_BLOCK_STYLE}
+            codeTagProps={{ style: CODE_TAG_STYLE }}
+          >
+            {code}
+          </SyntaxHighlighter>
+        ) : (
+          <div style={{ ...CODE_BLOCK_STYLE, overflow: 'auto', lineHeight: 1.5 }}>
+            <code style={{ ...CODE_TAG_STYLE, whiteSpace: 'pre' }}>{code}</code>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -209,7 +264,8 @@ const baseMarkdownComponents: Components = {
     <th className="border border-border px-2 py-1 text-left font-semibold" {...props} />
   ),
   td: (props) => <td className="border border-border px-2 py-1" {...props} />,
-  code: CodeRenderer,
+  pre: PreRenderer,
+  code: InlineCode,
 }
 
 function MessageBubbleImpl({
@@ -219,7 +275,7 @@ function MessageBubbleImpl({
   sources = EMPTY_SOURCES,
   onOpenCitation,
 }: MessageBubbleProps) {
-  const [copied, setCopied] = useState(false)
+  const { copied, copy } = useCopyToClipboard()
 
   const components = useMemo<Components>(
     () => ({
@@ -236,12 +292,6 @@ function MessageBubbleImpl({
     [role, sources, onOpenCitation],
   )
 
-  async function handleCopy() {
-    await navigator.clipboard.writeText(stripCitationMarkers(content))
-    setCopied(true)
-    setTimeout(() => setCopied(false), COPIED_RESET_DELAY_MS)
-  }
-
   return (
     <div
       data-slot="message-bubble"
@@ -254,15 +304,11 @@ function MessageBubbleImpl({
       {role === 'assistant' && !isStreaming && (
         <button
           type="button"
-          onClick={() => void handleCopy()}
+          onClick={() => void copy(stripCitationMarkers(content))}
           aria-label={copied ? 'Copied' : 'Copy message'}
           className="mt-1.5 flex cursor-pointer items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
-          {copied ? (
-            <Check className="size-3.5" aria-hidden="true" />
-          ) : (
-            <Copy className="size-3.5" aria-hidden="true" />
-          )}
+          <CopyIcon copied={copied} />
         </button>
       )}
     </div>

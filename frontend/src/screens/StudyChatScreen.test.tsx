@@ -2737,3 +2737,180 @@ describe('StudyChatScreen — loading a resumed session', () => {
     expect(screen.queryByRole('status', { name: 'Loading conversation…' })).not.toBeInTheDocument()
   })
 })
+
+describe('StudyChatScreen — find in conversation', () => {
+  const SESSION = {
+    id: 'session-1',
+    topic: 'Caches',
+    folderId: 'folder-1',
+    goal: 'Ace the SQL interview',
+    startedAt: '2026-08-16T10:00:00Z',
+    context: CONTEXT_NORMAL,
+  }
+
+  function msg(id: string, content: string, role: 'user' | 'assistant' = 'assistant') {
+    return { id, role, content, createdAt: '2026-08-16T10:00:00Z', sources: [] }
+  }
+
+  async function renderResumed(hasMore = false) {
+    setupSubscriptions()
+    vi.mocked(resumeStudySession).mockResolvedValueOnce({
+      session: SESSION,
+      messages: [msg('m2', 'What is a cache?', 'user'), msg('m3', 'A cache stores data. Cache!')],
+      hasMore,
+      nextCursor: hasMore ? 'm2' : '',
+      summaryCoversUntilMessageId: '',
+    })
+    render(
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic=""
+        mode="resume"
+        {...newSessionActionProps()}
+      />,
+    )
+    await screen.findByText('What is a cache?')
+  }
+
+  const findInput = () => screen.getByRole('textbox', { name: 'Find in conversation' })
+
+  it('opens a focused find bar on Ctrl+F', async () => {
+    await renderResumed()
+    expect(screen.queryByRole('search')).not.toBeInTheDocument()
+
+    // When the user presses Ctrl+F
+    const event = new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, cancelable: true })
+    act(() => {
+      window.dispatchEvent(event)
+    })
+
+    // Then the bar is shown with its input focused and the webview default is suppressed
+    expect(await screen.findByRole('search')).toBeInTheDocument()
+    expect(findInput()).toHaveFocus()
+    expect(event.defaultPrevented).toBe(true)
+  })
+
+  it('opens on Cmd+F too', async () => {
+    await renderResumed()
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F', metaKey: true }))
+    })
+
+    expect(await screen.findByRole('search')).toBeInTheDocument()
+  })
+
+  it('counts the matches in the conversation and navigates between them', async () => {
+    await renderResumed()
+    const user = userEvent.setup()
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true }))
+    })
+
+    await user.type(findInput(), 'cache')
+    expect(screen.getByText('1 of 3')).toBeInTheDocument()
+
+    await user.keyboard('{Enter}')
+    expect(screen.getByText('2 of 3')).toBeInTheDocument()
+    await user.keyboard('{Shift>}{Enter}{/Shift}')
+    expect(screen.getByText('1 of 3')).toBeInTheDocument()
+  })
+
+  it('finds a phrase that runs across bold text, and does not match a code block label', async () => {
+    setupSubscriptions()
+    vi.mocked(resumeStudySession).mockResolvedValueOnce({
+      session: SESSION,
+      messages: [msg('m1', 'Prefer **Cache eviction** policies.\n\n```go\npackage main\n```')],
+      hasMore: false,
+      nextCursor: '',
+      summaryCoversUntilMessageId: '',
+    })
+    render(
+      <StudyChatScreen
+        sessionId="session-1"
+        initialTopic=""
+        mode="resume"
+        {...newSessionActionProps()}
+      />,
+    )
+    await screen.findByText('policies.', { exact: false })
+    const user = userEvent.setup()
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true }))
+    })
+
+    await user.type(findInput(), 'cache eviction policies')
+    expect(screen.getByText('1 of 1')).toBeInTheDocument()
+
+    // "go" is only the code block's language label, which is not searched
+    await user.clear(findInput())
+    await user.type(findInput(), 'go')
+    expect(screen.getByText('No results')).toBeInTheDocument()
+  })
+
+  it('does not search its own chrome or the transcript controls', async () => {
+    await renderResumed()
+    const user = userEvent.setup()
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true }))
+    })
+
+    // "Copy message" is a button label, "Conversation" an aria-label: neither is text content
+    await user.type(findInput(), 'copy message')
+
+    expect(screen.getByText('No results')).toBeInTheDocument()
+  })
+
+  it('closes on Escape and returns focus to the composer', async () => {
+    await renderResumed()
+    const user = userEvent.setup()
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true }))
+    })
+    await user.type(findInput(), 'cache')
+
+    await user.keyboard('{Escape}')
+
+    expect(screen.queryByRole('search')).not.toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Type your answer...')).toHaveFocus()
+  })
+
+  it('loads the whole earlier history while the bar is open', async () => {
+    await renderResumed(true)
+    vi.mocked(listMessagesBefore)
+      .mockResolvedValueOnce({
+        messages: [msg('m1', 'Cache eviction policies')],
+        hasMore: true,
+        nextCursor: 'm0',
+      })
+      .mockResolvedValueOnce({
+        messages: [msg('m0', 'Intro to caches')],
+        hasMore: false,
+        nextCursor: '',
+      })
+    const user = userEvent.setup()
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true }))
+    })
+    await user.type(findInput(), 'cache')
+
+    // Then every page is fetched and its matches are counted: 3 loaded + 2 older
+    expect(await screen.findByText('1 of 5')).toBeInTheDocument()
+    expect(listMessagesBefore).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps searching what is loaded when an earlier page fails', async () => {
+    await renderResumed(true)
+    vi.mocked(listMessagesBefore).mockRejectedValueOnce(new Error('offline'))
+    const user = userEvent.setup()
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true }))
+    })
+    await user.type(findInput(), 'cache')
+
+    expect(await screen.findByText('Could not load the full history')).toBeInTheDocument()
+    expect(screen.getByText('1 of 3')).toBeInTheDocument()
+  })
+})
