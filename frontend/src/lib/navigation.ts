@@ -8,6 +8,7 @@ import {
   Settings,
   Target,
   TrendingUp,
+  User,
 } from 'lucide-react'
 
 // The full product roadmap (Phases 1-7), collapsed to the sidebar's nine
@@ -22,6 +23,7 @@ export type AppSection =
   | 'flashcards'
   | 'interview'
   | 'documentation'
+  | 'profile'
   | 'settings'
 
 export type NavStatus = 'unlocked' | 'locked'
@@ -102,13 +104,22 @@ export const NAVIGATION: NavItem[] = [
     description: 'What Athena is for, how study sessions work, and what the Knowledge Engine adds.',
   },
   {
+    id: 'profile',
+    label: 'Profile',
+    icon: User,
+    phase: 1,
+    status: 'unlocked',
+    group: 'footer',
+    description:
+      'Name, assistant name, focus area, experience level, study style and assistant language.',
+  },
+  {
     id: 'settings',
     label: 'Settings',
     icon: Settings,
     phase: 1,
     status: 'unlocked',
     group: 'footer',
-    description:
-      'OpenRouter key, name, assistant name, focus area, experience level, goals, study style and assistant language.',
+    description: 'OpenRouter key and local data.',
   },
 ]

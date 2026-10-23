@@ -11,6 +11,7 @@ const EXPECTED_IDS: AppSection[] = [
   'flashcards',
   'interview',
   'documentation',
+  'profile',
   'settings',
 ]
 
@@ -19,18 +20,18 @@ describe('NAVIGATION', () => {
     expect(NAVIGATION.map((item) => item.id)).toEqual(EXPECTED_IDS)
   })
 
-  it('unlocks home, study, documentation and settings', () => {
+  it('unlocks home, study, documentation, profile and settings', () => {
     const unlocked = NAVIGATION.filter((item) => item.status === 'unlocked').map((item) => item.id)
-    expect(unlocked).toEqual(['home', 'study', 'documentation', 'settings'])
+    expect(unlocked).toEqual(['home', 'study', 'documentation', 'profile', 'settings'])
   })
 
   it('has no Knowledge section, since knowledge comes only from documents imported into a study session', () => {
     expect(NAVIGATION.map((item) => item.id)).not.toContain('knowledge')
   })
 
-  it('pins documentation and settings to the sidebar footer group', () => {
+  it('pins documentation, profile and settings to the sidebar footer group, with profile directly above settings', () => {
     const footer = NAVIGATION.filter((item) => item.group === 'footer').map((item) => item.id)
-    expect(footer).toEqual(['documentation', 'settings'])
+    expect(footer).toEqual(['documentation', 'profile', 'settings'])
   })
 
   it('gives every locked item a non-empty description for the coming-soon panel', () => {

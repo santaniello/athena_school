@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import HomeScreen from '@/screens/HomeScreen'
 import StudyChatScreen from '@/screens/StudyChatScreen'
+import ProfileScreen from '@/screens/ProfileScreen'
 import SettingsScreen from '@/screens/SettingsScreen'
 import DocumentationScreen from '@/screens/DocumentationScreen'
 import { NAVIGATION, type AppSection } from '@/lib/navigation'
@@ -454,8 +455,10 @@ function AppShell() {
           )
         ) : section === 'documentation' ? (
           <DocumentationScreen />
-        ) : section === 'settings' && profile ? (
-          <SettingsScreen profile={profile} onProfileUpdated={setProfile} />
+        ) : section === 'profile' && profile ? (
+          <ProfileScreen profile={profile} onProfileUpdated={setProfile} />
+        ) : section === 'settings' ? (
+          <SettingsScreen />
         ) : (
           <ComingSoonPanel item={activeItem} />
         )}
