@@ -20,21 +20,57 @@ type Summarizer struct {
 	llm      domainllm.Provider
 	profiles domainprofile.Store
 
+	// window reports the window of the model that writes summaries; nil means
+	// the default. It sizes the input batches and the summary target.
+	window SummaryWindowSource
+	// inputBudget and targetTokens, when positive, override the sizes derived
+	// from window. Zero (the default) means derive them on every call, so a
+	// change of summary model applies to the next summary.
 	inputBudget  int
 	targetTokens int
 	now          func() time.Time
 }
 
+// SummaryWindowSource reports the context window, in tokens, of the model that
+// writes conversation summaries. Implemented by SummaryWindow.
+type SummaryWindowSource interface {
+	Tokens() int
+}
+
+// WithSummaryModelWindow makes the summarizer size its input and target from
+// window instead of the default 128k.
+func WithSummaryModelWindow(window SummaryWindowSource) func(*Summarizer) {
+	return func(s *Summarizer) { s.window = window }
+}
+
 // NewSummarizer creates a Summarizer that calls llm and reads the assistant
 // language from profiles.
-func NewSummarizer(llm domainllm.Provider, profiles domainprofile.Store) *Summarizer {
-	return &Summarizer{
-		llm:          llm,
-		profiles:     profiles,
-		inputBudget:  domainstudy.SummaryInputBudgetTokens,
-		targetTokens: domainstudy.SummaryTargetTokens(domainstudy.SummaryModelWindowTokens),
-		now:          func() time.Time { return time.Now().UTC() },
+func NewSummarizer(llm domainllm.Provider, profiles domainprofile.Store, options ...func(*Summarizer)) *Summarizer {
+	s := &Summarizer{
+		llm:      llm,
+		profiles: profiles,
+		now:      func() time.Time { return time.Now().UTC() },
 	}
+	for _, option := range options {
+		option(s)
+	}
+	return s
+}
+
+// sizing returns the input budget and summary target for one Summarize call.
+func (s *Summarizer) sizing() (inputBudget, targetTokens int) {
+	window := domainstudy.SummaryModelWindowTokens
+	if s.window != nil {
+		window = s.window.Tokens()
+	}
+	inputBudget, targetTokens = s.inputBudget, s.targetTokens
+	if inputBudget <= 0 {
+		inputBudget = domainstudy.SummaryInputBudgetFor(window)
+	}
+	if targetTokens <= 0 {
+		targetTokens = domainstudy.SummaryTargetTokens(window)
+	}
+	return inputBudget, targetTokens
 }
 
 // Summarize returns the summary of sessionID after folding messages into
@@ -55,20 +91,21 @@ func (s *Summarizer) Summarize(ctx context.Context, sessionID string, previous *
 		return domainstudy.ConversationSummary{}, fmt.Errorf("study: loading profile: %w", err)
 	}
 
+	inputBudget, targetTokens := s.sizing()
 	content := ""
 	if previous != nil {
 		content = previous.Content
 	}
 	lastID := ""
-	for _, b := range splitIntoBatches(messages, s.inputBudget) {
-		folded, err := s.chat(ctx, sessionID, buildSummarySystemPrompt(profile.AssistantLanguage, s.targetTokens), buildFoldUserPrompt(content, b.transcript))
+	for _, b := range splitIntoBatches(messages, inputBudget) {
+		folded, err := s.chat(ctx, sessionID, buildSummarySystemPrompt(profile.AssistantLanguage, targetTokens), buildFoldUserPrompt(content, b.transcript))
 		if err != nil {
 			return domainstudy.ConversationSummary{}, err
 		}
 		if err := validateSummaryFormat(folded); err != nil {
 			return domainstudy.ConversationSummary{}, err
 		}
-		content, err = s.enforceCap(ctx, sessionID, profile.AssistantLanguage, folded)
+		content, err = s.enforceCap(ctx, sessionID, profile.AssistantLanguage, targetTokens, folded)
 		if err != nil {
 			return domainstudy.ConversationSummary{}, err
 		}
@@ -98,12 +135,12 @@ func validateSummaryInput(sessionID string, previous *domainstudy.ConversationSu
 // enforceCap returns content when it fits the hard cap; otherwise it runs one
 // condensing pass on the summary alone and fails with ErrSummaryTooLarge if
 // the result still does not fit.
-func (s *Summarizer) enforceCap(ctx context.Context, sessionID, language, content string) (string, error) {
-	hardCap := domainstudy.SummaryHardCapTokens(s.targetTokens)
+func (s *Summarizer) enforceCap(ctx context.Context, sessionID, language string, targetTokens int, content string) (string, error) {
+	hardCap := domainstudy.SummaryHardCapTokens(targetTokens)
 	if domainstudy.EstimateTokens(content) <= hardCap {
 		return content, nil
 	}
-	condensed, err := s.chat(ctx, sessionID, buildCondensePrompt(language, s.targetTokens), buildCondenseUserPrompt(content))
+	condensed, err := s.chat(ctx, sessionID, buildCondensePrompt(language, targetTokens), buildCondenseUserPrompt(content))
 	if err != nil {
 		return "", err
 	}

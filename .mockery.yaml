@@ -19,6 +19,14 @@ packages:
   # for either would need to import this package for study.ContextEvent,
   # creating an import cycle for study's own internal ("package study")
   # test files that import their sibling mocks package for MockTransactor.
+  # Option is a plain function type (never mocked); a generated mock for it
+  # would import this package from its own internal test files' mocks
+  # package, creating an import cycle.
+  github.com/santaniello/athena/internal/application/ingest:
+    config:
+      recursive: true
+      all: false
+      include-regex: "^(Transactor|IndexGuard)$"
   github.com/santaniello/athena/internal/application/study:
     config:
       recursive: true

@@ -26,6 +26,22 @@ func WithSummarizer(summarizer ConversationSummarizer) Option {
 	return func(s *Service) { s.summarizer = summarizer }
 }
 
+// WithSummaryWindow sets where compaction reads the window of the model that
+// writes summaries, so the projected summary size follows the user's choice.
+// Without it the default 128k window is assumed.
+func WithSummaryWindow(window SummaryWindowSource) Option {
+	return func(s *Service) { s.summaryWindow = window }
+}
+
+// summaryWindowTokens returns the summary model's window, or 0 (meaning the
+// default) when none is wired.
+func (s *Service) summaryWindowTokens() int {
+	if s.summaryWindow == nil {
+		return 0
+	}
+	return s.summaryWindow.Tokens()
+}
+
 // WithSummaries sets the repository holding each session's summary.
 func WithSummaries(summaries domainstudy.ConversationSummaryRepository) Option {
 	return func(s *Service) { s.summaries = summaries }
@@ -123,9 +139,10 @@ func (s *Service) compact(ctx context.Context, sessionID, pendingContent string,
 	}
 
 	input := domainstudy.BuildInput{
-		Messages:      history,
-		ContextLength: window,
-		FixedTokens:   domainstudy.EstimateTokens(buildSystemPrompt(profile, session.Topic, session.Goal)) + knowledgeContextAllowanceTokens,
+		Messages:            history,
+		ContextLength:       window,
+		SummaryWindowTokens: s.summaryWindowTokens(),
+		FixedTokens:         domainstudy.EstimateTokens(buildSystemPrompt(profile, session.Topic, session.Goal)) + knowledgeContextAllowanceTokens,
 	}
 	if pendingContent != "" {
 		input.PendingTokens = domainstudy.EstimateTokens(pendingContent)

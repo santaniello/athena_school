@@ -158,7 +158,7 @@ func (s *Service) PreviewImport(
 		return ImportPreview{}, fmt.Errorf("ingest: reading file metadata: %w", err)
 	}
 
-	if hasPrev && prev.MTimeUnixNano == mtime && prev.EmbeddingModel == domainllm.EmbeddingModel {
+	if hasPrev && prev.MTimeUnixNano == mtime && prev.EmbeddingModel == s.embeddingModel() {
 		skip, _, checkErr := s.shouldSkipUnchanged(ctx, sessionID, prev)
 		if checkErr != nil {
 			return ImportPreview{}, fmt.Errorf("ingest: %w", checkErr)

@@ -16,6 +16,9 @@ const (
 	// summarization call, leaving room for the previous summary, the prompt
 	// and the output.
 	SummaryInputBudgetTokens = 32_000
+	// SummaryMinInputBudgetTokens is the smallest input budget SummaryInputBudgetFor
+	// returns, so even a tiny summary model gets a usable batch.
+	SummaryMinInputBudgetTokens = 2_000
 	// SummaryMinTargetTokens and SummaryMaxTargetTokens clamp the summary
 	// target size.
 	SummaryMinTargetTokens = 1_000
@@ -56,6 +59,18 @@ func NewConversationSummary(sessionID, content, coversUntilMessageID string, tok
 		TokenEstimate:        tokenEstimate,
 		UpdatedAt:            updatedAt,
 	}, nil
+}
+
+// SummaryInputBudgetFor returns the conversation text one summarization call
+// may carry for a summary model with the given window: a quarter of it, at
+// most SummaryInputBudgetTokens (the budget sized for the default window) and
+// at least SummaryMinInputBudgetTokens. A non-positive window is unknown and
+// gets the default budget.
+func SummaryInputBudgetFor(windowTokens int) int {
+	if windowTokens <= 0 {
+		return SummaryInputBudgetTokens
+	}
+	return min(max(windowTokens/4, SummaryMinInputBudgetTokens), SummaryInputBudgetTokens)
 }
 
 // SummaryTargetTokens returns the size the summary should aim for: a fraction

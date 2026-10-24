@@ -427,3 +427,48 @@ func TestContextUsageAfterCompaction_unresolvedWindowPreservesState(t *testing.T
 	assert.Equal(t, 500, got.UsedTokens)
 	assert.Equal(t, 0, got.ContextLength)
 }
+
+func TestBuildContext_projectedSummaryFollowsTheSummaryModelWindow(t *testing.T) {
+	// Given the same conversation sized for a 100,000 window, once with the
+	// default summary window (target 4,000 -> hard cap 5,000) and once with a
+	// small summary model of 8,000 tokens (target 1,000 -> hard cap 1,250)
+	messages := messagesOfTokens(20_000, 20_000, 20_000, 20_000, 100, 100, 100)
+	base := BuildInput{ContextLength: 100_000, PendingTokens: 100, Messages: messages}
+	small := base
+	small.SummaryWindowTokens = 8_000
+
+	// When building both plans
+	defaultPlan, err := BuildContext(base)
+	require.NoError(t, err)
+	smallPlan, err := BuildContext(small)
+	require.NoError(t, err)
+
+	// Then the small summary model projects a smaller summary, so the folded
+	// prompt is smaller by exactly the difference between the two hard caps
+	assert.Equal(t, 45_400, defaultPlan.EstimatedTokens)
+	assert.Equal(t, 41_650, smallPlan.EstimatedTokens)
+}
+
+func TestSummaryInputBudgetFor_scalesWithTheSummaryModelWindow(t *testing.T) {
+	cases := []struct {
+		name   string
+		window int
+		want   int
+	}{
+		{"default window keeps the historical budget", SummaryModelWindowTokens, SummaryInputBudgetTokens},
+		{"larger window never exceeds the historical budget", 1_000_000, SummaryInputBudgetTokens},
+		{"a 16k model gets a quarter of its window", 16_000, 4_000},
+		{"a tiny model keeps a usable floor", 2_000, SummaryMinInputBudgetTokens},
+		{"unknown window falls back to the default budget", 0, SummaryInputBudgetTokens},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			// Given a summary model window
+			// When computing the input budget for it
+			got := SummaryInputBudgetFor(c.window)
+
+			// Then it is a quarter of the window, clamped
+			assert.Equal(t, c.want, got)
+		})
+	}
+}

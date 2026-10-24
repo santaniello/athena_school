@@ -13,8 +13,12 @@ type ModelInfo struct {
 // the OpenRouter adapter; consumed by an application-level cache/resolver
 // (see ModelContextResolver) rather than called directly on the hot path of
 // a chat response.
+//
+// Chat models and embedding models are separate listings on OpenRouter, so
+// each has its own method.
 type ModelCatalog interface {
 	ListModels(ctx context.Context) ([]ModelInfo, error)
+	ListEmbeddingModels(ctx context.Context) ([]ModelInfo, error)
 }
 
 // ModelContextResolver resolves a model ID to its context window length,

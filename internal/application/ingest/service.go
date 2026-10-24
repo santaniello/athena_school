@@ -45,6 +45,26 @@ type Service struct {
 	store         domainknowledge.VectorStore
 	index         IndexGuard
 	fetcher       web.Fetcher
+	// models reports the embedding model currently in effect; nil means the
+	// built-in default (tests build a Service literal without it).
+	models domainllm.EmbeddingModelSource
+}
+
+// Option customizes a Service at construction.
+type Option func(*Service)
+
+// WithModelResolver makes the service follow the user's embedding model
+// choice instead of the built-in default.
+func WithModelResolver(models domainllm.EmbeddingModelSource) Option {
+	return func(s *Service) { s.models = models }
+}
+
+// embeddingModel returns the embedding model currently in effect.
+func (s *Service) embeddingModel() string {
+	if s.models == nil {
+		return domainllm.EmbeddingModel
+	}
+	return s.models.EmbeddingModel()
 }
 
 // NewService creates a notes-import Service.
@@ -58,11 +78,16 @@ func NewService(
 	store domainknowledge.VectorStore,
 	index IndexGuard,
 	fetcher web.Fetcher,
+	opts ...Option,
 ) *Service {
-	return &Service{
+	service := &Service{
 		chunks: chunks, ingestedFiles: ingestedFiles, items: items, documents: documents, llm: llm, tx: tx,
 		store: store, index: index, fetcher: fetcher,
 	}
+	for _, opt := range opts {
+		opt(service)
+	}
+	return service
 }
 
 // IndexingWarning wraps a post-commit VectorStore reconciliation failure —

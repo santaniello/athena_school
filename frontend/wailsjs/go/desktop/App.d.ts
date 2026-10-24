@@ -19,6 +19,8 @@ export function DownloadExampleNote():Promise<string>;
 
 export function GetKnowledgeIndexStatus():Promise<desktop.IndexStatusResult>;
 
+export function GetModelSettings():Promise<desktop.ModelSettingsResult>;
+
 export function GetProfile():Promise<desktop.UserProfileInput>;
 
 export function GetSessionSourceDocument(arg1:string,arg2:string):Promise<desktop.SourceDocumentResult>;
@@ -34,6 +36,8 @@ export function HasUserProfile():Promise<boolean>;
 export function ImportFile(arg1:string,arg2:string):Promise<void>;
 
 export function ListFolders():Promise<Array<desktop.FolderResult>>;
+
+export function ListSelectableModels():Promise<desktop.SelectableModelsResult>;
 
 export function ListSessionSources(arg1:string):Promise<Array<desktop.SessionSourceResult>>;
 
@@ -60,6 +64,8 @@ export function ResetLocalData():Promise<void>;
 export function ResumeStudySession(arg1:string):Promise<desktop.StudySessionHistoryResult>;
 
 export function RetryKnowledgeIndex():Promise<desktop.IndexStatusResult>;
+
+export function SaveModelSettings(arg1:desktop.ModelChoices):Promise<desktop.SaveModelSettingsResult>;
 
 export function SaveOpenRouterKey(arg1:string):Promise<void>;
 

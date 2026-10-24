@@ -1,37 +1,49 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { HasOpenRouterKey, ResetLocalData, UpdateProfile } from '../../wailsjs/go/desktop/App'
+import {
+  GetModelSettings,
+  HasOpenRouterKey,
+  ListSelectableModels,
+  ResetLocalData,
+} from '../../wailsjs/go/desktop/App'
 import SettingsScreen from './SettingsScreen'
-import type { ProfileDraft } from '@/lib/profile'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
-  UpdateProfile: vi.fn(),
   SaveOpenRouterKey: vi.fn(),
   HasOpenRouterKey: vi.fn(),
   ResetLocalData: vi.fn(),
+  GetModelSettings: vi.fn(),
+  SaveModelSettings: vi.fn(),
+  ListSelectableModels: vi.fn(),
 }))
-
-function currentProfile(): ProfileDraft {
-  return {
-    name: 'Ana',
-    assistantName: 'Atena',
-    area: 'Engenharia de Software',
-    experienceLevel: 'intermediate',
-    studyStyle: 'practical_examples',
-    assistantLanguage: 'en',
-  }
-}
 
 describe('SettingsScreen', () => {
   beforeEach(() => {
     vi.mocked(HasOpenRouterKey).mockResolvedValue(false)
+    vi.mocked(GetModelSettings).mockResolvedValue({
+      current: {
+        study: '',
+        conversationSummary: '',
+        queryEnrichment: '',
+        noteFormatting: '',
+        embedding: '',
+      },
+      defaults: {
+        study: 'anthropic/claude-sonnet-4.5',
+        conversationSummary: 'openai/gpt-4o-mini',
+        queryEnrichment: 'openai/gpt-4o-mini',
+        noteFormatting: 'anthropic/claude-sonnet-4.5',
+        embedding: 'openai/text-embedding-3-small',
+      },
+    } as never)
+    vi.mocked(ListSelectableModels).mockResolvedValue({ chat: [], embedding: [] } as never)
   })
 
   it('shows that a key is already configured, without ever showing it', async () => {
     // Given a key is already saved
     vi.mocked(HasOpenRouterKey).mockResolvedValue(true)
-    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
+    render(<SettingsScreen />)
 
     // Then a status message says so, and the masked field itself stays blank
     expect(await screen.findByText(/key is already configured/i)).toBeInTheDocument()
@@ -41,77 +53,43 @@ describe('SettingsScreen', () => {
   it('shows that no key is configured yet', async () => {
     // Given no key is saved
     vi.mocked(HasOpenRouterKey).mockResolvedValue(false)
-    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
+    render(<SettingsScreen />)
 
     // Then a status message says so
     expect(await screen.findByText(/no key configured yet/i)).toBeInTheDocument()
   })
 
-  it('pre-fills the form with the current profile', () => {
-    // Given the currently saved profile
-    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
+  it('renders the Models section before the OpenRouter key section', async () => {
+    // Given the settings screen
+    render(<SettingsScreen />)
 
-    // Then the fields show the saved values
-    expect(screen.getByLabelText('Name')).toHaveValue('Ana')
-    expect(screen.getByLabelText('Assistant name')).toHaveValue('Atena')
-    expect(screen.getByLabelText('Area')).toHaveValue('Engenharia de Software')
-    expect(screen.getByRole('combobox', { name: 'Experience level' })).toHaveTextContent(
-      'Intermediate',
-    )
-  })
-
-  it('saves a profile change and reports the saved draft', async () => {
-    // Given a binding that accepts the edit and echoes the saved profile back
-    const saved = { ...currentProfile(), assistantName: 'Nova Atena' }
-    vi.mocked(UpdateProfile).mockResolvedValueOnce(saved)
-    const onProfileUpdated = vi.fn()
-    const user = userEvent.setup()
-    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={onProfileUpdated} />)
-
-    // When changing the assistant name and saving
-    const assistantNameInput = screen.getByLabelText('Assistant name')
-    await user.clear(assistantNameInput)
-    await user.type(assistantNameInput, 'Nova Atena')
-    await user.click(screen.getByRole('button', { name: 'Save changes' }))
-
-    // Then the binding is called with the edit, and onProfileUpdated fires
-    // with what the backend actually persisted
-    await waitFor(() =>
-      expect(UpdateProfile).toHaveBeenCalledWith(
-        expect.objectContaining({ assistantName: 'Nova Atena' }),
-      ),
-    )
-    await waitFor(() => expect(onProfileUpdated).toHaveBeenCalledWith(saved))
-  })
-
-  it('shows an inline error and does not report an update on a rejected save', async () => {
-    // Given a binding that rejects with a domain validation sentinel
-    vi.mocked(UpdateProfile).mockRejectedValueOnce(
-      new Error('experience level must be beginner, intermediate or advanced'),
-    )
-    const onProfileUpdated = vi.fn()
-    const user = userEvent.setup()
-    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={onProfileUpdated} />)
-
-    // When saving
-    await user.click(screen.getByRole('button', { name: 'Save changes' }))
-
-    // Then an inline error is shown and onProfileUpdated never fires
-    expect(await screen.findByText('Select a valid experience level.')).toBeInTheDocument()
-    expect(onProfileUpdated).not.toHaveBeenCalled()
+    // Then the model selectors are present and come first in the page
+    const models = await screen.findByRole('heading', { name: 'Models' })
+    const key = screen.getByRole('heading', { name: 'OpenRouter key' })
+    expect(await screen.findByRole('combobox', { name: 'Study chat model' })).toBeInTheDocument()
+    expect(models.compareDocumentPosition(key) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('renders the OpenRouter key form', () => {
     // Given the settings screen
-    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
+    render(<SettingsScreen />)
 
     // Then the shared OpenRouter key form is present
     expect(screen.getByLabelText('OpenRouter key')).toBeInTheDocument()
   })
 
+  it('offers no profile form, which lives in the Profile tab', () => {
+    // Given the settings screen
+    render(<SettingsScreen />)
+
+    // Then no profile field is present
+    expect(screen.queryByLabelText('Assistant name')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument()
+  })
+
   it('offers no knowledge extraction setting, since extraction no longer exists', () => {
     // Given the settings screen
-    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
+    render(<SettingsScreen />)
 
     // Then there is no extraction section or control
     expect(screen.queryByText('Knowledge extraction')).not.toBeInTheDocument()
@@ -121,7 +99,7 @@ describe('SettingsScreen', () => {
   it('opens the reset confirmation dialog from the Danger zone button', async () => {
     // Given the settings screen
     const user = userEvent.setup()
-    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
+    render(<SettingsScreen />)
 
     // When clicking "Reset local data"
     await user.click(screen.getByRole('button', { name: 'Reset local data' }))
@@ -135,7 +113,7 @@ describe('SettingsScreen', () => {
     // during this assertion
     vi.mocked(ResetLocalData).mockReturnValueOnce(new Promise(() => {}))
     const user = userEvent.setup()
-    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
+    render(<SettingsScreen />)
     await user.click(screen.getByRole('button', { name: 'Reset local data' }))
     await screen.findByText('Reset local data?')
 
@@ -151,7 +129,7 @@ describe('SettingsScreen', () => {
     // Given a rejected reset
     vi.mocked(ResetLocalData).mockRejectedValueOnce(new Error('sqlite: resetting local data: boom'))
     const user = userEvent.setup()
-    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
+    render(<SettingsScreen />)
     await user.click(screen.getByRole('button', { name: 'Reset local data' }))
     await screen.findByText('Reset local data?')
 
@@ -166,7 +144,7 @@ describe('SettingsScreen', () => {
   it('closes the reset dialog when Cancel is clicked', async () => {
     // Given the confirmation dialog is open
     const user = userEvent.setup()
-    render(<SettingsScreen profile={currentProfile()} onProfileUpdated={vi.fn()} />)
+    render(<SettingsScreen />)
     await user.click(screen.getByRole('button', { name: 'Reset local data' }))
     await screen.findByText('Reset local data?')
 

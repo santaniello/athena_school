@@ -40,6 +40,25 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   // The Sources panel (useSessionSources) fetches this itself as soon as a
   // session is open — resolved empty so it settles past its loading state.
   ListSessionSources: vi.fn().mockResolvedValue([]),
+  // The Settings screen's Models section loads these on mount.
+  GetModelSettings: vi.fn().mockResolvedValue({
+    current: {
+      study: '',
+      conversationSummary: '',
+      queryEnrichment: '',
+      noteFormatting: '',
+      embedding: '',
+    },
+    defaults: {
+      study: 'anthropic/claude-sonnet-4.5',
+      conversationSummary: 'openai/gpt-4o-mini',
+      queryEnrichment: 'openai/gpt-4o-mini',
+      noteFormatting: 'anthropic/claude-sonnet-4.5',
+      embedding: 'openai/text-embedding-3-small',
+    },
+  }),
+  SaveModelSettings: vi.fn(),
+  ListSelectableModels: vi.fn().mockResolvedValue({ chat: [], embedding: [] }),
 }))
 
 // The Study section's sidebar tree (StudyFolderTree) fetches folders as
@@ -146,6 +165,7 @@ describe('AppShell', () => {
       'Flashcards',
       'Interview',
       'Documentation',
+      'Profile',
       'Settings',
     ]) {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
@@ -421,7 +441,21 @@ describe('AppShell', () => {
     expect(screen.queryByText('Free trial')).not.toBeInTheDocument()
   })
 
-  it('opens the real Settings screen, not the coming-soon panel, when Settings is selected', async () => {
+  it('opens the real Profile screen, not the coming-soon panel, when Profile is selected', async () => {
+    // Given the app shell mounts
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+
+    // When selecting Profile
+    await user.click(screen.getByRole('button', { name: 'Profile' }))
+
+    // Then the real profile form appears, not the locked-section panel
+    expect(screen.getByLabelText('Assistant name')).toBeInTheDocument()
+    expect(screen.queryByText('Planned for Phase 1')).not.toBeInTheDocument()
+  })
+
+  it('opens the real Settings screen with the key form and no profile form when Settings is selected', async () => {
     // Given the app shell mounts
     const user = userEvent.setup()
     renderShell()
@@ -430,19 +464,29 @@ describe('AppShell', () => {
     // When selecting Settings
     await user.click(screen.getByRole('button', { name: 'Settings' }))
 
-    // Then the real profile form appears, not the locked-section panel
-    expect(screen.getByLabelText('Assistant name')).toBeInTheDocument()
-    expect(screen.queryByText('Planned for Phase 1')).not.toBeInTheDocument()
+    // Then the OpenRouter key form appears and the profile form does not
+    expect(screen.getByLabelText('OpenRouter key')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Assistant name')).not.toBeInTheDocument()
   })
 
-  it('updates the sidebar name immediately after a Settings profile save, with no refetch', async () => {
-    // Given the app shell mounts and the user opens Settings
+  it('lists Profile directly above Settings in the sidebar footer', async () => {
+    // Given the app shell mounts
+    renderShell()
+    await screen.findByText(/Felipe\./)
+
+    // Then Profile immediately precedes Settings among the nav buttons
+    const names = screen.getAllByRole('button').map((button) => button.textContent)
+    expect(names.indexOf('Settings') - names.indexOf('Profile')).toBe(1)
+  })
+
+  it('updates the sidebar name immediately after a Profile save, with no refetch', async () => {
+    // Given the app shell mounts and the user opens Profile
     const saved = { ...profileResult, name: 'Felipe Santaniello' }
     vi.mocked(UpdateProfile).mockResolvedValueOnce(saved)
     const user = userEvent.setup()
     renderShell()
     await screen.findByText(/Felipe\./)
-    await user.click(screen.getByRole('button', { name: 'Settings' }))
+    await user.click(screen.getByRole('button', { name: 'Profile' }))
 
     // When editing the name and saving
     const nameInput = screen.getByLabelText('Name')

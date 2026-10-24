@@ -11,6 +11,7 @@ import (
 	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
+	domainllm "github.com/santaniello/athena/internal/domain/llm"
 )
 
 const testEmbeddingModel = "openai/text-embedding-3-small"
@@ -28,7 +29,7 @@ func TestApp_GetKnowledgeIndexStatus_startsLoading_beforeTheInitialLoadRuns(t *t
 	// never been started
 	chunks := knowledgemocks.NewMockChunkRepository(t)
 	store := knowledgemocks.NewMockVectorStore(t)
-	loader := applicationknowledge.NewIndexLoader(chunks, store, testEmbeddingModel)
+	loader := applicationknowledge.NewIndexLoader(chunks, store, domainllm.FixedEmbeddingModel(testEmbeddingModel))
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, loader, nil)
 	app.Startup(context.Background())
 
@@ -50,7 +51,7 @@ func TestApp_StartKnowledgeIndex_loadsThenEmitsStatus(t *testing.T) {
 		Return(domainknowledge.ChunkLoadResult{Chunks: valid}, nil).Once()
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().ReplaceAll(ctx, valid).Return(nil).Once()
-	loader := applicationknowledge.NewIndexLoader(chunks, store, testEmbeddingModel)
+	loader := applicationknowledge.NewIndexLoader(chunks, store, domainllm.FixedEmbeddingModel(testEmbeddingModel))
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, loader, nil)
 	app.Startup(ctx)
 
@@ -85,7 +86,7 @@ func TestApp_GetKnowledgeIndexStatus_reportsIssues_afterAPartiallyValidLoad(t *t
 		Return(domainknowledge.ChunkLoadResult{Chunks: valid, Issues: []domainknowledge.ChunkLoadIssue{issue}}, nil).Once()
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().ReplaceAll(ctx, valid).Return(nil).Once()
-	loader := applicationknowledge.NewIndexLoader(chunks, store, testEmbeddingModel)
+	loader := applicationknowledge.NewIndexLoader(chunks, store, domainllm.FixedEmbeddingModel(testEmbeddingModel))
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, loader, nil)
 	app.Startup(ctx)
 	app.emit = func(context.Context, string, ...interface{}) {}
@@ -111,7 +112,7 @@ func TestApp_RetryKnowledgeIndex_publishesANewSnapshot_andEmitsStatus(t *testing
 	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).Return(domainknowledge.ChunkLoadResult{Chunks: first}, nil).Once()
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().ReplaceAll(ctx, first).Return(nil).Once()
-	loader := applicationknowledge.NewIndexLoader(chunks, store, testEmbeddingModel)
+	loader := applicationknowledge.NewIndexLoader(chunks, store, domainllm.FixedEmbeddingModel(testEmbeddingModel))
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, loader, nil)
 	app.Startup(ctx)
 	app.emit = func(context.Context, string, ...interface{}) {}
@@ -144,7 +145,7 @@ func TestApp_RetryKnowledgeIndex_keepsThePreviousSnapshot_whenTheRetryFails(t *t
 	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).Return(domainknowledge.ChunkLoadResult{Chunks: first}, nil).Once()
 	store := knowledgemocks.NewMockVectorStore(t)
 	store.EXPECT().ReplaceAll(ctx, first).Return(nil).Once()
-	loader := applicationknowledge.NewIndexLoader(chunks, store, testEmbeddingModel)
+	loader := applicationknowledge.NewIndexLoader(chunks, store, domainllm.FixedEmbeddingModel(testEmbeddingModel))
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, loader, nil)
 	app.Startup(ctx)
 	app.emit = func(context.Context, string, ...interface{}) {}

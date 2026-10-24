@@ -12,6 +12,7 @@ import (
 	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
 	"github.com/santaniello/athena/internal/application/onboarding"
 	applicationreset "github.com/santaniello/athena/internal/application/reset"
+	"github.com/santaniello/athena/internal/application/settings"
 	"github.com/santaniello/athena/internal/application/study"
 	domainconfig "github.com/santaniello/athena/internal/domain/config"
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
@@ -31,6 +32,7 @@ type App struct {
 	index         *applicationknowledge.IndexLoader
 	apiKeyUpdater domainllm.APIKeyUpdater
 	reset         *applicationreset.Service
+	modelSettings *settings.Service
 	// emit defaults to wailsruntime.EventsEmit, which calls log.Fatal (i.e.
 	// os.Exit) when a.ctx was never produced by the real Wails runtime —
 	// exactly the case in tests, which use context.Background(). Tests
@@ -67,8 +69,9 @@ func NewApp(
 	apiKeyUpdater domainllm.APIKeyUpdater,
 	indexLoader *applicationknowledge.IndexLoader,
 	resetService *applicationreset.Service,
+	options ...Option,
 ) *App {
-	return &App{
+	app := &App{
 		onboarding:    onboardingService,
 		profiles:      profiles,
 		config:        config,
@@ -84,6 +87,10 @@ func NewApp(
 		saveFile:      wailsruntime.SaveFileDialog,
 		reloadApp:     wailsruntime.WindowReloadApp,
 	}
+	for _, option := range options {
+		option(app)
+	}
+	return app
 }
 
 // Startup is called by Wails once the frontend is ready. The context is

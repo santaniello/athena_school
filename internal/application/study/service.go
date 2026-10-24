@@ -55,6 +55,7 @@ type Service struct {
 	usage          domainllm.UsageReader
 	summarizer     ConversationSummarizer
 	summaries      domainstudy.ConversationSummaryRepository
+	summaryWindow  SummaryWindowSource
 	inFlight       *inFlightCoordinator
 }
 
