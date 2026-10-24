@@ -11,6 +11,7 @@ import (
 
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
+	domainllm "github.com/santaniello/athena/internal/domain/llm"
 )
 
 const testEmbeddingModel = "openai/text-embedding-3-small"
@@ -25,7 +26,7 @@ func testLoadChunk(id string) domainknowledge.Chunk {
 
 func TestNewIndexLoader_startsLoading_withNoSnapshot(t *testing.T) {
 	// Given a freshly constructed loader, before LoadInitial ever runs
-	loader := NewIndexLoader(knowledgemocks.NewMockChunkRepository(t), knowledgemocks.NewMockVectorStore(t), testEmbeddingModel)
+	loader := NewIndexLoader(knowledgemocks.NewMockChunkRepository(t), knowledgemocks.NewMockVectorStore(t), domainllm.FixedEmbeddingModel(testEmbeddingModel))
 
 	// When reading its status
 	status := loader.Status()
@@ -38,7 +39,7 @@ func TestNewIndexLoader_startsLoading_withNoSnapshot(t *testing.T) {
 
 func TestCheckMutationAllowed_returnsErrIndexLoading_beforeTheFirstLoadCompletes(t *testing.T) {
 	// Given a freshly constructed loader
-	loader := NewIndexLoader(knowledgemocks.NewMockChunkRepository(t), knowledgemocks.NewMockVectorStore(t), testEmbeddingModel)
+	loader := NewIndexLoader(knowledgemocks.NewMockChunkRepository(t), knowledgemocks.NewMockVectorStore(t), domainllm.FixedEmbeddingModel(testEmbeddingModel))
 
 	// When checking whether a mutation may proceed
 	err := loader.CheckMutationAllowed()
@@ -56,7 +57,7 @@ func TestLoadInitial_succeeds_withNoIssues_becomesReady(t *testing.T) {
 	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).
 		Return(domainknowledge.ChunkLoadResult{Chunks: valid}, nil).Once()
 	store.EXPECT().ReplaceAll(ctx, valid).Return(nil).Once()
-	loader := NewIndexLoader(chunks, store, testEmbeddingModel)
+	loader := NewIndexLoader(chunks, store, domainllm.FixedEmbeddingModel(testEmbeddingModel))
 
 	// When the initial load runs
 	loader.LoadInitial(ctx)
@@ -79,7 +80,7 @@ func TestLoadInitial_succeeds_withIssues_becomesReadyWithWarnings(t *testing.T) 
 	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).
 		Return(domainknowledge.ChunkLoadResult{Chunks: valid, Issues: []domainknowledge.ChunkLoadIssue{repoIssue}}, nil).Once()
 	store.EXPECT().ReplaceAll(ctx, valid).Return(nil).Once()
-	loader := NewIndexLoader(chunks, store, testEmbeddingModel)
+	loader := NewIndexLoader(chunks, store, domainllm.FixedEmbeddingModel(testEmbeddingModel))
 
 	// When the initial load runs
 	loader.LoadInitial(ctx)
@@ -104,7 +105,7 @@ func TestLoadInitial_isolatesAnInvalidRepositoryChunk_asDefenseInDepth(t *testin
 	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).
 		Return(domainknowledge.ChunkLoadResult{Chunks: []domainknowledge.Chunk{good, bad}}, nil).Once()
 	store.EXPECT().ReplaceAll(ctx, []domainknowledge.Chunk{good}).Return(nil).Once()
-	loader := NewIndexLoader(chunks, store, testEmbeddingModel)
+	loader := NewIndexLoader(chunks, store, domainllm.FixedEmbeddingModel(testEmbeddingModel))
 
 	// When the initial load runs
 	loader.LoadInitial(ctx)
@@ -125,7 +126,7 @@ func TestLoadInitial_fails_onRepositoryError_becomesFailedWithNoSnapshot(t *test
 	store := knowledgemocks.NewMockVectorStore(t)
 	boom := errors.New("disk full")
 	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).Return(domainknowledge.ChunkLoadResult{}, boom).Once()
-	loader := NewIndexLoader(chunks, store, testEmbeddingModel)
+	loader := NewIndexLoader(chunks, store, domainllm.FixedEmbeddingModel(testEmbeddingModel))
 
 	// When the initial load runs
 	loader.LoadInitial(ctx)
@@ -151,7 +152,7 @@ func TestLoadInitial_fails_onStorePublishError_becomesFailed(t *testing.T) {
 	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).
 		Return(domainknowledge.ChunkLoadResult{Chunks: valid}, nil).Once()
 	store.EXPECT().ReplaceAll(ctx, valid).Return(errors.New("store exploded")).Once()
-	loader := NewIndexLoader(chunks, store, testEmbeddingModel)
+	loader := NewIndexLoader(chunks, store, domainllm.FixedEmbeddingModel(testEmbeddingModel))
 
 	// When the initial load runs
 	loader.LoadInitial(ctx)
@@ -170,7 +171,7 @@ func TestRetry_succeeds_replacesSnapshot_andReturnsReady(t *testing.T) {
 	first := []domainknowledge.Chunk{testLoadChunk("c1")}
 	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).Return(domainknowledge.ChunkLoadResult{Chunks: first}, nil).Once()
 	store.EXPECT().ReplaceAll(ctx, first).Return(nil).Once()
-	loader := NewIndexLoader(chunks, store, testEmbeddingModel)
+	loader := NewIndexLoader(chunks, store, domainllm.FixedEmbeddingModel(testEmbeddingModel))
 	loader.LoadInitial(ctx)
 
 	// When retrying and the reload succeeds with a different snapshot
@@ -193,7 +194,7 @@ func TestRetry_fails_withPriorSnapshot_restoresThePreviousReadyState(t *testing.
 	first := []domainknowledge.Chunk{testLoadChunk("c1")}
 	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).Return(domainknowledge.ChunkLoadResult{Chunks: first}, nil).Once()
 	store.EXPECT().ReplaceAll(ctx, first).Return(nil).Once()
-	loader := NewIndexLoader(chunks, store, testEmbeddingModel)
+	loader := NewIndexLoader(chunks, store, domainllm.FixedEmbeddingModel(testEmbeddingModel))
 	loader.LoadInitial(ctx)
 
 	// When a retry's reload fails
@@ -218,7 +219,7 @@ func TestRetry_fails_withNoPriorSnapshot_becomesFailed(t *testing.T) {
 	store := knowledgemocks.NewMockVectorStore(t)
 	boom := errors.New("disk full")
 	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).Return(domainknowledge.ChunkLoadResult{}, boom).Once()
-	loader := NewIndexLoader(chunks, store, testEmbeddingModel)
+	loader := NewIndexLoader(chunks, store, domainllm.FixedEmbeddingModel(testEmbeddingModel))
 	loader.LoadInitial(ctx)
 
 	// When retrying and it fails again
@@ -238,7 +239,7 @@ func TestRetry_setsStateToLoading_whilePreservingHasSnapshot_duringTheReload(t *
 	first := []domainknowledge.Chunk{testLoadChunk("c1")}
 	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).Return(domainknowledge.ChunkLoadResult{Chunks: first}, nil).Once()
 	store.EXPECT().ReplaceAll(ctx, first).Return(nil).Once()
-	loader := NewIndexLoader(chunks, store, testEmbeddingModel)
+	loader := NewIndexLoader(chunks, store, domainllm.FixedEmbeddingModel(testEmbeddingModel))
 	loader.LoadInitial(ctx)
 
 	// When a retry is in flight (blocked mid-reload)
@@ -285,7 +286,7 @@ func TestBeginMutation_returnsErrIndexLoading_immediately_whileAReloadIsInProgre
 	first := []domainknowledge.Chunk{testLoadChunk("c1")}
 	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).Return(domainknowledge.ChunkLoadResult{Chunks: first}, nil).Once()
 	store.EXPECT().ReplaceAll(ctx, first).Return(nil).Once()
-	loader := NewIndexLoader(chunks, store, testEmbeddingModel)
+	loader := NewIndexLoader(chunks, store, domainllm.FixedEmbeddingModel(testEmbeddingModel))
 	loader.LoadInitial(ctx)
 
 	release := make(chan struct{})
@@ -329,7 +330,7 @@ func TestReload_waitsForAnInFlightMutation_beforeReadingOrPublishing(t *testing.
 	first := []domainknowledge.Chunk{testLoadChunk("c1")}
 	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).Return(domainknowledge.ChunkLoadResult{Chunks: first}, nil).Once()
 	store.EXPECT().ReplaceAll(ctx, first).Return(nil).Once()
-	loader := NewIndexLoader(chunks, store, testEmbeddingModel)
+	loader := NewIndexLoader(chunks, store, domainllm.FixedEmbeddingModel(testEmbeddingModel))
 	loader.LoadInitial(ctx)
 	require.NoError(t, loader.BeginMutation())
 
@@ -377,7 +378,7 @@ func TestReload_serializesTwoConcurrentRetries_soTheirPublishesCannotInterleave(
 	first := []domainknowledge.Chunk{testLoadChunk("c1")}
 	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).Return(domainknowledge.ChunkLoadResult{Chunks: first}, nil).Once()
 	store.EXPECT().ReplaceAll(ctx, first).Return(nil).Once()
-	loader := NewIndexLoader(chunks, store, testEmbeddingModel)
+	loader := NewIndexLoader(chunks, store, domainllm.FixedEmbeddingModel(testEmbeddingModel))
 	loader.LoadInitial(ctx)
 
 	// When two retries race, the first one blocked mid-reload
@@ -447,7 +448,7 @@ func TestRetry_secondConcurrentRetryFails_restoresTheFirstsSuccess_notAStaleLoad
 	first := []domainknowledge.Chunk{testLoadChunk("c1")}
 	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).Return(domainknowledge.ChunkLoadResult{Chunks: first}, nil).Once()
 	store.EXPECT().ReplaceAll(ctx, first).Return(nil).Once()
-	loader := NewIndexLoader(chunks, store, testEmbeddingModel)
+	loader := NewIndexLoader(chunks, store, domainllm.FixedEmbeddingModel(testEmbeddingModel))
 	loader.LoadInitial(ctx)
 
 	release := make(chan struct{})
@@ -510,7 +511,7 @@ func TestStatus_isSafeForConcurrentUse(t *testing.T) {
 	chunks.EXPECT().ListCurrent(ctx, testEmbeddingModel).
 		Return(domainknowledge.ChunkLoadResult{}, nil).Maybe()
 	store.EXPECT().ReplaceAll(ctx, []domainknowledge.Chunk{}).Return(nil).Maybe()
-	loader := NewIndexLoader(chunks, store, testEmbeddingModel)
+	loader := NewIndexLoader(chunks, store, domainllm.FixedEmbeddingModel(testEmbeddingModel))
 
 	done := make(chan struct{})
 	go func() {
@@ -526,4 +527,51 @@ func TestStatus_isSafeForConcurrentUse(t *testing.T) {
 
 	// Then the load settled into a terminal state
 	assert.NotEqual(t, domainknowledge.IndexStateLoading, loader.Status().State)
+}
+
+func TestRetry_loadsChunksOfTheEmbeddingModelCurrentAtThatMoment(t *testing.T) {
+	// Given a loader built on a resolver whose embedding model can change
+	ctx := context.Background()
+	resolver := domainllm.NewOverridableResolver()
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	store := knowledgemocks.NewMockVectorStore(t)
+	first := []domainknowledge.Chunk{testLoadChunk("small")}
+	chunks.EXPECT().ListCurrent(ctx, domainllm.EmbeddingModel).Return(domainknowledge.ChunkLoadResult{Chunks: first}, nil).Once()
+	store.EXPECT().ReplaceAll(ctx, first).Return(nil).Once()
+	loader := NewIndexLoader(chunks, store, resolver)
+	loader.LoadInitial(ctx)
+
+	// When the user switches the embedding model and the index is reloaded
+	resolver.SetOverrides(nil, "openai/text-embedding-3-large")
+	chunks.EXPECT().ListCurrent(ctx, "openai/text-embedding-3-large").Return(domainknowledge.ChunkLoadResult{}, nil).Once()
+	store.EXPECT().ReplaceAll(ctx, []domainknowledge.Chunk{}).Return(nil).Once()
+	status := loader.Retry(ctx)
+
+	// Then only chunks of the new model are requested, so the old model's
+	// chunks leave the searchable snapshot without being deleted
+	assert.Equal(t, domainknowledge.IndexStateReady, status.State)
+}
+
+func TestRetry_switchingBackLoadsThePreviousModelsChunksAgain(t *testing.T) {
+	// Given a loader that already moved to another embedding model
+	ctx := context.Background()
+	resolver := domainllm.NewOverridableResolver()
+	resolver.SetOverrides(nil, "openai/text-embedding-3-large")
+	chunks := knowledgemocks.NewMockChunkRepository(t)
+	store := knowledgemocks.NewMockVectorStore(t)
+	chunks.EXPECT().ListCurrent(ctx, "openai/text-embedding-3-large").Return(domainknowledge.ChunkLoadResult{}, nil).Once()
+	store.EXPECT().ReplaceAll(ctx, []domainknowledge.Chunk{}).Return(nil).Once()
+	loader := NewIndexLoader(chunks, store, resolver)
+	loader.LoadInitial(ctx)
+
+	// When the user switches back to the default and the index reloads
+	resolver.SetOverrides(nil, "")
+	restored := []domainknowledge.Chunk{testLoadChunk("small")}
+	chunks.EXPECT().ListCurrent(ctx, domainllm.EmbeddingModel).Return(domainknowledge.ChunkLoadResult{Chunks: restored}, nil).Once()
+	store.EXPECT().ReplaceAll(ctx, restored).Return(nil).Once()
+	loader.Retry(ctx)
+
+	// Then the previous index is back without any re-import (mock expectations
+	// verify both reloads)
+	assert.True(t, loader.Status().HasSnapshot)
 }

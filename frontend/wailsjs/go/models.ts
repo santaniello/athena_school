@@ -182,6 +182,84 @@ export namespace desktop {
 		    return a;
 		}
 	}
+	export class ModelChoices {
+	    study: string;
+	    conversationSummary: string;
+	    queryEnrichment: string;
+	    noteFormatting: string;
+	    embedding: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ModelChoices(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.study = source["study"];
+	        this.conversationSummary = source["conversationSummary"];
+	        this.queryEnrichment = source["queryEnrichment"];
+	        this.noteFormatting = source["noteFormatting"];
+	        this.embedding = source["embedding"];
+	    }
+	}
+	export class ModelSettingsResult {
+	    current: ModelChoices;
+	    defaults: ModelChoices;
+	
+	    static createFrom(source: any = {}) {
+	        return new ModelSettingsResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.current = this.convertValues(source["current"], ModelChoices);
+	        this.defaults = this.convertValues(source["defaults"], ModelChoices);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SaveModelSettingsResult {
+	    embeddingModelChanged: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new SaveModelSettingsResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.embeddingModelChanged = source["embeddingModelChanged"];
+	    }
+	}
+	export class SelectableModelsResult {
+	    chat: string[];
+	    embedding: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new SelectableModelsResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.chat = source["chat"];
+	        this.embedding = source["embedding"];
+	    }
+	}
 	export class SessionSourceResult {
 	    itemId: string;
 	    title: string;

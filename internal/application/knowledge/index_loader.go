@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
+	domainllm "github.com/santaniello/athena/internal/domain/llm"
 )
 
 // IndexLoader is the background lifecycle coordinator for the knowledge
@@ -22,7 +23,7 @@ import (
 type IndexLoader struct {
 	chunks         domainknowledge.ChunkRepository
 	store          domainknowledge.VectorStore
-	embeddingModel string
+	embeddingModel domainllm.EmbeddingModelSource
 
 	mu     sync.Mutex
 	status domainknowledge.IndexStatus
@@ -41,9 +42,11 @@ type IndexLoader struct {
 
 // NewIndexLoader creates an IndexLoader that has not started loading yet:
 // Status already reports IndexStateLoading with no snapshot, so there is no
-// window where an unstarted loader looks ready or failed.
+// window where an unstarted loader looks ready or failed. It asks
+// embeddingModel for the model at every reload, so a settings change is
+// picked up by the next Retry (spec 2.31, decision 12).
 func NewIndexLoader(
-	chunks domainknowledge.ChunkRepository, store domainknowledge.VectorStore, embeddingModel string,
+	chunks domainknowledge.ChunkRepository, store domainknowledge.VectorStore, embeddingModel domainllm.EmbeddingModelSource,
 ) *IndexLoader {
 	return &IndexLoader{
 		chunks:         chunks,
@@ -155,7 +158,7 @@ func (l *IndexLoader) reload(ctx context.Context) domainknowledge.IndexStatus {
 // it directly, Retry may restore a prior snapshot on failure instead).
 // Callers must hold opMu.
 func (l *IndexLoader) doReload(ctx context.Context) domainknowledge.IndexStatus {
-	result, err := l.chunks.ListCurrent(ctx, l.embeddingModel)
+	result, err := l.chunks.ListCurrent(ctx, l.embeddingModel.EmbeddingModel())
 	if err != nil {
 		log.Printf("knowledge index: loading current chunks: %v", err)
 		return domainknowledge.IndexStatus{

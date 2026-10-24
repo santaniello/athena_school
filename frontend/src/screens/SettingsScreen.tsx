@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { ModelSettingsSection } from '@/components/model-settings-section'
 import { OpenRouterKeyForm } from '@/components/openrouter-key-form'
 import { ResetLocalDataDialog } from '@/components/reset-local-data-dialog'
 import { hasOpenRouterKey } from '@/lib/openrouterKey'
 import { ResetLocalData } from '../../wailsjs/go/desktop/App'
 
-// Lets the user edit the OpenRouter key and reset local data. The profile
-// fields live in ProfileScreen. See
+// Lets the user pick the model behind each AI feature, edit the OpenRouter
+// key and reset local data. The profile fields live in ProfileScreen. See
 // specs/phases/phase-01-desktop-mvp/08-settings.md.
 function SettingsScreen() {
   const [hasKey, setHasKey] = useState<boolean | null>(null)
@@ -34,8 +35,10 @@ function SettingsScreen() {
   }
 
   return (
-    <div className="thin-scroll mx-auto flex w-full max-w-lg flex-col gap-8 overflow-y-auto pr-2">
-      <div className="flex flex-col gap-4">
+    <div className="thin-scroll mx-auto flex w-full max-w-2xl flex-col gap-8 overflow-y-auto pr-2">
+      <ModelSettingsSection />
+
+      <div className="flex flex-col gap-4 border-t border-border pt-8">
         <h2 className="font-heading text-lg font-semibold text-foreground">OpenRouter key</h2>
         {hasKey !== null && (
           <p className="text-sm text-muted-foreground">

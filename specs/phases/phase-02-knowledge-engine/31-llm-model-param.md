@@ -46,13 +46,21 @@ resolving through their tier.
 6. **Model IDs are validated against the catalog.** Saving a model ID checks it against the
    existing `ModelCatalog` (`ListModels`, already used by `modelcatalog.Service`). An unknown ID is
    rejected with a clear error. If the catalog cannot be fetched, saving is refused rather than
-   trusting an unverified ID. The UI selector is fed by the same catalog.
+   trusting an unverified ID. The UI selector is fed by the same catalog. OpenRouter keeps
+   embedding models out of `/api/v1/models` (verified: none of its 469 entries is an embedding
+   model) and serves them from `/api/v1/embeddings/models`, so `ModelCatalog` gains
+   `ListEmbeddingModels` and the embedding choice is validated against that list; chat choices
+   against `ListModels`. An empty choice (reset to default) never needs the catalog.
 7. **The free fallback is unchanged.** `FreeFallbackModel` still takes over when the account has
    no credits, whatever the user chose.
 8. **The summary window follows the chosen model.** `SummaryModelWindowTokens` (128k) is assumed
    by the summarizer and the context builder. It becomes the context length of the configured
    summary model, taken from the catalog (`ModelContextResolver`); 128k stays the fallback when
-   the length is unknown.
+   the length is unknown. The lookup is memory-only (`CachedContextLength`), never I/O. It sizes
+   the summary target (as before), the projected summary in `BuildContext`
+   (`BuildInput.SummaryWindowTokens`) and the summarizer's input batch
+   (`SummaryInputBudgetFor`: a quarter of the window, between 2,000 and the historical 32,000, so a
+   small summary model is not handed a batch larger than its window).
 9. **Changing the embedding model invalidates the index, and the user must re-import.** Chunks and
    `ingested_files` already store their `EmbeddingModel`. `IndexLoader.ListCurrent` only loads
    chunks of the current model, and import skips a file only when its stored model equals the
@@ -61,9 +69,11 @@ resolving through their tier.
    (dimensions can differ, see `vectorstore/store.go`).
 10. **Old chunks are kept, not deleted.** Consistent with the decoupled import lifecycle (notes
     are never removed automatically), switching the embedding model back restores the previous
-    index without re-importing. Re-importing with the new model must replace the file's chunks
-    for that model; whether stale chunks of other models are cleaned up on re-import is verified
-    during implementation and, if they would accumulate, handled by a follow-up.
+    index without re-importing. Verified during implementation: re-importing a file already
+    deletes every chunk of that file's source path (`DeleteBySourcePath`, whatever model produced
+    them) before saving the new ones, so chunks of other models never accumulate for a
+    re-imported file. The flip side is that switching back only restores the index of files not
+    yet re-imported; a re-imported file has to be imported again to return to the old model.
 11. **Big warning before an embedding change.** Changing the embedding model opens a blocking
     confirmation dialog stating plainly: retrieval will stop returning existing notes until every
     note is re-imported, re-importing consumes API credits, and until then answers will not be
@@ -71,7 +81,11 @@ resolving through their tier.
     leaves the previous value. The chat-model settings need no such dialog.
 12. **`IndexLoader` follows the current embedding model.** It is created in `main.go` with the
     embedding model; it must read the resolver's current value (or be rebuilt/reloaded) so that
-    retrieval after a change loads the right chunks.
+    retrieval after a change loads the right chunks. Implemented by reading the resolver on every
+    reload, and by `SaveModelSettings` in the desktop binding reloading the index
+    (`RetryKnowledgeIndex`) when the effective embedding model changed. Ingestion reads the model
+    once per file, stamps its chunks with it and fails the file if the provider answers with
+    another model, so one file never mixes models.
 13. **Usage tracking is unaffected.** `usage` already records the model per call, and the
     session's `Context.Model` already tolerates model changes.
 

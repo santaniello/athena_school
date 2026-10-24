@@ -1,18 +1,43 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { HasOpenRouterKey, ResetLocalData } from '../../wailsjs/go/desktop/App'
+import {
+  GetModelSettings,
+  HasOpenRouterKey,
+  ListSelectableModels,
+  ResetLocalData,
+} from '../../wailsjs/go/desktop/App'
 import SettingsScreen from './SettingsScreen'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
   SaveOpenRouterKey: vi.fn(),
   HasOpenRouterKey: vi.fn(),
   ResetLocalData: vi.fn(),
+  GetModelSettings: vi.fn(),
+  SaveModelSettings: vi.fn(),
+  ListSelectableModels: vi.fn(),
 }))
 
 describe('SettingsScreen', () => {
   beforeEach(() => {
     vi.mocked(HasOpenRouterKey).mockResolvedValue(false)
+    vi.mocked(GetModelSettings).mockResolvedValue({
+      current: {
+        study: '',
+        conversationSummary: '',
+        queryEnrichment: '',
+        noteFormatting: '',
+        embedding: '',
+      },
+      defaults: {
+        study: 'anthropic/claude-sonnet-4.5',
+        conversationSummary: 'openai/gpt-4o-mini',
+        queryEnrichment: 'openai/gpt-4o-mini',
+        noteFormatting: 'anthropic/claude-sonnet-4.5',
+        embedding: 'openai/text-embedding-3-small',
+      },
+    } as never)
+    vi.mocked(ListSelectableModels).mockResolvedValue({ chat: [], embedding: [] } as never)
   })
 
   it('shows that a key is already configured, without ever showing it', async () => {
@@ -32,6 +57,17 @@ describe('SettingsScreen', () => {
 
     // Then a status message says so
     expect(await screen.findByText(/no key configured yet/i)).toBeInTheDocument()
+  })
+
+  it('renders the Models section before the OpenRouter key section', async () => {
+    // Given the settings screen
+    render(<SettingsScreen />)
+
+    // Then the model selectors are present and come first in the page
+    const models = await screen.findByRole('heading', { name: 'Models' })
+    const key = screen.getByRole('heading', { name: 'OpenRouter key' })
+    expect(await screen.findByRole('combobox', { name: 'Study chat model' })).toBeInTheDocument()
+    expect(models.compareDocumentPosition(key) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('renders the OpenRouter key form', () => {

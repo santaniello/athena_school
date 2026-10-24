@@ -40,6 +40,25 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   // The Sources panel (useSessionSources) fetches this itself as soon as a
   // session is open — resolved empty so it settles past its loading state.
   ListSessionSources: vi.fn().mockResolvedValue([]),
+  // The Settings screen's Models section loads these on mount.
+  GetModelSettings: vi.fn().mockResolvedValue({
+    current: {
+      study: '',
+      conversationSummary: '',
+      queryEnrichment: '',
+      noteFormatting: '',
+      embedding: '',
+    },
+    defaults: {
+      study: 'anthropic/claude-sonnet-4.5',
+      conversationSummary: 'openai/gpt-4o-mini',
+      queryEnrichment: 'openai/gpt-4o-mini',
+      noteFormatting: 'anthropic/claude-sonnet-4.5',
+      embedding: 'openai/text-embedding-3-small',
+    },
+  }),
+  SaveModelSettings: vi.fn(),
+  ListSelectableModels: vi.fn().mockResolvedValue({ chat: [], embedding: [] }),
 }))
 
 // The Study section's sidebar tree (StudyFolderTree) fetches folders as

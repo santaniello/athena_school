@@ -26,6 +26,9 @@ type Client struct {
 	apiKeyMu   sync.RWMutex
 	httpClient *http.Client
 	recorder   domainllm.UsageRecorder
+	// models decides the model per task and the embedding model, read on
+	// every call so a settings change applies to the next one.
+	models domainllm.ModelResolver
 	// streamIdleTimeout bounds the silence between two lines of a streamed
 	// response; a long answer is fine as long as it keeps flowing.
 	streamIdleTimeout time.Duration
@@ -43,10 +46,19 @@ const (
 	defaultRequestTimeout = 5 * time.Minute
 )
 
+// Option customizes a Client at construction.
+type Option func(*Client)
+
+// WithModelResolver makes the client resolve models through resolver instead
+// of the built-in tier defaults.
+func WithModelResolver(resolver domainllm.ModelResolver) Option {
+	return func(c *Client) { c.models = resolver }
+}
+
 // NewClient creates a Client against baseURL, authenticating with apiKey
 // and recording usage via recorder. An empty baseURL defaults to the real
 // OpenRouter API.
-func NewClient(baseURL, apiKey string, recorder domainllm.UsageRecorder) *Client {
+func NewClient(baseURL, apiKey string, recorder domainllm.UsageRecorder, opts ...Option) *Client {
 	if baseURL == "" {
 		baseURL = defaultBaseURL
 	}
@@ -54,14 +66,19 @@ func NewClient(baseURL, apiKey string, recorder domainllm.UsageRecorder) *Client
 	// answer may take to arrive.
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.ResponseHeaderTimeout = responseHeaderTimeout
-	return &Client{
+	client := &Client{
 		baseURL:           baseURL,
 		apiKey:            apiKey,
 		httpClient:        &http.Client{Transport: transport},
 		recorder:          recorder,
+		models:            domainllm.DefaultModelResolver{},
 		streamIdleTimeout: defaultStreamIdle,
 		requestTimeout:    defaultRequestTimeout,
 	}
+	for _, opt := range opts {
+		opt(client)
+	}
+	return client
 }
 
 // SetAPIKey updates the key used by subsequent Chat, ChatStream and
@@ -139,7 +156,7 @@ func (c *Client) Chat(ctx context.Context, req domainllm.ChatRequest) (domainllm
 		return domainllm.ChatResponse{}, domainllm.ErrAPIKeyMissing
 	}
 
-	model := domainllm.ModelFor(req.Task)
+	model := c.models.ModelFor(req.Task)
 	completion, err := c.chatCompletion(ctx, model, req.Messages, false)
 	usedFallback := false
 	if errors.Is(err, domainllm.ErrInsufficientCredits) {
@@ -189,7 +206,7 @@ func (c *Client) ChatStream(ctx context.Context, req domainllm.ChatRequest, hand
 		return domainllm.StreamResponse{}, domainllm.ErrAPIKeyMissing
 	}
 
-	model := domainllm.ModelFor(req.Task)
+	model := c.models.ModelFor(req.Task)
 	result, err := c.streamChatCompletion(ctx, model, req.Messages, handler)
 	usedFallback := false
 	if errors.Is(err, domainllm.ErrInsufficientCredits) {
@@ -332,16 +349,17 @@ func (c *Client) Embeddings(ctx context.Context, req domainllm.EmbeddingRequest)
 		return domainllm.EmbeddingResponse{}, domainllm.ErrAPIKeyMissing
 	}
 
+	model := c.models.EmbeddingModel()
 	var decoded embeddingsResponse
 	err := c.postJSON(ctx, "/api/v1/embeddings", embeddingsRequest{
-		Model: domainllm.EmbeddingModel,
+		Model: model,
 		Input: req.Input,
 	}, &decoded, "embeddings")
 	if err != nil {
 		return domainllm.EmbeddingResponse{}, err
 	}
 
-	if err := c.record(ctx, req.SessionID, domainllm.EmbeddingModel, decoded.Usage); err != nil {
+	if err := c.record(ctx, req.SessionID, model, decoded.Usage); err != nil {
 		return domainllm.EmbeddingResponse{}, err
 	}
 
@@ -351,7 +369,7 @@ func (c *Client) Embeddings(ctx context.Context, req domainllm.EmbeddingRequest)
 	}
 	return domainllm.EmbeddingResponse{
 		Embedding: embedding,
-		Model:     domainllm.EmbeddingModel,
+		Model:     model,
 		Usage:     usageFrom(decoded.Usage),
 	}, nil
 }
@@ -368,16 +386,17 @@ func (c *Client) EmbeddingsBatch(ctx context.Context, req domainllm.EmbeddingBat
 		return domainllm.EmbeddingBatchResponse{}, domainllm.ErrAPIKeyMissing
 	}
 
+	model := c.models.EmbeddingModel()
 	var decoded embeddingsResponse
 	err := c.postJSON(ctx, "/api/v1/embeddings", embeddingsBatchRequest{
-		Model: domainllm.EmbeddingModel,
+		Model: model,
 		Input: req.Inputs,
 	}, &decoded, "embeddings batch")
 	if err != nil {
 		return domainllm.EmbeddingBatchResponse{}, err
 	}
 
-	if err := c.record(ctx, req.SessionID, domainllm.EmbeddingModel, decoded.Usage); err != nil {
+	if err := c.record(ctx, req.SessionID, model, decoded.Usage); err != nil {
 		return domainllm.EmbeddingBatchResponse{}, err
 	}
 
@@ -398,7 +417,7 @@ func (c *Client) EmbeddingsBatch(ctx context.Context, req domainllm.EmbeddingBat
 	}
 	return domainllm.EmbeddingBatchResponse{
 		Embeddings: embeddings,
-		Model:      domainllm.EmbeddingModel,
+		Model:      model,
 		Usage:      usageFrom(decoded.Usage),
 	}, nil
 }

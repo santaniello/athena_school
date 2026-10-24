@@ -14,9 +14,23 @@ import (
 // by OpenRouter (missing, malformed, disabled or unauthorized).
 var ErrKeyInvalid = errors.New("openrouter key is invalid or unauthorized")
 
+// ModelSettings holds the user's model choice per AI feature, as OpenRouter
+// model IDs. An empty field means "use the default" (the task's tier model,
+// or the built-in embedding model), so a config without a models section
+// behaves exactly as before configurable models existed. See
+// specs/phases/phase-02-knowledge-engine/31-llm-model-param.md.
+type ModelSettings struct {
+	Study               string
+	ConversationSummary string
+	QueryEnrichment     string
+	NoteFormatting      string
+	Embedding           string
+}
+
 // Config is the local app configuration persisted to ~/.athena/config.yaml.
 type Config struct {
 	OpenRouterKey string
+	Models        ModelSettings
 }
 
 // Store persists the local Config.

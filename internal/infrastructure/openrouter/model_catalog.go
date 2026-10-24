@@ -23,7 +23,18 @@ type openRouterModelsResponse struct {
 // internal/application/modelcatalog), since it owns what "valid" means for
 // its cache (entry-isolated skip/collapse/exclude rules).
 func (c *Client) ListModels(ctx context.Context) ([]domainllm.ModelInfo, error) {
-	resp, err := c.get(ctx, "/api/v1/models")
+	return c.listCatalog(ctx, "/api/v1/models")
+}
+
+// ListEmbeddingModels implements domainllm.ModelCatalog for embedding
+// models, which OpenRouter keeps out of /api/v1/models and serves from their
+// own public listing.
+func (c *Client) ListEmbeddingModels(ctx context.Context) ([]domainllm.ModelInfo, error) {
+	return c.listCatalog(ctx, "/api/v1/embeddings/models")
+}
+
+func (c *Client) listCatalog(ctx context.Context, path string) ([]domainllm.ModelInfo, error) {
+	resp, err := c.get(ctx, path)
 	if err != nil {
 		return nil, err
 	}

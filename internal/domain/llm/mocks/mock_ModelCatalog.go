@@ -22,6 +22,64 @@ func (_m *MockModelCatalog) EXPECT() *MockModelCatalog_Expecter {
 	return &MockModelCatalog_Expecter{mock: &_m.Mock}
 }
 
+// ListEmbeddingModels provides a mock function with given fields: ctx
+func (_m *MockModelCatalog) ListEmbeddingModels(ctx context.Context) ([]llm.ModelInfo, error) {
+	ret := _m.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListEmbeddingModels")
+	}
+
+	var r0 []llm.ModelInfo
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context) ([]llm.ModelInfo, error)); ok {
+		return rf(ctx)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context) []llm.ModelInfo); ok {
+		r0 = rf(ctx)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]llm.ModelInfo)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = rf(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockModelCatalog_ListEmbeddingModels_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListEmbeddingModels'
+type MockModelCatalog_ListEmbeddingModels_Call struct {
+	*mock.Call
+}
+
+// ListEmbeddingModels is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockModelCatalog_Expecter) ListEmbeddingModels(ctx interface{}) *MockModelCatalog_ListEmbeddingModels_Call {
+	return &MockModelCatalog_ListEmbeddingModels_Call{Call: _e.mock.On("ListEmbeddingModels", ctx)}
+}
+
+func (_c *MockModelCatalog_ListEmbeddingModels_Call) Run(run func(ctx context.Context)) *MockModelCatalog_ListEmbeddingModels_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context))
+	})
+	return _c
+}
+
+func (_c *MockModelCatalog_ListEmbeddingModels_Call) Return(_a0 []llm.ModelInfo, _a1 error) *MockModelCatalog_ListEmbeddingModels_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockModelCatalog_ListEmbeddingModels_Call) RunAndReturn(run func(context.Context) ([]llm.ModelInfo, error)) *MockModelCatalog_ListEmbeddingModels_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListModels provides a mock function with given fields: ctx
 func (_m *MockModelCatalog) ListModels(ctx context.Context) ([]llm.ModelInfo, error) {
 	ret := _m.Called(ctx)

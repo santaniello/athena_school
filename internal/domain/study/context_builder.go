@@ -65,6 +65,10 @@ type BuildInput struct {
 	FixedTokens int
 	// ContextLength is the model window; it must be positive.
 	ContextLength int
+	// SummaryWindowTokens is the window of the model that writes the summary,
+	// which sizes the summary a fold is projected to produce. Zero means the
+	// default, SummaryModelWindowTokens.
+	SummaryWindowTokens int
 }
 
 // ContextPlan is the result of BuildContext.
@@ -99,7 +103,11 @@ func BuildContext(input BuildInput) (ContextPlan, error) {
 	maxFold := max(0, len(input.Messages)-(MinRecentMessages-1))
 	// The summarizer may return up to the hard cap, so that is what a new
 	// summary is assumed to take.
-	projectedSummary := max(input.SummaryTokens, SummaryHardCapTokens(SummaryTargetTokens(SummaryModelWindowTokens)))
+	summaryWindow := input.SummaryWindowTokens
+	if summaryWindow <= 0 {
+		summaryWindow = SummaryModelWindowTokens
+	}
+	projectedSummary := max(input.SummaryTokens, SummaryHardCapTokens(SummaryTargetTokens(summaryWindow)))
 
 	// suffix[k] is the token size of Messages[k:].
 	suffix := make([]int, len(input.Messages)+1)

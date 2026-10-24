@@ -151,7 +151,8 @@ const DOCUMENTATION: DocSection[] = [
       { term: 'Socratic study', description: 'Opens with a question and keeps turns short.' },
       {
         term: 'Settings',
-        description: 'Change your key or reset local data; it applies immediately.',
+        description:
+          'Choose the model behind each AI feature, change your key or reset local data; it applies immediately.',
       },
       { term: 'Import notes', description: 'Athena reads your Markdown and text files.' },
       { term: 'Meaning search', description: 'Finds the right passage regardless of wording.' },

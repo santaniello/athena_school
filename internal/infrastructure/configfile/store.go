@@ -24,13 +24,33 @@ func NewStore(path string) *Store {
 }
 
 type configFile struct {
-	OpenRouterKey string `yaml:"openrouter_key"`
+	OpenRouterKey string     `yaml:"openrouter_key"`
+	Models        modelsFile `yaml:"models,omitempty"`
+}
+
+// modelsFile is the optional models section; every key is optional and an
+// empty one is omitted when writing.
+type modelsFile struct {
+	Study               string `yaml:"study,omitempty"`
+	ConversationSummary string `yaml:"conversation_summary,omitempty"`
+	QueryEnrichment     string `yaml:"query_enrichment,omitempty"`
+	NoteFormatting      string `yaml:"note_formatting,omitempty"`
+	Embedding           string `yaml:"embedding,omitempty"`
 }
 
 // Save writes the config to disk with owner-only permissions, creating the
 // parent directory if it does not exist.
 func (s *Store) Save(cfg config.Config) error {
-	data, err := yaml.Marshal(configFile{OpenRouterKey: cfg.OpenRouterKey})
+	data, err := yaml.Marshal(configFile{
+		OpenRouterKey: cfg.OpenRouterKey,
+		Models: modelsFile{
+			Study:               cfg.Models.Study,
+			ConversationSummary: cfg.Models.ConversationSummary,
+			QueryEnrichment:     cfg.Models.QueryEnrichment,
+			NoteFormatting:      cfg.Models.NoteFormatting,
+			Embedding:           cfg.Models.Embedding,
+		},
+	})
 	if err != nil {
 		return fmt.Errorf("configfile: encoding config: %w", err)
 	}
@@ -53,5 +73,14 @@ func (s *Store) Load() (config.Config, error) {
 	if err := yaml.Unmarshal(data, &file); err != nil {
 		return config.Config{}, fmt.Errorf("configfile: decoding config file: %w", err)
 	}
-	return config.Config{OpenRouterKey: file.OpenRouterKey}, nil
+	return config.Config{
+		OpenRouterKey: file.OpenRouterKey,
+		Models: config.ModelSettings{
+			Study:               file.Models.Study,
+			ConversationSummary: file.Models.ConversationSummary,
+			QueryEnrichment:     file.Models.QueryEnrichment,
+			NoteFormatting:      file.Models.NoteFormatting,
+			Embedding:           file.Models.Embedding,
+		},
+	}, nil
 }

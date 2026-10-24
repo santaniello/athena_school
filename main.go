@@ -20,6 +20,7 @@ import (
 	"github.com/santaniello/athena/internal/application/modelcatalog"
 	"github.com/santaniello/athena/internal/application/onboarding"
 	applicationreset "github.com/santaniello/athena/internal/application/reset"
+	"github.com/santaniello/athena/internal/application/settings"
 	"github.com/santaniello/athena/internal/application/study"
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
@@ -80,7 +81,15 @@ func main() {
 		log.Printf("loading config: %v", cfgErr)
 	}
 	usageRepo := sqlite.NewUsageRepository(db)
-	llmClient := openrouter.NewClient("", cfg.OpenRouterKey, usageRepo)
+	// One resolver feeds the LLM client, the ingest service, the vector index
+	// loader and the summary window; the Settings screen updates it, so a
+	// model change applies to the next call without a restart.
+	modelResolver := domainllm.NewOverridableResolver()
+	llmClient := openrouter.NewClient("", cfg.OpenRouterKey, usageRepo, openrouter.WithModelResolver(modelResolver))
+	settingsService := settings.NewService(configStore, llmClient, modelResolver)
+	if err := settingsService.ApplyStored(); err != nil {
+		log.Printf("applying stored model settings: %v", err)
+	}
 	studySessions := sqlite.NewSessionRepository(db)
 	studyMessages := sqlite.NewMessageRepository(db)
 	folders := sqlite.NewFolderRepository(db)
@@ -89,15 +98,18 @@ func main() {
 	messageSources := sqlite.NewMessageSourceRepository(db)
 	transactor := sqlite.NewSQLTransactor(db)
 	vectorStore := vectorstore.New()
-	indexLoader := applicationknowledge.NewIndexLoader(knowledgeChunks, vectorStore, domainllm.EmbeddingModel)
+	indexLoader := applicationknowledge.NewIndexLoader(knowledgeChunks, vectorStore, modelResolver)
 	knowledgeService := applicationknowledge.NewService(knowledgeItems, llmClient, knowledgeChunks, transactor, vectorStore, indexLoader, retrievalThresholds)
 	queryEnricher := applicationknowledge.NewHydeEnricher(llmClient)
 	catalogService := modelcatalog.NewService(llmClient)
+	contextResolver := newContextResolver(catalogService)
+	summaryWindow := study.NewSummaryWindow(modelResolver, contextResolver)
 	studyService := study.NewService(
-		studySessions, studyMessages, llmClient, profiles, folders, knowledgeService, transactor, newContextResolver(catalogService),
+		studySessions, studyMessages, llmClient, profiles, folders, knowledgeService, transactor, contextResolver,
 		messageSources, knowledgeService, queryEnricher,
 		study.WithUsageReader(usageRepo),
-		study.WithSummarizer(study.NewSummarizer(llmClient, profiles)),
+		study.WithSummarizer(study.NewSummarizer(llmClient, profiles, study.WithSummaryModelWindow(summaryWindow))),
+		study.WithSummaryWindow(summaryWindow),
 		study.WithSummaries(sqlite.NewConversationSummaryRepository(db)),
 	)
 	folderService := folder.NewService(folders, studySessions, knowledgeService)
@@ -107,6 +119,7 @@ func main() {
 	ingestService := applicationingest.NewService(
 		knowledgeChunks, ingestedFiles, knowledgeItems, knowledgeDocuments, llmClient, transactor, vectorStore, indexLoader,
 		webfetch.New(),
+		applicationingest.WithModelResolver(modelResolver),
 	)
 
 	resetter := sqlite.NewResetter(db)
@@ -115,6 +128,7 @@ func main() {
 	app := desktop.NewApp(
 		onboardingService, profiles, configStore, studyService, folderService, knowledgeService,
 		ingestService, llmClient, indexLoader, resetService,
+		desktop.WithModelSettings(settingsService),
 	)
 
 	err = wails.Run(&options.App{

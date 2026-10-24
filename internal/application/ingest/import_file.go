@@ -173,7 +173,7 @@ func (s *Service) importCandidates(
 			continue
 		}
 
-		if hasPrev && prev.MTimeUnixNano == mtime && prev.EmbeddingModel == domainllm.EmbeddingModel {
+		if hasPrev && prev.MTimeUnixNano == mtime && prev.EmbeddingModel == s.embeddingModel() {
 			skip, failure, checkErr := s.shouldSkipUnchanged(ctx, sessionID, prev)
 			if checkErr != nil {
 				summary.FilesFailed++
@@ -332,11 +332,17 @@ func (s *Service) ingestContent(
 	}
 
 	now := time.Now().UTC()
+	// Read once: every chunk of this file is stamped with it, and a provider
+	// answer from any other model means the setting changed mid-import.
+	embeddingModel := s.embeddingModel()
 	chunks := make([]domainknowledge.Chunk, len(chunkCandidates))
 	for i, chunkCandidate := range chunkCandidates {
 		response, embedErr := s.llm.Embeddings(ctx, domainllm.EmbeddingRequest{Input: chunkCandidate.EmbeddingText()})
 		if embedErr != nil {
 			return 0, fmt.Errorf("embedding chunk %d: %w", i, embedErr)
+		}
+		if response.Model != "" && response.Model != embeddingModel {
+			return 0, fmt.Errorf("embedding model changed during import (%s -> %s); import the file again", embeddingModel, response.Model)
 		}
 		start, end := chunkCandidate.Start, chunkCandidate.End
 		chunks[i] = domainknowledge.Chunk{
@@ -352,7 +358,7 @@ func (s *Service) ingestContent(
 			StartOffset:    &start,
 			EndOffset:      &end,
 			Embedding:      toFloat32(response.Embedding),
-			EmbeddingModel: domainllm.EmbeddingModel,
+			EmbeddingModel: embeddingModel,
 			CreatedAt:      now,
 		}
 
@@ -384,7 +390,7 @@ func (s *Service) ingestContent(
 			SourcePath:     candidate.SourcePath,
 			Path:           displayPath,
 			MTimeUnixNano:  mtime,
-			EmbeddingModel: domainllm.EmbeddingModel,
+			EmbeddingModel: embeddingModel,
 			ChunkCount:     len(chunks),
 			ItemID:         itemID,
 		})

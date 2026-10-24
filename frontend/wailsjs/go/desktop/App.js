@@ -34,6 +34,10 @@ export function GetKnowledgeIndexStatus() {
   return window['go']['desktop']['App']['GetKnowledgeIndexStatus']();
 }
 
+export function GetModelSettings() {
+  return window['go']['desktop']['App']['GetModelSettings']();
+}
+
 export function GetProfile() {
   return window['go']['desktop']['App']['GetProfile']();
 }
@@ -64,6 +68,10 @@ export function ImportFile(arg1, arg2) {
 
 export function ListFolders() {
   return window['go']['desktop']['App']['ListFolders']();
+}
+
+export function ListSelectableModels() {
+  return window['go']['desktop']['App']['ListSelectableModels']();
 }
 
 export function ListSessionSources(arg1) {
@@ -116,6 +124,10 @@ export function ResumeStudySession(arg1) {
 
 export function RetryKnowledgeIndex() {
   return window['go']['desktop']['App']['RetryKnowledgeIndex']();
+}
+
+export function SaveModelSettings(arg1) {
+  return window['go']['desktop']['App']['SaveModelSettings'](arg1);
 }
 
 export function SaveOpenRouterKey(arg1) {
