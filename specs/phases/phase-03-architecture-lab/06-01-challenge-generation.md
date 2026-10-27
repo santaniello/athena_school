@@ -33,7 +33,10 @@ tutor offers, duplicate avoidance); nothing here depends on the chat.
 4. **One generation call, structured output.** The model returns JSON with the challenge
    (title, scenario, functional and non-functional requirements, constraints, objectives) and its
    challenge criteria (name, description, relative weight, mandatory flag, five level
-   descriptors). The cost is one LLM call, plus one embedding call when notes are searched.
+   descriptors). The cost is one LLM call, plus one embedding call when notes are searched. The
+   model does not write the criterion `Key` that [3.2](02-rubrics.md) requires to be unique: code
+   derives it from the name, a lower-case slug with the prefix `c-` and a numeric suffix when two
+   names collide, so it never matches a key of the base rubric.
 5. **Validated before anything is stored.** The output goes through `Challenge.Validate` and the
    rubric rules of [3.2](02-rubrics.md) (1 to 6 challenge criteria, five levels each, weights
    mergeable to 100). Invalid output fails as `ErrInvalidGeneration` and stores nothing.
@@ -76,7 +79,11 @@ Order of work:
    `knowledge`: `SummaryReader`, `ProfileReader`, `NotesSearcher`.
 3. Call the LLM with the generation prompt and parse the JSON.
 4. Build and validate the challenge and the rubric criteria (decision 5).
-5. In one transaction, call `ChallengeService.Create` and `RubricService.SetChallengeRubric`.
+5. In one transaction, call `ChallengeService.Create` and `RubricService.SetChallengeRubric`. The
+   service runs both through the `Transactor` port of [3.4](04-exercise-service.md) (`WithinTx`,
+   the pattern of `application/study/transactor.go`); each one has a variant that takes the
+   repositories bound to that transaction, so a failure of the rubric also rolls back the
+   challenge.
 
 The prompt lives in `internal/application/exercise/generation_prompt.go`, a pure function of the
 context so its content is unit tested. Errors are exported sentinels.

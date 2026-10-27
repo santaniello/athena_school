@@ -80,7 +80,6 @@ Port, in the same package:
 type ChallengeRepository interface {
     Create(ctx, Challenge) error
     Get(ctx, id string) (Challenge, error)       // ErrChallengeNotFound
-    Update(ctx, Challenge) error                 // ErrChallengeNotFound
     List(ctx, ChallengeFilter, Page) (ChallengePage, error)
 }
 
@@ -104,11 +103,13 @@ count. Ordering is `UpdatedAt` descending, then `ID`, so pages are stable.
   `Topic` into the snapshot (the port also returns the session's goal, which
   [3.6.1](06-01-challenge-generation.md) uses), sets origin and timestamps and persists. Unknown session:
   `ErrSourceSessionNotFound`.
-- `Get`, `Update` (does not change `Topic`, `SourceSessionID`, `Origin` or `CreatedAt`) and
-  `List`.
+- `Get` and `List`. There is no `Update`.
 
-`Update` keeps the topic fixed on purpose: changing the topic would mean choosing another studied
-session, which is a different challenge.
+A challenge's content is **immutable after creation**, on purpose. An attempt freezes only its
+rubric version, and the result screen ([3.13](13-evaluation-and-history-screen.md)) shows the
+statement from the challenge, so editing it would make the history show a different statement
+from the one the user answered. No screen edits challenges; when manual authoring is specified,
+that spec must define how a challenge already used stays stable (a new version or a copy).
 
 ## SQLite
 
@@ -146,10 +147,10 @@ generated into `exercise/mocks` (ADR-003).
 Each slice is TDD (test first), keeps the build green and is committed on its own.
 
 - [ ] Domain: types, `Challenge.Validate`, errors, repository and filter types
-- [ ] SQLite: migration and `ChallengeRepository` (`Create`, `Get`, `Update`)
+- [ ] SQLite: migration and `ChallengeRepository` (`Create`, `Get`)
 - [ ] SQLite: `List` with filters, search, pagination and stable ordering
 - [ ] SQLite: session deletion nulls `source_session_id` and keeps the challenge
-- [ ] Application: `ChallengeService` (`Create` with topic snapshot, `Get`, `Update`, `List`)
+- [ ] Application: `ChallengeService` (`Create` with topic snapshot, `Get`, `List`)
 - [ ] Mocks regenerated; CI check that `internal/domain/exercise` does not import
       `internal/domain/architecture`
 - [ ] Docs: CHANGELOG entry; no README change (no user-visible surface yet)
@@ -165,7 +166,7 @@ Each slice is TDD (test first), keeps the build green and is committed on its ow
   a correct total and returns a stable order.
 - Deleting the source session keeps the challenge, sets `SourceSessionID` to empty and keeps the
   topic.
-- `Update` changes content fields only and bumps `UpdatedAt`.
+- Nothing changes a challenge's content after it is created.
 - `go test -race ./...`, coverage ≥ 80%, `make mutation-go` clean for the changed
   domain/application code, lint and vulnerability checks pass.
 

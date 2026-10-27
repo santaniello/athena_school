@@ -921,7 +921,7 @@ Fase 4 — Interview Mode (entrevista completa)
     ↓
 Fase 6 — Voice Interview (áudio)
     ↓
-Fase 7 — Advanced Features (whiteboard, graph, algorithms)
+Fase 7 — Advanced Features (graph, algorithms)
 ```
 
 > **Fase 5 pode iniciar após a Fase 1** e ser desenvolvida em paralelo com as fases 2, 3 e 4, pois depende apenas da estrutura de contas e licenças da Fase 1.

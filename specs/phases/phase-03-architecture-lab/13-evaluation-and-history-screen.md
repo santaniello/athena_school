@@ -37,7 +37,9 @@ lists complete attempts and never partial ones.
    - the submitted diagram, read-only.
 5. **The statement is visible here.** The exam is over, so the scenario and the four lists are
    shown above the result. This is the only place outside the exam where they appear; the catalog
-   still never shows them.
+   still never shows them. It is the statement the user answered: a challenge's content is
+   immutable after creation ([3.1](01-challenge-domain-and-persistence.md)), so a later read never
+   shows a different one.
 6. **The diagram opens in the same editor, locked.** The stored XML is shown with the draw.io embed
    of [3.9](09-diagram-editor-spike.md) in read-only mode, with no menus and no edit. It needs the
    internet like the exam. Without a connection the area says "The diagram needs an internet

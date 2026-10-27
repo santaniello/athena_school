@@ -74,7 +74,10 @@ func (s *OfferService) Decline(ctx, offerID string) error
 ```
 
 - `CreateOffer` refuses a second pending offer for the session (`ErrOfferPending`).
-- `Accept`: load the offer (`ErrOfferNotFound`); look for a challenge by source session
+- `Accept` takes an in-process lock per session (the desktop app is one process) before anything
+  else, so two concurrent accepts cannot both generate. Inside it: load the offer
+  (`ErrOfferNotFound`; a second call finds it already resolved and returns the existing link);
+  look for a challenge by source session
   (`ChallengeRepository.FindLatestBySourceSession`, added here); if none, call
   `GenerationService.GenerateChallenge` with the session and the profile's difficulty, with no
   transaction open; then, in one transaction, create the `SessionExercise` (an existing link for

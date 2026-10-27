@@ -23,7 +23,8 @@ and 9).
    from the difficulty (30 / 45 / 60 minutes for beginner / intermediate / advanced), adjustable
    per challenge from 1 to 180. The attempt copies the limit through `Deadline`, so a later edit
    never changes a running or past attempt.
-4. **Abandoning discards.** An attempt that is still `IN_PROGRESS` when the user leaves the lab,
+4. **Abandoning discards.** An attempt that is not finished (any state other than `FINISHED`, which
+   [3.12](12-architecture-defense.md) introduces) when the user leaves the lab,
    closes the app or the app crashes is deleted, with no submission, score or history entry.
    The repository exposes the deletion; the use cases that trigger it (on leave and at startup)
    are 3.4.
@@ -111,8 +112,8 @@ type AttemptRepository interface {
     Submit(ctx, ChallengeAttempt, Submission) error       // one transaction; fails if not IN_PROGRESS
     ListByChallenge(ctx, challengeID string) ([]ChallengeAttempt, error)
     FindInProgress(ctx) (ChallengeAttempt, error)         // ErrAttemptNotFound when none
-    DeleteInProgress(ctx, id string) error                // only IN_PROGRESS rows
-    DeleteAllInProgress(ctx) (int, error)
+    DeleteUnfinished(ctx, id string) error                // any state except FINISHED, with its children
+    DeleteAllUnfinished(ctx) (int, error)
 }
 type SubmissionRepository interface {
     GetByAttempt(ctx, attemptID string) (Submission, error) // ErrSubmissionNotFound
@@ -124,10 +125,11 @@ type SessionExerciseRepository interface {
 }
 ```
 
-`DeleteInProgress` and `DeleteAllInProgress` never touch a submitted attempt. [3.12](12-architecture-defense.md)
-generalizes them to `DeleteUnfinished` and `DeleteAllUnfinished`, which delete an attempt in any
-state other than `FINISHED`, and adds the states `DEFENDING` and `FINISHED`. Until then, the text
-of this spec holds.
+`DeleteUnfinished` and `DeleteAllUnfinished` delete an attempt in any state other than `FINISHED`
+(`FINISHED` is added by [3.12](12-architecture-defense.md); until then every attempt is unfinished),
+together with its submission and any child rows ([3.5](05-evaluation-engine.md),
+[3.10.1](10-01-tutor-hints.md), [3.12](12-architecture-defense.md)), in one transaction. A
+`FINISHED` attempt is never touched.
 
 ## SQLite
 
@@ -156,6 +158,8 @@ CREATE TABLE challenge_attempts (
   submit_reason       TEXT
 );
 CREATE INDEX idx_attempts_challenge ON challenge_attempts(challenge_id);
+-- at most one exam running: the database holds the rule, not only the service
+CREATE UNIQUE INDEX idx_attempts_one_in_progress ON challenge_attempts(state) WHERE state = 'IN_PROGRESS';
 CREATE TABLE submissions (
   id           TEXT PRIMARY KEY,
   attempt_id   TEXT NOT NULL UNIQUE REFERENCES challenge_attempts(id),
@@ -186,7 +190,7 @@ Each slice is TDD, keeps the build green and is committed on its own.
 - [ ] SQLite: migration (column and three tables) and the `challenges` repository change
 - [ ] SQLite: `AttemptRepository` (`Create`, `Get`, `Submit` in one transaction,
       `ListByChallenge`, `FindInProgress`)
-- [ ] SQLite: `DeleteInProgress` and `DeleteAllInProgress`, never touching submitted attempts
+- [ ] SQLite: `DeleteUnfinished` and `DeleteAllUnfinished`, never touching a `FINISHED` attempt
 - [ ] SQLite: `SubmissionRepository` and `SessionExerciseRepository`
 - [ ] SQLite: deleting a session removes its `SessionExercise` rows and keeps attempts,
       submissions and challenges
@@ -201,8 +205,9 @@ Each slice is TDD, keeps the build green and is committed on its own.
   moves the attempt to `SUBMITTED` and records the reason, atomically; a second submit fails and
   stores nothing.
 - Submitting empty or oversized content fails and leaves the attempt `IN_PROGRESS`.
-- `DeleteInProgress` and `DeleteAllInProgress` remove only in-progress attempts; a submitted
-  attempt and its submission are never removed.
+- `DeleteUnfinished` and `DeleteAllUnfinished` remove attempts in any state other than `FINISHED`
+  with their submission and child rows; a `FINISHED` attempt is never removed.
+- A second `IN_PROGRESS` attempt cannot be stored: the unique index refuses it.
 - A challenge can have several attempts; `ListByChallenge` returns them.
 - `FindInProgress` returns the one in-progress attempt, or `ErrAttemptNotFound` when there is none.
 - Creating a second `SessionExercise` for the same session and challenge fails with

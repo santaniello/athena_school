@@ -132,7 +132,10 @@ type EvaluationRepository interface {
   1. Load the attempt; allowed only from `SUBMITTED` or `EVALUATION_FAILED`
      (`ErrAttemptNotEvaluable`). An already evaluated attempt returns its stored evaluation
      without calling the evaluator.
-  2. Move to `EVALUATING` and persist that state, so a second call is refused while it runs.
+  2. Move to `EVALUATING` with one conditional update (`UPDATE ... WHERE id = ? AND state IN
+     ('SUBMITTED', 'EVALUATION_FAILED')`) and check that one row changed. Only the call that changed
+     it goes on; a concurrent call changes no row and is refused with `ErrAttemptNotEvaluable`
+     without calling the evaluator, so two calls can never both reach it.
   3. Load the challenge, the frozen rubric version and the submission, and call the evaluator
      with no database transaction open.
   4. On success, build the evaluation with `NewEvaluation`, then store it, record the minimum

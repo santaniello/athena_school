@@ -25,24 +25,28 @@ Scoring starts in [3.5](05-evaluation-engine.md), so a submitted attempt stays `
    flag.
 3. **A challenge needs a rubric to be started.** Without one, `StartAttempt` fails with
    `ErrChallengeHasNoRubric`. The attempt freezes the challenge's latest rubric version.
-4. **A session start creates the link.** When `SessionID` is given, the service finds or creates
-   the `SessionExercise` for that session and challenge in the same transaction as the attempt, and
-   the attempt carries it. This is the "accept" step of the chat offer; the offer itself is
-   [3.15](15-open-lab-from-chat.md).
+4. **A session start uses the accepted link; it never creates it.** When `SessionID` is given, the
+   service loads the `SessionExercise` for that session and challenge, created when the user
+   accepted the offer ([3.14](14-ai-challenge-generation.md)), and the attempt carries it. A session
+   that does not exist fails with `ErrSourceSessionNotFound`; one that is not linked to the
+   challenge fails with `ErrSessionExerciseNotFound`. A standalone start has no link.
 5. **The UI submits at the deadline, the backend checks the clock.** The diagram exists only in
    the UI, so the countdown reaching zero makes the UI call `SubmitAttempt`. The backend decides
    the outcome from its own time:
    - before the deadline: accepted, reason `USER`
    - from the deadline to 15 seconds after it: accepted, reason `TIME_EXPIRED`
    - later than that: refused with `ErrSubmissionTooLate` and the attempt is discarded
-6. **Leaving discards.** `DiscardAttempt` deletes an in-progress attempt when the user leaves the
-   lab. It never deletes a submitted one. The UI asks for confirmation before calling it (UI
-   spec [3.8](08-lab-layout-sketch.md)).
-7. **Crashes are cleaned at startup.** `DiscardStaleAttempts` deletes every attempt still in
-   progress and runs once when the application starts, before the UI can start a new one. It
+6. **Leaving discards.** `DiscardAttempt` deletes an unfinished attempt when the user leaves the
+   lab: one in any state other than `FINISHED`. It never deletes a `FINISHED` one. The UI asks for
+   confirmation before calling it (UI spec [3.8](08-lab-layout-sketch.md)). The state
+   `FINISHED` is introduced by [3.12](12-architecture-defense.md); until then no attempt is
+   finished, so a submitted one is also removed when the user leaves or the app restarts (the exam
+   is one sitting, and nothing waits).
+7. **Crashes are cleaned at startup.** `DiscardStaleAttempts` deletes every unfinished attempt
+   (any state other than `FINISHED`) and runs once when the application starts, before the UI can start a new one. It
    logs how many it removed and never fails the startup: an error is logged, not returned.
-   [3.12](12-architecture-defense.md) widens it to every attempt that is not `FINISHED`, together
-   with the evaluating states of [3.5](05-evaluation-engine.md).
+   The evaluating and defense states of [3.5](05-evaluation-engine.md) and
+   [3.12](12-architecture-defense.md) fall under the same rule.
 8. **The clock is a port.** The service reads time through a `Clock` interface, so the deadline,
    the grace period and the too-late rule are testable without sleeping.
 9. **No data compatibility to keep.**
@@ -78,8 +82,10 @@ statement is read through `ChallengeService`, not copied into it.
    (`ErrSourceSessionNotFound`), so the package does not import `study`.
 3. `FindInProgress`: if there is one and `DiscardInProgress` is false, return
    `ErrAttemptInProgress`.
-4. In one transaction: delete the running attempt if the flag was set, find or create the
-   `SessionExercise`, create the attempt with `NewAttempt`. The existing transactor pattern
+4. In one transaction: delete the running attempt if the flag was set, create the attempt with
+   `NewAttempt`. A violation of the one-running-exam index of
+   [3.3](03-attempts-and-session-link.md) is mapped to `ErrAttemptInProgress`, so two concurrent
+   starts cannot both succeed. The existing transactor pattern
    (`application/study/transactor.go`) is reused for the port.
 
 `SubmitAttempt`: loads the attempt (`ErrAttemptNotFound`), refuses one that is not in progress
@@ -109,9 +115,10 @@ Each slice is TDD, keeps the build green and is committed on its own.
 - [ ] Application: `Clock` and `SessionExists` ports, `AttemptView`, error sentinels
 - [ ] `StartAttempt`: standalone, rubric required, challenge not found
 - [ ] `StartAttempt`: in-progress conflict, and `DiscardInProgress` replacing it atomically
-- [ ] `StartAttempt`: session start creates or reuses the `SessionExercise`; unknown session
+- [ ] `StartAttempt`: session start loads the accepted `SessionExercise` and never creates it;
+      unknown session and unlinked session; two concurrent starts leave one attempt
 - [ ] `SubmitAttempt`: user submit, grace period, too late discards, not in progress
-- [ ] `DiscardAttempt` and `DiscardStaleAttempts` (never touches submitted attempts)
+- [ ] `DiscardAttempt` and `DiscardStaleAttempts` (any state other than `FINISHED`)
 - [ ] `GetAttempt` and `ListAttempts` read models
 - [ ] Bindings, `startup` cleanup hook, `wailsjs` regenerated, mocks regenerated
 - [ ] Docs: CHANGELOG entry
@@ -124,13 +131,15 @@ Each slice is TDD, keeps the build green and is committed on its own.
 - With an attempt running, starting another fails with `ErrAttemptInProgress` and the running
   attempt is untouched. Repeating with `DiscardInProgress` deletes it and creates the new one; if
   the new one cannot be created, the old one is still there.
-- Starting with a session id creates one `SessionExercise`; starting again on the same session and
-  challenge reuses it. An unknown session fails and stores nothing.
+- Starting with a session id uses the existing `SessionExercise` of that session and challenge and
+  creates none. An unknown session fails with `ErrSourceSessionNotFound` and a session not linked
+  to the challenge fails with `ErrSessionExerciseNotFound`; both store nothing.
 - A submission before the deadline is stored as `USER`; at the deadline or up to 15 seconds after,
   as `TIME_EXPIRED`; later than that it fails with `ErrSubmissionTooLate` and the attempt is gone.
 - A second submit fails with `ErrAttemptNotInProgress` and stores nothing.
-- `DiscardAttempt` removes an in-progress attempt and refuses a submitted one.
-- `DiscardStaleAttempts` removes every in-progress attempt, keeps all submitted ones and does not
+- `DiscardAttempt` removes an attempt in any state other than `FINISHED` and refuses a `FINISHED`
+  one.
+- `DiscardStaleAttempts` removes every unfinished attempt, keeps every `FINISHED` one and does not
   stop the app starting when it errors.
 - All of the above run against a fake `Clock`; no test sleeps.
 - `go test -race ./...`, coverage ≥ 80%, `make mutation-go` clean for the changed

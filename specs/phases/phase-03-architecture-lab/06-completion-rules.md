@@ -96,7 +96,11 @@ The attempt gains `PassScore int`, set when the diagram evaluation completes (ex
 
 - `ProgressService.GetChallengeProgress(ctx, challengeID)` and `GetAttemptOutcome(ctx, attemptID)`
   read the stored attempts, evaluations and rubric, and call the domain functions.
-- `PassScoreProvider.Current(ctx) int` is a port; the settings service implements it.
+- `PassScoreProvider.Current(ctx) (int, error)` is a port; the settings service implements it. The
+  default of 80 is returned only when no value is stored; a failure to read the setting is
+  returned as an error, never replaced by the default, so a threshold that was not verified is
+  never frozen on an attempt. `Evaluate` ([3.5](05-evaluation-engine.md)) then fails the evaluation
+  with that error.
 - `SettingsService` gains `GetPassScore` and `SetPassScore`: validate with `ValidatePassScore`
   (`ErrInvalidPassScore`), persist with the existing settings store, and return the default when
   nothing is stored.

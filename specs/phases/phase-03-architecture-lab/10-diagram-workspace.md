@@ -58,8 +58,9 @@ This is the first time the user can take an exam. Evaluation does not exist yet
     ([3.12](12-architecture-defense.md)) and the result are consecutive stages of the same screen,
     with no "waiting" status and no return to the catalog in between. Until 3.11 exists, the
     screen after submitting shows "Diagram submitted." with a **Back to catalog** button; the
-    attempt stays submitted and the challenge shows as **In progress**
-    ([3.6](06-completion-rules.md)). Each later spec replaces that end with its stage.
+    button leaves the lab, which discards the unfinished attempt
+    ([3.4](04-exercise-service.md)); nothing is finished until 3.12, so the catalog is unchanged.
+    Each later spec replaces that end with its stage.
 11. **A submission error after time expired** (`ErrSubmissionTooLate`) tells the user "The time
     was over and the exam could not be submitted." and returns to the catalog; the backend has
     discarded the attempt.

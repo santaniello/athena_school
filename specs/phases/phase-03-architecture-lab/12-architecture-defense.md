@@ -69,13 +69,11 @@ tutor asks.
 
 - **3.1:** `challenges` gains `defense_questions INTEGER NOT NULL DEFAULT 5` with a 3 to 5 check,
   and `Challenge.DefenseQuestions`.
-- **3.3 and 3.4:** the attempt states gain `DEFENDING` and `FINISHED`. Cleanup is generalized:
-  `DeleteInProgress` and `DeleteAllInProgress` become `DeleteUnfinished` and
-  `DeleteAllUnfinished`, which delete an attempt in any state other than `FINISHED` together with
-  its submission, evaluations, criterion results, hints and defense turns, in one transaction.
-  `DiscardAttempt` accepts any unfinished attempt and `DiscardStaleAttempts` runs at startup with
-  the same rule. `DiscardUnfinishedEvaluations` of [3.5](05-evaluation-engine.md) is folded in.
-  Attempts left `EVALUATED` by 3.11 alone are removed by this cleanup; there is no data to keep.
+- **3.3 and 3.4:** the attempt states gain `DEFENDING` and `FINISHED`. The cleanup
+  (`DeleteUnfinished`, `DeleteAllUnfinished`, `DiscardAttempt`, `DiscardStaleAttempts`) already
+  covers every state other than `FINISHED`; this spec adds `FINISHED` and makes the defense turns
+  one more child table deleted with the attempt. `DiscardUnfinishedEvaluations` of
+  [3.5](05-evaluation-engine.md) is folded into it.
 - **3.5:** the evaluation kind `UNDERSTANDING` is added on the same tables.
 - **3.6:** `PENDING` exists only inside a running sitting and is never stored.
 - **3.7:** nothing; a challenge shows its progress from finished attempts only.
@@ -121,12 +119,18 @@ func (s *DefenseService) GetDefense(ctx, attemptID string) (DefenseView, error)
 - `NextQuestion` moves `EVALUATED → DEFENDING` on the first call, picks the next criterion with
   `SelectDefenseCriteria`, asks the `QuestionGenerator` port for the text and stores the turn. It
   returns the same pending question when one is unanswered (so a retried screen does not spend
-  another call) and `ErrDefenseNotActive` after the last answer.
+  another call) and `ErrDefenseNotActive` after the last answer. Calls for the same attempt are
+  serialized by an in-process lock per attempt (the desktop app is one process): a second
+  concurrent call waits, then finds the stored question and returns it instead of calling the
+  model again. `UNIQUE (attempt_id, position)` stays as a backstop, and a failed generation stores
+  nothing and releases the lock.
 - `Answer` validates the answer (decision 7), stores it, and reports whether the defense is
   complete.
 - `Evaluate` runs once all answers exist: it calls the `UnderstandingEvaluator` port with no
   transaction open, builds the evaluation with `NewEvaluation`, then stores it and moves the
-  attempt to `FINISHED` in one transaction. On failure the attempt stays `DEFENDING`.
+  attempt to `FINISHED` in one transaction. On failure the attempt stays `DEFENDING`. It takes the
+  same per-attempt lock: a concurrent call waits and then returns the stored evaluation of a
+  `FINISHED` attempt instead of calling the evaluator again.
 
 The two ports are implemented in `internal/application/architecture` (the same package as the
 diagram evaluator); the generic service knows nothing about diagrams. Their prompts are pure
@@ -177,8 +181,8 @@ green and is committed on its own.
       questions), attempt transitions, answer validation
 - [ ] SQLite: `defense_questions` migration with the 3 to 5 check, `defense_turns`,
       `DefenseRepository`
-- [ ] SQLite and application: `DeleteUnfinished` and `DeleteAllUnfinished` replacing the earlier
-      cleanup, cascading to every child table in one transaction
+- [ ] SQLite: the defense turns deleted with their attempt by `DeleteUnfinished`; `FINISHED` added
+      to the states the cleanup never touches
 - [ ] Application: `NextQuestion` (first call starts the defense, pending question returned
       again, ends after the last answer)
 - [ ] Application: `Answer` (validation, "I don't know", completion)

@@ -56,7 +56,8 @@ The defense and the second score are [3.12](12-architecture-defense.md); the res
    evaluating again** button that calls `EvaluateAttempt` again, with no limit and no automatic
    retry. Leaving discards the attempt.
    Until 3.12 exists, the stage ends with the diagram result (score and feedback per criterion)
-   and **Back to catalog**; the attempt stays evaluated and 3.12 then replaces that end.
+   and **Back to catalog**, which discards the unfinished attempt like any other exit
+   ([3.4](04-exercise-service.md)); 3.12 then replaces that end.
 9. **Cost is one LLM call** per evaluation, plus one per manual retry.
 10. **No data compatibility to keep.**
 
