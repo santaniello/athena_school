@@ -57,11 +57,11 @@ Pagamentos       Paddle
 | 0 | Foundation | Repositório, tooling, CI/CD | — |
 | 1 | Desktop MVP | App funcional com gate de chave OpenRouter, onboarding e estudo | Fase 0 |
 | 2 | Knowledge Engine | Knowledge Base + RAG + notas | Fase 1 |
-| 3 | Learning Intelligence | Challenge + Gap Detection + Flashcards | Fase 2 |
+| 3 | Architecture Lab | Desafios de system design: prova com draw.io, avaliação por rubrica e defesa com o tutor | Fase 2 |
 | 4 | Interview Mode | Simulação de entrevista completa | Fase 3 |
 | 5 | Comercialização | Planos, pagamento, macOS, feature gating | Fase 1 |
 | 6 | Voice Interview | Entrevista por áudio (STT + TTS) | Fase 4 |
-| 7 | Advanced Features | Whiteboard, Knowledge Graph, Algorithm Mode | Fase 4 |
+| 7 | Advanced Features | Knowledge Graph, Algorithm Mode | Fase 4 |
 
 ---
 
@@ -613,142 +613,31 @@ Todos os Knowledge Items entram no vector store para permitir detecção de dupl
 
 ---
 
-## Fase 3 — Learning Intelligence
+## Fase 3 — Architecture Lab
 
-**Objetivo:** O Athena detecta onde o usuário tem dificuldade, pratica com desafios e reforça com flashcards.
+**Objetivo:** o usuário pratica system design em provas cronometradas de uma sentada: desenha a arquitetura num editor de diagramas (draw.io), recebe uma avaliação por rubrica e defende suas escolhas diante do tutor.
 
 **Dependência:** Fase 2 completa.
 
-### 3.1 — Challenge Mode
+> **Substitui a antiga fase "Learning Intelligence"** (Challenge Mode, Evaluation Engine, Progress Tracking, Gap Detection, Flashcards e Knowledge Promotion). Essas ideias não estão especificadas e não fazem parte do plano atual.
 
-- [ ] `internal/domain/challenge/` — `ChallengeSession`
-- [ ] UI: tela de desafio com problema, área de resposta, submissão
-- [ ] LLM gera problemas baseados no perfil e histórico do usuário
-- [ ] Avaliação estruturada:
+**Specs detalhadas:** `specs/phases/phase-03-architecture-lab/` (índice em `specs/phases/README.md`). **Decisão arquitetural:** `specs/decisions/ADR-005-exercise-engine.md`.
 
-```go
-type Evaluation struct {
-    Score       int      `json:"score"`
-    Strengths   []string `json:"strengths"`
-    Weaknesses  []string `json:"weaknesses"`
-    Missing     []string `json:"missing_topics"`
-    Suggestions []string `json:"suggestions"`
-}
-```
+Resumo do que a fase entrega:
 
-- [ ] Critérios de avaliação configuráveis por domínio (injeta via UserProfile)
-
-### 3.2 — Evaluation Engine
-
-- [ ] `internal/domain/evaluation/` — lógica de avaliação
-- [ ] LLM retorna JSON estruturado (schema validado no Core)
-- [ ] UI de resultado: strengths, improvements, score, sugestões
-- [ ] Persistido em SQLite:
-
-```sql
-CREATE TABLE evaluations (
-    id TEXT PRIMARY KEY,
-    session_id TEXT,
-    score INTEGER,
-    strengths TEXT,
-    weaknesses TEXT,
-    missing TEXT,
-    suggestions TEXT,
-    created_at DATETIME
-);
-```
-
-### 3.3 — Progress Tracking
-
-- [ ] `internal/domain/progress/` — agregação de métricas
-- [ ] Métricas por tópico: score médio, sessões, taxa de acerto, tempo
-- [ ] Schema:
-
-```sql
-CREATE TABLE progress (
-    id TEXT PRIMARY KEY,
-    topic TEXT,
-    subtopic TEXT,
-    mode TEXT,
-    score INTEGER,
-    session_id TEXT,
-    recorded_at DATETIME
-);
-```
-
-- [ ] UI: tela de progresso com barras por tópico
-
-### 3.4 — Gap Detection
-
-- [ ] `internal/application/gaps/` — análise de padrões de dificuldade
-- [ ] Algoritmo: tópicos com score médio abaixo de threshold → gap
-- [ ] UI: dashboard de gaps com indicadores ✅ ⚠️ ❌ por tópico
-- [ ] Sugestões automáticas de sessões de reforço
-
-### 3.5 — Flashcards
-
-> **Revisar antes de implementar (2.16):** assume Knowledge Items extraídos e aprovados, que deixaram de existir; os flashcards precisarão ser gerados a partir de documentos/chunks.
-
-#### Modelo
-
-```go
-type Flashcard struct {
-    ID            string
-    KnowledgeItem string
-    Topic         string
-    Type          string // front_back | cloze | multiple_choice
-    Front         string
-    Back          string
-    Options       []string
-    CorrectOption int
-    Status        string // draft | active | suspended
-    CreatedAt     time.Time
-}
-
-type FlashcardReview struct {
-    FlashcardID string
-    ReviewedAt  time.Time
-    Quality     int     // 0–5 (SM-2)
-    Interval    int     // dias
-    EaseFactor  float64
-}
-```
-
-#### Geração automática
-
-- [ ] LLM extrai conceitos de Knowledge Items aprovados
-- [ ] Gera 3 tipos: Front/Back, Cloze, Múltipla Escolha
-- [ ] Cartões criados como `draft` → usuário aprova
-
-#### Spaced Repetition (SM-2)
-
-- [ ] `internal/application/flashcards/sm2.go` — algoritmo SM-2
-- [ ] Cálculo de próximo intervalo baseado na qualidade da resposta (0–5)
-- [ ] Fila diária de revisão priorizando cartões vencidos
-
-#### UI de revisão
-
-- [ ] Tela: cartão frente → botão "Ver resposta" → verso → avaliação (❌ / ⚠️ / ✅)
-- [ ] Resumo ao final: acertos, erros, próxima revisão
-
-#### Integração com Gap Detection
-
-- [ ] Taxa de erro nos flashcards alimenta o gap detector
-- [ ] Cartões com erros recorrentes → recomendação de sessão de estudo
-
-### 3.6 — Knowledge Promotion
-
-> **Revisar antes de implementar (2.16):** a promoção de `draft` para `approved` não existe mais.
-
-- [ ] Após sessões, modal de promoção de Knowledge Items de `draft` para `approved`
-- [ ] Ao aprovar: flashcards são gerados automaticamente (com confirmação)
+- Desafios gerados por IA a partir de uma sessão de estudo, com rubrica em duas camadas (base do lab + critérios do desafio), versionada e congelada por tentativa
+- Prova de uma sentada, sem pausa nem retomada, com contagem regressiva controlada pelo backend; sair antes de terminar descarta a tentativa
+- Editor draw.io embutido (spike e ADR-006 antes da integração) e dicas do tutor sob demanda, limitadas a 3
+- Avaliação do diagrama por LLM contra a rubrica (o domínio calcula a nota) e defesa com perguntas adaptativas do tutor (5 por padrão), que gera a nota de entendimento
+- Aprovação exige as duas notas acima do mínimo configurável (padrão 80) e os critérios obrigatórios
+- Catálogo, tela de resultado, histórico de tentativas finalizadas e integração com o chat (oferta Accept/Decline, cartão persistente, resultado como contexto do tutor)
 
 ### Done when (Fase 3)
 
-- Usuário faz um challenge e recebe avaliação estruturada
-- Dashboard de gaps mostra tópicos com dificuldade
-- Flashcards são gerados a partir de Knowledge Items aprovados
-- Sessão de revisão diária funciona com SM-2
+- Usuário gera um desafio a partir de uma sessão, faz a prova e recebe a avaliação do diagrama
+- O tutor faz a defesa e o resultado (Aprovado ou Reprovado) mostra as duas notas e os motivos
+- O histórico lista só tentativas finalizadas e abre cada uma em modo leitura
+- O usuário pede um exercício no chat, aceita a oferta e abre o lab pela sessão
 
 ---
 
@@ -954,31 +843,7 @@ type AudioProvider interface {
 
 ### 7.2 — Whiteboard / Architecture Mode
 
-- [ ] Modelo semântico de diagrama (não coordenadas gráficas):
-
-```go
-type Diagram struct {
-    Nodes []Node `json:"nodes"`
-    Edges []Edge `json:"edges"`
-}
-
-type Node struct {
-    ID   string `json:"id"`
-    Type string `json:"type"` // api-server | database | cache | queue | etc.
-}
-
-type Edge struct {
-    Source string `json:"source"`
-    Target string `json:"target"`
-    Label  string `json:"label"`
-}
-```
-
-- [ ] `internal/domain/architecture/` — avaliação de diagramas
-- [ ] Frontend: biblioteca visual (React Flow ou tldraw — decisão na fase)
-- [ ] Regras determinísticas: single point of failure, missing replication
-- [ ] LLM evaluation: trade-offs, missing concerns
-- [ ] Architecture Score: Scalability / Reliability / Cost / Trade-offs / Design
+> **Substituído pelo Architecture Lab (Fase 3).** O editor de diagramas é o draw.io, a entrega é o XML e a avaliação é feita por LLM contra uma rubrica. Ver `specs/phases/phase-03-architecture-lab/`.
 
 ### 7.3 — Algorithm Mode (IT-specific)
 
@@ -992,7 +857,7 @@ type Edge struct {
 ### Done when (Fase 7)
 
 - Knowledge Graph mostra relações entre conceitos estudados
-- Usuário desenha uma arquitetura e recebe avaliação com score
+- Usuário desenha uma arquitetura e recebe avaliação com score (entregue pelo Architecture Lab, Fase 3)
 - Algorithm Mode funciona com execução segura de código (IT users)
 
 ---
@@ -1048,7 +913,7 @@ Fase 1 — Desktop MVP (login, onboarding, study, OpenRouter)
     ↓
 Fase 2 — Knowledge Engine (knowledge items, RAG, notas)       ←─┐
     ↓                                                            │
-Fase 3 — Learning Intelligence (challenge, gaps, flashcards)   │ em paralelo
+Fase 3 — Architecture Lab (desafios, prova, avaliação, defesa)  │ em paralelo
     ↓                                                            │
 Fase 5 — Comercialização (planos, Paddle, macOS) ───────────────┘
     ↓
