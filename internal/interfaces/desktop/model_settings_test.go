@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
@@ -117,7 +116,7 @@ func TestApp_SaveModelSettings_embeddingChange_reloadsTheIndexAndEmitsItsStatus(
 	f.app.modelSettings = service
 	f.catalog.EXPECT().ListEmbeddingModels(ctx).Return([]domainllm.ModelInfo{{ID: "openai/text-embedding-3-large"}}, nil).Once()
 	f.config.EXPECT().Load().Return(domainconfig.Config{}, nil).Once()
-	f.config.EXPECT().Save(mock.Anything).Return(nil).Once()
+	f.config.EXPECT().Save(domainconfig.Config{Models: domainconfig.ModelSettings{Embedding: "openai/text-embedding-3-large"}}).Return(nil).Once()
 	// The reload must ask for chunks of the NEW model only
 	chunks.EXPECT().ListCurrent(f.app.ctx, "openai/text-embedding-3-large").Return(domainknowledge.ChunkLoadResult{}, nil).Once()
 	store.EXPECT().ReplaceAll(f.app.ctx, []domainknowledge.Chunk{}).Return(nil).Once()
