@@ -144,8 +144,7 @@ const DOCUMENTATION: DocSection[] = [
       { term: 'Local account', description: 'Your data stays on your machine.' },
       {
         term: 'Profile',
-        description:
-          'Field, level, goals and style shape every reply; edit them in the Profile tab.',
+        description: 'Area, level and study style shape every reply; edit them in the Profile tab.',
       },
       { term: 'Folders', description: 'Conversations grouped by subject, reopenable any time.' },
       { term: 'Socratic study', description: 'Opens with a question and keeps turns short.' },

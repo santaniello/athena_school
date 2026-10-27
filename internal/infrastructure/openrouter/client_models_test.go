@@ -56,7 +56,7 @@ func TestClient_Chat_otherTasksKeepTheirTierModelWhenOneIsConfigured(t *testing.
 	server := chatSuccessServer(t, &receivedModel)
 	defer server.Close()
 	recorder := mocks.NewMockUsageRecorder(t)
-	recorder.EXPECT().Record(mock.Anything, mock.AnythingOfType("llm.UsageEntry")).Return(nil).Once()
+	recorder.EXPECT().Record(mock.Anything, usageEntryMatcher("sess-1", "openai/gpt-4o-mini", 1, 1, 0)).Return(nil).Once()
 	client := NewClient(server.URL, "sk-or-valid", recorder, WithModelResolver(configuredResolver()))
 
 	// When sending a request for a task with no override
@@ -73,7 +73,8 @@ func TestClient_Chat_seesAResolverChangeOnTheNextCallWithoutRebuilding(t *testin
 	server := chatSuccessServer(t, &receivedModel)
 	defer server.Close()
 	recorder := mocks.NewMockUsageRecorder(t)
-	recorder.EXPECT().Record(mock.Anything, mock.AnythingOfType("llm.UsageEntry")).Return(nil).Twice()
+	recorder.EXPECT().Record(mock.Anything, usageEntryMatcher("", "anthropic/claude-sonnet-4.5", 1, 1, 0)).Return(nil).Once()
+	recorder.EXPECT().Record(mock.Anything, usageEntryMatcher("", "openai/gpt-5", 1, 1, 0)).Return(nil).Once()
 	resolver := domainllm.NewOverridableResolver()
 	client := NewClient(server.URL, "sk-or-valid", recorder, WithModelResolver(resolver))
 	_, err := client.Chat(context.Background(), domainllm.ChatRequest{Task: domainllm.TaskStudy})
@@ -95,7 +96,7 @@ func TestClient_Chat_withoutAResolverUsesTheTierDefault(t *testing.T) {
 	server := chatSuccessServer(t, &receivedModel)
 	defer server.Close()
 	recorder := mocks.NewMockUsageRecorder(t)
-	recorder.EXPECT().Record(mock.Anything, mock.AnythingOfType("llm.UsageEntry")).Return(nil).Once()
+	recorder.EXPECT().Record(mock.Anything, usageEntryMatcher("", "anthropic/claude-sonnet-4.5", 1, 1, 0)).Return(nil).Once()
 	client := NewClient(server.URL, "sk-or-valid", recorder)
 
 	// When sending a study request
@@ -122,7 +123,7 @@ func TestClient_Chat_freeFallbackStillAppliesWhateverModelWasChosen(t *testing.T
 	}))
 	defer server.Close()
 	recorder := mocks.NewMockUsageRecorder(t)
-	recorder.EXPECT().Record(mock.Anything, mock.AnythingOfType("llm.UsageEntry")).Return(nil).Once()
+	recorder.EXPECT().Record(mock.Anything, usageEntryMatcher("", domainllm.FreeFallbackModel, 0, 0, 0)).Return(nil).Once()
 	client := NewClient(server.URL, "sk-or-valid", recorder, WithModelResolver(configuredResolver()))
 
 	// When sending a study request
@@ -163,14 +164,14 @@ func TestClient_ChatStream_inFlightStreamKeepsItsModelWhenSettingsChange(t *test
 	release := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedModel, _ = decodeRequestBody(t, r)["model"].(string)
-		sseFrame(w, `{"choices":[{"delta":{"content":"a"}}]}`)
+		sseFrame(w, `{"model":"anthropic/claude-sonnet-4.5","choices":[{"delta":{"content":"a"}}]}`)
 		close(started)
 		<-release
 		sseFrame(w, `[DONE]`)
 	}))
 	defer server.Close()
 	recorder := mocks.NewMockUsageRecorder(t)
-	recorder.EXPECT().Record(mock.Anything, mock.AnythingOfType("llm.UsageEntry")).Return(nil).Once()
+	recorder.EXPECT().Record(mock.Anything, usageEntryMatcher("", "anthropic/claude-sonnet-4.5", 0, 0, 0)).Return(nil).Once()
 	resolver := domainllm.NewOverridableResolver()
 	client := NewClient(server.URL, "sk-or-valid", recorder, WithModelResolver(resolver))
 	done := make(chan error, 1)

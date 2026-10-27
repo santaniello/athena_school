@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	settingsmocks "github.com/santaniello/athena/internal/application/settings/mocks"
@@ -114,7 +113,7 @@ func TestApplyStored_missingConfigFileLeavesTheResolverOnDefaults(t *testing.T) 
 	// Given no config file
 	f := newFixture(t)
 	f.config.EXPECT().Load().Return(domainconfig.Config{}, fs.ErrNotExist).Once()
-	f.applier.EXPECT().SetOverrides(mock.Anything, "").Maybe()
+	f.applier.EXPECT().SetOverrides(overridesOf(domainconfig.ModelSettings{}), "").Maybe()
 
 	// When applying at startup
 	err := f.service.ApplyStored()
@@ -181,7 +180,7 @@ func TestSaveModelSettings_emptyChoices_doNotNeedTheCatalog(t *testing.T) {
 	ctx := context.Background()
 	f.config.EXPECT().Load().Return(domainconfig.Config{OpenRouterKey: "k", Models: domainconfig.ModelSettings{Study: "openai/gpt-5"}}, nil).Once()
 	f.config.EXPECT().Save(domainconfig.Config{OpenRouterKey: "k"}).Return(nil).Once()
-	f.applier.EXPECT().SetOverrides(mock.Anything, "").Once()
+	f.applier.EXPECT().SetOverrides(overridesOf(domainconfig.ModelSettings{}), "").Once()
 
 	// When saving all-empty settings with the catalog down (no catalog expectations)
 	_, err := f.service.SaveModelSettings(ctx, domainconfig.ModelSettings{})
@@ -197,7 +196,7 @@ func TestSaveModelSettings_trimsWhitespaceAroundIDs(t *testing.T) {
 	f.catalog.EXPECT().ListModels(ctx).Return(chatCatalog, nil).Once()
 	f.config.EXPECT().Load().Return(domainconfig.Config{}, nil).Once()
 	f.config.EXPECT().Save(domainconfig.Config{Models: domainconfig.ModelSettings{Study: "openai/gpt-5"}}).Return(nil).Once()
-	f.applier.EXPECT().SetOverrides(mock.Anything, "").Once()
+	f.applier.EXPECT().SetOverrides(overridesOf(domainconfig.ModelSettings{Study: "openai/gpt-5"}), "").Once()
 
 	// When saving
 	_, err := f.service.SaveModelSettings(ctx, domainconfig.ModelSettings{Study: "  openai/gpt-5 "})
@@ -213,7 +212,7 @@ func TestSaveModelSettings_embeddingModel_isValidatedAgainstTheEmbeddingCatalog(
 	f.catalog.EXPECT().ListEmbeddingModels(ctx).Return(embeddingCatalog, nil).Once()
 	f.config.EXPECT().Load().Return(domainconfig.Config{}, nil).Once()
 	f.config.EXPECT().Save(domainconfig.Config{Models: domainconfig.ModelSettings{Embedding: "openai/text-embedding-3-large"}}).Return(nil).Once()
-	f.applier.EXPECT().SetOverrides(mock.Anything, "openai/text-embedding-3-large").Once()
+	f.applier.EXPECT().SetOverrides(overridesOf(domainconfig.ModelSettings{}), "openai/text-embedding-3-large").Once()
 
 	// When saving it
 	result, err := f.service.SaveModelSettings(ctx, domainconfig.ModelSettings{Embedding: "openai/text-embedding-3-large"})
@@ -258,8 +257,8 @@ func TestSaveModelSettings_embeddingChange_isReportedOnlyWhenTheEffectiveValueCh
 				f.catalog.EXPECT().ListEmbeddingModels(ctx).Return(embeddingCatalog, nil).Once()
 			}
 			f.config.EXPECT().Load().Return(domainconfig.Config{Models: domainconfig.ModelSettings{Embedding: tt.before}}, nil).Once()
-			f.config.EXPECT().Save(mock.Anything).Return(nil).Once()
-			f.applier.EXPECT().SetOverrides(mock.Anything, tt.after).Once()
+			f.config.EXPECT().Save(domainconfig.Config{Models: domainconfig.ModelSettings{Embedding: tt.after}}).Return(nil).Once()
+			f.applier.EXPECT().SetOverrides(overridesOf(domainconfig.ModelSettings{}), tt.after).Once()
 
 			// When saving another one
 			result, err := f.service.SaveModelSettings(ctx, domainconfig.ModelSettings{Embedding: tt.after})
@@ -277,7 +276,7 @@ func TestSaveModelSettings_saveFailure_doesNotUpdateTheResolver(t *testing.T) {
 	ctx := context.Background()
 	boom := errors.New("read-only filesystem")
 	f.config.EXPECT().Load().Return(domainconfig.Config{}, nil).Once()
-	f.config.EXPECT().Save(mock.Anything).Return(boom).Once()
+	f.config.EXPECT().Save(domainconfig.Config{}).Return(boom).Once()
 
 	// When saving empty settings
 	_, err := f.service.SaveModelSettings(ctx, domainconfig.ModelSettings{})
@@ -327,4 +326,13 @@ func TestListSelectableModels_catalogFailure_isReportedAsUnavailable(t *testing.
 
 	// Then the UI can show a retry state
 	require.ErrorIs(t, err, ErrCatalogUnavailable)
+}
+
+func overridesOf(m domainconfig.ModelSettings) map[domainllm.TaskType]string {
+	return map[domainllm.TaskType]string{
+		domainllm.TaskStudy:               m.Study,
+		domainllm.TaskConversationSummary: m.ConversationSummary,
+		domainllm.TaskQueryEnrichment:     m.QueryEnrichment,
+		domainllm.TaskNoteFormatting:      m.NoteFormatting,
+	}
 }
