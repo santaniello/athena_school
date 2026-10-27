@@ -39,11 +39,7 @@ Payments         Paddle
 | [0](phase-00-foundation/) | Foundation | Repo, tooling, CI/CD | — |
 | [1](phase-01-desktop-mvp/) | Desktop MVP | OpenRouter key gate, onboarding, study | Phase 0 |
 | [2](phase-02-knowledge-engine/) | Knowledge Engine | Knowledge Base + RAG + notes | Phase 1 |
-| [3](phase-03-learning-intelligence/) | Learning Intelligence | Challenge + Gap Detection + Flashcards | Phase 2 |
-| [4](phase-04-interview-mode/) | Interview Mode | Full interview simulation | Phase 3 |
-| [5](phase-05-comercializacao/) | Comercialização | Plans, payment, macOS, feature gating | Phase 1 |
-| [6](phase-06-voice-interview/) | Voice Interview | Audio interview (STT + TTS) | Phase 4 |
-| [7](phase-07-advanced-features/) | Advanced Features | Whiteboard, Knowledge Graph, Algorithm Mode | Phase 4 |
+| [3](phase-03-architecture-lab/) | Architecture Lab | Challenges, diagram whiteboard, rubric evaluation, oral defense | Phase 2 |
 
 ---
 
@@ -109,69 +105,36 @@ Delivered in three increments, each demonstrable on its own: **2.1 → 2.2 → 2
 
 ---
 
-## Phase 3 — Learning Intelligence
+## Phase 3 — Architecture Lab
 
-**Done when:** User runs a challenge and receives structured evaluation; gap dashboard shows weak topics; flashcards are generated from approved Knowledge Items; daily review session works with SM-2.
+**Done when:** User picks or generates a system-design challenge, solves it on a diagram whiteboard, submits it for a rubric evaluation, defends the decisions in a bounded Q&A with the tutor, and sees the diagram score, the understanding score and the attempt history. Delivered as **M1 (specs 01–13): standalone lab**, then **M2 (specs 14–17): tutor and study-session integration**.
 
-| Spec | Description |
-|---|---|
-| [01-challenge-mode.md](phase-03-learning-intelligence/01-challenge-mode.md) | ChallengeSession domain + LLM problem generation |
-| [02-evaluation-engine.md](phase-03-learning-intelligence/02-evaluation-engine.md) | Structured JSON evaluation + results UI |
-| [03-progress-tracking.md](phase-03-learning-intelligence/03-progress-tracking.md) | Per-topic metrics aggregation + progress screen |
-| [04-gap-detection.md](phase-03-learning-intelligence/04-gap-detection.md) | Gap analysis algorithm + dashboard UI |
-| [05-flashcards.md](phase-03-learning-intelligence/05-flashcards.md) | Flashcard model, SM-2 scheduler, review UI |
-| [06-knowledge-promotion.md](phase-03-learning-intelligence/06-knowledge-promotion.md) | Draft → approved + auto flashcard generation |
-
----
-
-## Phase 4 — Interview Mode
-
-**Done when:** User completes an interview with 3+ questions and a timer, receives a per-question evaluation report and final score, can browse interview history, and the domain matches the user profile.
+Design reference: [ADR-005](../decisions/ADR-005-exercise-engine.md). The lab screen layout is described in [3.8](phase-03-architecture-lab/08-lab-layout-sketch.md); colors and components follow the existing frontend.
 
 | Spec | Description |
 |---|---|
-| [01-interview-session.md](phase-04-interview-mode/01-interview-session.md) | InterviewSession domain + progressive LLM conduct |
-| [02-timer.md](phase-04-interview-mode/02-timer.md) | Configurable timer per question |
-| [03-interview-evaluation.md](phase-04-interview-mode/03-interview-evaluation.md) | Per-answer + aggregate evaluation + report |
-| [04-interview-history.md](phase-04-interview-mode/04-interview-history.md) | History list UI + detail + topic evolution |
-| [05-domain-aware-evaluation.md](phase-04-interview-mode/05-domain-aware-evaluation.md) | Domain-specific evaluation criteria via UserProfile |
+| [01-challenge-domain-and-persistence.md](phase-03-architecture-lab/01-challenge-domain-and-persistence.md) | Challenge model, SQLite schema, filterable repository |
+| [02-rubrics.md](phase-03-architecture-lab/02-rubrics.md) | Built-in base rubric + immutable per-challenge versions |
+| [03-attempts-and-session-link.md](phase-03-architecture-lab/03-attempts-and-session-link.md) | Exam-style attempts (time limit, discarded if abandoned), submissions, `SessionExercise` |
+| [04-exercise-service.md](phase-03-architecture-lab/04-exercise-service.md) | Start, submit, discard attempts; one exam at a time; startup cleanup |
+| [05-evaluation-engine.md](phase-03-architecture-lab/05-evaluation-engine.md) | Per-criterion levels, deterministic score, retry on failure |
+| [06-completion-rules.md](phase-03-architecture-lab/06-completion-rules.md) | Pass policy (both scores), frozen minimum score, derived progress, Settings field |
+| [06-01-challenge-generation.md](phase-03-architecture-lab/06-01-challenge-generation.md) | Minimal AI generation from a studied session; challenge and rubric saved together |
+| [07-challenge-catalog-ui.md](phase-03-architecture-lab/07-challenge-catalog-ui.md) | Architecture Lab entry screen: catalog, filters, generate from a studied session |
+| [08-lab-layout-sketch.md](phase-03-architecture-lab/08-lab-layout-sketch.md) | Three-panel exam layout from fixtures in a dev-only preview; countdown, no pause, no tabs |
+| [09-diagram-editor-spike.md](phase-03-architecture-lab/09-diagram-editor-spike.md) | Throwaway prototype of the draw.io online embed in Wails; produces ADR-006 |
+| [10-diagram-workspace.md](phase-03-architecture-lab/10-diagram-workspace.md) | The exam end to end: rules dialog, embedded editor, countdown, submit, auto-submit on expiry, leave |
+| [10-01-tutor-hints.md](phase-03-architecture-lab/10-01-tutor-hints.md) | On-demand hints during the exam, 3 per attempt, direction or question only |
+| [11-architecture-evaluator.md](phase-03-architecture-lab/11-architecture-evaluator.md) | Diagram summary from the XML, LLM evaluation per criterion, starts after submit, retry |
+| [12-architecture-defense.md](phase-03-architecture-lab/12-architecture-defense.md) | The tutor's 5 adaptive questions, understanding score, finishing the exam |
+| [13-evaluation-and-history-screen.md](phase-03-architecture-lab/13-evaluation-and-history-screen.md) | Result view (also the exam ending) and per-challenge History of finished attempts |
+| [14-ai-challenge-generation.md](phase-03-architecture-lab/14-ai-challenge-generation.md) | Exercise offer in the study chat: Accept or Decline, reuse before generating, send blocked while pending |
+| [15-open-lab-from-chat.md](phase-03-architecture-lab/15-open-lab-from-chat.md) | Open in Architecture Lab from the chat card, same window, return to the study session |
+| [16-session-feedback.md](phase-03-architecture-lab/16-session-feedback.md) | Short derived result summary in the session's next tutor replies, no XML or transcript |
+| [17-session-exercises-ui.md](phase-03-architecture-lab/17-session-exercises-ui.md) | Persistent exercise card in the chat with progress, Start again and History |
 
----
-
-## Phase 5 — Comercialização
-
-**Done when:** Trial expires and user can upgrade with real payment; locked features clearly indicate their plan; macOS build works in CI; app published on main distribution channels.
-
-| Spec | Description |
-|---|---|
-| [01-plans-feature-gating.md](phase-05-comercializacao/01-plans-feature-gating.md) | Plan model + licensing service + UI lock icons |
-| [02-paddle-integration.md](phase-05-comercializacao/02-paddle-integration.md) | Paddle products, webhook, checkout flow |
-| [03-plans-screen.md](phase-05-comercializacao/03-plans-screen.md) | Comparison table + monthly/annual toggle |
-| [04-macos-distribution.md](phase-05-comercializacao/04-macos-distribution.md) | Code signing, notarization, dmg artifact |
-| [05-distribution-channels.md](phase-05-comercializacao/05-distribution-channels.md) | Windows installer + winget; Linux AppImage + deb + Flathub |
-
----
-
-## Phase 6 — Voice Interview
-
-**Done when:** User completes a full interview speaking and listening; the AI transcribes the answer, evaluates it, and asks the next question by voice; history is saved with text transcript.
-
-| Spec | Description |
-|---|---|
-| [01-audio-providers.md](phase-06-voice-interview/01-audio-providers.md) | STT (Whisper) + TTS (OpenAI TTS) infrastructure |
-| [02-voice-ui.md](phase-06-voice-interview/02-voice-ui.md) | Microphone controls, live transcript, speaking indicator |
-
----
-
-## Phase 7 — Advanced Features
-
-**Done when:** Knowledge Graph shows concept relations; user draws an architecture and receives a scored evaluation; Algorithm Mode runs safely isolated code (IT users only).
-
-| Spec | Description |
-|---|---|
-| [01-knowledge-graph.md](phase-07-advanced-features/01-knowledge-graph.md) | Concept relations model + graph UI |
-| [02-whiteboard-mode.md](phase-07-advanced-features/02-whiteboard-mode.md) | Semantic diagram model + visual editor + evaluation |
-| [03-algorithm-mode.md](phase-07-advanced-features/03-algorithm-mode.md) | Code editor + sandboxed execution + evaluation |
+> Spec files are added one at a time, after review. Algorithms Lab (code editor, runner, tests) is a future phase and is not specified yet.
+> Manual challenge creation (the `MANUAL` origin of a challenge) is also future work: the model keeps the field, but no screen writes it yet.
 
 ---
 
@@ -181,12 +144,8 @@ Delivered in three increments, each demonstrable on its own: **2.1 → 2.2 → 2
 Phase 0 (Foundation)
     ↓
 Phase 1 (Desktop MVP)
-    ↓                 ↘
-Phase 2              Phase 5 (in parallel with 2–4)
     ↓
-Phase 3
+Phase 2 (Knowledge Engine)
     ↓
-Phase 4
-    ↓         ↘
-Phase 6      Phase 7
+Phase 3 (Architecture Lab)
 ```
