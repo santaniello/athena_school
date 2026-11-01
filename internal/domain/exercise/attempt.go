@@ -1,7 +1,10 @@
 package exercise
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -64,4 +67,69 @@ func NewAttempt(challenge Challenge, rubric RubricVersion, sessionExerciseID str
 // Expired reports whether the deadline has been reached.
 func (a ChallengeAttempt) Expired(now time.Time) bool {
 	return !now.Before(a.Deadline)
+}
+
+// MaxSubmissionContentBytes bounds a submission's content (2 MiB).
+const MaxSubmissionContentBytes = 2 << 20
+
+var (
+	// ErrAttemptNotInProgress is returned when an attempt that is not IN_PROGRESS is submitted.
+	ErrAttemptNotInProgress = errors.New("attempt is not in progress")
+	// ErrSubmissionContentRequired is returned when the submitted content is empty.
+	ErrSubmissionContentRequired = errors.New("submission content is required")
+	// ErrSubmissionContentTypeRequired is returned when the content type is blank.
+	ErrSubmissionContentTypeRequired = errors.New("submission content type is required")
+	// ErrSubmissionTooLarge is returned when the content exceeds MaxSubmissionContentBytes.
+	ErrSubmissionTooLarge = errors.New("submission content is too large")
+	// ErrSubmitReasonInvalid is returned for an unknown submit reason.
+	ErrSubmitReasonInvalid = errors.New("submit reason is invalid")
+)
+
+// Submission is the immutable artifact an attempt ended with. Content is an
+// opaque payload: exercise never parses it.
+type Submission struct {
+	ID          string
+	AttemptID   string
+	ContentType string
+	Content     string
+	Checksum    string // hex SHA-256 of Content
+	SubmittedAt time.Time
+}
+
+// Submit ends an IN_PROGRESS attempt and returns it as SUBMITTED together with
+// its Submission. The receiver is not modified; the caller assigns the
+// submission's ID.
+func (a ChallengeAttempt) Submit(contentType, content string, reason SubmitReason, now time.Time) (ChallengeAttempt, Submission, error) {
+	if a.State != AttemptInProgress {
+		return ChallengeAttempt{}, Submission{}, ErrAttemptNotInProgress
+	}
+	if err := validateSubmission(contentType, content, reason); err != nil {
+		return ChallengeAttempt{}, Submission{}, err
+	}
+	checksum := sha256.Sum256([]byte(content))
+	submission := Submission{
+		AttemptID:   a.ID,
+		ContentType: contentType,
+		Content:     content,
+		Checksum:    hex.EncodeToString(checksum[:]),
+		SubmittedAt: now,
+	}
+	a.State = AttemptSubmitted
+	a.SubmittedAt = now
+	a.SubmitReason = reason
+	return a, submission, nil
+}
+
+func validateSubmission(contentType, content string, reason SubmitReason) error {
+	switch {
+	case content == "":
+		return ErrSubmissionContentRequired
+	case strings.TrimSpace(contentType) == "":
+		return ErrSubmissionContentTypeRequired
+	case len(content) > MaxSubmissionContentBytes:
+		return ErrSubmissionTooLarge
+	case reason != SubmitReasonUser && reason != SubmitReasonTimeExpired:
+		return ErrSubmitReasonInvalid
+	}
+	return nil
 }
