@@ -33,13 +33,7 @@ func (p Page) Normalize() Page {
 	if p.Limit <= 0 {
 		p.Limit = DefaultPageLimit
 	}
-	if p.Limit > MaxPageLimit {
-		p.Limit = MaxPageLimit
-	}
-	if p.Offset < 0 {
-		p.Offset = 0
-	}
-	return p
+	return Page{Limit: min(p.Limit, MaxPageLimit), Offset: max(p.Offset, 0)}
 }
 
 // ChallengeFilter narrows a listing. Every non-empty field must match (AND).
