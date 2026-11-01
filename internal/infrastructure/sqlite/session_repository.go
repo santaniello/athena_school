@@ -67,6 +67,20 @@ func (r *SessionRepository) GetByID(ctx context.Context, id string) (study.Sessi
 	return s, nil
 }
 
+// Exists reports whether a session with the given id is stored. An unknown id
+// is false, not an error.
+func (r *SessionRepository) Exists(ctx context.Context, id string) (bool, error) {
+	var found int
+	err := execer(ctx, r.db).QueryRowContext(ctx, `SELECT 1 FROM sessions WHERE id = ?`, id).Scan(&found)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("sqlite: checking session: %w", err)
+	}
+	return true, nil
+}
+
 // ListByFolder returns every session in the given folder.
 func (r *SessionRepository) ListByFolder(ctx context.Context, folderID string) ([]study.Session, error) {
 	rows, err := execer(ctx, r.db).QueryContext(ctx,

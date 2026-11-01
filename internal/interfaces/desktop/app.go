@@ -7,6 +7,7 @@ import (
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
+	applicationexercise "github.com/santaniello/athena/internal/application/exercise"
 	"github.com/santaniello/athena/internal/application/folder"
 	applicationingest "github.com/santaniello/athena/internal/application/ingest"
 	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
@@ -33,6 +34,7 @@ type App struct {
 	apiKeyUpdater domainllm.APIKeyUpdater
 	reset         *applicationreset.Service
 	modelSettings *settings.Service
+	exercise      *applicationexercise.AttemptService
 	// emit defaults to wailsruntime.EventsEmit, which calls log.Fatal (i.e.
 	// os.Exit) when a.ctx was never produced by the real Wails runtime —
 	// exactly the case in tests, which use context.Background(). Tests
@@ -94,7 +96,9 @@ func NewApp(
 }
 
 // Startup is called by Wails once the frontend is ready. The context is
-// stored so bound methods can call Wails runtime functions later.
+// stored so bound methods can call Wails runtime functions later, and the
+// exam attempts a crash or a close left behind are discarded (spec 3.4).
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
+	a.discardStaleAttempts()
 }

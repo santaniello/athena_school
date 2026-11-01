@@ -20,6 +20,10 @@ type AttemptState string
 const (
 	AttemptInProgress AttemptState = "IN_PROGRESS"
 	AttemptSubmitted  AttemptState = "SUBMITTED"
+	// AttemptFinished is the end of an attempt's lifecycle, once it has been
+	// scored. Nothing reaches it yet; it is named here because a finished
+	// attempt is never discarded. Spec 3.12 adds the transitions into it.
+	AttemptFinished AttemptState = "FINISHED"
 )
 
 // SubmitReason records why an attempt ended.

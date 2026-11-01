@@ -93,6 +93,25 @@ func TestAttemptRepository_Get_returnsNotFound(t *testing.T) {
 	assert.ErrorIs(t, err, exercise.ErrAttemptNotFound)
 }
 
+func TestAttemptRepository_Create_duplicateIDIsNotReportedAsAnotherAttemptInProgress(t *testing.T) {
+	// Given a submitted attempt, so no attempt is running
+	repo, _ := newTestAttemptRepository(t)
+	ctx := context.Background()
+	first := newTestAttempt("attempt-1")
+	require.NoError(t, repo.Create(ctx, first))
+	submitted, submission, err := first.Submit("text/plain", "diagram", exercise.SubmitReasonUser, first.StartedAt)
+	require.NoError(t, err)
+	submission.ID = "submission-1"
+	require.NoError(t, repo.Submit(ctx, submitted, submission))
+
+	// When storing an attempt with the same id
+	err = repo.Create(ctx, newTestAttempt("attempt-1"))
+
+	// Then it fails, but not as a running-exam conflict
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, exercise.ErrAnotherAttemptInProgress)
+}
+
 func TestAttemptRepository_Create_refusesASecondInProgressAttempt(t *testing.T) {
 	// Given an attempt already in progress
 	repo, _ := newTestAttemptRepository(t)
@@ -102,8 +121,8 @@ func TestAttemptRepository_Create_refusesASecondInProgressAttempt(t *testing.T) 
 	// When storing another in-progress attempt
 	err := repo.Create(ctx, newTestAttempt("attempt-2"))
 
-	// Then the unique index refuses it
-	assert.Error(t, err)
+	// Then the unique index refuses it, reported as the domain's conflict error
+	assert.ErrorIs(t, err, exercise.ErrAnotherAttemptInProgress)
 	_, getErr := repo.Get(ctx, "attempt-2")
 	assert.ErrorIs(t, getErr, exercise.ErrAttemptNotFound)
 }

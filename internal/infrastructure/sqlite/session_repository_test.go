@@ -367,3 +367,23 @@ func TestSessionRepository_UpdateContext_participatesInTransaction(t *testing.T)
 	require.NoError(t, getErr)
 	assert.Equal(t, normalContext, stored.Context)
 }
+
+func TestSessionRepository_Exists_reportsWhetherTheSessionIsStored(t *testing.T) {
+	// Given a repository with one session
+	repo := newTestSessionRepository(t)
+	ctx := context.Background()
+	require.NoError(t, repo.Create(ctx, study.Session{
+		ID: "session-1", Topic: "Topic", Mode: study.ModeStudy, FolderID: "folder-a",
+		StartedAt: time.Now().UTC().Truncate(time.Second), Context: normalContext,
+	}))
+
+	// When asking about a stored and an unknown id
+	found, foundErr := repo.Exists(ctx, "session-1")
+	missing, missingErr := repo.Exists(ctx, "ghost")
+
+	// Then only the stored one exists, and neither lookup is an error
+	require.NoError(t, foundErr)
+	assert.True(t, found)
+	require.NoError(t, missingErr)
+	assert.False(t, missing)
+}
