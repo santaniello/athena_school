@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -145,6 +146,65 @@ func (s *AttemptService) currentConflict(ctx context.Context) error {
 		return &AttemptInProgressError{}
 	}
 	return &AttemptInProgressError{AttemptID: winner.ID}
+}
+
+// submitGracePeriod is how long after the deadline a submission is still
+// accepted, as TIME_EXPIRED, to absorb the UI's countdown and call latency.
+const submitGracePeriod = 15 * time.Second
+
+// SubmitAttempt ends the attempt with the given artifact. The backend decides
+// from its own clock: before the deadline the reason is USER, up to the grace
+// period after it TIME_EXPIRED, and later the attempt is discarded and the
+// call fails with ErrSubmissionTooLate.
+func (s *AttemptService) SubmitAttempt(ctx context.Context, attemptID, contentType, content string) (AttemptView, error) {
+	attempt, err := s.attempts.Get(ctx, attemptID)
+	if err != nil {
+		return AttemptView{}, fmt.Errorf("exercise: getting attempt: %w", err)
+	}
+	if attempt.State != domainexercise.AttemptInProgress {
+		return AttemptView{}, domainexercise.ErrAttemptNotInProgress
+	}
+
+	now := s.clock.Now()
+	if now.After(attempt.Deadline.Add(submitGracePeriod)) {
+		return AttemptView{}, s.discardLate(ctx, attempt.ID)
+	}
+	reason := domainexercise.SubmitReasonUser
+	if attempt.Expired(now) {
+		reason = domainexercise.SubmitReasonTimeExpired
+	}
+
+	submitted, submission, err := attempt.Submit(contentType, content, reason, now)
+	if err != nil {
+		return AttemptView{}, fmt.Errorf("exercise: submitting attempt: %w", err)
+	}
+	submission.ID = s.newID()
+	if err := s.attempts.Submit(ctx, submitted, submission); err != nil {
+		return AttemptView{}, fmt.Errorf("exercise: storing submission: %w", err)
+	}
+	return s.buildView(ctx, submitted, &submission)
+}
+
+// discardLate deletes an attempt whose submission came too late and returns
+// ErrSubmissionTooLate, joined with the failure if the delete did not work.
+func (s *AttemptService) discardLate(ctx context.Context, attemptID string) error {
+	if err := s.attempts.DeleteUnfinished(ctx, attemptID); err != nil {
+		return errors.Join(ErrSubmissionTooLate, fmt.Errorf("exercise: discarding late attempt: %w", err))
+	}
+	return ErrSubmissionTooLate
+}
+
+// buildView loads what an AttemptView needs besides the attempt itself.
+func (s *AttemptService) buildView(ctx context.Context, attempt domainexercise.ChallengeAttempt, submission *domainexercise.Submission) (AttemptView, error) {
+	challenge, err := s.challenges.Get(ctx, attempt.ChallengeID)
+	if err != nil {
+		return AttemptView{}, fmt.Errorf("exercise: getting challenge: %w", err)
+	}
+	rubric, err := s.rubrics.Get(ctx, attempt.RubricVersionID)
+	if err != nil {
+		return AttemptView{}, fmt.Errorf("exercise: getting rubric: %w", err)
+	}
+	return viewOf(attempt, challenge, rubric, submission), nil
 }
 
 func viewOf(attempt domainexercise.ChallengeAttempt, challenge domainexercise.Challenge, rubric domainexercise.RubricVersion, submission *domainexercise.Submission) AttemptView {

@@ -2,6 +2,8 @@ package exercise
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"testing"
 	"time"
@@ -382,6 +384,183 @@ func TestAttemptService_StartAttempt_sessionLookupFailuresAreReturned(t *testing
 			require.ErrorIs(t, err, boom)
 			assert.NotErrorIs(t, err, ErrSourceSessionNotFound)
 			assert.NotErrorIs(t, err, domainexercise.ErrSessionExerciseNotFound)
+		})
+	}
+}
+
+// expectView arms the lookups that build an AttemptView for attemptChallenge.
+func (f *attemptFixture) expectView(ctx context.Context) {
+	f.challenges.EXPECT().Get(ctx, "challenge-1").Return(attemptChallenge(), nil)
+	f.rubrics.EXPECT().Get(ctx, "rubric-2").Return(attemptRubric(), nil)
+}
+
+// storedAttempt is an IN_PROGRESS attempt whose deadline is fixedNow plus 45 minutes.
+func storedAttempt() domainexercise.ChallengeAttempt {
+	attempt := startedAttempt()
+	attempt.ID = "attempt-1"
+	return attempt
+}
+
+// expectedSubmission is the pair SubmitAttempt stores for storedAttempt
+// submitted with "<mxfile/>" at now.
+func expectedSubmission(now time.Time, reason domainexercise.SubmitReason) (domainexercise.ChallengeAttempt, domainexercise.Submission) {
+	submitted := storedAttempt()
+	submitted.State = domainexercise.AttemptSubmitted
+	submitted.SubmittedAt = now
+	submitted.SubmitReason = reason
+	sum := sha256.Sum256([]byte("<mxfile/>"))
+	return submitted, domainexercise.Submission{
+		ID: "submission-1", AttemptID: "attempt-1", ContentType: "application/drawio", Content: "<mxfile/>",
+		Checksum: hex.EncodeToString(sum[:]), SubmittedAt: now,
+	}
+}
+
+func TestAttemptService_SubmitAttempt_acceptsAtTheDeadlineBoundaries(t *testing.T) {
+	deadline := storedAttempt().Deadline
+	tests := []struct {
+		name       string
+		now        time.Time
+		wantReason domainexercise.SubmitReason
+	}{
+		{"just before the deadline is a user submit", deadline.Add(-time.Nanosecond), domainexercise.SubmitReasonUser},
+		{"exactly at the deadline is time expired", deadline, domainexercise.SubmitReasonTimeExpired},
+		{"exactly at the end of the grace period is time expired", deadline.Add(15 * time.Second), domainexercise.SubmitReasonTimeExpired},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given an attempt in progress and a clock at the boundary
+			f := newAttemptFixture(t)
+			ctx := context.Background()
+			f.service.newID = func() string { return "submission-1" }
+			f.clock.now = tt.now
+			f.attempts.EXPECT().Get(ctx, "attempt-1").Return(storedAttempt(), nil)
+			submitted, submission := expectedSubmission(tt.now, tt.wantReason)
+			f.attempts.EXPECT().Submit(ctx, submitted, submission).Return(nil)
+			f.expectView(ctx)
+
+			// When submitting
+			view, err := f.service.SubmitAttempt(ctx, "attempt-1", "application/drawio", "<mxfile/>")
+
+			// Then the attempt is stored as submitted for the expected reason and returned with its submission
+			require.NoError(t, err)
+			assert.Equal(t, submitted, view.Attempt)
+			require.NotNil(t, view.Submission)
+			assert.Equal(t, "submission-1", view.Submission.ID)
+			assert.Equal(t, "Design a URL shortener", view.ChallengeTitle)
+		})
+	}
+}
+
+func TestAttemptService_SubmitAttempt_tooLateDiscardsTheAttempt(t *testing.T) {
+	// Given an attempt whose grace period ended a nanosecond ago
+	f := newAttemptFixture(t)
+	ctx := context.Background()
+	f.clock.now = storedAttempt().Deadline.Add(15*time.Second + time.Nanosecond)
+	f.attempts.EXPECT().Get(ctx, "attempt-1").Return(storedAttempt(), nil)
+	f.attempts.EXPECT().DeleteUnfinished(ctx, "attempt-1").Return(nil)
+
+	// When submitting
+	_, err := f.service.SubmitAttempt(ctx, "attempt-1", "application/drawio", "<mxfile/>")
+
+	// Then it is refused as too late and the attempt is gone (Submit is never called)
+	assert.ErrorIs(t, err, ErrSubmissionTooLate)
+}
+
+func TestAttemptService_SubmitAttempt_tooLateReportsAFailedDiscardToo(t *testing.T) {
+	// Given a late submission whose attempt cannot be deleted
+	f := newAttemptFixture(t)
+	ctx := context.Background()
+	boom := errors.New("disk failure")
+	f.clock.now = storedAttempt().Deadline.Add(time.Hour)
+	f.attempts.EXPECT().Get(ctx, "attempt-1").Return(storedAttempt(), nil)
+	f.attempts.EXPECT().DeleteUnfinished(ctx, "attempt-1").Return(boom)
+
+	// When submitting
+	_, err := f.service.SubmitAttempt(ctx, "attempt-1", "application/drawio", "<mxfile/>")
+
+	// Then both the lateness and the failure are visible
+	require.ErrorIs(t, err, ErrSubmissionTooLate)
+	assert.ErrorIs(t, err, boom)
+}
+
+func TestAttemptService_SubmitAttempt_secondSubmitIsRefusedEvenAfterTheDeadline(t *testing.T) {
+	// Given an attempt already submitted, long past its deadline
+	f := newAttemptFixture(t)
+	ctx := context.Background()
+	already := storedAttempt()
+	already.State = domainexercise.AttemptSubmitted
+	f.clock.now = already.Deadline.Add(time.Hour)
+	f.attempts.EXPECT().Get(ctx, "attempt-1").Return(already, nil)
+
+	// When submitting again
+	_, err := f.service.SubmitAttempt(ctx, "attempt-1", "application/drawio", "<mxfile/>")
+
+	// Then it fails with ErrAttemptNotInProgress and nothing is stored or deleted
+	assert.ErrorIs(t, err, domainexercise.ErrAttemptNotInProgress)
+}
+
+func TestAttemptService_SubmitAttempt_unknownAttempt(t *testing.T) {
+	// Given no such attempt
+	f := newAttemptFixture(t)
+	ctx := context.Background()
+	f.attempts.EXPECT().Get(ctx, "ghost").Return(domainexercise.ChallengeAttempt{}, domainexercise.ErrAttemptNotFound)
+
+	// When submitting
+	_, err := f.service.SubmitAttempt(ctx, "ghost", "application/drawio", "<mxfile/>")
+
+	// Then it fails with ErrAttemptNotFound
+	assert.ErrorIs(t, err, domainexercise.ErrAttemptNotFound)
+}
+
+func TestAttemptService_SubmitAttempt_invalidContentStoresNothing(t *testing.T) {
+	// Given an attempt in progress
+	f := newAttemptFixture(t)
+	ctx := context.Background()
+	f.attempts.EXPECT().Get(ctx, "attempt-1").Return(storedAttempt(), nil)
+
+	// When submitting empty content
+	_, err := f.service.SubmitAttempt(ctx, "attempt-1", "application/drawio", "")
+
+	// Then the domain's error is returned and the attempt stays in progress
+	assert.ErrorIs(t, err, domainexercise.ErrSubmissionContentRequired)
+}
+
+func TestAttemptService_SubmitAttempt_storageAndReadFailuresAreReturned(t *testing.T) {
+	boom := errors.New("disk failure")
+	tests := []struct {
+		name  string
+		setup func(f *attemptFixture, ctx context.Context)
+	}{
+		{"submit fails", func(f *attemptFixture, ctx context.Context) {
+			submitted, submission := expectedSubmission(fixedNow, domainexercise.SubmitReasonUser)
+			f.attempts.EXPECT().Submit(ctx, submitted, submission).Return(boom)
+		}},
+		{"challenge read fails", func(f *attemptFixture, ctx context.Context) {
+			submitted, submission := expectedSubmission(fixedNow, domainexercise.SubmitReasonUser)
+			f.attempts.EXPECT().Submit(ctx, submitted, submission).Return(nil)
+			f.challenges.EXPECT().Get(ctx, "challenge-1").Return(domainexercise.Challenge{}, boom)
+		}},
+		{"rubric read fails", func(f *attemptFixture, ctx context.Context) {
+			submitted, submission := expectedSubmission(fixedNow, domainexercise.SubmitReasonUser)
+			f.attempts.EXPECT().Submit(ctx, submitted, submission).Return(nil)
+			f.challenges.EXPECT().Get(ctx, "challenge-1").Return(attemptChallenge(), nil)
+			f.rubrics.EXPECT().Get(ctx, "rubric-2").Return(domainexercise.RubricVersion{}, boom)
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given a failing dependency
+			f := newAttemptFixture(t)
+			ctx := context.Background()
+			f.service.newID = func() string { return "submission-1" }
+			f.attempts.EXPECT().Get(ctx, "attempt-1").Return(storedAttempt(), nil)
+			tt.setup(f, ctx)
+
+			// When submitting
+			_, err := f.service.SubmitAttempt(ctx, "attempt-1", "application/drawio", "<mxfile/>")
+
+			// Then the failure is returned
+			assert.ErrorIs(t, err, boom)
 		})
 	}
 }
