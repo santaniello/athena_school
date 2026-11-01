@@ -221,6 +221,47 @@ func (s *AttemptService) discardLate(ctx context.Context, attemptID string) erro
 	return ErrSubmissionTooLate
 }
 
+// GetAttempt returns the attempt's read model, with its submission once it is
+// submitted.
+func (s *AttemptService) GetAttempt(ctx context.Context, attemptID string) (AttemptView, error) {
+	attempt, err := s.attempts.Get(ctx, attemptID)
+	if err != nil {
+		return AttemptView{}, fmt.Errorf("exercise: getting attempt: %w", err)
+	}
+	return s.viewWithSubmission(ctx, attempt)
+}
+
+// ListAttempts returns the read model of each attempt on the challenge,
+// oldest first. A challenge nobody attempted yields an empty list.
+func (s *AttemptService) ListAttempts(ctx context.Context, challengeID string) ([]AttemptView, error) {
+	attempts, err := s.attempts.ListByChallenge(ctx, challengeID)
+	if err != nil {
+		return nil, fmt.Errorf("exercise: listing attempts: %w", err)
+	}
+	views := make([]AttemptView, 0, len(attempts))
+	for _, attempt := range attempts {
+		view, err := s.viewWithSubmission(ctx, attempt)
+		if err != nil {
+			return nil, err
+		}
+		views = append(views, view)
+	}
+	return views, nil
+}
+
+// viewWithSubmission builds the view of a stored attempt, loading its
+// submission when it has been submitted.
+func (s *AttemptService) viewWithSubmission(ctx context.Context, attempt domainexercise.ChallengeAttempt) (AttemptView, error) {
+	if attempt.State == domainexercise.AttemptInProgress {
+		return s.buildView(ctx, attempt, nil)
+	}
+	submission, err := s.submissions.GetByAttempt(ctx, attempt.ID)
+	if err != nil {
+		return AttemptView{}, fmt.Errorf("exercise: getting submission: %w", err)
+	}
+	return s.buildView(ctx, attempt, &submission)
+}
+
 // buildView loads what an AttemptView needs besides the attempt itself.
 func (s *AttemptService) buildView(ctx context.Context, attempt domainexercise.ChallengeAttempt, submission *domainexercise.Submission) (AttemptView, error) {
 	challenge, err := s.challenges.Get(ctx, attempt.ChallengeID)

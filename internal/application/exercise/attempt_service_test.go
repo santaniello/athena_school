@@ -658,3 +658,150 @@ func TestAttemptService_DiscardStaleAttempts_returnsTheFailure(t *testing.T) {
 	// Then the caller gets the error to log
 	assert.ErrorIs(t, err, boom)
 }
+
+func submittedAttempt() domainexercise.ChallengeAttempt {
+	attempt := storedAttempt()
+	attempt.State = domainexercise.AttemptSubmitted
+	attempt.SubmittedAt = fixedNow
+	attempt.SubmitReason = domainexercise.SubmitReasonUser
+	return attempt
+}
+
+func TestAttemptService_GetAttempt_inProgressViewHasNoSubmission(t *testing.T) {
+	// Given an attempt in progress
+	f := newAttemptFixture(t)
+	ctx := context.Background()
+	f.attempts.EXPECT().Get(ctx, "attempt-1").Return(storedAttempt(), nil)
+	f.expectView(ctx)
+
+	// When reading it
+	view, err := f.service.GetAttempt(ctx, "attempt-1")
+
+	// Then the view has the challenge and criteria but no submission (and none is looked up)
+	require.NoError(t, err)
+	assert.Equal(t, AttemptView{
+		Attempt: storedAttempt(), ChallengeTitle: "Design a URL shortener", ChallengeTopic: "caching",
+		Criteria: attemptRubric().Criteria,
+	}, view)
+}
+
+func TestAttemptService_GetAttempt_submittedViewCarriesTheSubmission(t *testing.T) {
+	// Given a submitted attempt
+	f := newAttemptFixture(t)
+	ctx := context.Background()
+	stored := domainexercise.Submission{ID: "submission-1", AttemptID: "attempt-1", Content: "<mxfile/>"}
+	f.attempts.EXPECT().Get(ctx, "attempt-1").Return(submittedAttempt(), nil)
+	f.submissions.EXPECT().GetByAttempt(ctx, "attempt-1").Return(stored, nil)
+	f.expectView(ctx)
+
+	// When reading it
+	view, err := f.service.GetAttempt(ctx, "attempt-1")
+
+	// Then the view includes the submission
+	require.NoError(t, err)
+	require.NotNil(t, view.Submission)
+	assert.Equal(t, stored, *view.Submission)
+}
+
+func TestAttemptService_GetAttempt_failuresAreReturned(t *testing.T) {
+	boom := errors.New("disk failure")
+	tests := []struct {
+		name  string
+		setup func(f *attemptFixture, ctx context.Context)
+		want  error
+	}{
+		{"unknown attempt", func(f *attemptFixture, ctx context.Context) {
+			f.attempts.EXPECT().Get(ctx, "attempt-1").Return(domainexercise.ChallengeAttempt{}, domainexercise.ErrAttemptNotFound)
+		}, domainexercise.ErrAttemptNotFound},
+		{"submitted attempt without a submission", func(f *attemptFixture, ctx context.Context) {
+			f.attempts.EXPECT().Get(ctx, "attempt-1").Return(submittedAttempt(), nil)
+			f.submissions.EXPECT().GetByAttempt(ctx, "attempt-1").Return(domainexercise.Submission{}, domainexercise.ErrSubmissionNotFound)
+		}, domainexercise.ErrSubmissionNotFound},
+		{"challenge read fails", func(f *attemptFixture, ctx context.Context) {
+			f.attempts.EXPECT().Get(ctx, "attempt-1").Return(storedAttempt(), nil)
+			f.challenges.EXPECT().Get(ctx, "challenge-1").Return(domainexercise.Challenge{}, boom)
+		}, boom},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given a failing dependency
+			f := newAttemptFixture(t)
+			ctx := context.Background()
+			tt.setup(f, ctx)
+
+			// When reading the attempt
+			_, err := f.service.GetAttempt(ctx, "attempt-1")
+
+			// Then the failure is returned
+			assert.ErrorIs(t, err, tt.want)
+		})
+	}
+}
+
+func TestAttemptService_ListAttempts_returnsAViewPerAttemptOldestFirst(t *testing.T) {
+	// Given a challenge with a submitted attempt and a running one
+	f := newAttemptFixture(t)
+	ctx := context.Background()
+	second := storedAttempt()
+	second.ID = "attempt-2"
+	f.attempts.EXPECT().ListByChallenge(ctx, "challenge-1").Return([]domainexercise.ChallengeAttempt{submittedAttempt(), second}, nil)
+	f.submissions.EXPECT().GetByAttempt(ctx, "attempt-1").Return(domainexercise.Submission{ID: "submission-1"}, nil)
+	f.challenges.EXPECT().Get(ctx, "challenge-1").Return(attemptChallenge(), nil).Twice()
+	f.rubrics.EXPECT().Get(ctx, "rubric-2").Return(attemptRubric(), nil).Twice()
+
+	// When listing
+	views, err := f.service.ListAttempts(ctx, "challenge-1")
+
+	// Then there is one view per attempt, in order
+	require.NoError(t, err)
+	require.Len(t, views, 2)
+	assert.Equal(t, "attempt-1", views[0].Attempt.ID)
+	assert.NotNil(t, views[0].Submission)
+	assert.Equal(t, "attempt-2", views[1].Attempt.ID)
+	assert.Nil(t, views[1].Submission)
+}
+
+func TestAttemptService_ListAttempts_noAttemptsIsAnEmptyList(t *testing.T) {
+	// Given a challenge nobody attempted
+	f := newAttemptFixture(t)
+	ctx := context.Background()
+	f.attempts.EXPECT().ListByChallenge(ctx, "challenge-1").Return(nil, nil)
+
+	// When listing
+	views, err := f.service.ListAttempts(ctx, "challenge-1")
+
+	// Then the list is empty, not nil, so the UI gets []
+	require.NoError(t, err)
+	assert.NotNil(t, views)
+	assert.Empty(t, views)
+}
+
+func TestAttemptService_ListAttempts_failuresAreReturned(t *testing.T) {
+	boom := errors.New("disk failure")
+	tests := []struct {
+		name  string
+		setup func(f *attemptFixture, ctx context.Context)
+	}{
+		{"list fails", func(f *attemptFixture, ctx context.Context) {
+			f.attempts.EXPECT().ListByChallenge(ctx, "challenge-1").Return(nil, boom)
+		}},
+		{"a view fails", func(f *attemptFixture, ctx context.Context) {
+			f.attempts.EXPECT().ListByChallenge(ctx, "challenge-1").Return([]domainexercise.ChallengeAttempt{storedAttempt()}, nil)
+			f.challenges.EXPECT().Get(ctx, "challenge-1").Return(domainexercise.Challenge{}, boom)
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given a failing dependency
+			f := newAttemptFixture(t)
+			ctx := context.Background()
+			tt.setup(f, ctx)
+
+			// When listing
+			_, err := f.service.ListAttempts(ctx, "challenge-1")
+
+			// Then the failure is returned
+			assert.ErrorIs(t, err, boom)
+		})
+	}
+}
