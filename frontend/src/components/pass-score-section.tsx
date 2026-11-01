@@ -106,6 +106,7 @@ function PassScoreSection() {
           value={value}
           onChange={(event) => edit(event.target.value)}
           aria-invalid={error !== ''}
+          disabled={saving}
           className="max-w-32"
         />
         <p className="text-xs text-muted-foreground">

@@ -102,8 +102,11 @@ describe('PassScoreSection', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled()
+    // The field is locked too, so "Saved." can never sit next to an unsaved value.
+    expect(screen.getByLabelText('Minimum passing score')).toBeDisabled()
     finish()
     expect(await screen.findByRole('status')).toBeInTheDocument()
+    expect(screen.getByLabelText('Minimum passing score')).toBeEnabled()
   })
 
   it('offers a retry when the score cannot be loaded', async () => {
