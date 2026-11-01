@@ -299,3 +299,89 @@ func TestAttemptService_StartAttempt_conflictWhoseWinnerVanishedStillReportsInPr
 	require.ErrorAs(t, err, &conflict)
 	assert.Empty(t, conflict.AttemptID)
 }
+
+func TestAttemptService_StartAttempt_sessionStartCarriesTheAcceptedLinkAndCreatesNone(t *testing.T) {
+	// Given a session linked to the challenge when the user accepted the offer
+	f := newAttemptFixture(t)
+	ctx := context.Background()
+	f.expectStartable(ctx)
+	f.sessions.EXPECT().Exists(ctx, "session-1").Return(true, nil)
+	f.links.EXPECT().GetBySessionAndChallenge(ctx, "session-1", "challenge-1").
+		Return(domainexercise.SessionExercise{ID: "link-1", SessionID: "session-1", ChallengeID: "challenge-1"}, nil)
+	f.attempts.EXPECT().FindInProgress(ctx).Return(domainexercise.ChallengeAttempt{}, domainexercise.ErrAttemptNotFound)
+	f.runTx()
+	linked := startedAttempt()
+	linked.SessionExerciseID = "link-1"
+	f.attempts.EXPECT().Create(ctx, linked).Return(nil)
+
+	// When starting from the session
+	view, err := f.service.StartAttempt(ctx, StartInput{ChallengeID: "challenge-1", SessionID: "session-1"})
+
+	// Then the attempt carries the existing link (SessionExerciseRepository.Create is never called)
+	require.NoError(t, err)
+	assert.Equal(t, "link-1", view.Attempt.SessionExerciseID)
+}
+
+func TestAttemptService_StartAttempt_unknownSessionStoresNothing(t *testing.T) {
+	// Given a session id that does not exist
+	f := newAttemptFixture(t)
+	ctx := context.Background()
+	f.expectStartable(ctx)
+	f.sessions.EXPECT().Exists(ctx, "ghost").Return(false, nil)
+
+	// When starting from it
+	_, err := f.service.StartAttempt(ctx, StartInput{ChallengeID: "challenge-1", SessionID: "ghost"})
+
+	// Then it fails with ErrSourceSessionNotFound
+	assert.ErrorIs(t, err, ErrSourceSessionNotFound)
+}
+
+func TestAttemptService_StartAttempt_sessionNotLinkedToTheChallengeStoresNothing(t *testing.T) {
+	// Given a session that exists but was never offered this challenge
+	f := newAttemptFixture(t)
+	ctx := context.Background()
+	f.expectStartable(ctx)
+	f.sessions.EXPECT().Exists(ctx, "session-1").Return(true, nil)
+	f.links.EXPECT().GetBySessionAndChallenge(ctx, "session-1", "challenge-1").
+		Return(domainexercise.SessionExercise{}, domainexercise.ErrSessionExerciseNotFound)
+
+	// When starting from it
+	_, err := f.service.StartAttempt(ctx, StartInput{ChallengeID: "challenge-1", SessionID: "session-1"})
+
+	// Then it fails with ErrSessionExerciseNotFound
+	assert.ErrorIs(t, err, domainexercise.ErrSessionExerciseNotFound)
+}
+
+func TestAttemptService_StartAttempt_sessionLookupFailuresAreReturned(t *testing.T) {
+	boom := errors.New("disk failure")
+	tests := []struct {
+		name  string
+		setup func(f *attemptFixture, ctx context.Context)
+	}{
+		{"session check fails", func(f *attemptFixture, ctx context.Context) {
+			f.sessions.EXPECT().Exists(ctx, "session-1").Return(false, boom)
+		}},
+		{"link lookup fails", func(f *attemptFixture, ctx context.Context) {
+			f.sessions.EXPECT().Exists(ctx, "session-1").Return(true, nil)
+			f.links.EXPECT().GetBySessionAndChallenge(ctx, "session-1", "challenge-1").
+				Return(domainexercise.SessionExercise{}, boom)
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given a failing lookup
+			f := newAttemptFixture(t)
+			ctx := context.Background()
+			f.expectStartable(ctx)
+			tt.setup(f, ctx)
+
+			// When starting from the session
+			_, err := f.service.StartAttempt(ctx, StartInput{ChallengeID: "challenge-1", SessionID: "session-1"})
+
+			// Then the failure surfaces as itself
+			require.ErrorIs(t, err, boom)
+			assert.NotErrorIs(t, err, ErrSourceSessionNotFound)
+			assert.NotErrorIs(t, err, domainexercise.ErrSessionExerciseNotFound)
+		})
+	}
+}

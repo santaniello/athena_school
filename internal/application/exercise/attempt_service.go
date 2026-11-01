@@ -71,6 +71,11 @@ func (s *AttemptService) StartAttempt(ctx context.Context, input StartInput) (At
 		return AttemptView{}, fmt.Errorf("exercise: getting latest rubric: %w", err)
 	}
 
+	linkID, err := s.sessionLinkID(ctx, input)
+	if err != nil {
+		return AttemptView{}, err
+	}
+
 	running, err := s.attempts.FindInProgress(ctx)
 	hasRunning := err == nil
 	if err != nil && !errors.Is(err, domainexercise.ErrAttemptNotFound) {
@@ -80,7 +85,7 @@ func (s *AttemptService) StartAttempt(ctx context.Context, input StartInput) (At
 		return AttemptView{}, &AttemptInProgressError{AttemptID: running.ID}
 	}
 
-	attempt, err := domainexercise.NewAttempt(challenge, rubric, "", s.clock.Now())
+	attempt, err := domainexercise.NewAttempt(challenge, rubric, linkID, s.clock.Now())
 	if err != nil {
 		return AttemptView{}, fmt.Errorf("exercise: creating attempt: %w", err)
 	}
@@ -89,6 +94,26 @@ func (s *AttemptService) StartAttempt(ctx context.Context, input StartInput) (At
 		return AttemptView{}, err
 	}
 	return viewOf(attempt, challenge, rubric, nil), nil
+}
+
+// sessionLinkID returns the id of the SessionExercise the user accepted for a
+// session start, or "" for a standalone one. It never creates the link.
+func (s *AttemptService) sessionLinkID(ctx context.Context, input StartInput) (string, error) {
+	if input.SessionID == "" {
+		return "", nil
+	}
+	exists, err := s.sessions.Exists(ctx, input.SessionID)
+	if err != nil {
+		return "", fmt.Errorf("exercise: checking session: %w", err)
+	}
+	if !exists {
+		return "", ErrSourceSessionNotFound
+	}
+	link, err := s.links.GetBySessionAndChallenge(ctx, input.SessionID, input.ChallengeID)
+	if err != nil {
+		return "", fmt.Errorf("exercise: getting session exercise: %w", err)
+	}
+	return link.ID, nil
 }
 
 // replaceAndStore deletes the running attempt, if any, and stores the new one
