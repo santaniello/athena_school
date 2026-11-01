@@ -114,3 +114,28 @@ func TestRubricVersion_Validate_acceptsTextExactlyAtTheLimits(t *testing.T) {
 	// Then it is valid (lengths are counted in characters)
 	assert.NoError(t, version.Validate())
 }
+
+func TestRubricVersion_Validate_acceptsASingleChallengeCriterion(t *testing.T) {
+	// Given the base criteria plus exactly one challenge criterion
+	merged, err := MergeRubric(BaseRubric(), []RubricCriterion{challengeCriterion("only", 10)})
+	require.NoError(t, err)
+
+	// When validating it
+	// Then the lower bound of one challenge criterion is accepted
+	assert.NoError(t, RubricVersion{Criteria: merged}.Validate())
+}
+
+func TestRubricVersion_Validate_acceptsAWeightOfExactlyOnePoint(t *testing.T) {
+	// Given a merged rubric where six challenge criteria get exactly 1 point each
+	challenge := make([]RubricCriterion, MaxChallengeCriteria)
+	for i := range challenge {
+		challenge[i] = challengeCriterion(string(rune('a'+i)), 1)
+	}
+	merged, err := MergeRubric(BaseRubric(), challenge)
+	require.NoError(t, err)
+	require.Equal(t, 1, merged[len(merged)-1].Weight)
+
+	// When validating it
+	// Then a weight of 1 is accepted
+	assert.NoError(t, RubricVersion{Criteria: merged}.Validate())
+}
