@@ -163,13 +163,13 @@ removed by a side effect. A version and its criteria are written in one transact
 
 Each slice is TDD, keeps the build green and is committed on its own.
 
-- [ ] Domain: criterion and version types, `BaseRubric`, errors
-- [ ] Domain: `MergeRubric` weight normalization (exact sum 100, deterministic remainder)
-- [ ] Domain: `RubricVersion.Validate`
-- [ ] SQLite: migration and `RubricRepository` (`Create` in one transaction, `Get`, `Latest`,
+- [x] Domain: criterion and version types, `BaseRubric`, errors
+- [x] Domain: `MergeRubric` weight normalization (exact sum 100, deterministic remainder)
+- [x] Domain: `RubricVersion.Validate`
+- [x] SQLite: migration and `RubricRepository` (`Create` in one transaction, `Get`, `Latest`,
       `ListVersions`)
-- [ ] Application: `RubricService` (`SetChallengeRubric`, versioning, reads)
-- [ ] Mocks regenerated; docs: CHANGELOG entry
+- [x] Application: `RubricService` (`SetChallengeRubric`, versioning, reads)
+- [x] Mocks regenerated; docs: CHANGELOG entry
 
 ## Acceptance Criteria
 

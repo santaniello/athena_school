@@ -127,6 +127,33 @@ var migrations = []func(*sql.DB) error{
 	)`),
 	execSQL(`CREATE INDEX IF NOT EXISTS idx_challenges_topic ON challenges(topic)`),
 	execSQL(`CREATE INDEX IF NOT EXISTS idx_challenges_difficulty ON challenges(difficulty)`),
+	// rubric_versions/rubric_criteria hold the immutable, merged rubric of a
+	// challenge (base + challenge criteria, weights summing to 100). Neither
+	// table cascades: a challenge is never deleted and rubric history must
+	// never disappear as a side effect. levels is a JSON array of 5 strings.
+	// See specs/phases/phase-03-architecture-lab/02-rubrics.md.
+	execSQL(`CREATE TABLE IF NOT EXISTS rubric_versions (
+		id           TEXT PRIMARY KEY,
+		challenge_id TEXT NOT NULL REFERENCES challenges(id),
+		version      INTEGER NOT NULL,
+		base_version TEXT NOT NULL,
+		created_at   TEXT NOT NULL,
+		UNIQUE (challenge_id, version)
+	)`),
+	execSQL(`CREATE TABLE IF NOT EXISTS rubric_criteria (
+		id                TEXT PRIMARY KEY,
+		rubric_version_id TEXT NOT NULL REFERENCES rubric_versions(id),
+		position          INTEGER NOT NULL,
+		key               TEXT NOT NULL,
+		name              TEXT NOT NULL,
+		description       TEXT NOT NULL,
+		weight            INTEGER NOT NULL,
+		source            TEXT NOT NULL,
+		mandatory         INTEGER NOT NULL,
+		levels            TEXT NOT NULL,
+		UNIQUE (rubric_version_id, key),
+		UNIQUE (rubric_version_id, position)
+	)`),
 }
 
 // addSessionsFolderIDColumn adds sessions.folder_id if it does not already
