@@ -27,6 +27,11 @@ const (
 	// 24-conversation-summary.md). It is a background, non-streamed call whose
 	// output is never shown as a reply, so it is routed cheap.
 	TaskConversationSummary TaskType = "conversation_summary"
+	// TaskArchitectureLab serves every AI call of the Architecture Lab:
+	// challenge generation, hints, and diagram and defense evaluation (see
+	// specs/phases/phase-03-architecture-lab/06-01-challenge-generation.md).
+	// Its output is read by the user, so it is routed medium.
+	TaskArchitectureLab TaskType = "architecture_lab"
 )
 
 // Tier is a cost/capability class of model.
@@ -60,7 +65,7 @@ func TierFor(task TaskType) Tier {
 	switch task {
 	case TaskOnboarding, TaskQueryEnrichment, TaskConversationSummary:
 		return TierCheap
-	case TaskStudy, TaskChallengeFeedback, TaskNoteFormatting:
+	case TaskStudy, TaskChallengeFeedback, TaskNoteFormatting, TaskArchitectureLab:
 		return TierMedium
 	case TaskInterviewEvaluation, TaskComplexReasoning:
 		return TierPremium
