@@ -82,7 +82,8 @@ jobs:
       - name: Check exercise does not import architecture
         run: |
           MODULE="$(go list -m)"
-          if go list -deps ./internal/domain/exercise/... ./internal/application/exercise/... | grep -E "^${MODULE}/internal/(domain|application|infrastructure)/architecture"; then
+          DEPS="$(go list -deps ./internal/domain/exercise/... ./internal/application/exercise/...)"
+          if grep -E "^${MODULE}/internal/(domain|application|infrastructure)/architecture(/|$)" <<<"${DEPS}"; then
             echo "::error::exercise must not import architecture (ADR-005)."
             exit 1
           fi
