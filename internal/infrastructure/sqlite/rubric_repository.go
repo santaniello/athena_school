@@ -172,30 +172,9 @@ func (r *RubricRepository) loadCriteria(ctx context.Context, versionID string) (
 	return criteria, nil
 }
 
-// inTx runs fn in the transaction already on ctx, or in a new one that
-// commits when fn succeeds and rolls back otherwise.
+// inTx runs fn in the transaction already on ctx, or in a new one.
 func (r *RubricRepository) inTx(ctx context.Context, fn func(sqlExecer) error) error {
-	if tx, ok := ctx.Value(txKey{}).(*sql.Tx); ok {
-		return fn(tx)
-	}
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
-		}
-	}()
-	if err := fn(tx); err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	committed = true
-	return nil
+	return withTx(ctx, r.db, fn)
 }
 
 func scanRubricVersion(row rowScanner) (exercise.RubricVersion, error) {

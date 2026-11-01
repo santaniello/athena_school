@@ -74,3 +74,29 @@ func (t *SQLTransactor) WithinTx(ctx context.Context, fn func(ctx context.Contex
 	committed = true
 	return nil
 }
+
+// withTx runs fn in the transaction already on ctx, or in a new one that
+// commits when fn succeeds and rolls back otherwise.
+func withTx(ctx context.Context, db *sql.DB, fn func(sqlExecer) error) error {
+	if tx, ok := ctx.Value(txKey{}).(*sql.Tx); ok {
+		return fn(tx)
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	if err := fn(tx); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	committed = true
+	return nil
+}
