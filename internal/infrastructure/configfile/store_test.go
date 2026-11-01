@@ -200,3 +200,34 @@ func TestStore_Load_legacyFileWithOnlyTheKeyHasNoModelSettings(t *testing.T) {
 	assert.Equal(t, config.Config{OpenRouterKey: "sk-or-legacy"}, loaded)
 	assert.Equal(t, config.ModelSettings{}, loaded.Models)
 }
+
+func TestStore_SaveThenLoad_roundTripsThePassScore(t *testing.T) {
+	// Given a config with a chosen minimum passing score
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	store := NewStore(path)
+	original := config.Config{OpenRouterKey: "k", PassScore: 65}
+
+	// When saving it and loading it back
+	require.NoError(t, store.Save(original))
+	loaded, err := store.Load()
+
+	// Then the score survives, under its documented key
+	require.NoError(t, err)
+	assert.Equal(t, original, loaded)
+	data, err := os.ReadFile(filepath.Clean(path))
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "pass_score: 65")
+}
+
+func TestStore_Save_omitsAnUnsetPassScore(t *testing.T) {
+	// Given a config without a minimum passing score
+	path := filepath.Join(t.TempDir(), "config.yaml")
+
+	// When saving it
+	require.NoError(t, NewStore(path).Save(config.Config{OpenRouterKey: "k"}))
+
+	// Then no pass_score key is written, so "nothing stored" stays distinguishable
+	data, err := os.ReadFile(filepath.Clean(path))
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), "pass_score")
+}

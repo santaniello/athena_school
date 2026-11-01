@@ -336,3 +336,112 @@ func overridesOf(m domainconfig.ModelSettings) map[domainllm.TaskType]string {
 		domainllm.TaskNoteFormatting:      m.NoteFormatting,
 	}
 }
+
+func TestGetPassScore_returnsTheDefaultOnlyWhenNothingIsStored(t *testing.T) {
+	tests := []struct {
+		name string
+		load func(f fixture)
+		want int
+	}{
+		{"no config file", func(f fixture) { f.config.EXPECT().Load().Return(domainconfig.Config{}, fs.ErrNotExist).Once() }, 80},
+		{"config without a pass score", func(f fixture) {
+			f.config.EXPECT().Load().Return(domainconfig.Config{OpenRouterKey: "k"}, nil).Once()
+		}, 80},
+		{"a stored pass score", func(f fixture) {
+			f.config.EXPECT().Load().Return(domainconfig.Config{PassScore: 65}, nil).Once()
+		}, 65},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given a config // When reading the pass score
+			f := newFixture(t)
+			tt.load(f)
+			score, err := f.service.GetPassScore()
+
+			// Then the default is 80 and a stored value wins
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, score)
+		})
+	}
+}
+
+func TestGetPassScore_failsInsteadOfFallingBackWhenTheConfigCannotBeRead(t *testing.T) {
+	// Given a config that fails to load for a reason other than being absent
+	f := newFixture(t)
+	f.config.EXPECT().Load().Return(domainconfig.Config{}, errors.New("disk on fire")).Once()
+
+	// When reading the pass score
+	score, err := f.service.GetPassScore()
+
+	// Then the error is returned, never the default
+	require.Error(t, err)
+	assert.Zero(t, score)
+}
+
+func TestGetPassScore_rejectsAStoredValueOutOfRange(t *testing.T) {
+	// Given a hand-edited config with an impossible score
+	f := newFixture(t)
+	f.config.EXPECT().Load().Return(domainconfig.Config{PassScore: 20}, nil).Once()
+
+	// When reading the pass score
+	_, err := f.service.GetPassScore()
+
+	// Then it is refused rather than frozen on an attempt
+	assert.ErrorIs(t, err, ErrInvalidPassScore)
+}
+
+func TestSetPassScore_persistsAValidScoreKeepingTheRestOfTheConfig(t *testing.T) {
+	// Given a config with a key and chosen models
+	f := newFixture(t)
+	existing := domainconfig.Config{OpenRouterKey: "k", Models: domainconfig.ModelSettings{Study: "openai/gpt-5"}}
+	f.config.EXPECT().Load().Return(existing, nil).Once()
+	want := existing
+	want.PassScore = 90
+	f.config.EXPECT().Save(want).Return(nil).Once()
+
+	// When setting the pass score
+	err := f.service.SetPassScore(90)
+
+	// Then only the score changes
+	require.NoError(t, err)
+}
+
+func TestSetPassScore_startsAConfigWhenNoFileExistsYet(t *testing.T) {
+	f := newFixture(t)
+	f.config.EXPECT().Load().Return(domainconfig.Config{}, fs.ErrNotExist).Once()
+	f.config.EXPECT().Save(domainconfig.Config{PassScore: 50}).Return(nil).Once()
+
+	require.NoError(t, f.service.SetPassScore(50))
+}
+
+func TestSetPassScore_rejectsOutOfRangeScoresAndStoresNothing(t *testing.T) {
+	for _, score := range []int{49, 101, 0, -5} {
+		// Given a score outside 50..100 // When setting it
+		f := newFixture(t)
+		err := f.service.SetPassScore(score)
+
+		// Then it is refused before the config is even read
+		assert.ErrorIs(t, err, ErrInvalidPassScore, "score %d", score)
+	}
+}
+
+func TestSetPassScore_reportsLoadAndSaveFailures(t *testing.T) {
+	f := newFixture(t)
+	f.config.EXPECT().Load().Return(domainconfig.Config{}, errors.New("no read")).Once()
+	require.Error(t, f.service.SetPassScore(70))
+
+	f = newFixture(t)
+	f.config.EXPECT().Load().Return(domainconfig.Config{}, nil).Once()
+	f.config.EXPECT().Save(domainconfig.Config{PassScore: 70}).Return(errors.New("no write")).Once()
+	require.Error(t, f.service.SetPassScore(70))
+}
+
+func TestCurrent_isThePassScoreForTheExerciseService(t *testing.T) {
+	f := newFixture(t)
+	f.config.EXPECT().Load().Return(domainconfig.Config{PassScore: 72}, nil).Once()
+
+	score, err := f.service.Current(context.Background())
+
+	require.NoError(t, err)
+	assert.Equal(t, 72, score)
+}

@@ -26,6 +26,7 @@ func NewStore(path string) *Store {
 type configFile struct {
 	OpenRouterKey string     `yaml:"openrouter_key"`
 	Models        modelsFile `yaml:"models,omitempty"`
+	PassScore     int        `yaml:"pass_score,omitempty"`
 }
 
 // modelsFile is the optional models section; every key is optional and an
@@ -50,6 +51,7 @@ func (s *Store) Save(cfg config.Config) error {
 			NoteFormatting:      cfg.Models.NoteFormatting,
 			Embedding:           cfg.Models.Embedding,
 		},
+		PassScore: cfg.PassScore,
 	})
 	if err != nil {
 		return fmt.Errorf("configfile: encoding config: %w", err)
@@ -82,5 +84,6 @@ func (s *Store) Load() (config.Config, error) {
 			NoteFormatting:      file.Models.NoteFormatting,
 			Embedding:           file.Models.Embedding,
 		},
+		PassScore: file.PassScore,
 	}, nil
 }
