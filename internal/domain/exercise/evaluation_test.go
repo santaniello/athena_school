@@ -2,7 +2,9 @@ package exercise
 
 import (
 	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -175,5 +177,132 @@ func TestComputeScore_rejectsARubricWithoutWeight(t *testing.T) {
 	_, err := ComputeScore(scoringRubric(0), levelResults(4))
 
 	// Then it is refused instead of dividing by zero
+	assert.ErrorIs(t, err, ErrInvalidEvaluation)
+}
+
+var evaluationNow = time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+
+func evaluableAttempt() ChallengeAttempt {
+	return ChallengeAttempt{ID: "attempt-1", ChallengeID: "challenge-1", RubricVersionID: "rubric-1", State: AttemptSubmitted}
+}
+
+func validOutput(levels ...int) EvaluatorOutput {
+	return EvaluatorOutput{
+		Model:           "vendor/model-1",
+		Summary:         "A solid design.",
+		Strengths:       []string{"clear data flow"},
+		Gaps:            []string{"no failure handling"},
+		Recommendations: []string{"add a queue"},
+		Results:         levelResults(levels...),
+	}
+}
+
+func TestNewEvaluation_buildsTheEvaluationWithTheComputedScore(t *testing.T) {
+	// Given a valid output for a two criteria rubric
+	rubric := scoringRubric(50, 50)
+	output := validOutput(4, 2)
+	output.Results[0].Evidence = "the cache box"
+
+	// When building the evaluation
+	evaluation, err := NewEvaluation(evaluableAttempt(), rubric, output, "vendor/model-1", evaluationNow)
+
+	// Then the score is computed by the domain and everything else is carried over
+	require.NoError(t, err)
+	assert.Equal(t, Evaluation{
+		AttemptID:       "attempt-1",
+		Kind:            EvaluationKindDiagram,
+		Model:           "vendor/model-1",
+		Score:           75,
+		Summary:         "A solid design.",
+		Strengths:       []string{"clear data flow"},
+		Gaps:            []string{"no failure handling"},
+		Recommendations: []string{"add a queue"},
+		Results:         output.Results,
+		CreatedAt:       evaluationNow,
+	}, evaluation)
+}
+
+func TestNewEvaluation_rejectsARubricThatIsNotTheAttemptsFrozenVersion(t *testing.T) {
+	// Given a rubric version other than the one the attempt froze
+	rubric := scoringRubric(50, 50)
+	rubric.ID = "rubric-2"
+
+	// When building the evaluation
+	_, err := NewEvaluation(evaluableAttempt(), rubric, validOutput(4, 2), "m", evaluationNow)
+
+	// Then it is an invalid evaluation
+	assert.ErrorIs(t, err, ErrInvalidEvaluation)
+}
+
+func TestNewEvaluation_rejectsOutputThatBreaksTheRules(t *testing.T) {
+	long := func(n int) string { return strings.Repeat("a", n) }
+	manyItems := make([]string, MaxFeedbackItems+1)
+	for i := range manyItems {
+		manyItems[i] = "item"
+	}
+	tests := []struct {
+		name   string
+		mutate func(*EvaluatorOutput)
+	}{
+		{"a missing criterion", func(o *EvaluatorOutput) { o.Results = o.Results[:1] }},
+		{"an unknown criterion", func(o *EvaluatorOutput) { o.Results[1].CriterionID = "other" }},
+		{"a repeated criterion", func(o *EvaluatorOutput) { o.Results[1].CriterionID = "c1" }},
+		{"a level above 4", func(o *EvaluatorOutput) { o.Results[0].Level = 5 }},
+		{"an empty justification", func(o *EvaluatorOutput) { o.Results[0].Justification = "" }},
+		{"a blank justification", func(o *EvaluatorOutput) { o.Results[0].Justification = " \n\t" }},
+		{"an oversized justification", func(o *EvaluatorOutput) { o.Results[0].Justification = long(MaxJustificationLength + 1) }},
+		{"an oversized evidence", func(o *EvaluatorOutput) { o.Results[0].Evidence = long(MaxEvidenceLength + 1) }},
+		{"an oversized summary", func(o *EvaluatorOutput) { o.Summary = long(MaxSummaryLength + 1) }},
+		{"too many strengths", func(o *EvaluatorOutput) { o.Strengths = manyItems }},
+		{"too many gaps", func(o *EvaluatorOutput) { o.Gaps = manyItems }},
+		{"too many recommendations", func(o *EvaluatorOutput) { o.Recommendations = manyItems }},
+		{"an oversized strength", func(o *EvaluatorOutput) { o.Strengths = []string{long(MaxFeedbackItemLength + 1)} }},
+		{"an oversized gap", func(o *EvaluatorOutput) { o.Gaps = []string{long(MaxFeedbackItemLength + 1)} }},
+		{"an oversized recommendation", func(o *EvaluatorOutput) { o.Recommendations = []string{long(MaxFeedbackItemLength + 1)} }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given an output with one defect
+			output := validOutput(4, 2)
+			tt.mutate(&output)
+
+			// When building the evaluation
+			_, err := NewEvaluation(evaluableAttempt(), scoringRubric(50, 50), output, "m", evaluationNow)
+
+			// Then it is rejected
+			assert.ErrorIs(t, err, ErrInvalidEvaluation)
+		})
+	}
+}
+
+func TestNewEvaluation_acceptsTextExactlyAtItsLimits(t *testing.T) {
+	// Given text of exactly the maximum lengths and the maximum number of items
+	output := validOutput(4, 2)
+	output.Summary = strings.Repeat("é", MaxSummaryLength)
+	output.Results[0].Justification = strings.Repeat("é", MaxJustificationLength)
+	output.Results[0].Evidence = strings.Repeat("é", MaxEvidenceLength)
+	items := make([]string, MaxFeedbackItems)
+	for i := range items {
+		items[i] = strings.Repeat("é", MaxFeedbackItemLength)
+	}
+	output.Strengths, output.Gaps, output.Recommendations = items, items, items
+
+	// When building the evaluation
+	_, err := NewEvaluation(evaluableAttempt(), scoringRubric(50, 50), output, "m", evaluationNow)
+
+	// Then the limits are inclusive and count characters, not bytes
+	assert.NoError(t, err)
+}
+
+func TestNewEvaluation_flagsDoNotExemptAJustification(t *testing.T) {
+	// Given a flagged criterion without a justification
+	output := validOutput(4, 0)
+	output.Results[1].InsufficientEvidence = true
+	output.Results[1].Justification = ""
+
+	// When building the evaluation
+	_, err := NewEvaluation(evaluableAttempt(), scoringRubric(50, 50), output, "m", evaluationNow)
+
+	// Then it is rejected: the user must be told why it was not judged
 	assert.ErrorIs(t, err, ErrInvalidEvaluation)
 }
