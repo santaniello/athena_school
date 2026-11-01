@@ -26,8 +26,16 @@ export function DeleteStudySession(arg1) {
   return window['go']['desktop']['App']['DeleteStudySession'](arg1);
 }
 
+export function DiscardAttempt(arg1) {
+  return window['go']['desktop']['App']['DiscardAttempt'](arg1);
+}
+
 export function DownloadExampleNote() {
   return window['go']['desktop']['App']['DownloadExampleNote']();
+}
+
+export function GetAttempt(arg1) {
+  return window['go']['desktop']['App']['GetAttempt'](arg1);
 }
 
 export function GetKnowledgeIndexStatus() {
@@ -64,6 +72,10 @@ export function HasUserProfile() {
 
 export function ImportFile(arg1, arg2) {
   return window['go']['desktop']['App']['ImportFile'](arg1, arg2);
+}
+
+export function ListAttempts(arg1) {
+  return window['go']['desktop']['App']['ListAttempts'](arg1);
 }
 
 export function ListFolders() {
@@ -142,6 +154,10 @@ export function SendStudyMessage(arg1, arg2, arg3, arg4) {
   return window['go']['desktop']['App']['SendStudyMessage'](arg1, arg2, arg3, arg4);
 }
 
+export function StartAttempt(arg1, arg2, arg3) {
+  return window['go']['desktop']['App']['StartAttempt'](arg1, arg2, arg3);
+}
+
 export function StartKnowledgeIndex(arg1) {
   return window['go']['desktop']['App']['StartKnowledgeIndex'](arg1);
 }
@@ -152,6 +168,10 @@ export function StartStudySession(arg1, arg2, arg3) {
 
 export function Startup(arg1) {
   return window['go']['desktop']['App']['Startup'](arg1);
+}
+
+export function SubmitAttempt(arg1, arg2, arg3) {
+  return window['go']['desktop']['App']['SubmitAttempt'](arg1, arg2, arg3);
 }
 
 export function UpdateProfile(arg1) {

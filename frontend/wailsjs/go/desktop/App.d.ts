@@ -15,7 +15,11 @@ export function DeleteFolder(arg1:string):Promise<void>;
 
 export function DeleteStudySession(arg1:string):Promise<void>;
 
+export function DiscardAttempt(arg1:string):Promise<void>;
+
 export function DownloadExampleNote():Promise<string>;
+
+export function GetAttempt(arg1:string):Promise<desktop.AttemptDTO>;
 
 export function GetKnowledgeIndexStatus():Promise<desktop.IndexStatusResult>;
 
@@ -34,6 +38,8 @@ export function HasOpenRouterKey():Promise<boolean>;
 export function HasUserProfile():Promise<boolean>;
 
 export function ImportFile(arg1:string,arg2:string):Promise<void>;
+
+export function ListAttempts(arg1:string):Promise<Array<desktop.AttemptDTO>>;
 
 export function ListFolders():Promise<Array<desktop.FolderResult>>;
 
@@ -73,10 +79,14 @@ export function SaveProfile(arg1:desktop.UserProfileInput):Promise<void>;
 
 export function SendStudyMessage(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
+export function StartAttempt(arg1:string,arg2:string,arg3:boolean):Promise<desktop.AttemptDTO>;
+
 export function StartKnowledgeIndex(arg1:context.Context):Promise<void>;
 
 export function StartStudySession(arg1:string,arg2:string,arg3:string):Promise<desktop.StudySessionResult>;
 
 export function Startup(arg1:context.Context):Promise<void>;
+
+export function SubmitAttempt(arg1:string,arg2:string,arg3:string):Promise<desktop.AttemptDTO>;
 
 export function UpdateProfile(arg1:desktop.UserProfileInput):Promise<desktop.UserProfileInput>;

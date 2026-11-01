@@ -1,5 +1,97 @@
 export namespace desktop {
 	
+	export class SubmissionDTO {
+	    contentType: string;
+	    content: string;
+	    checksum: string;
+	    submittedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SubmissionDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.contentType = source["contentType"];
+	        this.content = source["content"];
+	        this.checksum = source["checksum"];
+	        this.submittedAt = source["submittedAt"];
+	    }
+	}
+	export class CriterionDTO {
+	    key: string;
+	    name: string;
+	    description: string;
+	    weight: number;
+	    mandatory: boolean;
+	    levels: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new CriterionDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.weight = source["weight"];
+	        this.mandatory = source["mandatory"];
+	        this.levels = source["levels"];
+	    }
+	}
+	export class AttemptDTO {
+	    id: string;
+	    challengeId: string;
+	    challengeTitle: string;
+	    challengeTopic: string;
+	    sessionExerciseId: string;
+	    state: string;
+	    startedAt: string;
+	    deadline: string;
+	    submittedAt: string;
+	    submitReason: string;
+	    criteria: CriterionDTO[];
+	    submission?: SubmissionDTO;
+	
+	    static createFrom(source: any = {}) {
+	        return new AttemptDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.challengeId = source["challengeId"];
+	        this.challengeTitle = source["challengeTitle"];
+	        this.challengeTopic = source["challengeTopic"];
+	        this.sessionExerciseId = source["sessionExerciseId"];
+	        this.state = source["state"];
+	        this.startedAt = source["startedAt"];
+	        this.deadline = source["deadline"];
+	        this.submittedAt = source["submittedAt"];
+	        this.submitReason = source["submitReason"];
+	        this.criteria = this.convertValues(source["criteria"], CriterionDTO);
+	        this.submission = this.convertValues(source["submission"], SubmissionDTO);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class ChunkLoadIssueResult {
 	    chunkId: string;
 	    itemId: string;
@@ -36,6 +128,7 @@ export namespace desktop {
 	        this.estimatedTokens = source["estimatedTokens"];
 	    }
 	}
+	
 	export class FailedSectionResult {
 	    heading: string;
 	    reason: string;
@@ -589,6 +682,7 @@ export namespace desktop {
 	        this.updatedAt = source["updatedAt"];
 	    }
 	}
+	
 	export class UserProfileInput {
 	    name: string;
 	    assistantName: string;

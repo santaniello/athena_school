@@ -14,6 +14,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
+	applicationexercise "github.com/santaniello/athena/internal/application/exercise"
 	"github.com/santaniello/athena/internal/application/folder"
 	applicationingest "github.com/santaniello/athena/internal/application/ingest"
 	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
@@ -122,6 +123,12 @@ func main() {
 		applicationingest.WithModelResolver(modelResolver),
 	)
 
+	attemptService := applicationexercise.NewAttemptService(
+		sqlite.NewChallengeRepository(db), sqlite.NewRubricRepository(db), sqlite.NewAttemptRepository(db),
+		sqlite.NewSubmissionRepository(db), sqlite.NewSessionExerciseRepository(db),
+		studySessions, transactor, systemClock{},
+	)
+
 	resetter := sqlite.NewResetter(db)
 	resetService := applicationreset.NewService(resetter, vectorStore)
 
@@ -129,6 +136,7 @@ func main() {
 		onboardingService, profiles, configStore, studyService, folderService, knowledgeService,
 		ingestService, llmClient, indexLoader, resetService,
 		desktop.WithModelSettings(settingsService),
+		desktop.WithAttemptService(attemptService),
 	)
 
 	err = wails.Run(&options.App{
@@ -211,3 +219,8 @@ func activateLinuxWindow() {
 	}
 	log.Print("could not find the Athena window via wmctrl within the retry budget")
 }
+
+// systemClock is the exercise service's Clock: the real UTC time.
+type systemClock struct{}
+
+func (systemClock) Now() time.Time { return time.Now().UTC() }
