@@ -153,3 +153,31 @@ func TestSubmissionRepository_GetByAttempt_returnsNotFoundForAnAttemptWithoutSub
 	// Then ErrSubmissionNotFound is returned
 	assert.ErrorIs(t, err, exercise.ErrSubmissionNotFound)
 }
+
+func TestSessionRepository_Delete_removesLinksButKeepsAttemptsSubmissionsAndChallenges(t *testing.T) {
+	// Given a session linked to a challenge, with a submitted attempt that came from the link
+	links, db := newTestSessionExerciseRepository(t)
+	ctx := context.Background()
+	require.NoError(t, links.Create(ctx, newTestSessionExercise("link-1")))
+	attempts := NewAttemptRepository(db)
+	attempt := newTestAttempt("attempt-1")
+	attempt.SessionExerciseID = "link-1"
+	require.NoError(t, attempts.Create(ctx, attempt))
+	submitted, submission := submitForTest(t, attempt, "submission-1")
+	require.NoError(t, attempts.Submit(ctx, submitted, submission))
+
+	// When the session is deleted
+	require.NoError(t, NewSessionRepository(db).Delete(ctx, "session-1"))
+
+	// Then its links are gone, while the attempt (now standalone), its submission and the challenge remain
+	assert.Equal(t, 0, countTableRows(t, db, "session_exercises"))
+	got, err := attempts.Get(ctx, "attempt-1")
+	require.NoError(t, err)
+	assert.Empty(t, got.SessionExerciseID)
+	assert.Equal(t, exercise.AttemptSubmitted, got.State)
+	stored, err := NewSubmissionRepository(db).GetByAttempt(ctx, "attempt-1")
+	require.NoError(t, err)
+	assert.Equal(t, submission, stored)
+	_, err = NewChallengeRepository(db).Get(ctx, "challenge-1")
+	assert.NoError(t, err)
+}
