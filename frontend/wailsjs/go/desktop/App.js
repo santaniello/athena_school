@@ -46,6 +46,10 @@ export function GetModelSettings() {
   return window['go']['desktop']['App']['GetModelSettings']();
 }
 
+export function GetPassScore() {
+  return window['go']['desktop']['App']['GetPassScore']();
+}
+
 export function GetProfile() {
   return window['go']['desktop']['App']['GetProfile']();
 }
@@ -152,6 +156,10 @@ export function SaveProfile(arg1) {
 
 export function SendStudyMessage(arg1, arg2, arg3, arg4) {
   return window['go']['desktop']['App']['SendStudyMessage'](arg1, arg2, arg3, arg4);
+}
+
+export function SetPassScore(arg1) {
+  return window['go']['desktop']['App']['SetPassScore'](arg1);
 }
 
 export function StartAttempt(arg1, arg2, arg3) {
