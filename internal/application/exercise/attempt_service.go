@@ -71,15 +71,55 @@ func (s *AttemptService) StartAttempt(ctx context.Context, input StartInput) (At
 		return AttemptView{}, fmt.Errorf("exercise: getting latest rubric: %w", err)
 	}
 
+	running, err := s.attempts.FindInProgress(ctx)
+	hasRunning := err == nil
+	if err != nil && !errors.Is(err, domainexercise.ErrAttemptNotFound) {
+		return AttemptView{}, fmt.Errorf("exercise: looking for a running attempt: %w", err)
+	}
+	if hasRunning && !input.DiscardInProgress {
+		return AttemptView{}, &AttemptInProgressError{AttemptID: running.ID}
+	}
+
 	attempt, err := domainexercise.NewAttempt(challenge, rubric, "", s.clock.Now())
 	if err != nil {
 		return AttemptView{}, fmt.Errorf("exercise: creating attempt: %w", err)
 	}
 	attempt.ID = s.newID()
-	if err := s.attempts.Create(ctx, attempt); err != nil {
-		return AttemptView{}, fmt.Errorf("exercise: storing attempt: %w", err)
+	if err := s.replaceAndStore(ctx, running, hasRunning, attempt); err != nil {
+		return AttemptView{}, err
 	}
 	return viewOf(attempt, challenge, rubric, nil), nil
+}
+
+// replaceAndStore deletes the running attempt, if any, and stores the new one
+// in a single transaction, so a failed create leaves the old attempt in place.
+// Losing a race against a concurrent start surfaces as ErrAttemptInProgress.
+func (s *AttemptService) replaceAndStore(ctx context.Context, running domainexercise.ChallengeAttempt, hasRunning bool, attempt domainexercise.ChallengeAttempt) error {
+	err := s.tx.WithinTx(ctx, func(ctx context.Context) error {
+		if hasRunning {
+			if err := s.attempts.DeleteUnfinished(ctx, running.ID); err != nil {
+				return fmt.Errorf("exercise: discarding running attempt: %w", err)
+			}
+		}
+		return s.attempts.Create(ctx, attempt)
+	})
+	if errors.Is(err, domainexercise.ErrAnotherAttemptInProgress) {
+		return s.currentConflict(ctx)
+	}
+	if err != nil {
+		return fmt.Errorf("exercise: storing attempt: %w", err)
+	}
+	return nil
+}
+
+// currentConflict names the attempt that won a race. If it is already gone
+// the conflict is still real, only its id is unknown.
+func (s *AttemptService) currentConflict(ctx context.Context) error {
+	winner, err := s.attempts.FindInProgress(ctx)
+	if err != nil {
+		return &AttemptInProgressError{}
+	}
+	return &AttemptInProgressError{AttemptID: winner.ID}
 }
 
 func viewOf(attempt domainexercise.ChallengeAttempt, challenge domainexercise.Challenge, rubric domainexercise.RubricVersion, submission *domainexercise.Submission) AttemptView {
