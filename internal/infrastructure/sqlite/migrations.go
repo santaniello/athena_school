@@ -192,6 +192,49 @@ var migrations = []func(*sql.DB) error{
 		checksum     TEXT NOT NULL,
 		submitted_at TEXT NOT NULL
 	)`),
+	// Spec 3.5: the evaluation engine. challenge_attempts keeps why the last
+	// evaluation failed; evaluations and criterion_results are final and,
+	// like every Phase 3 table, nothing cascades: they only disappear with an
+	// unfinished attempt, deleted explicitly. strengths, gaps and
+	// recommendations are JSON arrays (see jsonlist.go). See
+	// specs/phases/phase-03-architecture-lab/05-evaluation-engine.md.
+	addAttemptsFailureReasonColumn,
+	execSQL(`CREATE TABLE IF NOT EXISTS evaluations (
+		id              TEXT PRIMARY KEY,
+		attempt_id      TEXT NOT NULL REFERENCES challenge_attempts(id),
+		kind            TEXT NOT NULL,
+		model           TEXT NOT NULL,
+		score           INTEGER NOT NULL,
+		summary         TEXT NOT NULL,
+		strengths       TEXT NOT NULL,
+		gaps            TEXT NOT NULL,
+		recommendations TEXT NOT NULL,
+		created_at      TEXT NOT NULL,
+		UNIQUE (attempt_id, kind)
+	)`),
+	execSQL(`CREATE TABLE IF NOT EXISTS criterion_results (
+		evaluation_id         TEXT NOT NULL REFERENCES evaluations(id),
+		criterion_id          TEXT NOT NULL REFERENCES rubric_criteria(id),
+		level                 INTEGER NOT NULL,
+		justification         TEXT NOT NULL,
+		evidence              TEXT NOT NULL,
+		insufficient_evidence INTEGER NOT NULL,
+		PRIMARY KEY (evaluation_id, criterion_id)
+	)`),
+}
+
+// addAttemptsFailureReasonColumn adds challenge_attempts.failure_reason if it
+// does not already exist (SQLite has no "ADD COLUMN IF NOT EXISTS").
+func addAttemptsFailureReasonColumn(db *sql.DB) error {
+	has, err := hasColumn(db, "challenge_attempts", "failure_reason")
+	if err != nil {
+		return err
+	}
+	if has {
+		return nil
+	}
+	_, err = db.Exec(`ALTER TABLE challenge_attempts ADD COLUMN failure_reason TEXT`)
+	return err
 }
 
 // addChallengesTimeLimitColumn adds challenges.time_limit_minutes if it does

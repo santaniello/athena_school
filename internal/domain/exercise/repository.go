@@ -124,6 +124,50 @@ type AttemptRepository interface {
 	// DeleteAllUnfinished deletes every attempt that is not FINISHED and
 	// returns how many it removed.
 	DeleteAllUnfinished(ctx context.Context) (int, error)
+	// StartEvaluation moves the attempt to EVALUATING with one conditional
+	// update that only matches SUBMITTED or EVALUATION_FAILED, clearing the
+	// failure reason. When no row changes, including a concurrent call that got
+	// there first, it returns ErrAttemptNotEvaluable.
+	StartEvaluation(ctx context.Context, id string) error
+	// CompleteEvaluation moves an EVALUATING attempt to EVALUATED, else
+	// ErrAttemptNotEvaluating.
+	CompleteEvaluation(ctx context.Context, id string) error
+	// FailEvaluation moves an EVALUATING attempt to EVALUATION_FAILED with the
+	// reason, else ErrAttemptNotEvaluating.
+	FailEvaluation(ctx context.Context, id, reason string) error
+	// DeleteUnfinishedEvaluations deletes every attempt left in EVALUATING or
+	// EVALUATION_FAILED, with its submission and hints, and returns how many it
+	// removed. Evaluated attempts are untouched.
+	DeleteUnfinishedEvaluations(ctx context.Context) (int, error)
+}
+
+// ErrEvaluationNotFound is returned when an attempt has no evaluation of the kind.
+var ErrEvaluationNotFound = errors.New("evaluation not found")
+
+// EvaluationRepository persists Evaluations. A stored evaluation is final, so
+// there is deliberately no Update and no Delete: it only disappears with its
+// unfinished attempt.
+type EvaluationRepository interface {
+	// Create stores the evaluation and its criterion results atomically. An
+	// attempt has at most one evaluation per kind.
+	Create(ctx context.Context, evaluation Evaluation) error
+	// GetByAttempt returns the attempt's evaluation of the kind, with its
+	// results in rubric order, or ErrEvaluationNotFound.
+	GetByAttempt(ctx context.Context, attemptID string, kind EvaluationKind) (Evaluation, error)
+}
+
+// EvaluatorInput is everything an Evaluator may look at.
+type EvaluatorInput struct {
+	Challenge  Challenge
+	Rubric     RubricVersion
+	Submission Submission // opaque content, interpreted only by the implementation
+}
+
+// Evaluator judges a submission against the frozen rubric. It is implemented
+// per lab; spec 3.11 provides the architecture one. It returns levels and
+// text, never a score.
+type Evaluator interface {
+	Evaluate(ctx context.Context, input EvaluatorInput) (EvaluatorOutput, error)
 }
 
 // SubmissionRepository reads Submissions. They are written only through

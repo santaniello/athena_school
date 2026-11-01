@@ -22,6 +22,53 @@ func (_m *MockAttemptRepository) EXPECT() *MockAttemptRepository_Expecter {
 	return &MockAttemptRepository_Expecter{mock: &_m.Mock}
 }
 
+// CompleteEvaluation provides a mock function with given fields: ctx, id
+func (_m *MockAttemptRepository) CompleteEvaluation(ctx context.Context, id string) error {
+	ret := _m.Called(ctx, id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CompleteEvaluation")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
+		r0 = rf(ctx, id)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockAttemptRepository_CompleteEvaluation_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CompleteEvaluation'
+type MockAttemptRepository_CompleteEvaluation_Call struct {
+	*mock.Call
+}
+
+// CompleteEvaluation is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id string
+func (_e *MockAttemptRepository_Expecter) CompleteEvaluation(ctx interface{}, id interface{}) *MockAttemptRepository_CompleteEvaluation_Call {
+	return &MockAttemptRepository_CompleteEvaluation_Call{Call: _e.mock.On("CompleteEvaluation", ctx, id)}
+}
+
+func (_c *MockAttemptRepository_CompleteEvaluation_Call) Run(run func(ctx context.Context, id string)) *MockAttemptRepository_CompleteEvaluation_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockAttemptRepository_CompleteEvaluation_Call) Return(_a0 error) *MockAttemptRepository_CompleteEvaluation_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockAttemptRepository_CompleteEvaluation_Call) RunAndReturn(run func(context.Context, string) error) *MockAttemptRepository_CompleteEvaluation_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Create provides a mock function with given fields: ctx, attempt
 func (_m *MockAttemptRepository) Create(ctx context.Context, attempt exercise.ChallengeAttempt) error {
 	ret := _m.Called(ctx, attempt)
@@ -168,6 +215,110 @@ func (_c *MockAttemptRepository_DeleteUnfinished_Call) Return(_a0 error) *MockAt
 }
 
 func (_c *MockAttemptRepository_DeleteUnfinished_Call) RunAndReturn(run func(context.Context, string) error) *MockAttemptRepository_DeleteUnfinished_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// DeleteUnfinishedEvaluations provides a mock function with given fields: ctx
+func (_m *MockAttemptRepository) DeleteUnfinishedEvaluations(ctx context.Context) (int, error) {
+	ret := _m.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteUnfinishedEvaluations")
+	}
+
+	var r0 int
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context) (int, error)); ok {
+		return rf(ctx)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context) int); ok {
+		r0 = rf(ctx)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = rf(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockAttemptRepository_DeleteUnfinishedEvaluations_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteUnfinishedEvaluations'
+type MockAttemptRepository_DeleteUnfinishedEvaluations_Call struct {
+	*mock.Call
+}
+
+// DeleteUnfinishedEvaluations is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockAttemptRepository_Expecter) DeleteUnfinishedEvaluations(ctx interface{}) *MockAttemptRepository_DeleteUnfinishedEvaluations_Call {
+	return &MockAttemptRepository_DeleteUnfinishedEvaluations_Call{Call: _e.mock.On("DeleteUnfinishedEvaluations", ctx)}
+}
+
+func (_c *MockAttemptRepository_DeleteUnfinishedEvaluations_Call) Run(run func(ctx context.Context)) *MockAttemptRepository_DeleteUnfinishedEvaluations_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context))
+	})
+	return _c
+}
+
+func (_c *MockAttemptRepository_DeleteUnfinishedEvaluations_Call) Return(_a0 int, _a1 error) *MockAttemptRepository_DeleteUnfinishedEvaluations_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockAttemptRepository_DeleteUnfinishedEvaluations_Call) RunAndReturn(run func(context.Context) (int, error)) *MockAttemptRepository_DeleteUnfinishedEvaluations_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// FailEvaluation provides a mock function with given fields: ctx, id, reason
+func (_m *MockAttemptRepository) FailEvaluation(ctx context.Context, id string, reason string) error {
+	ret := _m.Called(ctx, id, reason)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FailEvaluation")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = rf(ctx, id, reason)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockAttemptRepository_FailEvaluation_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FailEvaluation'
+type MockAttemptRepository_FailEvaluation_Call struct {
+	*mock.Call
+}
+
+// FailEvaluation is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id string
+//   - reason string
+func (_e *MockAttemptRepository_Expecter) FailEvaluation(ctx interface{}, id interface{}, reason interface{}) *MockAttemptRepository_FailEvaluation_Call {
+	return &MockAttemptRepository_FailEvaluation_Call{Call: _e.mock.On("FailEvaluation", ctx, id, reason)}
+}
+
+func (_c *MockAttemptRepository_FailEvaluation_Call) Run(run func(ctx context.Context, id string, reason string)) *MockAttemptRepository_FailEvaluation_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *MockAttemptRepository_FailEvaluation_Call) Return(_a0 error) *MockAttemptRepository_FailEvaluation_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockAttemptRepository_FailEvaluation_Call) RunAndReturn(run func(context.Context, string, string) error) *MockAttemptRepository_FailEvaluation_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -340,6 +491,53 @@ func (_c *MockAttemptRepository_ListByChallenge_Call) Return(_a0 []exercise.Chal
 }
 
 func (_c *MockAttemptRepository_ListByChallenge_Call) RunAndReturn(run func(context.Context, string) ([]exercise.ChallengeAttempt, error)) *MockAttemptRepository_ListByChallenge_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// StartEvaluation provides a mock function with given fields: ctx, id
+func (_m *MockAttemptRepository) StartEvaluation(ctx context.Context, id string) error {
+	ret := _m.Called(ctx, id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for StartEvaluation")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
+		r0 = rf(ctx, id)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockAttemptRepository_StartEvaluation_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'StartEvaluation'
+type MockAttemptRepository_StartEvaluation_Call struct {
+	*mock.Call
+}
+
+// StartEvaluation is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id string
+func (_e *MockAttemptRepository_Expecter) StartEvaluation(ctx interface{}, id interface{}) *MockAttemptRepository_StartEvaluation_Call {
+	return &MockAttemptRepository_StartEvaluation_Call{Call: _e.mock.On("StartEvaluation", ctx, id)}
+}
+
+func (_c *MockAttemptRepository_StartEvaluation_Call) Run(run func(ctx context.Context, id string)) *MockAttemptRepository_StartEvaluation_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockAttemptRepository_StartEvaluation_Call) Return(_a0 error) *MockAttemptRepository_StartEvaluation_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockAttemptRepository_StartEvaluation_Call) RunAndReturn(run func(context.Context, string) error) *MockAttemptRepository_StartEvaluation_Call {
 	_c.Call.Return(run)
 	return _c
 }
