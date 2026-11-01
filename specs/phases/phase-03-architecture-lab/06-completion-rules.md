@@ -135,17 +135,17 @@ This is the first thing in the phase the user can see.
 
 Each slice is TDD, keeps the build green and is committed on its own.
 
-- [ ] Domain: `ValidatePassScore`, constants, `EvaluateOutcome` (pending, passed, failed with
+- [x] Domain: `ValidatePassScore`, constants, `EvaluateOutcome` (pending, passed, failed with
       all reasons, mandatory level 2 in both evaluations)
-- [ ] Domain: `DeriveProgress` (all four statuses, later failure keeps completion, best score,
+- [x] Domain: `DeriveProgress` (all four statuses, later failure keeps completion, best score,
       first pass date)
-- [ ] Application: settings `GetPassScore` and `SetPassScore`, default and validation
-- [ ] SQLite: `pass_score` column; set it when the diagram evaluation completes
+- [x] Application: settings `GetPassScore` and `SetPassScore`, default and validation
+- [x] SQLite: `pass_score` column; set it when the diagram evaluation completes
       (`PassScoreProvider` wired into `Evaluate`)
-- [ ] Application: `ProgressService` (`GetChallengeProgress`, `GetAttemptOutcome`)
-- [ ] Bindings `GetPassScore` and `SetPassScore`; `wailsjs` regenerated; mocks regenerated
-- [ ] Frontend: Settings field with validation, save and error states (Vitest)
-- [ ] Docs: CHANGELOG, README and `lib/documentation.ts` mention of the setting
+- [x] Application: `ProgressService` (`GetChallengeProgress`, `GetAttemptOutcome`)
+- [x] Bindings `GetPassScore` and `SetPassScore`; `wailsjs` regenerated; mocks regenerated
+- [x] Frontend: Settings field with validation, save and error states (Vitest)
+- [x] Docs: CHANGELOG, README and `lib/documentation.ts` mention of the setting
 
 ## Acceptance Criteria
 

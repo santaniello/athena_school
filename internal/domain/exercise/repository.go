@@ -129,9 +129,9 @@ type AttemptRepository interface {
 	// failure reason. When no row changes, including a concurrent call that got
 	// there first, it returns ErrAttemptNotEvaluable.
 	StartEvaluation(ctx context.Context, id string) error
-	// CompleteEvaluation moves an EVALUATING attempt to EVALUATED, else
-	// ErrAttemptNotEvaluating.
-	CompleteEvaluation(ctx context.Context, id string) error
+	// CompleteEvaluation moves an EVALUATING attempt to EVALUATED and stores
+	// the minimum passing score frozen on it, else ErrAttemptNotEvaluating.
+	CompleteEvaluation(ctx context.Context, id string, passScore int) error
 	// FailEvaluation moves an EVALUATING attempt to EVALUATION_FAILED with the
 	// reason, else ErrAttemptNotEvaluating.
 	FailEvaluation(ctx context.Context, id, reason string) error

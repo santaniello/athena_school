@@ -94,12 +94,16 @@ const (
 	MaxFeedbackItemLength  = 500
 )
 
-// EvaluationKind says what an evaluation judged. UNDERSTANDING is added by
-// spec 3.12 on the same tables.
+// EvaluationKind says what an evaluation judged.
 type EvaluationKind string
 
-// EvaluationKindDiagram is the evaluation of the submitted artifact.
-const EvaluationKindDiagram EvaluationKind = "DIAGRAM"
+const (
+	// EvaluationKindDiagram is the evaluation of the submitted artifact.
+	EvaluationKindDiagram EvaluationKind = "DIAGRAM"
+	// EvaluationKindUnderstanding is the evaluation of the user's defense.
+	// Nothing produces it until spec 3.12; the completion rules already read it.
+	EvaluationKindUnderstanding EvaluationKind = "UNDERSTANDING"
+)
 
 // Evaluation is the final, immutable scoring of one attempt. Score and the
 // criterion levels are the technical result; Summary, Strengths, Gaps and

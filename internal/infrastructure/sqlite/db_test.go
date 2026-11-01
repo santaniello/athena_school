@@ -888,6 +888,30 @@ func TestOpen_addsTimeLimitToExistingChallengesWithTheMediumDefault(t *testing.T
 	assert.Equal(t, 45, minutes)
 }
 
+func TestOpen_addsAPassScoreColumnToAttemptsOfADatabaseFromBeforeSpec36(t *testing.T) {
+	// Given a database whose attempts have no pass_score column
+	path := filepath.Join(t.TempDir(), "athena.db")
+	first, err := Open(path)
+	require.NoError(t, err)
+	_, err = first.Exec(`ALTER TABLE challenge_attempts DROP COLUMN pass_score`)
+	require.NoError(t, err)
+	require.NoError(t, first.Close())
+
+	// When opening it again, twice
+	second, err := Open(path)
+	require.NoError(t, err)
+	require.NoError(t, second.Close())
+	third, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = third.Close() }()
+
+	// Then the column exists and is nullable
+	var notNull int
+	require.NoError(t, third.QueryRow(
+		`SELECT "notnull" FROM pragma_table_info('challenge_attempts') WHERE name = 'pass_score'`).Scan(&notNull))
+	assert.Zero(t, notNull)
+}
+
 func TestOpen_isIdempotentOnSecondOpen_forAttemptTables(t *testing.T) {
 	// Given a database that was already opened once
 	path := filepath.Join(t.TempDir(), "athena.db")

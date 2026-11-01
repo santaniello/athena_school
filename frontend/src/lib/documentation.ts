@@ -151,7 +151,7 @@ const DOCUMENTATION: DocSection[] = [
       {
         term: 'Settings',
         description:
-          'Choose the model behind each AI feature, change your key or reset local data; it applies immediately.',
+          'Choose the model behind each AI feature, set the minimum passing score for challenges, change your key or reset local data; it applies immediately.',
       },
       { term: 'Import notes', description: 'Athena reads your Markdown and text files.' },
       { term: 'Meaning search', description: 'Finds the right passage regardless of wording.' },

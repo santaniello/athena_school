@@ -22,17 +22,17 @@ func (_m *MockAttemptRepository) EXPECT() *MockAttemptRepository_Expecter {
 	return &MockAttemptRepository_Expecter{mock: &_m.Mock}
 }
 
-// CompleteEvaluation provides a mock function with given fields: ctx, id
-func (_m *MockAttemptRepository) CompleteEvaluation(ctx context.Context, id string) error {
-	ret := _m.Called(ctx, id)
+// CompleteEvaluation provides a mock function with given fields: ctx, id, passScore
+func (_m *MockAttemptRepository) CompleteEvaluation(ctx context.Context, id string, passScore int) error {
+	ret := _m.Called(ctx, id, passScore)
 
 	if len(ret) == 0 {
 		panic("no return value specified for CompleteEvaluation")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
-		r0 = rf(ctx, id)
+	if rf, ok := ret.Get(0).(func(context.Context, string, int) error); ok {
+		r0 = rf(ctx, id, passScore)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -48,13 +48,14 @@ type MockAttemptRepository_CompleteEvaluation_Call struct {
 // CompleteEvaluation is a helper method to define mock.On call
 //   - ctx context.Context
 //   - id string
-func (_e *MockAttemptRepository_Expecter) CompleteEvaluation(ctx interface{}, id interface{}) *MockAttemptRepository_CompleteEvaluation_Call {
-	return &MockAttemptRepository_CompleteEvaluation_Call{Call: _e.mock.On("CompleteEvaluation", ctx, id)}
+//   - passScore int
+func (_e *MockAttemptRepository_Expecter) CompleteEvaluation(ctx interface{}, id interface{}, passScore interface{}) *MockAttemptRepository_CompleteEvaluation_Call {
+	return &MockAttemptRepository_CompleteEvaluation_Call{Call: _e.mock.On("CompleteEvaluation", ctx, id, passScore)}
 }
 
-func (_c *MockAttemptRepository_CompleteEvaluation_Call) Run(run func(ctx context.Context, id string)) *MockAttemptRepository_CompleteEvaluation_Call {
+func (_c *MockAttemptRepository_CompleteEvaluation_Call) Run(run func(ctx context.Context, id string, passScore int)) *MockAttemptRepository_CompleteEvaluation_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(string))
+		run(args[0].(context.Context), args[1].(string), args[2].(int))
 	})
 	return _c
 }
@@ -64,7 +65,7 @@ func (_c *MockAttemptRepository_CompleteEvaluation_Call) Return(_a0 error) *Mock
 	return _c
 }
 
-func (_c *MockAttemptRepository_CompleteEvaluation_Call) RunAndReturn(run func(context.Context, string) error) *MockAttemptRepository_CompleteEvaluation_Call {
+func (_c *MockAttemptRepository_CompleteEvaluation_Call) RunAndReturn(run func(context.Context, string, int) error) *MockAttemptRepository_CompleteEvaluation_Call {
 	_c.Call.Return(run)
 	return _c
 }

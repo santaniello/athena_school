@@ -158,3 +158,42 @@ func TestApp_ListSelectableModels_catalogFailure_isReturnedToTheFrontend(t *test
 	// Then the unavailable sentinel reaches the frontend
 	require.ErrorIs(t, err, settings.ErrCatalogUnavailable)
 }
+
+func TestApp_GetPassScore_returnsTheStoredScoreOrTheDefault(t *testing.T) {
+	// Given a config with a chosen minimum, then one without
+	f := newModelSettingsApp(t, nil)
+	f.config.EXPECT().Load().Return(domainconfig.Config{PassScore: 65}, nil).Once()
+	chosen, err := f.app.GetPassScore()
+	require.NoError(t, err)
+
+	f.config.EXPECT().Load().Return(domainconfig.Config{}, nil).Once()
+	byDefault, err := f.app.GetPassScore()
+	require.NoError(t, err)
+
+	// Then the frontend gets 65, then 80
+	assert.Equal(t, 65, chosen)
+	assert.Equal(t, 80, byDefault)
+}
+
+func TestApp_GetPassScore_returnsTheReadFailure(t *testing.T) {
+	f := newModelSettingsApp(t, nil)
+	f.config.EXPECT().Load().Return(domainconfig.Config{}, errors.New("unreadable")).Once()
+
+	_, err := f.app.GetPassScore()
+
+	assert.Error(t, err)
+}
+
+func TestApp_SetPassScore_savesAValidScoreAndRejectsAnInvalidOne(t *testing.T) {
+	// Given a config
+	f := newModelSettingsApp(t, nil)
+	f.config.EXPECT().Load().Return(domainconfig.Config{OpenRouterKey: "k"}, nil).Once()
+	f.config.EXPECT().Save(domainconfig.Config{OpenRouterKey: "k", PassScore: 90}).Return(nil).Once()
+
+	// When the frontend saves 90, then 49
+	require.NoError(t, f.app.SetPassScore(90))
+	err := f.app.SetPassScore(49)
+
+	// Then the first is stored and the second is rejected with the validation error
+	assert.ErrorIs(t, err, settings.ErrInvalidPassScore)
+}

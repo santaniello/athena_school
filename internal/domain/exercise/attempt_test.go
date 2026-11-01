@@ -213,14 +213,23 @@ func TestChallengeAttempt_StartEvaluation_refusesEveryOtherState(t *testing.T) {
 	}
 }
 
-func TestChallengeAttempt_CompleteEvaluation_movesEvaluatingToEvaluated(t *testing.T) {
+func TestChallengeAttempt_CompleteEvaluation_movesEvaluatingToEvaluatedFreezingThePassScore(t *testing.T) {
 	// Given an attempt being evaluated
-	// When completing its evaluation
-	completed, err := attemptIn(AttemptEvaluating).CompleteEvaluation()
+	// When completing its evaluation with the minimum score in force
+	completed, err := attemptIn(AttemptEvaluating).CompleteEvaluation(65)
 
-	// Then it is EVALUATED
+	// Then it is EVALUATED and records that minimum
 	require.NoError(t, err)
 	assert.Equal(t, AttemptEvaluated, completed.State)
+	assert.Equal(t, 65, completed.PassScore)
+}
+
+func TestChallengeAttempt_CompleteEvaluation_refusesAnInvalidPassScore(t *testing.T) {
+	// Given an attempt being evaluated // When completing it with a score out of range
+	_, err := attemptIn(AttemptEvaluating).CompleteEvaluation(MinPassScore - 1)
+
+	// Then nothing is frozen
+	assert.ErrorIs(t, err, ErrInvalidPassScore)
 }
 
 func TestChallengeAttempt_FailEvaluation_movesEvaluatingToFailedKeepingTheReason(t *testing.T) {
@@ -239,7 +248,7 @@ func TestChallengeAttempt_CompleteAndFailEvaluation_refuseAnAttemptThatIsNotEval
 		t.Run(string(from), func(t *testing.T) {
 			// Given an attempt that is not being evaluated
 			// When completing or failing its evaluation
-			_, completeErr := attemptIn(from).CompleteEvaluation()
+			_, completeErr := attemptIn(from).CompleteEvaluation(DefaultPassScore)
 			_, failErr := attemptIn(from).FailEvaluation("x")
 
 			// Then both are refused

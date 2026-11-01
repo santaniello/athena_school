@@ -31,6 +31,10 @@ type ModelSettings struct {
 type Config struct {
 	OpenRouterKey string
 	Models        ModelSettings
+	// PassScore is the minimum passing score of a challenge attempt, 50 to
+	// 100. Zero means none is stored, so the default applies. See
+	// specs/phases/phase-03-architecture-lab/06-completion-rules.md.
+	PassScore int
 }
 
 // Store persists the local Config.

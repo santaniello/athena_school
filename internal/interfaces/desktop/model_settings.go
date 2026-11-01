@@ -95,3 +95,16 @@ type Option func(*App)
 func WithModelSettings(service *settings.Service) Option {
 	return func(a *App) { a.modelSettings = service }
 }
+
+// GetPassScore returns the minimum score a challenge attempt needs to pass:
+// the stored value, or 80 when none is stored. See
+// specs/phases/phase-03-architecture-lab/06-completion-rules.md.
+func (a *App) GetPassScore() (int, error) {
+	return a.modelSettings.GetPassScore()
+}
+
+// SetPassScore validates and saves the minimum passing score (50 to 100). An
+// out-of-range value is rejected and nothing is stored.
+func (a *App) SetPassScore(score int) error {
+	return a.modelSettings.SetPassScore(score)
+}
