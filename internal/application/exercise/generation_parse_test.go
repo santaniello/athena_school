@@ -220,3 +220,18 @@ func TestParseGeneration_namesTheCriterionWithTheWrongLevelCount(t *testing.T) {
 	require.ErrorIs(t, err, ErrInvalidGeneration)
 	assert.Contains(t, err.Error(), "criterion 2 has 4 levels, want 5")
 }
+
+func TestParseGeneration_namesTheCriterionWithoutAMandatoryFlag(t *testing.T) {
+	// Given a second criterion with no mandatory flag
+	output := validOutput()
+	bad := criterionJSON("Hot keys", 5)
+	delete(bad, "mandatory")
+	output["criteria"] = []any{criterionJSON("Cache invalidation", 10), bad}
+
+	// When it is parsed
+	_, err := parseGeneration(encode(t, output), "caching", domainexercise.DifficultyBeginner)
+
+	// Then the error says which criterion is missing the flag
+	require.ErrorIs(t, err, ErrInvalidGeneration)
+	assert.Contains(t, err.Error(), "criterion 2 has no mandatory flag")
+}
