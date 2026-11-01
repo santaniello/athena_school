@@ -103,6 +103,30 @@ var migrations = []func(*sql.DB) error{
 	// the rowid is implicitly the last column of every index. messages had
 	// no index before (spec 2.26).
 	execSQL(`CREATE INDEX IF NOT EXISTS idx_messages_session_created ON messages(session_id, created_at)`),
+	// challenges are Architecture Lab problems that outlive the study session
+	// they came from: source_session_id is nullable with ON DELETE SET NULL
+	// (never CASCADE) and topic is a snapshot, so deleting the session keeps
+	// the challenge and what the catalog filters by. Timestamps are
+	// fixed-width UTC text, so ordering by them is lexicographic. See
+	// specs/phases/phase-03-architecture-lab/01-challenge-domain-and-persistence.md.
+	execSQL(`CREATE TABLE IF NOT EXISTS challenges (
+		id                          TEXT PRIMARY KEY,
+		type                        TEXT NOT NULL,
+		title                       TEXT NOT NULL,
+		scenario                    TEXT NOT NULL,
+		functional_requirements     TEXT NOT NULL,
+		non_functional_requirements TEXT NOT NULL,
+		constraints                 TEXT NOT NULL,
+		objectives                  TEXT NOT NULL,
+		difficulty                  TEXT NOT NULL,
+		topic                       TEXT NOT NULL,
+		source_session_id           TEXT REFERENCES sessions(id) ON DELETE SET NULL,
+		origin                      TEXT NOT NULL,
+		created_at                  TEXT NOT NULL,
+		updated_at                  TEXT NOT NULL
+	)`),
+	execSQL(`CREATE INDEX IF NOT EXISTS idx_challenges_topic ON challenges(topic)`),
+	execSQL(`CREATE INDEX IF NOT EXISTS idx_challenges_difficulty ON challenges(difficulty)`),
 }
 
 // addSessionsFolderIDColumn adds sessions.folder_id if it does not already
