@@ -84,8 +84,8 @@ func stripCodeFence(content string) []byte {
 		return []byte(trimmed)
 	}
 	trimmed = strings.TrimPrefix(trimmed, "```")
-	if newline := strings.IndexByte(trimmed, '\n'); newline >= 0 {
-		trimmed = trimmed[newline+1:]
+	if _, afterInfo, found := strings.Cut(trimmed, "\n"); found {
+		trimmed = afterInfo
 	}
 	return bytes.TrimSpace([]byte(strings.TrimSuffix(strings.TrimSpace(trimmed), "```")))
 }
@@ -132,9 +132,7 @@ func slugOf(name string) string {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
 	})
 	slug := []rune(strings.Join(words, "-"))
-	if len(slug) > maxGeneratedSlugLength {
-		slug = slug[:maxGeneratedSlugLength]
-	}
+	slug = slug[:min(len(slug), maxGeneratedSlugLength)]
 	if trimmed := strings.Trim(string(slug), "-"); trimmed != "" {
 		return trimmed
 	}

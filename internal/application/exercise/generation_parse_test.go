@@ -195,3 +195,18 @@ func TestParseGeneration_rejectsInvalidOutput(t *testing.T) {
 		})
 	}
 }
+
+func TestParseGeneration_namesTheCriterionWithTheWrongLevelCount(t *testing.T) {
+	// Given a second criterion with four levels
+	output := validOutput()
+	bad := criterionJSON("Hot keys", 5)
+	bad["levels"] = levelsJSON(4)
+	output["criteria"] = []any{criterionJSON("Cache invalidation", 10), bad}
+
+	// When it is parsed
+	_, err := parseGeneration(encode(t, output), "caching", domainexercise.DifficultyBeginner)
+
+	// Then the error says which criterion and how many levels it had
+	require.ErrorIs(t, err, ErrInvalidGeneration)
+	assert.Contains(t, err.Error(), "criterion 2 has 4 levels, want 5")
+}

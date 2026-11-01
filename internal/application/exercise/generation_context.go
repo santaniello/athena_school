@@ -3,7 +3,6 @@ package exercise
 import (
 	"context"
 	"fmt"
-	"unicode/utf8"
 
 	domainexercise "github.com/santaniello/athena/internal/domain/exercise"
 )
@@ -59,10 +58,10 @@ func boundNotes(found []domainexercise.NoteExcerpt) []domainexercise.NoteExcerpt
 		if len(kept) == maxNoteChunks || remaining == 0 {
 			break
 		}
-		if utf8.RuneCountInString(excerpt.Content) > remaining {
-			excerpt.Content = string([]rune(excerpt.Content)[:remaining])
-		}
-		remaining -= utf8.RuneCountInString(excerpt.Content)
+		runes := []rune(excerpt.Content)
+		runes = runes[:min(len(runes), remaining)]
+		excerpt.Content = string(runes)
+		remaining -= len(runes)
 		kept = append(kept, excerpt)
 	}
 	return kept
