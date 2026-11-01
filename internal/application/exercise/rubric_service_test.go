@@ -182,6 +182,41 @@ func TestRubricService_SetChallengeRubric_invalidCriteriaStoreNothing(t *testing
 	}
 }
 
+func TestRubricService_SetChallengeRubric_versionConflictRetriesWithTheNewLatest(t *testing.T) {
+	// Given another call took version 2 between this call's read and write
+	service, challenges, rubrics := newTestRubricService(t)
+	ctx := context.Background()
+	challenges.EXPECT().Get(ctx, "challenge-1").Return(domainexercise.Challenge{ID: "challenge-1"}, nil)
+	rubrics.EXPECT().Latest(ctx, "challenge-1").Return(domainexercise.RubricVersion{Version: 1}, nil).Once()
+	rubrics.EXPECT().Create(ctx, mockRubricVersion(new(domainexercise.RubricVersion))).Return(domainexercise.ErrRubricVersionConflict).Once()
+	rubrics.EXPECT().Latest(ctx, "challenge-1").Return(domainexercise.RubricVersion{Version: 2}, nil).Once()
+	rubrics.EXPECT().Create(ctx, mockRubricVersion(new(domainexercise.RubricVersion))).Return(nil).Once()
+
+	// When setting the rubric
+	got, err := service.SetChallengeRubric(ctx, "challenge-1", []ChallengeCriterionInput{criterionInput("a", 10)})
+
+	// Then it re-reads the latest version and stores the next one, version 3
+	require.NoError(t, err)
+	assert.Equal(t, 3, got.Version)
+}
+
+func TestRubricService_SetChallengeRubric_givesUpAfterRepeatedVersionConflicts(t *testing.T) {
+	// Given every attempt to store collides with another call
+	service, challenges, rubrics := newTestRubricService(t)
+	ctx := context.Background()
+	challenges.EXPECT().Get(ctx, "challenge-1").Return(domainexercise.Challenge{ID: "challenge-1"}, nil)
+	rubrics.EXPECT().Latest(ctx, "challenge-1").Return(domainexercise.RubricVersion{Version: 1}, nil).Times(maxVersionAttempts)
+	rubrics.EXPECT().Create(ctx, mockRubricVersion(new(domainexercise.RubricVersion))).
+		Return(domainexercise.ErrRubricVersionConflict).Times(maxVersionAttempts)
+
+	// When setting the rubric
+	got, err := service.SetChallengeRubric(ctx, "challenge-1", []ChallengeCriterionInput{criterionInput("a", 10)})
+
+	// Then it stops after the maximum attempts and reports the typed conflict
+	assert.ErrorIs(t, err, domainexercise.ErrRubricVersionConflict)
+	assert.Empty(t, got.ID)
+}
+
 func TestRubricService_SetChallengeRubric_storageFailuresAreReturned(t *testing.T) {
 	boom := errors.New("boom")
 	input := []ChallengeCriterionInput{criterionInput("a", 10)}

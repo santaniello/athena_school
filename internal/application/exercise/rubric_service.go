@@ -12,6 +12,11 @@ import (
 	domainexercise "github.com/santaniello/athena/internal/domain/exercise"
 )
 
+// maxVersionAttempts bounds how many times SetChallengeRubric re-reads the
+// latest version and retries after another call took the version number it
+// had chosen.
+const maxVersionAttempts = 3
+
 // RubricService implements the rubric use cases. A stored rubric version is
 // immutable, so changing a challenge's rubric creates the next version and
 // there is deliberately no update or delete. See
@@ -72,13 +77,32 @@ func (s *RubricService) SetChallengeRubric(ctx context.Context, challengeID stri
 	if err := version.Validate(); err != nil {
 		return domainexercise.RubricVersion{}, fmt.Errorf("exercise: invalid rubric: %w", err)
 	}
-	if version.Version, err = s.nextVersionNumber(ctx, challengeID); err != nil {
+	if err := s.createNextVersion(ctx, &version); err != nil {
 		return domainexercise.RubricVersion{}, err
 	}
-	if err := s.rubrics.Create(ctx, version); err != nil {
-		return domainexercise.RubricVersion{}, fmt.Errorf("exercise: creating rubric version: %w", err)
-	}
 	return version, nil
+}
+
+// createNextVersion numbers the version one above the challenge's latest and
+// stores it. Reading the latest and storing are separate calls, so another
+// call may take that number in between; the repository then reports
+// ErrRubricVersionConflict and the number is chosen again, up to
+// maxVersionAttempts times.
+func (s *RubricService) createNextVersion(ctx context.Context, version *domainexercise.RubricVersion) error {
+	var err error
+	for range maxVersionAttempts {
+		if version.Version, err = s.nextVersionNumber(ctx, version.ChallengeID); err != nil {
+			return err
+		}
+		err = s.rubrics.Create(ctx, *version)
+		if !errors.Is(err, domainexercise.ErrRubricVersionConflict) {
+			break
+		}
+	}
+	if err != nil {
+		return fmt.Errorf("exercise: creating rubric version: %w", err)
+	}
+	return nil
 }
 
 // Get returns the rubric version with the given id, or

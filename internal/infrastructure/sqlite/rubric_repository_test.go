@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -166,8 +167,9 @@ func TestRubricRepository_Create_failureMidwayLeavesNothingStored(t *testing.T) 
 	// When creating it
 	err := repo.Create(ctx, version)
 
-	// Then it fails and neither the version nor its first criterion remains
+	// Then it fails (not as a version conflict) and neither the version nor its first criterion remains
 	require.Error(t, err)
+	assert.NotErrorIs(t, err, exercise.ErrRubricVersionConflict)
 	assert.Zero(t, countRows(t, db, `SELECT COUNT(*) FROM rubric_versions`))
 	assert.Zero(t, countRows(t, db, `SELECT COUNT(*) FROM rubric_criteria`))
 }
@@ -181,8 +183,8 @@ func TestRubricRepository_Create_rejectsASecondRubricWithTheSameVersionNumber(t 
 	// When creating another rubric as version 1 of the same challenge
 	err := repo.Create(ctx, newTestRubricVersion("r1-again", 1))
 
-	// Then it is rejected and the original is untouched
-	require.Error(t, err)
+	// Then it is rejected as a version conflict and the original is untouched
+	require.ErrorIs(t, err, exercise.ErrRubricVersionConflict)
 	assert.Equal(t, 1, countRows(t, db, `SELECT COUNT(*) FROM rubric_versions`))
 	assert.Equal(t, 6, countRows(t, db, `SELECT COUNT(*) FROM rubric_criteria`))
 }
@@ -263,4 +265,37 @@ func TestRubricRepository_Get_corruptLevelsReturnsAnError(t *testing.T) {
 	// Then the corruption is reported, not hidden
 	assert.Error(t, err)
 	assert.NotErrorIs(t, err, exercise.ErrRubricNotFound)
+}
+
+func TestRubricRepository_Create_concurrentCallsForTheSameVersionStoreExactlyOne(t *testing.T) {
+	// Given two calls that both chose version 2 for the same challenge
+	repo, db := newTestRubricRepository(t)
+	ctx := context.Background()
+	require.NoError(t, repo.Create(ctx, newTestRubricVersion("r1", 1)))
+	versions := []exercise.RubricVersion{newTestRubricVersion("r2a", 2), newTestRubricVersion("r2b", 2)}
+	errs := make([]error, len(versions))
+
+	// When both create at the same time
+	var wg sync.WaitGroup
+	for i := range versions {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs[i] = repo.Create(ctx, versions[i])
+		}()
+	}
+	wg.Wait()
+
+	// Then exactly one is stored and the other reports a version conflict, leaving no partial rows
+	succeeded := 0
+	for _, err := range errs {
+		if err == nil {
+			succeeded++
+			continue
+		}
+		assert.ErrorIs(t, err, exercise.ErrRubricVersionConflict)
+	}
+	assert.Equal(t, 1, succeeded)
+	assert.Equal(t, 2, countRows(t, db, `SELECT COUNT(*) FROM rubric_versions`))
+	assert.Equal(t, 12, countRows(t, db, `SELECT COUNT(*) FROM rubric_criteria`))
 }

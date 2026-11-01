@@ -5,6 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
+
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 
 	"github.com/santaniello/athena/internal/domain/exercise"
 )
@@ -58,10 +62,24 @@ func (r *RubricRepository) Create(ctx context.Context, version exercise.RubricVe
 		}
 		return nil
 	})
+	if isRubricVersionConflict(err) {
+		return fmt.Errorf("sqlite: creating rubric version: %w", exercise.ErrRubricVersionConflict)
+	}
 	if err != nil {
 		return fmt.Errorf("sqlite: creating rubric version: %w", err)
 	}
 	return nil
+}
+
+// isRubricVersionConflict reports whether err is the UNIQUE violation of
+// (challenge_id, version) on rubric_versions. Other UNIQUE violations (an
+// id or a criterion key) are different failures and are not conflicts.
+func isRubricVersionConflict(err error) bool {
+	var sqliteErr *sqlite.Error
+	if !errors.As(err, &sqliteErr) || sqliteErr.Code() != sqlite3.SQLITE_CONSTRAINT_UNIQUE {
+		return false
+	}
+	return strings.Contains(sqliteErr.Error(), "rubric_versions.challenge_id")
 }
 
 // Get returns the version with its criteria, or exercise.ErrRubricNotFound.
