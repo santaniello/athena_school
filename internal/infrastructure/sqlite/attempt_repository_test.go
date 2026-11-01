@@ -260,3 +260,120 @@ func TestAttemptRepository_FindInProgress_returnsNotFoundWhenNoneRuns(t *testing
 	// Then ErrAttemptNotFound is returned
 	assert.ErrorIs(t, err, exercise.ErrAttemptNotFound)
 }
+
+// insertFinishedAttempt stores an attempt in the FINISHED state, which the
+// domain only gains in spec 3.12, together with a submission.
+func insertFinishedAttempt(t *testing.T, db *sql.DB, id string) {
+	t.Helper()
+	_, err := db.Exec(`INSERT INTO challenge_attempts (id, challenge_id, rubric_version_id, state, started_at, deadline, submitted_at, submit_reason)
+		VALUES (?, 'challenge-1', 'rubric-1', 'FINISHED', ?, ?, ?, 'USER')`,
+		id, formatChallengeTime(attemptTestStart), formatChallengeTime(attemptTestStart), formatChallengeTime(attemptTestStart))
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO submissions (id, attempt_id, content_type, content, checksum, submitted_at)
+		VALUES (?, ?, 'text/plain', 'x', 'y', 'z')`, "submission-"+id, id)
+	require.NoError(t, err)
+}
+
+func countTableRows(t *testing.T, db *sql.DB, table string) int {
+	t.Helper()
+	var count int
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM `+table).Scan(&count))
+	return count
+}
+
+func TestAttemptRepository_DeleteUnfinished_removesAnInProgressAttempt(t *testing.T) {
+	// Given an in-progress attempt
+	repo, _ := newTestAttemptRepository(t)
+	ctx := context.Background()
+	require.NoError(t, repo.Create(ctx, newTestAttempt("attempt-1")))
+
+	// When discarding it
+	require.NoError(t, repo.DeleteUnfinished(ctx, "attempt-1"))
+
+	// Then it is gone
+	_, err := repo.Get(ctx, "attempt-1")
+	assert.ErrorIs(t, err, exercise.ErrAttemptNotFound)
+}
+
+func TestAttemptRepository_DeleteUnfinished_removesASubmittedAttemptWithItsSubmission(t *testing.T) {
+	// Given a submitted attempt
+	repo, db := newTestAttemptRepository(t)
+	ctx := context.Background()
+	require.NoError(t, repo.Create(ctx, newTestAttempt("attempt-1")))
+	submitted, submission := submitForTest(t, newTestAttempt("attempt-1"), "submission-1")
+	require.NoError(t, repo.Submit(ctx, submitted, submission))
+
+	// When discarding it
+	require.NoError(t, repo.DeleteUnfinished(ctx, "attempt-1"))
+
+	// Then the attempt and its submission are gone
+	_, err := repo.Get(ctx, "attempt-1")
+	assert.ErrorIs(t, err, exercise.ErrAttemptNotFound)
+	assert.Equal(t, 0, countTableRows(t, db, "submissions"))
+}
+
+func TestAttemptRepository_DeleteUnfinished_neverTouchesAFinishedAttempt(t *testing.T) {
+	// Given a finished attempt with its submission
+	repo, db := newTestAttemptRepository(t)
+	ctx := context.Background()
+	insertFinishedAttempt(t, db, "finished-1")
+
+	// When asked to discard it
+	require.NoError(t, repo.DeleteUnfinished(ctx, "finished-1"))
+
+	// Then both rows remain
+	assert.Equal(t, 1, countTableRows(t, db, "challenge_attempts"))
+	assert.Equal(t, 1, countTableRows(t, db, "submissions"))
+}
+
+func TestAttemptRepository_DeleteUnfinished_onlyRemovesTheGivenAttempt(t *testing.T) {
+	// Given a submitted attempt and a running one
+	repo, db := newTestAttemptRepository(t)
+	ctx := context.Background()
+	require.NoError(t, repo.Create(ctx, newTestAttempt("attempt-1")))
+	submitted, submission := submitForTest(t, newTestAttempt("attempt-1"), "submission-1")
+	require.NoError(t, repo.Submit(ctx, submitted, submission))
+	require.NoError(t, repo.Create(ctx, newTestAttempt("attempt-2")))
+
+	// When discarding the running one
+	require.NoError(t, repo.DeleteUnfinished(ctx, "attempt-2"))
+
+	// Then the submitted attempt and its submission stay
+	_, err := repo.Get(ctx, "attempt-1")
+	assert.NoError(t, err)
+	assert.Equal(t, 1, countTableRows(t, db, "submissions"))
+}
+
+func TestAttemptRepository_DeleteAllUnfinished_removesEveryUnfinishedAttemptAndKeepsFinishedOnes(t *testing.T) {
+	// Given a submitted attempt, a running one and a finished one
+	repo, db := newTestAttemptRepository(t)
+	ctx := context.Background()
+	require.NoError(t, repo.Create(ctx, newTestAttempt("attempt-1")))
+	submitted, submission := submitForTest(t, newTestAttempt("attempt-1"), "submission-1")
+	require.NoError(t, repo.Submit(ctx, submitted, submission))
+	require.NoError(t, repo.Create(ctx, newTestAttempt("attempt-2")))
+	insertFinishedAttempt(t, db, "finished-1")
+
+	// When discarding all unfinished attempts
+	removed, err := repo.DeleteAllUnfinished(ctx)
+
+	// Then two were removed, with the unfinished submission, and the finished one stays
+	require.NoError(t, err)
+	assert.Equal(t, 2, removed)
+	assert.Equal(t, 1, countTableRows(t, db, "challenge_attempts"))
+	assert.Equal(t, 1, countTableRows(t, db, "submissions"))
+	_, err = repo.Get(ctx, "finished-1")
+	assert.NoError(t, err)
+}
+
+func TestAttemptRepository_DeleteAllUnfinished_returnsZeroWhenThereIsNothingToRemove(t *testing.T) {
+	// Given no attempts
+	repo, _ := newTestAttemptRepository(t)
+
+	// When discarding all unfinished attempts
+	removed, err := repo.DeleteAllUnfinished(context.Background())
+
+	// Then nothing is removed
+	require.NoError(t, err)
+	assert.Equal(t, 0, removed)
+}

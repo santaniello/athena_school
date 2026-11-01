@@ -164,3 +164,54 @@ func nullableTime(t time.Time) any {
 	}
 	return formatChallengeTime(t)
 }
+
+// finishedState is the attempt state spec 3.12 adds; DeleteUnfinished and
+// DeleteAllUnfinished never touch it.
+const finishedState = "FINISHED"
+
+// DeleteUnfinished deletes the attempt and its submission in one transaction
+// unless it is FINISHED. An unknown id is a no-op.
+func (r *AttemptRepository) DeleteUnfinished(ctx context.Context, id string) error {
+	err := withTx(ctx, r.db, func(q sqlExecer) error {
+		_, err := deleteUnfinished(ctx, q, ` AND id = ?`, id)
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("sqlite: deleting unfinished attempt: %w", err)
+	}
+	return nil
+}
+
+// DeleteAllUnfinished deletes every attempt that is not FINISHED, with its
+// submissions, in one transaction, and returns how many attempts it removed.
+func (r *AttemptRepository) DeleteAllUnfinished(ctx context.Context) (int, error) {
+	var removed int
+	err := withTx(ctx, r.db, func(q sqlExecer) error {
+		var err error
+		removed, err = deleteUnfinished(ctx, q, ``)
+		return err
+	})
+	if err != nil {
+		return 0, fmt.Errorf("sqlite: deleting unfinished attempts: %w", err)
+	}
+	return removed, nil
+}
+
+// deleteUnfinished deletes the children first, since nothing cascades from
+// challenge_attempts, then the attempts themselves. extra is a fixed SQL
+// fragment narrowing the selection; its values travel as bound args.
+func deleteUnfinished(ctx context.Context, q sqlExecer, extra string, args ...any) (int, error) {
+	selection := `state <> ?` + extra
+	selectionArgs := append([]any{finishedState}, args...)
+	if _, err := q.ExecContext(ctx,
+		`DELETE FROM submissions WHERE attempt_id IN (SELECT id FROM challenge_attempts WHERE `+selection+`)`,
+		selectionArgs...); err != nil {
+		return 0, err
+	}
+	result, err := q.ExecContext(ctx, `DELETE FROM challenge_attempts WHERE `+selection, selectionArgs...)
+	if err != nil {
+		return 0, err
+	}
+	removed, err := result.RowsAffected()
+	return int(removed), err
+}
