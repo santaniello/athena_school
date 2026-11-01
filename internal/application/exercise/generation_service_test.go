@@ -98,13 +98,12 @@ func TestGenerationService_GenerateChallenge_savesChallengeAndRubricInOneTransac
 	f.sessions.EXPECT().ReadSession(insideTx(), "session-1").Return(testSession, nil).Once()
 	f.expectChat(ctx, encode(t, validOutput()), nil)
 	f.runTx(ctx)
-	var stored domainexercise.Challenge
-	f.challenges.EXPECT().Create(insideTx(), mock.MatchedBy(func(c domainexercise.Challenge) bool { stored = c; return true })).Return(nil)
-	f.challenges.EXPECT().Get(insideTx(), "challenge-1").RunAndReturn(
-		func(context.Context, string) (domainexercise.Challenge, error) { return stored, nil })
+	stored := expectedGeneratedChallenge()
+	f.challenges.EXPECT().Create(insideTx(), stored).Return(nil)
+	f.challenges.EXPECT().Get(insideTx(), "challenge-1").Return(stored, nil)
 	f.rubrics.EXPECT().Latest(insideTx(), "challenge-1").Return(domainexercise.RubricVersion{}, domainexercise.ErrRubricNotFound)
-	var rubric domainexercise.RubricVersion
-	f.rubrics.EXPECT().Create(insideTx(), mock.MatchedBy(func(v domainexercise.RubricVersion) bool { rubric = v; return true })).Return(nil)
+	rubric := expectedGeneratedRubric(t)
+	f.rubrics.EXPECT().Create(insideTx(), rubric).Return(nil)
 
 	// When the challenge is generated
 	got, err := f.service.GenerateChallenge(ctx, "session-1", domainexercise.DifficultyIntermediate)
@@ -224,15 +223,63 @@ func TestGenerationService_GenerateChallenge_returnsTheErrorWhenTheRubricCannotB
 	f.sessions.EXPECT().ReadSession(insideTx(), "session-1").Return(testSession, nil).Once()
 	f.expectChat(ctx, encode(t, validOutput()), nil)
 	f.runTx(ctx)
-	f.challenges.EXPECT().Create(insideTx(), mock.MatchedBy(func(domainexercise.Challenge) bool { return true })).Return(nil)
-	f.challenges.EXPECT().Get(insideTx(), "challenge-1").Return(domainexercise.Challenge{ID: "challenge-1"}, nil)
+	stored := expectedGeneratedChallenge()
+	f.challenges.EXPECT().Create(insideTx(), stored).Return(nil)
+	f.challenges.EXPECT().Get(insideTx(), "challenge-1").Return(stored, nil)
 	f.rubrics.EXPECT().Latest(insideTx(), "challenge-1").Return(domainexercise.RubricVersion{}, domainexercise.ErrRubricNotFound)
 	saveFailure := errors.New("disk full")
-	f.rubrics.EXPECT().Create(insideTx(), mock.MatchedBy(func(domainexercise.RubricVersion) bool { return true })).Return(saveFailure)
+	f.rubrics.EXPECT().Create(insideTx(), expectedGeneratedRubric(t)).Return(saveFailure)
 
 	// When a challenge is generated
 	_, err := f.service.GenerateChallenge(ctx, "session-1", domainexercise.DifficultyIntermediate)
 
 	// Then the error is returned out of the transaction, which rolls the challenge back
 	require.ErrorIs(t, err, saveFailure)
+}
+
+// expectedGeneratedChallenge is the challenge validOutput produces for
+// session-1 at INTERMEDIATE difficulty, with the fixture's id and clock.
+func expectedGeneratedChallenge() domainexercise.Challenge {
+	return domainexercise.Challenge{
+		ID:                        "challenge-1",
+		Type:                      domainexercise.ChallengeTypeArchitecture,
+		Title:                     "Design a global cache",
+		Scenario:                  "A shop serves 50k requests per second worldwide.",
+		FunctionalRequirements:    []string{"Serve product pages"},
+		NonFunctionalRequirements: []string{"p99 under 100 ms"},
+		Constraints:               []string{"Three regions"},
+		Objectives:                []string{"Justify the eviction policy"},
+		Difficulty:                domainexercise.DifficultyIntermediate,
+		Topic:                     "distributed caching",
+		SourceSessionID:           "session-1",
+		Origin:                    domainexercise.OriginAIGenerated,
+		TimeLimitMinutes:          45,
+		CreatedAt:                 fixedNow,
+		UpdatedAt:                 fixedNow,
+	}
+}
+
+// expectedGeneratedRubric is the first rubric version validOutput produces:
+// the base criteria then the two generated ones, with the fixture's ids
+// (id-1 to id-7 for the criteria, id-8 for the version) and clock.
+func expectedGeneratedRubric(t *testing.T) domainexercise.RubricVersion {
+	t.Helper()
+	generated, err := parseGeneration(encode(t, validOutput()), "distributed caching", domainexercise.DifficultyIntermediate)
+	require.NoError(t, err)
+	criteria := make([]domainexercise.RubricCriterion, len(generated.Criteria))
+	for i, input := range generated.Criteria {
+		criteria[i] = domainexercise.RubricCriterion{
+			Key: input.Key, Name: input.Name, Description: input.Description,
+			Weight: input.Weight, Mandatory: input.Mandatory, Levels: input.Levels,
+		}
+	}
+	merged, err := domainexercise.MergeRubric(domainexercise.BaseRubric(), criteria)
+	require.NoError(t, err)
+	for i := range merged {
+		merged[i].ID = fmt.Sprintf("id-%d", i+1)
+	}
+	return domainexercise.RubricVersion{
+		ID: fmt.Sprintf("id-%d", len(merged)+1), ChallengeID: "challenge-1", Version: 1,
+		BaseVersion: domainexercise.BaseRubricVersion, Criteria: merged, CreatedAt: fixedNow,
+	}
 }
