@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/santaniello/athena/internal/domain/exercise"
@@ -64,6 +65,78 @@ func (r *ChallengeRepository) Get(ctx context.Context, id string) (exercise.Chal
 		return exercise.Challenge{}, fmt.Errorf("sqlite: getting challenge: %w", err)
 	}
 	return challenge, nil
+}
+
+// List returns one page of the challenges matching filter (all non-empty
+// fields combined with AND), newest update first, ties broken by id, plus the
+// total number of matches. Only fixed SQL fragments are concatenated; every
+// user-supplied value travels as a bound argument.
+func (r *ChallengeRepository) List(ctx context.Context, filter exercise.ChallengeFilter, page exercise.Page) (exercise.ChallengePage, error) {
+	page = page.Normalize()
+	where, args := challengeWhere(filter)
+
+	var total int
+	if err := execer(ctx, r.db).QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM challenges`+where, args...,
+	).Scan(&total); err != nil {
+		return exercise.ChallengePage{}, fmt.Errorf("sqlite: counting challenges: %w", err)
+	}
+
+	rows, err := execer(ctx, r.db).QueryContext(ctx,
+		`SELECT `+challengeColumns+` FROM challenges`+where+` ORDER BY updated_at DESC, id LIMIT ? OFFSET ?`,
+		append(args, page.Limit, page.Offset)...,
+	)
+	if err != nil {
+		return exercise.ChallengePage{}, fmt.Errorf("sqlite: listing challenges: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	items := []exercise.Challenge{}
+	for rows.Next() {
+		challenge, err := scanChallenge(rows)
+		if err != nil {
+			return exercise.ChallengePage{}, fmt.Errorf("sqlite: scanning challenge: %w", err)
+		}
+		items = append(items, challenge)
+	}
+	if err := rows.Err(); err != nil {
+		return exercise.ChallengePage{}, fmt.Errorf("sqlite: iterating challenges: %w", err)
+	}
+	return exercise.ChallengePage{Items: items, Total: total}, nil
+}
+
+// challengeWhere builds the WHERE clause (with its leading space, or empty)
+// and bound arguments for filter.
+func challengeWhere(filter exercise.ChallengeFilter) (string, []any) {
+	var conditions []string
+	var args []any
+	if query := strings.TrimSpace(filter.Query); query != "" {
+		pattern := "%" + escapeLike(strings.ToLower(query)) + "%"
+		conditions = append(conditions, `(LOWER(title) LIKE ? ESCAPE '\' OR LOWER(scenario) LIKE ? ESCAPE '\' OR LOWER(topic) LIKE ? ESCAPE '\')`)
+		args = append(args, pattern, pattern, pattern)
+	}
+	if topic := exercise.NormalizeTopic(filter.Topic); topic != "" {
+		conditions = append(conditions, `topic = ?`)
+		args = append(args, topic)
+	}
+	if filter.Difficulty != "" {
+		conditions = append(conditions, `difficulty = ?`)
+		args = append(args, string(filter.Difficulty))
+	}
+	if filter.Origin != "" {
+		conditions = append(conditions, `origin = ?`)
+		args = append(args, string(filter.Origin))
+	}
+	if len(conditions) == 0 {
+		return "", args
+	}
+	return " WHERE " + strings.Join(conditions, " AND "), args
+}
+
+// escapeLike makes %, _ and the escape character itself literal in a LIKE
+// pattern used with ESCAPE '\'.
+func escapeLike(value string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(value)
 }
 
 // encodeChallengeLists returns the functional, non-functional, constraints
