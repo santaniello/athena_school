@@ -24,6 +24,7 @@ type ModelSettings struct {
 	ConversationSummary string
 	QueryEnrichment     string
 	NoteFormatting      string
+	ArchitectureLab     string
 	Embedding           string
 }
 
