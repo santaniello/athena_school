@@ -382,3 +382,35 @@ func TestChallengeRepository_List_normalizesAnInvalidPage(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"c1"}, challengeIDs(page.Items))
 }
+
+func TestChallengeRepository_Get_keepsChallengeAndTopicWhenSourceSessionIsDeleted(t *testing.T) {
+	// Given a challenge created from a session
+	repo, db := newTestChallengeRepository(t)
+	ctx := context.Background()
+	require.NoError(t, repo.Create(ctx, newTestChallenge("challenge-1")))
+
+	// When the session is deleted through the session repository
+	require.NoError(t, NewSessionRepository(db).Delete(ctx, "session-1"))
+
+	// Then the challenge survives with no source session and the same topic and content
+	got, err := repo.Get(ctx, "challenge-1")
+	require.NoError(t, err)
+	expected := newTestChallenge("challenge-1")
+	expected.SourceSessionID = ""
+	assert.Equal(t, expected, got)
+}
+
+func TestChallengeRepository_List_keepsChallengeFilterableByTopicAfterSessionDeletion(t *testing.T) {
+	// Given a challenge whose source session is then deleted along with its folder
+	repo, db := newTestChallengeRepository(t)
+	ctx := context.Background()
+	require.NoError(t, repo.Create(ctx, newTestChallenge("challenge-1")))
+	require.NoError(t, NewSessionRepository(db).DeleteByFolder(ctx, "folder-a"))
+
+	// When filtering the catalog by the snapshot topic
+	page, err := repo.List(ctx, exercise.ChallengeFilter{Topic: "caching"}, exercise.Page{})
+
+	// Then the challenge is still listed
+	require.NoError(t, err)
+	assert.Equal(t, []string{"challenge-1"}, challengeIDs(page.Items))
+}
