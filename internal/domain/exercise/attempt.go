@@ -133,3 +133,13 @@ func validateSubmission(contentType, content string, reason SubmitReason) error 
 	}
 	return nil
 }
+
+// SessionExercise links one study session to one challenge. It is created when
+// the user accepts the tutor's proposal, never when it is proposed.
+type SessionExercise struct {
+	ID          string
+	SessionID   string
+	ChallengeID string
+	MessageID   string // the assistant message the chat card hangs under
+	CreatedAt   time.Time
+}
