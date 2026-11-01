@@ -176,3 +176,75 @@ func TestChallengeAttempt_Submit_acceptsContentExactlyAtTheLimit(t *testing.T) {
 	// Then the limit is inclusive
 	assert.NoError(t, err)
 }
+
+func attemptIn(state AttemptState) ChallengeAttempt {
+	return ChallengeAttempt{ID: "attempt-1", State: state}
+}
+
+func TestChallengeAttempt_StartEvaluation_movesSubmittedAndFailedAttemptsToEvaluating(t *testing.T) {
+	for _, from := range []AttemptState{AttemptSubmitted, AttemptEvaluationFailed} {
+		t.Run(string(from), func(t *testing.T) {
+			// Given an attempt that can be evaluated, with an old failure reason
+			attempt := attemptIn(from)
+			attempt.FailureReason = "timeout"
+
+			// When starting its evaluation
+			started, err := attempt.StartEvaluation()
+
+			// Then it is EVALUATING with no failure reason, and the receiver is untouched
+			require.NoError(t, err)
+			assert.Equal(t, AttemptEvaluating, started.State)
+			assert.Empty(t, started.FailureReason)
+			assert.Equal(t, from, attempt.State)
+		})
+	}
+}
+
+func TestChallengeAttempt_StartEvaluation_refusesEveryOtherState(t *testing.T) {
+	for _, from := range []AttemptState{AttemptInProgress, AttemptEvaluating, AttemptEvaluated, AttemptFinished} {
+		t.Run(string(from), func(t *testing.T) {
+			// Given an attempt that cannot be evaluated now
+			// When starting its evaluation
+			_, err := attemptIn(from).StartEvaluation()
+
+			// Then it is refused
+			assert.ErrorIs(t, err, ErrAttemptNotEvaluable)
+		})
+	}
+}
+
+func TestChallengeAttempt_CompleteEvaluation_movesEvaluatingToEvaluated(t *testing.T) {
+	// Given an attempt being evaluated
+	// When completing its evaluation
+	completed, err := attemptIn(AttemptEvaluating).CompleteEvaluation()
+
+	// Then it is EVALUATED
+	require.NoError(t, err)
+	assert.Equal(t, AttemptEvaluated, completed.State)
+}
+
+func TestChallengeAttempt_FailEvaluation_movesEvaluatingToFailedKeepingTheReason(t *testing.T) {
+	// Given an attempt being evaluated
+	// When its evaluation fails
+	failed, err := attemptIn(AttemptEvaluating).FailEvaluation("the model timed out")
+
+	// Then it is EVALUATION_FAILED with the reason
+	require.NoError(t, err)
+	assert.Equal(t, AttemptEvaluationFailed, failed.State)
+	assert.Equal(t, "the model timed out", failed.FailureReason)
+}
+
+func TestChallengeAttempt_CompleteAndFailEvaluation_refuseAnAttemptThatIsNotEvaluating(t *testing.T) {
+	for _, from := range []AttemptState{AttemptInProgress, AttemptSubmitted, AttemptEvaluated, AttemptEvaluationFailed, AttemptFinished} {
+		t.Run(string(from), func(t *testing.T) {
+			// Given an attempt that is not being evaluated
+			// When completing or failing its evaluation
+			_, completeErr := attemptIn(from).CompleteEvaluation()
+			_, failErr := attemptIn(from).FailEvaluation("x")
+
+			// Then both are refused
+			assert.ErrorIs(t, completeErr, ErrAttemptNotEvaluating)
+			assert.ErrorIs(t, failErr, ErrAttemptNotEvaluating)
+		})
+	}
+}
