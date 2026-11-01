@@ -24,13 +24,14 @@ export interface ModelFeature {
   label: string
 }
 
-// The four chat features, in the order the Settings screen shows them. The
+// The chat features, in the order the Settings screen shows them. The
 // embedding model is separate: it sits behind an "Advanced" warning.
 export const MODEL_FEATURES: ModelFeature[] = [
   { key: 'study', label: 'Study chat' },
   { key: 'conversationSummary', label: 'Conversation summary' },
   { key: 'queryEnrichment', label: 'Query enrichment' },
   { key: 'noteFormatting', label: 'Note formatting (import)' },
+  { key: 'architectureLab', label: 'Architecture Lab' },
 ]
 
 export async function getModelSettings(): Promise<ModelSettings> {

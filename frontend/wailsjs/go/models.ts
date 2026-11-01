@@ -280,6 +280,7 @@ export namespace desktop {
 	    conversationSummary: string;
 	    queryEnrichment: string;
 	    noteFormatting: string;
+	    architectureLab: string;
 	    embedding: string;
 	
 	    static createFrom(source: any = {}) {
@@ -292,6 +293,7 @@ export namespace desktop {
 	        this.conversationSummary = source["conversationSummary"];
 	        this.queryEnrichment = source["queryEnrichment"];
 	        this.noteFormatting = source["noteFormatting"];
+	        this.architectureLab = source["architectureLab"];
 	        this.embedding = source["embedding"];
 	    }
 	}
