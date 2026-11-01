@@ -61,6 +61,7 @@ func TestChallengeService_Create_snapshotsNormalizedTopicAndPersists(t *testing.
 		Topic:                     "distributed caching",
 		SourceSessionID:           "session-1",
 		Origin:                    domainexercise.OriginManual,
+		TimeLimitMinutes:          30,
 		CreatedAt:                 fixedNow,
 		UpdatedAt:                 fixedNow,
 	}
@@ -97,6 +98,7 @@ func TestChallengeService_Create_trimsTextFields(t *testing.T) {
 		Topic:                     "caching",
 		SourceSessionID:           "session-1",
 		Origin:                    domainexercise.OriginManual,
+		TimeLimitMinutes:          30,
 		CreatedAt:                 fixedNow,
 		UpdatedAt:                 fixedNow,
 	}).Return(nil)
@@ -188,7 +190,7 @@ func TestChallengeService_Create_returnsRepositoryFailure(t *testing.T) {
 		Title: "Design a URL shortener", Scenario: "A startup needs a service that shortens URLs.",
 		FunctionalRequirements: []string{"Create a short link"}, NonFunctionalRequirements: []string{}, Constraints: []string{},
 		Objectives: []string{"Justify the storage choice"}, Difficulty: domainexercise.DifficultyBeginner,
-		Topic: "caching", SourceSessionID: "session-1", Origin: domainexercise.OriginManual,
+		Topic: "caching", SourceSessionID: "session-1", Origin: domainexercise.OriginManual, TimeLimitMinutes: 30,
 		CreatedAt: fixedNow, UpdatedAt: fixedNow,
 	}).Return(boom)
 

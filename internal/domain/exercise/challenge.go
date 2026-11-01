@@ -20,6 +20,10 @@ const (
 	MaxScenarioLength = 5000
 	MaxListItemLength = 500
 	MaxListItems      = 30
+
+	// MinTimeLimitMinutes and MaxTimeLimitMinutes bound a challenge's exam time.
+	MinTimeLimitMinutes = 1
+	MaxTimeLimitMinutes = 180
 )
 
 var (
@@ -51,6 +55,8 @@ var (
 	ErrListItemTooLong = errors.New("challenge list item is too long")
 	// ErrTooManyListItems is returned when a list exceeds MaxListItems.
 	ErrTooManyListItems = errors.New("challenge list has too many items")
+	// ErrTimeLimitInvalid is returned when the time limit is outside MinTimeLimitMinutes..MaxTimeLimitMinutes.
+	ErrTimeLimitInvalid = errors.New("challenge time limit is out of range")
 )
 
 // ChallengeType identifies which lab a challenge belongs to.
@@ -93,6 +99,7 @@ type Challenge struct {
 	Topic                     string // snapshot of the source session's topic
 	SourceSessionID           string // "" once the session is deleted
 	Origin                    ChallengeOrigin
+	TimeLimitMinutes          int // exam length; copied into an attempt's Deadline
 	CreatedAt                 time.Time
 	UpdatedAt                 time.Time
 }
@@ -118,6 +125,9 @@ func (c Challenge) Validate() error {
 	}
 	if err := c.validateEnums(); err != nil {
 		return err
+	}
+	if c.TimeLimitMinutes < MinTimeLimitMinutes || c.TimeLimitMinutes > MaxTimeLimitMinutes {
+		return ErrTimeLimitInvalid
 	}
 	if len(c.FunctionalRequirements) == 0 {
 		return ErrFunctionalRequirementsRequired
@@ -148,6 +158,20 @@ func (c Challenge) validateEnums() error {
 		return ErrOriginInvalid
 	}
 	return nil
+}
+
+// DefaultTimeLimit returns the exam length in minutes a challenge of the given
+// difficulty starts with, or 0 for an unknown difficulty.
+func DefaultTimeLimit(d Difficulty) int {
+	switch d {
+	case DifficultyBeginner:
+		return 30
+	case DifficultyIntermediate:
+		return 45
+	case DifficultyAdvanced:
+		return 60
+	}
+	return 0
 }
 
 func validateText(value string, errRequired error, maxLength int, errTooLong error) error {
