@@ -91,18 +91,13 @@ func TestBuildGenerationPrompt_putsTheContextInOrder(t *testing.T) {
 	user := buildGenerationPrompt(fullGenerationContext(), domainexercise.DifficultyAdvanced)[1].Content
 
 	// Then topic, goal, summary, profile and notes appear in that order
-	positions := []int{
-		strings.Index(user, "Distributed Caching"),
-		strings.Index(user, "Ace the interview"),
-		strings.Index(user, "We covered eviction."),
-		strings.Index(user, "backend"),
-		strings.Index(user, "LRU evicts the oldest."),
-	}
-	for i, position := range positions {
-		require.GreaterOrEqual(t, position, 0, "piece %d missing", i)
-		if i > 0 {
-			assert.Greater(t, position, positions[i-1], "piece %d out of order", i)
-		}
+	pieces := []string{"Distributed Caching", "Ace the interview", "We covered eviction.", "backend", "LRU evicts the oldest."}
+	previous := -1
+	for _, piece := range pieces {
+		position := strings.Index(user, piece)
+		require.GreaterOrEqual(t, position, 0, "%q missing", piece)
+		assert.Greater(t, position, previous, "%q out of order", piece)
+		previous = position
 	}
 	assert.Contains(t, user, "advanced")
 	assert.Contains(t, user, "cache.md")
