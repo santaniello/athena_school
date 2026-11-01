@@ -190,7 +190,7 @@ func nullableTime(t time.Time) any {
 
 // finishedState is the attempt state spec 3.12 adds; DeleteUnfinished and
 // DeleteAllUnfinished never touch it.
-const finishedState = "FINISHED"
+const finishedState = string(exercise.AttemptFinished)
 
 // DeleteUnfinished deletes the attempt and its submission in one transaction
 // unless it is FINISHED. An unknown id is a no-op.

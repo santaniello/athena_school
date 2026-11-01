@@ -564,3 +564,97 @@ func TestAttemptService_SubmitAttempt_storageAndReadFailuresAreReturned(t *testi
 		})
 	}
 }
+
+func TestAttemptService_DiscardAttempt_deletesAnUnfinishedAttemptInAnyState(t *testing.T) {
+	for _, state := range []domainexercise.AttemptState{domainexercise.AttemptInProgress, domainexercise.AttemptSubmitted} {
+		t.Run(string(state), func(t *testing.T) {
+			// Given an unfinished attempt
+			f := newAttemptFixture(t)
+			ctx := context.Background()
+			attempt := storedAttempt()
+			attempt.State = state
+			f.attempts.EXPECT().Get(ctx, "attempt-1").Return(attempt, nil)
+			f.attempts.EXPECT().DeleteUnfinished(ctx, "attempt-1").Return(nil)
+
+			// When discarding it
+			err := f.service.DiscardAttempt(ctx, "attempt-1")
+
+			// Then it is deleted
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestAttemptService_DiscardAttempt_refusesAFinishedAttempt(t *testing.T) {
+	// Given a finished attempt
+	f := newAttemptFixture(t)
+	ctx := context.Background()
+	attempt := storedAttempt()
+	attempt.State = domainexercise.AttemptFinished
+	f.attempts.EXPECT().Get(ctx, "attempt-1").Return(attempt, nil)
+
+	// When discarding it
+	err := f.service.DiscardAttempt(ctx, "attempt-1")
+
+	// Then it is refused and nothing is deleted
+	assert.ErrorIs(t, err, ErrAttemptFinished)
+}
+
+func TestAttemptService_DiscardAttempt_failuresAreReturned(t *testing.T) {
+	boom := errors.New("disk failure")
+	tests := []struct {
+		name  string
+		setup func(f *attemptFixture, ctx context.Context)
+		want  error
+	}{
+		{"unknown attempt", func(f *attemptFixture, ctx context.Context) {
+			f.attempts.EXPECT().Get(ctx, "attempt-1").Return(domainexercise.ChallengeAttempt{}, domainexercise.ErrAttemptNotFound)
+		}, domainexercise.ErrAttemptNotFound},
+		{"delete fails", func(f *attemptFixture, ctx context.Context) {
+			f.attempts.EXPECT().Get(ctx, "attempt-1").Return(storedAttempt(), nil)
+			f.attempts.EXPECT().DeleteUnfinished(ctx, "attempt-1").Return(boom)
+		}, boom},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given a failing dependency
+			f := newAttemptFixture(t)
+			ctx := context.Background()
+			tt.setup(f, ctx)
+
+			// When discarding
+			err := f.service.DiscardAttempt(ctx, "attempt-1")
+
+			// Then the failure is returned
+			assert.ErrorIs(t, err, tt.want)
+		})
+	}
+}
+
+func TestAttemptService_DiscardStaleAttempts_returnsHowManyWereRemoved(t *testing.T) {
+	// Given three unfinished attempts left behind
+	f := newAttemptFixture(t)
+	ctx := context.Background()
+	f.attempts.EXPECT().DeleteAllUnfinished(ctx).Return(3, nil)
+
+	// When cleaning up
+	removed, err := f.service.DiscardStaleAttempts(ctx)
+
+	// Then the count is reported
+	require.NoError(t, err)
+	assert.Equal(t, 3, removed)
+}
+
+func TestAttemptService_DiscardStaleAttempts_returnsTheFailure(t *testing.T) {
+	// Given a failing cleanup
+	f := newAttemptFixture(t)
+	ctx := context.Background()
+	boom := errors.New("disk failure")
+	f.attempts.EXPECT().DeleteAllUnfinished(ctx).Return(0, boom)
+
+	// When cleaning up
+	_, err := f.service.DiscardStaleAttempts(ctx)
+
+	// Then the caller gets the error to log
+	assert.ErrorIs(t, err, boom)
+}

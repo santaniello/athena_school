@@ -148,6 +148,33 @@ func (s *AttemptService) currentConflict(ctx context.Context) error {
 	return &AttemptInProgressError{AttemptID: winner.ID}
 }
 
+// DiscardAttempt deletes an unfinished attempt, in any state, when the user
+// leaves the lab. A FINISHED attempt is refused with ErrAttemptFinished.
+func (s *AttemptService) DiscardAttempt(ctx context.Context, attemptID string) error {
+	attempt, err := s.attempts.Get(ctx, attemptID)
+	if err != nil {
+		return fmt.Errorf("exercise: getting attempt: %w", err)
+	}
+	if attempt.State == domainexercise.AttemptFinished {
+		return ErrAttemptFinished
+	}
+	if err := s.attempts.DeleteUnfinished(ctx, attemptID); err != nil {
+		return fmt.Errorf("exercise: discarding attempt: %w", err)
+	}
+	return nil
+}
+
+// DiscardStaleAttempts deletes every unfinished attempt, the ones a crash or
+// a close left behind, and returns how many it removed. The caller runs it
+// once at startup and logs a failure instead of stopping the app.
+func (s *AttemptService) DiscardStaleAttempts(ctx context.Context) (int, error) {
+	removed, err := s.attempts.DeleteAllUnfinished(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("exercise: discarding stale attempts: %w", err)
+	}
+	return removed, nil
+}
+
 // submitGracePeriod is how long after the deadline a submission is still
 // accepted, as TIME_EXPIRED, to absorb the UI's countdown and call latency.
 const submitGracePeriod = 15 * time.Second
