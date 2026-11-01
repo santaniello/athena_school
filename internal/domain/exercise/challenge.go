@@ -97,6 +97,14 @@ type Challenge struct {
 	UpdatedAt                 time.Time
 }
 
+// SourceSession is what a challenge needs from the study session it comes
+// from: the topic copied into the challenge, and the session's goal, which
+// challenge generation reads.
+type SourceSession struct {
+	Topic string
+	Goal  string
+}
+
 // Validate reports the first rule the challenge breaks, each with its own error.
 func (c Challenge) Validate() error {
 	if err := validateText(c.Title, ErrChallengeTitleRequired, MaxTitleLength, ErrChallengeTitleTooLong); err != nil {
