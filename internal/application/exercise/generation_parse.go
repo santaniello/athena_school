@@ -41,7 +41,7 @@ type generationCriterion struct {
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
 	Weight      int      `json:"weight"`
-	Mandatory   bool     `json:"mandatory"`
+	Mandatory   *bool    `json:"mandatory"` // nil when absent or null
 	Levels      []string `json:"levels"`
 }
 
@@ -94,6 +94,9 @@ func toCriterionInputs(criteria []generationCriterion) ([]ChallengeCriterionInpu
 	inputs := make([]ChallengeCriterionInput, len(criteria))
 	used := make(map[string]struct{}, len(criteria))
 	for i, criterion := range criteria {
+		if criterion.Mandatory == nil {
+			return nil, fmt.Errorf("%w: criterion %d has no mandatory flag", ErrInvalidGeneration, i+1)
+		}
 		if len(criterion.Levels) != domainexercise.LevelCount {
 			return nil, fmt.Errorf("%w: criterion %d has %d levels, want %d", ErrInvalidGeneration, i+1, len(criterion.Levels), domainexercise.LevelCount)
 		}
@@ -102,7 +105,7 @@ func toCriterionInputs(criteria []generationCriterion) ([]ChallengeCriterionInpu
 			Name:        strings.TrimSpace(criterion.Name),
 			Description: strings.TrimSpace(criterion.Description),
 			Weight:      criterion.Weight,
-			Mandatory:   criterion.Mandatory,
+			Mandatory:   *criterion.Mandatory,
 		}
 		for level, descriptor := range criterion.Levels {
 			inputs[i].Levels[level] = strings.TrimSpace(descriptor)

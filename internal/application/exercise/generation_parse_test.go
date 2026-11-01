@@ -175,6 +175,16 @@ func TestParseGeneration_rejectsInvalidOutput(t *testing.T) {
 		}},
 		{name: "zero weight", mutate: func(o map[string]any) { o["criteria"] = []any{criterionJSON("Hot keys", 0)} }},
 		{name: "a weight that is not a whole number", raw: strings.Replace(encode(t, validOutput()), `"weight":10`, `"weight":10.5`, 1)},
+		{name: "missing mandatory flag", mutate: func(o map[string]any) {
+			c := criterionJSON("Hot keys", 5)
+			delete(c, "mandatory")
+			o["criteria"] = []any{c}
+		}},
+		{name: "null mandatory flag", mutate: func(o map[string]any) {
+			c := criterionJSON("Hot keys", 5)
+			c["mandatory"] = nil
+			o["criteria"] = []any{c}
+		}},
 		{name: "blank criterion name", mutate: func(o map[string]any) { o["criteria"] = []any{criterionJSON(" ", 5)} }},
 	}
 	for _, tt := range tests {
