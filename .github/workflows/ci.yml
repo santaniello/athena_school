@@ -77,6 +77,16 @@ jobs:
             exit 1
           fi
 
+      # ADR-005 decision 3: the exercise lifecycle must stay independent of
+      # the Architecture Lab, so the dependency only points the other way.
+      - name: Check exercise does not import architecture
+        run: |
+          MODULE="$(go list -m)"
+          if go list -deps ./internal/domain/exercise/... ./internal/application/exercise/... | grep -E "^${MODULE}/internal/(domain|application|infrastructure)/architecture"; then
+            echo "::error::exercise must not import architecture (ADR-005)."
+            exit 1
+          fi
+
       # install-mode is left at the action's default (binary): the v2.12.2
       # release binary is built with go1.26.2, so it no longer trips the
       # "built with an older Go than go.mod targets" refusal that forced
