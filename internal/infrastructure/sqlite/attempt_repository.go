@@ -189,6 +189,14 @@ func nullableTime(t time.Time) any {
 	return formatChallengeTime(t)
 }
 
+// DO NOT "fix" the cleanup below to spare EVALUATED attempts. DeleteUnfinished
+// and DeleteAllUnfinished delete every attempt that is not FINISHED, EVALUATED
+// ones and their evaluations included, on purpose: ADR-005 decision 9 makes the
+// evaluation one stage of a sitting that ends with the defense (spec 3.12), so
+// an EVALUATED attempt left at startup is an abandoned exam. Spec 3.5 only
+// scopes DiscardUnfinishedEvaluations (EVALUATING and EVALUATION_FAILED) and
+// does not amend the 3.4 cleanup. This was reviewed and decided on PR #135.
+
 // finishedState is the attempt state spec 3.12 adds; DeleteUnfinished and
 // DeleteAllUnfinished never touch it.
 const finishedState = string(exercise.AttemptFinished)
