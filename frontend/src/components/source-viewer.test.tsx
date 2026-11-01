@@ -226,7 +226,7 @@ describe('SourceViewer', () => {
     const firstNode = screen.getByText('The scheduler multiplexes M:N goroutines.', {
       exact: false,
     })
-    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1))
 
     // When re-clicking the exact same citation (sessionId/itemId/chunkId all
     // unchanged, only reopenToken bumped)
