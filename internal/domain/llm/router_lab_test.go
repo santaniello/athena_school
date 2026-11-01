@@ -7,6 +7,13 @@ import (
 )
 
 func TestTierFor_architectureLabIsMedium(t *testing.T) {
-	assert.Equal(t, TierMedium, TierFor(TaskArchitectureLab))
-	assert.Equal(t, "architecture_lab", string(TaskArchitectureLab))
+	// Given the Architecture Lab task
+	task := TaskArchitectureLab
+
+	// When its tier is looked up
+	tier := TierFor(task)
+
+	// Then it is medium and the task keeps its stable name
+	assert.Equal(t, TierMedium, tier)
+	assert.Equal(t, "architecture_lab", string(task))
 }
