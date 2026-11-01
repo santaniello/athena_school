@@ -143,7 +143,7 @@ func TestApp_StartAttempt_startsAStandaloneAttemptAndReturnsIt(t *testing.T) {
 	}, nil)
 	f.rubrics.EXPECT().Latest(ctx, "challenge-1").Return(domainexercise.RubricVersion{ID: "rubric-1", ChallengeID: "challenge-1"}, nil)
 	f.attempts.EXPECT().FindInProgress(ctx).Return(domainexercise.ChallengeAttempt{}, domainexercise.ErrAttemptNotFound)
-	f.tx.EXPECT().WithinTx(ctx, mock.Anything).
+	f.tx.EXPECT().WithinTx(ctx, mock.MatchedBy(func(func(context.Context) error) bool { return true })).
 		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
 	f.attempts.EXPECT().Create(ctx, mock.MatchedBy(func(attempt domainexercise.ChallengeAttempt) bool {
 		return attempt.ChallengeID == "challenge-1" && attempt.SessionExerciseID == "" &&
@@ -301,6 +301,25 @@ func TestApp_bindings_failuresFromEveryUseCaseAreCoded(t *testing.T) {
 			assert.ErrorAs(t, err, &coded)
 		})
 	}
+}
+
+func TestApp_SubmitAttempt_lateSubmissionWhoseDiscardFailedIsNotReportedAsDiscarded(t *testing.T) {
+	// Given a late submission whose attempt cannot be deleted
+	f := newExerciseFixture(t)
+	ctx := context.Background()
+	late := storedBindingAttempt()
+	f.attempts.EXPECT().Get(ctx, "attempt-1").Return(late, nil)
+	f.attempts.EXPECT().DeleteUnfinished(ctx, "attempt-1").Return(errors.New("disk failure"))
+	f.app.exercise = applicationexercise.NewAttemptService(
+		f.challenges, f.rubrics, f.attempts, f.submissions, domainmocks.NewMockSessionExerciseRepository(t),
+		f.sessions, f.tx, bindingClock{now: late.Deadline.Add(time.Hour)},
+	)
+
+	// When the frontend submits
+	_, err := f.app.SubmitAttempt("attempt-1", "application/drawio", "<mxfile/>")
+
+	// Then it gets a retryable internal error, not submission_too_late
+	assert.Equal(t, exerciseCodeInternal, codeOf(t, err).Code)
 }
 
 func TestApp_Startup_discardsStaleAttemptsOnce(t *testing.T) {

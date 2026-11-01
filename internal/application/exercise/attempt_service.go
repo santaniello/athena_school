@@ -213,10 +213,11 @@ func (s *AttemptService) SubmitAttempt(ctx context.Context, attemptID, contentTy
 }
 
 // discardLate deletes an attempt whose submission came too late and returns
-// ErrSubmissionTooLate, joined with the failure if the delete did not work.
+// ErrSubmissionTooLate. If the delete fails, only that failure is returned:
+// the attempt may still be stored, so claiming it was discarded would be false.
 func (s *AttemptService) discardLate(ctx context.Context, attemptID string) error {
 	if err := s.attempts.DeleteUnfinished(ctx, attemptID); err != nil {
-		return errors.Join(ErrSubmissionTooLate, fmt.Errorf("exercise: discarding late attempt: %w", err))
+		return fmt.Errorf("exercise: discarding late attempt: %w", err)
 	}
 	return ErrSubmissionTooLate
 }

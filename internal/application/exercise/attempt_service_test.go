@@ -54,8 +54,8 @@ func newAttemptFixture(t *testing.T) *attemptFixture {
 
 // runTx makes the mocked Transactor run its function, so the repository calls
 // made inside it are observed.
-func (f *attemptFixture) runTx() {
-	f.tx.EXPECT().WithinTx(mock.Anything, mock.Anything).
+func (f *attemptFixture) runTx(ctx context.Context) {
+	f.tx.EXPECT().WithinTx(ctx, mock.MatchedBy(func(func(context.Context) error) bool { return true })).
 		RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) })
 }
 
@@ -83,7 +83,7 @@ func TestAttemptService_StartAttempt_standaloneFreezesLatestRubricAndSetsDeadlin
 		State: domainexercise.AttemptInProgress, StartedAt: fixedNow, Deadline: fixedNow.Add(45 * time.Minute),
 	}
 	f.attempts.EXPECT().FindInProgress(ctx).Return(domainexercise.ChallengeAttempt{}, domainexercise.ErrAttemptNotFound)
-	f.runTx()
+	f.runTx(ctx)
 	f.attempts.EXPECT().Create(ctx, expected).Return(nil)
 
 	// When starting a standalone attempt
@@ -183,7 +183,7 @@ func TestAttemptService_StartAttempt_discardInProgressReplacesTheRunningAttemptI
 	ctx := context.Background()
 	f.expectStartable(ctx)
 	f.attempts.EXPECT().FindInProgress(ctx).Return(runningAttempt(), nil)
-	f.runTx()
+	f.runTx(ctx)
 	f.attempts.EXPECT().DeleteUnfinished(ctx, "running-1").Return(nil)
 	f.attempts.EXPECT().Create(ctx, domainexercise.ChallengeAttempt{
 		ID: "attempt-1", ChallengeID: "challenge-1", RubricVersionID: "rubric-2",
@@ -204,7 +204,7 @@ func TestAttemptService_StartAttempt_discardInProgressWithNothingRunningDeletesN
 	ctx := context.Background()
 	f.expectStartable(ctx)
 	f.attempts.EXPECT().FindInProgress(ctx).Return(domainexercise.ChallengeAttempt{}, domainexercise.ErrAttemptNotFound)
-	f.runTx()
+	f.runTx(ctx)
 	f.attempts.EXPECT().Create(ctx, startedAttempt()).Return(nil)
 
 	// When starting with DiscardInProgress
@@ -221,7 +221,7 @@ func TestAttemptService_StartAttempt_failedCreateAfterDiscardReturnsTheErrorFrom
 	boom := errors.New("disk failure")
 	f.expectStartable(ctx)
 	f.attempts.EXPECT().FindInProgress(ctx).Return(runningAttempt(), nil)
-	f.runTx()
+	f.runTx(ctx)
 	f.attempts.EXPECT().DeleteUnfinished(ctx, "running-1").Return(nil)
 	f.attempts.EXPECT().Create(ctx, startedAttempt()).Return(boom)
 
@@ -239,7 +239,7 @@ func TestAttemptService_StartAttempt_failedDeleteStopsBeforeCreating(t *testing.
 	boom := errors.New("disk failure")
 	f.expectStartable(ctx)
 	f.attempts.EXPECT().FindInProgress(ctx).Return(runningAttempt(), nil)
-	f.runTx()
+	f.runTx(ctx)
 	f.attempts.EXPECT().DeleteUnfinished(ctx, "running-1").Return(boom)
 
 	// When starting with DiscardInProgress
@@ -271,7 +271,7 @@ func TestAttemptService_StartAttempt_concurrentStartLosingTheRaceIsReportedAsInP
 	ctx := context.Background()
 	f.expectStartable(ctx)
 	f.attempts.EXPECT().FindInProgress(ctx).Return(domainexercise.ChallengeAttempt{}, domainexercise.ErrAttemptNotFound).Once()
-	f.runTx()
+	f.runTx(ctx)
 	f.attempts.EXPECT().Create(ctx, startedAttempt()).Return(domainexercise.ErrAnotherAttemptInProgress)
 	f.attempts.EXPECT().FindInProgress(ctx).Return(runningAttempt(), nil).Once()
 
@@ -290,7 +290,7 @@ func TestAttemptService_StartAttempt_conflictWhoseWinnerVanishedStillReportsInPr
 	ctx := context.Background()
 	f.expectStartable(ctx)
 	f.attempts.EXPECT().FindInProgress(ctx).Return(domainexercise.ChallengeAttempt{}, domainexercise.ErrAttemptNotFound).Twice()
-	f.runTx()
+	f.runTx(ctx)
 	f.attempts.EXPECT().Create(ctx, startedAttempt()).Return(domainexercise.ErrAnotherAttemptInProgress)
 
 	// When starting
@@ -311,7 +311,7 @@ func TestAttemptService_StartAttempt_sessionStartCarriesTheAcceptedLinkAndCreate
 	f.links.EXPECT().GetBySessionAndChallenge(ctx, "session-1", "challenge-1").
 		Return(domainexercise.SessionExercise{ID: "link-1", SessionID: "session-1", ChallengeID: "challenge-1"}, nil)
 	f.attempts.EXPECT().FindInProgress(ctx).Return(domainexercise.ChallengeAttempt{}, domainexercise.ErrAttemptNotFound)
-	f.runTx()
+	f.runTx(ctx)
 	linked := startedAttempt()
 	linked.SessionExerciseID = "link-1"
 	f.attempts.EXPECT().Create(ctx, linked).Return(nil)
@@ -466,7 +466,7 @@ func TestAttemptService_SubmitAttempt_tooLateDiscardsTheAttempt(t *testing.T) {
 	assert.ErrorIs(t, err, ErrSubmissionTooLate)
 }
 
-func TestAttemptService_SubmitAttempt_tooLateReportsAFailedDiscardToo(t *testing.T) {
+func TestAttemptService_SubmitAttempt_tooLateWithAFailedDiscardReturnsOnlyTheFailure(t *testing.T) {
 	// Given a late submission whose attempt cannot be deleted
 	f := newAttemptFixture(t)
 	ctx := context.Background()
@@ -478,9 +478,9 @@ func TestAttemptService_SubmitAttempt_tooLateReportsAFailedDiscardToo(t *testing
 	// When submitting
 	_, err := f.service.SubmitAttempt(ctx, "attempt-1", "application/drawio", "<mxfile/>")
 
-	// Then both the lateness and the failure are visible
-	require.ErrorIs(t, err, ErrSubmissionTooLate)
-	assert.ErrorIs(t, err, boom)
+	// Then only the failure is returned, since the attempt may still be stored
+	require.ErrorIs(t, err, boom)
+	assert.NotErrorIs(t, err, ErrSubmissionTooLate)
 }
 
 func TestAttemptService_SubmitAttempt_secondSubmitIsRefusedEvenAfterTheDeadline(t *testing.T) {
