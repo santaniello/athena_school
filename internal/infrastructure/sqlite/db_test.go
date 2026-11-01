@@ -863,3 +863,42 @@ func TestOpen_addsTheMessagesIndexToALegacyDatabaseWithoutTouchingItsMessages(t 
 	require.NoError(t, db.QueryRow(`SELECT content FROM messages WHERE id = 'message-1'`).Scan(&content))
 	assert.Equal(t, "kept", content)
 }
+
+func TestOpen_addsTimeLimitToExistingChallengesWithTheMediumDefault(t *testing.T) {
+	// Given a database from before spec 3.3: a challenge stored without time_limit_minutes
+	path := filepath.Join(t.TempDir(), "athena.db")
+	first, err := Open(path)
+	require.NoError(t, err)
+	_, err = first.Exec(`ALTER TABLE challenges DROP COLUMN time_limit_minutes`)
+	require.NoError(t, err)
+	_, err = first.Exec(`INSERT INTO challenges (id, type, title, scenario, functional_requirements,
+		non_functional_requirements, constraints, objectives, difficulty, topic, origin, created_at, updated_at)
+		VALUES ('legacy', 'ARCHITECTURE', 't', 's', '[]', '[]', '[]', '[]', 'BEGINNER', 'x', 'MANUAL', 'now', 'now')`)
+	require.NoError(t, err)
+	require.NoError(t, first.Close())
+
+	// When opening it again
+	second, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = second.Close() }()
+
+	// Then the existing challenge gets 45 minutes
+	var minutes int
+	require.NoError(t, second.QueryRow(`SELECT time_limit_minutes FROM challenges WHERE id = 'legacy'`).Scan(&minutes))
+	assert.Equal(t, 45, minutes)
+}
+
+func TestOpen_isIdempotentOnSecondOpen_forAttemptTables(t *testing.T) {
+	// Given a database that was already opened once
+	path := filepath.Join(t.TempDir(), "athena.db")
+	first, err := Open(path)
+	require.NoError(t, err)
+	require.NoError(t, first.Close())
+
+	// When opening it again
+	second, err := Open(path)
+
+	// Then the repeated column and table migrations succeed
+	require.NoError(t, err)
+	defer func() { _ = second.Close() }()
+}
