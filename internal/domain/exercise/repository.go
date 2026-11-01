@@ -87,6 +87,9 @@ type RubricRepository interface {
 var (
 	// ErrAttemptNotFound is returned when no attempt matches, or none is in progress.
 	ErrAttemptNotFound = errors.New("attempt not found")
+	// ErrAnotherAttemptInProgress is returned by AttemptRepository.Create when
+	// another attempt is already IN_PROGRESS.
+	ErrAnotherAttemptInProgress = errors.New("another attempt is already in progress")
 	// ErrInvalidSubmitTransition is returned by AttemptRepository.Submit when the
 	// attempt is not in the SUBMITTED state or the submission names another attempt.
 	ErrInvalidSubmitTransition = errors.New("attempt and submission do not describe a submit")
@@ -101,6 +104,8 @@ var (
 // AttemptRepository persists ChallengeAttempts. Only one attempt can be
 // IN_PROGRESS at a time; the store enforces it.
 type AttemptRepository interface {
+	// Create returns ErrAnotherAttemptInProgress if the attempt is IN_PROGRESS
+	// and another one already is.
 	Create(ctx context.Context, attempt ChallengeAttempt) error
 	// Get returns the attempt, or ErrAttemptNotFound.
 	Get(ctx context.Context, id string) (ChallengeAttempt, error)
