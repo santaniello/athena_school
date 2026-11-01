@@ -377,3 +377,39 @@ func TestAttemptRepository_DeleteAllUnfinished_returnsZeroWhenThereIsNothingToRe
 	require.NoError(t, err)
 	assert.Equal(t, 0, removed)
 }
+
+func TestAttemptRepository_Submit_refusesAnAttemptThatIsNotSubmitted(t *testing.T) {
+	// Given an in-progress attempt and a valid submission, but the attempt passed is still IN_PROGRESS
+	repo, db := newTestAttemptRepository(t)
+	ctx := context.Background()
+	require.NoError(t, repo.Create(ctx, newTestAttempt("attempt-1")))
+	_, submission := submitForTest(t, newTestAttempt("attempt-1"), "submission-1")
+
+	// When submitting it
+	err := repo.Submit(ctx, newTestAttempt("attempt-1"), submission)
+
+	// Then it is refused and nothing is stored, so the attempt can still be submitted properly
+	assert.ErrorIs(t, err, exercise.ErrInvalidSubmitTransition)
+	assert.Equal(t, 0, countTableRows(t, db, "submissions"))
+	submitted, validSubmission := submitForTest(t, newTestAttempt("attempt-1"), "submission-2")
+	assert.NoError(t, repo.Submit(ctx, submitted, validSubmission))
+}
+
+func TestAttemptRepository_Submit_refusesASubmissionOfAnotherAttempt(t *testing.T) {
+	// Given a submitted attempt value paired with a submission that names a different attempt
+	repo, db := newTestAttemptRepository(t)
+	ctx := context.Background()
+	require.NoError(t, repo.Create(ctx, newTestAttempt("attempt-1")))
+	submitted, submission := submitForTest(t, newTestAttempt("attempt-1"), "submission-1")
+	submission.AttemptID = "attempt-2"
+
+	// When submitting them
+	err := repo.Submit(ctx, submitted, submission)
+
+	// Then it is refused, the attempt stays IN_PROGRESS and nothing is stored
+	assert.ErrorIs(t, err, exercise.ErrInvalidSubmitTransition)
+	got, getErr := repo.Get(ctx, "attempt-1")
+	require.NoError(t, getErr)
+	assert.Equal(t, exercise.AttemptInProgress, got.State)
+	assert.Equal(t, 0, countTableRows(t, db, "submissions"))
+}

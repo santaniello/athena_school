@@ -86,10 +86,15 @@ func (r *AttemptRepository) ListByChallenge(ctx context.Context, challengeID str
 }
 
 // Submit moves the attempt to its submitted state and stores the submission in
-// one transaction. The update only matches a row still IN_PROGRESS, so a
+// one transaction. The attempt must already be SUBMITTED and the submission
+// must belong to it, else exercise.ErrInvalidSubmitTransition, so a submission
+// can never be stored while the attempt stays in progress. The update only matches a row still IN_PROGRESS, so a
 // repeated or concurrent submit returns exercise.ErrAttemptNotInProgress and
 // stores nothing.
 func (r *AttemptRepository) Submit(ctx context.Context, attempt exercise.ChallengeAttempt, submission exercise.Submission) error {
+	if attempt.State != exercise.AttemptSubmitted || submission.AttemptID != attempt.ID {
+		return exercise.ErrInvalidSubmitTransition
+	}
 	err := withTx(ctx, r.db, func(q sqlExecer) error {
 		result, err := q.ExecContext(ctx,
 			`UPDATE challenge_attempts SET state = ?, submitted_at = ?, submit_reason = ? WHERE id = ? AND state = ?`,

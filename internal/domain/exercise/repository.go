@@ -87,6 +87,9 @@ type RubricRepository interface {
 var (
 	// ErrAttemptNotFound is returned when no attempt matches, or none is in progress.
 	ErrAttemptNotFound = errors.New("attempt not found")
+	// ErrInvalidSubmitTransition is returned by AttemptRepository.Submit when the
+	// attempt is not in the SUBMITTED state or the submission names another attempt.
+	ErrInvalidSubmitTransition = errors.New("attempt and submission do not describe a submit")
 	// ErrSubmissionNotFound is returned when an attempt has no submission.
 	ErrSubmissionNotFound = errors.New("submission not found")
 	// ErrSessionExerciseExists is returned when a session is already linked to the challenge.
@@ -102,7 +105,9 @@ type AttemptRepository interface {
 	// Get returns the attempt, or ErrAttemptNotFound.
 	Get(ctx context.Context, id string) (ChallengeAttempt, error)
 	// Submit stores the submission and the attempt's SUBMITTED state in one
-	// transaction. It fails if the stored attempt is not IN_PROGRESS.
+	// transaction. The attempt must already be SUBMITTED and the submission must
+	// belong to it, else ErrInvalidSubmitTransition. It fails if the stored
+	// attempt is not IN_PROGRESS.
 	Submit(ctx context.Context, attempt ChallengeAttempt, submission Submission) error
 	// ListByChallenge returns the challenge's attempts, oldest first.
 	ListByChallenge(ctx context.Context, challengeID string) ([]ChallengeAttempt, error)
