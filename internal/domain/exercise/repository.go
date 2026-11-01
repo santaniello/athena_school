@@ -83,3 +83,56 @@ type RubricRepository interface {
 	// first. A challenge without a rubric yields an empty list.
 	ListVersions(ctx context.Context, challengeID string) ([]RubricVersion, error)
 }
+
+var (
+	// ErrAttemptNotFound is returned when no attempt matches, or none is in progress.
+	ErrAttemptNotFound = errors.New("attempt not found")
+	// ErrInvalidSubmitTransition is returned by AttemptRepository.Submit when the
+	// attempt is not in the SUBMITTED state or the submission names another attempt.
+	ErrInvalidSubmitTransition = errors.New("attempt and submission do not describe a submit")
+	// ErrSubmissionNotFound is returned when an attempt has no submission.
+	ErrSubmissionNotFound = errors.New("submission not found")
+	// ErrSessionExerciseExists is returned when a session is already linked to the challenge.
+	ErrSessionExerciseExists = errors.New("session is already linked to this challenge")
+	// ErrSessionExerciseNotFound is returned when a session is not linked to the challenge.
+	ErrSessionExerciseNotFound = errors.New("session exercise not found")
+)
+
+// AttemptRepository persists ChallengeAttempts. Only one attempt can be
+// IN_PROGRESS at a time; the store enforces it.
+type AttemptRepository interface {
+	Create(ctx context.Context, attempt ChallengeAttempt) error
+	// Get returns the attempt, or ErrAttemptNotFound.
+	Get(ctx context.Context, id string) (ChallengeAttempt, error)
+	// Submit stores the submission and the attempt's SUBMITTED state in one
+	// transaction. The attempt must already be SUBMITTED and the submission must
+	// belong to it, else ErrInvalidSubmitTransition. It fails if the stored
+	// attempt is not IN_PROGRESS.
+	Submit(ctx context.Context, attempt ChallengeAttempt, submission Submission) error
+	// ListByChallenge returns the challenge's attempts, oldest first.
+	ListByChallenge(ctx context.Context, challengeID string) ([]ChallengeAttempt, error)
+	// FindInProgress returns the running attempt, or ErrAttemptNotFound.
+	FindInProgress(ctx context.Context) (ChallengeAttempt, error)
+	// DeleteUnfinished deletes the attempt with its children unless it is
+	// FINISHED, which is never touched.
+	DeleteUnfinished(ctx context.Context, id string) error
+	// DeleteAllUnfinished deletes every attempt that is not FINISHED and
+	// returns how many it removed.
+	DeleteAllUnfinished(ctx context.Context) (int, error)
+}
+
+// SubmissionRepository reads Submissions. They are written only through
+// AttemptRepository.Submit.
+type SubmissionRepository interface {
+	// GetByAttempt returns the attempt's submission, or ErrSubmissionNotFound.
+	GetByAttempt(ctx context.Context, attemptID string) (Submission, error)
+}
+
+// SessionExerciseRepository persists the session-to-challenge links.
+type SessionExerciseRepository interface {
+	// Create returns ErrSessionExerciseExists if the session is already linked to the challenge.
+	Create(ctx context.Context, link SessionExercise) error
+	// GetBySessionAndChallenge returns the link, or ErrSessionExerciseNotFound.
+	GetBySessionAndChallenge(ctx context.Context, sessionID, challengeID string) (SessionExercise, error)
+	ListBySession(ctx context.Context, sessionID string) ([]SessionExercise, error)
+}

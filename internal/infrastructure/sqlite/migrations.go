@@ -154,6 +154,58 @@ var migrations = []func(*sql.DB) error{
 		UNIQUE (rubric_version_id, key),
 		UNIQUE (rubric_version_id, position)
 	)`),
+	// Spec 3.3: attempts, submissions and the session link. time_limit_minutes
+	// defaults to the intermediate 45 for challenges stored before it existed.
+	// session_exercises cascades from sessions (and their messages) while
+	// challenge_attempts only SET NULL on the link, and nothing cascades from
+	// attempts or submissions, so a deleted session never takes history with
+	// it. The partial unique index keeps the "one exam running" rule in the
+	// database, not only in the service. See
+	// specs/phases/phase-03-architecture-lab/03-attempts-and-session-link.md.
+	addChallengesTimeLimitColumn,
+	execSQL(`CREATE TABLE IF NOT EXISTS session_exercises (
+		id           TEXT PRIMARY KEY,
+		session_id   TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+		challenge_id TEXT NOT NULL REFERENCES challenges(id),
+		message_id   TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+		created_at   TEXT NOT NULL,
+		UNIQUE (session_id, challenge_id)
+	)`),
+	execSQL(`CREATE TABLE IF NOT EXISTS challenge_attempts (
+		id                  TEXT PRIMARY KEY,
+		challenge_id        TEXT NOT NULL REFERENCES challenges(id),
+		rubric_version_id   TEXT NOT NULL REFERENCES rubric_versions(id),
+		session_exercise_id TEXT REFERENCES session_exercises(id) ON DELETE SET NULL,
+		state               TEXT NOT NULL,
+		started_at          TEXT NOT NULL,
+		deadline            TEXT NOT NULL,
+		submitted_at        TEXT,
+		submit_reason       TEXT
+	)`),
+	execSQL(`CREATE INDEX IF NOT EXISTS idx_attempts_challenge ON challenge_attempts(challenge_id)`),
+	execSQL(`CREATE UNIQUE INDEX IF NOT EXISTS idx_attempts_one_in_progress ON challenge_attempts(state) WHERE state = 'IN_PROGRESS'`),
+	execSQL(`CREATE TABLE IF NOT EXISTS submissions (
+		id           TEXT PRIMARY KEY,
+		attempt_id   TEXT NOT NULL UNIQUE REFERENCES challenge_attempts(id),
+		content_type TEXT NOT NULL,
+		content      TEXT NOT NULL,
+		checksum     TEXT NOT NULL,
+		submitted_at TEXT NOT NULL
+	)`),
+}
+
+// addChallengesTimeLimitColumn adds challenges.time_limit_minutes if it does
+// not already exist (SQLite has no "ADD COLUMN IF NOT EXISTS").
+func addChallengesTimeLimitColumn(db *sql.DB) error {
+	has, err := hasColumn(db, "challenges", "time_limit_minutes")
+	if err != nil {
+		return err
+	}
+	if has {
+		return nil
+	}
+	_, err = db.Exec(`ALTER TABLE challenges ADD COLUMN time_limit_minutes INTEGER NOT NULL DEFAULT 45`)
+	return err
 }
 
 // addSessionsFolderIDColumn adds sessions.folder_id if it does not already
