@@ -58,3 +58,22 @@ type ChallengeRepository interface {
 	Get(ctx context.Context, id string) (Challenge, error)
 	List(ctx context.Context, filter ChallengeFilter, page Page) (ChallengePage, error)
 }
+
+// ErrRubricNotFound is returned when no rubric version matches, or a
+// challenge has no rubric yet.
+var ErrRubricNotFound = errors.New("rubric not found")
+
+// RubricRepository persists RubricVersions. A stored version is immutable, so
+// there is deliberately no Update and no Delete.
+type RubricRepository interface {
+	// Create stores the version and its criteria atomically.
+	Create(ctx context.Context, version RubricVersion) error
+	// Get returns the version, or ErrRubricNotFound.
+	Get(ctx context.Context, versionID string) (RubricVersion, error)
+	// Latest returns the challenge's highest version, or ErrRubricNotFound
+	// if it has none.
+	Latest(ctx context.Context, challengeID string) (RubricVersion, error)
+	// ListVersions returns every version of the challenge's rubric, oldest
+	// first. A challenge without a rubric yields an empty list.
+	ListVersions(ctx context.Context, challengeID string) ([]RubricVersion, error)
+}
