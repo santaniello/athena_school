@@ -17,6 +17,7 @@ const (
 	reasonInvalidOutput   = "The evaluator returned an invalid evaluation."
 	reasonCancelled       = "The evaluation was cancelled."
 	reasonNotSaved        = "The evaluation could not be saved."
+	reasonPassScore       = "The minimum passing score could not be verified."
 )
 
 // EvaluationService scores a submitted attempt against its frozen rubric. The
@@ -32,6 +33,7 @@ type EvaluationService struct {
 	evaluations domainexercise.EvaluationRepository
 	evaluator   domainexercise.Evaluator
 	tx          Transactor
+	passScores  PassScoreProvider
 	clock       Clock
 	newID       func() string
 }
@@ -45,6 +47,7 @@ func NewEvaluationService(
 	evaluations domainexercise.EvaluationRepository,
 	evaluator domainexercise.Evaluator,
 	tx Transactor,
+	passScores PassScoreProvider,
 	clock Clock,
 ) *EvaluationService {
 	return &EvaluationService{
@@ -55,6 +58,7 @@ func NewEvaluationService(
 		evaluations: evaluations,
 		evaluator:   evaluator,
 		tx:          tx,
+		passScores:  passScores,
 		clock:       clock,
 		newID:       uuid.NewString,
 	}
@@ -99,10 +103,29 @@ func (s *EvaluationService) Evaluate(ctx context.Context, attemptID string) (dom
 		return domainexercise.Evaluation{}, s.failEvaluation(ctx, attemptID, err)
 	}
 	evaluation.ID = s.newID()
-	if err := s.storeEvaluation(ctx, evaluation); err != nil {
+	passScore, err := s.currentPassScore(ctx)
+	if err != nil {
+		return domainexercise.Evaluation{}, s.failEvaluation(ctx, attemptID, err)
+	}
+	if err := s.storeEvaluation(ctx, evaluation, passScore); err != nil {
 		return domainexercise.Evaluation{}, s.failEvaluation(ctx, attemptID, fmt.Errorf("%w: %w", errNotSaved, err))
 	}
 	return evaluation, nil
+}
+
+// errPassScoreUnverified marks a minimum passing score that could not be read
+// or is invalid, so no default is ever frozen in its place.
+var errPassScoreUnverified = errors.New("exercise: verifying the minimum passing score")
+
+func (s *EvaluationService) currentPassScore(ctx context.Context) (int, error) {
+	passScore, err := s.passScores.Current(ctx)
+	if err == nil {
+		err = domainexercise.ValidatePassScore(passScore)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("%w: %w", errPassScoreUnverified, err)
+	}
+	return passScore, nil
 }
 
 // errNotSaved marks a failure to store a valid evaluation, so it gets its own reason.
@@ -124,13 +147,14 @@ func (s *EvaluationService) evaluatorInput(ctx context.Context, attempt domainex
 	return domainexercise.EvaluatorInput{Challenge: challenge, Rubric: rubric, Submission: submission}, nil
 }
 
-// storeEvaluation writes the evaluation and the EVALUATED state in one transaction.
-func (s *EvaluationService) storeEvaluation(ctx context.Context, evaluation domainexercise.Evaluation) error {
+// storeEvaluation writes the evaluation and the EVALUATED state, with the
+// minimum passing score frozen on the attempt, in one transaction.
+func (s *EvaluationService) storeEvaluation(ctx context.Context, evaluation domainexercise.Evaluation, passScore int) error {
 	return s.tx.WithinTx(ctx, func(ctx context.Context) error {
 		if err := s.evaluations.Create(ctx, evaluation); err != nil {
 			return err
 		}
-		return s.attempts.CompleteEvaluation(ctx, evaluation.AttemptID)
+		return s.attempts.CompleteEvaluation(ctx, evaluation.AttemptID, passScore)
 	})
 }
 
@@ -154,6 +178,8 @@ func failureReason(cause error) string {
 		return reasonInvalidOutput
 	case errors.Is(cause, errNotSaved):
 		return reasonNotSaved
+	case errors.Is(cause, errPassScoreUnverified):
+		return reasonPassScore
 	default:
 		return reasonEvaluatorFailed
 	}

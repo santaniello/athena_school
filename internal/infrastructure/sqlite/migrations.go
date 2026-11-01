@@ -199,6 +199,10 @@ var migrations = []func(*sql.DB) error{
 	// recommendations are JSON arrays (see jsonlist.go). See
 	// specs/phases/phase-03-architecture-lab/05-evaluation-engine.md.
 	addAttemptsFailureReasonColumn,
+	// Spec 3.6: the minimum passing score frozen on the attempt when its
+	// diagram evaluation completes; NULL until then. See
+	// specs/phases/phase-03-architecture-lab/06-completion-rules.md.
+	addAttemptsPassScoreColumn,
 	execSQL(`CREATE TABLE IF NOT EXISTS evaluations (
 		id              TEXT PRIMARY KEY,
 		attempt_id      TEXT NOT NULL REFERENCES challenge_attempts(id),
@@ -234,6 +238,20 @@ func addAttemptsFailureReasonColumn(db *sql.DB) error {
 		return nil
 	}
 	_, err = db.Exec(`ALTER TABLE challenge_attempts ADD COLUMN failure_reason TEXT`)
+	return err
+}
+
+// addAttemptsPassScoreColumn adds challenge_attempts.pass_score if it does not
+// already exist (SQLite has no "ADD COLUMN IF NOT EXISTS").
+func addAttemptsPassScoreColumn(db *sql.DB) error {
+	has, err := hasColumn(db, "challenge_attempts", "pass_score")
+	if err != nil {
+		return err
+	}
+	if has {
+		return nil
+	}
+	_, err = db.Exec(`ALTER TABLE challenge_attempts ADD COLUMN pass_score INTEGER`)
 	return err
 }
 

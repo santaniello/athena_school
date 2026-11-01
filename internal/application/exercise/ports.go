@@ -46,3 +46,11 @@ type SessionExists interface {
 type Transactor interface {
 	WithinTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
+
+// PassScoreProvider supplies the minimum passing score in force. Defined here
+// (consumer side); implemented by the settings service. It returns an error
+// rather than a default when the setting cannot be read, so a threshold that
+// was not verified is never frozen on an attempt.
+type PassScoreProvider interface {
+	Current(ctx context.Context) (int, error)
+}

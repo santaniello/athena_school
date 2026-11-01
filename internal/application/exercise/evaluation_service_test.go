@@ -24,6 +24,7 @@ type evaluationFixture struct {
 	evaluations *domainmocks.MockEvaluationRepository
 	evaluator   *domainmocks.MockEvaluator
 	tx          *exercisemocks.MockTransactor
+	passScores  *exercisemocks.MockPassScoreProvider
 }
 
 func newEvaluationFixture(t *testing.T) *evaluationFixture {
@@ -36,9 +37,10 @@ func newEvaluationFixture(t *testing.T) *evaluationFixture {
 		evaluations: domainmocks.NewMockEvaluationRepository(t),
 		evaluator:   domainmocks.NewMockEvaluator(t),
 		tx:          exercisemocks.NewMockTransactor(t),
+		passScores:  exercisemocks.NewMockPassScoreProvider(t),
 	}
 	f.service = NewEvaluationService(f.challenges, f.rubrics, f.attempts, f.submissions, f.evaluations, f.evaluator, f.tx,
-		&fakeClock{now: fixedNow})
+		f.passScores, &fakeClock{now: fixedNow})
 	f.service.newID = func() string { return "evaluation-1" }
 	return f
 }
@@ -116,7 +118,8 @@ func TestEvaluationService_Evaluate_storesTheEvaluationAndMarksTheAttemptEvaluat
 			f.evaluator.EXPECT().Evaluate(ctx, f.expectEvaluatorInput()).Return(evaluatorOutput(), nil)
 			f.runTx(ctx)
 			f.evaluations.EXPECT().Create(ctx, expectedEvaluation()).Return(nil)
-			f.attempts.EXPECT().CompleteEvaluation(ctx, "attempt-1").Return(nil)
+			f.passScores.EXPECT().Current(ctx).Return(80, nil)
+			f.attempts.EXPECT().CompleteEvaluation(ctx, "attempt-1", 80).Return(nil)
 
 			// When evaluating
 			evaluation, err := f.service.Evaluate(ctx, "attempt-1")
@@ -147,7 +150,8 @@ func TestEvaluationService_Evaluate_callsTheEvaluatorOutsideAnyTransaction(t *te
 			return fn(ctx)
 		})
 	f.evaluations.EXPECT().Create(ctx, expectedEvaluation()).Return(nil)
-	f.attempts.EXPECT().CompleteEvaluation(ctx, "attempt-1").Return(nil)
+	f.passScores.EXPECT().Current(ctx).Return(80, nil)
+	f.attempts.EXPECT().CompleteEvaluation(ctx, "attempt-1", 80).Return(nil)
 
 	// When evaluating
 	_, err := f.service.Evaluate(ctx, "attempt-1")
@@ -333,6 +337,7 @@ func TestEvaluationService_Evaluate_failsTheAttemptWhenTheEvaluationCannotBeStor
 	f.expectLoad(ctx, domainexercise.AttemptSubmitted)
 	f.attempts.EXPECT().StartEvaluation(ctx, "attempt-1").Return(nil)
 	f.evaluator.EXPECT().Evaluate(ctx, f.expectEvaluatorInput()).Return(evaluatorOutput(), nil)
+	f.passScores.EXPECT().Current(ctx).Return(80, nil)
 	f.runTx(ctx)
 	f.evaluations.EXPECT().Create(ctx, expectedEvaluation()).Return(storeFailure)
 	f.attempts.EXPECT().FailEvaluation(liveContext(), "attempt-1", "The evaluation could not be saved.").Return(nil)
@@ -418,4 +423,54 @@ func TestEvaluationService_DiscardUnfinishedEvaluations_returnsTheStoreFailure(t
 	// Then the failure is returned for the caller to log
 	assert.ErrorIs(t, err, failure)
 	assert.Zero(t, removed)
+}
+
+func TestEvaluationService_Evaluate_freezesTheMinimumInForceWhenTheEvaluationCompletes(t *testing.T) {
+	// Given a minimum score of 65 in force when the evaluator returns
+	f := newEvaluationFixture(t)
+	ctx := context.Background()
+	f.expectLoad(ctx, domainexercise.AttemptSubmitted)
+	f.attempts.EXPECT().StartEvaluation(ctx, "attempt-1").Return(nil)
+	f.evaluator.EXPECT().Evaluate(ctx, f.expectEvaluatorInput()).Return(evaluatorOutput(), nil)
+	f.passScores.EXPECT().Current(ctx).Return(65, nil)
+	f.runTx(ctx)
+	f.evaluations.EXPECT().Create(ctx, expectedEvaluation()).Return(nil)
+
+	// When evaluating
+	f.attempts.EXPECT().CompleteEvaluation(ctx, "attempt-1", 65).Return(nil)
+	_, err := f.service.Evaluate(ctx, "attempt-1")
+
+	// Then the attempt completes with exactly that minimum
+	require.NoError(t, err)
+}
+
+func TestEvaluationService_Evaluate_failsTheEvaluationWhenThePassScoreCannotBeVerified(t *testing.T) {
+	settingFailure := errors.New("config unreadable")
+	tests := []struct {
+		name  string
+		score int
+		err   error
+		want  error
+	}{
+		{"the setting cannot be read", 0, settingFailure, settingFailure},
+		{"the setting is out of range", 20, nil, domainexercise.ErrInvalidPassScore},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given a valid evaluation but a threshold that cannot be verified
+			f := newEvaluationFixture(t)
+			ctx := context.Background()
+			f.expectLoad(ctx, domainexercise.AttemptSubmitted)
+			f.attempts.EXPECT().StartEvaluation(ctx, "attempt-1").Return(nil)
+			f.evaluator.EXPECT().Evaluate(ctx, f.expectEvaluatorInput()).Return(evaluatorOutput(), nil)
+			f.passScores.EXPECT().Current(ctx).Return(tt.score, tt.err)
+			f.attempts.EXPECT().FailEvaluation(liveContext(), "attempt-1", "The minimum passing score could not be verified.").Return(nil)
+
+			// When evaluating
+			_, err := f.service.Evaluate(ctx, "attempt-1")
+
+			// Then no default is frozen: the evaluation fails with the cause and stores nothing
+			assert.ErrorIs(t, err, tt.want)
+		})
+	}
 }

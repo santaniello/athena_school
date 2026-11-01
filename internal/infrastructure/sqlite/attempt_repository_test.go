@@ -447,7 +447,7 @@ func attemptInState(t *testing.T, repo *AttemptRepository, id string, state exer
 	require.NoError(t, repo.StartEvaluation(ctx, id))
 	switch state {
 	case exercise.AttemptEvaluated:
-		require.NoError(t, repo.CompleteEvaluation(ctx, id))
+		require.NoError(t, repo.CompleteEvaluation(ctx, id, 80))
 	case exercise.AttemptEvaluationFailed:
 		require.NoError(t, repo.FailEvaluation(ctx, id, "model timeout"))
 	}
@@ -523,7 +523,7 @@ func TestAttemptRepository_CompleteAndFailEvaluation_onlyMatchAnEvaluatingAttemp
 	attemptInState(t, repo, "attempt-1", exercise.AttemptSubmitted)
 
 	// When completing or failing its evaluation
-	completeErr := repo.CompleteEvaluation(ctx, "attempt-1")
+	completeErr := repo.CompleteEvaluation(ctx, "attempt-1", 80)
 	failErr := repo.FailEvaluation(ctx, "attempt-1", "x")
 
 	// Then both are refused and the state is unchanged
@@ -591,4 +591,51 @@ func TestAttemptRepository_DeleteAllUnfinished_removesEvaluationsOfEvaluatedAtte
 	assert.Equal(t, 1, removed)
 	assert.Equal(t, 0, countTableRows(t, db, "evaluations"))
 	assert.Equal(t, 0, countTableRows(t, db, "criterion_results"))
+}
+
+func TestAttemptRepository_CompleteEvaluation_freezesThePassScoreOnTheAttempt(t *testing.T) {
+	// Given a submitted attempt, whose pass score is not known yet
+	repo, _ := newTestAttemptRepository(t)
+	ctx := context.Background()
+	attemptInState(t, repo, "attempt-1", exercise.AttemptSubmitted)
+	before, err := repo.Get(ctx, "attempt-1")
+	require.NoError(t, err)
+	assert.Zero(t, before.PassScore)
+
+	// When its evaluation completes under a minimum of 65
+	require.NoError(t, repo.StartEvaluation(ctx, "attempt-1"))
+	require.NoError(t, repo.CompleteEvaluation(ctx, "attempt-1", 65))
+
+	// Then the attempt keeps that minimum
+	after, err := repo.Get(ctx, "attempt-1")
+	require.NoError(t, err)
+	assert.Equal(t, 65, after.PassScore)
+	assert.Equal(t, exercise.AttemptEvaluated, after.State)
+}
+
+func TestAttemptRepository_StartEvaluation_leavesThePassScoreUnsetAfterAFailedRetry(t *testing.T) {
+	// Given an attempt whose evaluation failed
+	repo, _ := newTestAttemptRepository(t)
+	ctx := context.Background()
+	attemptInState(t, repo, "attempt-1", exercise.AttemptEvaluationFailed)
+
+	// When reading it
+	got, err := repo.Get(ctx, "attempt-1")
+
+	// Then no minimum was frozen
+	require.NoError(t, err)
+	assert.Zero(t, got.PassScore)
+}
+
+func TestAttemptRepository_Create_storesAFrozenPassScoreOfAnAttemptCreatedWithOne(t *testing.T) {
+	repo, _ := newTestAttemptRepository(t)
+	ctx := context.Background()
+	attempt := newTestAttempt("attempt-1")
+	attempt.PassScore = 90
+
+	require.NoError(t, repo.Create(ctx, attempt))
+
+	got, err := repo.Get(ctx, "attempt-1")
+	require.NoError(t, err)
+	assert.Equal(t, 90, got.PassScore)
 }

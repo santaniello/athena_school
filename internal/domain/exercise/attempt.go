@@ -55,6 +55,11 @@ type ChallengeAttempt struct {
 	SubmittedAt       time.Time // zero until submitted
 	SubmitReason      SubmitReason
 	FailureReason     string // why the last evaluation failed; kept until the next retry
+	// PassScore is the minimum passing score in force when the diagram
+	// evaluation completed, frozen so a later change of the setting never
+	// changes the result. Zero until then. See
+	// specs/phases/phase-03-architecture-lab/06-completion-rules.md.
+	PassScore int
 }
 
 // NewAttempt starts an in-progress attempt on the challenge, frozen to the
@@ -101,12 +106,17 @@ func (a ChallengeAttempt) StartEvaluation() (ChallengeAttempt, error) {
 	return a, nil
 }
 
-// CompleteEvaluation moves an EVALUATING attempt to EVALUATED.
-func (a ChallengeAttempt) CompleteEvaluation() (ChallengeAttempt, error) {
+// CompleteEvaluation moves an EVALUATING attempt to EVALUATED, freezing the
+// minimum passing score in force. An out-of-range score is ErrInvalidPassScore.
+func (a ChallengeAttempt) CompleteEvaluation(passScore int) (ChallengeAttempt, error) {
 	if a.State != AttemptEvaluating {
 		return ChallengeAttempt{}, ErrAttemptNotEvaluating
 	}
+	if err := ValidatePassScore(passScore); err != nil {
+		return ChallengeAttempt{}, err
+	}
 	a.State = AttemptEvaluated
+	a.PassScore = passScore
 	return a, nil
 }
 

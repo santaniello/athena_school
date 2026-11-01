@@ -14,7 +14,7 @@ import (
 	"github.com/santaniello/athena/internal/domain/exercise"
 )
 
-const attemptColumns = `id, challenge_id, rubric_version_id, session_exercise_id, state, started_at, deadline, submitted_at, submit_reason, failure_reason`
+const attemptColumns = `id, challenge_id, rubric_version_id, session_exercise_id, state, started_at, deadline, submitted_at, submit_reason, failure_reason, pass_score`
 
 // AttemptRepository is the SQLite-backed implementation of
 // exercise.AttemptRepository.
@@ -33,10 +33,11 @@ func NewAttemptRepository(db *sql.DB) *AttemptRepository {
 // refused by the database.
 func (r *AttemptRepository) Create(ctx context.Context, attempt exercise.ChallengeAttempt) error {
 	_, err := execer(ctx, r.db).ExecContext(ctx,
-		`INSERT INTO challenge_attempts (`+attemptColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO challenge_attempts (`+attemptColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		attempt.ID, attempt.ChallengeID, attempt.RubricVersionID, nullIfEmpty(attempt.SessionExerciseID),
 		string(attempt.State), formatChallengeTime(attempt.StartedAt), formatChallengeTime(attempt.Deadline),
 		nullableTime(attempt.SubmittedAt), nullIfEmpty(string(attempt.SubmitReason)), nullIfEmpty(attempt.FailureReason),
+		nullIfZero(attempt.PassScore),
 	)
 	if isOneInProgressViolation(err) {
 		return fmt.Errorf("sqlite: creating attempt: %w", exercise.ErrAnotherAttemptInProgress)
@@ -149,14 +150,16 @@ func scanAttempt(row rowScanner) (exercise.ChallengeAttempt, error) {
 	var a exercise.ChallengeAttempt
 	var state, startedAt, deadline string
 	var sessionExerciseID, submittedAt, submitReason, failureReason sql.NullString
+	var passScore sql.NullInt64
 	if err := row.Scan(&a.ID, &a.ChallengeID, &a.RubricVersionID, &sessionExerciseID, &state,
-		&startedAt, &deadline, &submittedAt, &submitReason, &failureReason); err != nil {
+		&startedAt, &deadline, &submittedAt, &submitReason, &failureReason, &passScore); err != nil {
 		return exercise.ChallengeAttempt{}, err
 	}
 	a.State = exercise.AttemptState(state)
 	a.SessionExerciseID = sessionExerciseID.String
 	a.SubmitReason = exercise.SubmitReason(submitReason.String)
 	a.FailureReason = failureReason.String
+	a.PassScore = int(passScore.Int64)
 
 	var err error
 	if a.StartedAt, err = parseChallengeTime(startedAt); err != nil {
@@ -176,6 +179,14 @@ func scanAttempt(row rowScanner) (exercise.ChallengeAttempt, error) {
 // nullIfEmpty returns nil, stored as NULL, for an empty string.
 func nullIfEmpty(value string) any {
 	if value == "" {
+		return nil
+	}
+	return value
+}
+
+// nullIfZero returns nil, stored as NULL, for zero.
+func nullIfZero(value int) any {
+	if value == 0 {
 		return nil
 	}
 	return value
@@ -275,12 +286,12 @@ func (r *AttemptRepository) StartEvaluation(ctx context.Context, id string) erro
 	return nil
 }
 
-// CompleteEvaluation moves an EVALUATING attempt to EVALUATED, else
-// exercise.ErrAttemptNotEvaluating.
-func (r *AttemptRepository) CompleteEvaluation(ctx context.Context, id string) error {
+// CompleteEvaluation moves an EVALUATING attempt to EVALUATED and freezes the
+// minimum passing score on it, else exercise.ErrAttemptNotEvaluating.
+func (r *AttemptRepository) CompleteEvaluation(ctx context.Context, id string, passScore int) error {
 	changed, err := r.updateState(ctx,
-		`UPDATE challenge_attempts SET state = ? WHERE id = ? AND state = ?`,
-		string(exercise.AttemptEvaluated), id, string(exercise.AttemptEvaluating))
+		`UPDATE challenge_attempts SET state = ?, pass_score = ? WHERE id = ? AND state = ?`,
+		string(exercise.AttemptEvaluated), passScore, id, string(exercise.AttemptEvaluating))
 	if err != nil {
 		return fmt.Errorf("sqlite: completing evaluation: %w", err)
 	}
