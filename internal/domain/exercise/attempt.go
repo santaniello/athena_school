@@ -20,6 +20,11 @@ type AttemptState string
 const (
 	AttemptInProgress AttemptState = "IN_PROGRESS"
 	AttemptSubmitted  AttemptState = "SUBMITTED"
+	// The evaluation states of spec 3.5: SUBMITTED → EVALUATING → EVALUATED,
+	// and EVALUATING → EVALUATION_FAILED → EVALUATING for a manual retry.
+	AttemptEvaluating       AttemptState = "EVALUATING"
+	AttemptEvaluated        AttemptState = "EVALUATED"
+	AttemptEvaluationFailed AttemptState = "EVALUATION_FAILED"
 	// AttemptFinished is the end of an attempt's lifecycle, once it has been
 	// scored. Nothing reaches it yet; it is named here because a finished
 	// attempt is never discarded. Spec 3.12 adds the transitions into it.
@@ -49,6 +54,7 @@ type ChallengeAttempt struct {
 	Deadline          time.Time
 	SubmittedAt       time.Time // zero until submitted
 	SubmitReason      SubmitReason
+	FailureReason     string // why the last evaluation failed; kept until the next retry
 }
 
 // NewAttempt starts an in-progress attempt on the challenge, frozen to the
@@ -71,6 +77,48 @@ func NewAttempt(challenge Challenge, rubric RubricVersion, sessionExerciseID str
 // Expired reports whether the deadline has been reached.
 func (a ChallengeAttempt) Expired(now time.Time) bool {
 	return !now.Before(a.Deadline)
+}
+
+var (
+	// ErrAttemptNotEvaluable is returned when an evaluation is started on an
+	// attempt that is neither SUBMITTED nor EVALUATION_FAILED, including one
+	// already being evaluated.
+	ErrAttemptNotEvaluable = errors.New("attempt cannot be evaluated now")
+	// ErrAttemptNotEvaluating is returned when an evaluation is completed or
+	// failed on an attempt that is not EVALUATING.
+	ErrAttemptNotEvaluating = errors.New("attempt is not being evaluated")
+)
+
+// StartEvaluation moves a SUBMITTED or EVALUATION_FAILED attempt to
+// EVALUATING and clears the previous failure reason. The receiver is not
+// modified.
+func (a ChallengeAttempt) StartEvaluation() (ChallengeAttempt, error) {
+	if a.State != AttemptSubmitted && a.State != AttemptEvaluationFailed {
+		return ChallengeAttempt{}, ErrAttemptNotEvaluable
+	}
+	a.State = AttemptEvaluating
+	a.FailureReason = ""
+	return a, nil
+}
+
+// CompleteEvaluation moves an EVALUATING attempt to EVALUATED.
+func (a ChallengeAttempt) CompleteEvaluation() (ChallengeAttempt, error) {
+	if a.State != AttemptEvaluating {
+		return ChallengeAttempt{}, ErrAttemptNotEvaluating
+	}
+	a.State = AttemptEvaluated
+	return a, nil
+}
+
+// FailEvaluation moves an EVALUATING attempt to EVALUATION_FAILED, recording
+// the reason until the next retry.
+func (a ChallengeAttempt) FailEvaluation(reason string) (ChallengeAttempt, error) {
+	if a.State != AttemptEvaluating {
+		return ChallengeAttempt{}, ErrAttemptNotEvaluating
+	}
+	a.State = AttemptEvaluationFailed
+	a.FailureReason = reason
+	return a, nil
 }
 
 // MaxSubmissionContentBytes bounds a submission's content (2 MiB).

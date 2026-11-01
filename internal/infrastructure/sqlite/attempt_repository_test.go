@@ -432,3 +432,163 @@ func TestAttemptRepository_Submit_refusesASubmissionOfAnotherAttempt(t *testing.
 	assert.Equal(t, exercise.AttemptInProgress, got.State)
 	assert.Equal(t, 0, countTableRows(t, db, "submissions"))
 }
+
+// attemptInState stores attempt-1 as SUBMITTED, then moves it through the
+// repository to the wanted evaluation state.
+func attemptInState(t *testing.T, repo *AttemptRepository, id string, state exercise.AttemptState) {
+	t.Helper()
+	ctx := context.Background()
+	require.NoError(t, repo.Create(ctx, newTestAttempt(id)))
+	submitted, submission := submitForTest(t, newTestAttempt(id), "submission-"+id)
+	require.NoError(t, repo.Submit(ctx, submitted, submission))
+	if state == exercise.AttemptSubmitted {
+		return
+	}
+	require.NoError(t, repo.StartEvaluation(ctx, id))
+	switch state {
+	case exercise.AttemptEvaluated:
+		require.NoError(t, repo.CompleteEvaluation(ctx, id))
+	case exercise.AttemptEvaluationFailed:
+		require.NoError(t, repo.FailEvaluation(ctx, id, "model timeout"))
+	}
+}
+
+func TestAttemptRepository_StartEvaluation_movesSubmittedToEvaluating(t *testing.T) {
+	// Given a submitted attempt
+	repo, _ := newTestAttemptRepository(t)
+	ctx := context.Background()
+	attemptInState(t, repo, "attempt-1", exercise.AttemptSubmitted)
+
+	// When starting its evaluation
+	require.NoError(t, repo.StartEvaluation(ctx, "attempt-1"))
+
+	// Then it is EVALUATING
+	got, err := repo.Get(ctx, "attempt-1")
+	require.NoError(t, err)
+	assert.Equal(t, exercise.AttemptEvaluating, got.State)
+}
+
+func TestAttemptRepository_StartEvaluation_secondCallIsRefused(t *testing.T) {
+	// Given an attempt already being evaluated
+	repo, _ := newTestAttemptRepository(t)
+	ctx := context.Background()
+	attemptInState(t, repo, "attempt-1", exercise.AttemptEvaluating)
+
+	// When starting it again
+	err := repo.StartEvaluation(ctx, "attempt-1")
+
+	// Then no row changes and it is refused
+	assert.ErrorIs(t, err, exercise.ErrAttemptNotEvaluable)
+}
+
+func TestAttemptRepository_StartEvaluation_refusesEvaluatedAndUnknownAttempts(t *testing.T) {
+	// Given an evaluated attempt
+	repo, _ := newTestAttemptRepository(t)
+	ctx := context.Background()
+	attemptInState(t, repo, "attempt-1", exercise.AttemptEvaluated)
+
+	// When starting its evaluation, or one of an unknown id
+	evaluatedErr := repo.StartEvaluation(ctx, "attempt-1")
+	unknownErr := repo.StartEvaluation(ctx, "nope")
+
+	// Then both are refused
+	assert.ErrorIs(t, evaluatedErr, exercise.ErrAttemptNotEvaluable)
+	assert.ErrorIs(t, unknownErr, exercise.ErrAttemptNotEvaluable)
+}
+
+func TestAttemptRepository_FailEvaluation_keepsTheReasonUntilTheNextRetry(t *testing.T) {
+	// Given an attempt whose evaluation failed
+	repo, _ := newTestAttemptRepository(t)
+	ctx := context.Background()
+	attemptInState(t, repo, "attempt-1", exercise.AttemptEvaluationFailed)
+	failed, err := repo.Get(ctx, "attempt-1")
+	require.NoError(t, err)
+	assert.Equal(t, exercise.AttemptEvaluationFailed, failed.State)
+	assert.Equal(t, "model timeout", failed.FailureReason)
+
+	// When retrying
+	require.NoError(t, repo.StartEvaluation(ctx, "attempt-1"))
+
+	// Then it is EVALUATING again with the reason cleared
+	retried, err := repo.Get(ctx, "attempt-1")
+	require.NoError(t, err)
+	assert.Equal(t, exercise.AttemptEvaluating, retried.State)
+	assert.Empty(t, retried.FailureReason)
+}
+
+func TestAttemptRepository_CompleteAndFailEvaluation_onlyMatchAnEvaluatingAttempt(t *testing.T) {
+	// Given a submitted attempt that is not being evaluated
+	repo, _ := newTestAttemptRepository(t)
+	ctx := context.Background()
+	attemptInState(t, repo, "attempt-1", exercise.AttemptSubmitted)
+
+	// When completing or failing its evaluation
+	completeErr := repo.CompleteEvaluation(ctx, "attempt-1")
+	failErr := repo.FailEvaluation(ctx, "attempt-1", "x")
+
+	// Then both are refused and the state is unchanged
+	assert.ErrorIs(t, completeErr, exercise.ErrAttemptNotEvaluating)
+	assert.ErrorIs(t, failErr, exercise.ErrAttemptNotEvaluating)
+	got, err := repo.Get(ctx, "attempt-1")
+	require.NoError(t, err)
+	assert.Equal(t, exercise.AttemptSubmitted, got.State)
+}
+
+func TestAttemptRepository_DeleteUnfinishedEvaluations_removesEvaluatingAndFailedAttemptsOnly(t *testing.T) {
+	// Given attempts submitted, evaluating, failed and evaluated
+	repo, db := newTestAttemptRepository(t)
+	ctx := context.Background()
+	attemptInState(t, repo, "submitted", exercise.AttemptSubmitted)
+	attemptInState(t, repo, "evaluating", exercise.AttemptEvaluating)
+	attemptInState(t, repo, "failed", exercise.AttemptEvaluationFailed)
+	attemptInState(t, repo, "evaluated", exercise.AttemptEvaluated)
+
+	// When discarding the unfinished evaluations
+	removed, err := repo.DeleteUnfinishedEvaluations(ctx)
+
+	// Then the evaluating and failed ones are gone with their submissions
+	require.NoError(t, err)
+	assert.Equal(t, 2, removed)
+	for _, id := range []string{"evaluating", "failed"} {
+		_, err := repo.Get(ctx, id)
+		assert.ErrorIs(t, err, exercise.ErrAttemptNotFound, id)
+	}
+	for _, id := range []string{"submitted", "evaluated"} {
+		_, err := repo.Get(ctx, id)
+		assert.NoError(t, err, id)
+	}
+	assert.Equal(t, 2, countTableRows(t, db, "submissions"))
+}
+
+func TestAttemptRepository_DeleteUnfinished_removesAnEvaluatedAttemptWithItsEvaluation(t *testing.T) {
+	// Given an evaluated attempt with a stored evaluation
+	repo, db := newTestAttemptRepository(t)
+	ctx := context.Background()
+	attemptInState(t, repo, "attempt-1", exercise.AttemptEvaluated)
+	require.NoError(t, NewEvaluationRepository(db).Create(ctx, newTestEvaluation("evaluation-1")))
+
+	// When discarding the attempt
+	require.NoError(t, repo.DeleteUnfinished(ctx, "attempt-1"))
+
+	// Then the evaluation and its criterion results go with it
+	assert.Equal(t, 0, countTableRows(t, db, "challenge_attempts"))
+	assert.Equal(t, 0, countTableRows(t, db, "evaluations"))
+	assert.Equal(t, 0, countTableRows(t, db, "criterion_results"))
+}
+
+func TestAttemptRepository_DeleteAllUnfinished_removesEvaluationsOfEvaluatedAttempts(t *testing.T) {
+	// Given an evaluated attempt with a stored evaluation
+	repo, db := newTestAttemptRepository(t)
+	ctx := context.Background()
+	attemptInState(t, repo, "attempt-1", exercise.AttemptEvaluated)
+	require.NoError(t, NewEvaluationRepository(db).Create(ctx, newTestEvaluation("evaluation-1")))
+
+	// When cleaning every unfinished attempt
+	removed, err := repo.DeleteAllUnfinished(ctx)
+
+	// Then the attempt goes with its evaluation instead of failing on the foreign key
+	require.NoError(t, err)
+	assert.Equal(t, 1, removed)
+	assert.Equal(t, 0, countTableRows(t, db, "evaluations"))
+	assert.Equal(t, 0, countTableRows(t, db, "criterion_results"))
+}

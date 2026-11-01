@@ -566,7 +566,10 @@ func TestAttemptService_SubmitAttempt_storageAndReadFailuresAreReturned(t *testi
 }
 
 func TestAttemptService_DiscardAttempt_deletesAnUnfinishedAttemptInAnyState(t *testing.T) {
-	for _, state := range []domainexercise.AttemptState{domainexercise.AttemptInProgress, domainexercise.AttemptSubmitted} {
+	for _, state := range []domainexercise.AttemptState{
+		domainexercise.AttemptInProgress, domainexercise.AttemptSubmitted, domainexercise.AttemptEvaluating,
+		domainexercise.AttemptEvaluationFailed, domainexercise.AttemptEvaluated,
+	} {
 		t.Run(string(state), func(t *testing.T) {
 			// Given an unfinished attempt
 			f := newAttemptFixture(t)

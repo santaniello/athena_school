@@ -14,7 +14,7 @@ import (
 	"github.com/santaniello/athena/internal/domain/exercise"
 )
 
-const attemptColumns = `id, challenge_id, rubric_version_id, session_exercise_id, state, started_at, deadline, submitted_at, submit_reason`
+const attemptColumns = `id, challenge_id, rubric_version_id, session_exercise_id, state, started_at, deadline, submitted_at, submit_reason, failure_reason`
 
 // AttemptRepository is the SQLite-backed implementation of
 // exercise.AttemptRepository.
@@ -33,10 +33,10 @@ func NewAttemptRepository(db *sql.DB) *AttemptRepository {
 // refused by the database.
 func (r *AttemptRepository) Create(ctx context.Context, attempt exercise.ChallengeAttempt) error {
 	_, err := execer(ctx, r.db).ExecContext(ctx,
-		`INSERT INTO challenge_attempts (`+attemptColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO challenge_attempts (`+attemptColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		attempt.ID, attempt.ChallengeID, attempt.RubricVersionID, nullIfEmpty(attempt.SessionExerciseID),
 		string(attempt.State), formatChallengeTime(attempt.StartedAt), formatChallengeTime(attempt.Deadline),
-		nullableTime(attempt.SubmittedAt), nullIfEmpty(string(attempt.SubmitReason)),
+		nullableTime(attempt.SubmittedAt), nullIfEmpty(string(attempt.SubmitReason)), nullIfEmpty(attempt.FailureReason),
 	)
 	if isOneInProgressViolation(err) {
 		return fmt.Errorf("sqlite: creating attempt: %w", exercise.ErrAnotherAttemptInProgress)
@@ -148,14 +148,15 @@ func (r *AttemptRepository) Submit(ctx context.Context, attempt exercise.Challen
 func scanAttempt(row rowScanner) (exercise.ChallengeAttempt, error) {
 	var a exercise.ChallengeAttempt
 	var state, startedAt, deadline string
-	var sessionExerciseID, submittedAt, submitReason sql.NullString
+	var sessionExerciseID, submittedAt, submitReason, failureReason sql.NullString
 	if err := row.Scan(&a.ID, &a.ChallengeID, &a.RubricVersionID, &sessionExerciseID, &state,
-		&startedAt, &deadline, &submittedAt, &submitReason); err != nil {
+		&startedAt, &deadline, &submittedAt, &submitReason, &failureReason); err != nil {
 		return exercise.ChallengeAttempt{}, err
 	}
 	a.State = exercise.AttemptState(state)
 	a.SessionExerciseID = sessionExerciseID.String
 	a.SubmitReason = exercise.SubmitReason(submitReason.String)
+	a.FailureReason = failureReason.String
 
 	var err error
 	if a.StartedAt, err = parseChallengeTime(startedAt); err != nil {
@@ -187,6 +188,14 @@ func nullableTime(t time.Time) any {
 	}
 	return formatChallengeTime(t)
 }
+
+// DO NOT "fix" the cleanup below to spare EVALUATED attempts. DeleteUnfinished
+// and DeleteAllUnfinished delete every attempt that is not FINISHED, EVALUATED
+// ones and their evaluations included, on purpose: ADR-005 decision 9 makes the
+// evaluation one stage of a sitting that ends with the defense (spec 3.12), so
+// an EVALUATED attempt left at startup is an abandoned exam. Spec 3.5 only
+// scopes DiscardUnfinishedEvaluations (EVALUATING and EVALUATION_FAILED) and
+// does not amend the 3.4 cleanup. This was reviewed and decided on PR #135.
 
 // finishedState is the attempt state spec 3.12 adds; DeleteUnfinished and
 // DeleteAllUnfinished never touch it.
@@ -224,17 +233,101 @@ func (r *AttemptRepository) DeleteAllUnfinished(ctx context.Context) (int, error
 // challenge_attempts, then the attempts themselves. extra is a fixed SQL
 // fragment narrowing the selection; its values travel as bound args.
 func deleteUnfinished(ctx context.Context, q sqlExecer, extra string, args ...any) (int, error) {
-	selection := `state <> ?` + extra
-	selectionArgs := append([]any{finishedState}, args...)
-	if _, err := q.ExecContext(ctx,
-		`DELETE FROM submissions WHERE attempt_id IN (SELECT id FROM challenge_attempts WHERE `+selection+`)`,
-		selectionArgs...); err != nil {
-		return 0, err
+	return deleteAttemptsWhere(ctx, q, `state <> ?`+extra, append([]any{finishedState}, args...)...)
+}
+
+// deleteAttemptsWhere deletes the attempts the fixed SQL condition selects,
+// children first: criterion results, evaluations and submissions. Its values
+// travel as bound args.
+func deleteAttemptsWhere(ctx context.Context, q sqlExecer, selection string, args ...any) (int, error) {
+	attemptIDs := `SELECT id FROM challenge_attempts WHERE ` + selection
+	for _, statement := range []string{
+		`DELETE FROM criterion_results WHERE evaluation_id IN (SELECT id FROM evaluations WHERE attempt_id IN (` + attemptIDs + `))`,
+		`DELETE FROM evaluations WHERE attempt_id IN (` + attemptIDs + `)`,
+		`DELETE FROM submissions WHERE attempt_id IN (` + attemptIDs + `)`,
+	} {
+		if _, err := q.ExecContext(ctx, statement, args...); err != nil {
+			return 0, err
+		}
 	}
-	result, err := q.ExecContext(ctx, `DELETE FROM challenge_attempts WHERE `+selection, selectionArgs...)
+	result, err := q.ExecContext(ctx, `DELETE FROM challenge_attempts WHERE `+selection, args...)
 	if err != nil {
 		return 0, err
 	}
 	removed, err := result.RowsAffected()
 	return int(removed), err
+}
+
+// StartEvaluation moves the attempt to EVALUATING with one conditional UPDATE
+// that only matches SUBMITTED or EVALUATION_FAILED, clearing the failure
+// reason. If no row changes, including when a concurrent call got there first,
+// it returns exercise.ErrAttemptNotEvaluable, so two calls can never both start.
+func (r *AttemptRepository) StartEvaluation(ctx context.Context, id string) error {
+	changed, err := r.updateState(ctx,
+		`UPDATE challenge_attempts SET state = ?, failure_reason = NULL WHERE id = ? AND state IN (?, ?)`,
+		string(exercise.AttemptEvaluating), id, string(exercise.AttemptSubmitted), string(exercise.AttemptEvaluationFailed))
+	if err != nil {
+		return fmt.Errorf("sqlite: starting evaluation: %w", err)
+	}
+	if !changed {
+		return exercise.ErrAttemptNotEvaluable
+	}
+	return nil
+}
+
+// CompleteEvaluation moves an EVALUATING attempt to EVALUATED, else
+// exercise.ErrAttemptNotEvaluating.
+func (r *AttemptRepository) CompleteEvaluation(ctx context.Context, id string) error {
+	changed, err := r.updateState(ctx,
+		`UPDATE challenge_attempts SET state = ? WHERE id = ? AND state = ?`,
+		string(exercise.AttemptEvaluated), id, string(exercise.AttemptEvaluating))
+	if err != nil {
+		return fmt.Errorf("sqlite: completing evaluation: %w", err)
+	}
+	if !changed {
+		return exercise.ErrAttemptNotEvaluating
+	}
+	return nil
+}
+
+// FailEvaluation moves an EVALUATING attempt to EVALUATION_FAILED with the
+// reason, else exercise.ErrAttemptNotEvaluating.
+func (r *AttemptRepository) FailEvaluation(ctx context.Context, id, reason string) error {
+	changed, err := r.updateState(ctx,
+		`UPDATE challenge_attempts SET state = ?, failure_reason = ? WHERE id = ? AND state = ?`,
+		string(exercise.AttemptEvaluationFailed), nullIfEmpty(reason), id, string(exercise.AttemptEvaluating))
+	if err != nil {
+		return fmt.Errorf("sqlite: failing evaluation: %w", err)
+	}
+	if !changed {
+		return exercise.ErrAttemptNotEvaluating
+	}
+	return nil
+}
+
+// updateState runs a conditional state UPDATE and reports whether a row changed.
+func (r *AttemptRepository) updateState(ctx context.Context, query string, args ...any) (bool, error) {
+	result, err := execer(ctx, r.db).ExecContext(ctx, query, args...)
+	if err != nil {
+		return false, err
+	}
+	changed, err := result.RowsAffected()
+	return changed > 0, err
+}
+
+// DeleteUnfinishedEvaluations deletes every attempt left in EVALUATING or
+// EVALUATION_FAILED, with its submission, in one transaction, and returns how
+// many it removed. Evaluated attempts are untouched.
+func (r *AttemptRepository) DeleteUnfinishedEvaluations(ctx context.Context) (int, error) {
+	var removed int
+	err := withTx(ctx, r.db, func(q sqlExecer) error {
+		var err error
+		removed, err = deleteAttemptsWhere(ctx, q, `state IN (?, ?)`,
+			string(exercise.AttemptEvaluating), string(exercise.AttemptEvaluationFailed))
+		return err
+	})
+	if err != nil {
+		return 0, fmt.Errorf("sqlite: deleting unfinished evaluations: %w", err)
+	}
+	return removed, nil
 }

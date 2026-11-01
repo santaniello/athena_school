@@ -221,8 +221,13 @@ Each slice is TDD, keeps the build green and is committed on its own.
 - From `EVALUATION_FAILED`, `Evaluate` runs again and can succeed; on an `EVALUATED` attempt it
   returns the stored evaluation and does not call the evaluator.
 - While an attempt is `EVALUATING`, a second `Evaluate` on it is refused.
-- At startup, attempts left in `EVALUATING` or `EVALUATION_FAILED` are deleted with their
-  submission; evaluated ones are unchanged. Discarding one of these through Leave works too.
+- `DiscardUnfinishedEvaluations` deletes attempts left in `EVALUATING` or `EVALUATION_FAILED` with
+  their submission and leaves evaluated ones unchanged. The startup cleanup of
+  [3.4](04-exercise-service.md), `DiscardStaleAttempts`, still deletes every attempt that is not
+  `FINISHED`, so until [3.12](12-architecture-defense.md) introduces the path into `FINISHED` it
+  also deletes `EVALUATED` attempts with their evaluation (ADR-005, decision 9: the evaluation is
+  one stage of a sitting that ends with the defense). Discarding one of these through Leave works
+  too.
 - The evaluator is called with no open database transaction.
 - `go test -race ./...`, coverage ≥ 80%, `make mutation-go` clean for the changed
   domain/application code, lint and vulnerability checks pass.
