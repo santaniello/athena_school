@@ -34,6 +34,10 @@ export function DownloadExampleNote() {
   return window['go']['desktop']['App']['DownloadExampleNote']();
 }
 
+export function GenerateChallenge(arg1, arg2) {
+  return window['go']['desktop']['App']['GenerateChallenge'](arg1, arg2);
+}
+
 export function GetAttempt(arg1) {
   return window['go']['desktop']['App']['GetAttempt'](arg1);
 }

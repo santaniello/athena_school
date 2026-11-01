@@ -27,6 +27,7 @@ import (
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
 	"github.com/santaniello/athena/internal/infrastructure/athenahome"
 	"github.com/santaniello/athena/internal/infrastructure/configfile"
+	"github.com/santaniello/athena/internal/infrastructure/exercisesource"
 	"github.com/santaniello/athena/internal/infrastructure/openrouter"
 	"github.com/santaniello/athena/internal/infrastructure/profilefile"
 	"github.com/santaniello/athena/internal/infrastructure/sqlite"
@@ -129,6 +130,20 @@ func main() {
 		studySessions, transactor, systemClock{},
 	)
 
+	challengeRepo := sqlite.NewChallengeRepository(db)
+	rubricRepo := sqlite.NewRubricRepository(db)
+	sessionTopics := exercisesource.NewSessionTopics(studySessions)
+	generationService := applicationexercise.NewGenerationService(
+		sessionTopics,
+		exercisesource.NewSummaries(sqlite.NewConversationSummaryRepository(db)),
+		exercisesource.NewProfiles(profiles),
+		exercisesource.NewNotes(knowledgeService),
+		llmClient,
+		applicationexercise.NewChallengeService(challengeRepo, sessionTopics),
+		applicationexercise.NewRubricService(challengeRepo, rubricRepo),
+		transactor,
+	)
+
 	resetter := sqlite.NewResetter(db)
 	resetService := applicationreset.NewService(resetter, vectorStore)
 
@@ -137,6 +152,7 @@ func main() {
 		ingestService, llmClient, indexLoader, resetService,
 		desktop.WithModelSettings(settingsService),
 		desktop.WithAttemptService(attemptService),
+		desktop.WithGenerationService(generationService),
 	)
 
 	err = wails.Run(&options.App{
