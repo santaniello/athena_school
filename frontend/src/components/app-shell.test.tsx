@@ -40,6 +40,9 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   // The Sources panel (useSessionSources) fetches this itself as soon as a
   // session is open — resolved empty so it settles past its loading state.
   ListSessionSources: vi.fn().mockResolvedValue([]),
+  // The Settings screen's Minimum passing score section loads this on mount.
+  GetPassScore: vi.fn().mockResolvedValue(80),
+  SetPassScore: vi.fn(),
   // The Settings screen's Models section loads these on mount.
   GetModelSettings: vi.fn().mockResolvedValue({
     current: {

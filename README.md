@@ -231,6 +231,8 @@ Picking a file in the Sources panel does not import it right away: Athena reform
 
 The models are configurable in **Settings → Models**: one per feature (study chat, conversation summary, query enrichment, note formatting) plus the embedding model, each with a "Reset to default". Choices are saved immediately and apply to the next call; a missing `models:` section in `config.yaml` keeps today's defaults.
 
+The **minimum passing score** for architecture challenges is set in **Settings → Challenges** (50 to 100, default 80, stored as `pass_score` in `config.yaml`). A challenge is passed only when both the diagram and your explanation reach it on their own, with every mandatory criterion at level 2 or higher; the value in force is frozen on each attempt when its diagram is evaluated, so changing it never affects attempts you already finished. See [06-completion-rules.md](specs/phases/phase-03-architecture-lab/06-completion-rules.md).
+
 Because a chunk is tagged with the embedding model that produced it, **changing the configured embedding model leaves every existing chunk out of the index** — a stale-model vector isn't comparable to freshly embedded queries — until its document is imported again.
 
 ---

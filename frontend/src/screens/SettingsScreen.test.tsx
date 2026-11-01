@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import {
   GetModelSettings,
   HasOpenRouterKey,
+  GetPassScore,
   ListSelectableModels,
   ResetLocalData,
 } from '../../wailsjs/go/desktop/App'
@@ -16,6 +17,8 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   GetModelSettings: vi.fn(),
   SaveModelSettings: vi.fn(),
   ListSelectableModels: vi.fn(),
+  GetPassScore: vi.fn(),
+  SetPassScore: vi.fn(),
 }))
 
 describe('SettingsScreen', () => {
@@ -38,6 +41,14 @@ describe('SettingsScreen', () => {
       },
     } as never)
     vi.mocked(ListSelectableModels).mockResolvedValue({ chat: [], embedding: [] } as never)
+    vi.mocked(GetPassScore).mockResolvedValue(80)
+  })
+
+  it('shows the stored minimum passing score', async () => {
+    vi.mocked(GetPassScore).mockResolvedValue(72)
+    render(<SettingsScreen />)
+
+    expect(await screen.findByLabelText('Minimum passing score')).toHaveValue(72)
   })
 
   it('shows that a key is already configured, without ever showing it', async () => {
