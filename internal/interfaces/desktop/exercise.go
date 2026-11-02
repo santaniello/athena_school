@@ -63,6 +63,8 @@ const (
 	exerciseCodeSubmissionTooLate    = "submission_too_late"
 	exerciseCodeSubmissionInvalid    = "submission_invalid"
 	exerciseCodeInvalidGeneration    = "invalid_generation"
+	exerciseCodeCancelled            = "cancelled"
+	exerciseCodeGenerationInProgress = "generation_in_progress"
 	exerciseCodeInternal             = "internal"
 )
 
@@ -109,6 +111,8 @@ func toExerciseError(err error) *ExerciseError {
 		return &ExerciseError{Code: exerciseCodeSubmissionTooLate, Message: "the submission arrived after the time limit and the attempt was discarded"}
 	case errors.Is(err, applicationexercise.ErrInvalidGeneration):
 		return &ExerciseError{Code: exerciseCodeInvalidGeneration, Message: "the generated challenge was not valid, try again"}
+	case errors.Is(err, context.Canceled):
+		return &ExerciseError{Code: exerciseCodeCancelled, Message: "cancelled"}
 	case isInvalidSubmission(err):
 		return &ExerciseError{Code: exerciseCodeSubmissionInvalid, Message: err.Error()}
 	}
@@ -307,7 +311,12 @@ func (a *App) GenerateChallenge(sessionID, difficulty string) (ChallengeSummaryD
 	if domainexercise.DefaultTimeLimit(level) == 0 {
 		return ChallengeSummaryDTO{}, invalidInput("difficulty must be BEGINNER, INTERMEDIATE or ADVANCED")
 	}
-	challenge, err := a.generator.GenerateChallenge(a.ctx, sessionID, level)
+	ctx, release, ok := a.beginGeneration()
+	if !ok {
+		return ChallengeSummaryDTO{}, &ExerciseError{Code: exerciseCodeGenerationInProgress, Message: "a challenge is already being generated"}
+	}
+	defer release()
+	challenge, err := a.generator.GenerateChallenge(ctx, sessionID, level)
 	if err != nil {
 		return ChallengeSummaryDTO{}, toExerciseError(err)
 	}
@@ -424,4 +433,35 @@ func (a *App) ListSessionsForGeneration() ([]SessionOptionDTO, error) {
 		})
 	}
 	return dtos, nil
+}
+
+// beginGeneration reserves the single generation slot. It returns the context
+// the generation runs under and the function that frees the slot, or false
+// when a generation is already running.
+func (a *App) beginGeneration() (context.Context, func(), bool) {
+	a.generationMu.Lock()
+	defer a.generationMu.Unlock()
+	if a.cancelGeneration != nil {
+		return nil, nil, false
+	}
+	ctx, cancel := context.WithCancel(a.ctx)
+	a.cancelGeneration = cancel
+	return ctx, func() {
+		cancel()
+		a.generationMu.Lock()
+		a.cancelGeneration = nil
+		a.generationMu.Unlock()
+	}, true
+}
+
+// CancelChallengeGeneration cancels the challenge generation in flight, which
+// then fails with the cancelled code and stores nothing. With none running it
+// does nothing.
+func (a *App) CancelChallengeGeneration() error {
+	a.generationMu.Lock()
+	defer a.generationMu.Unlock()
+	if a.cancelGeneration != nil {
+		a.cancelGeneration()
+	}
+	return nil
 }

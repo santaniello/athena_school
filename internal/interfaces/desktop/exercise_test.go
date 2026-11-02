@@ -638,3 +638,77 @@ func TestApp_ListSessionsForGeneration_mapsFailuresToAnInternalError(t *testing.
 	// Then the error is the generic internal one
 	assert.Equal(t, exerciseCodeInternal, codeOf(t, err).Code)
 }
+
+// blockingGenerator waits until its context is cancelled, like a slow model call.
+type blockingGenerator struct{ started chan struct{} }
+
+func (g *blockingGenerator) GenerateChallenge(ctx context.Context, _ string, _ domainexercise.Difficulty) (domainexercise.Challenge, error) {
+	close(g.started)
+	<-ctx.Done()
+	return domainexercise.Challenge{}, fmt.Errorf("generating: %w", ctx.Err())
+}
+
+func TestApp_CancelChallengeGeneration_stopsTheRunningGeneration(t *testing.T) {
+	// Given a generation that is still running
+	generator := &blockingGenerator{started: make(chan struct{})}
+	app := newGenerationApp(generator)
+	result := make(chan error, 1)
+	go func() {
+		_, err := app.GenerateChallenge("session-1", "BEGINNER")
+		result <- err
+	}()
+	<-generator.started
+
+	// When the frontend cancels it
+	cancelErr := app.CancelChallengeGeneration()
+
+	// Then the generation ends with the cancelled code
+	require.NoError(t, cancelErr)
+	assert.Equal(t, exerciseCodeCancelled, codeOf(t, <-result).Code)
+}
+
+func TestApp_CancelChallengeGeneration_withNothingRunningDoesNothing(t *testing.T) {
+	// Given no generation running
+	app := newGenerationApp(&fakeChallengeGenerator{})
+
+	// When the frontend cancels
+	err := app.CancelChallengeGeneration()
+
+	// Then it is not an error
+	require.NoError(t, err)
+}
+
+func TestApp_GenerateChallenge_refusesASecondGenerationWhileOneRuns(t *testing.T) {
+	// Given a generation that is still running
+	generator := &blockingGenerator{started: make(chan struct{})}
+	app := newGenerationApp(generator)
+	first := make(chan error, 1)
+	go func() {
+		_, err := app.GenerateChallenge("session-1", "BEGINNER")
+		first <- err
+	}()
+	<-generator.started
+
+	// When the frontend starts another one
+	_, err := app.GenerateChallenge("session-2", "BEGINNER")
+
+	// Then it is refused and the first one is not disturbed
+	assert.Equal(t, exerciseCodeGenerationInProgress, codeOf(t, err).Code)
+	require.NoError(t, app.CancelChallengeGeneration())
+	<-first
+}
+
+func TestApp_GenerateChallenge_canRunAgainAfterOneFinished(t *testing.T) {
+	// Given a generation that failed
+	generator := &fakeChallengeGenerator{err: errors.New("provider down")}
+	app := newGenerationApp(generator)
+	_, err := app.GenerateChallenge("session-1", "BEGINNER")
+	require.Error(t, err)
+
+	// When the frontend retries
+	generator.err = nil
+	_, retryErr := app.GenerateChallenge("session-1", "BEGINNER")
+
+	// Then it is not refused as a concurrent generation
+	require.NoError(t, retryErr)
+}

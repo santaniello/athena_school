@@ -4,6 +4,7 @@ package desktop
 
 import (
 	"context"
+	"sync"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -38,6 +39,10 @@ type App struct {
 	generator     challengeGenerator
 	catalog       challengeCatalog
 	sessionLister sessionLister
+	// cancelGeneration cancels the challenge generation in flight, if any.
+	// Guarded by generationMu; only one generation runs at a time.
+	generationMu     sync.Mutex
+	cancelGeneration context.CancelFunc
 	// emit defaults to wailsruntime.EventsEmit, which calls log.Fatal (i.e.
 	// os.Exit) when a.ctx was never produced by the real Wails runtime —
 	// exactly the case in tests, which use context.Background(). Tests
