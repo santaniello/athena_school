@@ -58,6 +58,8 @@ type ChallengeRepository interface {
 	// Get returns the challenge, or ErrChallengeNotFound.
 	Get(ctx context.Context, id string) (Challenge, error)
 	List(ctx context.Context, filter ChallengeFilter, page Page) (ChallengePage, error)
+	// ListTopics returns the distinct topics of all challenges, alphabetically.
+	ListTopics(ctx context.Context) ([]string, error)
 }
 
 // ErrRubricNotFound is returned when no rubric version matches, or a

@@ -59,35 +59,54 @@ func (s *ProgressService) GetChallengeProgress(ctx context.Context, challengeID 
 }
 
 // summarize reads what the attempt's evaluations say. A running attempt has
-// none, so nothing is read for it.
+// none, so nothing is read for it; the rubric is read only when both
+// evaluations exist.
 func (s *ProgressService) summarize(ctx context.Context, attempt domainexercise.ChallengeAttempt) (domainexercise.AttemptSummary, error) {
+	record := domainexercise.AttemptRecord{Attempt: attempt}
+	if attempt.State == domainexercise.AttemptInProgress {
+		return summarizeRecord(record)
+	}
+	var err error
+	if record.Diagram, err = s.findEvaluation(ctx, attempt.ID, domainexercise.EvaluationKindDiagram); err != nil {
+		return domainexercise.AttemptSummary{}, err
+	}
+	if record.Understanding, err = s.findEvaluation(ctx, attempt.ID, domainexercise.EvaluationKindUnderstanding); err != nil {
+		return domainexercise.AttemptSummary{}, err
+	}
+	if record.Diagram != nil && record.Understanding != nil && domainexercise.ValidatePassScore(attempt.PassScore) == nil {
+		rubric, err := s.rubrics.Get(ctx, attempt.RubricVersionID)
+		if err != nil {
+			return domainexercise.AttemptSummary{}, fmt.Errorf("exercise: getting rubric: %w", err)
+		}
+		record.Rubric = &rubric
+	}
+	return summarizeRecord(record)
+}
+
+// summarizeRecord computes what DeriveProgress needs of one attempt from what
+// is known of it. Both evaluations must come with the rubric the attempt was
+// frozen to and a valid frozen minimum score; a record that has both
+// evaluations without them is inconsistent and is refused.
+func summarizeRecord(record domainexercise.AttemptRecord) (domainexercise.AttemptSummary, error) {
+	attempt := record.Attempt
 	pending := domainexercise.AttemptOutcome{Result: domainexercise.ResultPending}
 	if attempt.State == domainexercise.AttemptInProgress {
 		return domainexercise.AttemptSummary{Running: true, Outcome: pending}, nil
 	}
-	diagram, err := s.findEvaluation(ctx, attempt.ID, domainexercise.EvaluationKindDiagram)
-	if err != nil {
-		return domainexercise.AttemptSummary{}, err
-	}
-	understanding, err := s.findEvaluation(ctx, attempt.ID, domainexercise.EvaluationKindUnderstanding)
-	if err != nil {
-		return domainexercise.AttemptSummary{}, err
-	}
 	summary := domainexercise.AttemptSummary{Outcome: pending, SubmittedAt: attempt.SubmittedAt}
-	if diagram != nil {
-		summary.DiagramScore = diagram.Score
+	if record.Diagram != nil {
+		summary.DiagramScore = record.Diagram.Score
 	}
-	if diagram == nil || understanding == nil {
+	if record.Diagram == nil || record.Understanding == nil {
 		return summary, nil
 	}
 	if err := domainexercise.ValidatePassScore(attempt.PassScore); err != nil {
 		return domainexercise.AttemptSummary{}, fmt.Errorf("exercise: attempt %s has no valid frozen pass score: %w", attempt.ID, err)
 	}
-	rubric, err := s.rubrics.Get(ctx, attempt.RubricVersionID)
-	if err != nil {
-		return domainexercise.AttemptSummary{}, fmt.Errorf("exercise: getting rubric: %w", err)
+	if record.Rubric == nil {
+		return domainexercise.AttemptSummary{}, fmt.Errorf("exercise: attempt %s has no rubric to evaluate against", attempt.ID)
 	}
-	summary.Outcome = domainexercise.EvaluateOutcome(attempt.PassScore, rubric, diagram, understanding)
+	summary.Outcome = domainexercise.EvaluateOutcome(attempt.PassScore, *record.Rubric, record.Diagram, record.Understanding)
 	return summary, nil
 }
 

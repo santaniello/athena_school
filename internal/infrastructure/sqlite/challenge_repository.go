@@ -106,6 +106,28 @@ func (r *ChallengeRepository) List(ctx context.Context, filter exercise.Challeng
 	return exercise.ChallengePage{Items: items, Total: total}, nil
 }
 
+// ListTopics returns the distinct topics of all challenges, alphabetically.
+func (r *ChallengeRepository) ListTopics(ctx context.Context) ([]string, error) {
+	rows, err := execer(ctx, r.db).QueryContext(ctx, `SELECT DISTINCT topic FROM challenges ORDER BY topic`)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: listing challenge topics: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	topics := []string{}
+	for rows.Next() {
+		var topic string
+		if err := rows.Scan(&topic); err != nil {
+			return nil, fmt.Errorf("sqlite: scanning challenge topic: %w", err)
+		}
+		topics = append(topics, topic)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sqlite: iterating challenge topics: %w", err)
+	}
+	return topics, nil
+}
+
 // challengeWhere builds the WHERE clause (with its leading space, or empty)
 // and bound arguments for filter.
 func challengeWhere(filter exercise.ChallengeFilter) (string, []any) {
