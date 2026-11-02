@@ -88,12 +88,15 @@ describe('ChallengeRow', () => {
     renderRow(fresh, true)
 
     expect(screen.getByRole('listitem')).toHaveAttribute('aria-current', 'true')
+    expect(screen.getByRole('listitem')).toHaveClass('bg-primary/10', 'ring-1')
   })
 
   it('does not mark an ordinary row', () => {
     renderRow(fresh)
 
     expect(screen.getByRole('listitem')).not.toHaveAttribute('aria-current')
+    expect(screen.getByRole('listitem')).toHaveClass('flex')
+    expect(screen.getByRole('listitem')).not.toHaveClass('bg-primary/10')
   })
 
   it('falls back to the raw value for a status or difficulty it does not know', () => {

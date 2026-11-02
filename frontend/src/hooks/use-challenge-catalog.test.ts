@@ -161,4 +161,55 @@ describe('useChallengeCatalog', () => {
     await waitFor(() => expect(result.current.catalog).toEqual(catalogOf('c1')))
     expect(result.current.error).toBeNull()
   })
+
+  it('drops the catalog when a reload fails', async () => {
+    // Given a loaded catalog
+    vi.mocked(listChallengeCatalog)
+      .mockResolvedValueOnce(catalogOf('c1'))
+      .mockRejectedValueOnce(new Error('boom'))
+    const { result } = renderHook(() => useChallengeCatalog({}))
+    await waitFor(() => expect(result.current.catalog).toEqual(catalogOf('c1')))
+
+    // When a reload fails
+    act(() => result.current.reload())
+
+    // Then no stale catalog is left beside the error
+    await waitFor(() => expect(result.current.error).not.toBeNull())
+    expect(result.current.catalog).toBeNull()
+  })
+
+  it('clears an earlier error when a new filter loads successfully', async () => {
+    // Given a failed load
+    vi.mocked(listChallengeCatalog)
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce(catalogOf('c1'))
+    const { result, rerender } = renderHook(({ query }) => useChallengeCatalog({ query }), {
+      initialProps: { query: 'a' },
+    })
+    await waitFor(() => expect(result.current.error).not.toBeNull())
+
+    // When the filter changes and the next load succeeds
+    rerender({ query: 'b' })
+
+    // Then the error is gone
+    await waitFor(() => expect(result.current.catalog).toEqual(catalogOf('c1')))
+    expect(result.current.error).toBeNull()
+  })
+
+  it('reloads every time it is asked, not just the first', async () => {
+    // Given a loaded catalog
+    vi.mocked(listChallengeCatalog).mockClear()
+    vi.mocked(listChallengeCatalog).mockResolvedValue(catalogOf('c1'))
+    const { result } = renderHook(() => useChallengeCatalog({}))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    // When reloading twice in a row
+    act(() => result.current.reload())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    act(() => result.current.reload())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    // Then each reload fetched again
+    expect(listChallengeCatalog).toHaveBeenCalledTimes(3)
+  })
 })

@@ -162,6 +162,9 @@ describe('exerciseErrorCode', () => {
     expect(exerciseErrorCode(new Error('{"message":"no code"}'))).toBe('')
     expect(exerciseErrorCode('{"code": 7}')).toBe('')
     expect(exerciseErrorCode(undefined)).toBe('')
+    expect(exerciseErrorCode('7')).toBe('')
+    expect(exerciseErrorCode('null')).toBe('')
+    expect(exerciseErrorCode(7)).toBe('')
   })
 })
 

@@ -88,6 +88,42 @@ describe('GenerateChallengeDialog', () => {
     expect(options[1]).toHaveTextContent('Infra')
   })
 
+  it('shows a loading message, and nothing else to act on, until the sessions arrive', async () => {
+    const pending = deferred<SessionOption[]>()
+    vi.mocked(listSessionsForGeneration).mockReturnValue(pending.promise)
+    renderDialog()
+
+    expect(screen.getByText('Loading your study sessions…')).toBeInTheDocument()
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Generate' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Study a topic first/)).not.toBeInTheDocument()
+
+    pending.resolve([caching])
+    await screen.findAllByRole('radio')
+    expect(screen.queryByText('Loading your study sessions…')).not.toBeInTheDocument()
+  })
+
+  it('does not tell the user to study first when there are sessions', async () => {
+    renderDialog()
+    await screen.findAllByRole('radio')
+
+    expect(screen.queryByText(/Study a topic first/)).not.toBeInTheDocument()
+    expect(screen.queryByText('No study session matches your search.')).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('matches the search ignoring case and surrounding spaces, over the topic too', async () => {
+    const user = userEvent.setup()
+    renderDialog()
+    await screen.findAllByRole('radio')
+
+    await user.type(screen.getByRole('searchbox', { name: 'Search study sessions' }), '  cach ')
+
+    const options = screen.getAllByRole('radio')
+    expect(options).toHaveLength(1)
+    expect(options[0]).toHaveTextContent('Caching')
+  })
+
   it('filters the sessions by the search text over topic and folder name', async () => {
     const user = userEvent.setup()
     renderDialog()
@@ -122,6 +158,7 @@ describe('GenerateChallengeDialog', () => {
 
     expect(generate).toBeEnabled()
     expect(screen.getByRole('radio', { name: /Caching/ })).toBeChecked()
+    expect(screen.getByRole('radio', { name: /Message queues/ })).not.toBeChecked()
   })
 
   it('preselects the difficulty it is given', async () => {
@@ -179,6 +216,17 @@ describe('GenerateChallengeDialog', () => {
 
     expect(cancelChallengeGeneration).toHaveBeenCalledOnce()
     expect(props.onClose).toHaveBeenCalledOnce()
+  })
+
+  it('only closes, without cancelling anything, when dismissed while idle', async () => {
+    const user = userEvent.setup()
+    const props = renderDialog()
+    await screen.findAllByRole('radio')
+
+    await user.keyboard('{Escape}')
+
+    expect(props.onClose).toHaveBeenCalledOnce()
+    expect(cancelChallengeGeneration).not.toHaveBeenCalled()
   })
 
   it('stays open on a failure, shows the error and offers a retry that works', async () => {

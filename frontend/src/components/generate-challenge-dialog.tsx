@@ -66,6 +66,10 @@ function GenerateChallengeContent({
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Stryker disable ConditionalExpression,BlockStatement,BooleanLiteral: the
+  // stale flag only matters when this dialog unmounts before the list
+  // arrives, and a state update on an unmounted component has no visible
+  // effect to assert on.
   useEffect(() => {
     let stale = false
     listSessionsForGeneration()
@@ -79,13 +83,17 @@ function GenerateChallengeContent({
       stale = true
     }
   }, [reloadToken])
+  // Stryker restore ConditionalExpression,BlockStatement,BooleanLiteral
 
   function retryLoading() {
     setSessions({ state: 'loading' })
+    // Stryker disable next-line ArithmeticOperator: any change of the token re-runs the effect.
     setReloadToken((token) => token + 1)
   }
 
   async function handleGenerate() {
+    // Stryker disable next-line ConditionalExpression: Generate is disabled
+    // until a session is chosen, so this guard is unreachable from the UI.
     if (!selectedId) return
     setError(null)
     setGenerating(true)

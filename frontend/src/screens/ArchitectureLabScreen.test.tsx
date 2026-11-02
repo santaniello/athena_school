@@ -241,12 +241,55 @@ describe('ArchitectureLabScreen', () => {
   })
 
   it('keeps the topic filter usable when the topics cannot be loaded', async () => {
+    const user = userEvent.setup()
     vi.mocked(listChallengeTopics).mockRejectedValue(new Error('boom'))
     vi.mocked(listChallengeCatalog).mockResolvedValue(catalog([item('c1')]))
 
     render(<ArchitectureLabScreen experienceLevel="intermediate" />)
 
     expect(await screen.findByText('Challenge c1')).toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: 'Topic' })).toBeInTheDocument()
+    await user.click(screen.getByRole('combobox', { name: 'Topic' }))
+    expect(await screen.findAllByRole('option')).toHaveLength(1)
+    expect(screen.getByRole('option', { name: 'All topics' })).toBeInTheDocument()
+  })
+
+  it('starts with every filter on "All"', async () => {
+    vi.mocked(listChallengeCatalog).mockResolvedValue(catalog([item('c1')]))
+
+    render(<ArchitectureLabScreen experienceLevel="intermediate" />)
+    await screen.findByText('Challenge c1')
+
+    expect(screen.getByRole('combobox', { name: 'Status' })).toHaveTextContent('All statuses')
+    expect(screen.getByRole('combobox', { name: 'Difficulty' })).toHaveTextContent(
+      'All difficulties',
+    )
+    expect(screen.getByRole('combobox', { name: 'Topic' })).toHaveTextContent('All topics')
+  })
+
+  it('reloads after a generation even when no filter was set', async () => {
+    const user = userEvent.setup()
+    vi.mocked(listChallengeCatalog).mockResolvedValue(catalog([item('c1')]))
+    render(<ArchitectureLabScreen experienceLevel="intermediate" />)
+    await screen.findByText('Challenge c1')
+    await user.click(screen.getByRole('button', { name: 'Generate challenge with AI' }))
+
+    await user.click(screen.getByRole('button', { name: 'finish generation' }))
+
+    await waitFor(() => expect(listChallengeCatalog).toHaveBeenCalledTimes(2))
+  })
+
+  it('keeps showing the rows while a reload is in flight', async () => {
+    const user = userEvent.setup()
+    vi.mocked(listChallengeCatalog)
+      .mockResolvedValueOnce(catalog([item('c1')]))
+      .mockReturnValueOnce(new Promise(() => {}))
+    render(<ArchitectureLabScreen experienceLevel="intermediate" />)
+    await screen.findByText('Challenge c1')
+    await user.click(screen.getByRole('button', { name: 'Generate challenge with AI' }))
+
+    await user.click(screen.getByRole('button', { name: 'finish generation' }))
+
+    expect(screen.getByText('Challenge c1')).toBeInTheDocument()
+    expect(screen.queryByText('Loading challenges…')).not.toBeInTheDocument()
   })
 })
