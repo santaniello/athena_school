@@ -92,6 +92,26 @@ export namespace desktop {
 		    return a;
 		}
 	}
+	export class ChallengeSummaryDTO {
+	    id: string;
+	    title: string;
+	    topic: string;
+	    difficulty: string;
+	    timeLimitMinutes: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ChallengeSummaryDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.topic = source["topic"];
+	        this.difficulty = source["difficulty"];
+	        this.timeLimitMinutes = source["timeLimitMinutes"];
+	    }
+	}
 	export class ChunkLoadIssueResult {
 	    chunkId: string;
 	    itemId: string;
@@ -280,6 +300,7 @@ export namespace desktop {
 	    conversationSummary: string;
 	    queryEnrichment: string;
 	    noteFormatting: string;
+	    architectureLab: string;
 	    embedding: string;
 	
 	    static createFrom(source: any = {}) {
@@ -292,6 +313,7 @@ export namespace desktop {
 	        this.conversationSummary = source["conversationSummary"];
 	        this.queryEnrichment = source["queryEnrichment"];
 	        this.noteFormatting = source["noteFormatting"];
+	        this.architectureLab = source["architectureLab"];
 	        this.embedding = source["embedding"];
 	    }
 	}

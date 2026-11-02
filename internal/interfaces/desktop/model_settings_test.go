@@ -58,6 +58,7 @@ func TestApp_GetModelSettings_returnsChoicesAndDefaultsForTheUI(t *testing.T) {
 		ConversationSummary: "openai/gpt-4o-mini",
 		QueryEnrichment:     "openai/gpt-4o-mini",
 		NoteFormatting:      "anthropic/claude-sonnet-4.5",
+		ArchitectureLab:     "anthropic/claude-sonnet-4.5",
 		Embedding:           "openai/text-embedding-3-small",
 	}, result.Defaults)
 }
@@ -89,6 +90,20 @@ func TestApp_SaveModelSettings_chatModelChange_savesWithoutTouchingTheIndex(t *t
 	require.NoError(t, err)
 	assert.False(t, result.EmbeddingModelChanged)
 	assert.Empty(t, f.emitted)
+}
+
+func TestApp_SaveModelSettings_savesTheArchitectureLabModel(t *testing.T) {
+	// Given a catalog that knows the chosen Architecture Lab model
+	f := newModelSettingsApp(t, nil)
+	f.catalog.EXPECT().ListModels(context.Background()).Return([]domainllm.ModelInfo{{ID: "openai/gpt-5"}}, nil).Once()
+	f.config.EXPECT().Load().Return(domainconfig.Config{OpenRouterKey: "k"}, nil).Once()
+	f.config.EXPECT().Save(domainconfig.Config{OpenRouterKey: "k", Models: domainconfig.ModelSettings{ArchitectureLab: "openai/gpt-5"}}).Return(nil).Once()
+
+	// When saving it
+	_, err := f.app.SaveModelSettings(ModelChoices{ArchitectureLab: "openai/gpt-5"})
+
+	// Then it reaches the config
+	require.NoError(t, err)
 }
 
 func TestApp_SaveModelSettings_unknownModel_isRejected(t *testing.T) {

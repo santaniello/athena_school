@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
@@ -16,6 +17,16 @@ func WithAttemptService(service *applicationexercise.AttemptService) Option {
 	return func(a *App) { a.exercise = service }
 }
 
+// challengeGenerator is the use case behind GenerateChallenge (spec 3.6.1).
+type challengeGenerator interface {
+	GenerateChallenge(ctx context.Context, sessionID string, difficulty domainexercise.Difficulty) (domainexercise.Challenge, error)
+}
+
+// WithGenerationService wires challenge generation from a studied session.
+func WithGenerationService(generator challengeGenerator) Option {
+	return func(a *App) { a.generator = generator }
+}
+
 // Stable ExerciseError.Code values the frontend switches on.
 const (
 	exerciseCodeInvalidInput         = "invalid_input"
@@ -29,6 +40,7 @@ const (
 	exerciseCodeAttemptFinished      = "attempt_finished"
 	exerciseCodeSubmissionTooLate    = "submission_too_late"
 	exerciseCodeSubmissionInvalid    = "submission_invalid"
+	exerciseCodeInvalidGeneration    = "invalid_generation"
 	exerciseCodeInternal             = "internal"
 )
 
@@ -73,6 +85,8 @@ func toExerciseError(err error) *ExerciseError {
 		return &ExerciseError{Code: exerciseCodeAttemptFinished, Message: "a finished attempt cannot be discarded"}
 	case errors.Is(err, applicationexercise.ErrSubmissionTooLate):
 		return &ExerciseError{Code: exerciseCodeSubmissionTooLate, Message: "the submission arrived after the time limit and the attempt was discarded"}
+	case errors.Is(err, applicationexercise.ErrInvalidGeneration):
+		return &ExerciseError{Code: exerciseCodeInvalidGeneration, Message: "the generated challenge was not valid, try again"}
 	case isInvalidSubmission(err):
 		return &ExerciseError{Code: exerciseCodeSubmissionInvalid, Message: err.Error()}
 	}
@@ -246,4 +260,40 @@ func (a *App) discardStaleAttempts() {
 		return
 	}
 	log.Printf("discarded %d stale exam attempt(s)", removed)
+}
+
+// ChallengeSummaryDTO is the short read model of a challenge: enough for the
+// catalog to list it.
+type ChallengeSummaryDTO struct {
+	ID               string `json:"id"`
+	Title            string `json:"title"`
+	Topic            string `json:"topic"`
+	Difficulty       string `json:"difficulty"`
+	TimeLimitMinutes int    `json:"timeLimitMinutes"`
+}
+
+// GenerateChallenge asks the AI for a challenge and its rubric from a studied
+// session and saves them to the catalog; it does not start the exam. A failure
+// stores nothing and may be retried. See
+// specs/phases/phase-03-architecture-lab/06-01-challenge-generation.md.
+func (a *App) GenerateChallenge(sessionID, difficulty string) (ChallengeSummaryDTO, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return ChallengeSummaryDTO{}, invalidInput("session id is required")
+	}
+	level := domainexercise.Difficulty(difficulty)
+	if domainexercise.DefaultTimeLimit(level) == 0 {
+		return ChallengeSummaryDTO{}, invalidInput("difficulty must be BEGINNER, INTERMEDIATE or ADVANCED")
+	}
+	challenge, err := a.generator.GenerateChallenge(a.ctx, sessionID, level)
+	if err != nil {
+		return ChallengeSummaryDTO{}, toExerciseError(err)
+	}
+	return ChallengeSummaryDTO{
+		ID:               challenge.ID,
+		Title:            challenge.Title,
+		Topic:            challenge.Topic,
+		Difficulty:       string(challenge.Difficulty),
+		TimeLimitMinutes: challenge.TimeLimitMinutes,
+	}, nil
 }

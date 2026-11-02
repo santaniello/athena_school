@@ -367,3 +367,92 @@ func TestApp_bindings_rejectBlankIDsWithoutCallingTheService(t *testing.T) {
 		})
 	}
 }
+
+type fakeChallengeGenerator struct {
+	challenge  domainexercise.Challenge
+	err        error
+	sessionID  string
+	difficulty domainexercise.Difficulty
+}
+
+func (g *fakeChallengeGenerator) GenerateChallenge(_ context.Context, sessionID string, difficulty domainexercise.Difficulty) (domainexercise.Challenge, error) {
+	g.sessionID, g.difficulty = sessionID, difficulty
+	return g.challenge, g.err
+}
+
+func newGenerationApp(generator challengeGenerator) *App {
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, WithGenerationService(generator))
+	app.ctx = context.Background()
+	return app
+}
+
+func TestApp_GenerateChallenge_returnsTheChallengeSummary(t *testing.T) {
+	// Given a generator that creates a challenge
+	generator := &fakeChallengeGenerator{challenge: domainexercise.Challenge{
+		ID: "challenge-1", Title: "Design a global cache", Topic: "distributed caching",
+		Difficulty: domainexercise.DifficultyAdvanced, TimeLimitMinutes: 60,
+		Scenario: "not part of the summary",
+	}}
+	app := newGenerationApp(generator)
+
+	// When the frontend generates a challenge for a session
+	got, err := app.GenerateChallenge(" session-1 ", "ADVANCED")
+
+	// Then the summary is returned and the use case got the trimmed id and the difficulty
+	require.NoError(t, err)
+	assert.Equal(t, ChallengeSummaryDTO{
+		ID: "challenge-1", Title: "Design a global cache", Topic: "distributed caching",
+		Difficulty: "ADVANCED", TimeLimitMinutes: 60,
+	}, got)
+	assert.Equal(t, "session-1", generator.sessionID)
+	assert.Equal(t, domainexercise.DifficultyAdvanced, generator.difficulty)
+}
+
+func TestApp_GenerateChallenge_rejectsInvalidInputBeforeCallingTheUseCase(t *testing.T) {
+	tests := []struct {
+		name       string
+		sessionID  string
+		difficulty string
+	}{
+		{"blank session id", "  ", "BEGINNER"},
+		{"unknown difficulty", "session-1", "EXPERT"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given a generator that must not be called
+			generator := &fakeChallengeGenerator{}
+			app := newGenerationApp(generator)
+
+			// When the frontend generates with that input
+			_, err := app.GenerateChallenge(tt.sessionID, tt.difficulty)
+
+			// Then it is an invalid_input error and nothing reached the use case
+			assert.Equal(t, exerciseCodeInvalidInput, codeOf(t, err).Code)
+			assert.Empty(t, generator.sessionID)
+		})
+	}
+}
+
+func TestApp_GenerateChallenge_mapsUseCaseErrorsToCodes(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		code string
+	}{
+		{"unknown session", fmt.Errorf("wrapped: %w", applicationexercise.ErrSourceSessionNotFound), exerciseCodeSessionNotFound},
+		{"invalid model output", fmt.Errorf("wrapped: %w", applicationexercise.ErrInvalidGeneration), exerciseCodeInvalidGeneration},
+		{"provider failure", errors.New("openrouter is down"), exerciseCodeInternal},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given a generator that fails
+			app := newGenerationApp(&fakeChallengeGenerator{err: tt.err})
+
+			// When the frontend generates a challenge
+			_, err := app.GenerateChallenge("session-1", "BEGINNER")
+
+			// Then the error carries the stable code
+			assert.Equal(t, tt.code, codeOf(t, err).Code)
+		})
+	}
+}

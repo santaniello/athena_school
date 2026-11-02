@@ -50,6 +50,7 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
       conversationSummary: '',
       queryEnrichment: '',
       noteFormatting: '',
+      architectureLab: '',
       embedding: '',
     },
     defaults: {
@@ -57,6 +58,7 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
       conversationSummary: 'openai/gpt-4o-mini',
       queryEnrichment: 'openai/gpt-4o-mini',
       noteFormatting: 'anthropic/claude-sonnet-4.5',
+      architectureLab: 'anthropic/claude-sonnet-4.5',
       embedding: 'openai/text-embedding-3-small',
     },
   }),

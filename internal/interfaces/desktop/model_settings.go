@@ -12,6 +12,7 @@ type ModelChoices struct {
 	ConversationSummary string `json:"conversationSummary"`
 	QueryEnrichment     string `json:"queryEnrichment"`
 	NoteFormatting      string `json:"noteFormatting"`
+	ArchitectureLab     string `json:"architectureLab"`
 	Embedding           string `json:"embedding"`
 }
 
@@ -39,6 +40,7 @@ func toModelChoices(models domainconfig.ModelSettings) ModelChoices {
 		ConversationSummary: models.ConversationSummary,
 		QueryEnrichment:     models.QueryEnrichment,
 		NoteFormatting:      models.NoteFormatting,
+		ArchitectureLab:     models.ArchitectureLab,
 		Embedding:           models.Embedding,
 	}
 }
@@ -49,6 +51,7 @@ func (c ModelChoices) toSettings() domainconfig.ModelSettings {
 		ConversationSummary: c.ConversationSummary,
 		QueryEnrichment:     c.QueryEnrichment,
 		NoteFormatting:      c.NoteFormatting,
+		ArchitectureLab:     c.ArchitectureLab,
 		Embedding:           c.Embedding,
 	}
 }

@@ -1,0 +1,156 @@
+package exercisesource
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	applicationexercise "github.com/santaniello/athena/internal/application/exercise"
+	domainexercise "github.com/santaniello/athena/internal/domain/exercise"
+	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
+	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
+	domainprofile "github.com/santaniello/athena/internal/domain/profile"
+	profilemocks "github.com/santaniello/athena/internal/domain/profile/mocks"
+	domainstudy "github.com/santaniello/athena/internal/domain/study"
+	studymocks "github.com/santaniello/athena/internal/domain/study/mocks"
+)
+
+func TestSessionTopics_ReadSession_returnsTopicAndGoal(t *testing.T) {
+	// Given a stored study session
+	sessions := studymocks.NewMockSessionRepository(t)
+	ctx := context.Background()
+	sessions.EXPECT().GetByID(ctx, "session-1").Return(domainstudy.Session{ID: "session-1", Topic: "Caching", Goal: "Interview"}, nil)
+
+	// When its topic is read
+	got, err := NewSessionTopics(sessions).ReadSession(ctx, "session-1")
+
+	// Then topic and goal come back
+	require.NoError(t, err)
+	assert.Equal(t, domainexercise.SourceSession{Topic: "Caching", Goal: "Interview"}, got)
+}
+
+func TestSessionTopics_ReadSession_translatesAnUnknownSession(t *testing.T) {
+	// Given a session that does not exist
+	sessions := studymocks.NewMockSessionRepository(t)
+	ctx := context.Background()
+	sessions.EXPECT().GetByID(ctx, "nope").Return(domainstudy.Session{}, domainstudy.ErrSessionNotFound)
+
+	// When its topic is read
+	_, err := NewSessionTopics(sessions).ReadSession(ctx, "nope")
+
+	// Then the exercise port's sentinel is returned
+	require.ErrorIs(t, err, applicationexercise.ErrSourceSessionNotFound)
+}
+
+func TestSessionTopics_ReadSession_passesOtherFailuresThrough(t *testing.T) {
+	// Given a store that fails
+	sessions := studymocks.NewMockSessionRepository(t)
+	ctx := context.Background()
+	failure := errors.New("db down")
+	sessions.EXPECT().GetByID(ctx, "session-1").Return(domainstudy.Session{}, failure)
+
+	// When the topic is read
+	_, err := NewSessionTopics(sessions).ReadSession(ctx, "session-1")
+
+	// Then that failure is returned, not mistaken for an unknown session
+	require.ErrorIs(t, err, failure)
+	assert.NotErrorIs(t, err, applicationexercise.ErrSourceSessionNotFound)
+}
+
+func TestSummaries_ReadSummary(t *testing.T) {
+	failure := errors.New("db down")
+	tests := []struct {
+		name    string
+		stored  domainstudy.ConversationSummary
+		err     error
+		want    string
+		wantErr error
+	}{
+		{"a stored summary", domainstudy.ConversationSummary{Content: "We covered eviction."}, nil, "We covered eviction.", nil},
+		{"no summary yet", domainstudy.ConversationSummary{}, domainstudy.ErrConversationSummaryNotFound, "", nil},
+		{"a failing store", domainstudy.ConversationSummary{}, failure, "", failure},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given a summary store answering as in the case
+			repo := studymocks.NewMockConversationSummaryRepository(t)
+			ctx := context.Background()
+			repo.EXPECT().Get(ctx, "session-1").Return(tt.stored, tt.err)
+
+			// When the summary is read
+			got, err := NewSummaries(repo).ReadSummary(ctx, "session-1")
+
+			// Then a missing summary is empty and a failure is returned
+			assert.Equal(t, tt.want, got)
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestProfiles_ReadProfile_returnsAreaLevelAndLanguage(t *testing.T) {
+	// Given a stored profile
+	store := profilemocks.NewMockStore(t)
+	store.EXPECT().Load().Return(domainprofile.UserProfile{Name: "Ana", Area: "backend", ExperienceLevel: "advanced", AssistantLanguage: "pt"}, nil)
+
+	// When it is read for generation
+	got, err := NewProfiles(store).ReadProfile(context.Background())
+
+	// Then only what generation needs comes back
+	require.NoError(t, err)
+	assert.Equal(t, domainexercise.GenerationProfile{Area: "backend", ExperienceLevel: "advanced", Language: "pt"}, got)
+}
+
+func TestProfiles_ReadProfile_returnsALoadFailure(t *testing.T) {
+	// Given a profile that cannot be loaded
+	store := profilemocks.NewMockStore(t)
+	failure := errors.New("no profile")
+	store.EXPECT().Load().Return(domainprofile.UserProfile{}, failure)
+
+	// When it is read
+	_, err := NewProfiles(store).ReadProfile(context.Background())
+
+	// Then the failure is returned
+	require.ErrorIs(t, err, failure)
+}
+
+func TestNotes_SearchNotes_searchesTheSessionWithTheQuery(t *testing.T) {
+	// Given a retriever that finds two chunks
+	retriever := knowledgemocks.NewMockRetriever(t)
+	ctx := context.Background()
+	retriever.EXPECT().Retrieve(ctx, "session-1", []string{"Caching"}).Return(domainknowledge.RetrievalResult{
+		Chunks: []domainknowledge.ScoredChunk{
+			{Chunk: domainknowledge.Chunk{FilePath: "cache.md", Content: "LRU evicts the oldest."}},
+			{Chunk: domainknowledge.Chunk{FilePath: "ttl.md", Content: "TTL expires entries."}},
+		},
+	}, nil)
+
+	// When the notes are searched
+	got, err := NewNotes(retriever).SearchNotes(ctx, "session-1", "Caching")
+
+	// Then each chunk becomes an excerpt, in order
+	require.NoError(t, err)
+	assert.Equal(t, []domainexercise.NoteExcerpt{
+		{Source: "cache.md", Content: "LRU evicts the oldest."},
+		{Source: "ttl.md", Content: "TTL expires entries."},
+	}, got)
+}
+
+func TestNotes_SearchNotes_returnsARetrievalFailure(t *testing.T) {
+	// Given an index that is not ready
+	retriever := knowledgemocks.NewMockRetriever(t)
+	ctx := context.Background()
+	retriever.EXPECT().Retrieve(ctx, "session-1", []string{"Caching"}).Return(domainknowledge.RetrievalResult{}, domainknowledge.ErrVectorStoreUnavailable)
+
+	// When the notes are searched
+	_, err := NewNotes(retriever).SearchNotes(ctx, "session-1", "Caching")
+
+	// Then the failure is returned for the caller to skip
+	require.ErrorIs(t, err, domainknowledge.ErrVectorStoreUnavailable)
+}

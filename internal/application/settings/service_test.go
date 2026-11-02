@@ -59,6 +59,7 @@ func TestGetModelSettings_returnsStoredChoicesAndTheDefaults(t *testing.T) {
 		ConversationSummary: "openai/gpt-4o-mini",
 		QueryEnrichment:     "openai/gpt-4o-mini",
 		NoteFormatting:      "anthropic/claude-sonnet-4.5",
+		ArchitectureLab:     "anthropic/claude-sonnet-4.5",
 		Embedding:           "openai/text-embedding-3-small",
 	}, view.Defaults)
 }
@@ -93,13 +94,14 @@ func TestApplyStored_pushesTheStoredChoicesIntoTheResolver(t *testing.T) {
 	// Given a stored config with several models chosen
 	f := newFixture(t)
 	f.config.EXPECT().Load().Return(domainconfig.Config{Models: domainconfig.ModelSettings{
-		Study: "openai/gpt-5", ConversationSummary: "x/y", QueryEnrichment: "q/r", NoteFormatting: "n/f", Embedding: "e/m",
+		Study: "openai/gpt-5", ConversationSummary: "x/y", QueryEnrichment: "q/r", NoteFormatting: "n/f", ArchitectureLab: "a/l", Embedding: "e/m",
 	}}, nil).Once()
 	f.applier.EXPECT().SetOverrides(map[domainllm.TaskType]string{
 		domainllm.TaskStudy:               "openai/gpt-5",
 		domainllm.TaskConversationSummary: "x/y",
 		domainllm.TaskQueryEnrichment:     "q/r",
 		domainllm.TaskNoteFormatting:      "n/f",
+		domainllm.TaskArchitectureLab:     "a/l",
 	}, "e/m").Once()
 
 	// When applying the stored settings at startup
@@ -128,13 +130,16 @@ func TestSaveModelSettings_validChoices_persistAndUpdateTheResolver(t *testing.T
 	ctx := context.Background()
 	f.catalog.EXPECT().ListModels(ctx).Return(chatCatalog, nil).Once()
 	f.config.EXPECT().Load().Return(domainconfig.Config{OpenRouterKey: "sk-or-key"}, nil).Once()
-	chosen := domainconfig.ModelSettings{Study: "openai/gpt-5", NoteFormatting: "openai/gpt-4o-mini"}
-	f.config.EXPECT().Save(domainconfig.Config{OpenRouterKey: "sk-or-key", Models: chosen}).Return(nil).Once()
+	chosen := domainconfig.ModelSettings{Study: "openai/gpt-5", NoteFormatting: "openai/gpt-4o-mini", ArchitectureLab: " openai/gpt-5 "}
+	f.config.EXPECT().Save(domainconfig.Config{OpenRouterKey: "sk-or-key", Models: domainconfig.ModelSettings{
+		Study: "openai/gpt-5", NoteFormatting: "openai/gpt-4o-mini", ArchitectureLab: "openai/gpt-5",
+	}}).Return(nil).Once()
 	f.applier.EXPECT().SetOverrides(map[domainllm.TaskType]string{
 		domainllm.TaskStudy:               "openai/gpt-5",
 		domainllm.TaskConversationSummary: "",
 		domainllm.TaskQueryEnrichment:     "",
 		domainllm.TaskNoteFormatting:      "openai/gpt-4o-mini",
+		domainllm.TaskArchitectureLab:     "openai/gpt-5",
 	}, "").Once()
 
 	// When saving them
@@ -159,6 +164,19 @@ func TestSaveModelSettings_unknownChatModel_isRejectedAndPersistsNothing(t *test
 	// and no resolver update (the strict mocks fail on any call)
 	require.ErrorIs(t, err, ErrUnknownModel)
 	assert.Contains(t, err.Error(), "made/up")
+}
+
+func TestSaveModelSettings_unknownArchitectureLabModel_isRejected(t *testing.T) {
+	// Given a catalog that does not list the chosen Architecture Lab model
+	f := newFixture(t)
+	ctx := context.Background()
+	f.catalog.EXPECT().ListModels(ctx).Return(chatCatalog, nil).Once()
+
+	// When saving it
+	_, err := f.service.SaveModelSettings(ctx, domainconfig.ModelSettings{ArchitectureLab: "made/up"})
+
+	// Then it is rejected and nothing is saved
+	require.ErrorIs(t, err, ErrUnknownModel)
 }
 
 func TestSaveModelSettings_catalogUnreachable_refusesTheSave(t *testing.T) {
@@ -334,6 +352,7 @@ func overridesOf(m domainconfig.ModelSettings) map[domainllm.TaskType]string {
 		domainllm.TaskConversationSummary: m.ConversationSummary,
 		domainllm.TaskQueryEnrichment:     m.QueryEnrichment,
 		domainllm.TaskNoteFormatting:      m.NoteFormatting,
+		domainllm.TaskArchitectureLab:     m.ArchitectureLab,
 	}
 }
 

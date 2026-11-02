@@ -19,6 +19,7 @@ const DEFAULTS = {
   conversationSummary: 'openai/gpt-4o-mini',
   queryEnrichment: 'openai/gpt-4o-mini',
   noteFormatting: 'anthropic/claude-sonnet-4.5',
+  architectureLab: 'anthropic/claude-sonnet-4.5',
   embedding: 'openai/text-embedding-3-small',
 }
 const NONE = {
@@ -26,6 +27,7 @@ const NONE = {
   conversationSummary: '',
   queryEnrichment: '',
   noteFormatting: '',
+  architectureLab: '',
   embedding: '',
 }
 const CHAT_MODELS = [
@@ -69,7 +71,7 @@ describe('ModelSettingsSection', () => {
     expect(screen.getByRole('combobox', { name: 'Study chat model' })).toHaveTextContent(
       'openai/gpt-5',
     )
-    expect(screen.getAllByText('Default: anthropic/claude-sonnet-4.5')).toHaveLength(2)
+    expect(screen.getAllByText('Default: anthropic/claude-sonnet-4.5')).toHaveLength(3)
     expect(screen.getByRole('combobox', { name: 'Conversation summary model' })).toHaveTextContent(
       'openai/gpt-4o-mini',
     )
@@ -77,6 +79,7 @@ describe('ModelSettingsSection', () => {
     expect(
       screen.getByRole('combobox', { name: 'Note formatting (import) model' }),
     ).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Architecture Lab model' })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Embedding model' })).toHaveTextContent(
       'openai/text-embedding-3-small',
     )
@@ -198,6 +201,7 @@ describe('ModelSettingsSection', () => {
 
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     expect(SaveModelSettings).not.toHaveBeenCalled()
+    expect(screen.getByRole('combobox', { name: 'Architecture Lab model' })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Embedding model' })).toHaveTextContent(
       'openai/text-embedding-3-small',
     )
@@ -216,6 +220,7 @@ describe('ModelSettingsSection', () => {
       embedding: 'openai/text-embedding-3-large',
     })
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+    expect(screen.getByRole('combobox', { name: 'Architecture Lab model' })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Embedding model' })).toHaveTextContent(
       'openai/text-embedding-3-large',
     )

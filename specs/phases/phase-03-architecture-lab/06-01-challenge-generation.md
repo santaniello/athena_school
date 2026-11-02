@@ -81,9 +81,9 @@ Order of work:
 4. Build and validate the challenge and the rubric criteria (decision 5).
 5. In one transaction, call `ChallengeService.Create` and `RubricService.SetChallengeRubric`. The
    service runs both through the `Transactor` port of [3.4](04-exercise-service.md) (`WithinTx`,
-   the pattern of `application/study/transactor.go`); each one has a variant that takes the
-   repositories bound to that transaction, so a failure of the rubric also rolls back the
-   challenge.
+   the pattern of `application/study/transactor.go`). The transaction travels in the context, so
+   the existing `ChallengeService.Create` and `RubricService.SetChallengeRubric` join it without a
+   variant, and a failure of the rubric also rolls back the challenge.
 
 The prompt lives in `internal/application/exercise/generation_prompt.go`, a pure function of the
 context so its content is unit tested. Errors are exported sentinels.
@@ -101,16 +101,16 @@ No screen in this spec.
 
 Each slice is TDD, keeps the build green and is committed on its own.
 
-- [ ] Application: ports (`SummaryReader`, `ProfileReader`, `NotesSearcher`, LLM), error sentinels
-- [ ] Context builder: topic, goal, summary, profile, notes bounded by 8 chunks and 6,000
+- [x] Application: ports (`SummaryReader`, `ProfileReader`, `NotesSearcher`, LLM), error sentinels
+- [x] Context builder: topic, goal, summary, profile, notes bounded by 8 chunks and 6,000
       characters; missing pieces skipped; notes failure does not fail generation
-- [ ] Prompt builder: language, difficulty, the "no solution" rule, JSON schema
-- [ ] Parsing and validation of the model output into a challenge and rubric criteria
-- [ ] `GenerateChallenge`: success path saving challenge and rubric in one transaction
-- [ ] Failures: unknown session, provider error, cancelled context, invalid output store nothing
-- [ ] `ModelSettings.ArchitectureLab`, `TaskArchitectureLab` and its tier, the field in the model
+- [x] Prompt builder: language, difficulty, the "no solution" rule, JSON schema
+- [x] Parsing and validation of the model output into a challenge and rubric criteria
+- [x] `GenerateChallenge`: success path saving challenge and rubric in one transaction
+- [x] Failures: unknown session, provider error, cancelled context, invalid output store nothing
+- [x] `ModelSettings.ArchitectureLab`, `TaskArchitectureLab` and its tier, the field in the model
       settings binding and Settings screen ("Architecture Lab model", with Reset to default)
-- [ ] Binding and `wailsjs` regenerated; mocks regenerated; usage accounting wired
+- [x] Binding and `wailsjs` regenerated; mocks regenerated; usage accounting wired
 - [ ] Docs: CHANGELOG entry
 
 ## Acceptance Criteria
