@@ -203,3 +203,23 @@ type SessionOptionRepository interface {
 	// started first.
 	ListAll(ctx context.Context) ([]SessionOption, error)
 }
+
+// AttemptRecord is an attempt with what its outcome is computed from: its
+// evaluations, if it has them, and the rubric criteria it was frozen to.
+// Rubric is nil for an attempt without evaluations. The evaluations carry only
+// their id, kind, score and the level and insufficient-evidence flag of each
+// criterion result: no text.
+type AttemptRecord struct {
+	Attempt       ChallengeAttempt
+	Diagram       *Evaluation
+	Understanding *Evaluation
+	Rubric        *RubricVersion
+}
+
+// AttemptRecordRepository reads the attempts of many challenges at once, so
+// the catalog costs a fixed number of queries however many challenges it lists.
+type AttemptRecordRepository interface {
+	// ListByChallenges returns the attempts of the given challenges, oldest
+	// first, grouped by challenge id. A challenge without attempts has no entry.
+	ListByChallenges(ctx context.Context, challengeIDs []string) (map[string][]AttemptRecord, error)
+}
