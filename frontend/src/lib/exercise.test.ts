@@ -12,7 +12,9 @@ import {
   STATUS_LABELS,
   cancelChallengeGeneration,
   exerciseErrorCode,
+  difficultyForExperience,
   exerciseErrorMessage,
+  formatSessionDate,
   generateChallenge,
   listChallengeCatalog,
   listChallengeTopics,
@@ -187,5 +189,24 @@ describe('exerciseErrorMessage', () => {
       'Something went wrong. Please try again.',
     )
     expect(exerciseErrorMessage(undefined)).toBe('Something went wrong. Please try again.')
+  })
+})
+
+describe('difficultyForExperience', () => {
+  it('preselects the difficulty matching the profile experience level', () => {
+    expect(difficultyForExperience('beginner')).toBe('BEGINNER')
+    expect(difficultyForExperience('intermediate')).toBe('INTERMEDIATE')
+    expect(difficultyForExperience('advanced')).toBe('ADVANCED')
+  })
+
+  it('falls back to intermediate for an unknown or missing level', () => {
+    expect(difficultyForExperience('guru')).toBe('INTERMEDIATE')
+    expect(difficultyForExperience(undefined)).toBe('INTERMEDIATE')
+  })
+})
+
+describe('formatSessionDate', () => {
+  it('writes the day, month and year of the start time', () => {
+    expect(formatSessionDate('2026-11-02T12:00:00Z')).toBe('Nov 2, 2026')
   })
 })

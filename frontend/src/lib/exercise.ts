@@ -137,3 +137,20 @@ const ERROR_MESSAGES: Record<string, string> = {
 export function exerciseErrorMessage(err: unknown): string {
   return ERROR_MESSAGES[exerciseErrorCode(err)] ?? GENERIC_MESSAGE
 }
+
+// Preselects the generation dialog's difficulty from the profile's experience
+// level (beginner, intermediate or advanced).
+export function difficultyForExperience(level: string | undefined): ChallengeDifficulty {
+  const match = (Object.keys(DIFFICULTY_LABELS) as ChallengeDifficulty[]).find(
+    (difficulty) => difficulty.toLowerCase() === level,
+  )
+  return match ?? 'INTERMEDIATE'
+}
+
+export function formatSessionDate(startedAt: string): string {
+  return new Date(startedAt).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })
+}
