@@ -29,7 +29,7 @@ Payments         Paddle
 | 0 | Repo setup, Wails scaffold, pre-commit quality gates, GitHub Actions CI/CD |
 | 1 | Conversational onboarding, personalized study sessions, streaming LLM responses |
 | 2 | Personal knowledge base built only from documents you import, owned per study session (deleting a session or folder deletes its knowledge), added, opened and removed from the session's own Sources panel, RAG retrieval scoped to the current session |
-| 3 | Challenge mode, gap detection, spaced repetition flashcards (SM-2) |
+| 3 | Architecture Lab (challenge catalog generated from your study sessions, with search, filters and progress; diagram exams to follow), gap detection, spaced repetition flashcards (SM-2) |
 | 4 | Interview simulation with timer, per-answer evaluation, domain-aware feedback |
 | 5 | Plan management, Paddle payments, macOS + Linux + Windows distribution |
 | 6 | Voice interviews (STT + TTS) |
@@ -232,6 +232,8 @@ Picking a file in the Sources panel does not import it right away: Athena reform
 The models are configurable in **Settings → Models**: one per feature (study chat, conversation summary, query enrichment, note formatting, Architecture Lab) plus the embedding model, each with a "Reset to default". Choices are saved immediately and apply to the next call; a missing `models:` section in `config.yaml` keeps today's defaults.
 
 The **minimum passing score** for architecture challenges is set in **Settings → Challenges** (50 to 100, default 80, stored as `pass_score` in `config.yaml`). A challenge is passed only when both the diagram and your explanation reach it on their own, with every mandatory criterion at level 2 or higher; the value in force is frozen on each attempt when its diagram is evaluated, so changing it never affects attempts you already finished. See [06-completion-rules.md](specs/phases/phase-03-architecture-lab/06-completion-rules.md).
+
+The **Architecture Lab** (sidebar) lists your architecture challenges with their status, attempts and best diagram score. Search matches the title, topic and scenario, and combines with the status, difficulty and topic filters. **Generate challenge with AI** writes a new challenge from any study session you already had (difficulty preselected from your profile, cancellable while it runs). Starting an exam arrives with the diagram editor, so **Start** is disabled for now. See [07-challenge-catalog-ui.md](specs/phases/phase-03-architecture-lab/07-challenge-catalog-ui.md).
 
 Because a chunk is tagged with the embedding model that produced it, **changing the configured embedding model leaves every existing chunk out of the index** — a stale-model vector isn't comparable to freshly embedded queries — until its document is imported again.
 

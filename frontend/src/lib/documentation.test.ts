@@ -2,13 +2,19 @@ import { describe, expect, it } from 'vitest'
 import { DOCUMENTATION, plannedSectionIds } from './documentation'
 
 describe('DOCUMENTATION', () => {
-  it('opens with the system purpose, then study, then knowledge, then the reference', () => {
+  it('opens with the system purpose, then study, knowledge, the architecture lab, then the reference', () => {
     // Given the in-app manual
     // When reading its section order
     const ids = DOCUMENTATION.map((section) => section.id)
 
     // Then it explains why Athena exists before explaining how to use it
-    expect(ids).toEqual(['what-is-athena', 'study-sessions', 'knowledge-engine', 'reference'])
+    expect(ids).toEqual([
+      'what-is-athena',
+      'study-sessions',
+      'knowledge-engine',
+      'architecture-lab',
+      'reference',
+    ])
   })
 
   it('gives every section a unique anchor id', () => {
@@ -46,6 +52,21 @@ describe('DOCUMENTATION', () => {
     // When collecting the planned sections
     // Then only the knowledge engine is flagged
     expect(plannedSectionIds()).toEqual(['knowledge-engine'])
+  })
+})
+
+describe('DOCUMENTATION architecture lab', () => {
+  const lab = DOCUMENTATION.find((section) => section.id === 'architecture-lab')
+
+  it('is available and describes generating a challenge from a studied session', () => {
+    expect(lab?.status).toBe('available')
+    const text = [...(lab?.body ?? []), ...(lab?.topics.map((topic) => topic.description) ?? [])]
+    expect(text.join('\n')).toContain('Generate challenge with AI')
+  })
+
+  it('says that starting an exam waits for the diagram editor, so it does not promise it', () => {
+    const text = (lab?.body ?? []).join('\n')
+    expect(text).toContain('diagram editor')
   })
 })
 
