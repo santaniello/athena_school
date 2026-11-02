@@ -92,6 +92,87 @@ export namespace desktop {
 		    return a;
 		}
 	}
+	export class CatalogFilterDTO {
+	    query: string;
+	    status: string;
+	    difficulty: string;
+	    topic: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CatalogFilterDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.query = source["query"];
+	        this.status = source["status"];
+	        this.difficulty = source["difficulty"];
+	        this.topic = source["topic"];
+	    }
+	}
+	export class ChallengeCatalogItemDTO {
+	    id: string;
+	    title: string;
+	    topic: string;
+	    difficulty: string;
+	    timeLimitMinutes: number;
+	    status: string;
+	    attempts: number;
+	    bestDiagramScore: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ChallengeCatalogItemDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.topic = source["topic"];
+	        this.difficulty = source["difficulty"];
+	        this.timeLimitMinutes = source["timeLimitMinutes"];
+	        this.status = source["status"];
+	        this.attempts = source["attempts"];
+	        this.bestDiagramScore = source["bestDiagramScore"];
+	    }
+	}
+	export class ChallengeCatalogDTO {
+	    total: number;
+	    completed: number;
+	    inProgress: number;
+	    items: ChallengeCatalogItemDTO[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ChallengeCatalogDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.total = source["total"];
+	        this.completed = source["completed"];
+	        this.inProgress = source["inProgress"];
+	        this.items = this.convertValues(source["items"], ChallengeCatalogItemDTO);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class ChallengeSummaryDTO {
 	    id: string;
 	    title: string;
@@ -373,6 +454,24 @@ export namespace desktop {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.chat = source["chat"];
 	        this.embedding = source["embedding"];
+	    }
+	}
+	export class SessionOptionDTO {
+	    id: string;
+	    topic: string;
+	    folderName: string;
+	    startedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SessionOptionDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.topic = source["topic"];
+	        this.folderName = source["folderName"];
+	        this.startedAt = source["startedAt"];
 	    }
 	}
 	export class SessionSourceResult {

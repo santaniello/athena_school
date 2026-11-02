@@ -45,11 +45,17 @@ export function ImportFile(arg1:string,arg2:string):Promise<void>;
 
 export function ListAttempts(arg1:string):Promise<Array<desktop.AttemptDTO>>;
 
+export function ListChallengeCatalog(arg1:desktop.CatalogFilterDTO):Promise<desktop.ChallengeCatalogDTO>;
+
+export function ListChallengeTopics():Promise<Array<string>>;
+
 export function ListFolders():Promise<Array<desktop.FolderResult>>;
 
 export function ListSelectableModels():Promise<desktop.SelectableModelsResult>;
 
 export function ListSessionSources(arg1:string):Promise<Array<desktop.SessionSourceResult>>;
+
+export function ListSessionsForGeneration():Promise<Array<desktop.SessionOptionDTO>>;
 
 export function ListStudyMessagesBefore(arg1:string,arg2:string,arg3:number):Promise<desktop.StudyMessagePageResult>;
 

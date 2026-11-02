@@ -36,6 +36,8 @@ type App struct {
 	modelSettings *settings.Service
 	exercise      *applicationexercise.AttemptService
 	generator     challengeGenerator
+	catalog       challengeCatalog
+	sessionLister sessionLister
 	// emit defaults to wailsruntime.EventsEmit, which calls log.Fatal (i.e.
 	// os.Exit) when a.ctx was never produced by the real Wails runtime —
 	// exactly the case in tests, which use context.Background(). Tests

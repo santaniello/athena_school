@@ -86,6 +86,14 @@ export function ListAttempts(arg1) {
   return window['go']['desktop']['App']['ListAttempts'](arg1);
 }
 
+export function ListChallengeCatalog(arg1) {
+  return window['go']['desktop']['App']['ListChallengeCatalog'](arg1);
+}
+
+export function ListChallengeTopics() {
+  return window['go']['desktop']['App']['ListChallengeTopics']();
+}
+
 export function ListFolders() {
   return window['go']['desktop']['App']['ListFolders']();
 }
@@ -96,6 +104,10 @@ export function ListSelectableModels() {
 
 export function ListSessionSources(arg1) {
   return window['go']['desktop']['App']['ListSessionSources'](arg1);
+}
+
+export function ListSessionsForGeneration() {
+  return window['go']['desktop']['App']['ListSessionsForGeneration']();
 }
 
 export function ListStudyMessagesBefore(arg1, arg2, arg3) {

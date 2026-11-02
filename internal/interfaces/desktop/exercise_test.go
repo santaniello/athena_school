@@ -456,3 +456,185 @@ func TestApp_GenerateChallenge_mapsUseCaseErrorsToCodes(t *testing.T) {
 		})
 	}
 }
+
+type fakeCatalog struct {
+	catalog   applicationexercise.Catalog
+	topics    []string
+	err       error
+	filter    applicationexercise.CatalogFilter
+	listCalls int
+}
+
+func (c *fakeCatalog) ListCatalog(_ context.Context, filter applicationexercise.CatalogFilter) (applicationexercise.Catalog, error) {
+	c.filter = filter
+	c.listCalls++
+	return c.catalog, c.err
+}
+
+func (c *fakeCatalog) ListTopics(context.Context) ([]string, error) { return c.topics, c.err }
+
+type fakeSessionLister struct {
+	options []domainexercise.SessionOption
+	err     error
+}
+
+func (l *fakeSessionLister) ListSessionsForGeneration(context.Context) ([]domainexercise.SessionOption, error) {
+	return l.options, l.err
+}
+
+func newCatalogApp(catalog challengeCatalog, sessions sessionLister) *App {
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, WithCatalogService(catalog), WithSessionLister(sessions))
+	app.ctx = context.Background()
+	return app
+}
+
+func TestApp_ListChallengeCatalog_returnsTheCatalogAndPassesTheTrimmedFilter(t *testing.T) {
+	// Given a catalog with one challenge
+	catalog := &fakeCatalog{catalog: applicationexercise.Catalog{
+		Total: 3, Completed: 1, InProgress: 1,
+		Items: []applicationexercise.CatalogItem{{
+			ChallengeID: "c1", Title: "Cache", Topic: "caching", Difficulty: domainexercise.DifficultyIntermediate,
+			TimeLimitMinutes: 45, Status: domainexercise.ProgressNeedsImprovement, Attempts: 2, BestDiagramScore: 86,
+		}},
+	}}
+	app := newCatalogApp(catalog, &fakeSessionLister{})
+
+	// When the frontend lists the catalog with a padded filter
+	got, err := app.ListChallengeCatalog(CatalogFilterDTO{
+		Query: "  cache ", Status: "NEEDS_IMPROVEMENT", Difficulty: "INTERMEDIATE", Topic: " caching ",
+	})
+
+	// Then the DTO mirrors the catalog and the use case got the cleaned filter
+	require.NoError(t, err)
+	assert.Equal(t, ChallengeCatalogDTO{
+		Total: 3, Completed: 1, InProgress: 1,
+		Items: []ChallengeCatalogItemDTO{{
+			ID: "c1", Title: "Cache", Topic: "caching", Difficulty: "INTERMEDIATE", TimeLimitMinutes: 45,
+			Status: "NEEDS_IMPROVEMENT", Attempts: 2, BestDiagramScore: 86,
+		}},
+	}, got)
+	assert.Equal(t, applicationexercise.CatalogFilter{
+		Query: "cache", Status: domainexercise.ProgressNeedsImprovement,
+		Difficulty: domainexercise.DifficultyIntermediate, Topic: "caching",
+	}, catalog.filter)
+}
+
+func TestApp_ListChallengeCatalog_returnsAnEmptyItemListNotNull(t *testing.T) {
+	// Given an empty catalog
+	app := newCatalogApp(&fakeCatalog{}, &fakeSessionLister{})
+
+	// When the frontend lists it
+	got, err := app.ListChallengeCatalog(CatalogFilterDTO{})
+
+	// Then the items are an empty list, which serializes as []
+	require.NoError(t, err)
+	assert.NotNil(t, got.Items)
+	assert.Empty(t, got.Items)
+}
+
+func TestApp_ListChallengeCatalog_rejectsUnknownFilterValuesBeforeCallingTheUseCase(t *testing.T) {
+	tests := []struct {
+		name   string
+		filter CatalogFilterDTO
+	}{
+		{"unknown status", CatalogFilterDTO{Status: "AWAITING_DEFENSE"}},
+		{"unknown difficulty", CatalogFilterDTO{Difficulty: "EXPERT"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given a catalog that must not be called
+			catalog := &fakeCatalog{}
+			app := newCatalogApp(catalog, &fakeSessionLister{})
+
+			// When the frontend lists with that filter
+			_, err := app.ListChallengeCatalog(tt.filter)
+
+			// Then it is an invalid_input error
+			assert.Equal(t, exerciseCodeInvalidInput, codeOf(t, err).Code)
+			assert.Zero(t, catalog.listCalls)
+		})
+	}
+}
+
+func TestApp_ListChallengeCatalog_acceptsEveryStatusAndDifficulty(t *testing.T) {
+	for _, status := range []string{"", "NOT_STARTED", "IN_PROGRESS", "NEEDS_IMPROVEMENT", "COMPLETED"} {
+		for _, difficulty := range []string{"", "BEGINNER", "INTERMEDIATE", "ADVANCED"} {
+			app := newCatalogApp(&fakeCatalog{}, &fakeSessionLister{})
+			_, err := app.ListChallengeCatalog(CatalogFilterDTO{Status: status, Difficulty: difficulty})
+			require.NoError(t, err, "status %q difficulty %q", status, difficulty)
+		}
+	}
+}
+
+func TestApp_ListChallengeCatalog_mapsUseCaseFailuresToAnInternalError(t *testing.T) {
+	// Given a catalog that fails
+	app := newCatalogApp(&fakeCatalog{err: errors.New("disk is gone")}, &fakeSessionLister{})
+
+	// When the frontend lists it
+	_, err := app.ListChallengeCatalog(CatalogFilterDTO{})
+
+	// Then the error is the generic internal one
+	assert.Equal(t, exerciseCodeInternal, codeOf(t, err).Code)
+}
+
+func TestApp_ListChallengeTopics_returnsTheTopics(t *testing.T) {
+	// Given a catalog with two topics
+	app := newCatalogApp(&fakeCatalog{topics: []string{"caching", "queues"}}, &fakeSessionLister{})
+
+	// When the frontend lists the topics
+	got, err := app.ListChallengeTopics()
+
+	// Then they are returned
+	require.NoError(t, err)
+	assert.Equal(t, []string{"caching", "queues"}, got)
+}
+
+func TestApp_ListChallengeTopics_mapsFailuresToAnInternalError(t *testing.T) {
+	// Given a catalog that fails
+	app := newCatalogApp(&fakeCatalog{err: errors.New("boom")}, &fakeSessionLister{})
+
+	// When the frontend lists the topics
+	_, err := app.ListChallengeTopics()
+
+	// Then the error is the generic internal one
+	assert.Equal(t, exerciseCodeInternal, codeOf(t, err).Code)
+}
+
+func TestApp_ListSessionsForGeneration_returnsTheSessionsWithRFC3339Dates(t *testing.T) {
+	// Given a studied session
+	started := time.Date(2026, 11, 2, 9, 30, 0, 0, time.UTC)
+	app := newCatalogApp(&fakeCatalog{}, &fakeSessionLister{options: []domainexercise.SessionOption{
+		{SessionID: "s1", Topic: "Caching", FolderName: "Backend", StartedAt: started},
+	}})
+
+	// When the frontend lists the sessions
+	got, err := app.ListSessionsForGeneration()
+
+	// Then each one carries its id, topic, folder name and start date
+	require.NoError(t, err)
+	assert.Equal(t, []SessionOptionDTO{{ID: "s1", Topic: "Caching", FolderName: "Backend", StartedAt: "2026-11-02T09:30:00Z"}}, got)
+}
+
+func TestApp_ListSessionsForGeneration_returnsAnEmptyListNotNull(t *testing.T) {
+	// Given no studied sessions
+	app := newCatalogApp(&fakeCatalog{}, &fakeSessionLister{})
+
+	// When the frontend lists them
+	got, err := app.ListSessionsForGeneration()
+
+	// Then the list is empty and not nil
+	require.NoError(t, err)
+	assert.NotNil(t, got)
+	assert.Empty(t, got)
+}
+
+func TestApp_ListSessionsForGeneration_mapsFailuresToAnInternalError(t *testing.T) {
+	// Given a lister that fails
+	app := newCatalogApp(&fakeCatalog{}, &fakeSessionLister{err: errors.New("boom")})
+
+	// When the frontend lists the sessions
+	_, err := app.ListSessionsForGeneration()
+
+	// Then the error is the generic internal one
+	assert.Equal(t, exerciseCodeInternal, codeOf(t, err).Code)
+}
