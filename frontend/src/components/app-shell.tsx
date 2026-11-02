@@ -18,6 +18,7 @@ import StudyChatScreen from '@/screens/StudyChatScreen'
 import ProfileScreen from '@/screens/ProfileScreen'
 import SettingsScreen from '@/screens/SettingsScreen'
 import DocumentationScreen from '@/screens/DocumentationScreen'
+import ArchitectureLabScreen from '@/screens/ArchitectureLabScreen'
 import { NAVIGATION, type AppSection } from '@/lib/navigation'
 import { getUserProfile, type ProfileDraft } from '@/lib/profile'
 import { startStudySession, type StudySession, type StudySource } from '@/lib/study'
@@ -453,6 +454,8 @@ function AppShell() {
               )}
             </div>
           )
+        ) : section === 'challenge' ? (
+          <ArchitectureLabScreen experienceLevel={profile?.experienceLevel} />
         ) : section === 'documentation' ? (
           <DocumentationScreen />
         ) : section === 'profile' && profile ? (
