@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 )
 
 // ErrChallengeNotFound is returned when no challenge matches the given ID.
@@ -184,4 +185,21 @@ type SessionExerciseRepository interface {
 	// GetBySessionAndChallenge returns the link, or ErrSessionExerciseNotFound.
 	GetBySessionAndChallenge(ctx context.Context, sessionID, challengeID string) (SessionExercise, error)
 	ListBySession(ctx context.Context, sessionID string) ([]SessionExercise, error)
+}
+
+// SessionOption is a study session as the generation dialog lists it: enough
+// to recognise it, never its messages.
+type SessionOption struct {
+	SessionID  string
+	Topic      string
+	FolderName string
+	StartedAt  time.Time
+}
+
+// SessionOptionRepository reads the study sessions a challenge can be
+// generated from.
+type SessionOptionRepository interface {
+	// ListAll returns every study session across all folders, most recently
+	// started first.
+	ListAll(ctx context.Context) ([]SessionOption, error)
 }
