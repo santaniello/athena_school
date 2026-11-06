@@ -467,7 +467,10 @@ function AppShell() {
             </div>
           )
         ) : section === 'challenge' ? (
-          <ArchitectureLabScreen experienceLevel={profile?.experienceLevel} />
+          <ArchitectureLabScreen
+            experienceLevel={profile?.experienceLevel}
+            onStartExam={() => {}}
+          />
         ) : section === 'documentation' ? (
           <DocumentationScreen />
         ) : section === 'profile' && profile ? (

@@ -1,6 +1,5 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DIFFICULTY_LABELS,
   STATUS_LABELS,
@@ -14,6 +13,8 @@ interface ChallengeRowProps {
   item: CatalogItem
   // True for the challenge that was just generated.
   highlighted: boolean
+  // Start or Start again was clicked; the caller opens the rules dialog.
+  onStart: (item: CatalogItem) => void
 }
 
 function attemptsText(attempts: number): string {
@@ -22,10 +23,10 @@ function attemptsText(attempts: number): string {
 }
 
 // One catalog row. It shows only what does not give the exam away: never the
-// scenario, requirements or rubric. Start is disabled until the diagram
-// editor exists. See
-// specs/phases/phase-03-architecture-lab/07-challenge-catalog-ui.md.
-function ChallengeRow({ item, highlighted }: ChallengeRowProps) {
+// scenario, requirements or rubric. Start opens the exam rules. See
+// specs/phases/phase-03-architecture-lab/07-challenge-catalog-ui.md and
+// 10-diagram-workspace.md.
+function ChallengeRow({ item, highlighted, onStart }: ChallengeRowProps) {
   const difficulty = DIFFICULTY_LABELS[item.difficulty as ChallengeDifficulty] ?? item.difficulty
   const status = STATUS_LABELS[item.status as ChallengeStatus] ?? item.status
   const progress = item.bestDiagramScore > 0 ? `Best ${item.bestDiagramScore} · ${status}` : status
@@ -51,17 +52,9 @@ function ChallengeRow({ item, highlighted }: ChallengeRowProps) {
             <span className="text-sm text-muted-foreground">{progress}</span>
           )}
         </div>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            {/* A disabled button swallows pointer events, so the tooltip hangs on its wrapper. */}
-            <span data-testid="start-tooltip-trigger" tabIndex={0}>
-              <Button type="button" variant="outline" size="sm" disabled>
-                {item.attempts === 0 ? 'Start' : 'Start again'}
-              </Button>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>Available with the diagram editor</TooltipContent>
-        </Tooltip>
+        <Button type="button" variant="outline" size="sm" onClick={() => onStart(item)}>
+          {item.attempts === 0 ? 'Start' : 'Start again'}
+        </Button>
       </div>
     </li>
   )
