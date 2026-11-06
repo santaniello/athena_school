@@ -43,8 +43,8 @@ lists complete attempts and never partial ones.
 6. **The diagram opens in the same editor, locked.** The stored XML is shown with the draw.io embed
    of [3.9](09-diagram-editor-spike.md) in read-only mode, with no menus and no edit. It needs the
    internet like the exam. Without a connection the area says "The diagram needs an internet
-   connection to display." and the rest of the page still works. The read-only configuration is
-   confirmed by the spike.
+   connection to display." and the rest of the page still works. The read-only configuration (`chrome=0`)
+   is confirmed by the spike ([ADR-006](../../decisions/ADR-006-diagram-editor.md)).
 7. **No comparison view and no trend.** Attempts are opened one at a time. The catalog already
    shows the count and the best diagram score.
 8. **Nothing is computed on the screen.** The frontend renders what the backend returns; the

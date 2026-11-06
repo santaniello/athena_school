@@ -35,7 +35,7 @@ This is the first time the user can take an exam. Evaluation does not exist yet
 5. **Finish and evaluate asks for confirmation:** "Finish now? You cannot edit the diagram after
    this." with **Cancel** and **Finish**. It is enabled only when the board has content (at least
    one cell). Confirming calls `SubmitAttempt` with the latest XML.
-6. **Time runs out.** At zero, with the board holding content, the screen submits the latest XML
+6. **Time runs out.** At zero, with the board holding content, the screen submits the XML from `getXml()`
    without asking; the backend accepts it within the 15-second grace period and records
    `TIME_EXPIRED` ([3.4](04-exercise-service.md)). If the board is empty, the screen calls
    `DiscardAttempt` and tells the user "Time is up and the board was empty. The exam was
@@ -76,8 +76,10 @@ This is the first time the user can take an exam. Evaluation does not exist yet
   size error.
 - `components/lab/start-exam-dialog.tsx` and `in-progress-dialog.tsx`.
 - `components/lab/diagram-editor.tsx`: the draw.io embed wrapper following ADR-006 (iframe,
-  `postMessage`, fixed configuration). It exposes `onReady`, `onChange(xml)`, `onConnectionLost`
-  and `onConnectionRestored`, and nothing else. The wrapper is the only code that knows draw.io.
+  `postMessage`, fixed configuration). It exposes `onReady`, `onChange(xml)`, `getXml()` (an
+  `export` pull that falls back to the latest `autosave` XML), `onConnectionLost` and
+  `onConnectionRestored`, and nothing else. The wrapper is the only code that knows draw.io. The
+  probe, timeouts and recovery are in [ADR-006](../../decisions/ADR-006-diagram-editor.md).
 - `screens/LabExamScreen.tsx`: the container that runs decisions 2 to 11 using `lab-layout`
   from 3.8 and `useExam`, a hook that owns the phase (preparing, running, submitting) and the
   latest XML.
