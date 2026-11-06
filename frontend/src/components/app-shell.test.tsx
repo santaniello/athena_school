@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { GetProfile, GetSessionSourceDocument, UpdateProfile } from '../../wailsjs/go/desktop/App'
@@ -179,6 +179,12 @@ function renderShell() {
 }
 
 describe('AppShell', () => {
+  // The preview route lives in the URL hash, so it must not outlive a test,
+  // even one that fails before its own assertions.
+  afterEach(() => {
+    window.location.hash = ''
+  })
+
   it('shows the lab layout preview on the dev-only #lab-preview route', async () => {
     // Given the dev preview route is requested
     window.location.hash = '#lab-preview'
@@ -188,7 +194,6 @@ describe('AppShell', () => {
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Cache and invalidation in a catalog' }),
     ).toBeInTheDocument()
-    window.location.hash = ''
   })
 
   it('does not show the lab layout preview without the route', async () => {
