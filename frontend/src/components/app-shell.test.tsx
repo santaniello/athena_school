@@ -179,6 +179,27 @@ function renderShell() {
 }
 
 describe('AppShell', () => {
+  it('shows the lab layout preview on the dev-only #lab-preview route', async () => {
+    // Given the dev preview route is requested
+    window.location.hash = '#lab-preview'
+    renderShell()
+
+    // Then the lab layout renders from its fixtures
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Cache and invalidation in a catalog' }),
+    ).toBeInTheDocument()
+    window.location.hash = ''
+  })
+
+  it('does not show the lab layout preview without the route', async () => {
+    // Given the app shell mounts on the regular entry
+    renderShell()
+    await screen.findByText(/Felipe\./)
+
+    // Then the preview is not reachable
+    expect(screen.queryByRole('region', { name: 'Board' })).not.toBeInTheDocument()
+  })
+
   it('lands on Home and greets the user once the profile resolves', async () => {
     // Given the app shell mounts
     renderShell()
