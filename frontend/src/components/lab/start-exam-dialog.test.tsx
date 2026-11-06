@@ -85,4 +85,15 @@ describe('StartExamDialog', () => {
 
     expect(props.onConfirm).toHaveBeenCalledExactlyOnceWith(challenge)
   })
+
+  it('cancels when dismissed with Escape', async () => {
+    const user = userEvent.setup()
+    const props = renderDialog()
+    await screen.findByRole('button', { name: 'Start exam' })
+
+    await user.keyboard('{Escape}')
+
+    expect(props.onCancel).toHaveBeenCalledTimes(1)
+    expect(props.onConfirm).not.toHaveBeenCalled()
+  })
 })

@@ -69,5 +69,6 @@ describe('diagramHasContent', () => {
   it('is false for text that is not a diagram', () => {
     expect(diagramHasContent('')).toBe(false)
     expect(diagramHasContent('<mxGraphModel><root>')).toBe(false)
+    expect(diagramHasContent('<mxGraphModel><root><mxCell id="2"/></mxGraphModel>')).toBe(false)
   })
 })

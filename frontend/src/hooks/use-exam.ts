@@ -47,10 +47,12 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void) 
   const phaseRef = useRef<ExamPhase>('preparing')
   const attemptRef = useRef<Attempt | null>(null)
 
+  // Stryker disable ArrayDeclaration: a stable callback; the setter it wraps never changes.
   const setPhase = useCallback((next: ExamPhase) => {
     phaseRef.current = next
     setPhaseState(next)
   }, [])
+  // Stryker restore ArrayDeclaration
 
   useEffect(() => {
     if (phase !== 'preparing') return
@@ -159,8 +161,9 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void) 
 
 // A failed discard is left to the startup cleanup: the user is leaving anyway.
 async function discard(attempt: Attempt) {
+  const { id } = attempt
   try {
-    await discardAttempt(attempt.id)
+    await discardAttempt(id)
   } catch {
     // see above
   }

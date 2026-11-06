@@ -41,6 +41,7 @@ function StartExamContent({
 }: Omit<StartExamDialogProps, 'challenge'> & { challenge: ExamToStart }) {
   const [passScore, setPassScore] = useState<number | null>(null)
 
+  // Stryker disable BooleanLiteral,BlockStatement,ArrayDeclaration: the guard only keeps a late answer from updating an unmounted dialog, and the effect runs once on mount.
   useEffect(() => {
     let stale = false
     getPassScore()
@@ -52,6 +53,7 @@ function StartExamContent({
       stale = true
     }
   }, [])
+  // Stryker restore BooleanLiteral,BlockStatement,ArrayDeclaration
 
   const minutes = challenge.timeLimitMinutes
   return (

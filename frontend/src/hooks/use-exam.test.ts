@@ -326,4 +326,26 @@ describe('useExam', () => {
 
     expect(onExit).toHaveBeenCalledOnce()
   })
+
+  it('is submitting while the expiry reads and sends the diagram', async () => {
+    const { result } = await running()
+    vi.mocked(submitAttempt).mockReturnValue(new Promise(() => {}))
+
+    act(() => {
+      void result.current.expire(async () => FULL_XML)
+    })
+
+    await vi.waitFor(() => expect(result.current.phase).toBe('submitting'))
+  })
+
+  it('clears an earlier message when the expiry takes over', async () => {
+    const { result } = await running()
+    vi.mocked(submitAttempt).mockRejectedValueOnce(coded('submission_too_large'))
+    await act(async () => result.current.submit(async () => FULL_XML))
+    expect(result.current.message).not.toBeNull()
+
+    await act(async () => result.current.expire(async () => FULL_XML))
+
+    expect(result.current.message).toBeNull()
+  })
 })

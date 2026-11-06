@@ -292,4 +292,83 @@ describe('DiagramEditor', () => {
 
     expect(currentIframe(view.container)).toBe(fresh)
   })
+
+  it('ignores an autosave or export that carries no XML', async () => {
+    const { iframe, ref, onChange } = setup()
+    makeReady(iframe)
+    fromEditor(iframe, { event: 'autosave', xml: '<mxGraphModel>kept</mxGraphModel>' })
+    onChange.mockClear()
+
+    fromEditor(iframe, { event: 'autosave' })
+    fromEditor(iframe, { event: 'export' })
+    const pending = ref.current!.getXml()
+    await advance(1500)
+
+    expect(onChange).not.toHaveBeenCalled()
+    await expect(pending).resolves.toBe('<mxGraphModel>kept</mxGraphModel>')
+  })
+
+  it('ignores messages that are JSON but not an event', () => {
+    const { iframe, onReady } = setup()
+
+    act(() => {
+      for (const data of ['null', '5', '"load"']) {
+        window.dispatchEvent(
+          new MessageEvent('message', { data, origin: ORIGIN, source: iframe.contentWindow }),
+        )
+      }
+    })
+
+    expect(onReady).not.toHaveBeenCalled()
+  })
+
+  it('calls the callbacks of the latest render', () => {
+    const first = vi.fn()
+    const second = vi.fn()
+    const props = { onReady: vi.fn(), onConnectionLost: vi.fn(), onConnectionRestored: vi.fn() }
+    const view = render(<DiagramEditor {...props} onChange={first} />)
+    const iframe = currentIframe(view.container)
+    view.rerender(<DiagramEditor {...props} onChange={second} />)
+
+    fromEditor(iframe, { event: 'autosave', xml: '<mxGraphModel/>' })
+
+    expect(second).toHaveBeenCalledWith('<mxGraphModel/>')
+    expect(first).not.toHaveBeenCalled()
+  })
+
+  it('does not probe an editor that has not loaded yet', async () => {
+    const { sent, onConnectionLost } = setup()
+
+    await advance(60000)
+
+    expect(sent.messages()).toEqual([])
+    expect(onConnectionLost).not.toHaveBeenCalled()
+  })
+
+  it('keeps recreating the iframe while the recovery does not load', async () => {
+    const { view, iframe } = setup()
+    makeReady(iframe)
+    await advance(5000 + 1500 + 5000)
+    const seen = new Set([iframe, currentIframe(view.container)])
+
+    for (let i = 0; i < 3; i++) {
+      await advance(15000)
+      seen.add(currentIframe(view.container))
+    }
+
+    expect(seen.size).toBe(5)
+  })
+
+  it('stops listening and probing once unmounted', async () => {
+    const { view, iframe, onChange, sent } = setup()
+    makeReady(iframe)
+    view.unmount()
+    sent.spy.mockClear()
+
+    fromEditor(iframe, { event: 'autosave', xml: '<mxGraphModel/>' })
+    await advance(30000)
+
+    expect(onChange).not.toHaveBeenCalled()
+    expect(sent.spy).not.toHaveBeenCalled()
+  })
 })
