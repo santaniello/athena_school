@@ -14,6 +14,7 @@ import { getPassScore } from '@/lib/passScore'
 export interface ExamToStart {
   id: string
   title: string
+  difficulty: string
   timeLimitMinutes: number
 }
 

@@ -6,7 +6,12 @@ import { StartExamDialog } from './start-exam-dialog'
 
 vi.mock('@/lib/passScore', () => ({ getPassScore: vi.fn() }))
 
-const challenge = { id: 'c1', title: 'Cache and invalidation', timeLimitMinutes: 45 }
+const challenge = {
+  id: 'c1',
+  title: 'Cache and invalidation',
+  difficulty: 'INTERMEDIATE',
+  timeLimitMinutes: 45,
+}
 
 function renderDialog(overrides: Partial<Parameters<typeof StartExamDialog>[0]> = {}) {
   const props = { challenge, onCancel: vi.fn(), onConfirm: vi.fn(), ...overrides }
