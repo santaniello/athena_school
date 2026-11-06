@@ -38,6 +38,7 @@ function renderLayout(overrides: Partial<Parameters<typeof LabLayout>[0]> = {}) 
       hints={[]}
       hintsLeft={3}
       canFinish
+      board={<p>the editor</p>}
       {...handlers}
       {...overrides}
     />,
@@ -72,11 +73,11 @@ describe('LabLayout', () => {
     expect(screen.getByRole('timer')).toHaveTextContent('44:12')
   })
 
-  it('shows the statement, a board placeholder, the tutor and the rubric at once', () => {
+  it('shows the statement, the board the caller provides, the tutor and the rubric at once', () => {
     renderLayout()
 
     expect(screen.getByText('A catalog service serves millions of reads per day.')).toBeVisible()
-    expect(screen.getByRole('region', { name: 'Board' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Board' })).toHaveTextContent('the editor')
     expect(screen.getByRole('heading', { name: 'Tutor Athena' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Rubric' })).toBeInTheDocument()
   })

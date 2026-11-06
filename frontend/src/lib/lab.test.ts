@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { countdownTone, formatCountdown } from './lab'
+import { countdownTone, diagramHasContent, formatCountdown } from './lab'
 
 const SECOND = 1000
 const MINUTE = 60 * SECOND
@@ -41,5 +41,33 @@ describe('countdownTone', () => {
   it('is urgent at one minute left and below', () => {
     expect(countdownTone(1 * MINUTE)).toBe('urgent')
     expect(countdownTone(0)).toBe('urgent')
+  })
+})
+
+describe('diagramHasContent', () => {
+  const root = '<mxCell id="0"/><mxCell id="1" parent="0"/>'
+
+  it('is false for the empty board', () => {
+    expect(diagramHasContent(`<mxGraphModel><root>${root}</root></mxGraphModel>`)).toBe(false)
+  })
+
+  it('is true once a cell besides the two root ones exists', () => {
+    const xml = `<mxGraphModel><root>${root}<mxCell id="2" value="API" vertex="1" parent="1"/></root></mxGraphModel>`
+    expect(diagramHasContent(xml)).toBe(true)
+  })
+
+  it('finds the cells inside an mxfile wrapper', () => {
+    const xml = `<mxfile><diagram id="d"><mxGraphModel><root>${root}<mxCell id="2" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>`
+    expect(diagramHasContent(xml)).toBe(true)
+  })
+
+  it('counts a cell wrapped in an object element, whose inner cell has no id', () => {
+    const xml = `<mxGraphModel><root>${root}<object id="2" label="API"><mxCell vertex="1" parent="1"/></object></root></mxGraphModel>`
+    expect(diagramHasContent(xml)).toBe(true)
+  })
+
+  it('is false for text that is not a diagram', () => {
+    expect(diagramHasContent('')).toBe(false)
+    expect(diagramHasContent('<mxGraphModel><root>')).toBe(false)
   })
 })

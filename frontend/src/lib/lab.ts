@@ -56,3 +56,14 @@ export interface LabHint {
   id: string
   text: string
 }
+
+// True once the board holds at least one cell besides draw.io's two root
+// cells (ids 0 and 1). Anything that is not a diagram has no content.
+export function diagramHasContent(xml: string): boolean {
+  const document = new DOMParser().parseFromString(xml, 'application/xml')
+  if (document.querySelector('parsererror')) return false
+  return Array.from(document.getElementsByTagName('mxCell')).some((cell) => {
+    const id = cell.getAttribute('id')
+    return id !== '0' && id !== '1'
+  })
+}
