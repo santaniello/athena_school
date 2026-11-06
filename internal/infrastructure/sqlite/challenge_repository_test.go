@@ -415,3 +415,34 @@ func TestChallengeRepository_List_keepsChallengeFilterableByTopicAfterSessionDel
 	require.NoError(t, err)
 	assert.Equal(t, []string{"challenge-1"}, challengeIDs(page.Items))
 }
+
+func TestChallengeRepository_ListTopics_returnsDistinctTopicsAlphabetically(t *testing.T) {
+	// Given challenges that repeat some topics
+	repo, _ := newTestChallengeRepository(t)
+	ctx := context.Background()
+	for id, topic := range map[string]string{"c1": "queues", "c2": "caching", "c3": "queues"} {
+		challenge := newTestChallenge(id)
+		challenge.Topic = topic
+		createChallenges(t, repo, challenge)
+	}
+
+	// When listing the topics
+	topics, err := repo.ListTopics(ctx)
+
+	// Then each appears once, in alphabetical order
+	require.NoError(t, err)
+	assert.Equal(t, []string{"caching", "queues"}, topics)
+}
+
+func TestChallengeRepository_ListTopics_returnsAnEmptyListWithoutChallenges(t *testing.T) {
+	// Given no challenges
+	repo, _ := newTestChallengeRepository(t)
+
+	// When listing the topics
+	topics, err := repo.ListTopics(context.Background())
+
+	// Then the list is empty and not nil
+	require.NoError(t, err)
+	assert.NotNil(t, topics)
+	assert.Empty(t, topics)
+}

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { GetProfile, GetSessionSourceDocument, UpdateProfile } from '../../wailsjs/go/desktop/App'
@@ -27,6 +27,7 @@ import {
 } from '@/lib/knowledge-index'
 import type { IndexStatus } from '@/lib/knowledge-index'
 import { deleteFolder, listFolders } from '@/lib/folder'
+import { listChallengeCatalog, listChallengeTopics } from '@/lib/exercise'
 import { AppShell } from './app-shell'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
@@ -97,6 +98,37 @@ vi.mock('@/lib/study', async (importOriginal) => {
   }
 })
 
+// The Architecture Lab screen loads its catalog and topics as soon as it mounts.
+vi.mock('@/lib/exercise', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/exercise')>()
+  return {
+    ...original,
+    listChallengeCatalog: vi.fn().mockResolvedValue({
+      total: 1,
+      completed: 0,
+      inProgress: 0,
+      items: [
+        {
+          id: 'c1',
+          title: 'Rate limiter for a public API',
+          topic: 'rate limiting',
+          difficulty: 'BEGINNER',
+          timeLimitMinutes: 30,
+          status: 'NOT_STARTED',
+          attempts: 0,
+          bestDiagramScore: 0,
+        },
+      ],
+    }),
+    listChallengeTopics: vi.fn().mockResolvedValue(['rate limiting']),
+    listSessionsForGeneration: vi
+      .fn()
+      .mockResolvedValue([
+        { id: 's1', topic: 'Caching', folderName: 'Backend', startedAt: '2026-11-02T12:00:00Z' },
+      ]),
+  }
+})
+
 vi.mock('@/lib/folder', () => ({
   listFolders: vi.fn().mockResolvedValue([{ id: 'default', name: 'General' }]),
   createFolder: vi.fn(),
@@ -147,6 +179,32 @@ function renderShell() {
 }
 
 describe('AppShell', () => {
+  // The preview route lives in the URL hash, so it must not outlive a test,
+  // even one that fails before its own assertions.
+  afterEach(() => {
+    window.location.hash = ''
+  })
+
+  it('shows the lab layout preview on the dev-only #lab-preview route', async () => {
+    // Given the dev preview route is requested
+    window.location.hash = '#lab-preview'
+    renderShell()
+
+    // Then the lab layout renders from its fixtures
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Cache and invalidation in a catalog' }),
+    ).toBeInTheDocument()
+  })
+
+  it('does not show the lab layout preview without the route', async () => {
+    // Given the app shell mounts on the regular entry
+    renderShell()
+    await screen.findByText(/Felipe\./)
+
+    // Then the preview is not reachable
+    expect(screen.queryByRole('region', { name: 'Board' })).not.toBeInTheDocument()
+  })
+
   it('lands on Home and greets the user once the profile resolves', async () => {
     // Given the app shell mounts
     renderShell()
@@ -165,7 +223,7 @@ describe('AppShell', () => {
     for (const label of [
       'Home',
       'Study',
-      'Challenge',
+      'Architecture Lab',
       'Progress',
       'Flashcards',
       'Interview',
@@ -198,13 +256,46 @@ describe('AppShell', () => {
     renderShell()
     await screen.findByText(/Felipe\./)
 
-    // When selecting a locked section (challenge stays locked for the
-    // whole of Phase 2)
-    await user.click(screen.getByRole('button', { name: 'Challenge' }))
+    // When selecting a locked section (Progress stays locked until its own spec)
+    await user.click(screen.getByRole('button', { name: 'Progress' }))
 
     // Then the topbar and content reflect that section, still locked
-    expect(screen.getByRole('heading', { name: 'Challenge', level: 1 })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Progress', level: 1 })).toBeInTheDocument()
     expect(screen.getByText('Planned for Phase 3')).toBeInTheDocument()
+  })
+
+  it('opens the Architecture Lab catalog, not the coming-soon panel', async () => {
+    // Given the app shell mounts
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+
+    // When selecting Architecture Lab
+    await user.click(screen.getByRole('button', { name: 'Architecture Lab' }))
+
+    // Then the topbar names the section and the catalog lists the challenges
+    expect(screen.getByRole('heading', { name: 'Architecture Lab', level: 1 })).toBeInTheDocument()
+    expect(await screen.findByText('Rate limiter for a public API')).toBeInTheDocument()
+    expect(screen.queryByText('Planned for Phase 3')).not.toBeInTheDocument()
+    expect(listChallengeCatalog).toHaveBeenCalled()
+    expect(listChallengeTopics).toHaveBeenCalled()
+  })
+
+  it('preselects the generation difficulty from the profile experience level', async () => {
+    // Given the Architecture Lab is open for an intermediate profile
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+    await user.click(screen.getByRole('button', { name: 'Architecture Lab' }))
+    await screen.findByText('Rate limiter for a public API')
+
+    // When opening the generation dialog
+    await user.click(screen.getByRole('button', { name: 'Generate challenge with AI' }))
+
+    // Then its difficulty selector starts on the profile's level
+    expect(await screen.findByRole('combobox', { name: 'Difficulty' })).toHaveTextContent(
+      'Intermediate',
+    )
   })
 
   it('routes the Home CTA to the Study screen, same as the Study nav row', async () => {

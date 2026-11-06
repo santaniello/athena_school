@@ -133,6 +133,33 @@ const DOCUMENTATION: DocSection[] = [
     ],
   },
   {
+    id: 'architecture-lab',
+    title: 'Architecture Lab',
+    status: 'available',
+    summary: 'Architecture challenges generated from what you studied.',
+    body: [
+      'The Architecture Lab lists your challenges. Each one is a system-design scenario that Athena writes from a study session you already had, so it practises what you actually studied. Use Generate challenge with AI, pick a session and a difficulty (preselected from your profile), and the challenge joins the list.',
+      'Each row shows the title, topic, difficulty, time limit, how many attempts you made and your best diagram score, never the scenario itself. Starting an exam arrives with the diagram editor; until then Start stays disabled.',
+    ],
+    topics: [
+      {
+        term: 'Search and filters',
+        description:
+          'Search by title, topic or scenario, and filter by status, difficulty and topic; they combine.',
+      },
+      {
+        term: 'Status',
+        description:
+          'Not started, In progress, Needs improvement or Completed. One passed attempt completes a challenge for good.',
+      },
+      {
+        term: 'Generate challenge with AI',
+        description:
+          'Needs a study session. It can be cancelled while it runs, and a failure stores nothing so you can try again.',
+      },
+    ],
+  },
+  {
     id: 'reference',
     title: 'Quick reference',
     status: 'available',
@@ -152,6 +179,10 @@ const DOCUMENTATION: DocSection[] = [
         term: 'Settings',
         description:
           'Choose the model behind each AI feature, set the minimum passing score for challenges, change your key or reset local data; it applies immediately.',
+      },
+      {
+        term: 'Architecture Lab',
+        description: 'Challenges generated from your study sessions, with progress at a glance.',
       },
       { term: 'Import notes', description: 'Athena reads your Markdown and text files.' },
       { term: 'Meaning search', description: 'Finds the right passage regardless of wording.' },

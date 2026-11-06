@@ -27,6 +27,28 @@ func WithGenerationService(generator challengeGenerator) Option {
 	return func(a *App) { a.generator = generator }
 }
 
+// challengeCatalog is the use case behind the catalog bindings (spec 3.7).
+type challengeCatalog interface {
+	ListCatalog(ctx context.Context, filter applicationexercise.CatalogFilter) (applicationexercise.Catalog, error)
+	ListTopics(ctx context.Context) ([]string, error)
+}
+
+// WithCatalogService wires the challenge catalog.
+func WithCatalogService(catalog challengeCatalog) Option {
+	return func(a *App) { a.catalog = catalog }
+}
+
+// sessionLister is the use case behind ListSessionsForGeneration.
+type sessionLister interface {
+	ListSessionsForGeneration(ctx context.Context) ([]domainexercise.SessionOption, error)
+}
+
+// WithSessionLister wires the list of studied sessions a challenge can be
+// generated from.
+func WithSessionLister(sessions sessionLister) Option {
+	return func(a *App) { a.sessionLister = sessions }
+}
+
 // Stable ExerciseError.Code values the frontend switches on.
 const (
 	exerciseCodeInvalidInput         = "invalid_input"
@@ -41,6 +63,8 @@ const (
 	exerciseCodeSubmissionTooLate    = "submission_too_late"
 	exerciseCodeSubmissionInvalid    = "submission_invalid"
 	exerciseCodeInvalidGeneration    = "invalid_generation"
+	exerciseCodeCancelled            = "cancelled"
+	exerciseCodeGenerationInProgress = "generation_in_progress"
 	exerciseCodeInternal             = "internal"
 )
 
@@ -87,6 +111,8 @@ func toExerciseError(err error) *ExerciseError {
 		return &ExerciseError{Code: exerciseCodeSubmissionTooLate, Message: "the submission arrived after the time limit and the attempt was discarded"}
 	case errors.Is(err, applicationexercise.ErrInvalidGeneration):
 		return &ExerciseError{Code: exerciseCodeInvalidGeneration, Message: "the generated challenge was not valid, try again"}
+	case errors.Is(err, context.Canceled):
+		return &ExerciseError{Code: exerciseCodeCancelled, Message: "cancelled"}
 	case isInvalidSubmission(err):
 		return &ExerciseError{Code: exerciseCodeSubmissionInvalid, Message: err.Error()}
 	}
@@ -285,7 +311,12 @@ func (a *App) GenerateChallenge(sessionID, difficulty string) (ChallengeSummaryD
 	if domainexercise.DefaultTimeLimit(level) == 0 {
 		return ChallengeSummaryDTO{}, invalidInput("difficulty must be BEGINNER, INTERMEDIATE or ADVANCED")
 	}
-	challenge, err := a.generator.GenerateChallenge(a.ctx, sessionID, level)
+	ctx, release, ok := a.beginGeneration()
+	if !ok {
+		return ChallengeSummaryDTO{}, &ExerciseError{Code: exerciseCodeGenerationInProgress, Message: "a challenge is already being generated"}
+	}
+	defer release()
+	challenge, err := a.generator.GenerateChallenge(ctx, sessionID, level)
 	if err != nil {
 		return ChallengeSummaryDTO{}, toExerciseError(err)
 	}
@@ -296,4 +327,141 @@ func (a *App) GenerateChallenge(sessionID, difficulty string) (ChallengeSummaryD
 		Difficulty:       string(challenge.Difficulty),
 		TimeLimitMinutes: challenge.TimeLimitMinutes,
 	}, nil
+}
+
+// CatalogFilterDTO is the catalog filter the frontend sends. Empty fields do
+// not filter.
+type CatalogFilterDTO struct {
+	Query      string `json:"query"`
+	Status     string `json:"status"`
+	Difficulty string `json:"difficulty"`
+	Topic      string `json:"topic"`
+}
+
+// ChallengeCatalogItemDTO is one catalog row. It deliberately has no scenario,
+// requirements or rubric: a row must not give the exam away.
+type ChallengeCatalogItemDTO struct {
+	ID               string `json:"id"`
+	Title            string `json:"title"`
+	Topic            string `json:"topic"`
+	Difficulty       string `json:"difficulty"`
+	TimeLimitMinutes int    `json:"timeLimitMinutes"`
+	Status           string `json:"status"`
+	Attempts         int    `json:"attempts"`
+	BestDiagramScore int    `json:"bestDiagramScore"`
+}
+
+// ChallengeCatalogDTO is the catalog with the counts shown above it.
+type ChallengeCatalogDTO struct {
+	Total      int                       `json:"total"`
+	Completed  int                       `json:"completed"`
+	InProgress int                       `json:"inProgress"`
+	Items      []ChallengeCatalogItemDTO `json:"items"`
+}
+
+// SessionOptionDTO is a studied session the generation dialog offers. StartedAt
+// is RFC 3339.
+type SessionOptionDTO struct {
+	ID         string `json:"id"`
+	Topic      string `json:"topic"`
+	FolderName string `json:"folderName"`
+	StartedAt  string `json:"startedAt"`
+}
+
+// ListChallengeCatalog lists the challenges matching the filter with their
+// progress and the counts above the list. See
+// specs/phases/phase-03-architecture-lab/07-challenge-catalog-ui.md.
+func (a *App) ListChallengeCatalog(filter CatalogFilterDTO) (ChallengeCatalogDTO, error) {
+	status, difficulty := domainexercise.ProgressStatus(filter.Status), domainexercise.Difficulty(filter.Difficulty)
+	if !isCatalogStatus(status) {
+		return ChallengeCatalogDTO{}, invalidInput("status must be NOT_STARTED, IN_PROGRESS, NEEDS_IMPROVEMENT or COMPLETED")
+	}
+	if difficulty != "" && domainexercise.DefaultTimeLimit(difficulty) == 0 {
+		return ChallengeCatalogDTO{}, invalidInput("difficulty must be BEGINNER, INTERMEDIATE or ADVANCED")
+	}
+	catalog, err := a.catalog.ListCatalog(a.ctx, applicationexercise.CatalogFilter{
+		Query: strings.TrimSpace(filter.Query), Status: status, Difficulty: difficulty, Topic: strings.TrimSpace(filter.Topic),
+	})
+	if err != nil {
+		return ChallengeCatalogDTO{}, toExerciseError(err)
+	}
+	dto := ChallengeCatalogDTO{
+		Total: catalog.Total, Completed: catalog.Completed, InProgress: catalog.InProgress,
+		Items: make([]ChallengeCatalogItemDTO, 0, len(catalog.Items)),
+	}
+	for _, item := range catalog.Items {
+		dto.Items = append(dto.Items, ChallengeCatalogItemDTO{
+			ID: item.ChallengeID, Title: item.Title, Topic: item.Topic, Difficulty: string(item.Difficulty),
+			TimeLimitMinutes: item.TimeLimitMinutes, Status: string(item.Status),
+			Attempts: item.Attempts, BestDiagramScore: item.BestDiagramScore,
+		})
+	}
+	return dto, nil
+}
+
+func isCatalogStatus(status domainexercise.ProgressStatus) bool {
+	switch status {
+	case "", domainexercise.ProgressNotStarted, domainexercise.ProgressInProgress,
+		domainexercise.ProgressNeedsImprovement, domainexercise.ProgressCompleted:
+		return true
+	}
+	return false
+}
+
+// ListChallengeTopics returns the distinct topics present in the catalog, for
+// the topic filter.
+func (a *App) ListChallengeTopics() ([]string, error) {
+	topics, err := a.catalog.ListTopics(a.ctx)
+	if err != nil {
+		return nil, toExerciseError(err)
+	}
+	return topics, nil
+}
+
+// ListSessionsForGeneration returns every study session a challenge can be
+// generated from, newest first. It carries no message content.
+func (a *App) ListSessionsForGeneration() ([]SessionOptionDTO, error) {
+	options, err := a.sessionLister.ListSessionsForGeneration(a.ctx)
+	if err != nil {
+		return nil, toExerciseError(err)
+	}
+	dtos := make([]SessionOptionDTO, 0, len(options))
+	for _, option := range options {
+		dtos = append(dtos, SessionOptionDTO{
+			ID: option.SessionID, Topic: option.Topic, FolderName: option.FolderName,
+			StartedAt: option.StartedAt.Format(time.RFC3339),
+		})
+	}
+	return dtos, nil
+}
+
+// beginGeneration reserves the single generation slot. It returns the context
+// the generation runs under and the function that frees the slot, or false
+// when a generation is already running.
+func (a *App) beginGeneration() (context.Context, func(), bool) {
+	a.generationMu.Lock()
+	defer a.generationMu.Unlock()
+	if a.cancelGeneration != nil {
+		return nil, nil, false
+	}
+	ctx, cancel := context.WithCancel(a.ctx)
+	a.cancelGeneration = cancel
+	return ctx, func() {
+		cancel()
+		a.generationMu.Lock()
+		a.cancelGeneration = nil
+		a.generationMu.Unlock()
+	}, true
+}
+
+// CancelChallengeGeneration cancels the challenge generation in flight, which
+// then fails with the cancelled code and stores nothing. With none running it
+// does nothing.
+func (a *App) CancelChallengeGeneration() error {
+	a.generationMu.Lock()
+	defer a.generationMu.Unlock()
+	if a.cancelGeneration != nil {
+		a.cancelGeneration()
+	}
+	return nil
 }

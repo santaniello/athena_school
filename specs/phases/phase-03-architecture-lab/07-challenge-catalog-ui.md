@@ -42,8 +42,8 @@ A structure reference only: colors, components and spacing follow the existing f
    [3.6](06-completion-rules.md). There is no "awaiting defense" status: the evaluation and the
    tutor's questions run in the same sitting as the exam ([3.10](10-diagram-workspace.md)), and
    only a finished attempt is kept.
-5. **Counts at the top:** total challenges, completed, in progress. They follow the filters of
-   the list's scope, not the text search.
+5. **Counts at the top:** total challenges, completed, in progress. They follow the status,
+   difficulty and topic filters, not the text search.
 6. **Filters:** text search over title, scenario and topic (the scenario is searched but never
    displayed), status, difficulty and topic. The topic options are the distinct topics present.
    They combine with AND. Status is derived, so the backend filters by it after deriving; the
@@ -93,6 +93,12 @@ Bindings in `internal/interfaces/desktop/exercise.go`: `ListChallengeCatalog(fil
 `ListChallengeTopics()` and `ListSessionsForGeneration()`; `GenerateChallenge` already exists
 from 3.6.1. `wailsjs` regenerated.
 
+The dialog's **Cancel** needs a way to stop the call, which a Wails binding does not offer from the
+frontend. `GenerateChallenge` therefore runs under its own cancellable context, one generation at
+a time (a second call fails with `generation_in_progress`), and a new
+`CancelChallengeGeneration()` binding cancels it; the cancelled call fails with the `cancelled`
+code and stores nothing.
+
 ## Frontend
 
 - `lib/navigation.ts`: the `challenge` item as in decision 1.
@@ -110,18 +116,18 @@ from 3.6.1. `wailsjs` regenerated.
 Each slice is TDD (Go tests, Vitest for the frontend), keeps the build green and is committed on
 its own.
 
-- [ ] Backend: `ListSessionsForGeneration` read use case and its SQL
-- [ ] Backend: bulk loading of attempts and evaluations for a set of challenges
-- [ ] Backend: `ListCatalog` (counts, derived status, status filter, order,
+- [x] Backend: `ListSessionsForGeneration` read use case and its SQL
+- [x] Backend: bulk loading of attempts and evaluations for a set of challenges
+- [x] Backend: `ListCatalog` (counts, derived status, status filter, order,
       paging) and `ListTopics`
-- [ ] Bindings and `wailsjs` regenerated; mocks regenerated
-- [ ] Frontend: navigation item unlocked and renamed; `AppShell` routing
-- [ ] Frontend: `lib/exercise.ts` and `useChallengeCatalog`
-- [ ] Frontend: catalog screen with counts, rows, search and filters, empty, no-results and error
+- [x] Bindings and `wailsjs` regenerated; mocks regenerated
+- [x] Frontend: navigation item unlocked and renamed; `AppShell` routing
+- [x] Frontend: `lib/exercise.ts` and `useChallengeCatalog`
+- [x] Frontend: catalog screen with counts, rows, search and filters, empty, no-results and error
       states
-- [ ] Frontend: generation dialog (session list with search, difficulty, progress, cancel, error,
+- [x] Frontend: generation dialog (session list with search, difficulty, progress, cancel, error,
       no-sessions state)
-- [ ] Docs: CHANGELOG, README and `lib/documentation.ts` describe the Architecture Lab
+- [x] Docs: CHANGELOG, README and `lib/documentation.ts` describe the Architecture Lab
 
 ## Acceptance Criteria
 

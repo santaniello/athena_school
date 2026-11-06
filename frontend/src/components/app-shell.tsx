@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { BookOpen, PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { AthenaLogo } from '@/components/athena-logo'
 import { NavItem } from '@/components/nav-item'
@@ -18,6 +18,7 @@ import StudyChatScreen from '@/screens/StudyChatScreen'
 import ProfileScreen from '@/screens/ProfileScreen'
 import SettingsScreen from '@/screens/SettingsScreen'
 import DocumentationScreen from '@/screens/DocumentationScreen'
+import ArchitectureLabScreen from '@/screens/ArchitectureLabScreen'
 import { NAVIGATION, type AppSection } from '@/lib/navigation'
 import { getUserProfile, type ProfileDraft } from '@/lib/profile'
 import { startStudySession, type StudySession, type StudySource } from '@/lib/study'
@@ -54,6 +55,14 @@ interface ActiveStudySession {
 
 const PRIMARY_ITEMS = NAVIGATION.filter((item) => item.group === 'primary')
 const FOOTER_ITEMS = NAVIGATION.filter((item) => item.group === 'footer')
+
+// Development-only preview of the lab layout (phase 3.8). The dynamic import
+// sits behind import.meta.env.DEV, so a production build drops the preview and
+// its fixtures entirely. It is not in the navigation and creates no attempt.
+const LabPreview = import.meta.env.DEV
+  ? lazy(() => import('@/components/lab/lab-preview').then((m) => ({ default: m.LabPreview })))
+  : null
+const LAB_PREVIEW_HASH = '#lab-preview'
 
 // The persistent app chrome (sidebar + topbar) mounted once, after auth, the
 // key gate and onboarding are all done. Hosts every roadmap section from day
@@ -414,7 +423,11 @@ function AppShell() {
           without it a long chat transcript stretches past the viewport
           instead of scrolling inside its own scroll area. */}
       <main className="flex min-h-0 flex-1 p-10">
-        {section === 'home' ? (
+        {LabPreview && window.location.hash === LAB_PREVIEW_HASH ? (
+          <Suspense fallback={null}>
+            <LabPreview />
+          </Suspense>
+        ) : section === 'home' ? (
           <HomeScreen
             profile={profile}
             studyLocked={studyLocked}
@@ -453,6 +466,8 @@ function AppShell() {
               )}
             </div>
           )
+        ) : section === 'challenge' ? (
+          <ArchitectureLabScreen experienceLevel={profile?.experienceLevel} />
         ) : section === 'documentation' ? (
           <DocumentationScreen />
         ) : section === 'profile' && profile ? (

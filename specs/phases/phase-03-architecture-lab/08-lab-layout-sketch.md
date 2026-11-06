@@ -94,17 +94,17 @@ No backend and no Wails binding in this spec.
 
 Each slice is TDD (Vitest), keeps the build green and is committed on its own.
 
-- [ ] `lab-countdown`: formatting, warning and urgent thresholds, `onExpire` called once,
+- [x] `lab-countdown`: formatting, warning and urgent thresholds, `onExpire` called once,
       expired deadline at mount
-- [ ] `lab-statement-panel`: scenario and the four lists, empty lists hidden
-- [ ] `lab-rubric-panel`: name, description, weight, mandatory marker, no score shown
-- [ ] `lab-tutor-panel`: initial text, counter, button, hint messages, none-left state, no free
+- [x] `lab-statement-panel`: scenario and the four lists, empty lists hidden
+- [x] `lab-rubric-panel`: name, description, weight, mandatory marker, no score shown
+- [x] `lab-tutor-panel`: initial text, counter, button, hint messages, none-left state, no free
       input
-- [ ] `lab-leave-dialog`: confirmation, cancel, confirm
-- [ ] `lab-layout`: top bar, three resizable and collapsible panels, board placeholder, Finish
+- [x] `lab-leave-dialog`: confirmation, cancel, confirm
+- [x] `lab-layout`: top bar, three resizable and collapsible panels, board placeholder, Finish
       enablement, handlers
-- [ ] Dev-only preview route from fixtures, excluded from production
-- [ ] Docs: CHANGELOG
+- [x] Dev-only preview route from fixtures, excluded from production
+- [x] Docs: CHANGELOG
 
 ## Acceptance Criteria
 

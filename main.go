@@ -144,6 +144,9 @@ func main() {
 		transactor,
 	)
 
+	challengeCatalog := applicationexercise.NewCatalogService(challengeRepo, sqlite.NewAttemptRecordRepository(db))
+	sessionService := applicationexercise.NewSessionService(sqlite.NewSessionOptionRepository(db))
+
 	resetter := sqlite.NewResetter(db)
 	resetService := applicationreset.NewService(resetter, vectorStore)
 
@@ -153,6 +156,8 @@ func main() {
 		desktop.WithModelSettings(settingsService),
 		desktop.WithAttemptService(attemptService),
 		desktop.WithGenerationService(generationService),
+		desktop.WithCatalogService(challengeCatalog),
+		desktop.WithSessionLister(sessionService),
 	)
 
 	err = wails.Run(&options.App{

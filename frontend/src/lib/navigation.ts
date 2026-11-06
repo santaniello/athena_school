@@ -60,12 +60,13 @@ export const NAVIGATION: NavItem[] = [
   },
   {
     id: 'challenge',
-    label: 'Challenge',
+    label: 'Architecture Lab',
     icon: Target,
     phase: 3,
-    status: 'locked',
+    status: 'unlocked',
     group: 'primary',
-    description: 'Practice problems generated for your profile, with structured evaluation.',
+    description:
+      'Architecture challenges generated from what you studied, with a diagram and an evaluation.',
   },
   {
     id: 'progress',

@@ -20,9 +20,9 @@ describe('NAVIGATION', () => {
     expect(NAVIGATION.map((item) => item.id)).toEqual(EXPECTED_IDS)
   })
 
-  it('unlocks home, study, documentation, profile and settings', () => {
+  it('unlocks home, study, the architecture lab, documentation, profile and settings', () => {
     const unlocked = NAVIGATION.filter((item) => item.status === 'unlocked').map((item) => item.id)
-    expect(unlocked).toEqual(['home', 'study', 'documentation', 'profile', 'settings'])
+    expect(unlocked).toEqual(['home', 'study', 'challenge', 'documentation', 'profile', 'settings'])
   })
 
   it('has no Knowledge section, since knowledge comes only from documents imported into a study session', () => {
@@ -32,6 +32,14 @@ describe('NAVIGATION', () => {
   it('pins documentation, profile and settings to the sidebar footer group, with profile directly above settings', () => {
     const footer = NAVIGATION.filter((item) => item.group === 'footer').map((item) => item.id)
     expect(footer).toEqual(['documentation', 'profile', 'settings'])
+  })
+
+  it('names the challenge section Architecture Lab', () => {
+    const item = NAVIGATION.find((entry) => entry.id === 'challenge')
+    expect(item?.label).toBe('Architecture Lab')
+    expect(item?.description).toBe(
+      'Architecture challenges generated from what you studied, with a diagram and an evaluation.',
+    )
   })
 
   it('gives every locked item a non-empty description for the coming-soon panel', () => {
