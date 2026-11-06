@@ -1,0 +1,76 @@
+<mxfile host="embed.diagrams.net">
+  <diagram id="ma3D-D4r-XQIXZ_3V_XV" name="Page-1">
+    <mxGraphModel dx="1896" dy="753" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="vpc" parent="1" style="points=[];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;container=1;collapsible=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_vpc;strokeColor=#248814;fillColor=none;verticalAlign=top;align=left;spacingLeft=30;fontColor=#AAB7B8;dashed=0;" value="VPC (private subnets)" vertex="1">
+          <mxGeometry height="300" width="520" x="300" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="orders" parent="vpc" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=#F78E04;gradientDirection=north;fillColor=#D05C17;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.lambda;" value="Orders Service" vertex="1">
+          <mxGeometry height="48" width="48" x="40" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="pay" parent="vpc" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=#F78E04;gradientDirection=north;fillColor=#D05C17;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.lambda;" value="Payments Service" vertex="1">
+          <mxGeometry height="48" width="48" x="200" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="inv" parent="vpc" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=#F78E04;gradientDirection=north;fillColor=#D05C17;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.lambda;" value="Inventory Service" vertex="1">
+          <mxGeometry height="48" width="48" x="360" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="db" parent="vpc" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=#F78E04;gradientDirection=north;fillColor=#D05C17;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.aurora;" value="Orders DB (Aurora)" vertex="1">
+          <mxGeometry height="48" width="48" x="40" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="cache" parent="vpc" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=#F78E04;gradientDirection=north;fillColor=#D05C17;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.elasticache;" value="Redis Cache" vertex="1">
+          <mxGeometry height="48" width="48" x="200" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="q" parent="vpc" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=#F78E04;gradientDirection=north;fillColor=#D05C17;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.sqs;" value="Order Events (SQS)" vertex="1">
+          <mxGeometry height="48" width="48" x="360" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="cdn" parent="1" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=#F78E04;gradientDirection=north;fillColor=#D05C17;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.cloudfront;" value="CloudFront&lt;br&gt;&lt;b&gt;CDN&lt;/b&gt;" vertex="1">
+          <mxGeometry height="48" width="48" x="20" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="alb" parent="1" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=#F78E04;gradientDirection=north;fillColor=#D05C17;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.elastic_load_balancing;" value="Application Load Balancer" vertex="1">
+          <mxGeometry height="48" width="48" x="140" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="s3" parent="1" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=#F78E04;gradientDirection=north;fillColor=#D05C17;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.s3;" value="Receipts (S3)" vertex="1">
+          <mxGeometry height="48" width="48" x="860" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="sns" parent="1" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=#F78E04;gradientDirection=north;fillColor=#D05C17;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.sns;" value="Notifications (SNS)" vertex="1">
+          <mxGeometry height="48" width="48" x="860" y="200" as="geometry" />
+        </mxCell>
+        <mxCell id="e0" edge="1" parent="1" source="cdn" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="alb" value="HTTPS">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="alb" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="orders" value="route /orders">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="alb" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="pay" value="route /pay">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="alb" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="inv" value="route /stock">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="orders" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="db" value="SQL">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="orders" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="cache" value="cache read">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="orders" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="q" value="publish">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="pay" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="sns" value="notify">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="inv" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="q" value="consume">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="orders" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="s3" value="receipt">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="pay" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="db" value="ledger">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

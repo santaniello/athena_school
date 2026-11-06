@@ -61,13 +61,13 @@ on. No production code is delivered by this spec.
 
 ## Tasks
 
-- [ ] Prototype on a dev-only route: embed in an iframe with the fixed configuration
-- [ ] Measure questions 1 to 5 on the supported operating systems available
-- [ ] Check question 6 with an example diagram and the XML alone
-- [ ] Check question 7 with the network inspector
-- [ ] Write `ADR-006-diagram-editor.md` and the XML examples
-- [ ] Adjust 3.10 and 3.11 if needed; remove the prototype
-- [ ] Docs: CHANGELOG entry for the ADR
+- [x] Prototype on a dev-only route: embed in an iframe with the fixed configuration
+- [x] Measure questions 1 to 5 on the supported operating systems available (Linux only; macOS and Windows not available)
+- [x] Check question 6 with an example diagram and the XML alone
+- [x] Check question 7 with the network inspector (partial: the iframe's own requests were not visible; see ADR-006)
+- [x] Write `ADR-006-diagram-editor.md` and the XML examples
+- [x] Adjust 3.10 and 3.11 if needed; remove the prototype
+- [x] Docs: CHANGELOG entry for the ADR
 
 ## Acceptance Criteria
 
