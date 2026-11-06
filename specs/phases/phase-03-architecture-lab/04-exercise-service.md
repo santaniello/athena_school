@@ -70,9 +70,10 @@ func (s *AttemptService) GetAttempt(ctx, attemptID string) (AttemptView, error)
 func (s *AttemptService) ListAttempts(ctx, challengeID string) ([]AttemptView, error)
 ```
 
-`AttemptView` carries the attempt, the challenge's title and topic, the rubric version's criteria
-and, once submitted, the submission. It is the read model the bindings return; the challenge
-statement is read through `ChallengeService`, not copied into it.
+`AttemptView` carries the attempt, the challenge's title and topic, the challenge statement
+(scenario and the four lists, never the rubric's levels), the rubric version's criteria and, once
+submitted, the submission. It is the read model the bindings return; `AttemptDTO` exposes the
+statement as `statement`, so the exam screen ([3.10](10-diagram-workspace.md)) needs one call.
 
 `StartAttempt` order of work:
 

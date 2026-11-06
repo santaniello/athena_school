@@ -62,6 +62,21 @@ func (f *attemptFixture) runTx(ctx context.Context) {
 func attemptChallenge() domainexercise.Challenge {
 	return domainexercise.Challenge{
 		ID: "challenge-1", Title: "Design a URL shortener", Topic: "caching", TimeLimitMinutes: 45,
+		Scenario:                  "A link service.",
+		FunctionalRequirements:    []string{"Shorten a URL"},
+		NonFunctionalRequirements: []string{"p99 under 100 ms"},
+		Constraints:               []string{"No new database"},
+		Objectives:                []string{"Cut read load"},
+	}
+}
+
+func attemptStatement() ChallengeStatement {
+	return ChallengeStatement{
+		Scenario:                  "A link service.",
+		FunctionalRequirements:    []string{"Shorten a URL"},
+		NonFunctionalRequirements: []string{"p99 under 100 ms"},
+		Constraints:               []string{"No new database"},
+		Objectives:                []string{"Cut read load"},
 	}
 }
 
@@ -95,6 +110,7 @@ func TestAttemptService_StartAttempt_standaloneFreezesLatestRubricAndSetsDeadlin
 		Attempt:        expected,
 		ChallengeTitle: "Design a URL shortener",
 		ChallengeTopic: "caching",
+		Statement:      attemptStatement(),
 		Criteria:       attemptRubric().Criteria,
 	}, view)
 }
@@ -684,7 +700,7 @@ func TestAttemptService_GetAttempt_inProgressViewHasNoSubmission(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, AttemptView{
 		Attempt: storedAttempt(), ChallengeTitle: "Design a URL shortener", ChallengeTopic: "caching",
-		Criteria: attemptRubric().Criteria,
+		Statement: attemptStatement(), Criteria: attemptRubric().Criteria,
 	}, view)
 }
 

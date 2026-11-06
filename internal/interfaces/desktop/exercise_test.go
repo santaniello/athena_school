@@ -75,6 +75,9 @@ func storedBindingAttempt() domainexercise.ChallengeAttempt {
 func (f *exerciseFixture) expectView(ctx context.Context) {
 	f.challenges.EXPECT().Get(ctx, "challenge-1").Return(domainexercise.Challenge{
 		ID: "challenge-1", Title: "Design a URL shortener", Topic: "caching",
+		Scenario: "A link service.", FunctionalRequirements: []string{"Shorten a URL"},
+		NonFunctionalRequirements: []string{"p99 under 100 ms"}, Constraints: []string{"No new database"},
+		Objectives: []string{"Cut read load"},
 	}, nil)
 	f.rubrics.EXPECT().Get(ctx, "rubric-1").Return(domainexercise.RubricVersion{
 		ID: "rubric-1", Criteria: []domainexercise.RubricCriterion{{
@@ -100,6 +103,11 @@ func TestApp_GetAttempt_mapsAnInProgressAttemptToItsDTO(t *testing.T) {
 		ID: "attempt-1", ChallengeID: "challenge-1", ChallengeTitle: "Design a URL shortener", ChallengeTopic: "caching",
 		SessionExerciseID: "link-1", State: "IN_PROGRESS",
 		StartedAt: "2026-11-01T10:00:00Z", Deadline: "2026-11-01T10:45:00Z",
+		Statement: StatementDTO{
+			Scenario: "A link service.", FunctionalRequirements: []string{"Shorten a URL"},
+			NonFunctionalRequirements: []string{"p99 under 100 ms"}, Constraints: []string{"No new database"},
+			Objectives: []string{"Cut read load"},
+		},
 		Criteria: []CriterionDTO{{
 			Key: "architecture", Name: "Overall architecture", Description: "Coherent.", Weight: 100, Mandatory: true,
 			Levels: []string{"0", "1", "2", "3", "4"},

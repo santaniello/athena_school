@@ -89,8 +89,9 @@ This is the first time the user can take an exam. Evaluation does not exist yet
   diagram editor" tooltip is removed.
 - All UI text is in English.
 
-No new backend and no new binding: every call exists from [3.4](04-exercise-service.md). If the
-spike shows a gap in the attempt API, this spec and 3.4 are corrected first.
+No new binding: every call exists from [3.4](04-exercise-service.md). One gap was found while
+implementing: no binding exposed the challenge statement, so `AttemptView` and `AttemptDTO` now
+carry it (`statement`: scenario and the four lists), and 3.4 was corrected in the same change.
 
 ## Tasks
 
