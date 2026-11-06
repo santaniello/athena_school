@@ -22,12 +22,16 @@ vi.mock('@/components/generate-challenge-dialog', () => ({
     defaultDifficulty: string
     onClose: () => void
     onGenerated: (challenge: { id: string }) => void
+    onGeneratedAfterClose: (challenge: { id: string }) => void
   }) =>
     props.open ? (
       <div role="dialog" aria-label="Generate dialog">
         <span>default {props.defaultDifficulty}</span>
         <button onClick={props.onClose}>close dialog</button>
         <button onClick={() => props.onGenerated({ id: 'c-new' })}>finish generation</button>
+        <button onClick={() => props.onGeneratedAfterClose({ id: 'c-late' })}>
+          finish late generation
+        </button>
       </div>
     ) : null,
 }))
@@ -291,5 +295,25 @@ describe('ArchitectureLabScreen', () => {
 
     expect(screen.getByText('Challenge c1')).toBeInTheDocument()
     expect(screen.queryByText('Loading challenges…')).not.toBeInTheDocument()
+  })
+
+  it('reloads for a generation that finished after its dialog closed, leaving the screen alone', async () => {
+    vi.mocked(listChallengeCatalog).mockResolvedValue(catalog([item('c1')]))
+    const user = userEvent.setup()
+    render(<ArchitectureLabScreen experienceLevel="intermediate" />)
+    await screen.findByText('Challenge c1')
+    await user.type(screen.getByRole('searchbox', { name: 'Search challenges' }), 'cache')
+    await user.click(screen.getByRole('button', { name: 'Generate challenge with AI' }))
+    const callsBefore = vi.mocked(listChallengeCatalog).mock.calls.length
+    const topicCallsBefore = vi.mocked(listChallengeTopics).mock.calls.length
+
+    await user.click(screen.getByRole('button', { name: 'finish late generation' }))
+
+    await waitFor(() =>
+      expect(vi.mocked(listChallengeCatalog).mock.calls.length).toBeGreaterThan(callsBefore),
+    )
+    expect(vi.mocked(listChallengeTopics).mock.calls.length).toBeGreaterThan(topicCallsBefore)
+    expect(screen.getByRole('dialog', { name: 'Generate dialog' })).toBeInTheDocument()
+    expect(screen.getByRole('searchbox', { name: 'Search challenges' })).toHaveValue('cache')
   })
 })

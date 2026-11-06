@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -29,7 +29,6 @@ import {
   type GeneratedChallenge,
   type SessionOption,
 } from '@/lib/exercise'
-import { cn } from '@/lib/utils'
 
 interface GenerateChallengeDialogProps {
   open: boolean
@@ -38,6 +37,10 @@ interface GenerateChallengeDialogProps {
   onClose: () => void
   // Called with the new challenge; the caller closes the dialog and reloads.
   onGenerated: (challenge: GeneratedChallenge) => void
+  // Called instead when the dialog was already closed by the time the
+  // challenge arrived: it exists in the catalog, but nothing on screen is
+  // waiting for it, so the caller must not touch a dialog opened since.
+  onGeneratedAfterClose: (challenge: GeneratedChallenge) => void
 }
 
 const DIFFICULTIES = Object.keys(DIFFICULTY_LABELS) as ChallengeDifficulty[]
@@ -57,6 +60,7 @@ function GenerateChallengeContent({
   defaultDifficulty,
   onClose,
   onGenerated,
+  onGeneratedAfterClose,
 }: Omit<GenerateChallengeDialogProps, 'open'>) {
   const [sessions, setSessions] = useState<Sessions>({ state: 'loading' })
   const [reloadToken, setReloadToken] = useState(0)
@@ -65,6 +69,17 @@ function GenerateChallengeContent({
   const [difficulty, setDifficulty] = useState(defaultDifficulty)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // False once the dialog has closed, so a late answer is told apart from one
+  // this instance is still waiting for.
+  // Stryker disable next-line BooleanLiteral: the mount effect below sets it before any answer can arrive.
+  const mountedRef = useRef(false)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   // Stryker disable ConditionalExpression,BlockStatement,BooleanLiteral: the
   // stale flag only matters when this dialog unmounts before the list
@@ -98,7 +113,9 @@ function GenerateChallengeContent({
     setError(null)
     setGenerating(true)
     try {
-      onGenerated(await generateChallenge(selectedId, difficulty))
+      const challenge = await generateChallenge(selectedId, difficulty)
+      if (mountedRef.current) onGenerated(challenge)
+      else onGeneratedAfterClose(challenge)
     } catch (err) {
       // A cancelled generation is the user's own doing: back to the choice, quietly.
       if (exerciseErrorCode(err) !== 'cancelled') setError(exerciseErrorMessage(err))
@@ -163,23 +180,24 @@ function GenerateChallengeContent({
               className="thin-scroll max-h-64 space-y-1 overflow-y-auto"
             >
               {visible.map((session) => (
-                <button
+                // A native radio gives one tab stop and the arrow keys for free.
+                <label
                   key={session.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={session.id === selectedId}
-                  disabled={generating}
-                  onClick={() => setSelectedId(session.id)}
-                  className={cn(
-                    'flex w-full cursor-pointer flex-col rounded-lg border border-border px-3 py-2 text-left text-sm transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60',
-                    session.id === selectedId && 'border-primary bg-primary/10',
-                  )}
+                  className="flex w-full cursor-pointer flex-col rounded-lg border border-border px-3 py-2 text-left text-sm transition-colors hover:bg-accent has-[:checked]:border-primary has-[:checked]:bg-primary/10 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
                 >
+                  <input
+                    type="radio"
+                    name="study-session"
+                    className="sr-only"
+                    checked={session.id === selectedId}
+                    disabled={generating}
+                    onChange={() => setSelectedId(session.id)}
+                  />
                   <span className="font-medium text-foreground">{session.topic}</span>
                   <span className="text-muted-foreground">
                     {session.folderName} · {formatSessionDate(session.startedAt)}
                   </span>
-                </button>
+                </label>
               ))}
               {visible.length === 0 && (
                 <p className="py-2 text-sm text-muted-foreground">

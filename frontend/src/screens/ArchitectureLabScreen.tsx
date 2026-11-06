@@ -68,6 +68,14 @@ function ArchitectureLabScreen({ experienceLevel }: ArchitectureLabScreenProps) 
     loadTopics()
   }
 
+  // The dialog was closed before the challenge arrived. The challenge is in
+  // the catalog, so the list refreshes, but the filters and any dialog opened
+  // since are left alone.
+  function handleGeneratedAfterClose() {
+    reload()
+    loadTopics()
+  }
+
   const items = catalog?.items ?? []
 
   return (
@@ -161,6 +169,7 @@ function ArchitectureLabScreen({ experienceLevel }: ArchitectureLabScreenProps) 
         defaultDifficulty={difficultyForExperience(experienceLevel)}
         onClose={() => setDialogOpen(false)}
         onGenerated={handleGenerated}
+        onGeneratedAfterClose={handleGeneratedAfterClose}
       />
     </div>
   )

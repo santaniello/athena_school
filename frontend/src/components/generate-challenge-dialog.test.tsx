@@ -46,10 +46,11 @@ function renderDialog(overrides: Partial<Parameters<typeof GenerateChallengeDial
     defaultDifficulty: 'INTERMEDIATE' as const,
     onClose: vi.fn(),
     onGenerated: vi.fn(),
+    onGeneratedAfterClose: vi.fn(),
     ...overrides,
   }
-  render(<GenerateChallengeDialog {...props} />)
-  return props
+  const view = render(<GenerateChallengeDialog {...props} />)
+  return { ...props, unmount: view.unmount }
 }
 
 // A promise the test settles by hand, like a slow model call.
@@ -81,11 +82,11 @@ describe('GenerateChallengeDialog', () => {
 
     const options = await screen.findAllByRole('radio')
     expect(options).toHaveLength(2)
-    expect(options[0]).toHaveTextContent('Caching')
-    expect(options[0]).toHaveTextContent('Backend')
-    expect(options[0]).toHaveTextContent('Nov 2, 2026')
-    expect(options[1]).toHaveTextContent('Message queues')
-    expect(options[1]).toHaveTextContent('Infra')
+    expect(options[0]).toHaveAccessibleName(expect.stringContaining('Caching'))
+    expect(options[0]).toHaveAccessibleName(expect.stringContaining('Backend'))
+    expect(options[0]).toHaveAccessibleName(expect.stringContaining('Nov 2, 2026'))
+    expect(options[1]).toHaveAccessibleName(expect.stringContaining('Message queues'))
+    expect(options[1]).toHaveAccessibleName(expect.stringContaining('Infra'))
   })
 
   it('shows a loading message, and nothing else to act on, until the sessions arrive', async () => {
@@ -121,7 +122,7 @@ describe('GenerateChallengeDialog', () => {
 
     const options = screen.getAllByRole('radio')
     expect(options).toHaveLength(1)
-    expect(options[0]).toHaveTextContent('Caching')
+    expect(options[0]).toHaveAccessibleName(expect.stringContaining('Caching'))
   })
 
   it('filters the sessions by the search text over topic and folder name', async () => {
@@ -133,7 +134,7 @@ describe('GenerateChallengeDialog', () => {
 
     const options = screen.getAllByRole('radio')
     expect(options).toHaveLength(1)
-    expect(options[0]).toHaveTextContent('Message queues')
+    expect(options[0]).toHaveAccessibleName(expect.stringContaining('Message queues'))
   })
 
   it('says so when the search matches no session', async () => {
@@ -299,5 +300,37 @@ describe('GenerateChallengeDialog', () => {
 
     expect(props.onClose).toHaveBeenCalledOnce()
     expect(cancelChallengeGeneration).not.toHaveBeenCalled()
+  })
+
+  it('reports a challenge generated after the dialog closed without closing anything', async () => {
+    const user = userEvent.setup()
+    const pending = deferred<GeneratedChallenge>()
+    vi.mocked(generateChallenge).mockReturnValueOnce(pending.promise)
+    const props = renderDialog()
+    await user.click(await screen.findByRole('radio', { name: /Caching/ }))
+    await user.click(screen.getByRole('button', { name: 'Generate' }))
+
+    props.unmount()
+    pending.resolve(created)
+
+    await waitFor(() => expect(props.onGeneratedAfterClose).toHaveBeenCalledWith(created))
+    expect(props.onGenerated).not.toHaveBeenCalled()
+  })
+
+  it('moves the choice with the arrow keys inside one tab stop', async () => {
+    const user = userEvent.setup()
+    renderDialog()
+    await screen.findAllByRole('radio')
+
+    await user.click(screen.getByRole('radio', { name: /Caching/ }))
+    await user.keyboard('{ArrowDown}')
+
+    expect(screen.getByRole('radio', { name: /Message queues/ })).toBeChecked()
+    expect(screen.getByRole('radio', { name: /Caching/ })).not.toBeChecked()
+
+    await user.tab()
+    expect(screen.getAllByRole('radio').some((radio) => radio === document.activeElement)).toBe(
+      false,
+    )
   })
 })
