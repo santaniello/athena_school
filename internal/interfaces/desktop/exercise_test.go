@@ -242,7 +242,7 @@ func TestApp_exerciseErrors_mapEverySentinelToItsCode(t *testing.T) {
 		{"submission too late", applicationexercise.ErrSubmissionTooLate, exerciseCodeSubmissionTooLate},
 		{"content required", domainexercise.ErrSubmissionContentRequired, exerciseCodeSubmissionInvalid},
 		{"content type required", domainexercise.ErrSubmissionContentTypeRequired, exerciseCodeSubmissionInvalid},
-		{"content too large", domainexercise.ErrSubmissionTooLarge, exerciseCodeSubmissionInvalid},
+		{"content too large", domainexercise.ErrSubmissionTooLarge, exerciseCodeSubmissionTooLarge},
 		{"anything else", errors.New("disk failure: secret path"), exerciseCodeInternal},
 	}
 	for _, tt := range tests {
