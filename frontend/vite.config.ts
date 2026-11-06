@@ -4,6 +4,11 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+// Dates are rendered in the local time zone on purpose, so the tests pin one:
+// a date asserted as "Nov 2" must not turn into "Nov 3" on a machine far east
+// of UTC. The test workers inherit this from the process that loads the config.
+process.env.TZ = 'UTC'
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
