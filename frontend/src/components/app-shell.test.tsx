@@ -129,6 +129,25 @@ vi.mock('@/lib/exercise', async (importOriginal) => {
   }
 })
 
+// The exam screen is covered by its own tests; this stand-in exposes what the
+// shell hands it and lets a test end the exam.
+vi.mock('@/screens/LabExamScreen', () => ({
+  default: (props: {
+    challenge: { id: string; title: string }
+    leaveRequested: boolean
+    onLeaveCancelled: () => void
+    onExit: (notice?: string) => void
+  }) => (
+    <div role="region" aria-label="Exam">
+      <span>exam {props.challenge.id}</span>
+      <span>{props.leaveRequested ? 'leave requested' : 'no leave request'}</span>
+      <button onClick={() => props.onLeaveCancelled()}>cancel leave</button>
+      <button onClick={() => props.onExit()}>finish exam</button>
+      <button onClick={() => props.onExit('Time is up.')}>finish with notice</button>
+    </div>
+  ),
+}))
+
 vi.mock('@/lib/folder', () => ({
   listFolders: vi.fn().mockResolvedValue([{ id: 'default', name: 'General' }]),
   createFolder: vi.fn(),
@@ -1541,5 +1560,79 @@ describe('AppShell knowledge index lifecycle', () => {
     // Then the subscription/query effect never re-ran
     expect(getKnowledgeIndexStatus).toHaveBeenCalledOnce()
     expect(onKnowledgeIndexStatus).toHaveBeenCalledOnce()
+  })
+
+  describe('exam', () => {
+    async function startExam() {
+      const user = userEvent.setup()
+      renderShell()
+      await screen.findByText(/Felipe\./)
+      await user.click(screen.getByRole('button', { name: 'Architecture Lab' }))
+      await screen.findByText('Rate limiter for a public API')
+      await user.click(screen.getByRole('button', { name: 'Start' }))
+      await user.click(await screen.findByRole('button', { name: 'Start exam' }))
+      return user
+    }
+
+    it('replaces the catalog with the exam once the rules are confirmed', async () => {
+      await startExam()
+
+      expect(screen.getByRole('region', { name: 'Exam' })).toHaveTextContent('exam c1')
+      expect(screen.queryByText('Rate limiter for a public API')).not.toBeInTheDocument()
+    })
+
+    it('returns to the catalog when the exam ends', async () => {
+      const user = await startExam()
+
+      await user.click(screen.getByRole('button', { name: 'finish exam' }))
+
+      expect(await screen.findByText('Rate limiter for a public API')).toBeInTheDocument()
+      expect(screen.queryByRole('region', { name: 'Exam' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
+    it('tells the user why the exam ended when it returns with a notice', async () => {
+      const user = await startExam()
+
+      await user.click(screen.getByRole('button', { name: 'finish with notice' }))
+
+      expect(await screen.findByText('Time is up.')).toBeInTheDocument()
+    })
+
+    it('does not leave the exam through the sidebar until the exam agrees', async () => {
+      const user = await startExam()
+
+      await user.click(screen.getByRole('button', { name: 'Settings' }))
+
+      expect(screen.getByRole('region', { name: 'Exam' })).toHaveTextContent('leave requested')
+      expect(screen.queryByRole('heading', { name: 'Settings', level: 1 })).not.toBeInTheDocument()
+    })
+
+    it('stays in the exam when the leave is cancelled', async () => {
+      const user = await startExam()
+      await user.click(screen.getByRole('button', { name: 'Settings' }))
+
+      await user.click(screen.getByRole('button', { name: 'cancel leave' }))
+
+      expect(screen.getByRole('region', { name: 'Exam' })).toHaveTextContent('no leave request')
+    })
+
+    it('goes where the user navigated once the exam is over', async () => {
+      const user = await startExam()
+      await user.click(screen.getByRole('button', { name: 'Settings' }))
+
+      await user.click(screen.getByRole('button', { name: 'finish exam' }))
+
+      expect(await screen.findByRole('heading', { name: 'Settings', level: 1 })).toBeInTheDocument()
+      expect(screen.queryByRole('region', { name: 'Exam' })).not.toBeInTheDocument()
+    })
+
+    it('keeps the exam when the Architecture Lab entry is clicked again', async () => {
+      const user = await startExam()
+
+      await user.click(screen.getByRole('button', { name: 'Architecture Lab' }))
+
+      expect(screen.getByRole('region', { name: 'Exam' })).toHaveTextContent('no leave request')
+    })
   })
 })

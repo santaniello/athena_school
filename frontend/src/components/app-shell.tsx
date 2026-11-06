@@ -19,6 +19,9 @@ import ProfileScreen from '@/screens/ProfileScreen'
 import SettingsScreen from '@/screens/SettingsScreen'
 import DocumentationScreen from '@/screens/DocumentationScreen'
 import ArchitectureLabScreen from '@/screens/ArchitectureLabScreen'
+import LabExamScreen from '@/screens/LabExamScreen'
+import type { ExamToStart } from '@/components/lab/start-exam-dialog'
+import { ToastViewport, type ToastItem } from '@/components/toast'
 import { NAVIGATION, type AppSection } from '@/lib/navigation'
 import { getUserProfile, type ProfileDraft } from '@/lib/profile'
 import { startStudySession, type StudySession, type StudySource } from '@/lib/study'
@@ -77,6 +80,11 @@ const LAB_PREVIEW_HASH = '#lab-preview'
 // specs/phases/phase-01-desktop-mvp/10-study-folders.md.
 function AppShell() {
   const [section, setSection] = useState<AppSection>('home')
+  // The exam in progress, a full-screen state of the Architecture Lab. While
+  // it runs, navigating elsewhere waits for the exam's own leave question.
+  const [exam, setExam] = useState<ExamToStart | null>(null)
+  const [pendingSection, setPendingSection] = useState<AppSection | null>(null)
+  const [notices, setNotices] = useState<ToastItem[]>([])
   const [profile, setProfile] = useState<ProfileDraft | null>(null)
   const [activeSession, setActiveSession] = useState<ActiveStudySession | null>(null)
   // Holds the header's slot DOM node once mounted, so StudyChatScreen can
@@ -213,6 +221,26 @@ function AppShell() {
       if (result.state !== 'failed') setContinuedWithoutSearch(false)
     } finally {
       setRetryingIndex(false)
+    }
+  }
+
+  function navigate(next: AppSection) {
+    if (!exam) {
+      setSection(next)
+      return
+    }
+    if (next !== 'challenge') setPendingSection(next)
+  }
+
+  function handleExamExit(notice?: string) {
+    setExam(null)
+    if (pendingSection) setSection(pendingSection)
+    setPendingSection(null)
+    if (notice) {
+      setNotices((current) => [
+        ...current,
+        { id: crypto.randomUUID(), tone: 'warning', message: notice, durationMs: 10000 },
+      ])
     }
   }
 
@@ -431,7 +459,7 @@ function AppShell() {
           <HomeScreen
             profile={profile}
             studyLocked={studyLocked}
-            onStartStudy={() => setSection('study')}
+            onStartStudy={() => navigate('study')}
           />
         ) : section === 'study' ? (
           activeSession ? (
@@ -467,10 +495,19 @@ function AppShell() {
             </div>
           )
         ) : section === 'challenge' ? (
-          <ArchitectureLabScreen
-            experienceLevel={profile?.experienceLevel}
-            onStartExam={() => {}}
-          />
+          exam ? (
+            <LabExamScreen
+              challenge={exam}
+              leaveRequested={pendingSection !== null}
+              onLeaveCancelled={() => setPendingSection(null)}
+              onExit={handleExamExit}
+            />
+          ) : (
+            <ArchitectureLabScreen
+              experienceLevel={profile?.experienceLevel}
+              onStartExam={setExam}
+            />
+          )
         ) : section === 'documentation' ? (
           <DocumentationScreen />
         ) : section === 'profile' && profile ? (
@@ -481,6 +518,10 @@ function AppShell() {
           <ComingSoonPanel item={activeItem} />
         )}
       </main>
+      <ToastViewport
+        toasts={notices}
+        onDismiss={(id) => setNotices((current) => current.filter((toast) => toast.id !== id))}
+      />
     </div>
   )
 
@@ -515,7 +556,7 @@ function AppShell() {
             >
               {PRIMARY_ITEMS.map((item) => (
                 <div key={item.id}>
-                  <NavItem item={item} active={item.id === section} onSelect={setSection} />
+                  <NavItem item={item} active={item.id === section} onSelect={navigate} />
                   {item.id === 'study' && section === 'study' && (
                     <StudyFolderTree
                       ref={studyFolderTreeRef}
@@ -537,7 +578,7 @@ function AppShell() {
                   key={item.id}
                   item={item}
                   active={item.id === section}
-                  onSelect={setSection}
+                  onSelect={navigate}
                 />
               ))}
             </div>
