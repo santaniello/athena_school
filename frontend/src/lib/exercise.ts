@@ -5,12 +5,14 @@ import {
   GetAttempt,
   ListChallengeCatalog,
   ListChallengeTopics,
+  ListHints,
   ListSessionsForGeneration,
+  RequestHint,
   StartAttempt,
   SubmitAttempt,
 } from '../../wailsjs/go/desktop/App'
 import type { desktop } from '../../wailsjs/go/models'
-import type { LabCriterion, LabStatement } from './lab'
+import type { LabCriterion, LabHint, LabStatement } from './lab'
 
 // The Architecture Lab catalog. The frontend only renders what the backend
 // returns: statuses and counts are derived there. See
@@ -226,4 +228,21 @@ export function discardAttempt(attemptId: string): Promise<void> {
 
 export async function getAttempt(attemptId: string): Promise<Attempt> {
   return toAttempt(await GetAttempt(attemptId))
+}
+
+// The tutor's hints during the exam. The backend counts them and refuses the
+// fourth; a failed request spends nothing. See
+// specs/phases/phase-03-architecture-lab/10-01-tutor-hints.md.
+function toHint(dto: desktop.HintDTO): LabHint {
+  return { id: dto.id, text: dto.content }
+}
+
+// Asks the tutor for a hint, given the board as it is now.
+export async function requestHint(attemptId: string, boardXml: string): Promise<LabHint> {
+  return toHint(await RequestHint(attemptId, boardXml))
+}
+
+// The hints already given for the attempt, in the order given.
+export async function listHints(attemptId: string): Promise<LabHint[]> {
+  return (await ListHints(attemptId)).map(toHint)
 }

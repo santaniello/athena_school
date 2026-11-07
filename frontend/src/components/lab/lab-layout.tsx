@@ -27,6 +27,8 @@ interface LabLayoutProps {
   now?: () => number
   hints: LabHint[]
   hintsLeft: number
+  hintAsking: boolean
+  hintFailed: boolean
   // True once the board has content.
   canFinish: boolean
   // The board: the diagram editor, supplied by the caller.
@@ -55,6 +57,8 @@ function LabLayout({
   now,
   hints,
   hintsLeft,
+  hintAsking,
+  hintFailed,
   canFinish,
   board,
   onExpire,
@@ -194,7 +198,13 @@ function LabLayout({
           style={{ overflow: 'hidden' }}
         >
           <div className="flex h-full flex-col divide-y divide-border overflow-y-auto">
-            <LabTutorPanel hints={hints} hintsLeft={hintsLeft} onAskHint={onAskHint} />
+            <LabTutorPanel
+              hints={hints}
+              hintsLeft={hintsLeft}
+              asking={hintAsking}
+              failed={hintFailed}
+              onAskHint={onAskHint}
+            />
             <LabRubricPanel criteria={criteria} />
           </div>
         </ResizablePanel>

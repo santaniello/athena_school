@@ -37,6 +37,8 @@ function renderLayout(overrides: Partial<Parameters<typeof LabLayout>[0]> = {}) 
       now={() => Date.now()}
       hints={[]}
       hintsLeft={3}
+      hintAsking={false}
+      hintFailed={false}
       canFinish
       board={<p>the editor</p>}
       {...handlers}
@@ -147,6 +149,13 @@ describe('LabLayout', () => {
     await user.click(screen.getByRole('button', { name: 'Ask for a hint' }))
 
     expect(handlers.onAskHint).toHaveBeenCalledOnce()
+  })
+
+  it('passes the hint progress and failure to the tutor panel', () => {
+    renderLayout({ hintAsking: true, hintFailed: true })
+
+    expect(screen.getByRole('button', { name: 'Asking the tutor...' })).toBeDisabled()
+    expect(screen.getByText('Could not get a hint. Try again.')).toBeInTheDocument()
   })
 
   it('passes the expiry to the caller', () => {

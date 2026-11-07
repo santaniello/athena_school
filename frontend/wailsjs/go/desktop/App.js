@@ -102,6 +102,10 @@ export function ListFolders() {
   return window['go']['desktop']['App']['ListFolders']();
 }
 
+export function ListHints(arg1) {
+  return window['go']['desktop']['App']['ListHints'](arg1);
+}
+
 export function ListSelectableModels() {
   return window['go']['desktop']['App']['ListSelectableModels']();
 }
@@ -144,6 +148,10 @@ export function RemoveSessionSource(arg1, arg2) {
 
 export function RenameFolder(arg1, arg2) {
   return window['go']['desktop']['App']['RenameFolder'](arg1, arg2);
+}
+
+export function RequestHint(arg1, arg2) {
+  return window['go']['desktop']['App']['RequestHint'](arg1, arg2);
 }
 
 export function RequestOpeningTurn(arg1, arg2) {

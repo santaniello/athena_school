@@ -11,7 +11,16 @@ const hints: LabHint[] = [
 
 function renderPanel(overrides: Partial<Parameters<typeof LabTutorPanel>[0]> = {}) {
   const onAskHint = vi.fn()
-  render(<LabTutorPanel hints={[]} hintsLeft={3} onAskHint={onAskHint} {...overrides} />)
+  render(
+    <LabTutorPanel
+      hints={[]}
+      hintsLeft={3}
+      asking={false}
+      failed={false}
+      onAskHint={onAskHint}
+      {...overrides}
+    />,
+  )
   return onAskHint
 }
 
@@ -55,6 +64,31 @@ describe('LabTutorPanel', () => {
 
     expect(screen.queryByRole('button', { name: 'Ask for a hint' })).not.toBeInTheDocument()
     expect(screen.getByText('No hints left')).toBeInTheDocument()
+  })
+
+  it('shows progress and disables the button while a hint is being requested', async () => {
+    const user = userEvent.setup()
+    const onAskHint = renderPanel({ asking: true })
+
+    const button = screen.getByRole('button', { name: 'Asking the tutor...' })
+    expect(button).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Ask for a hint' })).not.toBeInTheDocument()
+    await user.click(button)
+    expect(onAskHint).not.toHaveBeenCalled()
+  })
+
+  it('says the hint could not be fetched and keeps the counter and the button', () => {
+    renderPanel({ failed: true, hintsLeft: 2 })
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not get a hint. Try again.')
+    expect(screen.getByText('Hints left: 2 of 3')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Ask for a hint' })).toBeEnabled()
+  })
+
+  it('shows no alert when nothing failed', () => {
+    renderPanel()
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('has no free-text input', () => {

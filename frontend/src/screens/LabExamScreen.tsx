@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Loader2 } from 'lucide-react'
 import { DiagramEditor, type DiagramEditorHandle } from '@/components/lab/diagram-editor'
 import { LabConfirmDialog } from '@/components/lab/lab-confirm-dialog'
@@ -7,7 +7,7 @@ import { LabLeaveDialog } from '@/components/lab/lab-leave-dialog'
 import type { ExamToStart } from '@/components/lab/start-exam-dialog'
 import { Button } from '@/components/ui/button'
 import { useExam } from '@/hooks/use-exam'
-import { MAX_HINTS } from '@/lib/lab'
+import { useHints } from '@/hooks/use-hints'
 
 interface LabExamScreenProps {
   challenge: ExamToStart
@@ -19,8 +19,6 @@ interface LabExamScreenProps {
   onExit: (notice?: string) => void
   now?: () => number
 }
-
-function noop() {}
 
 // The exam, end to end: prepare the editor, create the attempt when it is
 // ready, run the clock, submit and leave. The backend owns the clock; this
@@ -47,9 +45,11 @@ function LabExamScreen({
     if (leaveRequested && !hasAttempt) void leave()
   }, [leaveRequested, hasAttempt, leave])
 
-  function getXml(): Promise<string> {
-    return editorRef.current?.getXml() ?? Promise.resolve('')
-  }
+  const getXml = useCallback(
+    (): Promise<string> => editorRef.current?.getXml() ?? Promise.resolve(''),
+    [],
+  )
+  const tutor = useHints(attempt?.id ?? null, getXml)
 
   function handleExpire() {
     setFinishing(false)
@@ -160,8 +160,10 @@ function LabExamScreen({
         criteria={attempt.criteria}
         deadline={attempt.deadline}
         now={now}
-        hints={[]}
-        hintsLeft={MAX_HINTS}
+        hints={tutor.hints}
+        hintsLeft={tutor.hintsLeft}
+        hintAsking={tutor.asking}
+        hintFailed={tutor.failed}
         canFinish={exam.hasContent && phase === 'running'}
         board={
           <>
@@ -188,7 +190,7 @@ function LabExamScreen({
           </>
         }
         onExpire={handleExpire}
-        onAskHint={noop}
+        onAskHint={() => void tutor.askHint()}
         onFinish={() => setFinishing(true)}
         onLeave={() => void exam.leave()}
       />

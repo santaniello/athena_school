@@ -29,6 +29,8 @@ function LabPreview() {
       deadline={deadline}
       hints={previewHints.slice(0, hintsShown)}
       hintsLeft={MAX_HINTS - hintsShown}
+      hintAsking={false}
+      hintFailed={false}
       canFinish={false}
       board={
         <p className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">

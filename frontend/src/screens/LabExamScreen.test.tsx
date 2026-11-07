@@ -3,12 +3,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { DiagramEditorHandle } from '@/components/lab/diagram-editor'
-import { discardAttempt, startAttempt, submitAttempt, type Attempt } from '@/lib/exercise'
+import {
+  discardAttempt,
+  listHints,
+  requestHint,
+  startAttempt,
+  submitAttempt,
+  type Attempt,
+} from '@/lib/exercise'
 import LabExamScreen from './LabExamScreen'
 
 vi.mock('@/lib/exercise', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/exercise')>()
-  return { ...original, startAttempt: vi.fn(), submitAttempt: vi.fn(), discardAttempt: vi.fn() }
+  return {
+    ...original,
+    startAttempt: vi.fn(),
+    submitAttempt: vi.fn(),
+    discardAttempt: vi.fn(),
+    requestHint: vi.fn(),
+    listHints: vi.fn(),
+  }
 })
 
 interface EditorProps {
@@ -104,6 +118,7 @@ describe('LabExamScreen', () => {
     vi.mocked(startAttempt).mockResolvedValue(attempt)
     vi.mocked(submitAttempt).mockResolvedValue()
     vi.mocked(discardAttempt).mockResolvedValue()
+    vi.mocked(listHints).mockResolvedValue([])
   })
   afterEach(() => vi.useRealTimers())
 
@@ -397,5 +412,49 @@ describe('LabExamScreen', () => {
 
     expect(onExit).toHaveBeenCalledExactlyOnceWith()
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  })
+  it('asks the tutor with the current board and shows the hint in the panel', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    vi.mocked(requestHint).mockResolvedValue({ id: 'h1', text: 'What if the cache is down?' })
+    await startRunning()
+    expect(screen.getByText('Hints left: 3 of 3')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Ask for a hint' }))
+
+    expect(requestHint).toHaveBeenCalledExactlyOnceWith('a1', FULL_XML)
+    expect(await screen.findByText('What if the cache is down?')).toBeInTheDocument()
+    expect(screen.getByText('Hints left: 2 of 3')).toBeInTheDocument()
+  })
+
+  it('shows the hints given earlier for the attempt', async () => {
+    vi.mocked(listHints).mockResolvedValue([{ id: 'h1', text: 'Think about reads.' }])
+
+    await startRunning()
+
+    expect(await screen.findByText('Think about reads.')).toBeInTheDocument()
+    expect(listHints).toHaveBeenCalledExactlyOnceWith('a1')
+    expect(screen.getByText('Hints left: 2 of 3')).toBeInTheDocument()
+  })
+
+  it('says a hint could not be fetched, without spending one', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    vi.mocked(requestHint).mockRejectedValue(coded('internal'))
+    await startRunning()
+
+    await user.click(screen.getByRole('button', { name: 'Ask for a hint' }))
+
+    expect(await screen.findByText('Could not get a hint. Try again.')).toBeInTheDocument()
+    expect(screen.getByText('Hints left: 3 of 3')).toBeInTheDocument()
+  })
+
+  it('sends an empty board when the editor is gone', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    vi.mocked(requestHint).mockResolvedValue({ id: 'h1', text: 'Where would you start?' })
+    xmlOnBoard = ''
+    await startRunning()
+
+    await user.click(screen.getByRole('button', { name: 'Ask for a hint' }))
+
+    expect(requestHint).toHaveBeenCalledExactlyOnceWith('a1', '')
   })
 })

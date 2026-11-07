@@ -14,6 +14,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
+	applicationarchitecture "github.com/santaniello/athena/internal/application/architecture"
 	applicationexercise "github.com/santaniello/athena/internal/application/exercise"
 	"github.com/santaniello/athena/internal/application/folder"
 	applicationingest "github.com/santaniello/athena/internal/application/ingest"
@@ -144,6 +145,12 @@ func main() {
 		transactor,
 	)
 
+	hintService := applicationexercise.NewHintService(
+		challengeRepo, rubricRepo, sqlite.NewAttemptRepository(db), sqlite.NewHintRepository(db),
+		applicationarchitecture.NewHintGenerator(llmClient, exercisesource.NewProfiles(profiles)),
+		systemClock{},
+	)
+
 	challengeCatalog := applicationexercise.NewCatalogService(challengeRepo, sqlite.NewAttemptRecordRepository(db))
 	sessionService := applicationexercise.NewSessionService(sqlite.NewSessionOptionRepository(db))
 
@@ -156,6 +163,7 @@ func main() {
 		desktop.WithModelSettings(settingsService),
 		desktop.WithAttemptService(attemptService),
 		desktop.WithGenerationService(generationService),
+		desktop.WithHintService(hintService),
 		desktop.WithCatalogService(challengeCatalog),
 		desktop.WithSessionLister(sessionService),
 	)

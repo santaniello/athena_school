@@ -298,6 +298,26 @@ export namespace desktop {
 	        this.paragraphsAfter = source["paragraphsAfter"];
 	    }
 	}
+	export class HintDTO {
+	    id: string;
+	    attemptId: string;
+	    position: number;
+	    content: string;
+	    createdAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new HintDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.attemptId = source["attemptId"];
+	        this.position = source["position"];
+	        this.content = source["content"];
+	        this.createdAt = source["createdAt"];
+	    }
+	}
 	export class StructureWarningResult {
 	    heading: string;
 	    message: string;
