@@ -11,7 +11,8 @@ import (
 )
 
 // Short, user-facing reasons stored on an attempt whose evaluation failed.
-// The raw error is returned to the caller, never stored.
+// The raw error is returned to the caller, never stored. An evaluator error
+// may bring its own short reason through a FailureReason method.
 const (
 	reasonEvaluatorFailed = "The evaluator could not complete the evaluation."
 	reasonInvalidOutput   = "The evaluator returned an invalid evaluation."
@@ -180,9 +181,12 @@ func failureReason(cause error) string {
 		return reasonNotSaved
 	case errors.Is(cause, errPassScoreUnverified):
 		return reasonPassScore
-	default:
-		return reasonEvaluatorFailed
 	}
+	var reasoned interface{ FailureReason() string }
+	if errors.As(cause, &reasoned) {
+		return reasoned.FailureReason()
+	}
+	return reasonEvaluatorFailed
 }
 
 // GetEvaluation returns the attempt's stored diagram evaluation, or

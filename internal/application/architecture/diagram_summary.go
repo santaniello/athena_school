@@ -15,14 +15,32 @@ import (
 	"unicode/utf8"
 )
 
-// Errors returned by SummarizeDiagram.
+// diagramError is a diagram failure that also knows the short, user-facing
+// reason an attempt is stored with. The exercise engine reads it through its
+// FailureReason method without importing this package.
+type diagramError struct {
+	message string
+	reason  string
+}
+
+func (e *diagramError) Error() string { return e.message }
+
+// FailureReason returns the short reason shown to the user.
+func (e *diagramError) FailureReason() string { return e.reason }
+
+// Errors returned by SummarizeDiagram and the evaluator.
 var (
 	// ErrInvalidDiagram is returned when the submitted diagram cannot be read:
-	// malformed XML, corrupt or oversized compression, or too many cells.
-	ErrInvalidDiagram = errors.New("the diagram could not be read")
+	// wrong content type, malformed XML, corrupt or oversized compression, or
+	// too many cells.
+	ErrInvalidDiagram error = &diagramError{
+		message: "the diagram could not be read", reason: "The diagram could not be read.",
+	}
 	// ErrEmptyDiagram is returned when the diagram holds no labeled component
 	// and no connection, so there is nothing to evaluate.
-	ErrEmptyDiagram = errors.New("the diagram is empty")
+	ErrEmptyDiagram error = &diagramError{
+		message: "the diagram is empty", reason: "The diagram is empty.",
+	}
 )
 
 // Limits on untrusted diagram input.

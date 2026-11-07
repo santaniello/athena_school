@@ -3,6 +3,7 @@ package exercise
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -257,6 +258,12 @@ func TestEvaluationService_Evaluate_leavesTheAttemptUntouchedWhenWhatTheEvaluato
 	}
 }
 
+// reasonedError is an evaluator error that brings its own user-facing reason.
+type reasonedError struct{}
+
+func (reasonedError) Error() string         { return "diagram problem" }
+func (reasonedError) FailureReason() string { return "The diagram is empty." }
+
 func TestEvaluationService_Evaluate_failsTheAttemptWhenTheEvaluatorFailsOrReturnsInvalidOutput(t *testing.T) {
 	invalid := evaluatorOutput()
 	invalid.Results = invalid.Results[:1]
@@ -270,6 +277,7 @@ func TestEvaluationService_Evaluate_failsTheAttemptWhenTheEvaluatorFailsOrReturn
 	}{
 		{"evaluator error", domainexercise.EvaluatorOutput{}, evaluatorFailure, evaluatorFailure, "The evaluator could not complete the evaluation."},
 		{"invalid output", invalid, nil, domainexercise.ErrInvalidEvaluation, "The evaluator returned an invalid evaluation."},
+		{"error with its own reason", domainexercise.EvaluatorOutput{}, fmt.Errorf("wrapped: %w", reasonedError{}), reasonedError{}, "The diagram is empty."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
