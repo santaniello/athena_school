@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -111,22 +112,39 @@ func TestHintRepository_Add_refusesARepeatedPosition(t *testing.T) {
 }
 
 func TestHintRepository_Add_underConcurrencyStoresAtMostMaxHints(t *testing.T) {
-	// Given many concurrent adds, each for a distinct position
+	// Given more concurrent adds than hints, several racing for each position
 	repo, _, db := newTestHintRepository(t)
 	ctx := context.Background()
+	const callers = exercise.MaxHints + 4
+	results := make(chan error, callers)
+	start := make(chan struct{})
 	var wg sync.WaitGroup
-	for position := 1; position <= exercise.MaxHints+4; position++ {
+	for caller := 0; caller < callers; caller++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_ = repo.Add(ctx, newTestHint("attempt-1", position))
+			<-start
+			hint := newTestHint("attempt-1", caller%exercise.MaxHints+1)
+			hint.ID = fmt.Sprintf("caller-%d", caller)
+			results <- repo.Add(ctx, hint)
 		}()
 	}
+	close(start)
 
 	// When they all finish
 	wg.Wait()
+	close(results)
 
-	// Then the cap held
+	// Then exactly MaxHints succeeded and every other call was refused
+	stored := 0
+	for err := range results {
+		if err == nil {
+			stored++
+			continue
+		}
+		assert.True(t, errors.Is(err, exercise.ErrNoHintsLeft) || errors.Is(err, exercise.ErrHintInProgress), "unexpected error: %v", err)
+	}
+	assert.Equal(t, exercise.MaxHints, stored)
 	assert.Equal(t, exercise.MaxHints, countTableRows(t, db, "attempt_hints"))
 }
 

@@ -56,6 +56,23 @@ func hintsGiven(count int) []domainexercise.Hint {
 	return hints
 }
 
+// withinTimeout matches the context handed to the generator: it must carry
+// the deadline that bounds a hung call.
+func withinTimeout() any {
+	return mock.MatchedBy(func(ctx context.Context) bool {
+		_, bounded := ctx.Deadline()
+		return bounded
+	})
+}
+
+func expectedHintInput(board string, previous []domainexercise.Hint) domainexercise.HintInput {
+	return domainexercise.HintInput{Challenge: attemptChallenge(), Rubric: attemptRubric(), BoardXML: board, Previous: previous}
+}
+
+func expectedHint(position int, content string) domainexercise.Hint {
+	return domainexercise.Hint{ID: "hint-id", AttemptID: "attempt-1", Position: position, Content: content, CreatedAt: fixedNow}
+}
+
 // expectInputs makes the fixture return the running attempt, the given hints,
 // the challenge and the rubric.
 func (f *hintFixture) expectInputs(ctx context.Context, previous []domainexercise.Hint) {
@@ -71,9 +88,7 @@ func TestHintService_RequestHint_generatesAndStoresTheNextHint(t *testing.T) {
 	ctx := context.Background()
 	previous := hintsGiven(1)
 	f.expectInputs(ctx, previous)
-	f.generator.EXPECT().GenerateHint(ctx, domainexercise.HintInput{
-		Challenge: attemptChallenge(), Rubric: attemptRubric(), BoardXML: "<mxfile/>", Previous: previous,
-	}).Return("  What happens if the cache is down?\n", nil)
+	f.generator.EXPECT().GenerateHint(withinTimeout(), expectedHintInput("<mxfile/>", previous)).Return("  What happens if the cache is down?\n", nil)
 	expected := domainexercise.Hint{
 		ID: "hint-id", AttemptID: "attempt-1", Position: 2, Content: "What happens if the cache is down?", CreatedAt: fixedNow,
 	}
@@ -92,10 +107,8 @@ func TestHintService_RequestHint_worksWithAnEmptyBoard(t *testing.T) {
 	f := newHintFixture(t)
 	ctx := context.Background()
 	f.expectInputs(ctx, []domainexercise.Hint{})
-	f.generator.EXPECT().GenerateHint(ctx, domainexercise.HintInput{
-		Challenge: attemptChallenge(), Rubric: attemptRubric(), BoardXML: "", Previous: []domainexercise.Hint{},
-	}).Return("Where would you start?", nil)
-	f.hints.EXPECT().Add(ctx, mock.MatchedBy(func(h domainexercise.Hint) bool { return h.Position == 1 })).Return(nil)
+	f.generator.EXPECT().GenerateHint(withinTimeout(), expectedHintInput("", []domainexercise.Hint{})).Return("Where would you start?", nil)
+	f.hints.EXPECT().Add(ctx, expectedHint(1, "Where would you start?")).Return(nil)
 
 	// When asking for the first hint
 	hint, err := f.service.RequestHint(ctx, "attempt-1", "")
@@ -111,10 +124,8 @@ func TestHintService_RequestHint_acceptsABoardAtTheSizeLimit(t *testing.T) {
 	ctx := context.Background()
 	board := strings.Repeat("x", domainexercise.MaxSubmissionContentBytes)
 	f.expectInputs(ctx, []domainexercise.Hint{})
-	f.generator.EXPECT().GenerateHint(ctx, domainexercise.HintInput{
-		Challenge: attemptChallenge(), Rubric: attemptRubric(), BoardXML: board, Previous: []domainexercise.Hint{},
-	}).Return("A hint", nil)
-	f.hints.EXPECT().Add(ctx, mock.MatchedBy(func(domainexercise.Hint) bool { return true })).Return(nil)
+	f.generator.EXPECT().GenerateHint(withinTimeout(), expectedHintInput(board, []domainexercise.Hint{})).Return("A hint", nil)
+	f.hints.EXPECT().Add(ctx, expectedHint(1, "A hint")).Return(nil)
 
 	// When asking for a hint
 	_, err := f.service.RequestHint(ctx, "attempt-1", board)
@@ -214,9 +225,9 @@ func TestHintService_RequestHint_aProviderErrorStoresNothingAndCanBeRepeated(t *
 	f.hints.EXPECT().ListByAttempt(ctx, "attempt-1").Return([]domainexercise.Hint{}, nil)
 	f.challenges.EXPECT().Get(ctx, "challenge-1").Return(attemptChallenge(), nil)
 	f.rubrics.EXPECT().Get(ctx, "rubric-2").Return(attemptRubric(), nil)
-	f.generator.EXPECT().GenerateHint(ctx, mock.MatchedBy(func(domainexercise.HintInput) bool { return true })).Return("", providerErr).Once()
-	f.generator.EXPECT().GenerateHint(ctx, mock.MatchedBy(func(domainexercise.HintInput) bool { return true })).Return("Try again", nil).Once()
-	f.hints.EXPECT().Add(ctx, mock.MatchedBy(func(h domainexercise.Hint) bool { return h.Position == 1 })).Return(nil).Once()
+	f.generator.EXPECT().GenerateHint(withinTimeout(), expectedHintInput("", []domainexercise.Hint{})).Return("", providerErr).Once()
+	f.generator.EXPECT().GenerateHint(withinTimeout(), expectedHintInput("", []domainexercise.Hint{})).Return("Try again", nil).Once()
+	f.hints.EXPECT().Add(ctx, expectedHint(1, "Try again")).Return(nil).Once()
 
 	// When the first call fails and the second works
 	_, firstErr := f.service.RequestHint(ctx, "attempt-1", "")
@@ -233,7 +244,7 @@ func TestHintService_RequestHint_aCancelledCallStoresNothing(t *testing.T) {
 	f := newHintFixture(t)
 	ctx := context.Background()
 	f.expectInputs(ctx, []domainexercise.Hint{})
-	f.generator.EXPECT().GenerateHint(ctx, mock.MatchedBy(func(domainexercise.HintInput) bool { return true })).Return("", context.Canceled)
+	f.generator.EXPECT().GenerateHint(withinTimeout(), expectedHintInput("", []domainexercise.Hint{})).Return("", context.Canceled)
 
 	// When requesting a hint
 	_, err := f.service.RequestHint(ctx, "attempt-1", "")
@@ -294,8 +305,8 @@ func TestHintService_RequestHint_aStoreFailureOrRefusalIsReturned(t *testing.T) 
 			f := newHintFixture(t)
 			ctx := context.Background()
 			f.expectInputs(ctx, []domainexercise.Hint{})
-			f.generator.EXPECT().GenerateHint(ctx, mock.MatchedBy(func(domainexercise.HintInput) bool { return true })).Return("A hint", nil)
-			f.hints.EXPECT().Add(ctx, mock.MatchedBy(func(domainexercise.Hint) bool { return true })).Return(storeErr)
+			f.generator.EXPECT().GenerateHint(withinTimeout(), expectedHintInput("", []domainexercise.Hint{})).Return("A hint", nil)
+			f.hints.EXPECT().Add(ctx, expectedHint(1, "A hint")).Return(storeErr)
 
 			// When requesting a hint
 			_, err := f.service.RequestHint(ctx, "attempt-1", "")
@@ -312,13 +323,13 @@ func TestHintService_RequestHint_aSecondRequestWhileOneRunsIsRefused(t *testing.
 	ctx := context.Background()
 	f.expectInputs(ctx, []domainexercise.Hint{})
 	entered, release := make(chan struct{}), make(chan struct{})
-	f.generator.EXPECT().GenerateHint(ctx, mock.MatchedBy(func(domainexercise.HintInput) bool { return true })).
+	f.generator.EXPECT().GenerateHint(withinTimeout(), expectedHintInput("", []domainexercise.Hint{})).
 		RunAndReturn(func(context.Context, domainexercise.HintInput) (string, error) {
 			close(entered)
 			<-release
 			return "A hint", nil
 		})
-	f.hints.EXPECT().Add(ctx, mock.MatchedBy(func(domainexercise.Hint) bool { return true })).Return(nil)
+	f.hints.EXPECT().Add(ctx, expectedHint(1, "A hint")).Return(nil)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	var firstErr error
@@ -426,4 +437,53 @@ func TestHintService_ListHints_failures(t *testing.T) {
 		// Then the error is returned
 		assert.ErrorIs(t, err, boom)
 	})
+}
+
+func TestHintService_RequestHint_boundsTheModelCallByTheHintTimeout(t *testing.T) {
+	// Given a running attempt with plenty of time left
+	f := newHintFixture(t)
+	ctx := context.Background()
+	f.expectInputs(ctx, []domainexercise.Hint{})
+	var remaining time.Duration
+	f.generator.EXPECT().GenerateHint(withinTimeout(), expectedHintInput("", []domainexercise.Hint{})).
+		RunAndReturn(func(ctx context.Context, _ domainexercise.HintInput) (string, error) {
+			deadline, _ := ctx.Deadline()
+			remaining = time.Until(deadline)
+			return "A hint", nil
+		})
+	f.hints.EXPECT().Add(ctx, expectedHint(1, "A hint")).Return(nil)
+
+	// When requesting a hint
+	_, err := f.service.RequestHint(ctx, "attempt-1", "")
+
+	// Then the model call is bounded by the hint timeout
+	require.NoError(t, err)
+	assert.Greater(t, remaining, hintTimeout-5*time.Second)
+	assert.LessOrEqual(t, remaining, hintTimeout)
+}
+
+func TestHintService_RequestHint_neverOutlivesTheExam(t *testing.T) {
+	// Given an attempt with 5 seconds left
+	f := newHintFixture(t)
+	ctx := context.Background()
+	attempt := hintAttempt()
+	attempt.Deadline = fixedNow.Add(5 * time.Second)
+	f.attempts.EXPECT().Get(ctx, "attempt-1").Return(attempt, nil)
+	f.hints.EXPECT().ListByAttempt(ctx, "attempt-1").Return([]domainexercise.Hint{}, nil)
+	f.challenges.EXPECT().Get(ctx, "challenge-1").Return(attemptChallenge(), nil)
+	f.rubrics.EXPECT().Get(ctx, "rubric-2").Return(attemptRubric(), nil)
+	var remaining time.Duration
+	f.generator.EXPECT().GenerateHint(withinTimeout(), expectedHintInput("", []domainexercise.Hint{})).
+		RunAndReturn(func(ctx context.Context, _ domainexercise.HintInput) (string, error) {
+			deadline, _ := ctx.Deadline()
+			remaining = time.Until(deadline)
+			return "", context.DeadlineExceeded
+		})
+
+	// When requesting a hint
+	_, err := f.service.RequestHint(ctx, "attempt-1", "")
+
+	// Then the call is cut at the exam's end and a retry stays possible
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.LessOrEqual(t, remaining, 5*time.Second)
 }

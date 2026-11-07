@@ -5,11 +5,17 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
 	domainexercise "github.com/santaniello/athena/internal/domain/exercise"
 )
+
+// hintTimeout bounds one model call, so a hung provider cannot hold the
+// attempt's single request slot for the provider's own, much longer, timeout.
+// The call never outlives the exam either.
+const hintTimeout = 60 * time.Second
 
 // HintService gives the tutor's hints during an exam: at most
 // domainexercise.MaxHints per attempt, one request at a time. A hint is spent
@@ -83,7 +89,9 @@ func (s *HintService) RequestHint(ctx context.Context, attemptID, boardXML strin
 	if err != nil {
 		return domainexercise.Hint{}, err
 	}
-	content, err := s.generator.GenerateHint(ctx, input)
+	callCtx, cancel := context.WithTimeout(ctx, min(hintTimeout, attempt.Deadline.Sub(s.clock.Now())))
+	defer cancel()
+	content, err := s.generator.GenerateHint(callCtx, input)
 	if err != nil {
 		return domainexercise.Hint{}, fmt.Errorf("exercise: generating hint: %w", err)
 	}
