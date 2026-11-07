@@ -252,6 +252,61 @@ export namespace desktop {
 	    }
 	}
 	
+	export class DefenseTurnDTO {
+	    position: number;
+	    question: string;
+	    answer: string;
+	    askedAt: string;
+	    answeredAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DefenseTurnDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.position = source["position"];
+	        this.question = source["question"];
+	        this.answer = source["answer"];
+	        this.askedAt = source["askedAt"];
+	        this.answeredAt = source["answeredAt"];
+	    }
+	}
+	export class DefenseDTO {
+	    total: number;
+	    turns: DefenseTurnDTO[];
+	    complete: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new DefenseDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.total = source["total"];
+	        this.turns = this.convertValues(source["turns"], DefenseTurnDTO);
+	        this.complete = source["complete"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class EvaluationResultDTO {
 	    criterionKey: string;
 	    criterionName: string;
@@ -541,6 +596,63 @@ export namespace desktop {
 		    return a;
 		}
 	}
+	export class OutcomeReasonDTO {
+	    kind: string;
+	    evaluation: string;
+	    criterionKey: string;
+	    criterionName: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new OutcomeReasonDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.evaluation = source["evaluation"];
+	        this.criterionKey = source["criterionKey"];
+	        this.criterionName = source["criterionName"];
+	    }
+	}
+	export class OutcomeDTO {
+	    result: string;
+	    passScore: number;
+	    diagramScore: number;
+	    understandingScore: number;
+	    reasons: OutcomeReasonDTO[];
+	
+	    static createFrom(source: any = {}) {
+	        return new OutcomeDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.result = source["result"];
+	        this.passScore = source["passScore"];
+	        this.diagramScore = source["diagramScore"];
+	        this.understandingScore = source["understandingScore"];
+	        this.reasons = this.convertValues(source["reasons"], OutcomeReasonDTO);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class SaveModelSettingsResult {
 	    embeddingModelChanged: boolean;
 	
