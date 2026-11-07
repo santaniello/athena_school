@@ -11,7 +11,8 @@ import (
 )
 
 // Short, user-facing reasons stored on an attempt whose evaluation failed.
-// The raw error is returned to the caller, never stored.
+// The raw error is returned to the caller, never stored. An evaluator error
+// may bring its own short reason through a FailureReason method.
 const (
 	reasonEvaluatorFailed = "The evaluator could not complete the evaluation."
 	reasonInvalidOutput   = "The evaluator returned an invalid evaluation."
@@ -180,9 +181,12 @@ func failureReason(cause error) string {
 		return reasonNotSaved
 	case errors.Is(cause, errPassScoreUnverified):
 		return reasonPassScore
-	default:
-		return reasonEvaluatorFailed
 	}
+	var reasoned interface{ FailureReason() string }
+	if errors.As(cause, &reasoned) {
+		return reasoned.FailureReason()
+	}
+	return reasonEvaluatorFailed
 }
 
 // GetEvaluation returns the attempt's stored diagram evaluation, or
@@ -193,6 +197,20 @@ func (s *EvaluationService) GetEvaluation(ctx context.Context, attemptID string)
 		return domainexercise.Evaluation{}, fmt.Errorf("exercise: getting evaluation: %w", err)
 	}
 	return evaluation, nil
+}
+
+// Criteria returns the criteria of the rubric version the attempt froze, so a
+// stored evaluation's results can be shown with their names.
+func (s *EvaluationService) Criteria(ctx context.Context, attemptID string) ([]domainexercise.RubricCriterion, error) {
+	attempt, err := s.attempts.Get(ctx, attemptID)
+	if err != nil {
+		return nil, fmt.Errorf("exercise: getting attempt: %w", err)
+	}
+	rubric, err := s.rubrics.Get(ctx, attempt.RubricVersionID)
+	if err != nil {
+		return nil, fmt.Errorf("exercise: getting rubric: %w", err)
+	}
+	return rubric.Criteria, nil
 }
 
 // DiscardUnfinishedEvaluations deletes every attempt left in EVALUATING or

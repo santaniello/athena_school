@@ -3,11 +3,14 @@ import {
   ATTEMPT_IN_PROGRESS,
   SUBMISSION_TOO_LATE,
   discardAttempt,
+  evaluateAttempt,
+  evaluationErrorMessage,
   exerciseErrorCode,
   exerciseErrorMessage,
   startAttempt,
   submitAttempt,
   type Attempt,
+  type Evaluation,
 } from '@/lib/exercise'
 import { diagramHasContent } from '@/lib/lab'
 
@@ -27,7 +30,12 @@ export type ExamPhase =
   | 'startFailed'
   | 'running'
   | 'submitting'
-  | 'submitted'
+  // The diagram was submitted and the evaluation is running or failed; the
+  // exam stays in this sitting. See
+  // specs/phases/phase-03-architecture-lab/11-architecture-evaluator.md.
+  | 'evaluating'
+  | 'evaluationFailed'
+  | 'evaluated'
 
 type XmlSource = () => Promise<string>
 
@@ -41,6 +49,7 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void) 
   const [attempt, setAttempt] = useState<Attempt | null>(null)
   const [hasContent, setHasContent] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [evaluation, setEvaluation] = useState<Evaluation | null>(null)
   // A new key replaces the editor, which is how the user tries again.
   const [editorKey, setEditorKey] = useState(0)
   // The board's own editor loads after the attempt exists; until it reports
@@ -137,8 +146,6 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void) 
   async function send(current: Attempt, xml: string) {
     try {
       await submitAttempt(current.id, xml)
-      if (exitedRef.current) return
-      setPhase('submitted')
     } catch (err) {
       if (exitedRef.current) return
       if (exerciseErrorCode(err) === SUBMISSION_TOO_LATE) {
@@ -147,7 +154,33 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void) 
       }
       setMessage(exerciseErrorMessage(err))
       setPhase('running')
+      return
     }
+    if (exitedRef.current) return
+    await evaluate(current)
+  }
+
+  // The evaluation is a stage of the same sitting: the user stays in the lab.
+  async function evaluate(current: Attempt) {
+    setMessage(null)
+    setPhase('evaluating')
+    try {
+      const result = await evaluateAttempt(current.id)
+      if (exitedRef.current) return
+      setEvaluation(result)
+      setPhase('evaluated')
+    } catch (err) {
+      if (exitedRef.current) return
+      setMessage(evaluationErrorMessage(err))
+      setPhase('evaluationFailed')
+    }
+  }
+
+  // Manual only: there is no limit and no automatic retry.
+  async function retryEvaluation() {
+    const current = attemptRef.current
+    if (!current || phaseRef.current !== 'evaluationFailed') return
+    await evaluate(current)
   }
 
   async function submit(getXml: XmlSource) {
@@ -188,6 +221,7 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void) 
     attempt,
     hasContent,
     message,
+    evaluation,
     editorKey,
     boardStalled,
     editorReady,
@@ -197,6 +231,7 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void) 
     cancelReplace,
     submit,
     expire,
+    retryEvaluation,
     leave,
   }
 }

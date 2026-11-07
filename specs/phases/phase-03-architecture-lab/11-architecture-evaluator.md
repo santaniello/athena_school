@@ -92,17 +92,17 @@ Errors are exported sentinels: `ErrInvalidDiagram`, `ErrEmptyDiagram`.
 Each slice is TDD (Go tests with testify and Mockery mocks, Vitest for the frontend), keeps the
 build green and is committed on its own.
 
-- [ ] `SummarizeDiagram`: components, connections, groupings, HTML labels to text, length limits;
+- [x] `SummarizeDiagram`: components, connections, groupings, HTML labels to text, length limits;
       compressed and uncompressed diagrams
-- [ ] `SummarizeDiagram` limits: wrong content type, decompression bomb, cell cap, malformed XML,
+- [x] `SummarizeDiagram` limits: wrong content type, decompression bomb, cell cap, malformed XML,
       empty diagram, entities not resolved
-- [ ] `BuildEvaluationPrompt`: rubric levels, data-block rule, flag rule, language, content tested
-- [ ] `DiagramEvaluator`: success path with a fake LLM, invalid JSON, unknown or missing criterion,
+- [x] `BuildEvaluationPrompt`: rubric levels, data-block rule, flag rule, language, content tested
+- [x] `DiagramEvaluator`: success path with a fake LLM, invalid JSON, unknown or missing criterion,
       provider error, cancelled context
-- [ ] Bindings and `wailsjs` regenerated; mocks regenerated; usage accounting wired
-- [ ] Frontend: wrappers, `useExam` triggering the evaluation, evaluation stage (progress,
+- [x] Bindings and `wailsjs` regenerated; mocks regenerated; usage accounting wired
+- [x] Frontend: wrappers, `useExam` triggering the evaluation, evaluation stage (progress,
       failure and retry, diagram result)
-- [ ] Docs: CHANGELOG, README and `lib/documentation.ts` describe the evaluation
+- [x] Docs: CHANGELOG, README and `lib/documentation.ts` describe the evaluation
 
 ## Acceptance Criteria
 

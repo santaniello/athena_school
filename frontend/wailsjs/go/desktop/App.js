@@ -38,12 +38,20 @@ export function DownloadExampleNote() {
   return window['go']['desktop']['App']['DownloadExampleNote']();
 }
 
+export function EvaluateAttempt(arg1) {
+  return window['go']['desktop']['App']['EvaluateAttempt'](arg1);
+}
+
 export function GenerateChallenge(arg1, arg2) {
   return window['go']['desktop']['App']['GenerateChallenge'](arg1, arg2);
 }
 
 export function GetAttempt(arg1) {
   return window['go']['desktop']['App']['GetAttempt'](arg1);
+}
+
+export function GetEvaluation(arg1) {
+  return window['go']['desktop']['App']['GetEvaluation'](arg1);
 }
 
 export function GetKnowledgeIndexStatus() {

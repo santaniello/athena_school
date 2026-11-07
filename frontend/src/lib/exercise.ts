@@ -1,8 +1,10 @@
 import {
   CancelChallengeGeneration,
   DiscardAttempt,
+  EvaluateAttempt,
   GenerateChallenge,
   GetAttempt,
+  GetEvaluation,
   ListChallengeCatalog,
   ListChallengeTopics,
   ListHints,
@@ -245,4 +247,66 @@ export async function requestHint(attemptId: string, boardXml: string): Promise<
 // The hints already given for the attempt, in the order given.
 export async function listHints(attemptId: string): Promise<LabHint[]> {
   return (await ListHints(attemptId)).map(toHint)
+}
+
+// The diagram evaluation of a submitted attempt: the score is computed by the
+// backend, the model only picks levels. See
+// specs/phases/phase-03-architecture-lab/11-architecture-evaluator.md.
+export interface EvaluationResult {
+  key: string
+  name: string
+  // 0..4; meaningless when insufficientEvidence is set.
+  level: number
+  justification: string
+  evidence: string
+  // The diagram did not show enough to judge the criterion.
+  insufficientEvidence: boolean
+}
+
+export interface Evaluation {
+  score: number
+  summary: string
+  strengths: string[]
+  gaps: string[]
+  recommendations: string[]
+  results: EvaluationResult[]
+}
+
+function toEvaluation(dto: desktop.EvaluationDTO): Evaluation {
+  return {
+    score: dto.score,
+    summary: dto.summary,
+    strengths: dto.strengths,
+    gaps: dto.gaps,
+    recommendations: dto.recommendations,
+    results: dto.results.map((result) => ({
+      key: result.criterionKey,
+      name: result.criterionName,
+      level: result.level,
+      justification: result.justification,
+      evidence: result.evidence,
+      insufficientEvidence: result.insufficientEvidence,
+    })),
+  }
+}
+
+// Evaluates a submitted attempt. A failure can be retried by calling it again.
+export async function evaluateAttempt(attemptId: string): Promise<Evaluation> {
+  return toEvaluation(await EvaluateAttempt(attemptId))
+}
+
+export async function getEvaluation(attemptId: string): Promise<Evaluation> {
+  return toEvaluation(await GetEvaluation(attemptId))
+}
+
+const EVALUATION_FAILED_MESSAGE = 'The evaluator could not complete the evaluation.'
+
+const EVALUATION_ERROR_MESSAGES: Record<string, string> = {
+  invalid_diagram: 'The diagram could not be read.',
+  empty_diagram: 'The diagram is empty.',
+  invalid_evaluation: 'The evaluator returned an invalid evaluation.',
+}
+
+export function evaluationErrorMessage(err: unknown): string {
+  return EVALUATION_ERROR_MESSAGES[exerciseErrorCode(err)] ?? EVALUATION_FAILED_MESSAGE
 }

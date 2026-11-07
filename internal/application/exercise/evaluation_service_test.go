@@ -3,6 +3,7 @@ package exercise
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -257,6 +258,12 @@ func TestEvaluationService_Evaluate_leavesTheAttemptUntouchedWhenWhatTheEvaluato
 	}
 }
 
+// reasonedError is an evaluator error that brings its own user-facing reason.
+type reasonedError struct{}
+
+func (reasonedError) Error() string         { return "diagram problem" }
+func (reasonedError) FailureReason() string { return "The diagram is empty." }
+
 func TestEvaluationService_Evaluate_failsTheAttemptWhenTheEvaluatorFailsOrReturnsInvalidOutput(t *testing.T) {
 	invalid := evaluatorOutput()
 	invalid.Results = invalid.Results[:1]
@@ -270,6 +277,7 @@ func TestEvaluationService_Evaluate_failsTheAttemptWhenTheEvaluatorFailsOrReturn
 	}{
 		{"evaluator error", domainexercise.EvaluatorOutput{}, evaluatorFailure, evaluatorFailure, "The evaluator could not complete the evaluation."},
 		{"invalid output", invalid, nil, domainexercise.ErrInvalidEvaluation, "The evaluator returned an invalid evaluation."},
+		{"error with its own reason", domainexercise.EvaluatorOutput{}, fmt.Errorf("wrapped: %w", reasonedError{}), reasonedError{}, "The diagram is empty."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -471,6 +479,47 @@ func TestEvaluationService_Evaluate_failsTheEvaluationWhenThePassScoreCannotBeVe
 
 			// Then no default is frozen: the evaluation fails with the cause and stores nothing
 			assert.ErrorIs(t, err, tt.want)
+		})
+	}
+}
+
+func TestEvaluationService_Criteria_returnsTheFrozenRubricCriteriaOfTheAttempt(t *testing.T) {
+	// Given an attempt that froze a rubric version
+	f := newEvaluationFixture(t)
+	ctx := context.Background()
+	f.attempts.EXPECT().Get(ctx, "attempt-1").Return(attemptToEvaluate(domainexercise.AttemptEvaluated), nil)
+	f.rubrics.EXPECT().Get(ctx, "rubric-2").Return(evaluationRubric(), nil)
+
+	// When reading the criteria
+	criteria, err := f.service.Criteria(ctx, "attempt-1")
+
+	// Then they are the rubric's, in order
+	require.NoError(t, err)
+	assert.Equal(t, evaluationRubric().Criteria, criteria)
+}
+
+func TestEvaluationService_Criteria_reportsAReadFailure(t *testing.T) {
+	// Given an unknown attempt, and an attempt whose rubric cannot be read
+	cause := errors.New("db down")
+	for name, arrange := range map[string]func(f *evaluationFixture, ctx context.Context){
+		"attempt": func(f *evaluationFixture, ctx context.Context) {
+			f.attempts.EXPECT().Get(ctx, "attempt-1").Return(domainexercise.ChallengeAttempt{}, cause)
+		},
+		"rubric": func(f *evaluationFixture, ctx context.Context) {
+			f.attempts.EXPECT().Get(ctx, "attempt-1").Return(attemptToEvaluate(domainexercise.AttemptEvaluated), nil)
+			f.rubrics.EXPECT().Get(ctx, "rubric-2").Return(domainexercise.RubricVersion{}, cause)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newEvaluationFixture(t)
+			ctx := context.Background()
+			arrange(f, ctx)
+
+			// When reading the criteria
+			_, err := f.service.Criteria(ctx, "attempt-1")
+
+			// Then the failure is returned
+			assert.ErrorIs(t, err, cause)
 		})
 	}
 }
