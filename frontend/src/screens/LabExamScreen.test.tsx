@@ -5,11 +5,13 @@ import userEvent from '@testing-library/user-event'
 import type { DiagramEditorHandle } from '@/components/lab/diagram-editor'
 import {
   discardAttempt,
+  evaluateAttempt,
   listHints,
   requestHint,
   startAttempt,
   submitAttempt,
   type Attempt,
+  type Evaluation,
 } from '@/lib/exercise'
 import LabExamScreen from './LabExamScreen'
 
@@ -20,6 +22,7 @@ vi.mock('@/lib/exercise', async (importOriginal) => {
     startAttempt: vi.fn(),
     submitAttempt: vi.fn(),
     discardAttempt: vi.fn(),
+    evaluateAttempt: vi.fn(),
     requestHint: vi.fn(),
     listHints: vi.fn(),
   }
@@ -77,6 +80,24 @@ const attempt: Attempt = {
   ],
 }
 
+const evaluation: Evaluation = {
+  score: 72,
+  summary: 'A solid start.',
+  strengths: [],
+  gaps: [],
+  recommendations: [],
+  results: [
+    {
+      key: 'k1',
+      name: 'Consistency',
+      level: 3,
+      justification: 'Invalidation is drawn.',
+      evidence: '',
+      insufficientEvidence: false,
+    },
+  ],
+}
+
 const challenge = {
   id: 'c1',
   title: 'Cache and invalidation',
@@ -118,6 +139,7 @@ describe('LabExamScreen', () => {
     vi.mocked(startAttempt).mockResolvedValue(attempt)
     vi.mocked(submitAttempt).mockResolvedValue()
     vi.mocked(discardAttempt).mockResolvedValue()
+    vi.mocked(evaluateAttempt).mockResolvedValue(evaluation)
     vi.mocked(listHints).mockResolvedValue([])
   })
   afterEach(() => vi.useRealTimers())
@@ -233,8 +255,68 @@ describe('LabExamScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Finish' }))
 
     expect(submitAttempt).toHaveBeenCalledExactlyOnceWith('a1', FULL_XML)
-    expect(await screen.findByText('Diagram submitted.')).toBeInTheDocument()
+    expect(await screen.findByText('72')).toBeInTheDocument()
+    expect(evaluateAttempt).toHaveBeenCalledExactlyOnceWith('a1')
+    expect(screen.getByText('Invalidation is drawn.')).toBeInTheDocument()
     expect(screen.queryByRole('timer')).not.toBeInTheDocument()
+  })
+
+  it('shows progress while the diagram is evaluated and stays in the lab', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    vi.mocked(evaluateAttempt).mockReturnValue(new Promise(() => {}))
+    const { onExit } = await startRunning()
+    act(() => editor.onChange(FULL_XML))
+    await user.click(screen.getByRole('button', { name: 'Finish and evaluate' }))
+    await user.click(screen.getByRole('button', { name: 'Finish' }))
+
+    expect(await screen.findByText('Evaluating your diagram...')).toBeInTheDocument()
+    expect(screen.queryByTestId('editor')).not.toBeInTheDocument()
+    expect(onExit).not.toHaveBeenCalled()
+  })
+
+  it('says why the evaluation failed and evaluates again on request', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    vi.mocked(evaluateAttempt).mockRejectedValueOnce(coded('invalid_evaluation'))
+    await startRunning()
+    act(() => editor.onChange(FULL_XML))
+    await user.click(screen.getByRole('button', { name: 'Finish and evaluate' }))
+    await user.click(screen.getByRole('button', { name: 'Finish' }))
+
+    expect(
+      await screen.findByText('The evaluator returned an invalid evaluation.'),
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Try evaluating again' }))
+
+    expect(await screen.findByText('72')).toBeInTheDocument()
+    expect(evaluateAttempt).toHaveBeenCalledTimes(2)
+    expect(submitAttempt).toHaveBeenCalledOnce()
+  })
+
+  it('asks before leaving during the evaluation and discards the attempt on confirm', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    vi.mocked(evaluateAttempt).mockReturnValue(new Promise(() => {}))
+    const onLeaveCancelled = vi.fn()
+    const view = await startRunning()
+    act(() => editor.onChange(FULL_XML))
+    await user.click(screen.getByRole('button', { name: 'Finish and evaluate' }))
+    await user.click(screen.getByRole('button', { name: 'Finish' }))
+    await screen.findByText('Evaluating your diagram...')
+
+    view.rerender(
+      <LabExamScreen
+        challenge={challenge}
+        leaveRequested
+        onLeaveCancelled={onLeaveCancelled}
+        onExit={view.onExit}
+      />,
+    )
+    expect(
+      screen.getByText('Leaving discards this exam. It will not be graded.'),
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Leave' }))
+
+    expect(discardAttempt).toHaveBeenCalledExactlyOnceWith('a1')
+    expect(view.onExit).toHaveBeenCalledOnce()
   })
 
   it('keeps the exam when the finish question is cancelled', async () => {
@@ -256,7 +338,7 @@ describe('LabExamScreen', () => {
     act(() => editor.onChange(FULL_XML))
     await user.click(screen.getByRole('button', { name: 'Finish and evaluate' }))
     await user.click(screen.getByRole('button', { name: 'Finish' }))
-    await screen.findByText('Diagram submitted.')
+    await screen.findByText('72')
 
     await user.click(screen.getByRole('button', { name: 'Back to catalog' }))
 
@@ -314,7 +396,7 @@ describe('LabExamScreen', () => {
     await act(async () => vi.advanceTimersByTime(44 * 60 * 1000))
 
     expect(submitAttempt).toHaveBeenCalledExactlyOnceWith('a1', FULL_XML)
-    expect(await screen.findByText('Diagram submitted.')).toBeInTheDocument()
+    expect(await screen.findByText('72')).toBeInTheDocument()
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
   })
 

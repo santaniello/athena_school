@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Loader2 } from 'lucide-react'
+import { EvaluationStage } from '@/components/lab/evaluation-stage'
 import { DiagramEditor, type DiagramEditorHandle } from '@/components/lab/diagram-editor'
 import { LabConfirmDialog } from '@/components/lab/lab-confirm-dialog'
 import { LabLayout } from '@/components/lab/lab-layout'
@@ -80,15 +81,16 @@ function LabExamScreen({
     />
   )
 
-  if (phase === 'submitted') {
+  if (phase === 'evaluating' || phase === 'evaluationFailed' || phase === 'evaluated') {
     return (
       <>
-        <CenteredMessage>
-          <p className="text-base font-semibold text-foreground">Diagram submitted.</p>
-          <Button type="button" onClick={() => void exam.leave()}>
-            Back to catalog
-          </Button>
-        </CenteredMessage>
+        <EvaluationStage
+          phase={phase}
+          message={exam.message}
+          evaluation={exam.evaluation}
+          onRetry={() => void exam.retryEvaluation()}
+          onBack={() => void exam.leave()}
+        />
         {leaveDialog}
       </>
     )
