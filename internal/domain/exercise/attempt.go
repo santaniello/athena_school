@@ -12,8 +12,7 @@ import (
 // rubric version that belongs to another challenge.
 var ErrRubricChallengeMismatch = errors.New("rubric version does not belong to the challenge")
 
-// AttemptState is where an attempt is in its lifecycle. Evaluation and defense
-// states are added by later specs.
+// AttemptState is where an attempt is in its lifecycle.
 type AttemptState string
 
 // The attempt states defined so far.
@@ -25,9 +24,10 @@ const (
 	AttemptEvaluating       AttemptState = "EVALUATING"
 	AttemptEvaluated        AttemptState = "EVALUATED"
 	AttemptEvaluationFailed AttemptState = "EVALUATION_FAILED"
-	// AttemptFinished is the end of an attempt's lifecycle, once it has been
-	// scored. Nothing reaches it yet; it is named here because a finished
-	// attempt is never discarded. Spec 3.12 adds the transitions into it.
+	// The defense states of spec 3.12: EVALUATED → DEFENDING → FINISHED.
+	AttemptDefending AttemptState = "DEFENDING"
+	// AttemptFinished is the end of an attempt's lifecycle, once both
+	// evaluations exist. A finished attempt is read-only and never discarded.
 	AttemptFinished AttemptState = "FINISHED"
 )
 
@@ -128,6 +128,26 @@ func (a ChallengeAttempt) FailEvaluation(reason string) (ChallengeAttempt, error
 	}
 	a.State = AttemptEvaluationFailed
 	a.FailureReason = reason
+	return a, nil
+}
+
+// StartDefense moves an EVALUATED attempt to DEFENDING. Any other state is
+// ErrDefenseNotActive. The receiver is not modified.
+func (a ChallengeAttempt) StartDefense() (ChallengeAttempt, error) {
+	if a.State != AttemptEvaluated {
+		return ChallengeAttempt{}, ErrDefenseNotActive
+	}
+	a.State = AttemptDefending
+	return a, nil
+}
+
+// FinishDefense moves a DEFENDING attempt to FINISHED. Any other state is
+// ErrDefenseNotActive. The receiver is not modified.
+func (a ChallengeAttempt) FinishDefense() (ChallengeAttempt, error) {
+	if a.State != AttemptDefending {
+		return ChallengeAttempt{}, ErrDefenseNotActive
+	}
+	a.State = AttemptFinished
 	return a, nil
 }
 

@@ -74,6 +74,7 @@ func (s *ChallengeService) Create(ctx context.Context, input CreateChallengeInpu
 		SourceSessionID:           sessionID,
 		Origin:                    input.Origin,
 		TimeLimitMinutes:          domainexercise.DefaultTimeLimit(input.Difficulty),
+		DefenseQuestions:          domainexercise.DefaultDefenseQuestions,
 		CreatedAt:                 now,
 		UpdatedAt:                 now,
 	}

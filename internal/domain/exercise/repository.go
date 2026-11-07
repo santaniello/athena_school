@@ -138,6 +138,12 @@ type AttemptRepository interface {
 	// FailEvaluation moves an EVALUATING attempt to EVALUATION_FAILED with the
 	// reason, else ErrAttemptNotEvaluating.
 	FailEvaluation(ctx context.Context, id, reason string) error
+	// StartDefense moves an EVALUATED attempt to DEFENDING with one conditional
+	// update, else ErrDefenseNotActive.
+	StartDefense(ctx context.Context, id string) error
+	// FinishDefense moves a DEFENDING attempt to FINISHED with one conditional
+	// update, else ErrDefenseNotActive.
+	FinishDefense(ctx context.Context, id string) error
 	// DeleteUnfinishedEvaluations deletes every attempt left in EVALUATING or
 	// EVALUATION_FAILED, with its submission and hints, and returns how many it
 	// removed. Evaluated attempts are untouched.

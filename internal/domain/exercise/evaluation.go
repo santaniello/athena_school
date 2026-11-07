@@ -101,7 +101,7 @@ const (
 	// EvaluationKindDiagram is the evaluation of the submitted artifact.
 	EvaluationKindDiagram EvaluationKind = "DIAGRAM"
 	// EvaluationKindUnderstanding is the evaluation of the user's defense.
-	// Nothing produces it until spec 3.12; the completion rules already read it.
+	// It is produced by the defense of spec 3.12.
 	EvaluationKindUnderstanding EvaluationKind = "UNDERSTANDING"
 )
 
@@ -138,6 +138,10 @@ type EvaluatorOutput struct {
 // here. Any defect is ErrInvalidEvaluation and nothing should be stored. The
 // caller assigns the ID.
 func NewEvaluation(attempt ChallengeAttempt, rubric RubricVersion, output EvaluatorOutput, model string, now time.Time) (Evaluation, error) {
+	return newEvaluation(EvaluationKindDiagram, attempt, rubric, output, model, now)
+}
+
+func newEvaluation(kind EvaluationKind, attempt ChallengeAttempt, rubric RubricVersion, output EvaluatorOutput, model string, now time.Time) (Evaluation, error) {
 	if attempt.RubricVersionID != rubric.ID {
 		return Evaluation{}, fmt.Errorf("%w: rubric version is not the one the attempt froze", ErrInvalidEvaluation)
 	}
@@ -150,7 +154,7 @@ func NewEvaluation(attempt ChallengeAttempt, rubric RubricVersion, output Evalua
 	}
 	return Evaluation{
 		AttemptID:       attempt.ID,
-		Kind:            EvaluationKindDiagram,
+		Kind:            kind,
 		Model:           model,
 		Score:           score,
 		Summary:         output.Summary,

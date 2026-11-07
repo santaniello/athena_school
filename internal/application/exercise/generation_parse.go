@@ -156,6 +156,7 @@ func validateGenerated(generated generatedChallenge, topic string) error {
 		Topic:                     topic,
 		Origin:                    generated.Challenge.Origin,
 		TimeLimitMinutes:          domainexercise.DefaultTimeLimit(generated.Challenge.Difficulty),
+		DefenseQuestions:          domainexercise.DefaultDefenseQuestions,
 	}
 	if err := probe.Validate(); err != nil {
 		return err
