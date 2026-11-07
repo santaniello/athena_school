@@ -40,9 +40,12 @@ function LabExamScreen({
   const { attempt, phase } = exam
 
   const hasAttempt = attempt !== null
+  const { leave } = exam
+  // Without an attempt there is nothing to confirm. Leaving goes through the
+  // hook so an attempt still being created is discarded when it arrives.
   useEffect(() => {
-    if (leaveRequested && !hasAttempt) onExit()
-  }, [leaveRequested, hasAttempt, onExit])
+    if (leaveRequested && !hasAttempt) void leave()
+  }, [leaveRequested, hasAttempt, leave])
 
   function getXml(): Promise<string> {
     return editorRef.current?.getXml() ?? Promise.resolve('')
@@ -163,7 +166,7 @@ function LabExamScreen({
         board={
           <>
             {editor}
-            {connectionLost && (
+            {(connectionLost || exam.boardStalled) && (
               <p
                 role="status"
                 className="absolute inset-x-0 top-0 z-10 bg-amber-500/90 px-3 py-1 text-center text-sm text-black"

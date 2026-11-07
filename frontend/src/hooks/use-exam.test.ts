@@ -348,4 +348,113 @@ describe('useExam', () => {
 
     expect(result.current.message).toBeNull()
   })
+
+  it('exits once when the user leaves while a late submission is in flight', async () => {
+    const { result, onExit } = await running()
+    let reject: (reason: Error) => void = () => {}
+    vi.mocked(submitAttempt).mockReturnValue(new Promise<void>((_, r) => (reject = r)))
+    let sending: Promise<void> = Promise.resolve()
+    act(() => {
+      sending = result.current.submit(async () => FULL_XML)
+    })
+    await vi.waitFor(() => expect(submitAttempt).toHaveBeenCalled())
+
+    await act(async () => result.current.leave())
+    await act(async () => {
+      reject(coded('submission_too_late'))
+      await sending
+    })
+
+    expect(onExit).toHaveBeenCalledExactlyOnceWith()
+    expect(discardAttempt).toHaveBeenCalledExactlyOnceWith('a1')
+  })
+
+  it('does not report submitted when the user left before the submission finished', async () => {
+    const { result } = await running()
+    let resolve: () => void = () => {}
+    vi.mocked(submitAttempt).mockReturnValue(new Promise<void>((r) => (resolve = r)))
+    let sending: Promise<void> = Promise.resolve()
+    act(() => {
+      sending = result.current.submit(async () => FULL_XML)
+    })
+    await vi.waitFor(() => expect(submitAttempt).toHaveBeenCalled())
+    await act(async () => result.current.leave())
+
+    await act(async () => {
+      resolve()
+      await sending
+    })
+
+    expect(result.current.phase).not.toBe('submitted')
+  })
+
+  it('leaves only once when asked twice', async () => {
+    const { result, onExit } = await running()
+
+    await act(async () => {
+      await Promise.all([result.current.leave(), result.current.leave()])
+    })
+
+    expect(onExit).toHaveBeenCalledOnce()
+    expect(discardAttempt).toHaveBeenCalledOnce()
+  })
+
+  it('discards an attempt that is created after the user left', async () => {
+    let resolve: (value: Attempt) => void = () => {}
+    vi.mocked(startAttempt).mockReturnValue(new Promise<Attempt>((r) => (resolve = r)))
+    const { result, onExit } = setup()
+    act(() => result.current.editorReady())
+
+    await act(async () => result.current.leave())
+    await act(async () => resolve(attempt))
+
+    expect(onExit).toHaveBeenCalledOnce()
+    expect(discardAttempt).toHaveBeenCalledExactlyOnceWith('a1')
+    expect(result.current.phase).toBe('starting')
+  })
+
+  it('ignores a start failure that arrives after the user left', async () => {
+    let reject: (reason: Error) => void = () => {}
+    vi.mocked(startAttempt).mockReturnValue(new Promise<Attempt>((_, r) => (reject = r)))
+    const { result } = setup()
+    act(() => result.current.editorReady())
+    await act(async () => result.current.leave())
+
+    await act(async () => reject(coded('attempt_in_progress')))
+
+    expect(result.current.phase).toBe('starting')
+  })
+
+  it('replaces the board editor when it is not ready 15 seconds after the attempt began', async () => {
+    vi.useFakeTimers()
+    const { result } = await running()
+    const key = result.current.editorKey
+
+    act(() => vi.advanceTimersByTime(15000))
+
+    expect(result.current.editorKey).toBe(key + 1)
+    expect(result.current.boardStalled).toBe(true)
+  })
+
+  it('tries the board editor again every 15 seconds until it is ready', async () => {
+    vi.useFakeTimers()
+    const { result } = await running()
+
+    act(() => vi.advanceTimersByTime(15000))
+    act(() => vi.advanceTimersByTime(15000))
+
+    expect(result.current.editorKey).toBe(2)
+  })
+
+  it('does not replace the board editor once it is ready, and clears the stall', async () => {
+    vi.useFakeTimers()
+    const { result } = await running()
+    act(() => vi.advanceTimersByTime(15000))
+
+    act(() => result.current.editorReady())
+    act(() => vi.advanceTimersByTime(60000))
+
+    expect(result.current.boardStalled).toBe(false)
+    expect(result.current.editorKey).toBe(1)
+  })
 })

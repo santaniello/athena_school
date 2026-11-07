@@ -43,9 +43,15 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void) 
   const [message, setMessage] = useState<string | null>(null)
   // A new key replaces the editor, which is how the user tries again.
   const [editorKey, setEditorKey] = useState(0)
+  // The board's own editor loads after the attempt exists; until it reports
+  // ready the user cannot draw.
+  const [boardReady, setBoardReady] = useState(false)
+  const [boardStalled, setBoardStalled] = useState(false)
   // Mirrors state so handlers fired in a burst see the latest value.
   const phaseRef = useRef<ExamPhase>('preparing')
   const attemptRef = useRef<Attempt | null>(null)
+  // The exam ends once: by leaving, by a late submission or by the expiry.
+  const exitedRef = useRef(false)
 
   // Stryker disable ArrayDeclaration: a stable callback; the setter it wraps never changes.
   const setPhase = useCallback((next: ExamPhase) => {
@@ -60,14 +66,38 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void) 
     return () => clearTimeout(timer)
   }, [phase, editorKey, setPhase])
 
+  // The board's editor is a fresh iframe, loaded while the clock already runs.
+  // If it does not report ready in time it is replaced, and tried again.
+  useEffect(() => {
+    if (phase !== 'running' || boardReady) return
+    const timer = setTimeout(() => {
+      setBoardStalled(true)
+      setEditorKey((key) => key + 1)
+    }, EDITOR_TIMEOUT_MS)
+    return () => clearTimeout(timer)
+  }, [phase, boardReady, editorKey])
+
+  function exit(notice?: string) {
+    if (exitedRef.current) return
+    exitedRef.current = true
+    if (notice === undefined) onExit()
+    else onExit(notice)
+  }
+
   async function begin(discardInProgress: boolean) {
     setPhase('starting')
     try {
       const started = await startAttempt(challengeId, discardInProgress)
+      if (exitedRef.current) {
+        // The user left while the attempt was being created.
+        await discard(started)
+        return
+      }
       attemptRef.current = started
       setAttempt(started)
       setPhase('running')
     } catch (err) {
+      if (exitedRef.current) return
       if (!discardInProgress && exerciseErrorCode(err) === ATTEMPT_IN_PROGRESS) {
         setPhase('conflict')
         return
@@ -78,6 +108,11 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void) 
   }
 
   function editorReady() {
+    if (phaseRef.current === 'running') {
+      setBoardReady(true)
+      setBoardStalled(false)
+      return
+    }
     if (phaseRef.current !== 'preparing') return
     void begin(false)
   }
@@ -92,7 +127,7 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void) 
   }
 
   function cancelReplace() {
-    onExit()
+    exit()
   }
 
   function editorChanged(xml: string) {
@@ -102,10 +137,12 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void) 
   async function send(current: Attempt, xml: string) {
     try {
       await submitAttempt(current.id, xml)
+      if (exitedRef.current) return
       setPhase('submitted')
     } catch (err) {
+      if (exitedRef.current) return
       if (exerciseErrorCode(err) === SUBMISSION_TOO_LATE) {
-        onExit(exerciseErrorMessage(err))
+        exit(exerciseErrorMessage(err))
         return
       }
       setMessage(exerciseErrorMessage(err))
@@ -134,10 +171,14 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void) 
       return
     }
     await discard(current)
-    onExit(EMPTY_BOARD_NOTICE)
+    exit(EMPTY_BOARD_NOTICE)
   }
 
   async function leave() {
+    if (exitedRef.current) return
+    // Marked first: a submission or creation still in flight must not finish
+    // the exam a second time or leave an attempt behind.
+    exitedRef.current = true
     if (attemptRef.current) await discard(attemptRef.current)
     onExit()
   }
@@ -148,6 +189,7 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void) 
     hasContent,
     message,
     editorKey,
+    boardStalled,
     editorReady,
     editorChanged,
     retryEditor,
