@@ -21,6 +21,7 @@ type fakeDefense struct {
 	evaluated  domainexercise.Evaluation
 	err        error
 	outcomeErr error
+	readErr    error
 
 	asked, answered, evaluatedID, read, outcomeID string
 	answer                                        string
@@ -43,6 +44,9 @@ func (f *fakeDefense) Evaluate(_ context.Context, attemptID string) (domainexerc
 
 func (f *fakeDefense) GetDefense(_ context.Context, attemptID string) (applicationexercise.DefenseView, error) {
 	f.read = attemptID
+	if f.readErr != nil {
+		return applicationexercise.DefenseView{}, f.readErr
+	}
 	return f.view, f.err
 }
 
@@ -90,18 +94,34 @@ func storedDefense() *fakeDefense {
 	}
 }
 
-func TestApp_NextDefenseQuestion_returnsTheQuestionWithoutItsCriterion(t *testing.T) {
-	// Given a service that asks
+func TestApp_NextDefenseQuestion_returnsTheQuestionWithItsPositionAndTheTotal(t *testing.T) {
+	// Given a service that asks, in a defense of five questions
 	defense := storedDefense()
 	app := newDefenseApp(defense)
 
 	// When the frontend asks for the next question with a padded id
 	got, err := app.NextDefenseQuestion(" attempt-1 ")
 
-	// Then only position, text and times are exposed, so nothing hints at the criterion
+	// Then position, text and total are exposed, and nothing hints at the criterion
 	require.NoError(t, err)
-	assert.Equal(t, DefenseTurnDTO{Position: 1, Question: "Where does the cache live?", AskedAt: "2026-11-07T10:00:00Z"}, got)
+	assert.Equal(t, DefenseQuestionDTO{Position: 1, Question: "Where does the cache live?", Total: 5}, got)
 	assert.Equal(t, "attempt-1", defense.asked)
+	assert.Equal(t, "attempt-1", defense.read)
+}
+
+func TestApp_NextDefenseQuestion_reportsAFailureToReadTheTotal(t *testing.T) {
+	// Given a question that was asked but a defense that cannot be read
+	defense := storedDefense()
+	defense.readErr = domainexercise.ErrDefenseNotActive
+	app := newDefenseApp(defense)
+
+	// When asking
+	_, err := app.NextDefenseQuestion("attempt-1")
+
+	// Then the failure is coded
+	var exerciseErr *ExerciseError
+	require.ErrorAs(t, err, &exerciseErr)
+	assert.Equal(t, exerciseCodeDefenseNotActive, exerciseErr.Code)
 }
 
 func TestApp_AnswerDefenseQuestion_returnsTheDefenseAfterTheAnswer(t *testing.T) {

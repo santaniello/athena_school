@@ -77,7 +77,7 @@ export function ListStudySessionsByFolder(arg1:string):Promise<Array<desktop.Stu
 
 export function MoveStudySession(arg1:string,arg2:string):Promise<void>;
 
-export function NextDefenseQuestion(arg1:string):Promise<desktop.DefenseTurnDTO>;
+export function NextDefenseQuestion(arg1:string):Promise<desktop.DefenseQuestionDTO>;
 
 export function PickNotesFile():Promise<string>;
 

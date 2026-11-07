@@ -306,6 +306,22 @@ export namespace desktop {
 		    return a;
 		}
 	}
+	export class DefenseQuestionDTO {
+	    position: number;
+	    question: string;
+	    total: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new DefenseQuestionDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.position = source["position"];
+	        this.question = source["question"];
+	        this.total = source["total"];
+	    }
+	}
 	
 	export class EvaluationResultDTO {
 	    criterionKey: string;

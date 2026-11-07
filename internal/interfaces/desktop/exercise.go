@@ -696,6 +696,14 @@ type DefenseTurnDTO struct {
 	AnsweredAt string `json:"answeredAt"`
 }
 
+// DefenseQuestionDTO is the question the user must answer now, with how many
+// questions the defense has. It does not say which criterion it targets.
+type DefenseQuestionDTO struct {
+	Position int    `json:"position"`
+	Question string `json:"question"`
+	Total    int    `json:"total"`
+}
+
 // DefenseDTO is the defense of an attempt: how many questions it has, the
 // turns so far in order, and whether the last answer is in.
 type DefenseDTO struct {
@@ -766,16 +774,20 @@ func toOutcomeDTO(outcome applicationexercise.DefenseOutcome) OutcomeDTO {
 // call starts the defense; a question still waiting for its answer is returned
 // again. After the last answer it fails with defense_not_active. See
 // specs/phases/phase-03-architecture-lab/12-architecture-defense.md.
-func (a *App) NextDefenseQuestion(attemptID string) (DefenseTurnDTO, error) {
+func (a *App) NextDefenseQuestion(attemptID string) (DefenseQuestionDTO, error) {
 	attemptID = strings.TrimSpace(attemptID)
 	if attemptID == "" {
-		return DefenseTurnDTO{}, invalidInput("attempt id is required")
+		return DefenseQuestionDTO{}, invalidInput("attempt id is required")
 	}
 	turn, err := a.defense.NextQuestion(a.ctx, attemptID)
 	if err != nil {
-		return DefenseTurnDTO{}, toExerciseError(err)
+		return DefenseQuestionDTO{}, toExerciseError(err)
 	}
-	return toDefenseTurnDTO(turn), nil
+	view, err := a.defense.GetDefense(a.ctx, attemptID)
+	if err != nil {
+		return DefenseQuestionDTO{}, toExerciseError(err)
+	}
+	return DefenseQuestionDTO{Position: turn.Position, Question: turn.Question, Total: view.Total}, nil
 }
 
 // AnswerDefenseQuestion stores the answer to the question that is waiting and
