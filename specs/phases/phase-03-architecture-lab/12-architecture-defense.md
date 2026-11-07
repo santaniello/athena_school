@@ -177,21 +177,21 @@ CREATE TABLE defense_turns (
 Each slice is TDD (Go with testify and Mockery mocks, Vitest for the frontend), keeps the build
 green and is committed on its own.
 
-- [ ] Domain: `SelectDefenseCriteria` (order, once each, mandatory first, fewer criteria than
+- [x] Domain: `SelectDefenseCriteria` (order, once each, mandatory first, fewer criteria than
       questions), attempt transitions, answer validation
-- [ ] SQLite: `defense_questions` migration with the 3 to 5 check, `defense_turns`,
+- [x] SQLite: `defense_questions` migration with the 3 to 5 check, `defense_turns`,
       `DefenseRepository`
-- [ ] SQLite: the defense turns deleted with their attempt by `DeleteUnfinished`; `FINISHED` added
+- [x] SQLite: the defense turns deleted with their attempt by `DeleteUnfinished`; `FINISHED` added
       to the states the cleanup never touches
-- [ ] Application: `NextQuestion` (first call starts the defense, pending question returned
+- [x] Application: `NextQuestion` (first call starts the defense, pending question returned
       again, ends after the last answer)
-- [ ] Application: `Answer` (validation, "I don't know", completion)
-- [ ] Application: `Evaluate` (success finishes the attempt, failure keeps `DEFENDING`, no
+- [x] Application: `Answer` (validation, "I don't know", completion)
+- [x] Application: `Evaluate` (success finishes the attempt, failure keeps `DEFENDING`, no
       transaction during the call)
-- [ ] Architecture ports: question prompt, understanding-evaluation prompt, parsing, usage
-- [ ] Bindings, `wailsjs` and mocks regenerated
-- [ ] Frontend: defense stage, outcome, `useExam` transitions, leave during the defense
-- [ ] Docs: CHANGELOG, README and `lib/documentation.ts` describe the defense
+- [x] Architecture ports: question prompt, understanding-evaluation prompt, parsing, usage
+- [x] Bindings, `wailsjs` and mocks regenerated
+- [x] Frontend: defense stage, outcome, `useExam` transitions, leave during the defense
+- [x] Docs: CHANGELOG, README and `lib/documentation.ts` describe the defense
 
 ## Acceptance Criteria
 
