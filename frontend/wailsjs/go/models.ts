@@ -252,6 +252,75 @@ export namespace desktop {
 	    }
 	}
 	
+	export class EvaluationResultDTO {
+	    criterionKey: string;
+	    criterionName: string;
+	    level: number;
+	    justification: string;
+	    evidence: string;
+	    insufficientEvidence: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new EvaluationResultDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.criterionKey = source["criterionKey"];
+	        this.criterionName = source["criterionName"];
+	        this.level = source["level"];
+	        this.justification = source["justification"];
+	        this.evidence = source["evidence"];
+	        this.insufficientEvidence = source["insufficientEvidence"];
+	    }
+	}
+	export class EvaluationDTO {
+	    attemptId: string;
+	    model: string;
+	    score: number;
+	    summary: string;
+	    strengths: string[];
+	    gaps: string[];
+	    recommendations: string[];
+	    results: EvaluationResultDTO[];
+	    createdAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new EvaluationDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.attemptId = source["attemptId"];
+	        this.model = source["model"];
+	        this.score = source["score"];
+	        this.summary = source["summary"];
+	        this.strengths = source["strengths"];
+	        this.gaps = source["gaps"];
+	        this.recommendations = source["recommendations"];
+	        this.results = this.convertValues(source["results"], EvaluationResultDTO);
+	        this.createdAt = source["createdAt"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class FailedSectionResult {
 	    heading: string;
 	    reason: string;

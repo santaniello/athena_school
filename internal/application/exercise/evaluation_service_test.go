@@ -482,3 +482,44 @@ func TestEvaluationService_Evaluate_failsTheEvaluationWhenThePassScoreCannotBeVe
 		})
 	}
 }
+
+func TestEvaluationService_Criteria_returnsTheFrozenRubricCriteriaOfTheAttempt(t *testing.T) {
+	// Given an attempt that froze a rubric version
+	f := newEvaluationFixture(t)
+	ctx := context.Background()
+	f.attempts.EXPECT().Get(ctx, "attempt-1").Return(attemptToEvaluate(domainexercise.AttemptEvaluated), nil)
+	f.rubrics.EXPECT().Get(ctx, "rubric-2").Return(evaluationRubric(), nil)
+
+	// When reading the criteria
+	criteria, err := f.service.Criteria(ctx, "attempt-1")
+
+	// Then they are the rubric's, in order
+	require.NoError(t, err)
+	assert.Equal(t, evaluationRubric().Criteria, criteria)
+}
+
+func TestEvaluationService_Criteria_reportsAReadFailure(t *testing.T) {
+	// Given an unknown attempt, and an attempt whose rubric cannot be read
+	cause := errors.New("db down")
+	for name, arrange := range map[string]func(f *evaluationFixture, ctx context.Context){
+		"attempt": func(f *evaluationFixture, ctx context.Context) {
+			f.attempts.EXPECT().Get(ctx, "attempt-1").Return(domainexercise.ChallengeAttempt{}, cause)
+		},
+		"rubric": func(f *evaluationFixture, ctx context.Context) {
+			f.attempts.EXPECT().Get(ctx, "attempt-1").Return(attemptToEvaluate(domainexercise.AttemptEvaluated), nil)
+			f.rubrics.EXPECT().Get(ctx, "rubric-2").Return(domainexercise.RubricVersion{}, cause)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newEvaluationFixture(t)
+			ctx := context.Background()
+			arrange(f, ctx)
+
+			// When reading the criteria
+			_, err := f.service.Criteria(ctx, "attempt-1")
+
+			// Then the failure is returned
+			assert.ErrorIs(t, err, cause)
+		})
+	}
+}
