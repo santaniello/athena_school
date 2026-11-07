@@ -1,7 +1,9 @@
 import {
+  AnswerDefenseQuestion,
   CancelChallengeGeneration,
   DiscardAttempt,
   EvaluateAttempt,
+  EvaluateDefense,
   GenerateChallenge,
   GetAttempt,
   GetEvaluation,
@@ -9,6 +11,7 @@ import {
   ListChallengeTopics,
   ListHints,
   ListSessionsForGeneration,
+  NextDefenseQuestion,
   RequestHint,
   StartAttempt,
   SubmitAttempt,
@@ -309,4 +312,83 @@ const EVALUATION_ERROR_MESSAGES: Record<string, string> = {
 
 export function evaluationErrorMessage(err: unknown): string {
   return EVALUATION_ERROR_MESSAGES[exerciseErrorCode(err)] ?? EVALUATION_FAILED_MESSAGE
+}
+
+// The tutor's defense: questions one at a time, then the outcome. See
+// specs/phases/phase-03-architecture-lab/12-architecture-defense.md.
+
+// The text the backend recognises as no knowledge of the criterion.
+export const DONT_KNOW_ANSWER = "I don't know"
+export const MAX_ANSWER_LENGTH = 4000
+
+export interface DefenseQuestion {
+  position: number
+  text: string
+  total: number
+}
+
+export interface DefenseProgress {
+  total: number
+  // The last answer is in: the defense can be evaluated.
+  complete: boolean
+}
+
+export type OutcomeResult = 'PASSED' | 'FAILED'
+
+export interface OutcomeReason {
+  kind: 'DIAGRAM_SCORE' | 'UNDERSTANDING_SCORE' | 'MANDATORY_CRITERION'
+  evaluation: 'DIAGRAM' | 'UNDERSTANDING'
+  // Set for MANDATORY_CRITERION, '' otherwise.
+  criterionName: string
+}
+
+export interface Outcome {
+  result: OutcomeResult
+  passScore: number
+  diagramScore: number
+  understandingScore: number
+  reasons: OutcomeReason[]
+}
+
+// The question the user must answer now. The first call starts the defense.
+export async function nextDefenseQuestion(attemptId: string): Promise<DefenseQuestion> {
+  const dto = await NextDefenseQuestion(attemptId)
+  return { position: dto.position, text: dto.question, total: dto.total }
+}
+
+export async function answerDefenseQuestion(
+  attemptId: string,
+  answer: string,
+): Promise<DefenseProgress> {
+  const dto = await AnswerDefenseQuestion(attemptId, answer)
+  return { total: dto.total, complete: dto.complete }
+}
+
+// Judges the answers and finishes the attempt. A failure can be retried by
+// calling it again.
+export async function evaluateDefense(attemptId: string): Promise<Outcome> {
+  const dto = await EvaluateDefense(attemptId)
+  return {
+    result: dto.result as OutcomeResult,
+    passScore: dto.passScore,
+    diagramScore: dto.diagramScore,
+    understandingScore: dto.understandingScore,
+    reasons: dto.reasons.map((reason) => ({
+      kind: reason.kind as OutcomeReason['kind'],
+      evaluation: reason.evaluation as OutcomeReason['evaluation'],
+      criterionName: reason.criterionName,
+    })),
+  }
+}
+
+const DEFENSE_FAILED_MESSAGE = 'The tutor could not continue the defense.'
+
+const DEFENSE_ERROR_MESSAGES: Record<string, string> = {
+  invalid_answer: 'The answer must be between 1 and 4,000 characters.',
+  invalid_evaluation: 'The tutor returned an invalid evaluation.',
+  invalid_diagram: 'The diagram could not be read.',
+}
+
+export function defenseErrorMessage(err: unknown): string {
+  return DEFENSE_ERROR_MESSAGES[exerciseErrorCode(err)] ?? DEFENSE_FAILED_MESSAGE
 }

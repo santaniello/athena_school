@@ -2,15 +2,20 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ATTEMPT_IN_PROGRESS,
   SUBMISSION_TOO_LATE,
+  answerDefenseQuestion,
+  defenseErrorMessage,
   discardAttempt,
   evaluateAttempt,
+  evaluateDefense,
   evaluationErrorMessage,
   exerciseErrorCode,
   exerciseErrorMessage,
+  nextDefenseQuestion,
   startAttempt,
   submitAttempt,
   type Attempt,
-  type Evaluation,
+  type DefenseQuestion,
+  type Outcome,
 } from '@/lib/exercise'
 import { diagramHasContent } from '@/lib/lab'
 
@@ -35,7 +40,19 @@ export type ExamPhase =
   // specs/phases/phase-03-architecture-lab/11-architecture-evaluator.md.
   | 'evaluating'
   | 'evaluationFailed'
-  | 'evaluated'
+  // The tutor's defense, which starts by itself once the diagram is evaluated:
+  // a question is being written, failed, waits for its answer or has its
+  // answer in flight. See
+  // specs/phases/phase-03-architecture-lab/12-architecture-defense.md.
+  | 'questioning'
+  | 'questionFailed'
+  | 'answering'
+  | 'sendingAnswer'
+  // The last answer is in and the final evaluation runs or failed.
+  | 'judging'
+  | 'judgingFailed'
+  // Both evaluations exist: the outcome is shown.
+  | 'finished'
 
 type XmlSource = () => Promise<string>
 
@@ -49,7 +66,8 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void) 
   const [attempt, setAttempt] = useState<Attempt | null>(null)
   const [hasContent, setHasContent] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
-  const [evaluation, setEvaluation] = useState<Evaluation | null>(null)
+  const [question, setQuestion] = useState<DefenseQuestion | null>(null)
+  const [outcome, setOutcome] = useState<Outcome | null>(null)
   // A new key replaces the editor, which is how the user tries again.
   const [editorKey, setEditorKey] = useState(0)
   // The board's own editor loads after the attempt exists; until it reports
@@ -161,19 +179,20 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void) 
   }
 
   // The evaluation is a stage of the same sitting: the user stays in the lab.
+  // Once it succeeds the defense starts by itself; its result is not shown.
   async function evaluate(current: Attempt) {
     setMessage(null)
     setPhase('evaluating')
     try {
-      const result = await evaluateAttempt(current.id)
-      if (exitedRef.current) return
-      setEvaluation(result)
-      setPhase('evaluated')
+      await evaluateAttempt(current.id)
     } catch (err) {
       if (exitedRef.current) return
       setMessage(evaluationErrorMessage(err))
       setPhase('evaluationFailed')
+      return
     }
+    if (exitedRef.current) return
+    await askNext(current)
   }
 
   // Manual only: there is no limit and no automatic retry.
@@ -181,6 +200,65 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void) 
     const current = attemptRef.current
     if (!current || phaseRef.current !== 'evaluationFailed') return
     await evaluate(current)
+  }
+
+  async function askNext(current: Attempt) {
+    setMessage(null)
+    setPhase('questioning')
+    try {
+      const next = await nextDefenseQuestion(current.id)
+      if (exitedRef.current) return
+      setQuestion(next)
+      setPhase('answering')
+    } catch (err) {
+      if (exitedRef.current) return
+      setMessage(defenseErrorMessage(err))
+      setPhase('questionFailed')
+    }
+  }
+
+  async function judge(current: Attempt) {
+    setMessage(null)
+    setPhase('judging')
+    try {
+      const result = await evaluateDefense(current.id)
+      if (exitedRef.current) return
+      setOutcome(result)
+      setPhase('finished')
+    } catch (err) {
+      if (exitedRef.current) return
+      setMessage(defenseErrorMessage(err))
+      setPhase('judgingFailed')
+    }
+  }
+
+  // The answer is stored when it is sent. A refused answer leaves the question
+  // waiting, with the reason.
+  async function sendAnswer(answer: string) {
+    const current = attemptRef.current
+    if (!current || phaseRef.current !== 'answering') return
+    setPhase('sendingAnswer')
+    setMessage(null)
+    let complete: boolean
+    try {
+      complete = (await answerDefenseQuestion(current.id, answer)).complete
+    } catch (err) {
+      if (exitedRef.current) return
+      setMessage(defenseErrorMessage(err))
+      setPhase('answering')
+      return
+    }
+    if (exitedRef.current) return
+    if (complete) await judge(current)
+    else await askNext(current)
+  }
+
+  // Manual only: the answers already given are kept and nothing is spent.
+  async function retryDefense() {
+    const current = attemptRef.current
+    if (!current) return
+    if (phaseRef.current === 'questionFailed') await askNext(current)
+    else if (phaseRef.current === 'judgingFailed') await judge(current)
   }
 
   async function submit(getXml: XmlSource) {
@@ -212,7 +290,8 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void) 
     // Marked first: a submission or creation still in flight must not finish
     // the exam a second time or leave an attempt behind.
     exitedRef.current = true
-    if (attemptRef.current) await discard(attemptRef.current)
+    // A finished attempt is read-only and survives leaving the screen.
+    if (attemptRef.current && phaseRef.current !== 'finished') await discard(attemptRef.current)
     onExit()
   }
 
@@ -221,7 +300,8 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void) 
     attempt,
     hasContent,
     message,
-    evaluation,
+    question,
+    outcome,
     editorKey,
     boardStalled,
     editorReady,
@@ -232,6 +312,8 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void) 
     submit,
     expire,
     retryEvaluation,
+    sendAnswer,
+    retryDefense,
     leave,
   }
 }

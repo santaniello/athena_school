@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Loader2 } from 'lucide-react'
+import { DefenseStage } from '@/components/lab/defense-stage'
 import { EvaluationStage } from '@/components/lab/evaluation-stage'
+import { ExamOutcome } from '@/components/lab/exam-outcome'
 import { DiagramEditor, type DiagramEditorHandle } from '@/components/lab/diagram-editor'
 import { LabConfirmDialog } from '@/components/lab/lab-confirm-dialog'
 import { LabLayout } from '@/components/lab/lab-layout'
@@ -81,16 +83,10 @@ function LabExamScreen({
     />
   )
 
-  if (phase === 'evaluating' || phase === 'evaluationFailed' || phase === 'evaluated') {
+  if (phase === 'finished' && exam.outcome) {
     return (
       <>
-        <EvaluationStage
-          phase={phase}
-          message={exam.message}
-          evaluation={exam.evaluation}
-          onRetry={() => void exam.retryEvaluation()}
-          onBack={() => void exam.leave()}
-        />
+        <ExamOutcome outcome={exam.outcome} onBack={() => void exam.leave()} />
         {leaveDialog}
       </>
     )
@@ -167,6 +163,7 @@ function LabExamScreen({
         hintAsking={tutor.asking}
         hintFailed={tutor.failed}
         canFinish={exam.hasContent && phase === 'running'}
+        stage={stageFor(exam)}
         board={
           <>
             {editor}
@@ -178,7 +175,7 @@ function LabExamScreen({
                 Connection lost. Reconnecting...
               </p>
             )}
-            {exam.message && (
+            {phase === 'running' && exam.message && (
               <p
                 role="alert"
                 className="absolute inset-x-0 bottom-0 z-10 bg-destructive px-3 py-1 text-center text-sm text-white"
@@ -186,8 +183,8 @@ function LabExamScreen({
                 {exam.message}
               </p>
             )}
-            {phase === 'submitting' && (
-              <div data-testid="board-lock" className="absolute inset-0 z-20 cursor-wait" />
+            {phase !== 'running' && (
+              <div data-testid="board-lock" className="absolute inset-0 z-20 cursor-not-allowed" />
             )}
           </>
         }
@@ -207,6 +204,40 @@ function LabExamScreen({
       {leaveDialog}
     </>
   )
+}
+
+// The stage that takes the place of the tutor once the diagram was submitted:
+// the evaluation, then the tutor's questions. While drawing there is none.
+function stageFor(exam: ReturnType<typeof useExam>): ReactNode {
+  switch (exam.phase) {
+    case 'evaluating':
+    case 'evaluationFailed':
+      return (
+        <EvaluationStage
+          phase={exam.phase}
+          message={exam.message}
+          onRetry={() => void exam.retryEvaluation()}
+          onBack={() => void exam.leave()}
+        />
+      )
+    case 'questioning':
+    case 'questionFailed':
+    case 'answering':
+    case 'sendingAnswer':
+    case 'judging':
+    case 'judgingFailed':
+      return (
+        <DefenseStage
+          phase={exam.phase}
+          question={exam.question}
+          message={exam.message}
+          onSend={(answer) => void exam.sendAnswer(answer)}
+          onRetry={() => void exam.retryDefense()}
+        />
+      )
+    default:
+      return undefined
+  }
 }
 
 function CenteredMessage({ children }: { children: ReactNode }) {

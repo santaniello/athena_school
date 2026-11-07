@@ -3,6 +3,7 @@ import {
   CancelChallengeGeneration,
   DiscardAttempt,
   EvaluateAttempt,
+  EvaluateDefense,
   GenerateChallenge,
   GetAttempt,
   GetEvaluation,
@@ -10,6 +11,8 @@ import {
   ListChallengeTopics,
   ListHints,
   ListSessionsForGeneration,
+  NextDefenseQuestion,
+  AnswerDefenseQuestion,
   RequestHint,
   StartAttempt,
   SubmitAttempt,
@@ -22,8 +25,14 @@ import {
   DIAGRAM_CONTENT_TYPE,
   SUBMISSION_TOO_LARGE,
   SUBMISSION_TOO_LATE,
+  DONT_KNOW_ANSWER,
+  MAX_ANSWER_LENGTH,
+  answerDefenseQuestion,
   cancelChallengeGeneration,
+  defenseErrorMessage,
   discardAttempt,
+  evaluateDefense,
+  nextDefenseQuestion,
   evaluateAttempt,
   evaluationErrorMessage,
   exerciseErrorCode,
@@ -53,6 +62,9 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   DiscardAttempt: vi.fn(),
   GetAttempt: vi.fn(),
   EvaluateAttempt: vi.fn(),
+  EvaluateDefense: vi.fn(),
+  NextDefenseQuestion: vi.fn(),
+  AnswerDefenseQuestion: vi.fn(),
   GetEvaluation: vi.fn(),
   RequestHint: vi.fn(),
   ListHints: vi.fn(),
@@ -475,5 +487,85 @@ describe('evaluation bindings', () => {
     ['', 'The evaluator could not complete the evaluation.'],
   ])('explains an evaluation failure coded %s', (code, message) => {
     expect(evaluationErrorMessage(JSON.stringify({ code }))).toBe(message)
+  })
+})
+
+describe('defense bindings', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('uses the fixed answer the backend recognises and its length limit', () => {
+    expect(DONT_KNOW_ANSWER).toBe("I don't know")
+    expect(MAX_ANSWER_LENGTH).toBe(4000)
+  })
+
+  it('asks for the next question and maps it', async () => {
+    vi.mocked(NextDefenseQuestion).mockResolvedValueOnce(
+      desktop.DefenseQuestionDTO.createFrom({ position: 2, question: 'Why a cache?', total: 5 }),
+    )
+
+    const question = await nextDefenseQuestion('a1')
+
+    expect(NextDefenseQuestion).toHaveBeenCalledExactlyOnceWith('a1')
+    expect(question).toEqual({ position: 2, text: 'Why a cache?', total: 5 })
+  })
+
+  it.each([true, false])('sends an answer and reports complete=%s', async (complete) => {
+    vi.mocked(AnswerDefenseQuestion).mockResolvedValueOnce(
+      desktop.DefenseDTO.createFrom({ total: 5, turns: [], complete }),
+    )
+
+    const progress = await answerDefenseQuestion('a1', 'To cut reads.')
+
+    expect(AnswerDefenseQuestion).toHaveBeenCalledExactlyOnceWith('a1', 'To cut reads.')
+    expect(progress).toEqual({ total: 5, complete })
+  })
+
+  it('evaluates the defense and maps the outcome with its reasons', async () => {
+    vi.mocked(EvaluateDefense).mockResolvedValueOnce(
+      desktop.OutcomeDTO.createFrom({
+        result: 'FAILED',
+        passScore: 80,
+        diagramScore: 85,
+        understandingScore: 60,
+        reasons: [
+          {
+            kind: 'UNDERSTANDING_SCORE',
+            evaluation: 'UNDERSTANDING',
+            criterionKey: '',
+            criterionName: '',
+          },
+          {
+            kind: 'MANDATORY_CRITERION',
+            evaluation: 'DIAGRAM',
+            criterionKey: 'resilience',
+            criterionName: 'Resilience',
+          },
+        ],
+      }),
+    )
+
+    const outcome = await evaluateDefense('a1')
+
+    expect(EvaluateDefense).toHaveBeenCalledExactlyOnceWith('a1')
+    expect(outcome).toEqual({
+      result: 'FAILED',
+      passScore: 80,
+      diagramScore: 85,
+      understandingScore: 60,
+      reasons: [
+        { kind: 'UNDERSTANDING_SCORE', evaluation: 'UNDERSTANDING', criterionName: '' },
+        { kind: 'MANDATORY_CRITERION', evaluation: 'DIAGRAM', criterionName: 'Resilience' },
+      ],
+    })
+  })
+
+  it.each([
+    ['invalid_answer', 'The answer must be between 1 and 4,000 characters.'],
+    ['invalid_evaluation', 'The tutor returned an invalid evaluation.'],
+    ['invalid_diagram', 'The diagram could not be read.'],
+    ['internal', 'The tutor could not continue the defense.'],
+    ['', 'The tutor could not continue the defense.'],
+  ])('explains a defense failure coded %s', (code, message) => {
+    expect(defenseErrorMessage(JSON.stringify({ code }))).toBe(message)
   })
 })
