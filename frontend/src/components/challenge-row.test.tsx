@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { CatalogItem } from '@/lib/exercise'
@@ -25,12 +25,13 @@ const fresh: CatalogItem = {
   bestDiagramScore: 0,
 }
 
-function renderRow(item: CatalogItem, highlighted = false) {
+function renderRow(item: CatalogItem, highlighted = false, onStart = vi.fn()) {
   render(
     <ul>
-      <ChallengeRow item={item} highlighted={highlighted} />
+      <ChallengeRow item={item} highlighted={highlighted} onStart={onStart} />
     </ul>,
   )
+  return onStart
 }
 
 describe('ChallengeRow', () => {
@@ -74,14 +75,23 @@ describe('ChallengeRow', () => {
     expect(screen.getByRole('button', { name: 'Start again' })).toBeInTheDocument()
   })
 
-  it('keeps Start disabled and explains why on hover', async () => {
+  it('asks to start the exam of the row when Start is clicked', async () => {
     const user = userEvent.setup()
-    renderRow(fresh)
+    const onStart = renderRow(fresh)
 
-    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
-    await user.hover(screen.getByTestId('start-tooltip-trigger'))
+    expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled()
+    await user.click(screen.getByRole('button', { name: 'Start' }))
 
-    expect(await screen.findAllByText('Available with the diagram editor')).not.toHaveLength(0)
+    expect(onStart).toHaveBeenCalledExactlyOnceWith(fresh)
+  })
+
+  it('asks to start again from Start again', async () => {
+    const user = userEvent.setup()
+    const onStart = renderRow(attempted)
+
+    await user.click(screen.getByRole('button', { name: 'Start again' }))
+
+    expect(onStart).toHaveBeenCalledExactlyOnceWith(attempted)
   })
 
   it('marks the row that was just generated', () => {

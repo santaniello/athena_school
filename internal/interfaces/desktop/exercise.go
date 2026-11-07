@@ -62,6 +62,7 @@ const (
 	exerciseCodeAttemptFinished      = "attempt_finished"
 	exerciseCodeSubmissionTooLate    = "submission_too_late"
 	exerciseCodeSubmissionInvalid    = "submission_invalid"
+	exerciseCodeSubmissionTooLarge   = "submission_too_large"
 	exerciseCodeInvalidGeneration    = "invalid_generation"
 	exerciseCodeCancelled            = "cancelled"
 	exerciseCodeGenerationInProgress = "generation_in_progress"
@@ -113,6 +114,8 @@ func toExerciseError(err error) *ExerciseError {
 		return &ExerciseError{Code: exerciseCodeInvalidGeneration, Message: "the generated challenge was not valid, try again"}
 	case errors.Is(err, context.Canceled):
 		return &ExerciseError{Code: exerciseCodeCancelled, Message: "cancelled"}
+	case errors.Is(err, domainexercise.ErrSubmissionTooLarge):
+		return &ExerciseError{Code: exerciseCodeSubmissionTooLarge, Message: err.Error()}
 	case isInvalidSubmission(err):
 		return &ExerciseError{Code: exerciseCodeSubmissionInvalid, Message: err.Error()}
 	}
@@ -122,8 +125,7 @@ func toExerciseError(err error) *ExerciseError {
 
 func isInvalidSubmission(err error) bool {
 	return errors.Is(err, domainexercise.ErrSubmissionContentRequired) ||
-		errors.Is(err, domainexercise.ErrSubmissionContentTypeRequired) ||
-		errors.Is(err, domainexercise.ErrSubmissionTooLarge)
+		errors.Is(err, domainexercise.ErrSubmissionContentTypeRequired)
 }
 
 func invalidInput(message string) *ExerciseError {
@@ -148,6 +150,15 @@ type SubmissionDTO struct {
 	SubmittedAt string `json:"submittedAt"`
 }
 
+// StatementDTO is the challenge statement the exam screen shows.
+type StatementDTO struct {
+	Scenario                  string   `json:"scenario"`
+	FunctionalRequirements    []string `json:"functionalRequirements"`
+	NonFunctionalRequirements []string `json:"nonFunctionalRequirements"`
+	Constraints               []string `json:"constraints"`
+	Objectives                []string `json:"objectives"`
+}
+
 // AttemptDTO is the desktop-facing read model of an exam attempt. Times are
 // RFC 3339; SubmittedAt, SubmitReason and Submission are empty/null until the
 // attempt is submitted.
@@ -162,6 +173,7 @@ type AttemptDTO struct {
 	Deadline          string         `json:"deadline"`
 	SubmittedAt       string         `json:"submittedAt"`
 	SubmitReason      string         `json:"submitReason"`
+	Statement         StatementDTO   `json:"statement"`
 	Criteria          []CriterionDTO `json:"criteria"`
 	Submission        *SubmissionDTO `json:"submission"`
 }
@@ -178,7 +190,14 @@ func toAttemptDTO(view applicationexercise.AttemptView) AttemptDTO {
 		StartedAt:         attempt.StartedAt.Format(time.RFC3339),
 		Deadline:          attempt.Deadline.Format(time.RFC3339),
 		SubmitReason:      string(attempt.SubmitReason),
-		Criteria:          make([]CriterionDTO, 0, len(view.Criteria)),
+		Statement: StatementDTO{
+			Scenario:                  view.Statement.Scenario,
+			FunctionalRequirements:    view.Statement.FunctionalRequirements,
+			NonFunctionalRequirements: view.Statement.NonFunctionalRequirements,
+			Constraints:               view.Statement.Constraints,
+			Objectives:                view.Statement.Objectives,
+		},
+		Criteria: make([]CriterionDTO, 0, len(view.Criteria)),
 	}
 	if !attempt.SubmittedAt.IsZero() {
 		dto.SubmittedAt = attempt.SubmittedAt.Format(time.RFC3339)

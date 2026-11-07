@@ -281,7 +281,14 @@ func viewOf(attempt domainexercise.ChallengeAttempt, challenge domainexercise.Ch
 		Attempt:        attempt,
 		ChallengeTitle: challenge.Title,
 		ChallengeTopic: challenge.Topic,
-		Criteria:       rubric.Criteria,
-		Submission:     submission,
+		Statement: ChallengeStatement{
+			Scenario:                  challenge.Scenario,
+			FunctionalRequirements:    challenge.FunctionalRequirements,
+			NonFunctionalRequirements: challenge.NonFunctionalRequirements,
+			Constraints:               challenge.Constraints,
+			Objectives:                challenge.Objectives,
+		},
+		Criteria:   rubric.Criteria,
+		Submission: submission,
 	}
 }

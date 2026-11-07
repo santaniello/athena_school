@@ -40,6 +40,26 @@ export namespace desktop {
 	        this.levels = source["levels"];
 	    }
 	}
+	export class StatementDTO {
+	    scenario: string;
+	    functionalRequirements: string[];
+	    nonFunctionalRequirements: string[];
+	    constraints: string[];
+	    objectives: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new StatementDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.scenario = source["scenario"];
+	        this.functionalRequirements = source["functionalRequirements"];
+	        this.nonFunctionalRequirements = source["nonFunctionalRequirements"];
+	        this.constraints = source["constraints"];
+	        this.objectives = source["objectives"];
+	    }
+	}
 	export class AttemptDTO {
 	    id: string;
 	    challengeId: string;
@@ -51,6 +71,7 @@ export namespace desktop {
 	    deadline: string;
 	    submittedAt: string;
 	    submitReason: string;
+	    statement: StatementDTO;
 	    criteria: CriterionDTO[];
 	    submission?: SubmissionDTO;
 	
@@ -70,6 +91,7 @@ export namespace desktop {
 	        this.deadline = source["deadline"];
 	        this.submittedAt = source["submittedAt"];
 	        this.submitReason = source["submitReason"];
+	        this.statement = this.convertValues(source["statement"], StatementDTO);
 	        this.criteria = this.convertValues(source["criteria"], CriterionDTO);
 	        this.submission = this.convertValues(source["submission"], SubmissionDTO);
 	    }
@@ -544,6 +566,7 @@ export namespace desktop {
 		    return a;
 		}
 	}
+	
 	
 	
 	export class StudyContextResult {

@@ -30,6 +30,11 @@ function LabPreview() {
       hints={previewHints.slice(0, hintsShown)}
       hintsLeft={MAX_HINTS - hintsShown}
       canFinish={false}
+      board={
+        <p className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
+          The diagram editor will appear here.
+        </p>
+      }
       onExpire={noop}
       onAskHint={() => setHintsShown((shown) => Math.min(shown + 1, MAX_HINTS))}
       onFinish={noop}

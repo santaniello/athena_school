@@ -1,0 +1,401 @@
+import { useImperativeHandle, type Ref } from 'react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import type { DiagramEditorHandle } from '@/components/lab/diagram-editor'
+import { discardAttempt, startAttempt, submitAttempt, type Attempt } from '@/lib/exercise'
+import LabExamScreen from './LabExamScreen'
+
+vi.mock('@/lib/exercise', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/exercise')>()
+  return { ...original, startAttempt: vi.fn(), submitAttempt: vi.fn(), discardAttempt: vi.fn() }
+})
+
+interface EditorProps {
+  ref?: Ref<DiagramEditorHandle>
+  onReady: () => void
+  onChange: (xml: string) => void
+  onConnectionLost: () => void
+  onConnectionRestored: () => void
+}
+
+// The real editor is covered by its own tests; this stand-in exposes the
+// callbacks the screen hands it and answers getXml with xmlOnBoard.
+let editor: EditorProps
+let xmlOnBoard = ''
+
+vi.mock('@/components/lab/diagram-editor', () => ({
+  DiagramEditor: (props: EditorProps) => {
+    editor = props
+    useImperativeHandle(props.ref, () => ({ getXml: () => Promise.resolve(xmlOnBoard) }))
+    return <div data-testid="editor" />
+  },
+}))
+
+const FULL_XML =
+  '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" vertex="1" parent="1"/></root></mxGraphModel>'
+const EMPTY_XML =
+  '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel>'
+
+const NOW = new Date('2026-11-06T12:00:00Z').getTime()
+
+const attempt: Attempt = {
+  id: 'a1',
+  challengeId: 'c1',
+  title: 'Cache and invalidation',
+  topic: 'caching',
+  deadline: new Date(NOW + 44 * 60 * 1000).toISOString(),
+  statement: {
+    scenario: 'A catalog service serves millions of reads.',
+    functionalRequirements: ['Browse products'],
+    nonFunctionalRequirements: [],
+    constraints: [],
+    objectives: [],
+  },
+  criteria: [
+    {
+      id: 'k1',
+      name: 'Consistency',
+      description: 'Reads stay correct.',
+      weight: 20,
+      mandatory: true,
+    },
+  ],
+}
+
+const challenge = {
+  id: 'c1',
+  title: 'Cache and invalidation',
+  difficulty: 'INTERMEDIATE',
+  timeLimitMinutes: 45,
+}
+
+function coded(code: string): Error {
+  return new Error(JSON.stringify({ code, message: code }))
+}
+
+function renderScreen(props: { leaveRequested?: boolean } = {}) {
+  const handlers = { onExit: vi.fn(), onLeaveCancelled: vi.fn() }
+  const view = render(
+    <LabExamScreen
+      challenge={challenge}
+      leaveRequested={false}
+      now={() => Date.now()}
+      {...handlers}
+      {...props}
+    />,
+  )
+  return { ...handlers, ...view }
+}
+
+async function startRunning(props: { leaveRequested?: boolean } = {}) {
+  const view = renderScreen(props)
+  await act(async () => editor.onReady())
+  await screen.findByRole('timer')
+  return view
+}
+
+describe('LabExamScreen', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(NOW)
+    xmlOnBoard = FULL_XML
+    vi.mocked(startAttempt).mockResolvedValue(attempt)
+    vi.mocked(submitAttempt).mockResolvedValue()
+    vi.mocked(discardAttempt).mockResolvedValue()
+  })
+  afterEach(() => vi.useRealTimers())
+
+  it('prepares the editor first: no statement, no clock, no attempt', () => {
+    renderScreen()
+
+    expect(screen.getByText('Preparing the editor')).toBeInTheDocument()
+    expect(screen.queryByRole('timer')).not.toBeInTheDocument()
+    expect(screen.queryByText(/A catalog service/)).not.toBeInTheDocument()
+    expect(startAttempt).not.toHaveBeenCalled()
+  })
+
+  it('creates the attempt once the editor is ready and shows the exam from its deadline', async () => {
+    await startRunning()
+
+    expect(startAttempt).toHaveBeenCalledExactlyOnceWith('c1', false)
+    expect(screen.getByText('A catalog service serves millions of reads.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Cache and invalidation' })).toBeInTheDocument()
+    expect(screen.getByText('Intermediate')).toBeInTheDocument()
+    expect(screen.getByText('Consistency')).toBeInTheDocument()
+    expect(screen.getByRole('timer')).toHaveTextContent('44:00')
+    expect(screen.getByRole('heading', { name: 'Tutor Athena' })).toBeInTheDocument()
+    expect(screen.getByTestId('editor')).toBeInTheDocument()
+  })
+
+  it('offers to try again when the editor does not load, and no attempt exists', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderScreen()
+
+    await act(async () => vi.advanceTimersByTime(15000))
+
+    expect(
+      screen.getByText('The editor needs an internet connection. Try again.'),
+    ).toBeInTheDocument()
+    expect(startAttempt).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(screen.getByText('Preparing the editor')).toBeInTheDocument()
+  })
+
+  it('goes back to the catalog from the editor failure', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const { onExit } = renderScreen()
+    await act(async () => vi.advanceTimersByTime(15000))
+
+    await user.click(screen.getByRole('button', { name: 'Back to catalog' }))
+
+    expect(onExit).toHaveBeenCalledExactlyOnceWith()
+    expect(discardAttempt).not.toHaveBeenCalled()
+  })
+
+  it('warns about the running exam and replaces it on OK', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    vi.mocked(startAttempt).mockRejectedValueOnce(coded('attempt_in_progress'))
+    renderScreen()
+    await act(async () => editor.onReady())
+
+    expect(
+      await screen.findByText('You have an exam in progress. Starting a new one discards it.'),
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'OK' }))
+
+    expect(startAttempt).toHaveBeenLastCalledWith('c1', true)
+    expect(await screen.findByRole('timer')).toBeInTheDocument()
+  })
+
+  it('returns to the catalog and touches nothing when the warning is cancelled', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    vi.mocked(startAttempt).mockRejectedValueOnce(coded('attempt_in_progress'))
+    const { onExit } = renderScreen()
+    await act(async () => editor.onReady())
+
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
+
+    expect(onExit).toHaveBeenCalledExactlyOnceWith()
+    expect(startAttempt).toHaveBeenCalledOnce()
+    expect(discardAttempt).not.toHaveBeenCalled()
+  })
+
+  it('says why the exam could not start and goes back', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    vi.mocked(startAttempt).mockRejectedValue(coded('challenge_has_no_rubric'))
+    const { onExit } = renderScreen()
+    await act(async () => editor.onReady())
+
+    expect(await screen.findByText('Something went wrong. Please try again.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Back to catalog' }))
+    expect(onExit).toHaveBeenCalledOnce()
+  })
+
+  it('disables Finish and evaluate on an empty board and enables it with content', async () => {
+    await startRunning()
+    const finish = screen.getByRole('button', { name: 'Finish and evaluate' })
+    expect(finish).toBeDisabled()
+
+    act(() => editor.onChange(FULL_XML))
+    expect(finish).toBeEnabled()
+
+    act(() => editor.onChange(EMPTY_XML))
+    expect(finish).toBeDisabled()
+  })
+
+  it('asks before finishing and submits the diagram when confirmed', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    await startRunning()
+    act(() => editor.onChange(FULL_XML))
+
+    await user.click(screen.getByRole('button', { name: 'Finish and evaluate' }))
+    expect(
+      screen.getByText('Finish now? You cannot edit the diagram after this.'),
+    ).toBeInTheDocument()
+    expect(submitAttempt).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Finish' }))
+
+    expect(submitAttempt).toHaveBeenCalledExactlyOnceWith('a1', FULL_XML)
+    expect(await screen.findByText('Diagram submitted.')).toBeInTheDocument()
+    expect(screen.queryByRole('timer')).not.toBeInTheDocument()
+  })
+
+  it('keeps the exam when the finish question is cancelled', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    await startRunning()
+    act(() => editor.onChange(FULL_XML))
+    await user.click(screen.getByRole('button', { name: 'Finish and evaluate' }))
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(submitAttempt).not.toHaveBeenCalled()
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(screen.getByRole('timer')).toBeInTheDocument()
+  })
+
+  it('discards the submitted attempt and goes back from Back to catalog', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const { onExit } = await startRunning()
+    act(() => editor.onChange(FULL_XML))
+    await user.click(screen.getByRole('button', { name: 'Finish and evaluate' }))
+    await user.click(screen.getByRole('button', { name: 'Finish' }))
+    await screen.findByText('Diagram submitted.')
+
+    await user.click(screen.getByRole('button', { name: 'Back to catalog' }))
+
+    expect(discardAttempt).toHaveBeenCalledExactlyOnceWith('a1')
+    expect(onExit).toHaveBeenCalledExactlyOnceWith()
+  })
+
+  it('keeps the exam open and explains when the diagram is too large', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    vi.mocked(submitAttempt).mockRejectedValue(coded('submission_too_large'))
+    await startRunning()
+    act(() => editor.onChange(FULL_XML))
+    await user.click(screen.getByRole('button', { name: 'Finish and evaluate' }))
+    await user.click(screen.getByRole('button', { name: 'Finish' }))
+
+    expect(
+      await screen.findByText('The diagram is too large to submit. Remove some elements.'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('timer')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Finish and evaluate' })).toBeEnabled()
+  })
+
+  it('returns to the catalog with the too-late notice', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    vi.mocked(submitAttempt).mockRejectedValue(coded('submission_too_late'))
+    const { onExit } = await startRunning()
+    act(() => editor.onChange(FULL_XML))
+    await user.click(screen.getByRole('button', { name: 'Finish and evaluate' }))
+    await user.click(screen.getByRole('button', { name: 'Finish' }))
+
+    await screen.findByRole('timer')
+    expect(onExit).toHaveBeenCalledExactlyOnceWith(
+      'The time was over and the exam could not be submitted.',
+    )
+  })
+
+  it('blocks editing while the diagram is being submitted', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    vi.mocked(submitAttempt).mockReturnValue(new Promise(() => {}))
+    await startRunning()
+    act(() => editor.onChange(FULL_XML))
+    await user.click(screen.getByRole('button', { name: 'Finish and evaluate' }))
+    await user.click(screen.getByRole('button', { name: 'Finish' }))
+
+    expect(await screen.findByTestId('board-lock')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Finish and evaluate' })).toBeDisabled()
+  })
+
+  it('submits by itself at zero when the board has content, closing the finish question', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    await startRunning()
+    act(() => editor.onChange(FULL_XML))
+    await user.click(screen.getByRole('button', { name: 'Finish and evaluate' }))
+
+    await act(async () => vi.advanceTimersByTime(44 * 60 * 1000))
+
+    expect(submitAttempt).toHaveBeenCalledExactlyOnceWith('a1', FULL_XML)
+    expect(await screen.findByText('Diagram submitted.')).toBeInTheDocument()
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  })
+
+  it('discards an empty board at zero and tells the user', async () => {
+    xmlOnBoard = EMPTY_XML
+    const { onExit } = await startRunning()
+
+    await act(async () => vi.advanceTimersByTime(44 * 60 * 1000))
+
+    expect(submitAttempt).not.toHaveBeenCalled()
+    expect(discardAttempt).toHaveBeenCalledExactlyOnceWith('a1')
+    expect(onExit).toHaveBeenCalledExactlyOnceWith(
+      'Time is up and the board was empty. The exam was discarded.',
+    )
+  })
+
+  it('discards the attempt and goes back when the user confirms Leave', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const { onExit } = await startRunning()
+
+    await user.click(screen.getByRole('button', { name: 'Leave' }))
+    expect(discardAttempt).not.toHaveBeenCalled()
+    await user.click(screen.getAllByRole('button', { name: 'Leave' }).at(-1)!)
+
+    expect(discardAttempt).toHaveBeenCalledExactlyOnceWith('a1')
+    expect(onExit).toHaveBeenCalledExactlyOnceWith()
+  })
+
+  it('shows a banner while the connection is lost and clears it on recovery', async () => {
+    await startRunning()
+    expect(screen.queryByText('Connection lost. Reconnecting...')).not.toBeInTheDocument()
+
+    act(() => editor.onConnectionLost())
+    expect(screen.getByRole('status')).toHaveTextContent('Connection lost. Reconnecting...')
+    expect(screen.getByRole('timer')).toBeInTheDocument()
+
+    act(() => editor.onConnectionRestored())
+    expect(screen.queryByText('Connection lost. Reconnecting...')).not.toBeInTheDocument()
+  })
+
+  it('asks the same Leave question when navigation is requested during the exam', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const { onExit, rerender, onLeaveCancelled } = await startRunning()
+
+    rerender(
+      <LabExamScreen
+        challenge={challenge}
+        leaveRequested
+        now={() => Date.now()}
+        onExit={onExit}
+        onLeaveCancelled={onLeaveCancelled}
+      />,
+    )
+    expect(
+      screen.getByText('Leaving discards this exam. It will not be graded.'),
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(onLeaveCancelled).toHaveBeenCalledOnce()
+    expect(onExit).not.toHaveBeenCalled()
+    expect(discardAttempt).not.toHaveBeenCalled()
+  })
+
+  it('discards the attempt when the requested navigation is confirmed', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const { onExit, rerender, onLeaveCancelled } = await startRunning()
+    rerender(
+      <LabExamScreen
+        challenge={challenge}
+        leaveRequested
+        now={() => Date.now()}
+        onExit={onExit}
+        onLeaveCancelled={onLeaveCancelled}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Leave' }))
+
+    expect(discardAttempt).toHaveBeenCalledExactlyOnceWith('a1')
+    expect(onExit).toHaveBeenCalledExactlyOnceWith()
+  })
+
+  it('lets navigation through at once when no attempt exists yet', () => {
+    const { onExit, rerender, onLeaveCancelled } = renderScreen()
+
+    rerender(
+      <LabExamScreen
+        challenge={challenge}
+        leaveRequested
+        now={() => Date.now()}
+        onExit={onExit}
+        onLeaveCancelled={onLeaveCancelled}
+      />,
+    )
+
+    expect(onExit).toHaveBeenCalledExactlyOnceWith()
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  })
+})

@@ -1,24 +1,36 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   CancelChallengeGeneration,
+  DiscardAttempt,
   GenerateChallenge,
+  GetAttempt,
   ListChallengeCatalog,
   ListChallengeTopics,
   ListSessionsForGeneration,
+  StartAttempt,
+  SubmitAttempt,
 } from '../../wailsjs/go/desktop/App'
 import { desktop } from '../../wailsjs/go/models'
 import {
   DIFFICULTY_LABELS,
   STATUS_LABELS,
+  ATTEMPT_IN_PROGRESS,
+  DIAGRAM_CONTENT_TYPE,
+  SUBMISSION_TOO_LARGE,
+  SUBMISSION_TOO_LATE,
   cancelChallengeGeneration,
+  discardAttempt,
   exerciseErrorCode,
   difficultyForExperience,
   exerciseErrorMessage,
   formatSessionDate,
   generateChallenge,
+  getAttempt,
   listChallengeCatalog,
   listChallengeTopics,
   listSessionsForGeneration,
+  startAttempt,
+  submitAttempt,
 } from './exercise'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
@@ -27,6 +39,10 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   ListChallengeCatalog: vi.fn(),
   ListChallengeTopics: vi.fn(),
   ListSessionsForGeneration: vi.fn(),
+  StartAttempt: vi.fn(),
+  SubmitAttempt: vi.fn(),
+  DiscardAttempt: vi.fn(),
+  GetAttempt: vi.fn(),
 }))
 
 const item = {
@@ -211,5 +227,118 @@ describe('difficultyForExperience', () => {
 describe('formatSessionDate', () => {
   it('writes the day, month and year of the start time', () => {
     expect(formatSessionDate('2026-11-02T12:00:00Z')).toBe('Nov 2, 2026')
+  })
+})
+
+const attemptDto = desktop.AttemptDTO.createFrom({
+  id: 'a1',
+  challengeId: 'c1',
+  challengeTitle: 'Cache',
+  challengeTopic: 'caching',
+  state: 'IN_PROGRESS',
+  deadline: '2026-11-01T10:45:00Z',
+  statement: {
+    scenario: 'A link service.',
+    functionalRequirements: ['Shorten a URL'],
+    nonFunctionalRequirements: ['p99 under 100 ms'],
+    constraints: ['No new database'],
+    objectives: ['Cut read load'],
+  },
+  criteria: [
+    {
+      key: 'architecture',
+      name: 'Overall architecture',
+      description: 'Coherent.',
+      weight: 20,
+      mandatory: true,
+      levels: ['0', '1', '2', '3', '4'],
+    },
+  ],
+})
+
+const attempt = {
+  id: 'a1',
+  challengeId: 'c1',
+  title: 'Cache',
+  topic: 'caching',
+  deadline: '2026-11-01T10:45:00Z',
+  statement: {
+    scenario: 'A link service.',
+    functionalRequirements: ['Shorten a URL'],
+    nonFunctionalRequirements: ['p99 under 100 ms'],
+    constraints: ['No new database'],
+    objectives: ['Cut read load'],
+  },
+  criteria: [
+    {
+      id: 'architecture',
+      name: 'Overall architecture',
+      description: 'Coherent.',
+      weight: 20,
+      mandatory: true,
+    },
+  ],
+}
+
+describe('attempt bindings', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('starts a standalone attempt and maps it to what the exam screen needs', async () => {
+    vi.mocked(StartAttempt).mockResolvedValueOnce(attemptDto)
+
+    const started = await startAttempt('c1', false)
+
+    expect(StartAttempt).toHaveBeenCalledWith('c1', '', false)
+    expect(started).toEqual(attempt)
+  })
+
+  it('asks the backend to discard the running attempt only when told to', async () => {
+    vi.mocked(StartAttempt).mockResolvedValueOnce(attemptDto)
+
+    await startAttempt('c1', true)
+
+    expect(StartAttempt).toHaveBeenCalledWith('c1', '', true)
+  })
+
+  it('submits the diagram XML as drawio-xml', async () => {
+    vi.mocked(SubmitAttempt).mockResolvedValueOnce(attemptDto)
+
+    await submitAttempt('a1', '<mxGraphModel/>')
+
+    expect(DIAGRAM_CONTENT_TYPE).toBe('drawio-xml')
+    expect(SubmitAttempt).toHaveBeenCalledWith('a1', 'drawio-xml', '<mxGraphModel/>')
+  })
+
+  it('discards an attempt', async () => {
+    vi.mocked(DiscardAttempt).mockResolvedValueOnce()
+
+    await discardAttempt('a1')
+
+    expect(DiscardAttempt).toHaveBeenCalledWith('a1')
+  })
+
+  it('reads an attempt', async () => {
+    vi.mocked(GetAttempt).mockResolvedValueOnce(attemptDto)
+
+    expect(await getAttempt('a1')).toEqual(attempt)
+    expect(GetAttempt).toHaveBeenCalledWith('a1')
+  })
+
+  it('names the codes the exam screen switches on', () => {
+    expect(ATTEMPT_IN_PROGRESS).toBe('attempt_in_progress')
+    expect(SUBMISSION_TOO_LATE).toBe('submission_too_late')
+    expect(SUBMISSION_TOO_LARGE).toBe('submission_too_large')
+  })
+
+  it('explains a diagram that is too large', () => {
+    expect(exerciseErrorMessage(JSON.stringify({ code: 'submission_too_large' }))).toBe(
+      'The diagram is too large to submit. Remove some elements.',
+    )
+  })
+
+  it('explains a submission that arrived after the time was over', () => {
+    expect(exerciseErrorMessage(JSON.stringify({ code: 'submission_too_late' }))).toBe(
+      'The time was over and the exam could not be submitted.',
+    )
   })
 })

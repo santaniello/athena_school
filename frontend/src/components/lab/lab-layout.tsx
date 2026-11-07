@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { PanelLeft, PanelRight } from 'lucide-react'
 import type { PanelImperativeHandle } from 'react-resizable-panels'
 import { Badge } from '@/components/ui/badge'
@@ -29,6 +29,8 @@ interface LabLayoutProps {
   hintsLeft: number
   // True once the board has content.
   canFinish: boolean
+  // The board: the diagram editor, supplied by the caller.
+  board: ReactNode
   onExpire: () => void
   onAskHint: () => void
   onFinish: () => void
@@ -54,6 +56,7 @@ function LabLayout({
   hints,
   hintsLeft,
   canFinish,
+  board,
   onExpire,
   onAskHint,
   onFinish,
@@ -172,11 +175,8 @@ function LabLayout({
           // Stryker disable next-line ObjectLiteral,StringLiteral: layout style, no layout engine in jsdom, checked by eye in the dev preview.
           style={{ overflow: 'hidden' }}
         >
-          <section
-            aria-label="Board"
-            className="flex h-full items-center justify-center bg-muted/30 p-6 text-center text-sm text-muted-foreground"
-          >
-            The diagram editor will appear here.
+          <section aria-label="Board" className="relative h-full bg-muted/30">
+            {board}
           </section>
         </ResizablePanel>
         <ResizableHandle className={HANDLE_CLASSES} />

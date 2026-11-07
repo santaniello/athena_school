@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/select'
 import { ChallengeRow } from '@/components/challenge-row'
 import { GenerateChallengeDialog } from '@/components/generate-challenge-dialog'
+import { StartExamDialog, type ExamToStart } from '@/components/lab/start-exam-dialog'
 import { useChallengeCatalog } from '@/hooks/use-challenge-catalog'
 import {
   DIFFICULTY_LABELS,
@@ -25,6 +26,8 @@ import {
 interface ArchitectureLabScreenProps {
   // The profile's experience level, which preselects the generation difficulty.
   experienceLevel?: string
+  // The user confirmed the rules of an exam; the shell opens the exam screen.
+  onStartExam: (challenge: ExamToStart) => void
 }
 
 const ALL = 'all'
@@ -38,14 +41,16 @@ function plural(count: number, noun: string): string {
 // The Architecture Lab's entry screen: the user's challenges with search,
 // filters and progress at a glance, plus the Generate challenge with AI
 // action. Everything shown, statuses and counts included, comes from the
-// backend. Starting an exam arrives with the diagram editor. See
-// specs/phases/phase-03-architecture-lab/07-challenge-catalog-ui.md.
-function ArchitectureLabScreen({ experienceLevel }: ArchitectureLabScreenProps) {
+// backend. Start opens the exam rules; confirming them hands the challenge to
+// the shell. See specs/phases/phase-03-architecture-lab/07-challenge-catalog-ui.md
+// and 10-diagram-workspace.md.
+function ArchitectureLabScreen({ experienceLevel, onStartExam }: ArchitectureLabScreenProps) {
   const [filter, setFilter] = useState<Required<CatalogFilter>>({ ...NO_FILTER })
   const { catalog, loading, error, reload } = useChallengeCatalog(filter)
   const [topics, setTopics] = useState<string[]>([])
   const [dialogOpen, setDialogOpen] = useState(false)
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
+  const [pendingExam, setPendingExam] = useState<ExamToStart | null>(null)
 
   const filtersActive = Object.values(filter).some((value) => value !== '')
 
@@ -140,7 +145,12 @@ function ArchitectureLabScreen({ experienceLevel }: ArchitectureLabScreenProps) 
         ) : items.length > 0 ? (
           <ul className="divide-y divide-border rounded-lg border border-border">
             {items.map((item) => (
-              <ChallengeRow key={item.id} item={item} highlighted={item.id === highlightedId} />
+              <ChallengeRow
+                key={item.id}
+                item={item}
+                highlighted={item.id === highlightedId}
+                onStart={setPendingExam}
+              />
             ))}
           </ul>
         ) : filtersActive ? (
@@ -170,6 +180,15 @@ function ArchitectureLabScreen({ experienceLevel }: ArchitectureLabScreenProps) 
         onClose={() => setDialogOpen(false)}
         onGenerated={handleGenerated}
         onGeneratedAfterClose={handleGeneratedAfterClose}
+      />
+
+      <StartExamDialog
+        challenge={pendingExam}
+        onCancel={() => setPendingExam(null)}
+        onConfirm={(challenge) => {
+          setPendingExam(null)
+          onStartExam(challenge)
+        }}
       />
     </div>
   )

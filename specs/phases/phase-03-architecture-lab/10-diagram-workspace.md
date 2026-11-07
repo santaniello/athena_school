@@ -89,27 +89,28 @@ This is the first time the user can take an exam. Evaluation does not exist yet
   diagram editor" tooltip is removed.
 - All UI text is in English.
 
-No new backend and no new binding: every call exists from [3.4](04-exercise-service.md). If the
-spike shows a gap in the attempt API, this spec and 3.4 are corrected first.
+No new binding: every call exists from [3.4](04-exercise-service.md). One gap was found while
+implementing: no binding exposed the challenge statement, so `AttemptView` and `AttemptDTO` now
+carry it (`statement`: scenario and the four lists), and 3.4 was corrected in the same change.
 
 ## Tasks
 
 Each slice is TDD (Vitest), keeps the build green and is committed on its own. The editor is
 faked in the tests behind the wrapper's interface.
 
-- [ ] `lib/exercise.ts` wrappers and error mapping
-- [ ] `diagram-editor` wrapper: ready, change, connection lost and restored events
-- [ ] `start-exam-dialog` and the catalog's Start enabled
-- [ ] `useExam`: preparing → create the attempt on ready → running; editor failure path with no
+- [x] `lib/exercise.ts` wrappers and error mapping
+- [x] `diagram-editor` wrapper: ready, change, connection lost and restored events
+- [x] `start-exam-dialog` and the catalog's Start enabled
+- [x] `useExam`: preparing → create the attempt on ready → running; editor failure path with no
       attempt
-- [ ] In-progress conflict dialog and `DiscardInProgress` retry
-- [ ] Finish confirmation and `SubmitAttempt` with the latest XML; too-large error keeps the exam
-- [ ] Expiry: submit with content, discard when empty, too-late message
-- [ ] Leave and sidebar navigation guard discarding the attempt
-- [ ] Connection-lost banner
-- [ ] After submitting: "Diagram submitted." with Back to catalog (replaced by the evaluation stage
+- [x] In-progress conflict dialog and `DiscardInProgress` retry
+- [x] Finish confirmation and `SubmitAttempt` with the latest XML; too-large error keeps the exam
+- [x] Expiry: submit with content, discard when empty, too-late message
+- [x] Leave and sidebar navigation guard discarding the attempt
+- [x] Connection-lost banner
+- [x] After submitting: "Diagram submitted." with Back to catalog (replaced by the evaluation stage
       in 3.11)
-- [ ] Docs: CHANGELOG, README and `lib/documentation.ts` describe the exam
+- [x] Docs: CHANGELOG, README and `lib/documentation.ts` describe the exam
 
 ## Acceptance Criteria
 

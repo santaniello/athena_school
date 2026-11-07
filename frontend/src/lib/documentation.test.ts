@@ -64,9 +64,15 @@ describe('DOCUMENTATION architecture lab', () => {
     expect(text.join('\n')).toContain('Generate challenge with AI')
   })
 
-  it('says that starting an exam waits for the diagram editor, so it does not promise it', () => {
-    const text = (lab?.body ?? []).join('\n')
-    expect(text).toContain('diagram editor')
+  it('explains how the exam works and that submitting is not the end of it yet', () => {
+    const text = [
+      ...(lab?.body ?? []),
+      ...(lab?.topics.map((topic) => topic.description) ?? []),
+    ].join('\n')
+    expect(text).toContain('internet connection')
+    expect(text).toContain('no pause')
+    expect(text).toContain('leaving discards')
+    expect(text).not.toContain('Start stays disabled')
   })
 })
 
