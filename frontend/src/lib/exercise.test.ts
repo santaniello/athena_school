@@ -6,7 +6,9 @@ import {
   GetAttempt,
   ListChallengeCatalog,
   ListChallengeTopics,
+  ListHints,
   ListSessionsForGeneration,
+  RequestHint,
   StartAttempt,
   SubmitAttempt,
 } from '../../wailsjs/go/desktop/App'
@@ -28,7 +30,9 @@ import {
   getAttempt,
   listChallengeCatalog,
   listChallengeTopics,
+  listHints,
   listSessionsForGeneration,
+  requestHint,
   startAttempt,
   submitAttempt,
 } from './exercise'
@@ -43,6 +47,8 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   SubmitAttempt: vi.fn(),
   DiscardAttempt: vi.fn(),
   GetAttempt: vi.fn(),
+  RequestHint: vi.fn(),
+  ListHints: vi.fn(),
 }))
 
 const item = {
@@ -340,5 +346,39 @@ describe('attempt bindings', () => {
     expect(exerciseErrorMessage(JSON.stringify({ code: 'submission_too_late' }))).toBe(
       'The time was over and the exam could not be submitted.',
     )
+  })
+})
+
+describe('hint bindings', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const hintDto = (id: string, content: string) =>
+    new desktop.HintDTO({
+      id,
+      attemptId: 'a1',
+      position: 1,
+      content,
+      createdAt: '2026-11-07T09:15:00Z',
+    })
+
+  it('asks for a hint with the attempt and the board XML and maps it to a message', async () => {
+    vi.mocked(RequestHint).mockResolvedValueOnce(hintDto('h1', 'What if the cache is down?'))
+
+    const hint = await requestHint('a1', '<mxGraphModel/>')
+
+    expect(RequestHint).toHaveBeenCalledExactlyOnceWith('a1', '<mxGraphModel/>')
+    expect(hint).toEqual({ id: 'h1', text: 'What if the cache is down?' })
+  })
+
+  it('lists the hints already given, in order', async () => {
+    vi.mocked(ListHints).mockResolvedValueOnce([hintDto('h1', 'first'), hintDto('h2', 'second')])
+
+    const hints = await listHints('a1')
+
+    expect(ListHints).toHaveBeenCalledExactlyOnceWith('a1')
+    expect(hints).toEqual([
+      { id: 'h1', text: 'first' },
+      { id: 'h2', text: 'second' },
+    ])
   })
 })

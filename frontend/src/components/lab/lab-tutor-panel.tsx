@@ -4,13 +4,18 @@ import { MAX_HINTS, type LabHint } from '@/lib/lab'
 interface LabTutorPanelProps {
   hints: LabHint[]
   hintsLeft: number
+  // A request is running: the button shows progress and cannot be pressed.
+  asking: boolean
+  // The last request failed and spent nothing.
+  failed: boolean
   onAskHint: () => void
 }
 
 // Tutor Athena during the exam: empty until asked. The user can only request
 // a hint; there is no message input. The hint behavior itself is owned by the
-// caller. See specs/phases/phase-03-architecture-lab/08-lab-layout-sketch.md.
-function LabTutorPanel({ hints, hintsLeft, onAskHint }: LabTutorPanelProps) {
+// caller. See specs/phases/phase-03-architecture-lab/08-lab-layout-sketch.md
+// and 10-01-tutor-hints.md.
+function LabTutorPanel({ hints, hintsLeft, asking, failed, onAskHint }: LabTutorPanelProps) {
   return (
     <section className="flex flex-col gap-3 p-4">
       <h3 className="text-sm font-semibold text-foreground">Tutor Athena</h3>
@@ -20,11 +25,16 @@ function LabTutorPanel({ hints, hintsLeft, onAskHint }: LabTutorPanelProps) {
           {hintsLeft > 0 ? `Hints left: ${hintsLeft} of ${MAX_HINTS}` : 'No hints left'}
         </span>
         {hintsLeft > 0 && (
-          <Button type="button" size="sm" variant="outline" onClick={onAskHint}>
-            Ask for a hint
+          <Button type="button" size="sm" variant="outline" disabled={asking} onClick={onAskHint}>
+            {asking ? 'Asking the tutor...' : 'Ask for a hint'}
           </Button>
         )}
       </div>
+      {failed && (
+        <p role="alert" className="text-sm text-destructive">
+          Could not get a hint. Try again.
+        </p>
+      )}
       {hints.length > 0 && (
         <div role="log" aria-label="Hints" className="flex flex-col gap-2">
           {hints.map((hint) => (
