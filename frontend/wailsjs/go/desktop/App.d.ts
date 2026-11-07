@@ -53,6 +53,8 @@ export function ListChallengeTopics():Promise<Array<string>>;
 
 export function ListFolders():Promise<Array<desktop.FolderResult>>;
 
+export function ListHints(arg1:string):Promise<Array<desktop.HintDTO>>;
+
 export function ListSelectableModels():Promise<desktop.SelectableModelsResult>;
 
 export function ListSessionSources(arg1:string):Promise<Array<desktop.SessionSourceResult>>;
@@ -74,6 +76,8 @@ export function PreviewLinkImport(arg1:string,arg2:string):Promise<desktop.Impor
 export function RemoveSessionSource(arg1:string,arg2:string):Promise<void>;
 
 export function RenameFolder(arg1:string,arg2:string):Promise<void>;
+
+export function RequestHint(arg1:string,arg2:string):Promise<desktop.HintDTO>;
 
 export function RequestOpeningTurn(arg1:string,arg2:string):Promise<void>;
 
