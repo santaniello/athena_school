@@ -2,10 +2,12 @@ package architecture
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSummarizeDiagram_aMalformedDiagramIsInvalid(t *testing.T) {
@@ -58,9 +60,9 @@ func TestSummarizeDiagram_aDecompressionBombIsInvalid(t *testing.T) {
 }
 
 func TestSummarizeDiagram_stopsAtTheCellCap(t *testing.T) {
-	// Given a diagram with one cell more than the cap
+	// Given a diagram with one cell more than the cap, roots included
 	var cells strings.Builder
-	for i := 0; i <= MaxCells; i++ {
+	for i := 0; i < MaxCells-1; i++ {
 		fmt.Fprintf(&cells, `<mxCell id="c%d" parent="1" vertex="1" value="n%d"/>`, i, i)
 	}
 
@@ -97,4 +99,72 @@ func TestSummarizeDiagram_doesNotResolveEntities(t *testing.T) {
 	// Then it is rejected and nothing from the file system is read
 	assert.ErrorIs(t, err, ErrInvalidDiagram)
 	assert.NotContains(t, fmt.Sprintf("%v", summary), "root:")
+}
+
+func TestSummarizeDiagram_aCompressedPageMustHoldAGraphModelDirectly(t *testing.T) {
+	// Given a compressed page that itself holds another compressed page
+	inner := `<mxfile><diagram>` + compressDiagram(t, wrapModel(sampleCells)) + `</diagram></mxfile>`
+	file := `<mxfile><diagram>` + compressDiagram(t, inner) + `</diagram></mxfile>`
+
+	// When summarizing it
+	_, err := SummarizeDiagram(file)
+
+	// Then the nesting is rejected instead of being inflated layer by layer
+	assert.ErrorIs(t, err, ErrInvalidDiagram)
+}
+
+func TestSummarizeDiagram_acceptsAPageThatInflatesToExactlyTheLimit(t *testing.T) {
+	// Given a compressed page whose inflated text is exactly MaxDecompressedSize bytes
+	model := wrapModel(sampleCells)
+	escapedLength := func(padding int) int {
+		return len(strings.ReplaceAll(url.QueryEscape(model+"<!--"+strings.Repeat("A", padding)+"-->"), "+", "%20"))
+	}
+	padding := MaxDecompressedSize - escapedLength(0)
+	require.Equal(t, MaxDecompressedSize, escapedLength(padding))
+	file := `<mxfile><diagram>` + compressDiagram(t, model+"<!--"+strings.Repeat("A", padding)+"-->") + `</diagram></mxfile>`
+
+	// When summarizing it
+	summary, err := SummarizeDiagram(file)
+
+	// Then it is read
+	require.NoError(t, err)
+	assert.Len(t, summary.Components, 3)
+}
+
+func TestSummarizeDiagram_aWrapperDoesNotLendItsLabelToTheNextCell(t *testing.T) {
+	// Given an object followed by a plain cell
+	cells := `<object label="Queue" id="q"><mxCell parent="1" vertex="1"/></object>
+<mxCell id="p" parent="1" vertex="1" value="Plain"/>`
+
+	// When summarizing it
+	summary, err := SummarizeDiagram(wrapFile(cells))
+
+	// Then the plain cell keeps its own label
+	require.NoError(t, err)
+	assert.Equal(t, []SummaryComponent{{Number: 1, Label: "Queue"}, {Number: 2, Label: "Plain"}}, summary.Components)
+}
+
+func TestSummarizeDiagram_survivesAParentCycleAmongAncestors(t *testing.T) {
+	// Given a labeled cell whose ancestors loop among unlabeled cells
+	cells := `<mxCell id="a" parent="b" vertex="1" value="A"/>
+<mxCell id="b" parent="c" vertex="1" value=""/><mxCell id="c" parent="b" vertex="1" value=""/>`
+
+	// When summarizing it
+	summary, err := SummarizeDiagram(wrapFile(cells))
+
+	// Then it terminates with the labeled component at the top level
+	require.NoError(t, err)
+	assert.Equal(t, []SummaryComponent{{Number: 1, Label: "A"}}, summary.Components)
+}
+
+func TestSummarizeDiagram_aComponentInAParentCycleWithItselfHasNoContainer(t *testing.T) {
+	// Given a labeled cell whose parent chain leads back to itself
+	cells := `<mxCell id="a" parent="b" vertex="1" value="A"/><mxCell id="b" parent="a" vertex="1" value=""/>`
+
+	// When summarizing it
+	summary, err := SummarizeDiagram(wrapFile(cells))
+
+	// Then it is not its own container
+	require.NoError(t, err)
+	assert.Equal(t, []SummaryComponent{{Number: 1, Label: "A"}}, summary.Components)
 }

@@ -65,10 +65,10 @@ func (e *DiagramEvaluator) Evaluate(ctx context.Context, input domainexercise.Ev
 }
 
 type evaluationAnswer struct {
-	Summary         string            `json:"summary"`
-	Strengths       []string          `json:"strengths"`
-	Gaps            []string          `json:"gaps"`
-	Recommendations []string          `json:"recommendations"`
+	Summary         *string           `json:"summary"`
+	Strengths       *[]string         `json:"strengths"`
+	Gaps            *[]string         `json:"gaps"`
+	Recommendations *[]string         `json:"recommendations"`
 	Criteria        []criterionAnswer `json:"criteria"`
 }
 
@@ -77,7 +77,7 @@ type criterionAnswer struct {
 	Level                *int   `json:"level"`
 	Justification        string `json:"justification"`
 	Evidence             string `json:"evidence"`
-	InsufficientEvidence bool   `json:"insufficientEvidence"`
+	InsufficientEvidence *bool  `json:"insufficientEvidence"`
 }
 
 func invalidEvaluation(format string, args ...any) error {
@@ -90,6 +90,9 @@ func parseEvaluation(content string, rubric domainexercise.RubricVersion) (domai
 	var answer evaluationAnswer
 	if err := json.Unmarshal([]byte(stripCodeFence(content)), &answer); err != nil {
 		return domainexercise.EvaluatorOutput{}, invalidEvaluation("the answer is not the expected JSON: %v", err)
+	}
+	if answer.Summary == nil || answer.Strengths == nil || answer.Gaps == nil || answer.Recommendations == nil {
+		return domainexercise.EvaluatorOutput{}, invalidEvaluation("the answer is missing summary, strengths, gaps or recommendations")
 	}
 	if len(answer.Criteria) == 0 {
 		return domainexercise.EvaluatorOutput{}, invalidEvaluation("the answer has no criteria")
@@ -104,17 +107,17 @@ func parseEvaluation(content string, rubric domainexercise.RubricVersion) (domai
 		if !known {
 			return domainexercise.EvaluatorOutput{}, invalidEvaluation("unknown criterion %q", item.CriterionKey)
 		}
-		if item.Level == nil {
-			return domainexercise.EvaluatorOutput{}, invalidEvaluation("criterion %q has no level", item.CriterionKey)
+		if item.Level == nil || item.InsufficientEvidence == nil {
+			return domainexercise.EvaluatorOutput{}, invalidEvaluation("criterion %q has no level or insufficientEvidence", item.CriterionKey)
 		}
 		results = append(results, domainexercise.CriterionResult{
 			CriterionID: id, Level: *item.Level, Justification: item.Justification,
-			Evidence: item.Evidence, InsufficientEvidence: item.InsufficientEvidence,
+			Evidence: item.Evidence, InsufficientEvidence: *item.InsufficientEvidence,
 		})
 	}
 	return domainexercise.EvaluatorOutput{
-		Summary: answer.Summary, Strengths: answer.Strengths, Gaps: answer.Gaps,
-		Recommendations: answer.Recommendations, Results: results,
+		Summary: *answer.Summary, Strengths: *answer.Strengths, Gaps: *answer.Gaps,
+		Recommendations: *answer.Recommendations, Results: results,
 	}, nil
 }
 

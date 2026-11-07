@@ -93,7 +93,7 @@ func SummarizeDiagram(content string) (DiagramSummary, error) {
 	if strings.TrimSpace(content) == "" {
 		return DiagramSummary{}, ErrEmptyDiagram
 	}
-	cells, err := readCells(xml.NewDecoder(strings.NewReader(content)))
+	cells, err := readCells(xml.NewDecoder(strings.NewReader(content)), true)
 	if err != nil {
 		return DiagramSummary{}, err
 	}
@@ -109,8 +109,10 @@ func invalidDiagram(cause error) error {
 }
 
 // readCells finds the first diagram page and returns its cells. A page either
-// holds an mxGraphModel or the compressed text of one.
-func readCells(dec *xml.Decoder) ([]diagramCell, error) {
+// holds an mxGraphModel or the compressed text of one. The inflated text of a
+// compressed page must be an mxGraphModel itself (allowCompressed is false),
+// so layers of compression cannot be nested past the single inflation cap.
+func readCells(dec *xml.Decoder, allowCompressed bool) ([]diagramCell, error) {
 	var compressed strings.Builder
 	inDiagram := false
 	for {
@@ -127,6 +129,9 @@ func readCells(dec *xml.Decoder) ([]diagramCell, error) {
 			case "mxGraphModel":
 				return readModel(dec)
 			case "diagram":
+				if !allowCompressed {
+					return nil, invalidDiagram(errors.New("a compressed page cannot hold another page"))
+				}
 				inDiagram = true
 			}
 		case xml.CharData:
@@ -160,7 +165,7 @@ func readCompressed(text string) ([]diagramCell, error) {
 	if err != nil {
 		return nil, invalidDiagram(err)
 	}
-	return readCells(xml.NewDecoder(strings.NewReader(model)))
+	return readCells(xml.NewDecoder(strings.NewReader(model)), false)
 }
 
 // readModel reads the cells of an mxGraphModel whose start tag was consumed.
@@ -311,7 +316,10 @@ func assignContainers(cells []diagramCell, byID map[string]diagramCell, numbers 
 		parent := cell.parent
 		for step := 0; step < len(cells); step++ {
 			if container := numbers[parent]; container != 0 {
-				summary.Components[number-1].Container = container
+				// A cycle can lead back to the component itself.
+				if container != number {
+					summary.Components[number-1].Container = container
+				}
 				break
 			}
 			next, ok := byID[parent]

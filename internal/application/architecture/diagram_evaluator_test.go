@@ -3,6 +3,7 @@ package architecture
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -82,14 +83,19 @@ func TestDiagramEvaluator_Evaluate_acceptsAnswerInAMarkdownFence(t *testing.T) {
 func TestDiagramEvaluator_Evaluate_badModelOutputIsAnInvalidEvaluation(t *testing.T) {
 	for name, answer := range map[string]string{
 		"not json":              "I think it is good.",
-		"no criteria":           `{"summary": "x"}`,
-		"empty criteria":        `{"criteria": []}`,
+		"no criteria":           `{"summary": "x", "strengths": [], "gaps": [], "recommendations": []}`,
+		"empty criteria":        `{"summary": "x", "strengths": [], "gaps": [], "recommendations": [], "criteria": []}`,
 		"unknown criterion":     `{"criteria": [{"criterionKey": "speed", "level": 1, "justification": "x"}]}`,
 		"missing criterion key": `{"criteria": [{"level": 1, "justification": "x"}]}`,
 		"missing level":         `{"criteria": [{"criterionKey": "scalability", "justification": "x"}]}`,
 		"fractional level":      `{"criteria": [{"criterionKey": "scalability", "level": 2.5, "justification": "x"}]}`,
 		"level as text":         `{"criteria": [{"criterionKey": "scalability", "level": "high", "justification": "x"}]}`,
 		"trailing text":         validEvaluation + " thanks",
+		"no summary":            strings.Replace(validEvaluation, `"summary": "A solid start.",`, "", 1),
+		"no strengths":          strings.Replace(validEvaluation, `"strengths": ["Clear API"],`, "", 1),
+		"no gaps":               strings.Replace(validEvaluation, `"gaps": ["No cache failover"],`, "", 1),
+		"no recommendations":    strings.Replace(validEvaluation, `"recommendations": ["Add replicas"],`, "", 1),
+		"no insufficient flag":  strings.Replace(validEvaluation, `, "insufficientEvidence": false`, "", 1),
 	} {
 		t.Run(name, func(t *testing.T) {
 			// Given a provider that answers with bad output
@@ -168,4 +174,22 @@ func TestDiagramEvaluator_diagramErrorsCarryAUserFacingReason(t *testing.T) {
 	require.ErrorAs(t, ErrEmptyDiagram, &empty)
 	assert.Equal(t, "The diagram could not be read.", invalid.FailureReason())
 	assert.Equal(t, "The diagram is empty.", empty.FailureReason())
+}
+
+func TestDiagramEvaluator_Evaluate_evidenceAndEmptyListsAreOptionalValues(t *testing.T) {
+	// Given an answer with empty lists and no evidence quote
+	answer := `{"summary": "ok", "strengths": [], "gaps": [], "recommendations": [],
+	  "criteria": [
+	    {"criterionKey": "scalability", "level": 2, "justification": "j", "insufficientEvidence": false},
+	    {"criterionKey": "resilience", "level": 1, "justification": "j", "insufficientEvidence": false}]}`
+	provider := llmmocks.NewMockProvider(t)
+	input := testEvaluatorInput()
+	expectEvaluationCall(t, provider, input, "en").Return(domainllm.ChatResponse{Content: answer}, nil).Once()
+
+	// When evaluating
+	output, err := NewDiagramEvaluator(provider, fakeLanguage{code: "en"}).Evaluate(context.Background(), input)
+
+	// Then it is accepted
+	require.NoError(t, err)
+	assert.Empty(t, output.Results[0].Evidence)
 }
