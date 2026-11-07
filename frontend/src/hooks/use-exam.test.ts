@@ -1,11 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
-import { discardAttempt, startAttempt, submitAttempt, type Attempt } from '@/lib/exercise'
+import {
+  discardAttempt,
+  evaluateAttempt,
+  startAttempt,
+  submitAttempt,
+  type Attempt,
+  type Evaluation,
+} from '@/lib/exercise'
 import { useExam } from './use-exam'
 
 vi.mock('@/lib/exercise', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/exercise')>()
-  return { ...original, startAttempt: vi.fn(), submitAttempt: vi.fn(), discardAttempt: vi.fn() }
+  return {
+    ...original,
+    startAttempt: vi.fn(),
+    submitAttempt: vi.fn(),
+    discardAttempt: vi.fn(),
+    evaluateAttempt: vi.fn(),
+  }
 })
 
 const attempt: Attempt = {
@@ -22,6 +35,15 @@ const attempt: Attempt = {
     objectives: [],
   },
   criteria: [],
+}
+
+const evaluation: Evaluation = {
+  score: 72,
+  summary: 'Solid.',
+  strengths: [],
+  gaps: [],
+  recommendations: [],
+  results: [],
 }
 
 const EMPTY_XML =
@@ -51,6 +73,7 @@ describe('useExam', () => {
     vi.clearAllMocks()
     vi.mocked(submitAttempt).mockResolvedValue()
     vi.mocked(discardAttempt).mockResolvedValue()
+    vi.mocked(evaluateAttempt).mockResolvedValue(evaluation)
   })
   afterEach(() => vi.useRealTimers())
 
@@ -186,13 +209,123 @@ describe('useExam', () => {
     expect(result.current.hasContent).toBe(false)
   })
 
-  it('submits the XML the editor returns and shows the submitted state', async () => {
+  it('submits the XML the editor returns, then evaluates the attempt', async () => {
     const { result } = await running()
 
     await act(async () => result.current.submit(async () => FULL_XML))
 
     expect(submitAttempt).toHaveBeenCalledExactlyOnceWith('a1', FULL_XML)
-    expect(result.current.phase).toBe('submitted')
+    expect(evaluateAttempt).toHaveBeenCalledExactlyOnceWith('a1')
+    expect(result.current.phase).toBe('evaluated')
+    expect(result.current.evaluation).toBe(evaluation)
+  })
+
+  it('is evaluating while the evaluation is in flight', async () => {
+    const { result } = await running()
+    vi.mocked(evaluateAttempt).mockReturnValue(new Promise(() => {}))
+
+    act(() => {
+      void result.current.submit(async () => FULL_XML)
+    })
+
+    await vi.waitFor(() => expect(result.current.phase).toBe('evaluating'))
+    expect(result.current.evaluation).toBeNull()
+  })
+
+  it('does not evaluate a diagram that could not be submitted', async () => {
+    const { result } = await running()
+    vi.mocked(submitAttempt).mockRejectedValue(coded('submission_too_large'))
+
+    await act(async () => result.current.submit(async () => FULL_XML))
+
+    expect(evaluateAttempt).not.toHaveBeenCalled()
+  })
+
+  it('shows why the evaluation failed and keeps the submission', async () => {
+    const { result, onExit } = await running()
+    vi.mocked(evaluateAttempt).mockRejectedValue(coded('empty_diagram'))
+
+    await act(async () => result.current.submit(async () => FULL_XML))
+
+    expect(result.current.phase).toBe('evaluationFailed')
+    expect(result.current.message).toBe('The diagram is empty.')
+    expect(result.current.evaluation).toBeNull()
+    expect(submitAttempt).toHaveBeenCalledOnce()
+    expect(discardAttempt).not.toHaveBeenCalled()
+    expect(onExit).not.toHaveBeenCalled()
+  })
+
+  it('evaluates again on request, without submitting again, and can succeed', async () => {
+    const { result } = await running()
+    vi.mocked(evaluateAttempt).mockRejectedValueOnce(coded('internal'))
+    await act(async () => result.current.submit(async () => FULL_XML))
+
+    await act(async () => result.current.retryEvaluation())
+
+    expect(evaluateAttempt).toHaveBeenCalledTimes(2)
+    expect(submitAttempt).toHaveBeenCalledOnce()
+    expect(result.current.phase).toBe('evaluated')
+    expect(result.current.message).toBeNull()
+    expect(result.current.evaluation).toBe(evaluation)
+  })
+
+  it('is evaluating again while a retry is in flight', async () => {
+    const { result } = await running()
+    vi.mocked(evaluateAttempt).mockRejectedValueOnce(coded('internal'))
+    await act(async () => result.current.submit(async () => FULL_XML))
+    vi.mocked(evaluateAttempt).mockReturnValue(new Promise(() => {}))
+
+    act(() => {
+      void result.current.retryEvaluation()
+    })
+
+    await vi.waitFor(() => expect(result.current.phase).toBe('evaluating'))
+    expect(result.current.message).toBeNull()
+  })
+
+  it('ignores a retry unless the evaluation failed', async () => {
+    const { result } = await running()
+    await act(async () => result.current.retryEvaluation())
+    expect(evaluateAttempt).not.toHaveBeenCalled()
+
+    await act(async () => result.current.submit(async () => FULL_XML))
+    await act(async () => result.current.retryEvaluation())
+
+    expect(evaluateAttempt).toHaveBeenCalledOnce()
+  })
+
+  it('discards the attempt and drops the result when the user leaves while it is evaluated', async () => {
+    const { result, onExit } = await running()
+    let resolve: (value: Evaluation) => void = () => {}
+    vi.mocked(evaluateAttempt).mockReturnValue(new Promise<Evaluation>((r) => (resolve = r)))
+    act(() => {
+      void result.current.submit(async () => FULL_XML)
+    })
+    await vi.waitFor(() => expect(result.current.phase).toBe('evaluating'))
+
+    await act(async () => result.current.leave())
+    await act(async () => resolve(evaluation))
+
+    expect(discardAttempt).toHaveBeenCalledExactlyOnceWith('a1')
+    expect(onExit).toHaveBeenCalledOnce()
+    expect(result.current.phase).toBe('evaluating')
+    expect(result.current.evaluation).toBeNull()
+  })
+
+  it('drops a failure that arrives after the user left', async () => {
+    const { result } = await running()
+    let reject: (reason: Error) => void = () => {}
+    vi.mocked(evaluateAttempt).mockReturnValue(new Promise<Evaluation>((_, r) => (reject = r)))
+    act(() => {
+      void result.current.submit(async () => FULL_XML)
+    })
+    await vi.waitFor(() => expect(result.current.phase).toBe('evaluating'))
+    await act(async () => result.current.leave())
+
+    await act(async () => reject(coded('internal')))
+
+    expect(result.current.phase).toBe('evaluating')
+    expect(result.current.message).toBeNull()
   })
 
   it('is submitting while the submission is in flight', async () => {
@@ -236,7 +369,7 @@ describe('useExam', () => {
     await act(async () => result.current.submit(async () => FULL_XML))
 
     expect(result.current.message).toBeNull()
-    expect(result.current.phase).toBe('submitted')
+    expect(result.current.phase).toBe('evaluated')
   })
 
   it('returns to the catalog with a notice when the submission came too late', async () => {
@@ -256,7 +389,7 @@ describe('useExam', () => {
     await act(async () => result.current.expire(async () => FULL_XML))
 
     expect(submitAttempt).toHaveBeenCalledExactlyOnceWith('a1', FULL_XML)
-    expect(result.current.phase).toBe('submitted')
+    expect(result.current.phase).toBe('evaluated')
   })
 
   it('discards at expiry when the board is empty, and says so', async () => {
@@ -343,9 +476,43 @@ describe('useExam', () => {
     vi.mocked(submitAttempt).mockRejectedValueOnce(coded('submission_too_large'))
     await act(async () => result.current.submit(async () => FULL_XML))
     expect(result.current.message).not.toBeNull()
+    vi.mocked(submitAttempt).mockReturnValue(new Promise(() => {}))
 
-    await act(async () => result.current.expire(async () => FULL_XML))
+    act(() => {
+      void result.current.expire(async () => FULL_XML)
+    })
 
+    await vi.waitFor(() => expect(result.current.phase).toBe('submitting'))
+    expect(result.current.message).toBeNull()
+  })
+
+  it('clears an earlier message while the next submission is in flight', async () => {
+    const { result } = await running()
+    vi.mocked(submitAttempt).mockRejectedValueOnce(coded('submission_too_large'))
+    await act(async () => result.current.submit(async () => FULL_XML))
+    vi.mocked(submitAttempt).mockReturnValue(new Promise(() => {}))
+
+    act(() => {
+      void result.current.submit(async () => FULL_XML)
+    })
+
+    await vi.waitFor(() => expect(result.current.phase).toBe('submitting'))
+    expect(result.current.message).toBeNull()
+  })
+
+  it('ignores a submission error that arrives after the user left', async () => {
+    const { result } = await running()
+    let reject: (reason: Error) => void = () => {}
+    vi.mocked(submitAttempt).mockReturnValue(new Promise<void>((_, r) => (reject = r)))
+    act(() => {
+      void result.current.submit(async () => FULL_XML)
+    })
+    await vi.waitFor(() => expect(submitAttempt).toHaveBeenCalled())
+    await act(async () => result.current.leave())
+
+    await act(async () => reject(coded('submission_too_large')))
+
+    expect(result.current.phase).toBe('submitting')
     expect(result.current.message).toBeNull()
   })
 
@@ -369,7 +536,7 @@ describe('useExam', () => {
     expect(discardAttempt).toHaveBeenCalledExactlyOnceWith('a1')
   })
 
-  it('does not report submitted when the user left before the submission finished', async () => {
+  it('does not start the evaluation when the user left before the submission finished', async () => {
     const { result } = await running()
     let resolve: () => void = () => {}
     vi.mocked(submitAttempt).mockReturnValue(new Promise<void>((r) => (resolve = r)))
@@ -385,7 +552,8 @@ describe('useExam', () => {
       await sending
     })
 
-    expect(result.current.phase).not.toBe('submitted')
+    expect(result.current.phase).toBe('submitting')
+    expect(evaluateAttempt).not.toHaveBeenCalled()
   })
 
   it('leaves only once when asked twice', async () => {

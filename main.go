@@ -151,6 +151,13 @@ func main() {
 		systemClock{},
 	)
 
+	evaluationService := applicationexercise.NewEvaluationService(
+		challengeRepo, rubricRepo, sqlite.NewAttemptRepository(db), sqlite.NewSubmissionRepository(db),
+		sqlite.NewEvaluationRepository(db),
+		applicationarchitecture.NewDiagramEvaluator(llmClient, exercisesource.NewProfiles(profiles)),
+		transactor, settingsService, systemClock{},
+	)
+
 	challengeCatalog := applicationexercise.NewCatalogService(challengeRepo, sqlite.NewAttemptRecordRepository(db))
 	sessionService := applicationexercise.NewSessionService(sqlite.NewSessionOptionRepository(db))
 
@@ -164,6 +171,7 @@ func main() {
 		desktop.WithAttemptService(attemptService),
 		desktop.WithGenerationService(generationService),
 		desktop.WithHintService(hintService),
+		desktop.WithEvaluationService(evaluationService),
 		desktop.WithCatalogService(challengeCatalog),
 		desktop.WithSessionLister(sessionService),
 	)

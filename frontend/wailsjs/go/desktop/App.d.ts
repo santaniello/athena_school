@@ -21,9 +21,13 @@ export function DiscardAttempt(arg1:string):Promise<void>;
 
 export function DownloadExampleNote():Promise<string>;
 
+export function EvaluateAttempt(arg1:string):Promise<desktop.EvaluationDTO>;
+
 export function GenerateChallenge(arg1:string,arg2:string):Promise<desktop.ChallengeSummaryDTO>;
 
 export function GetAttempt(arg1:string):Promise<desktop.AttemptDTO>;
+
+export function GetEvaluation(arg1:string):Promise<desktop.EvaluationDTO>;
 
 export function GetKnowledgeIndexStatus():Promise<desktop.IndexStatusResult>;
 

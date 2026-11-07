@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   CancelChallengeGeneration,
   DiscardAttempt,
+  EvaluateAttempt,
   GenerateChallenge,
   GetAttempt,
+  GetEvaluation,
   ListChallengeCatalog,
   ListChallengeTopics,
   ListHints,
@@ -22,12 +24,15 @@ import {
   SUBMISSION_TOO_LATE,
   cancelChallengeGeneration,
   discardAttempt,
+  evaluateAttempt,
+  evaluationErrorMessage,
   exerciseErrorCode,
   difficultyForExperience,
   exerciseErrorMessage,
   formatSessionDate,
   generateChallenge,
   getAttempt,
+  getEvaluation,
   listChallengeCatalog,
   listChallengeTopics,
   listHints,
@@ -47,6 +52,8 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   SubmitAttempt: vi.fn(),
   DiscardAttempt: vi.fn(),
   GetAttempt: vi.fn(),
+  EvaluateAttempt: vi.fn(),
+  GetEvaluation: vi.fn(),
   RequestHint: vi.fn(),
   ListHints: vi.fn(),
 }))
@@ -380,5 +387,93 @@ describe('hint bindings', () => {
       { id: 'h1', text: 'first' },
       { id: 'h2', text: 'second' },
     ])
+  })
+})
+
+describe('evaluation bindings', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const dto = () =>
+    desktop.EvaluationDTO.createFrom({
+      attemptId: 'a1',
+      model: 'vendor/model-x',
+      score: 72,
+      summary: 'Solid.',
+      strengths: ['API'],
+      gaps: ['No failover'],
+      recommendations: ['Add replicas'],
+      results: [
+        {
+          criterionKey: 'scalability',
+          criterionName: 'Scalability',
+          level: 3,
+          justification: 'Cache shown.',
+          evidence: 'API -> Cache',
+          insufficientEvidence: false,
+        },
+        {
+          criterionKey: 'resilience',
+          criterionName: 'Resilience',
+          level: 0,
+          justification: 'Not shown.',
+          evidence: '',
+          insufficientEvidence: true,
+        },
+      ],
+      createdAt: '2026-11-07T10:00:00Z',
+    })
+
+  const expected = {
+    score: 72,
+    summary: 'Solid.',
+    strengths: ['API'],
+    gaps: ['No failover'],
+    recommendations: ['Add replicas'],
+    results: [
+      {
+        key: 'scalability',
+        name: 'Scalability',
+        level: 3,
+        justification: 'Cache shown.',
+        evidence: 'API -> Cache',
+        insufficientEvidence: false,
+      },
+      {
+        key: 'resilience',
+        name: 'Resilience',
+        level: 0,
+        justification: 'Not shown.',
+        evidence: '',
+        insufficientEvidence: true,
+      },
+    ],
+  }
+
+  it('evaluates the attempt and maps the result', async () => {
+    vi.mocked(EvaluateAttempt).mockResolvedValueOnce(dto())
+
+    const evaluation = await evaluateAttempt('a1')
+
+    expect(EvaluateAttempt).toHaveBeenCalledExactlyOnceWith('a1')
+    expect(evaluation).toEqual(expected)
+  })
+
+  it('reads the stored evaluation', async () => {
+    vi.mocked(GetEvaluation).mockResolvedValueOnce(dto())
+
+    const evaluation = await getEvaluation('a1')
+
+    expect(GetEvaluation).toHaveBeenCalledExactlyOnceWith('a1')
+    expect(evaluation).toEqual(expected)
+  })
+
+  it.each([
+    ['invalid_diagram', 'The diagram could not be read.'],
+    ['empty_diagram', 'The diagram is empty.'],
+    ['invalid_evaluation', 'The evaluator returned an invalid evaluation.'],
+    ['internal', 'The evaluator could not complete the evaluation.'],
+    ['', 'The evaluator could not complete the evaluation.'],
+  ])('explains an evaluation failure coded %s', (code, message) => {
+    expect(evaluationErrorMessage(JSON.stringify({ code }))).toBe(message)
   })
 })

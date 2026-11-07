@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	applicationarchitecture "github.com/santaniello/athena/internal/application/architecture"
 	applicationexercise "github.com/santaniello/athena/internal/application/exercise"
 	domainexercise "github.com/santaniello/athena/internal/domain/exercise"
 )
@@ -60,6 +61,18 @@ func WithHintService(hints hintGiver) Option {
 	return func(a *App) { a.hints = hints }
 }
 
+// attemptEvaluator is the use case behind the evaluation bindings (spec 3.11).
+type attemptEvaluator interface {
+	Evaluate(ctx context.Context, attemptID string) (domainexercise.Evaluation, error)
+	GetEvaluation(ctx context.Context, attemptID string) (domainexercise.Evaluation, error)
+	Criteria(ctx context.Context, attemptID string) ([]domainexercise.RubricCriterion, error)
+}
+
+// WithEvaluationService wires the evaluation of a submitted attempt.
+func WithEvaluationService(evaluations attemptEvaluator) Option {
+	return func(a *App) { a.evaluations = evaluations }
+}
+
 // Stable ExerciseError.Code values the frontend switches on.
 const (
 	exerciseCodeInvalidInput         = "invalid_input"
@@ -79,6 +92,11 @@ const (
 	exerciseCodeNoHintsLeft          = "no_hints_left"
 	exerciseCodeHintInProgress       = "hint_in_progress"
 	exerciseCodeGenerationInProgress = "generation_in_progress"
+	exerciseCodeInvalidDiagram       = "invalid_diagram"
+	exerciseCodeEmptyDiagram         = "empty_diagram"
+	exerciseCodeInvalidEvaluation    = "invalid_evaluation"
+	exerciseCodeAttemptNotEvaluable  = "attempt_not_evaluable"
+	exerciseCodeEvaluationNotFound   = "evaluation_not_found"
 	exerciseCodeInternal             = "internal"
 )
 
@@ -129,6 +147,16 @@ func toExerciseError(err error) *ExerciseError {
 		return &ExerciseError{Code: exerciseCodeHintInProgress, Message: "a hint is already being requested"}
 	case errors.Is(err, applicationexercise.ErrInvalidGeneration):
 		return &ExerciseError{Code: exerciseCodeInvalidGeneration, Message: "the generated challenge was not valid, try again"}
+	case errors.Is(err, applicationarchitecture.ErrInvalidDiagram):
+		return &ExerciseError{Code: exerciseCodeInvalidDiagram, Message: "the diagram could not be read"}
+	case errors.Is(err, applicationarchitecture.ErrEmptyDiagram):
+		return &ExerciseError{Code: exerciseCodeEmptyDiagram, Message: "the diagram is empty"}
+	case errors.Is(err, domainexercise.ErrInvalidEvaluation):
+		return &ExerciseError{Code: exerciseCodeInvalidEvaluation, Message: "the evaluator returned an invalid evaluation"}
+	case errors.Is(err, domainexercise.ErrAttemptNotEvaluable):
+		return &ExerciseError{Code: exerciseCodeAttemptNotEvaluable, Message: "the attempt cannot be evaluated now"}
+	case errors.Is(err, domainexercise.ErrEvaluationNotFound):
+		return &ExerciseError{Code: exerciseCodeEvaluationNotFound, Message: "the attempt has no evaluation"}
 	case errors.Is(err, context.Canceled):
 		return &ExerciseError{Code: exerciseCodeCancelled, Message: "cancelled"}
 	case errors.Is(err, domainexercise.ErrSubmissionTooLarge):
@@ -548,4 +576,82 @@ func (a *App) ListHints(attemptID string) ([]HintDTO, error) {
 		dtos = append(dtos, toHintDTO(hint))
 	}
 	return dtos, nil
+}
+
+// EvaluationResultDTO is the judgement of one rubric criterion.
+type EvaluationResultDTO struct {
+	CriterionKey         string `json:"criterionKey"`
+	CriterionName        string `json:"criterionName"`
+	Level                int    `json:"level"`
+	Justification        string `json:"justification"`
+	Evidence             string `json:"evidence"`
+	InsufficientEvidence bool   `json:"insufficientEvidence"`
+}
+
+// EvaluationDTO is the diagram evaluation of an attempt. Score is computed by
+// the domain; CreatedAt is RFC 3339.
+type EvaluationDTO struct {
+	AttemptID       string                `json:"attemptId"`
+	Model           string                `json:"model"`
+	Score           int                   `json:"score"`
+	Summary         string                `json:"summary"`
+	Strengths       []string              `json:"strengths"`
+	Gaps            []string              `json:"gaps"`
+	Recommendations []string              `json:"recommendations"`
+	Results         []EvaluationResultDTO `json:"results"`
+	CreatedAt       string                `json:"createdAt"`
+}
+
+func toEvaluationDTO(evaluation domainexercise.Evaluation, criteria []domainexercise.RubricCriterion) EvaluationDTO {
+	byID := make(map[string]domainexercise.RubricCriterion, len(criteria))
+	for _, criterion := range criteria {
+		byID[criterion.ID] = criterion
+	}
+	dto := EvaluationDTO{
+		AttemptID: evaluation.AttemptID, Model: evaluation.Model, Score: evaluation.Score, Summary: evaluation.Summary,
+		Strengths:       append([]string{}, evaluation.Strengths...),
+		Gaps:            append([]string{}, evaluation.Gaps...),
+		Recommendations: append([]string{}, evaluation.Recommendations...),
+		Results:         make([]EvaluationResultDTO, 0, len(evaluation.Results)),
+		CreatedAt:       evaluation.CreatedAt.Format(time.RFC3339),
+	}
+	for _, result := range evaluation.Results {
+		criterion := byID[result.CriterionID]
+		dto.Results = append(dto.Results, EvaluationResultDTO{
+			CriterionKey: criterion.Key, CriterionName: criterion.Name, Level: result.Level,
+			Justification: result.Justification, Evidence: result.Evidence, InsufficientEvidence: result.InsufficientEvidence,
+		})
+	}
+	return dto
+}
+
+// EvaluateAttempt evaluates the submitted attempt's diagram, or returns the
+// stored evaluation if it was already evaluated. A failure leaves the attempt
+// EVALUATION_FAILED and can be retried by calling it again. See
+// specs/phases/phase-03-architecture-lab/11-architecture-evaluator.md.
+func (a *App) EvaluateAttempt(attemptID string) (EvaluationDTO, error) {
+	return a.evaluationOf(attemptID, a.evaluations.Evaluate)
+}
+
+// GetEvaluation returns the attempt's stored diagram evaluation.
+func (a *App) GetEvaluation(attemptID string) (EvaluationDTO, error) {
+	return a.evaluationOf(attemptID, a.evaluations.GetEvaluation)
+}
+
+func (a *App) evaluationOf(
+	attemptID string, load func(context.Context, string) (domainexercise.Evaluation, error),
+) (EvaluationDTO, error) {
+	attemptID = strings.TrimSpace(attemptID)
+	if attemptID == "" {
+		return EvaluationDTO{}, invalidInput("attempt id is required")
+	}
+	evaluation, err := load(a.ctx, attemptID)
+	if err != nil {
+		return EvaluationDTO{}, toExerciseError(err)
+	}
+	criteria, err := a.evaluations.Criteria(a.ctx, attemptID)
+	if err != nil {
+		return EvaluationDTO{}, toExerciseError(err)
+	}
+	return toEvaluationDTO(evaluation, criteria), nil
 }
