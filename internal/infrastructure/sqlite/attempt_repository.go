@@ -248,13 +248,14 @@ func deleteUnfinished(ctx context.Context, q sqlExecer, extra string, args ...an
 }
 
 // deleteAttemptsWhere deletes the attempts the fixed SQL condition selects,
-// children first: criterion results, evaluations and submissions. Its values
+// children first: criterion results, evaluations, hints and submissions. Its values
 // travel as bound args.
 func deleteAttemptsWhere(ctx context.Context, q sqlExecer, selection string, args ...any) (int, error) {
 	attemptIDs := `SELECT id FROM challenge_attempts WHERE ` + selection
 	for _, statement := range []string{
 		`DELETE FROM criterion_results WHERE evaluation_id IN (SELECT id FROM evaluations WHERE attempt_id IN (` + attemptIDs + `))`,
 		`DELETE FROM evaluations WHERE attempt_id IN (` + attemptIDs + `)`,
+		`DELETE FROM attempt_hints WHERE attempt_id IN (` + attemptIDs + `)`,
 		`DELETE FROM submissions WHERE attempt_id IN (` + attemptIDs + `)`,
 	} {
 		if _, err := q.ExecContext(ctx, statement, args...); err != nil {

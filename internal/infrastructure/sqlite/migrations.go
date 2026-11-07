@@ -3,6 +3,8 @@ package sqlite
 import (
 	"database/sql"
 	"fmt"
+
+	"github.com/santaniello/athena/internal/domain/exercise"
 )
 
 // migrations are idempotent DDL/DML steps applied in order on every Open
@@ -225,6 +227,19 @@ var migrations = []func(*sql.DB) error{
 		insufficient_evidence INTEGER NOT NULL,
 		PRIMARY KEY (evaluation_id, criterion_id)
 	)`),
+	// Spec 3.10.1: the tutor's hints during an attempt. Like every Phase 3
+	// table nothing cascades: they only disappear with an unfinished attempt,
+	// deleted explicitly. UNIQUE (attempt_id, position) and the position range
+	// back the cap of exercise.MaxHints. See
+	// specs/phases/phase-03-architecture-lab/10-01-tutor-hints.md.
+	execSQL(fmt.Sprintf(`CREATE TABLE IF NOT EXISTS attempt_hints (
+		id         TEXT PRIMARY KEY,
+		attempt_id TEXT NOT NULL REFERENCES challenge_attempts(id),
+		position   INTEGER NOT NULL CHECK (position BETWEEN 1 AND %d),
+		content    TEXT NOT NULL,
+		created_at TEXT NOT NULL,
+		UNIQUE (attempt_id, position)
+	)`, exercise.MaxHints)),
 }
 
 // addAttemptsFailureReasonColumn adds challenge_attempts.failure_reason if it
