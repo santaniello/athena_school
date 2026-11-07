@@ -37,6 +37,7 @@ type App struct {
 	modelSettings *settings.Service
 	exercise      *applicationexercise.AttemptService
 	generator     challengeGenerator
+	hints         hintGiver
 	catalog       challengeCatalog
 	sessionLister sessionLister
 	// cancelGeneration cancels the challenge generation in flight, if any.

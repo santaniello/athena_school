@@ -49,6 +49,17 @@ func WithSessionLister(sessions sessionLister) Option {
 	return func(a *App) { a.sessionLister = sessions }
 }
 
+// hintGiver is the use case behind the hint bindings (spec 3.10.1).
+type hintGiver interface {
+	RequestHint(ctx context.Context, attemptID, boardXML string) (domainexercise.Hint, error)
+	ListHints(ctx context.Context, attemptID string) ([]domainexercise.Hint, error)
+}
+
+// WithHintService wires the tutor hints given during an exam.
+func WithHintService(hints hintGiver) Option {
+	return func(a *App) { a.hints = hints }
+}
+
 // Stable ExerciseError.Code values the frontend switches on.
 const (
 	exerciseCodeInvalidInput         = "invalid_input"
@@ -65,6 +76,8 @@ const (
 	exerciseCodeSubmissionTooLarge   = "submission_too_large"
 	exerciseCodeInvalidGeneration    = "invalid_generation"
 	exerciseCodeCancelled            = "cancelled"
+	exerciseCodeNoHintsLeft          = "no_hints_left"
+	exerciseCodeHintInProgress       = "hint_in_progress"
 	exerciseCodeGenerationInProgress = "generation_in_progress"
 	exerciseCodeInternal             = "internal"
 )
@@ -110,6 +123,10 @@ func toExerciseError(err error) *ExerciseError {
 		return &ExerciseError{Code: exerciseCodeAttemptFinished, Message: "a finished attempt cannot be discarded"}
 	case errors.Is(err, applicationexercise.ErrSubmissionTooLate):
 		return &ExerciseError{Code: exerciseCodeSubmissionTooLate, Message: "the submission arrived after the time limit and the attempt was discarded"}
+	case errors.Is(err, domainexercise.ErrNoHintsLeft):
+		return &ExerciseError{Code: exerciseCodeNoHintsLeft, Message: "no hints left for this attempt"}
+	case errors.Is(err, domainexercise.ErrHintInProgress):
+		return &ExerciseError{Code: exerciseCodeHintInProgress, Message: "a hint is already being requested"}
 	case errors.Is(err, applicationexercise.ErrInvalidGeneration):
 		return &ExerciseError{Code: exerciseCodeInvalidGeneration, Message: "the generated challenge was not valid, try again"}
 	case errors.Is(err, context.Canceled):
@@ -483,4 +500,52 @@ func (a *App) CancelChallengeGeneration() error {
 		a.cancelGeneration()
 	}
 	return nil
+}
+
+// HintDTO is one tutor hint. CreatedAt is RFC 3339.
+type HintDTO struct {
+	ID        string `json:"id"`
+	AttemptID string `json:"attemptId"`
+	Position  int    `json:"position"`
+	Content   string `json:"content"`
+	CreatedAt string `json:"createdAt"`
+}
+
+func toHintDTO(hint domainexercise.Hint) HintDTO {
+	return HintDTO{
+		ID: hint.ID, AttemptID: hint.AttemptID, Position: hint.Position, Content: hint.Content,
+		CreatedAt: hint.CreatedAt.Format(time.RFC3339),
+	}
+}
+
+// RequestHint asks the tutor for a hint on the running attempt, given the
+// current board. A failure spends nothing and can be repeated. See
+// specs/phases/phase-03-architecture-lab/10-01-tutor-hints.md.
+func (a *App) RequestHint(attemptID, boardXML string) (HintDTO, error) {
+	attemptID = strings.TrimSpace(attemptID)
+	if attemptID == "" {
+		return HintDTO{}, invalidInput("attempt id is required")
+	}
+	hint, err := a.hints.RequestHint(a.ctx, attemptID, boardXML)
+	if err != nil {
+		return HintDTO{}, toExerciseError(err)
+	}
+	return toHintDTO(hint), nil
+}
+
+// ListHints returns the hints already given for the attempt, in order.
+func (a *App) ListHints(attemptID string) ([]HintDTO, error) {
+	attemptID = strings.TrimSpace(attemptID)
+	if attemptID == "" {
+		return nil, invalidInput("attempt id is required")
+	}
+	hints, err := a.hints.ListHints(a.ctx, attemptID)
+	if err != nil {
+		return nil, toExerciseError(err)
+	}
+	dtos := make([]HintDTO, 0, len(hints))
+	for _, hint := range hints {
+		dtos = append(dtos, toHintDTO(hint))
+	}
+	return dtos, nil
 }
