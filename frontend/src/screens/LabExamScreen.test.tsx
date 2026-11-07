@@ -685,5 +685,30 @@ describe('LabExamScreen', () => {
       expect(discardAttempt).toHaveBeenCalledExactlyOnceWith('a1')
       expect(onExit).toHaveBeenCalledOnce()
     })
+
+    it('shows progress while a question is written, while an answer is sent and while the answers are judged', async () => {
+      const { user } = await defending()
+      vi.mocked(answerDefenseQuestion).mockReturnValue(new Promise(() => {}))
+      await user.type(screen.getByRole('textbox', { name: 'Your answer' }), 'x')
+      await user.click(screen.getByRole('button', { name: 'Send answer' }))
+      expect(await screen.findByRole('button', { name: 'Sending...' })).toBeDisabled()
+    })
+
+    it('shows progress while the next question is written', async () => {
+      const { user } = await defending()
+      vi.mocked(nextDefenseQuestion).mockReturnValue(new Promise(() => {}))
+      await user.click(screen.getByRole('button', { name: "I don't know" }))
+      expect(
+        await screen.findByText('The tutor is preparing the next question...'),
+      ).toBeInTheDocument()
+    })
+
+    it('shows progress while the answers are judged', async () => {
+      const { user } = await defending()
+      vi.mocked(answerDefenseQuestion).mockResolvedValue({ total: 2, complete: true })
+      vi.mocked(evaluateDefense).mockReturnValue(new Promise(() => {}))
+      await user.click(screen.getByRole('button', { name: "I don't know" }))
+      expect(await screen.findByText('Evaluating your answers...')).toBeInTheDocument()
+    })
   })
 })

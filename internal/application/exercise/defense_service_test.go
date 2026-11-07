@@ -740,3 +740,42 @@ func TestDefenseService_Outcome_refusesAnAttemptThatIsNotFinished(t *testing.T) 
 	// Then the defense is not finished
 	assert.ErrorIs(t, err, domainexercise.ErrDefenseNotActive)
 }
+
+func TestAttemptLocks_forgetAnAttemptOnceNoCallHoldsOrAwaitsIt(t *testing.T) {
+	// Given a lock table
+	locks := attemptLocks{held: map[string]*attemptLock{}}
+
+	// When a call takes and releases the lock, and another waits behind a holder
+	first := locks.lock("attempt-1")
+	assert.Len(t, locks.held, 1)
+	acquired := make(chan func())
+	go func() { acquired <- locks.lock("attempt-1") }()
+	require.Eventually(t, func() bool {
+		locks.mu.Lock()
+		defer locks.mu.Unlock()
+		return locks.held["attempt-1"].refs == 2
+	}, time.Second, time.Millisecond)
+	first()
+
+	// Then the entry stays while the waiter holds it, and goes once it releases
+	second := <-acquired
+	assert.Len(t, locks.held, 1)
+	assert.Equal(t, 1, locks.held["attempt-1"].refs)
+	second()
+	assert.Empty(t, locks.held)
+}
+
+func TestAttemptLocks_doNotBlockOtherAttempts(t *testing.T) {
+	// Given one attempt's lock held
+	locks := attemptLocks{held: map[string]*attemptLock{}}
+	release := locks.lock("attempt-1")
+
+	// When another attempt takes its own
+	other := locks.lock("attempt-2")
+
+	// Then both are held at once
+	assert.Len(t, locks.held, 2)
+	other()
+	release()
+	assert.Empty(t, locks.held)
+}

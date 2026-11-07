@@ -159,4 +159,16 @@ describe('DefenseStage', () => {
       expect(onRetry).toHaveBeenCalledOnce()
     },
   )
+
+  it.each(['questionFailed', 'judgingFailed'] as const)(
+    'shows the failure, not the held question, when %s',
+    (phase) => {
+      setup({ phase, message: 'The tutor could not continue the defense.' })
+
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'The tutor could not continue the defense.',
+      )
+      expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    },
+  )
 })
