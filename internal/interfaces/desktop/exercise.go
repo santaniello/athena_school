@@ -73,6 +73,20 @@ func WithEvaluationService(evaluations attemptEvaluator) Option {
 	return func(a *App) { a.evaluations = evaluations }
 }
 
+// defenseRunner is the use case behind the defense bindings (spec 3.12).
+type defenseRunner interface {
+	NextQuestion(ctx context.Context, attemptID string) (domainexercise.DefenseTurn, error)
+	Answer(ctx context.Context, attemptID, answer string) (applicationexercise.DefenseView, error)
+	Evaluate(ctx context.Context, attemptID string) (domainexercise.Evaluation, error)
+	GetDefense(ctx context.Context, attemptID string) (applicationexercise.DefenseView, error)
+	Outcome(ctx context.Context, attemptID string) (applicationexercise.DefenseOutcome, error)
+}
+
+// WithDefenseService wires the tutor's questions and the final evaluation.
+func WithDefenseService(defense defenseRunner) Option {
+	return func(a *App) { a.defense = defense }
+}
+
 // Stable ExerciseError.Code values the frontend switches on.
 const (
 	exerciseCodeInvalidInput         = "invalid_input"
@@ -97,6 +111,11 @@ const (
 	exerciseCodeInvalidEvaluation    = "invalid_evaluation"
 	exerciseCodeAttemptNotEvaluable  = "attempt_not_evaluable"
 	exerciseCodeEvaluationNotFound   = "evaluation_not_found"
+	exerciseCodeDefenseNotActive     = "defense_not_active"
+	exerciseCodeQuestionPending      = "question_pending"
+	exerciseCodeNoQuestionPending    = "no_question_pending"
+	exerciseCodeInvalidAnswer        = "invalid_answer"
+	exerciseCodeEmptyQuestion        = "empty_question"
 	exerciseCodeInternal             = "internal"
 )
 
@@ -157,6 +176,16 @@ func toExerciseError(err error) *ExerciseError {
 		return &ExerciseError{Code: exerciseCodeAttemptNotEvaluable, Message: "the attempt cannot be evaluated now"}
 	case errors.Is(err, domainexercise.ErrEvaluationNotFound):
 		return &ExerciseError{Code: exerciseCodeEvaluationNotFound, Message: "the attempt has no evaluation"}
+	case errors.Is(err, domainexercise.ErrDefenseNotActive):
+		return &ExerciseError{Code: exerciseCodeDefenseNotActive, Message: "the defense is not active"}
+	case errors.Is(err, domainexercise.ErrQuestionPending):
+		return &ExerciseError{Code: exerciseCodeQuestionPending, Message: "a question is waiting for its answer"}
+	case errors.Is(err, domainexercise.ErrNoQuestionPending):
+		return &ExerciseError{Code: exerciseCodeNoQuestionPending, Message: "there is no question waiting for an answer"}
+	case errors.Is(err, domainexercise.ErrInvalidAnswer):
+		return &ExerciseError{Code: exerciseCodeInvalidAnswer, Message: "the answer must be 1 to 4000 characters"}
+	case errors.Is(err, applicationexercise.ErrEmptyQuestion):
+		return &ExerciseError{Code: exerciseCodeEmptyQuestion, Message: "the tutor wrote an empty question"}
 	case errors.Is(err, context.Canceled):
 		return &ExerciseError{Code: exerciseCodeCancelled, Message: "cancelled"}
 	case errors.Is(err, domainexercise.ErrSubmissionTooLarge):
@@ -654,4 +683,142 @@ func (a *App) evaluationOf(
 		return EvaluationDTO{}, toExerciseError(err)
 	}
 	return toEvaluationDTO(evaluation, criteria), nil
+}
+
+// DefenseTurnDTO is one question of the defense with its answer. It carries
+// the question text but not the criterion it targets. AskedAt and AnsweredAt
+// are RFC 3339; Answer and AnsweredAt are empty until answered.
+type DefenseTurnDTO struct {
+	Position   int    `json:"position"`
+	Question   string `json:"question"`
+	Answer     string `json:"answer"`
+	AskedAt    string `json:"askedAt"`
+	AnsweredAt string `json:"answeredAt"`
+}
+
+// DefenseDTO is the defense of an attempt: how many questions it has, the
+// turns so far in order, and whether the last answer is in.
+type DefenseDTO struct {
+	Total    int              `json:"total"`
+	Turns    []DefenseTurnDTO `json:"turns"`
+	Complete bool             `json:"complete"`
+}
+
+func toDefenseTurnDTO(turn domainexercise.DefenseTurn) DefenseTurnDTO {
+	dto := DefenseTurnDTO{
+		Position: turn.Position, Question: turn.Question, Answer: turn.Answer,
+		AskedAt: turn.AskedAt.Format(time.RFC3339),
+	}
+	if turn.Answered() {
+		dto.AnsweredAt = turn.AnsweredAt.Format(time.RFC3339)
+	}
+	return dto
+}
+
+func toDefenseDTO(view applicationexercise.DefenseView) DefenseDTO {
+	dto := DefenseDTO{Total: view.Total, Complete: view.Complete, Turns: make([]DefenseTurnDTO, 0, len(view.Turns))}
+	for _, turn := range view.Turns {
+		dto.Turns = append(dto.Turns, toDefenseTurnDTO(turn))
+	}
+	return dto
+}
+
+// OutcomeReasonDTO is one rule a failed attempt broke. CriterionKey and
+// CriterionName are set only for MANDATORY_CRITERION.
+type OutcomeReasonDTO struct {
+	Kind          string `json:"kind"`
+	Evaluation    string `json:"evaluation"`
+	CriterionKey  string `json:"criterionKey"`
+	CriterionName string `json:"criterionName"`
+}
+
+// OutcomeDTO is the end of an attempt: PASSED or FAILED, both scores, the
+// minimum passing score frozen on the attempt and, when failed, every reason.
+type OutcomeDTO struct {
+	Result             string             `json:"result"`
+	PassScore          int                `json:"passScore"`
+	DiagramScore       int                `json:"diagramScore"`
+	UnderstandingScore int                `json:"understandingScore"`
+	Reasons            []OutcomeReasonDTO `json:"reasons"`
+}
+
+func toOutcomeDTO(outcome applicationexercise.DefenseOutcome) OutcomeDTO {
+	byID := make(map[string]domainexercise.RubricCriterion, len(outcome.Criteria))
+	for _, criterion := range outcome.Criteria {
+		byID[criterion.ID] = criterion
+	}
+	dto := OutcomeDTO{
+		Result: string(outcome.Outcome.Result), PassScore: outcome.PassScore,
+		DiagramScore: outcome.Diagram.Score, UnderstandingScore: outcome.Understanding.Score,
+		Reasons: make([]OutcomeReasonDTO, 0, len(outcome.Outcome.Reasons)),
+	}
+	for _, reason := range outcome.Outcome.Reasons {
+		criterion := byID[reason.CriterionID]
+		dto.Reasons = append(dto.Reasons, OutcomeReasonDTO{
+			Kind: string(reason.Kind), Evaluation: string(reason.Evaluation),
+			CriterionKey: criterion.Key, CriterionName: criterion.Name,
+		})
+	}
+	return dto
+}
+
+// NextDefenseQuestion returns the question the user must answer now. The first
+// call starts the defense; a question still waiting for its answer is returned
+// again. After the last answer it fails with defense_not_active. See
+// specs/phases/phase-03-architecture-lab/12-architecture-defense.md.
+func (a *App) NextDefenseQuestion(attemptID string) (DefenseTurnDTO, error) {
+	attemptID = strings.TrimSpace(attemptID)
+	if attemptID == "" {
+		return DefenseTurnDTO{}, invalidInput("attempt id is required")
+	}
+	turn, err := a.defense.NextQuestion(a.ctx, attemptID)
+	if err != nil {
+		return DefenseTurnDTO{}, toExerciseError(err)
+	}
+	return toDefenseTurnDTO(turn), nil
+}
+
+// AnswerDefenseQuestion stores the answer to the question that is waiting and
+// returns the defense, complete once the last answer is in.
+func (a *App) AnswerDefenseQuestion(attemptID, answer string) (DefenseDTO, error) {
+	attemptID = strings.TrimSpace(attemptID)
+	if attemptID == "" {
+		return DefenseDTO{}, invalidInput("attempt id is required")
+	}
+	view, err := a.defense.Answer(a.ctx, attemptID, answer)
+	if err != nil {
+		return DefenseDTO{}, toExerciseError(err)
+	}
+	return toDefenseDTO(view), nil
+}
+
+// EvaluateDefense judges the answers once all are given, finishes the attempt
+// and returns its outcome. A failure leaves the attempt defending and can be
+// retried by calling it again.
+func (a *App) EvaluateDefense(attemptID string) (OutcomeDTO, error) {
+	attemptID = strings.TrimSpace(attemptID)
+	if attemptID == "" {
+		return OutcomeDTO{}, invalidInput("attempt id is required")
+	}
+	if _, err := a.defense.Evaluate(a.ctx, attemptID); err != nil {
+		return OutcomeDTO{}, toExerciseError(err)
+	}
+	outcome, err := a.defense.Outcome(a.ctx, attemptID)
+	if err != nil {
+		return OutcomeDTO{}, toExerciseError(err)
+	}
+	return toOutcomeDTO(outcome), nil
+}
+
+// GetDefense returns the defense of an attempt whose diagram was evaluated.
+func (a *App) GetDefense(attemptID string) (DefenseDTO, error) {
+	attemptID = strings.TrimSpace(attemptID)
+	if attemptID == "" {
+		return DefenseDTO{}, invalidInput("attempt id is required")
+	}
+	view, err := a.defense.GetDefense(a.ctx, attemptID)
+	if err != nil {
+		return DefenseDTO{}, toExerciseError(err)
+	}
+	return toDefenseDTO(view), nil
 }
