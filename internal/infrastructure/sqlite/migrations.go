@@ -240,6 +240,23 @@ var migrations = []func(*sql.DB) error{
 		created_at TEXT NOT NULL,
 		UNIQUE (attempt_id, position)
 	)`, exercise.MaxHints)),
+	// Spec 3.12: the defense. challenges gains the number of questions the tutor
+	// asks, and defense_turns holds each question with its answer. Like every
+	// Phase 3 table nothing cascades: turns only disappear with an unfinished
+	// attempt, deleted explicitly. See
+	// specs/phases/phase-03-architecture-lab/12-architecture-defense.md.
+	addChallengesDefenseQuestionsColumn,
+	execSQL(`CREATE TABLE IF NOT EXISTS defense_turns (
+		id           TEXT PRIMARY KEY,
+		attempt_id   TEXT NOT NULL REFERENCES challenge_attempts(id),
+		position     INTEGER NOT NULL,
+		criterion_id TEXT NOT NULL REFERENCES rubric_criteria(id),
+		question     TEXT NOT NULL,
+		answer       TEXT NOT NULL DEFAULT '',
+		asked_at     TEXT NOT NULL,
+		answered_at  TEXT,
+		UNIQUE (attempt_id, position)
+	)`),
 }
 
 // addAttemptsFailureReasonColumn adds challenge_attempts.failure_reason if it
@@ -281,6 +298,23 @@ func addChallengesTimeLimitColumn(db *sql.DB) error {
 		return nil
 	}
 	_, err = db.Exec(`ALTER TABLE challenges ADD COLUMN time_limit_minutes INTEGER NOT NULL DEFAULT 45`)
+	return err
+}
+
+// addChallengesDefenseQuestionsColumn adds challenges.defense_questions if it
+// does not already exist (SQLite has no "ADD COLUMN IF NOT EXISTS"). Stored
+// challenges get the default of five questions.
+func addChallengesDefenseQuestionsColumn(db *sql.DB) error {
+	has, err := hasColumn(db, "challenges", "defense_questions")
+	if err != nil {
+		return err
+	}
+	if has {
+		return nil
+	}
+	_, err = db.Exec(fmt.Sprintf(
+		`ALTER TABLE challenges ADD COLUMN defense_questions INTEGER NOT NULL DEFAULT %d CHECK (defense_questions BETWEEN %d AND %d)`,
+		exercise.DefaultDefenseQuestions, exercise.MinDefenseQuestions, exercise.MaxDefenseQuestions))
 	return err
 }
 

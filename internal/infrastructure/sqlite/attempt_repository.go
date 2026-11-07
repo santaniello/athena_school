@@ -208,8 +208,8 @@ func nullableTime(t time.Time) any {
 // scopes DiscardUnfinishedEvaluations (EVALUATING and EVALUATION_FAILED) and
 // does not amend the 3.4 cleanup. This was reviewed and decided on PR #135.
 
-// finishedState is the attempt state spec 3.12 adds; DeleteUnfinished and
-// DeleteAllUnfinished never touch it.
+// finishedState is the attempt state that ends an attempt's lifecycle;
+// DeleteUnfinished and DeleteAllUnfinished never touch it.
 const finishedState = string(exercise.AttemptFinished)
 
 // DeleteUnfinished deletes the attempt and its submission in one transaction
@@ -248,7 +248,7 @@ func deleteUnfinished(ctx context.Context, q sqlExecer, extra string, args ...an
 }
 
 // deleteAttemptsWhere deletes the attempts the fixed SQL condition selects,
-// children first: criterion results, evaluations, hints and submissions. Its values
+// children first: criterion results, evaluations, hints, defense turns and submissions. Its values
 // travel as bound args.
 func deleteAttemptsWhere(ctx context.Context, q sqlExecer, selection string, args ...any) (int, error) {
 	attemptIDs := `SELECT id FROM challenge_attempts WHERE ` + selection
@@ -256,6 +256,7 @@ func deleteAttemptsWhere(ctx context.Context, q sqlExecer, selection string, arg
 		`DELETE FROM criterion_results WHERE evaluation_id IN (SELECT id FROM evaluations WHERE attempt_id IN (` + attemptIDs + `))`,
 		`DELETE FROM evaluations WHERE attempt_id IN (` + attemptIDs + `)`,
 		`DELETE FROM attempt_hints WHERE attempt_id IN (` + attemptIDs + `)`,
+		`DELETE FROM defense_turns WHERE attempt_id IN (` + attemptIDs + `)`,
 		`DELETE FROM submissions WHERE attempt_id IN (` + attemptIDs + `)`,
 	} {
 		if _, err := q.ExecContext(ctx, statement, args...); err != nil {
@@ -342,4 +343,28 @@ func (r *AttemptRepository) DeleteUnfinishedEvaluations(ctx context.Context) (in
 		return 0, fmt.Errorf("sqlite: deleting unfinished evaluations: %w", err)
 	}
 	return removed, nil
+}
+
+// StartDefense moves an EVALUATED attempt to DEFENDING with one conditional
+// UPDATE, else exercise.ErrDefenseNotActive.
+func (r *AttemptRepository) StartDefense(ctx context.Context, id string) error {
+	return r.moveDefense(ctx, id, exercise.AttemptEvaluated, exercise.AttemptDefending)
+}
+
+// FinishDefense moves a DEFENDING attempt to FINISHED with one conditional
+// UPDATE, else exercise.ErrDefenseNotActive.
+func (r *AttemptRepository) FinishDefense(ctx context.Context, id string) error {
+	return r.moveDefense(ctx, id, exercise.AttemptDefending, exercise.AttemptFinished)
+}
+
+func (r *AttemptRepository) moveDefense(ctx context.Context, id string, from, to exercise.AttemptState) error {
+	changed, err := r.updateState(ctx,
+		`UPDATE challenge_attempts SET state = ? WHERE id = ? AND state = ?`, string(to), id, string(from))
+	if err != nil {
+		return fmt.Errorf("sqlite: moving defense to %s: %w", to, err)
+	}
+	if !changed {
+		return exercise.ErrDefenseNotActive
+	}
+	return nil
 }
