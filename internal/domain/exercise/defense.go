@@ -182,7 +182,39 @@ func NewUnderstandingEvaluation(
 		return Evaluation{}, err
 	}
 	output.Results = results
-	return newEvaluation(EvaluationKindUnderstanding, attempt, rubric, output, model, now)
+	evaluation, err := newEvaluation(EvaluationKindUnderstanding, attempt, rubric, output, model, now)
+	if err != nil {
+		return Evaluation{}, err
+	}
+	// The defense chooses what it asks, so a criterion left out is not the
+	// learner's missing evidence: score over the criteria asked alone, never
+	// falling back to the full rubric. Results keep every criterion.
+	evaluation.Score, err = askedScore(rubric, turns, results)
+	if err != nil {
+		return Evaluation{}, err
+	}
+	return evaluation, nil
+}
+
+// askedScore computes the score over the criteria that have a turn.
+func askedScore(rubric RubricVersion, turns []DefenseTurn, results []CriterionResult) (int, error) {
+	asked := make(map[string]bool, len(turns))
+	for _, turn := range turns {
+		asked[turn.CriterionID] = true
+	}
+	subRubric := RubricVersion{ID: rubric.ID}
+	for _, criterion := range rubric.Criteria {
+		if asked[criterion.ID] {
+			subRubric.Criteria = append(subRubric.Criteria, criterion)
+		}
+	}
+	var askedResults []CriterionResult
+	for _, result := range results {
+		if asked[result.CriterionID] {
+			askedResults = append(askedResults, result)
+		}
+	}
+	return ComputeScore(subRubric, askedResults)
 }
 
 // understandingResults returns one result per rubric criterion, in rubric

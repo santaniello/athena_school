@@ -291,6 +291,21 @@ func TestNewUnderstandingEvaluation_flagsTheCriteriaThatWereNotAsked(t *testing.
 	assert.Equal(t, 79, evaluation.Score) // (40×4 + 30×2) / (70×4) = 78.57 → 79
 }
 
+func TestNewUnderstandingEvaluation_rescalesEvenWhenTheCriteriaAskedAreUnderHalfTheWeight(t *testing.T) {
+	// Given a rubric where the two criteria asked weigh 40 of 100
+	rubric := scoringRubric(20, 20, 20, 20, 20)
+	turns := []DefenseTurn{answeredTurn(1, "c1", "A cache."), answeredTurn(2, "c2", "A queue.")}
+	output := understandingOutput(map[int]int{0: 4, 1: 4})
+
+	// When building the understanding evaluation
+	evaluation, err := NewUnderstandingEvaluation(defendingAttempt(), rubric, turns, output, "m", evaluationNow)
+
+	// Then top levels on what was asked score 100, not 40, and every criterion stays in the results
+	require.NoError(t, err)
+	assert.Equal(t, 100, evaluation.Score)
+	assert.Len(t, evaluation.Results, 5)
+}
+
 func TestNewUnderstandingEvaluation_carriesOverTheFeedbackText(t *testing.T) {
 	// Given a valid output
 	rubric := scoringRubric(50, 50)
