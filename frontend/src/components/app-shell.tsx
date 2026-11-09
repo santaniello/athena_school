@@ -21,7 +21,7 @@ import DocumentationScreen from '@/screens/DocumentationScreen'
 import ArchitectureLabScreen from '@/screens/ArchitectureLabScreen'
 import LabExamScreen from '@/screens/LabExamScreen'
 import type { LabReturn } from '@/lib/lab'
-import type { SessionExercise } from '@/lib/exercise'
+import { toExamToStart, type SessionExercise } from '@/lib/exercise'
 import type { ExamToStart } from '@/components/lab/start-exam-dialog'
 import { ToastViewport, type ToastItem } from '@/components/toast'
 import { NAVIGATION, type AppSection } from '@/lib/navigation'
@@ -88,12 +88,10 @@ function AppShell() {
   // Where the exam goes back to when it ends: the catalog it was started from
   // or the study session that offered it. Not persisted.
   const [labReturn, setLabReturn] = useState<LabReturn>({ kind: 'catalog' })
-  // The exercise the exam was started from, so the session's card is still
-  // there when the chat comes back.
-  const [offeredExercise, setOfferedExercise] = useState<{
-    sessionId: string
-    exercise: SessionExercise
-  } | null>(null)
+  // The accepted exercise of each session, as its chat card shows it, so the
+  // card is still there when the chat mounts again (for example after the lab).
+  // Kept in memory only; the persistent card is spec 3.17.
+  const [sessionExercises, setSessionExercises] = useState<Record<string, SessionExercise>>({})
   const [pendingSection, setPendingSection] = useState<AppSection | null>(null)
   const [notices, setNotices] = useState<ToastItem[]>([])
   const [profile, setProfile] = useState<ProfileDraft | null>(null)
@@ -243,6 +241,25 @@ function AppShell() {
     if (next !== 'challenge') setPendingSection(next)
   }
 
+  function handleExerciseChange(sessionId: string, exercise: SessionExercise | null) {
+    setSessionExercises((current) => {
+      const next = { ...current }
+      if (exercise) next[sessionId] = exercise
+      else delete next[sessionId]
+      return next
+    })
+  }
+
+  // The opening turn was asked for, so any later mount of this chat resumes
+  // the session instead of asking for it again.
+  function handleOpeningTurnRequested(sessionId: string) {
+    setActiveSession((current) =>
+      current?.id === sessionId && current.mode === 'new'
+        ? { ...current, mode: 'resume' }
+        : current,
+    )
+  }
+
   function startCatalogExam(challenge: ExamToStart) {
     setLabReturn({ kind: 'catalog' })
     setExam(challenge)
@@ -250,23 +267,12 @@ function AppShell() {
 
   function startSessionExam(exercise: SessionExercise, sessionId: string) {
     setLabReturn({ kind: 'study', sessionId })
-    setOfferedExercise({ sessionId, exercise })
-    setExam({
-      id: exercise.challengeId,
-      title: exercise.title,
-      difficulty: exercise.difficulty,
-      timeLimitMinutes: exercise.timeLimitMinutes,
-    })
+    setExam(toExamToStart(exercise))
     setSection('challenge')
   }
 
   function handleExamExit(notice?: string) {
     setExam(null)
-    if (labReturn.kind === 'study') {
-      // The chat unmounted while the lab was open: it comes back as a resumed
-      // session, never as a new one asking for an opening turn.
-      setActiveSession((current) => (current ? { ...current, mode: 'resume' } : current))
-    }
     const destination = pendingSection ?? (labReturn.kind === 'study' ? 'study' : null)
     if (destination) setSection(destination)
     setLabReturn({ kind: 'catalog' })
@@ -504,9 +510,9 @@ function AppShell() {
               initialTopic={activeSession.topic}
               mode={activeSession.mode}
               onTopicResolved={handleTopicResolved}
-              initialExercise={
-                offeredExercise?.sessionId === activeSession.id ? offeredExercise.exercise : null
-              }
+              initialExercise={sessionExercises[activeSession.id] ?? null}
+              onExerciseChange={handleExerciseChange}
+              onOpeningTurnRequested={handleOpeningTurnRequested}
               onStartExam={startSessionExam}
               onStartNewSession={handleStartNewSession}
               startingNewSession={startingNewSession}

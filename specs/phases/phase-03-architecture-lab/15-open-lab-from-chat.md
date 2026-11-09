@@ -58,8 +58,14 @@ back.
 The only backend change is the `timeLimitMinutes` field on `SessionExerciseDTO` (`SessionExerciseView`);
 no new binding.
 
-After returning, `AppShell` hands the accepted exercise back to the chat (`initialExercise`), since
-the chat's own state is lost when it unmounts; the session comes back in `resume` mode.
+`AppShell` keeps the accepted exercise of each session in memory (`sessionExercises`, one entry per
+session). The chat reports it when it is accepted and when it drops it (a new message or a new
+offer), and receives it as `initialExercise` when it mounts again, so the card survives the lab and
+any other trip away from the chat but not an app restart. The persisted card is
+[3.17](17-session-exercises-ui.md). The chat also reports that the opening turn was requested, and
+from then on the session is opened in `resume` mode on every mount, whatever way the user left and
+came back. `StudyChatScreen` requires `onStartExam`; `toExamToStart` in `lib/exercise.ts` is the
+single mapping from a session exercise to the exam.
 
 ## Tasks
 

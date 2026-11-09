@@ -519,6 +519,25 @@ export interface SessionExercise {
   timeLimitMinutes: number
 }
 
+// What the rules dialog and the exam screen need to start the exam of a
+// challenge.
+export interface ExamToStart {
+  id: string
+  title: string
+  difficulty: string
+  timeLimitMinutes: number
+}
+
+// The exam of a challenge linked to a study session.
+export function toExamToStart(exercise: SessionExercise): ExamToStart {
+  return {
+    id: exercise.challengeId,
+    title: exercise.title,
+    difficulty: exercise.difficulty,
+    timeLimitMinutes: exercise.timeLimitMinutes,
+  }
+}
+
 export const OFFER_PENDING_MESSAGE = 'Accept or decline the exercise offer to keep chatting.'
 
 export async function getPendingOffer(sessionId: string): Promise<ExerciseOffer | null> {

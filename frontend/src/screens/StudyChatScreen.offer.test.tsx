@@ -136,6 +136,7 @@ async function renderResumed(props: Partial<ComponentProps<typeof StudyChatScree
       mode="resume"
       onStartNewSession={vi.fn()}
       startingNewSession={false}
+      onStartExam={vi.fn()}
       {...props}
     />,
   )
@@ -266,6 +267,23 @@ describe('StudyChatScreen — exercise offer', () => {
 
     expect(onStartExam).not.toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: 'Start exam' })).not.toBeInTheDocument()
+  })
+
+  it('reports the accepted exercise, and its removal when a message is sent', async () => {
+    subscribe()
+    vi.mocked(getPendingOffer).mockResolvedValue(OFFER)
+    vi.mocked(acceptOffer).mockResolvedValue(EXERCISE)
+    vi.mocked(sendStudyMessage).mockResolvedValue()
+    const onExerciseChange = vi.fn()
+    await renderResumed({ onExerciseChange })
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Accept' }))
+    expect(onExerciseChange).toHaveBeenLastCalledWith('session-1', EXERCISE)
+    await user.type(screen.getByPlaceholderText('Type your answer...'), 'thanks')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(onExerciseChange).toHaveBeenLastCalledWith('session-1', null)
   })
 
   it('shows the ready exercise again when the chat comes back from the lab', async () => {

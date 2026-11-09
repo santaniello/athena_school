@@ -10,6 +10,7 @@ import {
   onStudyDone,
   onStudySources,
   requestOpeningTurn,
+  sendStudyMessage,
   resumeStudySession,
   startStudySession,
 } from '@/lib/study'
@@ -854,6 +855,41 @@ describe('AppShell', () => {
     expect(screen.getByRole('heading', { name: 'Home', level: 1 })).toBeInTheDocument()
     expect(screen.queryByText('Study / General')).not.toBeInTheDocument()
     expect(screen.queryByText('Nav test topic')).not.toBeInTheDocument()
+  })
+
+  it('asks for the opening turn once when the user leaves a new session and comes back', async () => {
+    // Given a new session whose opening turn was requested
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+    await user.click(screen.getByRole('button', { name: 'Study' }))
+    await screen.findByText('General')
+    vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([])
+    const startedSession: StudySession = {
+      id: 'session-once',
+      topic: 'Once',
+      folderId: 'default',
+      goal: 'Goal',
+      startedAt: '2026-11-09T10:00:00Z',
+      context: CONTEXT_NORMAL,
+    }
+    vi.mocked(startStudySession).mockResolvedValueOnce(startedSession)
+    vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
+    vi.mocked(resumeStudySession).mockReturnValue(new Promise(() => {}))
+    await user.click(screen.getByText('General'))
+    await user.click(await screen.findByText('New session'))
+    await user.type(screen.getByPlaceholderText('What do you want to study?'), 'Once')
+    await user.type(screen.getByPlaceholderText('e.g. Pass the SQL interview'), 'Goal{Enter}')
+    await screen.findByText('Study / General')
+
+    // When leaving through the sidebar and coming back
+    await user.click(screen.getByRole('button', { name: 'Architecture Lab' }))
+    await user.click(screen.getByRole('button', { name: 'Study' }))
+
+    // Then the session is resumed, not opened again
+    await screen.findByText('Study / General')
+    expect(requestOpeningTurn).toHaveBeenCalledOnce()
+    expect(resumeStudySession).toHaveBeenCalledWith('session-once')
   })
 
   it('starts a new session on the same topic and folder from the context-limit warning banner, refreshing the sidebar tree', async () => {
@@ -1716,6 +1752,32 @@ describe('AppShell knowledge index lifecycle', () => {
         expect(screen.getByRole('heading', { name: 'Caching', level: 1 })).toBeInTheDocument()
         expect(requestOpeningTurn).not.toHaveBeenCalled()
         expect(screen.queryByRole('region', { name: 'Exam' })).not.toBeInTheDocument()
+      })
+
+      it('keeps the accepted card when the user leaves and comes back without opening the lab', async () => {
+        const user = await startFromSession()
+        await user.click(screen.getByRole('button', { name: 'finish exam' }))
+        await screen.findByText('Exercise ready: Design a cache')
+
+        await user.click(screen.getByRole('button', { name: 'Home' }))
+        await user.click(screen.getByRole('button', { name: 'Study' }))
+
+        expect(await screen.findByText('Exercise ready: Design a cache')).toBeInTheDocument()
+      })
+
+      it('does not bring the card back once a message moved the conversation on', async () => {
+        const user = await startFromSession()
+        await user.click(screen.getByRole('button', { name: 'finish exam' }))
+        await screen.findByText('Exercise ready: Design a cache')
+        vi.mocked(sendStudyMessage).mockResolvedValue()
+
+        await user.type(screen.getByPlaceholderText('Type your answer...'), 'thanks')
+        await user.click(screen.getByRole('button', { name: 'Send' }))
+        await user.click(screen.getByRole('button', { name: 'Home' }))
+        await user.click(screen.getByRole('button', { name: 'Study' }))
+
+        await screen.findByText('Sure, let us practice.')
+        expect(screen.queryByText('Exercise ready: Design a cache')).not.toBeInTheDocument()
       })
 
       it('goes where the user navigated, not to the session, when the exam ends then', async () => {
