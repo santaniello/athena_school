@@ -140,6 +140,7 @@ func TestOfferService_Decline_deletesTheOffer(t *testing.T) {
 	// Given a pending offer
 	f := newOfferFixture(t)
 	ctx := context.Background()
+	f.expectOffer(ctx)
 	f.offers.EXPECT().Delete(ctx, "offer-1").Return(nil)
 
 	// When declining it
@@ -149,11 +150,39 @@ func TestOfferService_Decline_deletesTheOffer(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestOfferService_Decline_isANoOp_whenTheOfferIsAlreadyGone(t *testing.T) {
+	// Given an offer another call already resolved
+	f := newOfferFixture(t)
+	ctx := context.Background()
+	f.offers.EXPECT().Get(ctx, "offer-1").Return(domainexercise.Offer{}, domainexercise.ErrOfferNotFound)
+
+	// When declining it
+	err := f.service.Decline(ctx, "offer-1")
+
+	// Then nothing is deleted (strict mocks) and there is no error
+	assert.NoError(t, err)
+}
+
+func TestOfferService_Decline_failsWhenTheOfferCannotBeRead(t *testing.T) {
+	// Given a read failure
+	f := newOfferFixture(t)
+	ctx := context.Background()
+	boom := errors.New("boom")
+	f.offers.EXPECT().Get(ctx, "offer-1").Return(domainexercise.Offer{}, boom)
+
+	// When declining
+	err := f.service.Decline(ctx, "offer-1")
+
+	// Then the error comes back
+	assert.ErrorIs(t, err, boom)
+}
+
 func TestOfferService_Decline_failsWhenTheStoreFails(t *testing.T) {
 	// Given a store failure
 	f := newOfferFixture(t)
 	ctx := context.Background()
 	boom := errors.New("boom")
+	f.expectOffer(ctx)
 	f.offers.EXPECT().Delete(ctx, "offer-1").Return(boom)
 
 	// When declining
@@ -169,6 +198,8 @@ func TestOfferService_Accept_reusesTheSessionsLatestChallengeWithoutGenerating(t
 	ctx := context.Background()
 	f.expectOffer(ctx)
 	f.challenges.EXPECT().FindLatestBySourceSession(ctx, "session-1").Return(testOfferChallenge, nil)
+	f.links.EXPECT().GetBySessionAndChallenge(ctx, "session-1", "challenge-1").
+		Return(domainexercise.SessionExercise{}, domainexercise.ErrSessionExerciseNotFound)
 	f.runTx(ctx)
 	f.links.EXPECT().Create(insideTx(), domainexercise.SessionExercise{
 		ID: "generated-id", SessionID: "session-1", ChallengeID: "challenge-1", MessageID: "message-1", CreatedAt: fixedNow,
@@ -274,22 +305,45 @@ func TestOfferService_Accept_returnsNotFoundForAnUnknownOffer(t *testing.T) {
 	assert.ErrorIs(t, err, domainexercise.ErrOfferNotFound)
 }
 
-func TestOfferService_Accept_acceptsAnExistingLinkAsIs(t *testing.T) {
-	// Given the session is already linked to the challenge
+func TestOfferService_Accept_generatesANewChallenge_whenTheLatestOneIsAlreadyLinked(t *testing.T) {
+	// Given a session whose latest challenge is already taken by another message
 	f := newOfferFixture(t)
 	ctx := context.Background()
 	f.expectOffer(ctx)
 	f.challenges.EXPECT().FindLatestBySourceSession(ctx, "session-1").Return(testOfferChallenge, nil)
+	f.links.EXPECT().GetBySessionAndChallenge(ctx, "session-1", "challenge-1").
+		Return(domainexercise.SessionExercise{ID: "link-1"}, nil)
+	f.profiles.EXPECT().ReadProfile(ctx).Return(domainexercise.GenerationProfile{ExperienceLevel: "advanced"}, nil)
+	fresh := domainexercise.Challenge{ID: "challenge-2", Title: "Design a queue", Topic: "queues", Difficulty: domainexercise.DifficultyAdvanced}
+	f.generator.EXPECT().GenerateChallenge(ctx, "session-1", domainexercise.DifficultyAdvanced).Return(fresh, nil)
 	f.runTx(ctx)
-	f.links.EXPECT().Create(insideTx(), mock.Anything).Return(domainexercise.ErrSessionExerciseExists)
+	f.links.EXPECT().Create(insideTx(), domainexercise.SessionExercise{
+		ID: "generated-id", SessionID: "session-1", ChallengeID: "challenge-2", MessageID: "message-1", CreatedAt: fixedNow,
+	}).Return(nil)
 	f.offers.EXPECT().Delete(insideTx(), "offer-1").Return(nil)
 
 	// When accepting
 	view, err := f.service.Accept(ctx, "offer-1")
 
-	// Then it succeeds and the offer is still deleted
+	// Then the old challenge is not reused: a new one is generated and linked
 	require.NoError(t, err)
-	assert.Equal(t, offerView(), view)
+	assert.Equal(t, "challenge-2", view.ChallengeID)
+}
+
+func TestOfferService_Accept_failsWhenTheLinkLookupFails(t *testing.T) {
+	// Given a failure reading whether the latest challenge is linked
+	f := newOfferFixture(t)
+	ctx := context.Background()
+	f.expectOffer(ctx)
+	boom := errors.New("boom")
+	f.challenges.EXPECT().FindLatestBySourceSession(ctx, "session-1").Return(testOfferChallenge, nil)
+	f.links.EXPECT().GetBySessionAndChallenge(ctx, "session-1", "challenge-1").Return(domainexercise.SessionExercise{}, boom)
+
+	// When accepting
+	_, err := f.service.Accept(ctx, "offer-1")
+
+	// Then the error comes back
+	assert.ErrorIs(t, err, boom)
 }
 
 func TestOfferService_Accept_failsAndKeepsTheOffer_whenTheLinkCannotBeCreated(t *testing.T) {
@@ -299,6 +353,8 @@ func TestOfferService_Accept_failsAndKeepsTheOffer_whenTheLinkCannotBeCreated(t 
 	f.expectOffer(ctx)
 	boom := errors.New("db down")
 	f.challenges.EXPECT().FindLatestBySourceSession(ctx, "session-1").Return(testOfferChallenge, nil)
+	f.links.EXPECT().GetBySessionAndChallenge(ctx, "session-1", "challenge-1").
+		Return(domainexercise.SessionExercise{}, domainexercise.ErrSessionExerciseNotFound)
 	f.runTx(ctx)
 	f.links.EXPECT().Create(insideTx(), mock.Anything).Return(boom)
 
@@ -316,6 +372,8 @@ func TestOfferService_Accept_failsWhenTheOfferCannotBeDeleted(t *testing.T) {
 	f.expectOffer(ctx)
 	boom := errors.New("db down")
 	f.challenges.EXPECT().FindLatestBySourceSession(ctx, "session-1").Return(testOfferChallenge, nil)
+	f.links.EXPECT().GetBySessionAndChallenge(ctx, "session-1", "challenge-1").
+		Return(domainexercise.SessionExercise{}, domainexercise.ErrSessionExerciseNotFound)
 	f.runTx(ctx)
 	f.links.EXPECT().Create(insideTx(), mock.Anything).Return(nil)
 	f.offers.EXPECT().Delete(insideTx(), "offer-1").Return(boom)
@@ -329,32 +387,50 @@ func TestOfferService_Accept_failsWhenTheOfferCannotBeDeleted(t *testing.T) {
 
 func TestOfferService_Accept_returnsTheExistingLink_whenAnotherAcceptResolvedTheOfferFirst(t *testing.T) {
 	// Given an offer that is gone by the time the session lock is taken, with
-	// the link its resolution created
+	// the link its resolution created under the offer's message
 	f := newOfferFixture(t)
 	ctx := context.Background()
 	f.offers.EXPECT().Get(ctx, "offer-1").Return(testOffer, nil).Once()
 	f.offers.EXPECT().Get(ctx, "offer-1").Return(domainexercise.Offer{}, domainexercise.ErrOfferNotFound).Once()
-	f.challenges.EXPECT().FindLatestBySourceSession(ctx, "session-1").Return(testOfferChallenge, nil)
-	f.links.EXPECT().GetBySessionAndChallenge(ctx, "session-1", "challenge-1").
-		Return(domainexercise.SessionExercise{ID: "link-1"}, nil)
+	f.links.EXPECT().ListBySession(ctx, "session-1").Return([]domainexercise.SessionExercise{
+		{ID: "link-0", ChallengeID: "challenge-0", MessageID: "message-0"},
+		{ID: "link-1", ChallengeID: "challenge-1", MessageID: "message-1"},
+	}, nil)
+	f.challenges.EXPECT().Get(ctx, "challenge-1").Return(testOfferChallenge, nil)
 
 	// When accepting
 	view, err := f.service.Accept(ctx, "offer-1")
 
-	// Then the existing link is returned and nothing is generated or created
+	// Then the link of this offer is returned and nothing is generated or created
 	require.NoError(t, err)
 	assert.Equal(t, offerView(), view)
 }
 
-func TestOfferService_Accept_returnsNotFound_whenTheOfferIsGoneAndHasNoLink(t *testing.T) {
-	// Given an offer that vanished (declined) and no link for the session
+func TestOfferService_Accept_returnsNotFound_whenTheOfferWasDeclinedAndOnlyOlderLinksExist(t *testing.T) {
+	// Given an offer that vanished (declined) while the session has a link
+	// that belongs to an earlier message
 	f := newOfferFixture(t)
 	ctx := context.Background()
 	f.offers.EXPECT().Get(ctx, "offer-1").Return(testOffer, nil).Once()
 	f.offers.EXPECT().Get(ctx, "offer-1").Return(domainexercise.Offer{}, domainexercise.ErrOfferNotFound).Once()
-	f.challenges.EXPECT().FindLatestBySourceSession(ctx, "session-1").Return(testOfferChallenge, nil)
-	f.links.EXPECT().GetBySessionAndChallenge(ctx, "session-1", "challenge-1").
-		Return(domainexercise.SessionExercise{}, domainexercise.ErrSessionExerciseNotFound)
+	f.links.EXPECT().ListBySession(ctx, "session-1").Return([]domainexercise.SessionExercise{
+		{ID: "link-0", ChallengeID: "challenge-0", MessageID: "message-0"},
+	}, nil)
+
+	// When accepting
+	_, err := f.service.Accept(ctx, "offer-1")
+
+	// Then ErrOfferNotFound is returned, not the old exercise
+	assert.ErrorIs(t, err, domainexercise.ErrOfferNotFound)
+}
+
+func TestOfferService_Accept_returnsNotFound_whenTheOfferIsGoneAndTheSessionHasNoLinks(t *testing.T) {
+	// Given an offer that vanished and a session without links
+	f := newOfferFixture(t)
+	ctx := context.Background()
+	f.offers.EXPECT().Get(ctx, "offer-1").Return(testOffer, nil).Once()
+	f.offers.EXPECT().Get(ctx, "offer-1").Return(domainexercise.Offer{}, domainexercise.ErrOfferNotFound).Once()
+	f.links.EXPECT().ListBySession(ctx, "session-1").Return(nil, nil)
 
 	// When accepting
 	_, err := f.service.Accept(ctx, "offer-1")
@@ -363,19 +439,20 @@ func TestOfferService_Accept_returnsNotFound_whenTheOfferIsGoneAndHasNoLink(t *t
 	assert.ErrorIs(t, err, domainexercise.ErrOfferNotFound)
 }
 
-func TestOfferService_Accept_returnsNotFound_whenTheOfferIsGoneAndTheSessionHasNoChallenge(t *testing.T) {
-	// Given an offer that vanished and a session without a challenge
+func TestOfferService_Accept_failsWhenTheLinksCannotBeListedAfterALostRace(t *testing.T) {
+	// Given an offer that vanished and a failing link store
 	f := newOfferFixture(t)
 	ctx := context.Background()
+	boom := errors.New("boom")
 	f.offers.EXPECT().Get(ctx, "offer-1").Return(testOffer, nil).Once()
 	f.offers.EXPECT().Get(ctx, "offer-1").Return(domainexercise.Offer{}, domainexercise.ErrOfferNotFound).Once()
-	f.challenges.EXPECT().FindLatestBySourceSession(ctx, "session-1").Return(domainexercise.Challenge{}, domainexercise.ErrChallengeNotFound)
+	f.links.EXPECT().ListBySession(ctx, "session-1").Return(nil, boom)
 
 	// When accepting
 	_, err := f.service.Accept(ctx, "offer-1")
 
-	// Then ErrOfferNotFound is returned
-	assert.ErrorIs(t, err, domainexercise.ErrOfferNotFound)
+	// Then the error comes back
+	assert.ErrorIs(t, err, boom)
 }
 
 func TestOfferService_Accept_failsWhenTheOfferReadFailsInsideTheLock(t *testing.T) {
@@ -446,8 +523,10 @@ func TestOfferService_Accept_serializesConcurrentAcceptsOfTheSameSession(t *test
 		}).Once()
 	f.links.EXPECT().Create(ctx, mock.Anything).Return(nil).Once()
 	f.offers.EXPECT().Delete(ctx, "offer-1").Return(nil).Once()
-	f.links.EXPECT().GetBySessionAndChallenge(ctx, "session-1", "challenge-1").
-		Return(domainexercise.SessionExercise{ID: "link-1"}, nil).Maybe()
+	f.links.EXPECT().ListBySession(ctx, "session-1").Return([]domainexercise.SessionExercise{
+		{ID: "link-1", ChallengeID: "challenge-1", MessageID: "message-1"},
+	}, nil).Maybe()
+	f.challenges.EXPECT().Get(ctx, "challenge-1").Return(testOfferChallenge, nil).Maybe()
 
 	// When two accepts run at once
 	var wg sync.WaitGroup
@@ -467,4 +546,19 @@ func TestOfferService_Accept_serializesConcurrentAcceptsOfTheSameSession(t *test
 	require.NoError(t, errs[1])
 	assert.Equal(t, offerView(), views[0])
 	assert.Equal(t, offerView(), views[1])
+}
+
+func TestSessionLocks_dropsAnEntryOnceNobodyHoldsIt(t *testing.T) {
+	// Given locks used for two sessions
+	locks := sessionLocks{held: map[string]*sessionLock{}}
+
+	// When both are taken and released
+	unlockA := locks.lock("a")
+	unlockB := locks.lock("b")
+	assert.Len(t, locks.held, 2)
+	unlockA()
+	unlockB()
+
+	// Then the map is empty again
+	assert.Empty(t, locks.held)
 }

@@ -54,7 +54,7 @@ func NewOfferService(
 		generator:  generator,
 		profiles:   profiles,
 		tx:         tx,
-		locks:      sessionLocks{held: map[string]*sync.Mutex{}},
+		locks:      sessionLocks{held: map[string]*sessionLock{}},
 		now:        func() time.Time { return time.Now().UTC() },
 		newID:      uuid.NewString,
 	}
@@ -82,8 +82,18 @@ func (s *OfferService) GetPending(ctx context.Context, sessionID string) (domain
 	return offer, true, nil
 }
 
-// Decline deletes the offer. Nothing else is created or touched.
+// Decline deletes the offer. Nothing else is created or touched. It takes the
+// session lock, so it never interleaves with an accept of the same offer.
 func (s *OfferService) Decline(ctx context.Context, offerID string) error {
+	offer, err := s.offers.Get(ctx, offerID)
+	if errors.Is(err, domainexercise.ErrOfferNotFound) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("exercise: reading offer: %w", err)
+	}
+	unlock := s.locks.lock(offer.SessionID)
+	defer unlock()
 	if err := s.offers.Delete(ctx, offerID); err != nil {
 		return fmt.Errorf("exercise: declining offer: %w", err)
 	}
@@ -105,7 +115,7 @@ func (s *OfferService) Accept(ctx context.Context, offerID string) (SessionExerc
 
 	offer, err := s.offers.Get(ctx, offerID)
 	if errors.Is(err, domainexercise.ErrOfferNotFound) {
-		return s.existingLink(ctx, first.SessionID)
+		return s.existingLink(ctx, first)
 	}
 	if err != nil {
 		return SessionExerciseView{}, fmt.Errorf("exercise: reading offer: %w", err)
@@ -121,34 +131,42 @@ func (s *OfferService) Accept(ctx context.Context, offerID string) (SessionExerc
 	return sessionExerciseViewOf(challenge), nil
 }
 
-// existingLink answers an accept that lost the race: the offer is gone, so
-// the winner left a challenge and a link for the session.
-func (s *OfferService) existingLink(ctx context.Context, sessionID string) (SessionExerciseView, error) {
-	challenge, err := s.challenges.FindLatestBySourceSession(ctx, sessionID)
-	if errors.Is(err, domainexercise.ErrChallengeNotFound) {
-		return SessionExerciseView{}, domainexercise.ErrOfferNotFound
-	}
-	if err != nil {
-		return SessionExerciseView{}, fmt.Errorf("exercise: finding challenge: %w", err)
-	}
-	_, err = s.links.GetBySessionAndChallenge(ctx, sessionID, challenge.ID)
-	if errors.Is(err, domainexercise.ErrSessionExerciseNotFound) {
-		return SessionExerciseView{}, domainexercise.ErrOfferNotFound
-	}
+// existingLink answers an accept that lost the race: the offer is gone, so it
+// was either accepted (a link under the offer's message exists) or declined
+// (none does, and the accept reports the offer as not found).
+func (s *OfferService) existingLink(ctx context.Context, offer domainexercise.Offer) (SessionExerciseView, error) {
+	links, err := s.links.ListBySession(ctx, offer.SessionID)
 	if err != nil {
 		return SessionExerciseView{}, fmt.Errorf("exercise: finding link: %w", err)
 	}
-	return sessionExerciseViewOf(challenge), nil
+	for _, link := range links {
+		if link.MessageID != offer.MessageID {
+			continue
+		}
+		challenge, err := s.challenges.Get(ctx, link.ChallengeID)
+		if err != nil {
+			return SessionExerciseView{}, fmt.Errorf("exercise: finding challenge: %w", err)
+		}
+		return sessionExerciseViewOf(challenge), nil
+	}
+	return SessionExerciseView{}, domainexercise.ErrOfferNotFound
 }
 
-// challengeFor reuses the session's latest challenge, else generates one with
-// no transaction open.
+// challengeFor reuses the session's latest challenge when no message of the
+// session has taken it yet (for example one generated in the Lab), else
+// generates a new one with no transaction open.
 func (s *OfferService) challengeFor(ctx context.Context, sessionID string) (domainexercise.Challenge, error) {
 	challenge, err := s.challenges.FindLatestBySourceSession(ctx, sessionID)
-	if err == nil {
-		return challenge, nil
-	}
-	if !errors.Is(err, domainexercise.ErrChallengeNotFound) {
+	switch {
+	case err == nil:
+		_, linkErr := s.links.GetBySessionAndChallenge(ctx, sessionID, challenge.ID)
+		if errors.Is(linkErr, domainexercise.ErrSessionExerciseNotFound) {
+			return challenge, nil
+		}
+		if linkErr != nil {
+			return domainexercise.Challenge{}, fmt.Errorf("exercise: finding link: %w", linkErr)
+		}
+	case !errors.Is(err, domainexercise.ErrChallengeNotFound):
 		return domainexercise.Challenge{}, fmt.Errorf("exercise: finding challenge: %w", err)
 	}
 	profile, err := s.profiles.ReadProfile(ctx)
@@ -163,13 +181,13 @@ func (s *OfferService) challengeFor(ctx context.Context, sessionID string) (doma
 }
 
 // link creates the session exercise under the offer's message and deletes the
-// offer in one transaction. An existing link is accepted as is.
+// offer in one transaction.
 func (s *OfferService) link(ctx context.Context, offer domainexercise.Offer, challenge domainexercise.Challenge) error {
 	err := s.tx.WithinTx(ctx, func(ctx context.Context) error {
 		err := s.links.Create(ctx, domainexercise.SessionExercise{
 			ID: s.newID(), SessionID: offer.SessionID, ChallengeID: challenge.ID, MessageID: offer.MessageID, CreatedAt: s.now(),
 		})
-		if err != nil && !errors.Is(err, domainexercise.ErrSessionExerciseExists) {
+		if err != nil {
 			return err
 		}
 		return s.offers.Delete(ctx, offer.ID)
@@ -200,21 +218,36 @@ func difficultyFor(experienceLevel string) domainexercise.Difficulty {
 }
 
 // sessionLocks hands out one mutex per session, in process: the desktop app
-// is a single process.
+// is a single process. An entry lives only while someone holds or waits for
+// it, so the map does not grow with the sessions ever seen.
 type sessionLocks struct {
 	mu   sync.Mutex
-	held map[string]*sync.Mutex
+	held map[string]*sessionLock
+}
+
+type sessionLock struct {
+	mu   sync.Mutex
+	refs int
 }
 
 // lock takes the session's mutex and returns the function that releases it.
 func (l *sessionLocks) lock(sessionID string) func() {
 	l.mu.Lock()
-	m, ok := l.held[sessionID]
+	entry, ok := l.held[sessionID]
 	if !ok {
-		m = &sync.Mutex{}
-		l.held[sessionID] = m
+		entry = &sessionLock{}
+		l.held[sessionID] = entry
 	}
+	entry.refs++
 	l.mu.Unlock()
-	m.Lock()
-	return m.Unlock
+	entry.mu.Lock()
+	return func() {
+		entry.mu.Unlock()
+		l.mu.Lock()
+		entry.refs--
+		if entry.refs == 0 {
+			delete(l.held, sessionID)
+		}
+		l.mu.Unlock()
+	}
 }

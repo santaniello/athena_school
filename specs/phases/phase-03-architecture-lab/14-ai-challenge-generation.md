@@ -38,11 +38,14 @@ and avoids creating duplicates. The catalog route of 3.6.1 and 3.7 stays as it i
    not start the exam: opening the lab is [3.15](15-open-lab-from-chat.md). The link keeps the
    offer's message id, so the card of [3.17](17-session-exercises-ui.md) stays under that message.
 8. **Reuse before generating.** On accept, if a challenge already exists whose source session is
-   this one (from the chat or from the catalog), the most recent one is reused and no AI call is
-   made. Otherwise a challenge is generated through
+   this one (from the chat or from the catalog) and no message of the session has taken it yet, the
+   most recent one is reused and no AI call is made. A challenge already linked to an earlier
+   message is not reused: a second offer in the same session gets a new challenge, so the user
+   never receives the same exercise twice. Otherwise a challenge is generated through
    [3.6.1](06-01-challenge-generation.md) for this session, with the difficulty from the profile's
-   experience level and no question to the user. To get another challenge for the same session the
-   user uses **Generate challenge with AI** in the catalog.
+   experience level and no question to the user. The accept also takes the app's single
+   generation slot, so it never runs alongside **Generate challenge with AI** in the catalog, and
+   cancelling a generation cancels it.
 9. **Failure leaves the offer pending.** If generation fails (provider error, invalid output), the
    offer stays pending with the error shown and **Accept** available again, and **Decline** still
    works. Nothing is created and there is no automatic retry. While generating, the card shows
@@ -152,7 +155,8 @@ build green and is committed on its own.
   sent to the model, and the input is disabled; this still holds after reopening the app.
 - **Decline** removes the card and its record, keeps the tutor's text, and re-enables the input.
 - **Accept** with no earlier challenge for the session generates one with the profile's
-  difficulty and links it; with an earlier one it reuses the latest and makes no AI call. Either
+  difficulty and links it; with an earlier one that no message has taken yet it reuses the latest and makes no AI call; with
+  one already linked to a message it generates a new one. Either
   way the offer is deleted and the input is enabled.
 - A generation failure leaves the offer pending with the error and **Accept** available again;
   nothing is created.
