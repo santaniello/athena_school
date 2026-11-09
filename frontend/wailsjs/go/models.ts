@@ -835,6 +835,7 @@ export namespace desktop {
 	    title: string;
 	    topic: string;
 	    difficulty: string;
+	    timeLimitMinutes: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new SessionExerciseDTO(source);
@@ -846,6 +847,7 @@ export namespace desktop {
 	        this.title = source["title"];
 	        this.topic = source["topic"];
 	        this.difficulty = source["difficulty"];
+	        this.timeLimitMinutes = source["timeLimitMinutes"];
 	    }
 	}
 	export class SessionOptionDTO {
