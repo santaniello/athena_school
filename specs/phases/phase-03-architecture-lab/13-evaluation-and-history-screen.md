@@ -105,15 +105,15 @@ Bindings in `internal/interfaces/desktop/exercise.go`: `ListAttemptHistory(chall
 Each slice is TDD (Go tests with testify and Mockery mocks, Vitest for the frontend), keeps the
 build green and is committed on its own.
 
-- [ ] Backend: `ListHistory` (only finished attempts, newest first, scores and outcome)
-- [ ] Backend: `GetAttemptResult` (joins, frozen pass score, outcome and reasons, the not-judged
+- [x] Backend: `ListHistory` (only finished attempts, newest first, scores and outcome)
+- [x] Backend: `GetAttemptResult` (joins, frozen pass score, outcome and reasons, the not-judged
       and not-asked cases, `ErrAttemptNotFinished`)
-- [ ] Bindings, `wailsjs` and mocks regenerated
-- [ ] Frontend: `evaluation-table`, `outcome-card`, `defense-transcript`, `result-header`
-- [ ] Frontend: `diagram-editor` read-only mode and the offline message
-- [ ] Frontend: `attempt-result-view` and the exam ending in `LabExamScreen`
-- [ ] Frontend: `attempt-history-dialog` and the **History** button
-- [ ] Docs: CHANGELOG, README and `lib/documentation.ts` describe the result and history
+- [x] Bindings, `wailsjs` and mocks regenerated
+- [x] Frontend: `evaluation-table`, `outcome-card`, `defense-transcript`, `result-header`
+- [x] Frontend: `diagram-editor` read-only mode and the offline message
+- [x] Frontend: `attempt-result-view` and the exam ending in `LabExamScreen`
+- [x] Frontend: `attempt-history-dialog` and the **History** button
+- [x] Docs: CHANGELOG, README and `lib/documentation.ts` describe the result and history
 
 ## Acceptance Criteria
 
