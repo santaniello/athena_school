@@ -5,10 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
-
-	"modernc.org/sqlite"
-	sqlite3 "modernc.org/sqlite/lib"
 
 	"github.com/santaniello/athena/internal/domain/exercise"
 )
@@ -46,11 +42,7 @@ func (r *SessionExerciseRepository) Create(ctx context.Context, link exercise.Se
 // isSessionExerciseConflict reports whether err is the UNIQUE violation of
 // (session_id, challenge_id). A clash on the id is a different failure.
 func isSessionExerciseConflict(err error) bool {
-	var sqliteErr *sqlite.Error
-	if !errors.As(err, &sqliteErr) || sqliteErr.Code() != sqlite3.SQLITE_CONSTRAINT_UNIQUE {
-		return false
-	}
-	return strings.Contains(sqliteErr.Error(), "session_exercises.session_id")
+	return isUniqueViolation(err, "session_exercises.session_id")
 }
 
 // GetBySessionAndChallenge returns the link, or exercise.ErrSessionExerciseNotFound.

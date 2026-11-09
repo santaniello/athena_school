@@ -3,12 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
-	"strings"
-
-	"modernc.org/sqlite"
-	sqlite3 "modernc.org/sqlite/lib"
 
 	"github.com/santaniello/athena/internal/domain/exercise"
 )
@@ -55,11 +50,7 @@ func (r *HintRepository) Add(ctx context.Context, hint exercise.Hint) error {
 // isHintPositionViolation reports whether err is the UNIQUE violation of
 // (attempt_id, position) on attempt_hints.
 func isHintPositionViolation(err error) bool {
-	var sqliteErr *sqlite.Error
-	if !errors.As(err, &sqliteErr) || sqliteErr.Code() != sqlite3.SQLITE_CONSTRAINT_UNIQUE {
-		return false
-	}
-	return strings.Contains(sqliteErr.Error(), "attempt_hints.position")
+	return isUniqueViolation(err, "attempt_hints.position")
 }
 
 // ListByAttempt returns the attempt's hints in the order given.
