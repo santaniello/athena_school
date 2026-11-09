@@ -140,7 +140,7 @@ const DOCUMENTATION: DocSection[] = [
     body: [
       'The Architecture Lab lists your challenges. Each one is a system-design scenario that Athena writes from a study session you already had, so it practises what you actually studied. Use Generate challenge with AI, pick a session and a difficulty (preselected from your profile), and the challenge joins the list.',
       'Each row shows the title, topic, difficulty, time limit, how many attempts you made and your best diagram score, never the scenario itself. Start opens the rules of the exam: the time limit, the minimum passing score and what leaving means. The exam draws in the diagram editor (draw.io), which needs an internet connection to load.',
-      "During the exam you see the statement, the board, the tutor and the rubric. The clock has no pause and the attempt is never saved, so leaving discards it. Finish and evaluate asks for confirmation and sends the diagram; when time runs out a diagram with content is sent as it is and an empty board is discarded. The diagram is then evaluated in the same screen: the model picks a level per rubric criterion from a summary of your components and connections, a decision you did not draw is flagged as not enough evidence instead of guessed, and the app computes the score. If the evaluation fails, Try evaluating again runs it again. The result is not shown yet: the tutor then asks you 5 questions about your choices, one at a time, each aimed at a rubric criterion (first the decisions your diagram did not show), with no time limit and no feedback until the end. Answer in free text or press I don't know. After the last answer a second evaluation measures what you understood, and the exam ends with Passed or Failed, both scores and, when failed, the reasons. Leaving during the questions discards the attempt; a finished one is kept.",
+      "During the exam you see the statement, the board, the tutor and the rubric. The clock has no pause and the attempt is never saved, so leaving discards it. Finish and evaluate asks for confirmation and sends the diagram; when time runs out a diagram with content is sent as it is and an empty board is discarded. The diagram is then evaluated in the same screen: the model picks a level per rubric criterion from a summary of your components and connections, a decision you did not draw is flagged as not enough evidence instead of guessed, and the app computes the score. If the evaluation fails, Try evaluating again runs it again. The tutor then asks you 5 questions about your choices, one at a time, each aimed at a rubric criterion (first the decisions your diagram did not show), with no time limit and no feedback until the end. Answer in free text or press I don't know. After the last answer a second evaluation measures what you understood, and the exam ends with the result: Passed or Failed, both scores, the minimum used and, when failed, the reasons; the statement, each criterion with its weight, level, justification and evidence (a criterion that was not judged says so instead of showing 0), the strengths, gaps and recommendations, your answers and the diagram, locked. Leaving during the questions discards the attempt; a finished one is kept and never removed. A challenge with finished attempts shows History, which lists them newest first and opens the same result later; the locked diagram needs an internet connection like the exam.",
     ],
     topics: [
       {
@@ -156,7 +156,7 @@ const DOCUMENTATION: DocSection[] = [
       {
         term: 'Exam',
         description:
-          'One sitting: no pause, no resume. Closing the app or leaving discards the attempt, and nothing is graded yet.',
+          'One sitting: no pause, no resume. Closing the app or leaving discards the attempt, and a finished attempt is kept, graded by the diagram evaluation and the questions of the tutor.',
       },
       {
         term: 'Generate challenge with AI',
@@ -188,7 +188,8 @@ const DOCUMENTATION: DocSection[] = [
       },
       {
         term: 'Architecture Lab',
-        description: 'Challenges generated from your study sessions, with progress at a glance.',
+        description:
+          'Challenges generated from your study sessions, with progress at a glance and a History of every finished attempt.',
       },
       { term: 'Import notes', description: 'Athena reads your Markdown and text files.' },
       { term: 'Meaning search', description: 'Finds the right passage regardless of wording.' },

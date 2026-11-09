@@ -769,7 +769,6 @@ describe('useExam', () => {
       expect(nextDefenseQuestion).toHaveBeenCalledOnce()
       expect(evaluateDefense).toHaveBeenCalledExactlyOnceWith('a1')
       expect(result.current.phase).toBe('finished')
-      expect(result.current.outcome).toBe(outcome)
     })
 
     it('is judging while the final evaluation is in flight', async () => {
@@ -782,7 +781,6 @@ describe('useExam', () => {
       })
 
       await vi.waitFor(() => expect(result.current.phase).toBe('judging'))
-      expect(result.current.outcome).toBeNull()
     })
 
     it('keeps the answers and shows why the final evaluation failed', async () => {
@@ -794,7 +792,6 @@ describe('useExam', () => {
 
       expect(result.current.phase).toBe('judgingFailed')
       expect(result.current.message).toBe('The tutor returned an invalid evaluation.')
-      expect(result.current.outcome).toBeNull()
       expect(discardAttempt).not.toHaveBeenCalled()
       expect(onExit).not.toHaveBeenCalled()
     })
@@ -811,7 +808,6 @@ describe('useExam', () => {
       expect(answerDefenseQuestion).toHaveBeenCalledOnce()
       expect(result.current.phase).toBe('finished')
       expect(result.current.message).toBeNull()
-      expect(result.current.outcome).toBe(outcome)
     })
 
     it('ignores an answer unless a question is waiting', async () => {
@@ -913,7 +909,6 @@ describe('useExam', () => {
       await act(async () => resolve(outcome))
 
       expect(result.current.phase).toBe('judging')
-      expect(result.current.outcome).toBeNull()
     })
 
     it('drops a final evaluation failure that arrives after the user left', async () => {

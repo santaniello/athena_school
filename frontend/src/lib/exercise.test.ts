@@ -6,7 +6,9 @@ import {
   EvaluateDefense,
   GenerateChallenge,
   GetAttempt,
+  GetAttemptResult,
   GetEvaluation,
+  ListAttemptHistory,
   ListChallengeCatalog,
   ListChallengeTopics,
   ListHints,
@@ -41,7 +43,9 @@ import {
   formatSessionDate,
   generateChallenge,
   getAttempt,
+  getAttemptResult,
   getEvaluation,
+  listAttemptHistory,
   listChallengeCatalog,
   listChallengeTopics,
   listHints,
@@ -66,6 +70,8 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   NextDefenseQuestion: vi.fn(),
   AnswerDefenseQuestion: vi.fn(),
   GetEvaluation: vi.fn(),
+  GetAttemptResult: vi.fn(),
+  ListAttemptHistory: vi.fn(),
   RequestHint: vi.fn(),
   ListHints: vi.fn(),
 }))
@@ -567,5 +573,180 @@ describe('defense bindings', () => {
     ['', 'The tutor could not continue the defense.'],
   ])('explains a defense failure coded %s', (code, message) => {
     expect(defenseErrorMessage(JSON.stringify({ code }))).toBe(message)
+  })
+})
+
+describe('history bindings', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('lists the finished attempts of a challenge', async () => {
+    vi.mocked(ListAttemptHistory).mockResolvedValueOnce([
+      desktop.AttemptHistoryItemDTO.createFrom({
+        attemptId: 'a2',
+        finishedAt: '2026-11-08T10:00:00Z',
+        diagramScore: 90,
+        understandingScore: 70,
+        outcome: 'FAILED',
+      }),
+    ])
+
+    const items = await listAttemptHistory('c1')
+
+    expect(ListAttemptHistory).toHaveBeenCalledExactlyOnceWith('c1')
+    expect(items).toEqual([
+      {
+        attemptId: 'a2',
+        finishedAt: '2026-11-08T10:00:00Z',
+        diagramScore: 90,
+        understandingScore: 70,
+        outcome: 'FAILED',
+      },
+    ])
+  })
+
+  it('reads the full result of a finished attempt', async () => {
+    vi.mocked(GetAttemptResult).mockResolvedValueOnce(
+      desktop.AttemptResultDTO.createFrom({
+        challenge: {
+          id: 'c1',
+          title: 'Cache',
+          topic: 'caching',
+          difficulty: 'ADVANCED',
+          statement: {
+            scenario: 'A link service.',
+            functionalRequirements: ['Shorten'],
+            nonFunctionalRequirements: ['Fast'],
+            constraints: ['No DB'],
+            objectives: ['Cut load'],
+          },
+        },
+        attemptId: 'a1',
+        startedAt: '2026-11-07T09:30:00Z',
+        submittedAt: '2026-11-07T10:00:00Z',
+        finishedAt: '2026-11-07T11:00:00Z',
+        timeSpentSeconds: 1800,
+        submitReason: 'TIME_EXPIRED',
+        hintsUsed: 2,
+        maxHints: 3,
+        outcome: {
+          result: 'FAILED',
+          passScore: 80,
+          diagramScore: 85,
+          understandingScore: 60,
+          reasons: [
+            { kind: 'UNDERSTANDING_SCORE', evaluation: 'UNDERSTANDING', criterionName: '' },
+          ],
+        },
+        diagram: {
+          score: 85,
+          summary: 'Good.',
+          strengths: ['s'],
+          gaps: ['g'],
+          recommendations: ['r'],
+          results: [
+            {
+              criterionKey: 'architecture',
+              criterionName: 'Architecture',
+              weight: 60,
+              level: 3,
+              justification: 'ok',
+              evidence: 'box A',
+              insufficientEvidence: false,
+            },
+          ],
+        },
+        understanding: {
+          score: 60,
+          summary: '',
+          strengths: [],
+          gaps: [],
+          recommendations: [],
+          results: [
+            {
+              criterionKey: 'architecture',
+              criterionName: 'Architecture',
+              weight: 60,
+              level: 0,
+              justification: '',
+              evidence: '',
+              insufficientEvidence: true,
+            },
+          ],
+        },
+        defense: [{ position: 1, question: 'Why?', answer: 'Because.' }],
+        submission: '<mxfile/>',
+      }),
+    )
+
+    const result = await getAttemptResult('a1')
+
+    expect(GetAttemptResult).toHaveBeenCalledExactlyOnceWith('a1')
+    expect(result).toEqual({
+      challenge: {
+        id: 'c1',
+        title: 'Cache',
+        topic: 'caching',
+        difficulty: 'ADVANCED',
+        statement: {
+          scenario: 'A link service.',
+          functionalRequirements: ['Shorten'],
+          nonFunctionalRequirements: ['Fast'],
+          constraints: ['No DB'],
+          objectives: ['Cut load'],
+        },
+      },
+      attemptId: 'a1',
+      startedAt: '2026-11-07T09:30:00Z',
+      finishedAt: '2026-11-07T11:00:00Z',
+      timeSpentSeconds: 1800,
+      submitReason: 'TIME_EXPIRED',
+      hintsUsed: 2,
+      maxHints: 3,
+      outcome: {
+        result: 'FAILED',
+        passScore: 80,
+        diagramScore: 85,
+        understandingScore: 60,
+        reasons: [{ kind: 'UNDERSTANDING_SCORE', evaluation: 'UNDERSTANDING', criterionName: '' }],
+      },
+      diagram: {
+        score: 85,
+        summary: 'Good.',
+        strengths: ['s'],
+        gaps: ['g'],
+        recommendations: ['r'],
+        results: [
+          {
+            key: 'architecture',
+            name: 'Architecture',
+            weight: 60,
+            level: 3,
+            justification: 'ok',
+            evidence: 'box A',
+            insufficientEvidence: false,
+          },
+        ],
+      },
+      understanding: {
+        score: 60,
+        summary: '',
+        strengths: [],
+        gaps: [],
+        recommendations: [],
+        results: [
+          {
+            key: 'architecture',
+            name: 'Architecture',
+            weight: 60,
+            level: 0,
+            justification: '',
+            evidence: '',
+            insufficientEvidence: true,
+          },
+        ],
+      },
+      defense: [{ position: 1, question: 'Why?', answer: 'Because.' }],
+      submission: '<mxfile/>',
+    })
   })
 })

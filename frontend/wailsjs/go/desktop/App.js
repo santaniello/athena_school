@@ -58,6 +58,10 @@ export function GetAttempt(arg1) {
   return window['go']['desktop']['App']['GetAttempt'](arg1);
 }
 
+export function GetAttemptResult(arg1) {
+  return window['go']['desktop']['App']['GetAttemptResult'](arg1);
+}
+
 export function GetDefense(arg1) {
   return window['go']['desktop']['App']['GetDefense'](arg1);
 }
@@ -104,6 +108,10 @@ export function HasUserProfile() {
 
 export function ImportFile(arg1, arg2) {
   return window['go']['desktop']['App']['ImportFile'](arg1, arg2);
+}
+
+export function ListAttemptHistory(arg1) {
+  return window['go']['desktop']['App']['ListAttemptHistory'](arg1);
 }
 
 export function ListAttempts(arg1) {

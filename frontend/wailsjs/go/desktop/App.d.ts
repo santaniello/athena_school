@@ -31,6 +31,8 @@ export function GenerateChallenge(arg1:string,arg2:string):Promise<desktop.Chall
 
 export function GetAttempt(arg1:string):Promise<desktop.AttemptDTO>;
 
+export function GetAttemptResult(arg1:string):Promise<desktop.AttemptResultDTO>;
+
 export function GetDefense(arg1:string):Promise<desktop.DefenseDTO>;
 
 export function GetEvaluation(arg1:string):Promise<desktop.EvaluationDTO>;
@@ -54,6 +56,8 @@ export function HasOpenRouterKey():Promise<boolean>;
 export function HasUserProfile():Promise<boolean>;
 
 export function ImportFile(arg1:string,arg2:string):Promise<void>;
+
+export function ListAttemptHistory(arg1:string):Promise<Array<desktop.AttemptHistoryItemDTO>>;
 
 export function ListAttempts(arg1:string):Promise<Array<desktop.AttemptDTO>>;
 

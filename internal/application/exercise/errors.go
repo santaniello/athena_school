@@ -17,6 +17,9 @@ var (
 	ErrSubmissionTooLate = errors.New("submission arrived too late")
 	// ErrAttemptFinished is returned when a finished attempt is discarded.
 	ErrAttemptFinished = errors.New("a finished attempt cannot be discarded")
+	// ErrAttemptNotFinished is returned when the result of an attempt that is
+	// not FINISHED is asked for.
+	ErrAttemptNotFinished = errors.New("the attempt is not finished")
 )
 
 // AttemptInProgressError is the concrete ErrAttemptInProgress: it names the

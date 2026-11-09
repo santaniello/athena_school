@@ -12,6 +12,23 @@ import ArchitectureLabScreen from './ArchitectureLabScreen'
 
 vi.mock('@/lib/passScore', () => ({ getPassScore: vi.fn() }))
 
+// The real dialog is covered by its own tests; this stand-in only exposes
+// what the screen hands it.
+vi.mock('@/components/attempt-history-dialog', () => ({
+  AttemptHistoryDialog: (props: {
+    challenge: { id: string; title: string } | null
+    onClose: () => void
+  }) =>
+    props.challenge ? (
+      <div role="dialog" aria-label="History dialog">
+        <span>
+          history of {props.challenge.id} {props.challenge.title}
+        </span>
+        <button onClick={props.onClose}>close history</button>
+      </div>
+    ) : null,
+}))
+
 const onStartExam = vi.fn()
 
 vi.mock('@/lib/exercise', async (importOriginal) => {
@@ -352,6 +369,21 @@ describe('ArchitectureLabScreen', () => {
     await user.click(await screen.findByRole('button', { name: 'Cancel' }))
 
     expect(onStartExam).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('opens the history of a challenge with attempts and closes it again', async () => {
+    const user = userEvent.setup()
+    vi.mocked(listChallengeCatalog).mockResolvedValue(
+      catalog([item('c1', { attempts: 2, status: 'COMPLETED', bestDiagramScore: 90 })]),
+    )
+    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+    await screen.findByText('Challenge c1')
+
+    await user.click(screen.getByRole('button', { name: 'History' }))
+    expect(await screen.findByRole('dialog')).toHaveTextContent('history of c1 Challenge c1')
+    await user.click(screen.getByRole('button', { name: 'close history' }))
+
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })

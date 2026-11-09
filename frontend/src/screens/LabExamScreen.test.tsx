@@ -8,6 +8,8 @@ import {
   discardAttempt,
   evaluateAttempt,
   evaluateDefense,
+  getAttemptResult,
+  type AttemptResult,
   listHints,
   nextDefenseQuestion,
   requestHint,
@@ -30,6 +32,7 @@ vi.mock('@/lib/exercise', async (importOriginal) => {
     nextDefenseQuestion: vi.fn(),
     answerDefenseQuestion: vi.fn(),
     evaluateDefense: vi.fn(),
+    getAttemptResult: vi.fn(),
     requestHint: vi.fn(),
     listHints: vi.fn(),
   }
@@ -97,6 +100,7 @@ const evaluation: Evaluation = {
     {
       key: 'k1',
       name: 'Consistency',
+      weight: 20,
       level: 3,
       justification: 'Invalidation is drawn.',
       evidence: '',
@@ -111,6 +115,34 @@ const outcome: Outcome = {
   diagramScore: 85,
   understandingScore: 60,
   reasons: [{ kind: 'UNDERSTANDING_SCORE', evaluation: 'UNDERSTANDING', criterionName: '' }],
+}
+
+const attemptResult: AttemptResult = {
+  challenge: {
+    id: 'c1',
+    title: 'Cache and invalidation',
+    topic: 'caching',
+    difficulty: 'INTERMEDIATE',
+    statement: {
+      scenario: 'A catalog service.',
+      functionalRequirements: [],
+      nonFunctionalRequirements: [],
+      constraints: [],
+      objectives: [],
+    },
+  },
+  attemptId: 'a1',
+  startedAt: '2026-11-07T09:30:00Z',
+  finishedAt: '2026-11-07T11:00:00Z',
+  timeSpentSeconds: 1800,
+  submitReason: 'USER',
+  hintsUsed: 1,
+  maxHints: 3,
+  outcome,
+  diagram: evaluation,
+  understanding: evaluation,
+  defense: [{ position: 1, question: 'Why a cache?', answer: 'To cut reads.' }],
+  submission: '<mxfile/>',
 }
 
 const challenge = {
@@ -162,6 +194,7 @@ describe('LabExamScreen', () => {
     })
     vi.mocked(answerDefenseQuestion).mockResolvedValue({ total: 2, complete: false })
     vi.mocked(evaluateDefense).mockResolvedValue(outcome)
+    vi.mocked(getAttemptResult).mockResolvedValue(attemptResult)
     vi.mocked(listHints).mockResolvedValue([])
   })
   afterEach(() => vi.useRealTimers())
@@ -594,7 +627,7 @@ describe('LabExamScreen', () => {
       expect(screen.queryByText('Invalidation is drawn.')).not.toBeInTheDocument()
     })
 
-    it('goes from the last answer to the outcome with Back to catalog', async () => {
+    it('goes from the last answer to the full result with Back to catalog', async () => {
       const { user, onExit } = await defending()
       vi.mocked(nextDefenseQuestion).mockResolvedValue({
         position: 2,
@@ -612,9 +645,12 @@ describe('LabExamScreen', () => {
       expect(answerDefenseQuestion).toHaveBeenNthCalledWith(1, 'a1', 'To cut reads.')
       expect(answerDefenseQuestion).toHaveBeenNthCalledWith(2, 'a1', "I don't know")
       expect(evaluateDefense).toHaveBeenCalledExactlyOnceWith('a1')
+      expect(getAttemptResult).toHaveBeenCalledExactlyOnceWith('a1')
       expect(
         screen.getByText('The understanding score is below the minimum of 80.'),
       ).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Cache and invalidation' })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Tutor questions' })).toBeInTheDocument()
       await user.click(screen.getByRole('button', { name: 'Back to catalog' }))
       expect(onExit).toHaveBeenCalledOnce()
       expect(discardAttempt).not.toHaveBeenCalled()

@@ -15,7 +15,6 @@ import {
   submitAttempt,
   type Attempt,
   type DefenseQuestion,
-  type Outcome,
 } from '@/lib/exercise'
 import { diagramHasContent } from '@/lib/lab'
 
@@ -67,7 +66,6 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void) 
   const [hasContent, setHasContent] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [question, setQuestion] = useState<DefenseQuestion | null>(null)
-  const [outcome, setOutcome] = useState<Outcome | null>(null)
   // A new key replaces the editor, which is how the user tries again.
   const [editorKey, setEditorKey] = useState(0)
   // The board's own editor loads after the attempt exists; until it reports
@@ -221,9 +219,8 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void) 
     setMessage(null)
     setPhase('judging')
     try {
-      const result = await evaluateDefense(current.id)
+      await evaluateDefense(current.id)
       if (exitedRef.current) return
-      setOutcome(result)
       setPhase('finished')
     } catch (err) {
       if (exitedRef.current) return
@@ -301,7 +298,6 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void) 
     hasContent,
     message,
     question,
-    outcome,
     editorKey,
     boardStalled,
     editorReady,

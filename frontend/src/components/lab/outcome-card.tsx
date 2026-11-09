@@ -1,17 +1,16 @@
-import { Button } from '@/components/ui/button'
 import type { Outcome, OutcomeReason } from '@/lib/exercise'
 
-interface ExamOutcomeProps {
+interface OutcomeCardProps {
   outcome: Outcome
-  onBack: () => void
 }
 
-// The end of the exam: Passed or Failed, both scores and, when failed, every
-// reason. See specs/phases/phase-03-architecture-lab/12-architecture-defense.md.
-export function ExamOutcome({ outcome, onBack }: ExamOutcomeProps) {
+// Passed or Failed, both scores, the minimum used and, when failed, every
+// reason. The outcome and the reasons come from the backend, never derived
+// here. See specs/phases/phase-03-architecture-lab/13-evaluation-and-history-screen.md.
+export function OutcomeCard({ outcome }: OutcomeCardProps) {
   const passed = outcome.result === 'PASSED'
   return (
-    <div className="mx-auto flex h-full w-full max-w-xl flex-col gap-6 overflow-y-auto p-6">
+    <section aria-label="Outcome" className="flex flex-col gap-4">
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold text-foreground">{passed ? 'Passed' : 'Failed'}</h1>
         <p className="text-sm text-muted-foreground">Minimum to pass: {outcome.passScore}</p>
@@ -27,12 +26,7 @@ export function ExamOutcome({ outcome, onBack }: ExamOutcomeProps) {
           ))}
         </ul>
       )}
-      <div>
-        <Button type="button" onClick={onBack}>
-          Back to catalog
-        </Button>
-      </div>
-    </div>
+    </section>
   )
 }
 

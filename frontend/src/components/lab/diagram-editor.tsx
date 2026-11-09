@@ -4,6 +4,9 @@ const EMBED_ORIGIN = 'https://embed.diagrams.net'
 const EMBED_URL =
   `${EMBED_ORIGIN}/?embed=1&proto=json&spin=1&configure=1&ui=min&noSaveBtn=1` +
   '&noExitBtn=1&saveAndExit=0&libraries=1&lang=en'
+// The read-only view of the stored diagram: no menus, sidebars or toolbars, and
+// nothing in it can be edited. See ADR-006.
+const READ_ONLY_URL = `${EMBED_ORIGIN}/?embed=1&proto=json&spin=1&chrome=0&lang=en`
 const EMBED_CONFIG = {
   compressXml: false,
   defaultLibraries: 'general;aws4;gcp2;azure2;kubernetes;er;flowchart;network',
@@ -15,6 +18,7 @@ const EXPORT_TIMEOUT_MS = 1500
 const PROBE_INTERVAL_MS = 5000
 const MISSED_PROBES_FOR_LOSS = 2
 const RECOVERY_TIMEOUT_MS = 15000
+const READ_ONLY_LOAD_TIMEOUT_MS = 10000
 
 export interface DiagramEditorHandle {
   // The current diagram XML: an export pull, or the latest autosave when the
@@ -24,6 +28,10 @@ export interface DiagramEditorHandle {
 
 interface DiagramEditorProps {
   ref?: Ref<DiagramEditorHandle>
+  // Shows `xml` with no way to edit it. The connection is not probed: a
+  // diagram that does not load says so instead.
+  readOnly?: boolean
+  xml?: string
   onReady: () => void
   onChange: (xml: string) => void
   onConnectionLost: () => void
@@ -55,6 +63,8 @@ function parse(data: unknown): EditorMessage | null {
 // specs/phases/phase-03-architecture-lab/10-diagram-workspace.md.
 function DiagramEditor({
   ref,
+  readOnly = false,
+  xml = '',
   onReady,
   onChange,
   onConnectionLost,
@@ -65,7 +75,8 @@ function DiagramEditor({
   const [generation, setGeneration] = useState(0)
   // Stryker disable next-line StringLiteral: only 'ready' and 'lost' are ever compared.
   const phase = useRef<Phase>('loading')
-  const latestXml = useRef('')
+  const latestXml = useRef(readOnly ? xml : '')
+  const [unavailable, setUnavailable] = useState(readOnly && !navigator.onLine)
   const waiting = useRef<Array<(xml: string) => void>>([])
   // Stryker disable next-line ObjectLiteral: the effect below sets the callbacks before any message can arrive.
   const callbacks = useRef({ onReady, onChange, onConnectionLost, onConnectionRestored })
@@ -110,9 +121,14 @@ function DiagramEditor({
         post({ action: 'configure', config: EMBED_CONFIG })
         break
       case 'init':
-        post({ action: 'load', xml: latestXml.current || EMPTY_DIAGRAM, autosave: 1 })
+        post({
+          action: 'load',
+          xml: latestXml.current || EMPTY_DIAGRAM,
+          autosave: readOnly ? 0 : 1,
+        })
         break
       case 'load':
+        setUnavailable(false)
         if (phase.current === 'lost') callbacks.current.onConnectionRestored()
         else callbacks.current.onReady()
         phase.current = 'ready'
@@ -137,7 +153,7 @@ function DiagramEditor({
     window.addEventListener('message', listener)
     let missed = 0
     const probe = setInterval(() => {
-      if (phase.current !== 'ready') return
+      if (phase.current !== 'ready' || readOnly) return
       void requestXml().then((xml) => {
         missed = xml === null ? missed + 1 : 0
         if (missed < MISSED_PROBES_FOR_LOSS) return
@@ -167,14 +183,33 @@ function DiagramEditor({
     return () => clearTimeout(retry)
   }, [generation])
 
+  // A read-only diagram that has not loaded in time is most likely offline.
+  useEffect(() => {
+    if (!readOnly) return
+    const timer = setTimeout(() => {
+      if (phase.current !== 'ready') setUnavailable(true)
+    }, READ_ONLY_LOAD_TIMEOUT_MS)
+    return () => clearTimeout(timer)
+  }, [readOnly])
+
   return (
-    <iframe
-      key={generation}
-      ref={iframeRef}
-      title="Diagram editor"
-      src={EMBED_URL}
-      className="size-full border-0"
-    />
+    <>
+      <iframe
+        key={generation}
+        ref={iframeRef}
+        title="Diagram editor"
+        src={readOnly ? READ_ONLY_URL : EMBED_URL}
+        className="size-full border-0"
+      />
+      {unavailable && (
+        <p
+          role="status"
+          className="absolute inset-0 flex items-center justify-center bg-background p-4 text-center text-sm text-muted-foreground"
+        >
+          The diagram needs an internet connection to display.
+        </p>
+      )}
+    </>
   )
 }
 

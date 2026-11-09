@@ -15,6 +15,8 @@ interface ChallengeRowProps {
   highlighted: boolean
   // Start or Start again was clicked; the caller opens the rules dialog.
   onStart: (item: CatalogItem) => void
+  // History was clicked; the caller opens the list of finished attempts.
+  onHistory: (item: CatalogItem) => void
 }
 
 function attemptsText(attempts: number): string {
@@ -26,7 +28,7 @@ function attemptsText(attempts: number): string {
 // scenario, requirements or rubric. Start opens the exam rules. See
 // specs/phases/phase-03-architecture-lab/07-challenge-catalog-ui.md and
 // 10-diagram-workspace.md.
-function ChallengeRow({ item, highlighted, onStart }: ChallengeRowProps) {
+function ChallengeRow({ item, highlighted, onStart, onHistory }: ChallengeRowProps) {
   const difficulty = DIFFICULTY_LABELS[item.difficulty as ChallengeDifficulty] ?? item.difficulty
   const status = STATUS_LABELS[item.status as ChallengeStatus] ?? item.status
   const progress = item.bestDiagramScore > 0 ? `Best ${item.bestDiagramScore} · ${status}` : status
@@ -52,6 +54,11 @@ function ChallengeRow({ item, highlighted, onStart }: ChallengeRowProps) {
             <span className="text-sm text-muted-foreground">{progress}</span>
           )}
         </div>
+        {item.attempts > 0 && (
+          <Button type="button" variant="ghost" size="sm" onClick={() => onHistory(item)}>
+            History
+          </Button>
+        )}
         <Button type="button" variant="outline" size="sm" onClick={() => onStart(item)}>
           {item.attempts === 0 ? 'Start' : 'Start again'}
         </Button>
