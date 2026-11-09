@@ -32,29 +32,46 @@ const unavailableContextMessage = "Unable to determine this session's context li
 // specs/phases/phase-02-knowledge-engine/09-persistent-provenance.md); an
 // empty/nil slice is a valid no-op (a strict-notes miss, or the opening
 // turn, which never retrieves).
+//
+// The model may end a reply with the exercise offer marker (see
+// offer_marker.go): the user never sees it, not while streaming and not
+// after, and the stored text is clean. When detectOffer is set (a reply to
+// the user's own message) and the marker was there, an offer is created under
+// the stored message once the reply is safely persisted; failing to create it
+// never fails the reply.
 func (s *Service) streamAndPersist(
 	ctx context.Context, sessionID string, priorContext domainstudy.ContextUsage,
-	messages []domainllm.Message, sources []domainknowledge.Source, onChunk func(chunk string) error,
+	messages []domainllm.Message, sources []domainknowledge.Source, detectOffer bool, onChunk func(chunk string) error,
 	onContext ContextCallback, onContextUnavailable ContextUnavailableCallback,
 ) (string, error) {
 	var buf strings.Builder
+	var filter offerMarkerFilter
 	streamResp, err := s.llm.ChatStream(ctx, domainllm.ChatRequest{
 		SessionID: sessionID,
 		Task:      domainllm.TaskStudy,
 		Messages:  messages,
 	}, func(chunk string) error {
 		buf.WriteString(chunk)
-		return onChunk(chunk)
+		if safe := filter.write(chunk); safe != "" {
+			return onChunk(safe)
+		}
+		return nil
 	})
 	if err != nil {
 		return "", err
 	}
+	if held := filter.flush(); held != "" {
+		if err := onChunk(held); err != nil {
+			return "", err
+		}
+	}
+	content, offered := stripExerciseOfferMarker(buf.String())
 
 	assistantMessage := domainstudy.Message{
 		ID:        uuid.NewString(),
 		SessionID: sessionID,
 		Role:      domainstudy.RoleAssistant,
-		Content:   buf.String(),
+		Content:   content,
 		CreatedAt: time.Now().UTC(),
 	}
 
@@ -88,6 +105,11 @@ func (s *Service) streamAndPersist(
 	}
 
 	emitContextTransition(priorContext, newUsage, onContext)
+
+	if detectOffer && offered && s.offers != nil {
+		// Best effort: a missed offer is a normal reply, and the user can ask again.
+		_ = s.offers.CreateOffer(ctx, sessionID, assistantMessage.ID)
+	}
 
 	switch {
 	case streamResp.Model == "":

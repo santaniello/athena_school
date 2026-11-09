@@ -56,6 +56,7 @@ type Service struct {
 	summarizer     ConversationSummarizer
 	summaries      domainstudy.ConversationSummaryRepository
 	summaryWindow  SummaryWindowSource
+	offers         OfferGate
 	inFlight       *inFlightCoordinator
 }
 

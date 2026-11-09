@@ -41,3 +41,7 @@ var ErrInvalidSummaryFormat = errors.New("study: conversation summary does not h
 // ErrNothingToCompact is returned by CompactSession when there is nothing
 // that could be folded into the summary (or the context window is unknown).
 var ErrNothingToCompact = errors.New("study: nothing to compact")
+
+// ErrOfferPending is returned by SendMessage while the session has an exercise
+// offer waiting for Accept or Decline. Nothing is stored or sent to the model.
+var ErrOfferPending = errors.New("study: an exercise offer is pending for this session")

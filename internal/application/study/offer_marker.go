@@ -1,6 +1,9 @@
 package study
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // exerciseOfferMarker is the fixed token the model ends a reply with when the
 // user explicitly asked for an architecture exercise. The backend reads it,
@@ -10,10 +13,13 @@ const exerciseOfferMarker = "[[ATHENA_EXERCISE_OFFER]]"
 
 // exerciseOfferInstruction is the study-prompt rule that makes the model emit
 // the marker. It is a pure string so the prompt test pins it.
-const exerciseOfferInstruction = "\n- If, and only if, the user explicitly asks you for an exercise or to practice this topic " +
-	"(for example \"give me an exercise\" or \"I want to practice this\"), answer in one or two short sentences " +
-	"and end the reply with the exact text " + exerciseOfferMarker + " on its own line. " +
-	"Never propose an exercise on your own, and never write that text in any other case."
+var exerciseOfferInstruction = fmt.Sprintf(
+	"\n- If, and only if, the user explicitly asks you for an exercise or to practice this topic "+
+		"(for example \"give me an exercise\" or \"I want to practice this\"), answer in one or two short sentences "+
+		"and end the reply with the exact text %s on its own line. "+
+		"Never propose an exercise on your own, and never write that text in any other case.",
+	exerciseOfferMarker,
+)
 
 // stripExerciseOfferMarker removes every marker from content and reports
 // whether there was one. Content without a marker is returned untouched.
@@ -56,11 +62,9 @@ func (f *offerMarkerFilter) flush() string {
 // partialMarkerSuffixLength is the length of the longest suffix of text that
 // is a proper prefix of the marker.
 func partialMarkerSuffixLength(text string) int {
-	longest := min(len(text), len(exerciseOfferMarker)-1)
-	for n := longest; n > 0; n-- {
-		if strings.HasPrefix(exerciseOfferMarker, text[len(text)-n:]) {
-			return n
-		}
+	n := len(exerciseOfferMarker) - 1
+	for n > 0 && !strings.HasSuffix(text, exerciseOfferMarker[:n]) {
+		n--
 	}
-	return 0
+	return n
 }
