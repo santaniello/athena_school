@@ -221,13 +221,15 @@ function toAttempt(dto: desktop.AttemptDTO): Attempt {
   }
 }
 
-// Starts a standalone exam. When another exam is running it rejects with
-// ATTEMPT_IN_PROGRESS unless discardInProgress is true.
+// Starts an exam, standalone or, with a session id, linked to that study
+// session. When another exam is running it rejects with ATTEMPT_IN_PROGRESS
+// unless discardInProgress is true.
 export async function startAttempt(
   challengeId: string,
   discardInProgress: boolean,
+  sessionId = '',
 ): Promise<Attempt> {
-  return toAttempt(await StartAttempt(challengeId, '', discardInProgress))
+  return toAttempt(await StartAttempt(challengeId, sessionId, discardInProgress))
 }
 
 export async function submitAttempt(attemptId: string, xml: string): Promise<void> {
@@ -514,6 +516,7 @@ export interface SessionExercise {
   title: string
   topic: string
   difficulty: string
+  timeLimitMinutes: number
 }
 
 export const OFFER_PENDING_MESSAGE = 'Accept or decline the exercise offer to keep chatting.'
@@ -531,6 +534,7 @@ export async function acceptOffer(offerId: string): Promise<SessionExercise> {
     title: exercise.title,
     topic: exercise.topic,
     difficulty: exercise.difficulty,
+    timeLimitMinutes: exercise.timeLimitMinutes,
   }
 }
 

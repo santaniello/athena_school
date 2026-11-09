@@ -211,6 +211,7 @@ describe('StudyChatScreen — exercise offer', () => {
       title: 'Design a cache',
       topic: 'caching',
       difficulty: 'ADVANCED',
+      timeLimitMinutes: 45,
     })
     await renderResumed()
     const user = userEvent.setup()
@@ -261,6 +262,7 @@ describe('StudyChatScreen — exercise offer', () => {
       title: 'Design a cache',
       topic: 'caching',
       difficulty: 'ADVANCED',
+      timeLimitMinutes: 45,
     })
     vi.mocked(sendStudyMessage).mockResolvedValue()
     await renderResumed()

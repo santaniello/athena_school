@@ -15,6 +15,7 @@ const exercise: SessionExercise = {
   title: 'Design a cache',
   topic: 'caching',
   difficulty: 'ADVANCED',
+  timeLimitMinutes: 45,
 }
 
 function setup(props: { language?: string; exercise?: SessionExercise | null } = {}) {

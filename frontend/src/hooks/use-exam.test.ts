@@ -73,9 +73,9 @@ function coded(code: string): Error {
   return new Error(JSON.stringify({ code, message: code }))
 }
 
-function setup() {
+function setup(sessionId?: string) {
   const onExit = vi.fn()
-  const hook = renderHook(() => useExam('c1', onExit))
+  const hook = renderHook(() => useExam('c1', onExit, sessionId))
   return { onExit, ...hook }
 }
 
@@ -107,13 +107,22 @@ describe('useExam', () => {
     expect(startAttempt).not.toHaveBeenCalled()
   })
 
+  it('links the attempt to the study session it was started from', async () => {
+    vi.mocked(startAttempt).mockResolvedValue(attempt)
+    const { result } = setup('s1')
+
+    await act(async () => result.current.editorReady())
+
+    expect(startAttempt).toHaveBeenCalledExactlyOnceWith('c1', false, 's1')
+  })
+
   it('creates the attempt only once the editor is ready, then runs', async () => {
     vi.mocked(startAttempt).mockResolvedValue(attempt)
     const { result } = setup()
 
     await act(async () => result.current.editorReady())
 
-    expect(startAttempt).toHaveBeenCalledExactlyOnceWith('c1', false)
+    expect(startAttempt).toHaveBeenCalledExactlyOnceWith('c1', false, '')
     expect(result.current.phase).toBe('running')
     expect(result.current.attempt).toBe(attempt)
   })
@@ -184,7 +193,7 @@ describe('useExam', () => {
 
     await act(async () => result.current.confirmReplace())
 
-    expect(startAttempt).toHaveBeenLastCalledWith('c1', true)
+    expect(startAttempt).toHaveBeenLastCalledWith('c1', true, '')
     expect(result.current.phase).toBe('running')
   })
 

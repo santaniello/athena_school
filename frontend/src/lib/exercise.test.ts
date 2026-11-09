@@ -345,6 +345,14 @@ describe('attempt bindings', () => {
     expect(StartAttempt).toHaveBeenCalledWith('c1', '', true)
   })
 
+  it('links the attempt to a study session when one is given', async () => {
+    vi.mocked(StartAttempt).mockResolvedValueOnce(attemptDto)
+
+    await startAttempt('c1', false, 's1')
+
+    expect(StartAttempt).toHaveBeenCalledWith('c1', 's1', false)
+  })
+
   it('submits the diagram XML as drawio-xml', async () => {
     vi.mocked(SubmitAttempt).mockResolvedValueOnce(attemptDto)
 
@@ -792,6 +800,7 @@ describe('exercise offer', () => {
         title: 'Design a cache',
         topic: 'caching',
         difficulty: 'ADVANCED',
+        timeLimitMinutes: 45,
       }),
     )
 
@@ -803,6 +812,7 @@ describe('exercise offer', () => {
       title: 'Design a cache',
       topic: 'caching',
       difficulty: 'ADVANCED',
+      timeLimitMinutes: 45,
     })
   })
 
