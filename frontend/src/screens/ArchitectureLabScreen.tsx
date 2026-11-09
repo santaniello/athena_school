@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { ChallengeRow } from '@/components/challenge-row'
+import { AttemptHistoryDialog, type HistoryChallenge } from '@/components/attempt-history-dialog'
 import { GenerateChallengeDialog } from '@/components/generate-challenge-dialog'
 import { StartExamDialog, type ExamToStart } from '@/components/lab/start-exam-dialog'
 import { useChallengeCatalog } from '@/hooks/use-challenge-catalog'
@@ -51,6 +52,7 @@ function ArchitectureLabScreen({ experienceLevel, onStartExam }: ArchitectureLab
   const [dialogOpen, setDialogOpen] = useState(false)
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const [pendingExam, setPendingExam] = useState<ExamToStart | null>(null)
+  const [historyOf, setHistoryOf] = useState<HistoryChallenge | null>(null)
 
   const filtersActive = Object.values(filter).some((value) => value !== '')
 
@@ -150,6 +152,7 @@ function ArchitectureLabScreen({ experienceLevel, onStartExam }: ArchitectureLab
                 item={item}
                 highlighted={item.id === highlightedId}
                 onStart={setPendingExam}
+                onHistory={setHistoryOf}
               />
             ))}
           </ul>
@@ -181,6 +184,8 @@ function ArchitectureLabScreen({ experienceLevel, onStartExam }: ArchitectureLab
         onGenerated={handleGenerated}
         onGeneratedAfterClose={handleGeneratedAfterClose}
       />
+
+      <AttemptHistoryDialog challenge={historyOf} onClose={() => setHistoryOf(null)} />
 
       <StartExamDialog
         challenge={pendingExam}

@@ -25,10 +25,10 @@ const fresh: CatalogItem = {
   bestDiagramScore: 0,
 }
 
-function renderRow(item: CatalogItem, highlighted = false, onStart = vi.fn()) {
+function renderRow(item: CatalogItem, highlighted = false, onStart = vi.fn(), onHistory = vi.fn()) {
   render(
     <ul>
-      <ChallengeRow item={item} highlighted={highlighted} onStart={onStart} />
+      <ChallengeRow item={item} highlighted={highlighted} onStart={onStart} onHistory={onHistory} />
     </ul>,
   )
   return onStart
@@ -114,5 +114,20 @@ describe('ChallengeRow', () => {
 
     expect(screen.getByText('EXPERT')).toBeInTheDocument()
     expect(screen.getByText('MYSTERY')).toBeInTheDocument()
+  })
+
+  it('opens the history of a challenge that has attempts', async () => {
+    const onHistory = vi.fn()
+    renderRow(attempted, false, vi.fn(), onHistory)
+
+    await userEvent.click(screen.getByRole('button', { name: 'History' }))
+
+    expect(onHistory).toHaveBeenCalledExactlyOnceWith(attempted)
+  })
+
+  it('offers no history for a challenge nobody tried', () => {
+    renderRow(fresh)
+
+    expect(screen.queryByRole('button', { name: 'History' })).not.toBeInTheDocument()
   })
 })

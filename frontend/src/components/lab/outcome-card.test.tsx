@@ -1,8 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import type { Outcome } from '@/lib/exercise'
-import { ExamOutcome } from './exam-outcome'
+import { OutcomeCard } from './outcome-card'
 
 const passed: Outcome = {
   result: 'PASSED',
@@ -26,12 +25,10 @@ const failed: Outcome = {
 }
 
 function setup(outcome: Outcome) {
-  const onBack = vi.fn()
-  render(<ExamOutcome outcome={outcome} onBack={onBack} />)
-  return { onBack }
+  render(<OutcomeCard outcome={outcome} />)
 }
 
-describe('ExamOutcome', () => {
+describe('OutcomeCard', () => {
   it('shows Passed with both scores and the minimum, and no reasons', () => {
     setup(passed)
 
@@ -58,14 +55,5 @@ describe('ExamOutcome', () => {
       'Mandatory criterion not met in the diagram: Resilience.',
       'Mandatory criterion not met in the defense: Scalability.',
     ])
-  })
-
-  it('goes back to the catalog', async () => {
-    const user = userEvent.setup()
-    const { onBack } = setup(passed)
-
-    await user.click(screen.getByRole('button', { name: 'Back to catalog' }))
-
-    expect(onBack).toHaveBeenCalledOnce()
   })
 })

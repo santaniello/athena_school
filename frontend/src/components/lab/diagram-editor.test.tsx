@@ -372,3 +372,104 @@ describe('DiagramEditor', () => {
     expect(sent.spy).not.toHaveBeenCalled()
   })
 })
+
+describe('DiagramEditor read-only', () => {
+  const STORED =
+    '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel>'
+
+  function setupReadOnly(online = true) {
+    vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(online)
+    const callbacks = {
+      onReady: vi.fn(),
+      onChange: vi.fn(),
+      onConnectionLost: vi.fn(),
+      onConnectionRestored: vi.fn(),
+    }
+    const view = render(<DiagramEditor readOnly xml={STORED} {...callbacks} />)
+    const iframe = currentIframe(view.container)
+    return { ...callbacks, view, iframe, sent: sentTo(iframe) }
+  }
+
+  const MESSAGE = 'The diagram needs an internet connection to display.'
+
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  it('embeds draw.io with no chrome and no editing configuration', () => {
+    const { iframe } = setupReadOnly()
+
+    const url = new URL(iframe.src)
+    expect(url.origin).toBe(ORIGIN)
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      embed: '1',
+      proto: 'json',
+      spin: '1',
+      chrome: '0',
+      lang: 'en',
+    })
+  })
+
+  it('answers init by loading the stored diagram with autosave off', () => {
+    const { iframe, sent } = setupReadOnly()
+
+    fromEditor(iframe, { event: 'init' })
+
+    expect(sent.messages()).toEqual([{ action: 'load', xml: STORED, autosave: 0 }])
+  })
+
+  it('never probes the editor, so a slow one is not replaced', async () => {
+    const { iframe, sent, onConnectionLost } = setupReadOnly()
+    fromEditor(iframe, { event: 'init' })
+    fromEditor(iframe, { event: 'load' })
+    sent.spy.mockClear()
+
+    await advance(60000)
+
+    expect(sent.spy).not.toHaveBeenCalled()
+    expect(onConnectionLost).not.toHaveBeenCalled()
+  })
+
+  it('shows no message while the diagram loads in time', async () => {
+    const { iframe, view } = setupReadOnly()
+
+    await advance(9000)
+    fromEditor(iframe, { event: 'load' })
+    await advance(60000)
+
+    expect(view.queryByText(MESSAGE)).not.toBeInTheDocument()
+  })
+
+  it('says the diagram needs a connection when it does not load in time', async () => {
+    const { view } = setupReadOnly()
+
+    await advance(10000)
+
+    expect(view.getByText(MESSAGE)).toBeInTheDocument()
+  })
+
+  it('says it at once when the machine is offline', () => {
+    const { view } = setupReadOnly(false)
+
+    expect(view.getByText(MESSAGE)).toBeInTheDocument()
+  })
+
+  it('takes the message back when the diagram loads late', async () => {
+    const { iframe, view } = setupReadOnly()
+    await advance(10000)
+
+    fromEditor(iframe, { event: 'load' })
+
+    expect(view.queryByText(MESSAGE)).not.toBeInTheDocument()
+  })
+
+  it('does not show the message in the editing mode', async () => {
+    const { view } = setup()
+
+    await advance(60000)
+
+    expect(view.queryByText(MESSAGE)).not.toBeInTheDocument()
+  })
+})

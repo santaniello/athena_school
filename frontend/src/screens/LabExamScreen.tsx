@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Loader2 } from 'lucide-react'
 import { DefenseStage } from '@/components/lab/defense-stage'
 import { EvaluationStage } from '@/components/lab/evaluation-stage'
-import { ExamOutcome } from '@/components/lab/exam-outcome'
+import { AttemptResultView } from '@/components/lab/attempt-result-view'
 import { DiagramEditor, type DiagramEditorHandle } from '@/components/lab/diagram-editor'
 import { LabConfirmDialog } from '@/components/lab/lab-confirm-dialog'
 import { LabLayout } from '@/components/lab/lab-layout'
@@ -83,10 +83,14 @@ function LabExamScreen({
     />
   )
 
-  if (phase === 'finished' && exam.outcome) {
+  if (phase === 'finished' && attempt) {
     return (
       <>
-        <ExamOutcome outcome={exam.outcome} onBack={() => void exam.leave()} />
+        <AttemptResultView
+          attemptId={attempt.id}
+          backLabel="Back to catalog"
+          onBack={() => void exam.leave()}
+        />
         {leaveDialog}
       </>
     )

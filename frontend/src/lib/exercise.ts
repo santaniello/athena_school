@@ -6,7 +6,9 @@ import {
   EvaluateDefense,
   GenerateChallenge,
   GetAttempt,
+  GetAttemptResult,
   GetEvaluation,
+  ListAttemptHistory,
   ListChallengeCatalog,
   ListChallengeTopics,
   ListHints,
@@ -258,6 +260,8 @@ export async function listHints(attemptId: string): Promise<LabHint[]> {
 export interface EvaluationResult {
   key: string
   name: string
+  // The criterion's weight in the rubric, in percentage points.
+  weight: number
   // 0..4; meaningless when insufficientEvidence is set.
   level: number
   justification: string
@@ -285,6 +289,7 @@ function toEvaluation(dto: desktop.EvaluationDTO): Evaluation {
     results: dto.results.map((result) => ({
       key: result.criterionKey,
       name: result.criterionName,
+      weight: result.weight,
       level: result.level,
       justification: result.justification,
       evidence: result.evidence,
@@ -367,7 +372,10 @@ export async function answerDefenseQuestion(
 // Judges the answers and finishes the attempt. A failure can be retried by
 // calling it again.
 export async function evaluateDefense(attemptId: string): Promise<Outcome> {
-  const dto = await EvaluateDefense(attemptId)
+  return toOutcome(await EvaluateDefense(attemptId))
+}
+
+function toOutcome(dto: desktop.OutcomeDTO): Outcome {
   return {
     result: dto.result as OutcomeResult,
     passScore: dto.passScore,
@@ -391,4 +399,98 @@ const DEFENSE_ERROR_MESSAGES: Record<string, string> = {
 
 export function defenseErrorMessage(err: unknown): string {
   return DEFENSE_ERROR_MESSAGES[exerciseErrorCode(err)] ?? DEFENSE_FAILED_MESSAGE
+}
+
+// The history and the result of finished attempts, read-only. The backend
+// decides the outcome and its reasons; nothing is derived here. See
+// specs/phases/phase-03-architecture-lab/13-evaluation-and-history-screen.md.
+
+export interface AttemptHistoryItem {
+  attemptId: string
+  // ISO timestamp.
+  finishedAt: string
+  diagramScore: number
+  understandingScore: number
+  outcome: OutcomeResult
+}
+
+export interface DefenseTurn {
+  position: number
+  question: string
+  answer: string
+}
+
+export type SubmitReason = 'USER' | 'TIME_EXPIRED'
+
+export interface AttemptResult {
+  challenge: {
+    id: string
+    title: string
+    topic: string
+    difficulty: string
+    statement: LabStatement
+  }
+  attemptId: string
+  // ISO timestamps.
+  startedAt: string
+  finishedAt: string
+  timeSpentSeconds: number
+  submitReason: SubmitReason
+  hintsUsed: number
+  maxHints: number
+  outcome: Outcome
+  diagram: Evaluation
+  understanding: Evaluation
+  defense: DefenseTurn[]
+  // The submitted diagram, draw.io XML.
+  submission: string
+}
+
+// The finished attempts of a challenge, newest first.
+export async function listAttemptHistory(challengeId: string): Promise<AttemptHistoryItem[]> {
+  const items = await ListAttemptHistory(challengeId)
+  return items.map((item) => ({
+    attemptId: item.attemptId,
+    finishedAt: item.finishedAt,
+    diagramScore: item.diagramScore,
+    understandingScore: item.understandingScore,
+    outcome: item.outcome as OutcomeResult,
+  }))
+}
+
+// The full result of a finished attempt; rejects with attempt_not_finished
+// for any other.
+export async function getAttemptResult(attemptId: string): Promise<AttemptResult> {
+  const dto = await GetAttemptResult(attemptId)
+  return {
+    challenge: {
+      id: dto.challenge.id,
+      title: dto.challenge.title,
+      topic: dto.challenge.topic,
+      difficulty: dto.challenge.difficulty,
+      statement: {
+        scenario: dto.challenge.statement.scenario,
+        functionalRequirements: dto.challenge.statement.functionalRequirements,
+        nonFunctionalRequirements: dto.challenge.statement.nonFunctionalRequirements,
+        constraints: dto.challenge.statement.constraints,
+        objectives: dto.challenge.statement.objectives,
+      },
+    },
+    attemptId: dto.attemptId,
+    startedAt: dto.startedAt,
+    finishedAt: dto.finishedAt,
+    timeSpentSeconds: dto.timeSpentSeconds,
+    submitReason: dto.submitReason as SubmitReason,
+    hintsUsed: dto.hintsUsed,
+    maxHints: dto.maxHints,
+    outcome: toOutcome(dto.outcome),
+    diagram: toEvaluation(dto.diagram),
+    understanding: toEvaluation(dto.understanding),
+    defense: dto.defense.map((turn) => ({
+      position: turn.position,
+      question: turn.question,
+      answer: turn.answer,
+    })),
+    submission: dto.submission,
+  }
 }
