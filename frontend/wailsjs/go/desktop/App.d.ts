@@ -3,6 +3,8 @@
 import {desktop} from '../models';
 import {context} from '../models';
 
+export function AcceptOffer(arg1:string):Promise<desktop.SessionExerciseDTO>;
+
 export function AnswerDefenseQuestion(arg1:string,arg2:string):Promise<desktop.DefenseDTO>;
 
 export function CancelChallengeGeneration():Promise<void>;
@@ -14,6 +16,8 @@ export function ConfirmImport(arg1:string,arg2:string,arg3:string):Promise<void>
 export function ConfirmLinkImport(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function CreateFolder(arg1:string):Promise<desktop.FolderResult>;
+
+export function DeclineOffer(arg1:string):Promise<void>;
 
 export function DeleteFolder(arg1:string):Promise<void>;
 
@@ -42,6 +46,8 @@ export function GetKnowledgeIndexStatus():Promise<desktop.IndexStatusResult>;
 export function GetModelSettings():Promise<desktop.ModelSettingsResult>;
 
 export function GetPassScore():Promise<number>;
+
+export function GetPendingOffer(arg1:string):Promise<desktop.ExerciseOfferDTO>;
 
 export function GetProfile():Promise<desktop.UserProfileInput>;
 

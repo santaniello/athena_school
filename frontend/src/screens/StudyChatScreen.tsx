@@ -15,6 +15,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { ExerciseOfferCard } from '@/components/exercise-offer-card'
 import { MessageBubble } from '@/components/message-bubble'
 import { ThinkingIndicator } from '@/components/thinking-indicator'
 import { SourceModeSelect } from '@/components/source-mode-select'
@@ -26,6 +27,13 @@ import { FindBar } from '@/components/find-bar'
 import { ToastViewport, type ToastItem } from '@/components/toast'
 import { useFindInPage } from '@/hooks/use-find-in-page'
 import { useMessageHistory } from '@/hooks/use-message-history'
+import {
+  OFFER_PENDING_MESSAGE,
+  getAssistantLanguage,
+  getPendingOffer,
+  type ExerciseOffer,
+  type SessionExercise,
+} from '@/lib/exercise'
 import { FIND_IGNORE_PROPS } from '@/lib/find-in-page'
 import {
   compactStudySession,
@@ -104,6 +112,21 @@ async function fetchSummaryCursor(sessionId: string): Promise<string | null> {
   }
 }
 
+// The session's pending exercise offer with the language its card speaks, or
+// null when there is none or it could not be read — the offer is an extra on
+// top of the chat and must never break it.
+async function fetchPendingOffer(
+  sessionId: string,
+): Promise<{ offer: ExerciseOffer; language: string } | null> {
+  try {
+    const offer = await getPendingOffer(sessionId)
+    if (!offer) return null
+    return { offer, language: await getAssistantLanguage() }
+  } catch {
+    return null
+  }
+}
+
 function contextTokensFrom(
   event: Pick<StudyContextEvent, 'usedTokens' | 'contextLength' | 'estimated'>,
 ) {
@@ -122,6 +145,7 @@ const PRE_PERSISTENCE_ERROR_CODES = new Set([
   'turn_in_progress',
   'budget_impossible',
   'message_too_large',
+  'offer_pending',
 ])
 
 // Of those, the codes whose rejection has no dedicated alert of its own (the
@@ -133,6 +157,7 @@ const REJECTION_MESSAGES: Record<string, string> = {
     "This conversation no longer fits the model's context window, even summarized. Start a new session on the same topic to continue.",
   message_too_large:
     "This message is too long for the model's context window. Shorten it and try again.",
+  offer_pending: 'Accept or decline the exercise offer before sending another message.',
 }
 
 // A failure toast stays long enough to read; the compaction success notice
@@ -273,6 +298,12 @@ function StudyChatScreen({
   // null when none failed since the last success (or after a reload).
   const [compactionFailure, setCompactionFailure] = useState<string | null>(null)
   const [toasts, setToasts] = useState<ToastItem[]>([])
+  // The tutor's pending exercise offer (it blocks the composer until the user
+  // accepts or declines) and, once accepted, the exercise it linked. See
+  // specs/phases/phase-03-architecture-lab/14-ai-challenge-generation.md.
+  const [offer, setOffer] = useState<ExerciseOffer | null>(null)
+  const [offerLanguage, setOfferLanguage] = useState('en')
+  const [readyExercise, setReadyExercise] = useState<SessionExercise | null>(null)
   // The last message folded into the session's summary; empty when none. The
   // transcript shows a marker right after it.
   const [summaryCoversUntilId, setSummaryCoversUntilId] = useState('')
@@ -392,6 +423,15 @@ function StudyChatScreen({
     })
   }, [sessionId])
 
+  const refreshPendingOffer = useCallback(() => {
+    void fetchPendingOffer(sessionId).then((pending) => {
+      if (!pending || currentSessionIdRef.current !== sessionId) return
+      setOffer(pending.offer)
+      setOfferLanguage(pending.language)
+      setReadyExercise(null)
+    })
+  }, [sessionId])
+
   const registerStreamPush = useCallback((push: ((text: string) => void) | null) => {
     streamPushRef.current = push
     // Replays chunks that arrived before the turn mounted: sendStudyMessage is
@@ -490,6 +530,7 @@ function StudyChatScreen({
           estimated: history.session.context.estimated,
         })
         refreshSessionUsage()
+        refreshPendingOffer()
         startHistory(history.hasMore, history.nextCursor)
         // Rendering a long history (markdown of every message) is the slow
         // part of opening a session. As a transition it is rendered in
@@ -537,6 +578,7 @@ function StudyChatScreen({
       setIsStreaming(false)
       setCompacting(false)
       refreshSessionUsage()
+      refreshPendingOffer()
     })
     const offError = onStudyError((event) => {
       if (event.sessionId !== sessionId) return
@@ -555,6 +597,7 @@ function StudyChatScreen({
         setDraft(restored)
         const rejection = REJECTION_MESSAGES[event.code]
         if (rejection) setError(rejection)
+        if (event.code === 'offer_pending') refreshPendingOffer()
         return
       }
       pendingSendRef.current = null
@@ -647,7 +690,7 @@ function StudyChatScreen({
       offCompacted()
       offCompactionFailed()
     }
-  }, [sessionId, refreshSessionUsage, pushToast])
+  }, [sessionId, refreshSessionUsage, refreshPendingOffer, pushToast])
 
   // The blocked alert's primary action: compaction progress and outcome come
   // back as events; a rejection without a failure event (nothing to compact,
@@ -671,8 +714,11 @@ function StudyChatScreen({
 
   async function handleSend() {
     const content = draft.trim()
-    if (!content) return
+    if (!content || offer) return
     pendingSendRef.current = content
+    // The "Exercise ready" card belongs to the exchange that produced it; a new
+    // message moves the conversation on.
+    setReadyExercise(null)
     setMessages((previous) => [...previous, { id: crypto.randomUUID(), role: 'user', content }])
     setDraft('')
     setError(null)
@@ -712,7 +758,7 @@ function StudyChatScreen({
   function handleDraftKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key !== 'Enter' || event.shiftKey) return
     event.preventDefault()
-    if (!draft.trim() || isStreaming) return
+    if (!draft.trim() || isStreaming || offer) return
     void handleSend()
   }
 
@@ -808,6 +854,18 @@ function StudyChatScreen({
             compacting={compacting}
           />
         )}
+        {(offer || readyExercise) && !isStreaming && (
+          <ExerciseOfferCard
+            offerId={offer?.id ?? ''}
+            language={offerLanguage}
+            exercise={readyExercise}
+            onAccepted={(exercise) => {
+              setReadyExercise(exercise)
+              setOffer(null)
+            }}
+            onDeclined={() => setOffer(null)}
+          />
+        )}
       </div>
       {error && (
         <Alert variant="destructive">
@@ -871,7 +929,8 @@ function StudyChatScreen({
           value={draft}
           onChange={handleDraftChange}
           onKeyDown={handleDraftKeyDown}
-          placeholder="Type your answer..."
+          placeholder={offer ? OFFER_PENDING_MESSAGE : 'Type your answer...'}
+          disabled={offer !== null}
           className="min-h-24 max-h-[200px] resize-none overflow-y-auto pb-11"
         />
         {!sourceModeSlot && <div className="absolute bottom-2 left-2">{sessionControls}</div>}
@@ -881,7 +940,7 @@ function StudyChatScreen({
               <Button
                 size="icon-sm"
                 aria-label="Send"
-                disabled={!draft.trim() || isStreaming}
+                disabled={!draft.trim() || isStreaming || offer !== null}
                 onClick={() => void handleSend()}
               >
                 <ArrowUp className="size-4" aria-hidden="true" />

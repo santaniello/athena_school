@@ -41,6 +41,7 @@ type App struct {
 	evaluations   attemptEvaluator
 	defense       defenseRunner
 	history       historyReader
+	offers        exerciseOffers
 	catalog       challengeCatalog
 	sessionLister sessionLister
 	// cancelGeneration cancels the challenge generation in flight, if any.

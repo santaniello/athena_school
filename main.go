@@ -107,6 +107,25 @@ func main() {
 	catalogService := modelcatalog.NewService(llmClient)
 	contextResolver := newContextResolver(catalogService)
 	summaryWindow := study.NewSummaryWindow(modelResolver, contextResolver)
+	challengeRepo := sqlite.NewChallengeRepository(db)
+	rubricRepo := sqlite.NewRubricRepository(db)
+	sessionTopics := exercisesource.NewSessionTopics(studySessions)
+	generationService := applicationexercise.NewGenerationService(
+		sessionTopics,
+		exercisesource.NewSummaries(sqlite.NewConversationSummaryRepository(db)),
+		exercisesource.NewProfiles(profiles),
+		exercisesource.NewNotes(knowledgeService),
+		llmClient,
+		applicationexercise.NewChallengeService(challengeRepo, sessionTopics),
+		applicationexercise.NewRubricService(challengeRepo, rubricRepo),
+		transactor,
+	)
+
+	offerService := applicationexercise.NewOfferService(
+		sqlite.NewOfferRepository(db), challengeRepo, sqlite.NewSessionExerciseRepository(db),
+		generationService, exercisesource.NewProfiles(profiles), transactor,
+	)
+
 	studyService := study.NewService(
 		studySessions, studyMessages, llmClient, profiles, folders, knowledgeService, transactor, contextResolver,
 		messageSources, knowledgeService, queryEnricher,
@@ -114,6 +133,7 @@ func main() {
 		study.WithSummarizer(study.NewSummarizer(llmClient, profiles, study.WithSummaryModelWindow(summaryWindow))),
 		study.WithSummaryWindow(summaryWindow),
 		study.WithSummaries(sqlite.NewConversationSummaryRepository(db)),
+		study.WithOfferGate(exercisesource.NewOfferGate(offerService)),
 	)
 	folderService := folder.NewService(folders, studySessions, knowledgeService)
 
@@ -129,20 +149,6 @@ func main() {
 		sqlite.NewChallengeRepository(db), sqlite.NewRubricRepository(db), sqlite.NewAttemptRepository(db),
 		sqlite.NewSubmissionRepository(db), sqlite.NewSessionExerciseRepository(db),
 		studySessions, transactor, systemClock{},
-	)
-
-	challengeRepo := sqlite.NewChallengeRepository(db)
-	rubricRepo := sqlite.NewRubricRepository(db)
-	sessionTopics := exercisesource.NewSessionTopics(studySessions)
-	generationService := applicationexercise.NewGenerationService(
-		sessionTopics,
-		exercisesource.NewSummaries(sqlite.NewConversationSummaryRepository(db)),
-		exercisesource.NewProfiles(profiles),
-		exercisesource.NewNotes(knowledgeService),
-		llmClient,
-		applicationexercise.NewChallengeService(challengeRepo, sessionTopics),
-		applicationexercise.NewRubricService(challengeRepo, rubricRepo),
-		transactor,
 	)
 
 	hintService := applicationexercise.NewHintService(
@@ -187,6 +193,7 @@ func main() {
 		desktop.WithEvaluationService(evaluationService),
 		desktop.WithDefenseService(defenseService),
 		desktop.WithHistoryService(historyService),
+		desktop.WithOfferService(offerService),
 		desktop.WithCatalogService(challengeCatalog),
 		desktop.WithSessionLister(sessionService),
 	)

@@ -68,6 +68,21 @@ func (r *ChallengeRepository) Get(ctx context.Context, id string) (exercise.Chal
 	return challenge, nil
 }
 
+// FindLatestBySourceSession returns the most recently created challenge whose
+// source session is sessionID, or exercise.ErrChallengeNotFound.
+func (r *ChallengeRepository) FindLatestBySourceSession(ctx context.Context, sessionID string) (exercise.Challenge, error) {
+	row := execer(ctx, r.db).QueryRowContext(ctx,
+		`SELECT `+challengeColumns+` FROM challenges WHERE source_session_id = ? ORDER BY created_at DESC, id DESC LIMIT 1`, sessionID)
+	challenge, err := scanChallenge(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return exercise.Challenge{}, exercise.ErrChallengeNotFound
+	}
+	if err != nil {
+		return exercise.Challenge{}, fmt.Errorf("sqlite: finding challenge by source session: %w", err)
+	}
+	return challenge, nil
+}
+
 // List returns one page of the challenges matching filter (all non-empty
 // fields combined with AND), newest update first, ties broken by id, plus the
 // total number of matches. Only fixed SQL fragments are concatenated; every

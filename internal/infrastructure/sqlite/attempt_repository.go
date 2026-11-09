@@ -5,11 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
-
-	"modernc.org/sqlite"
-	sqlite3 "modernc.org/sqlite/lib"
 
 	"github.com/santaniello/athena/internal/domain/exercise"
 )
@@ -52,11 +48,7 @@ func (r *AttemptRepository) Create(ctx context.Context, attempt exercise.Challen
 // one-running-exam index on challenge_attempts.state. Other UNIQUE violations
 // (an id) are different failures.
 func isOneInProgressViolation(err error) bool {
-	var sqliteErr *sqlite.Error
-	if !errors.As(err, &sqliteErr) || sqliteErr.Code() != sqlite3.SQLITE_CONSTRAINT_UNIQUE {
-		return false
-	}
-	return strings.Contains(sqliteErr.Error(), "challenge_attempts.state")
+	return isUniqueViolation(err, "challenge_attempts.state")
 }
 
 // Get returns the attempt, or exercise.ErrAttemptNotFound.

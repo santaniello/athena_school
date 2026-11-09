@@ -54,3 +54,9 @@ type Transactor interface {
 type PassScoreProvider interface {
 	Current(ctx context.Context) (int, error)
 }
+
+// ChallengeGenerator writes a challenge from a studied session. Defined here
+// (consumer side); implemented by *GenerationService.
+type ChallengeGenerator interface {
+	GenerateChallenge(ctx context.Context, sessionID string, difficulty domainexercise.Difficulty) (domainexercise.Challenge, error)
+}

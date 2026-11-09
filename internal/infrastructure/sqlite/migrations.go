@@ -257,6 +257,18 @@ var migrations = []func(*sql.DB) error{
 		answered_at  TEXT,
 		UNIQUE (attempt_id, position)
 	)`),
+	// Spec 3.14: the pending exercise offers of the study chat. UNIQUE on the
+	// session keeps "one pending offer" in the database; a resolved offer is
+	// deleted, so every row is pending, and it goes with its session or its
+	// message. See
+	// specs/phases/phase-03-architecture-lab/14-ai-challenge-generation.md.
+	execSQL(`CREATE TABLE IF NOT EXISTS exercise_offers (
+		id         TEXT PRIMARY KEY,
+		session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+		message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+		created_at TEXT NOT NULL,
+		UNIQUE (session_id)
+	)`),
 }
 
 // addAttemptsFailureReasonColumn adds challenge_attempts.failure_reason if it

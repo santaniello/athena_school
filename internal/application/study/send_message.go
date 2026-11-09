@@ -62,6 +62,10 @@ func (s *Service) SendMessage(
 	}
 	defer s.inFlight.end(sessionID)
 
+	if err := s.rejectWhileOfferPending(ctx, sessionID); err != nil {
+		return err
+	}
+
 	var config sendConfig
 	for _, option := range options {
 		option(&config)
@@ -211,8 +215,25 @@ func (s *Service) SendMessage(
 		llmMessages = append(llmMessages, domainllm.Message{Role: message.Role, Content: content})
 	}
 
-	if _, err := s.streamAndPersist(ctx, sessionID, newContext, llmMessages, sources, onChunk, onContext, onContextUnavailable); err != nil {
+	if _, err := s.streamAndPersist(ctx, sessionID, newContext, llmMessages, sources, true, onChunk, onContext, onContextUnavailable); err != nil {
 		return fmt.Errorf("study: sending message: %w", err)
+	}
+	return nil
+}
+
+// rejectWhileOfferPending returns ErrOfferPending when the session has an
+// exercise offer waiting for Accept or Decline, before anything is stored or
+// sent to the model.
+func (s *Service) rejectWhileOfferPending(ctx context.Context, sessionID string) error {
+	if s.offers == nil {
+		return nil
+	}
+	pending, err := s.offers.HasPending(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("study: checking pending exercise offer: %w", err)
+	}
+	if pending {
+		return ErrOfferPending
 	}
 	return nil
 }
