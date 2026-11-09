@@ -37,8 +37,9 @@ back.
    challenge from the chat. How finished attempts show on the card is
    [3.17](17-session-exercises-ui.md).
 7. **No new backend rules.** Everything needed exists in [3.4](04-exercise-service.md) and
-   [3.14](14-ai-challenge-generation.md). The only addition is that `AppShell` carries a "return
-   to" target while an exam runs.
+   [3.14](14-ai-challenge-generation.md). The additions are that `AppShell` carries a "return
+   to" target while an exam runs, and that `SessionExerciseDTO` carries `timeLimitMinutes`, which
+   the rules dialog shows and the accept result did not have.
 8. **No data compatibility to keep.**
 
 ## Frontend
@@ -54,17 +55,21 @@ back.
 - `lib/exercise.ts`: `startAttempt` already accepts a session id; no new wrapper.
 - All UI text is in English.
 
-No backend and no binding in this spec.
+The only backend change is the `timeLimitMinutes` field on `SessionExerciseDTO` (`SessionExerciseView`);
+no new binding.
+
+After returning, `AppShell` hands the accepted exercise back to the chat (`initialExercise`), since
+the chat's own state is lost when it unmounts; the session comes back in `resume` mode.
 
 ## Tasks
 
 Each slice is TDD (Vitest), keeps the build green and is committed on its own.
 
-- [ ] `AppShell`: `labReturn` set from the catalog and from a session, applied and cleared on exit
-- [ ] Offer card: **Open in Architecture Lab** starting the exam with the session id
-- [ ] `LabExamScreen` and the result view: the return target and the label
-- [ ] Leave and discard exits return to the origin
-- [ ] Docs: CHANGELOG, README and `lib/documentation.ts`
+- [x] `AppShell`: `labReturn` set from the catalog and from a session, applied and cleared on exit
+- [x] Offer card: **Open in Architecture Lab** starting the exam with the session id
+- [x] `LabExamScreen` and the result view: the return target and the label
+- [x] Leave and discard exits return to the origin
+- [x] Docs: CHANGELOG, README and `lib/documentation.ts`
 
 ## Acceptance Criteria
 
