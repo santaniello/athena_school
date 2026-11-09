@@ -1,6 +1,8 @@
 import {
+  AcceptOffer,
   AnswerDefenseQuestion,
   CancelChallengeGeneration,
+  DeclineOffer,
   DiscardAttempt,
   EvaluateAttempt,
   EvaluateDefense,
@@ -8,6 +10,8 @@ import {
   GetAttempt,
   GetAttemptResult,
   GetEvaluation,
+  GetPendingOffer,
+  GetProfile,
   ListAttemptHistory,
   ListChallengeCatalog,
   ListChallengeTopics,
@@ -149,6 +153,7 @@ const GENERIC_MESSAGE = 'Something went wrong. Please try again.'
 
 const ERROR_MESSAGES: Record<string, string> = {
   invalid_generation: 'The generated challenge was not valid. Try again.',
+  offer_not_found: 'This exercise offer is no longer available.',
   source_session_not_found: 'That study session no longer exists. Pick another one.',
   generation_in_progress: 'A challenge is already being generated.',
   [SUBMISSION_TOO_LARGE]: 'The diagram is too large to submit. Remove some elements.',
@@ -492,5 +497,78 @@ export async function getAttemptResult(attemptId: string): Promise<AttemptResult
       answer: turn.answer,
     })),
     submission: dto.submission,
+  }
+}
+
+// The exercise offer of the study chat: the tutor's answer to the user's
+// request for an exercise, accepted or declined. See
+// specs/phases/phase-03-architecture-lab/14-ai-challenge-generation.md.
+export interface ExerciseOffer {
+  id: string
+  sessionId: string
+  messageId: string
+}
+
+export interface SessionExercise {
+  challengeId: string
+  title: string
+  topic: string
+  difficulty: string
+}
+
+export const OFFER_PENDING_MESSAGE = 'Accept or decline the exercise offer to keep chatting.'
+
+export async function getPendingOffer(sessionId: string): Promise<ExerciseOffer | null> {
+  const offer = await GetPendingOffer(sessionId)
+  if (!offer) return null
+  return { id: offer.id, sessionId: offer.sessionId, messageId: offer.messageId }
+}
+
+export async function acceptOffer(offerId: string): Promise<SessionExercise> {
+  const exercise = await AcceptOffer(offerId)
+  return {
+    challengeId: exercise.challengeId,
+    title: exercise.title,
+    topic: exercise.topic,
+    difficulty: exercise.difficulty,
+  }
+}
+
+export function declineOffer(offerId: string): Promise<void> {
+  return DeclineOffer(offerId)
+}
+
+export interface OfferLabels {
+  title: string
+  accept: string
+  decline: string
+  preparing: string
+}
+
+// The offer speaks the assistant language; the rest of the interface stays in
+// English.
+export function offerLabels(language: string | undefined): OfferLabels {
+  if (language === 'pt') {
+    return {
+      title: 'Praticar com um exercício de arquitetura',
+      accept: 'Aceitar',
+      decline: 'Recusar',
+      preparing: 'Preparando seu exercício…',
+    }
+  }
+  return {
+    title: 'Practice with an architecture exercise',
+    accept: 'Accept',
+    decline: 'Decline',
+    preparing: 'Preparing your exercise…',
+  }
+}
+
+// The profile's assistant language ('pt' or 'en'); English when it cannot be read.
+export async function getAssistantLanguage(): Promise<string> {
+  try {
+    return (await GetProfile()).assistantLanguage || 'en'
+  } catch {
+    return 'en'
   }
 }

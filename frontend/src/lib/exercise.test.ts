@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  AcceptOffer,
   CancelChallengeGeneration,
+  DeclineOffer,
+  GetPendingOffer,
+  GetProfile,
   DiscardAttempt,
   EvaluateAttempt,
   EvaluateDefense,
@@ -21,6 +25,12 @@ import {
 } from '../../wailsjs/go/desktop/App'
 import { desktop } from '../../wailsjs/go/models'
 import {
+  OFFER_PENDING_MESSAGE,
+  acceptOffer,
+  declineOffer,
+  getAssistantLanguage,
+  getPendingOffer,
+  offerLabels,
   DIFFICULTY_LABELS,
   STATUS_LABELS,
   ATTEMPT_IN_PROGRESS,
@@ -56,6 +66,10 @@ import {
 } from './exercise'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
+  AcceptOffer: vi.fn(),
+  DeclineOffer: vi.fn(),
+  GetPendingOffer: vi.fn(),
+  GetProfile: vi.fn(),
   CancelChallengeGeneration: vi.fn(),
   GenerateChallenge: vi.fn(),
   ListChallengeCatalog: vi.fn(),
@@ -748,5 +762,80 @@ describe('history bindings', () => {
       defense: [{ position: 1, question: 'Why?', answer: 'Because.' }],
       submission: '<mxfile/>',
     })
+  })
+})
+
+describe('exercise offer', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('reads the pending offer of a session', async () => {
+    vi.mocked(GetPendingOffer).mockResolvedValueOnce(
+      desktop.ExerciseOfferDTO.createFrom({ id: 'o1', sessionId: 's1', messageId: 'm1' }),
+    )
+
+    const offer = await getPendingOffer('s1')
+
+    expect(GetPendingOffer).toHaveBeenCalledWith('s1')
+    expect(offer).toEqual({ id: 'o1', sessionId: 's1', messageId: 'm1' })
+  })
+
+  it('reports no offer as null', async () => {
+    vi.mocked(GetPendingOffer).mockResolvedValueOnce(null as unknown as desktop.ExerciseOfferDTO)
+
+    expect(await getPendingOffer('s1')).toBeNull()
+  })
+
+  it('accepts an offer and returns the linked challenge', async () => {
+    vi.mocked(AcceptOffer).mockResolvedValueOnce(
+      desktop.SessionExerciseDTO.createFrom({
+        challengeId: 'c1',
+        title: 'Design a cache',
+        topic: 'caching',
+        difficulty: 'ADVANCED',
+      }),
+    )
+
+    const exercise = await acceptOffer('o1')
+
+    expect(AcceptOffer).toHaveBeenCalledWith('o1')
+    expect(exercise).toEqual({
+      challengeId: 'c1',
+      title: 'Design a cache',
+      topic: 'caching',
+      difficulty: 'ADVANCED',
+    })
+  })
+
+  it('declines an offer', async () => {
+    vi.mocked(DeclineOffer).mockResolvedValueOnce()
+
+    await declineOffer('o1')
+
+    expect(DeclineOffer).toHaveBeenCalledWith('o1')
+  })
+
+  it('labels the buttons in the assistant language', () => {
+    expect(offerLabels('en')).toMatchObject({ accept: 'Accept', decline: 'Decline' })
+    expect(offerLabels('pt')).toMatchObject({ accept: 'Aceitar', decline: 'Recusar' })
+    expect(offerLabels(undefined)).toMatchObject({ accept: 'Accept', decline: 'Decline' })
+    expect(offerLabels('pt').title).not.toBe(offerLabels('en').title)
+    expect(offerLabels('pt').preparing).not.toBe(offerLabels('en').preparing)
+  })
+
+  it('reads the assistant language from the profile, English when it cannot', async () => {
+    vi.mocked(GetProfile).mockResolvedValueOnce(
+      desktop.UserProfileInput.createFrom({ assistantLanguage: 'pt' }),
+    )
+    expect(await getAssistantLanguage()).toBe('pt')
+
+    vi.mocked(GetProfile).mockRejectedValueOnce(new Error('boom'))
+    expect(await getAssistantLanguage()).toBe('en')
+  })
+
+  it('explains a vanished offer and keeps the pending message', () => {
+    expect(exerciseErrorMessage(new Error('{"code":"offer_not_found","message":"x"}'))).toBe(
+      'This exercise offer is no longer available.',
+    )
+    expect(OFFER_PENDING_MESSAGE).toBe('Accept or decline the exercise offer to keep chatting.')
   })
 })
