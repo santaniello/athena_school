@@ -10,6 +10,7 @@ function setup(props: Partial<React.ComponentProps<typeof EvaluationStage>> = {}
     <EvaluationStage
       phase="evaluating"
       message={null}
+      backLabel="Back to catalog"
       onRetry={onRetry}
       onBack={onBack}
       {...props}
@@ -38,5 +39,11 @@ describe('EvaluationStage', () => {
     expect(onRetry).toHaveBeenCalledOnce()
     await user.click(screen.getByRole('button', { name: 'Back to catalog' }))
     expect(onBack).toHaveBeenCalledOnce()
+  })
+
+  it('names the way back as it is told to', async () => {
+    setup({ phase: 'evaluationFailed', message: 'x', backLabel: 'Back to study session' })
+
+    expect(screen.getByRole('button', { name: 'Back to study session' })).toBeInTheDocument()
   })
 })

@@ -60,11 +60,7 @@ type XmlSource = () => Promise<string>
 // only after the editor reports ready, so the clock never starts on a board the
 // user cannot use. See
 // specs/phases/phase-03-architecture-lab/10-diagram-workspace.md.
-export function useExam(
-  challengeId: string,
-  onExit: (notice?: string) => void,
-  sessionId = '',
-) {
+export function useExam(challengeId: string, onExit: (notice?: string) => void, sessionId = '') {
   const [phase, setPhaseState] = useState<ExamPhase>('preparing')
   const [attempt, setAttempt] = useState<Attempt | null>(null)
   const [hasContent, setHasContent] = useState(false)

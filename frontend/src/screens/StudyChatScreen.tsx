@@ -21,6 +21,7 @@ import { ThinkingIndicator } from '@/components/thinking-indicator'
 import { SourceModeSelect } from '@/components/source-mode-select'
 import { LocalSourcesStrip } from '@/components/local-sources-strip'
 import { SessionUsageBar } from '@/components/session-usage-bar'
+import { StartExamDialog } from '@/components/lab/start-exam-dialog'
 import { SummaryDialog } from '@/components/summary-dialog'
 import { SummaryMarker } from '@/components/summary-marker'
 import { FindBar } from '@/components/find-bar'
@@ -84,6 +85,13 @@ interface StudyChatScreenProps {
   // in contexts that never open the panel (e.g. this screen rendered
   // standalone, as in its own tests).
   onOpenCitation?: (source: StudySource) => void
+  // The exercise accepted before the chat left for the lab, so the card is
+  // still here on the way back. See
+  // specs/phases/phase-03-architecture-lab/15-open-lab-from-chat.md.
+  initialExercise?: SessionExercise | null
+  // The user confirmed the rules of the accepted exercise's exam; the shell
+  // opens the lab and brings the user back to this session.
+  onStartExam?: (exercise: SessionExercise, sessionId: string) => void
 }
 
 // ContextState mirrors the persisted study.ContextState the backend tracks
@@ -266,6 +274,8 @@ function StudyChatScreen({
   startingNewSession,
   sourceModeSlot,
   onOpenCitation,
+  initialExercise = null,
+  onStartExam,
 }: StudyChatScreenProps) {
   const [sessionTopic, setSessionTopic] = useState(initialTopic)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -303,7 +313,8 @@ function StudyChatScreen({
   // specs/phases/phase-03-architecture-lab/14-ai-challenge-generation.md.
   const [offer, setOffer] = useState<ExerciseOffer | null>(null)
   const [offerLanguage, setOfferLanguage] = useState('en')
-  const [readyExercise, setReadyExercise] = useState<SessionExercise | null>(null)
+  const [readyExercise, setReadyExercise] = useState<SessionExercise | null>(initialExercise)
+  const [examRules, setExamRules] = useState<SessionExercise | null>(null)
   // The last message folded into the session's summary; empty when none. The
   // transcript shows a marker right after it.
   const [summaryCoversUntilId, setSummaryCoversUntilId] = useState('')
@@ -796,6 +807,22 @@ function StudyChatScreen({
         sessionId={sessionId}
         onClose={() => setSummaryOpen(false)}
       />
+      <StartExamDialog
+        challenge={
+          examRules && {
+            id: examRules.challengeId,
+            title: examRules.title,
+            difficulty: examRules.difficulty,
+            timeLimitMinutes: examRules.timeLimitMinutes,
+          }
+        }
+        onCancel={() => setExamRules(null)}
+        onConfirm={() => {
+          if (!examRules) return
+          setExamRules(null)
+          onStartExam?.(examRules, sessionId)
+        }}
+      />
       <SessionUsageBar context={{ state: contextState, ...contextTokens }} usage={sessionUsage} />
       {findOpen && (
         <FindBar
@@ -864,6 +891,7 @@ function StudyChatScreen({
               setOffer(null)
             }}
             onDeclined={() => setOffer(null)}
+            onOpenLab={setExamRules}
           />
         )}
       </div>

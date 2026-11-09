@@ -27,7 +27,12 @@ import {
 } from '@/lib/knowledge-index'
 import type { IndexStatus } from '@/lib/knowledge-index'
 import { deleteFolder, listFolders } from '@/lib/folder'
-import { listChallengeCatalog, listChallengeTopics } from '@/lib/exercise'
+import {
+  acceptOffer,
+  getPendingOffer,
+  listChallengeCatalog,
+  listChallengeTopics,
+} from '@/lib/exercise'
 import { AppShell } from './app-shell'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
@@ -121,6 +126,9 @@ vi.mock('@/lib/exercise', async (importOriginal) => {
       ],
     }),
     listChallengeTopics: vi.fn().mockResolvedValue(['rate limiting']),
+    getPendingOffer: vi.fn().mockResolvedValue(null),
+    getAssistantLanguage: vi.fn().mockResolvedValue('en'),
+    acceptOffer: vi.fn(),
     listSessionsForGeneration: vi
       .fn()
       .mockResolvedValue([
@@ -134,12 +142,14 @@ vi.mock('@/lib/exercise', async (importOriginal) => {
 vi.mock('@/screens/LabExamScreen', () => ({
   default: (props: {
     challenge: { id: string; title: string }
+    returnTo: { kind: string; sessionId?: string }
     leaveRequested: boolean
     onLeaveCancelled: () => void
     onExit: (notice?: string) => void
   }) => (
     <div role="region" aria-label="Exam">
       <span>exam {props.challenge.id}</span>
+      <span>{`return to ${props.returnTo.kind} ${props.returnTo.sessionId ?? ''}`.trim()}</span>
       <span>{props.leaveRequested ? 'leave requested' : 'no leave request'}</span>
       <button onClick={() => props.onLeaveCancelled()}>cancel leave</button>
       <button onClick={() => props.onExit()}>finish exam</button>
@@ -1625,6 +1635,111 @@ describe('AppShell knowledge index lifecycle', () => {
 
       expect(await screen.findByRole('heading', { name: 'Settings', level: 1 })).toBeInTheDocument()
       expect(screen.queryByRole('region', { name: 'Exam' })).not.toBeInTheDocument()
+    })
+
+    it('returns to the catalog and says so to the exam when it was started from the catalog', async () => {
+      await startExam()
+
+      expect(screen.getByRole('region', { name: 'Exam' })).toHaveTextContent('return to catalog')
+    })
+
+    describe('started from a study session', () => {
+      const session: StudySession = {
+        id: 'session-lab',
+        topic: 'Caching',
+        folderId: 'default',
+        goal: 'Learn caching',
+        startedAt: '2026-11-09T10:00:00Z',
+        context: CONTEXT_NORMAL,
+      }
+
+      async function startFromSession() {
+        const user = userEvent.setup()
+        renderShell()
+        await screen.findByText(/Felipe\./)
+        await user.click(screen.getByRole('button', { name: 'Study' }))
+        await screen.findByText('General')
+        vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([session])
+        vi.mocked(resumeStudySession).mockResolvedValue({
+          session,
+          messages: [
+            { id: 'm1', role: 'user', content: 'give me an exercise', createdAt: 't', sources: [] },
+            {
+              id: 'm2',
+              role: 'assistant',
+              content: 'Sure, let us practice.',
+              createdAt: 't',
+              sources: [],
+            },
+          ],
+          hasMore: false,
+          nextCursor: '',
+          summaryCoversUntilMessageId: '',
+        } as Awaited<ReturnType<typeof resumeStudySession>>)
+        vi.mocked(getPendingOffer).mockResolvedValueOnce({
+          id: 'offer-1',
+          sessionId: 'session-lab',
+          messageId: 'm2',
+        })
+        vi.mocked(acceptOffer).mockResolvedValueOnce({
+          challengeId: 'c9',
+          title: 'Design a cache',
+          topic: 'caching',
+          difficulty: 'ADVANCED',
+          timeLimitMinutes: 45,
+        })
+        await user.click(screen.getByText('General'))
+        await user.click(await screen.findByText('Caching'))
+        await user.click(await screen.findByRole('button', { name: 'Accept' }))
+        await user.click(await screen.findByRole('button', { name: 'Open in Architecture Lab' }))
+        await user.click(await screen.findByRole('button', { name: 'Start exam' }))
+        return user
+      }
+
+      it('opens the exam in the same window, linked to the session', async () => {
+        await startFromSession()
+
+        const exam = screen.getByRole('region', { name: 'Exam' })
+        expect(exam).toHaveTextContent('exam c9')
+        expect(exam).toHaveTextContent('return to study session-lab')
+        expect(screen.queryByText('Sure, let us practice.')).not.toBeInTheDocument()
+      })
+
+      it('returns to the same resumed session, with its card, when the exam ends', async () => {
+        const user = await startFromSession()
+
+        await user.click(screen.getByRole('button', { name: 'finish exam' }))
+
+        expect(await screen.findByText('Sure, let us practice.')).toBeInTheDocument()
+        expect(screen.getByText('Exercise ready: Design a cache')).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Open in Architecture Lab' })).toBeInTheDocument()
+        expect(screen.getByRole('heading', { name: 'Caching', level: 1 })).toBeInTheDocument()
+        expect(requestOpeningTurn).not.toHaveBeenCalled()
+        expect(screen.queryByRole('region', { name: 'Exam' })).not.toBeInTheDocument()
+      })
+
+      it('goes where the user navigated, not to the session, when the exam ends then', async () => {
+        const user = await startFromSession()
+        await user.click(screen.getByRole('button', { name: 'Settings' }))
+
+        await user.click(screen.getByRole('button', { name: 'finish exam' }))
+
+        expect(
+          await screen.findByRole('heading', { name: 'Settings', level: 1 }),
+        ).toBeInTheDocument()
+      })
+
+      it('goes back to the catalog for an exam started from the catalog afterwards', async () => {
+        const user = await startFromSession()
+        await user.click(screen.getByRole('button', { name: 'finish exam' }))
+        await screen.findByText('Sure, let us practice.')
+
+        await user.click(screen.getByRole('button', { name: 'Architecture Lab' }))
+        await user.click(await screen.findByRole('button', { name: 'Start' }))
+        await user.click(await screen.findByRole('button', { name: 'Start exam' }))
+
+        expect(screen.getByRole('region', { name: 'Exam' })).toHaveTextContent('return to catalog')
+      })
     })
 
     it('keeps the exam when the Architecture Lab entry is clicked again', async () => {

@@ -21,6 +21,7 @@ const exercise: SessionExercise = {
 function setup(props: { language?: string; exercise?: SessionExercise | null } = {}) {
   const onAccepted = vi.fn()
   const onDeclined = vi.fn()
+  const onOpenLab = vi.fn()
   render(
     <ExerciseOfferCard
       offerId="o1"
@@ -28,9 +29,10 @@ function setup(props: { language?: string; exercise?: SessionExercise | null } =
       exercise={props.exercise ?? null}
       onAccepted={onAccepted}
       onDeclined={onDeclined}
+      onOpenLab={onOpenLab}
     />,
   )
-  return { onAccepted, onDeclined, user: userEvent.setup() }
+  return { onAccepted, onDeclined, onOpenLab, user: userEvent.setup() }
 }
 
 describe('ExerciseOfferCard', () => {
@@ -117,10 +119,20 @@ describe('ExerciseOfferCard', () => {
     expect(screen.getByRole('button', { name: 'Decline' })).toBeEnabled()
   })
 
-  it('shows the ready exercise and no buttons once accepted', () => {
+  it('shows the ready exercise with only Open in Architecture Lab once accepted', () => {
     setup({ exercise })
 
     expect(screen.getByText('Exercise ready: Design a cache')).toBeInTheDocument()
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Open in Architecture Lab' })).toBeEnabled()
+  })
+
+  it('opens the lab with the exercise only when the user asks', async () => {
+    const { user, onOpenLab } = setup({ exercise })
+    expect(onOpenLab).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Open in Architecture Lab' }))
+
+    expect(onOpenLab).toHaveBeenCalledExactlyOnceWith(exercise)
   })
 })

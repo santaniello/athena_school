@@ -6,6 +6,7 @@ interface EvaluationStageProps {
   // Why the evaluation failed; shown only in the failed state.
   message: string | null
   onRetry: () => void
+  backLabel: string
   onBack: () => void
 }
 
@@ -15,7 +16,13 @@ interface EvaluationStageProps {
 // only at the end. See
 // specs/phases/phase-03-architecture-lab/11-architecture-evaluator.md and
 // 12-architecture-defense.md.
-export function EvaluationStage({ phase, message, onRetry, onBack }: EvaluationStageProps) {
+export function EvaluationStage({
+  phase,
+  message,
+  backLabel,
+  onRetry,
+  onBack,
+}: EvaluationStageProps) {
   if (phase === 'evaluating') {
     return (
       <Centered>
@@ -37,7 +44,7 @@ export function EvaluationStage({ phase, message, onRetry, onBack }: EvaluationS
           Try evaluating again
         </Button>
         <Button type="button" variant="outline" onClick={onBack}>
-          Back to catalog
+          {backLabel}
         </Button>
       </div>
     </Centered>

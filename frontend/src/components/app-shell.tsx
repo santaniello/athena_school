@@ -20,6 +20,8 @@ import SettingsScreen from '@/screens/SettingsScreen'
 import DocumentationScreen from '@/screens/DocumentationScreen'
 import ArchitectureLabScreen from '@/screens/ArchitectureLabScreen'
 import LabExamScreen from '@/screens/LabExamScreen'
+import type { LabReturn } from '@/lib/lab'
+import type { SessionExercise } from '@/lib/exercise'
 import type { ExamToStart } from '@/components/lab/start-exam-dialog'
 import { ToastViewport, type ToastItem } from '@/components/toast'
 import { NAVIGATION, type AppSection } from '@/lib/navigation'
@@ -83,6 +85,15 @@ function AppShell() {
   // The exam in progress, a full-screen state of the Architecture Lab. While
   // it runs, navigating elsewhere waits for the exam's own leave question.
   const [exam, setExam] = useState<ExamToStart | null>(null)
+  // Where the exam goes back to when it ends: the catalog it was started from
+  // or the study session that offered it. Not persisted.
+  const [labReturn, setLabReturn] = useState<LabReturn>({ kind: 'catalog' })
+  // The exercise the exam was started from, so the session's card is still
+  // there when the chat comes back.
+  const [offeredExercise, setOfferedExercise] = useState<{
+    sessionId: string
+    exercise: SessionExercise
+  } | null>(null)
   const [pendingSection, setPendingSection] = useState<AppSection | null>(null)
   const [notices, setNotices] = useState<ToastItem[]>([])
   const [profile, setProfile] = useState<ProfileDraft | null>(null)
@@ -232,9 +243,33 @@ function AppShell() {
     if (next !== 'challenge') setPendingSection(next)
   }
 
+  function startCatalogExam(challenge: ExamToStart) {
+    setLabReturn({ kind: 'catalog' })
+    setExam(challenge)
+  }
+
+  function startSessionExam(exercise: SessionExercise, sessionId: string) {
+    setLabReturn({ kind: 'study', sessionId })
+    setOfferedExercise({ sessionId, exercise })
+    setExam({
+      id: exercise.challengeId,
+      title: exercise.title,
+      difficulty: exercise.difficulty,
+      timeLimitMinutes: exercise.timeLimitMinutes,
+    })
+    setSection('challenge')
+  }
+
   function handleExamExit(notice?: string) {
     setExam(null)
-    if (pendingSection) setSection(pendingSection)
+    if (labReturn.kind === 'study') {
+      // The chat unmounted while the lab was open: it comes back as a resumed
+      // session, never as a new one asking for an opening turn.
+      setActiveSession((current) => (current ? { ...current, mode: 'resume' } : current))
+    }
+    const destination = pendingSection ?? (labReturn.kind === 'study' ? 'study' : null)
+    if (destination) setSection(destination)
+    setLabReturn({ kind: 'catalog' })
     setPendingSection(null)
     if (notice) {
       setNotices((current) => [
@@ -469,6 +504,10 @@ function AppShell() {
               initialTopic={activeSession.topic}
               mode={activeSession.mode}
               onTopicResolved={handleTopicResolved}
+              initialExercise={
+                offeredExercise?.sessionId === activeSession.id ? offeredExercise.exercise : null
+              }
+              onStartExam={startSessionExam}
               onStartNewSession={handleStartNewSession}
               startingNewSession={startingNewSession}
               sourceModeSlot={sourceModeSlot}
@@ -498,6 +537,7 @@ function AppShell() {
           exam ? (
             <LabExamScreen
               challenge={exam}
+              returnTo={labReturn}
               leaveRequested={pendingSection !== null}
               onLeaveCancelled={() => setPendingSection(null)}
               onExit={handleExamExit}
@@ -505,7 +545,7 @@ function AppShell() {
           ) : (
             <ArchitectureLabScreen
               experienceLevel={profile?.experienceLevel}
-              onStartExam={setExam}
+              onStartExam={startCatalogExam}
             />
           )
         ) : section === 'documentation' ? (
