@@ -252,4 +252,44 @@ describe('StudyChatScreen — exercise offer', () => {
     expect(document.querySelectorAll('[data-slot="message-bubble"]')).toHaveLength(2)
     expect(screen.getByPlaceholderText(PENDING_TEXT)).toHaveValue('hello')
   })
+
+  it('clears the ready exercise card when the next message is sent', async () => {
+    subscribe()
+    vi.mocked(getPendingOffer).mockResolvedValue(OFFER)
+    vi.mocked(acceptOffer).mockResolvedValue({
+      challengeId: 'c1',
+      title: 'Design a cache',
+      topic: 'caching',
+      difficulty: 'ADVANCED',
+    })
+    vi.mocked(sendStudyMessage).mockResolvedValue()
+    await renderResumed()
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Accept' }))
+    await screen.findByText('Exercise ready: Design a cache')
+
+    await user.type(screen.getByPlaceholderText('Type your answer...'), 'thanks')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(screen.queryByText('Exercise ready: Design a cache')).not.toBeInTheDocument()
+  })
+
+  it('explains the refusal when a send is rejected because an offer is pending', async () => {
+    const handlers = subscribe()
+    await renderResumed()
+    vi.mocked(sendStudyMessage).mockResolvedValue()
+    const user = userEvent.setup()
+
+    await user.type(screen.getByPlaceholderText('Type your answer...'), 'hello')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+    act(() =>
+      handlers.error?.({ sessionId: 'session-1', message: 'pending', code: 'offer_pending' }),
+    )
+
+    expect(
+      await screen.findByText(
+        'Accept or decline the exercise offer before sending another message.',
+      ),
+    ).toBeInTheDocument()
+  })
 })

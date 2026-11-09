@@ -157,6 +157,7 @@ const REJECTION_MESSAGES: Record<string, string> = {
     "This conversation no longer fits the model's context window, even summarized. Start a new session on the same topic to continue.",
   message_too_large:
     "This message is too long for the model's context window. Shorten it and try again.",
+  offer_pending: 'Accept or decline the exercise offer before sending another message.',
 }
 
 // A failure toast stays long enough to read; the compaction success notice
@@ -715,6 +716,9 @@ function StudyChatScreen({
     const content = draft.trim()
     if (!content || offer) return
     pendingSendRef.current = content
+    // The "Exercise ready" card belongs to the exchange that produced it; a new
+    // message moves the conversation on.
+    setReadyExercise(null)
     setMessages((previous) => [...previous, { id: crypto.randomUUID(), role: 'user', content }])
     setDraft('')
     setError(null)
