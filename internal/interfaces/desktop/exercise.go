@@ -87,6 +87,17 @@ func WithDefenseService(defense defenseRunner) Option {
 	return func(a *App) { a.defense = defense }
 }
 
+// historyReader is the use case behind the history bindings (spec 3.13).
+type historyReader interface {
+	ListHistory(ctx context.Context, challengeID string) ([]applicationexercise.AttemptListItem, error)
+	GetAttemptResult(ctx context.Context, attemptID string) (applicationexercise.AttemptResultView, error)
+}
+
+// WithHistoryService wires the history and result of finished attempts.
+func WithHistoryService(history historyReader) Option {
+	return func(a *App) { a.history = history }
+}
+
 // Stable ExerciseError.Code values the frontend switches on.
 const (
 	exerciseCodeInvalidInput         = "invalid_input"
@@ -98,6 +109,7 @@ const (
 	exerciseCodeAttemptNotFound      = "attempt_not_found"
 	exerciseCodeAttemptNotInProgress = "attempt_not_in_progress"
 	exerciseCodeAttemptFinished      = "attempt_finished"
+	exerciseCodeAttemptNotFinished   = "attempt_not_finished"
 	exerciseCodeSubmissionTooLate    = "submission_too_late"
 	exerciseCodeSubmissionInvalid    = "submission_invalid"
 	exerciseCodeSubmissionTooLarge   = "submission_too_large"
@@ -158,6 +170,8 @@ func toExerciseError(err error) *ExerciseError {
 		return &ExerciseError{Code: exerciseCodeAttemptNotInProgress, Message: "the attempt is not in progress"}
 	case errors.Is(err, applicationexercise.ErrAttemptFinished):
 		return &ExerciseError{Code: exerciseCodeAttemptFinished, Message: "a finished attempt cannot be discarded"}
+	case errors.Is(err, applicationexercise.ErrAttemptNotFinished):
+		return &ExerciseError{Code: exerciseCodeAttemptNotFinished, Message: "the attempt is not finished"}
 	case errors.Is(err, applicationexercise.ErrSubmissionTooLate):
 		return &ExerciseError{Code: exerciseCodeSubmissionTooLate, Message: "the submission arrived after the time limit and the attempt was discarded"}
 	case errors.Is(err, domainexercise.ErrNoHintsLeft):
@@ -611,6 +625,7 @@ func (a *App) ListHints(attemptID string) ([]HintDTO, error) {
 type EvaluationResultDTO struct {
 	CriterionKey         string `json:"criterionKey"`
 	CriterionName        string `json:"criterionName"`
+	Weight               int    `json:"weight"`
 	Level                int    `json:"level"`
 	Justification        string `json:"justification"`
 	Evidence             string `json:"evidence"`
@@ -636,7 +651,25 @@ func toEvaluationDTO(evaluation domainexercise.Evaluation, criteria []domainexer
 	for _, criterion := range criteria {
 		byID[criterion.ID] = criterion
 	}
-	dto := EvaluationDTO{
+	dto := newEvaluationDTO(evaluation)
+	for _, result := range evaluation.Results {
+		dto.Results = append(dto.Results, toEvaluationResultDTO(byID[result.CriterionID], result))
+	}
+	return dto
+}
+
+// toEvaluationViewDTO maps an evaluation whose results are already joined
+// with their criteria.
+func toEvaluationViewDTO(view applicationexercise.EvaluationView) EvaluationDTO {
+	dto := newEvaluationDTO(view.Evaluation)
+	for _, row := range view.Rows {
+		dto.Results = append(dto.Results, toEvaluationResultDTO(row.Criterion, row.Result))
+	}
+	return dto
+}
+
+func newEvaluationDTO(evaluation domainexercise.Evaluation) EvaluationDTO {
+	return EvaluationDTO{
 		AttemptID: evaluation.AttemptID, Model: evaluation.Model, Score: evaluation.Score, Summary: evaluation.Summary,
 		Strengths:       append([]string{}, evaluation.Strengths...),
 		Gaps:            append([]string{}, evaluation.Gaps...),
@@ -644,14 +677,13 @@ func toEvaluationDTO(evaluation domainexercise.Evaluation, criteria []domainexer
 		Results:         make([]EvaluationResultDTO, 0, len(evaluation.Results)),
 		CreatedAt:       evaluation.CreatedAt.Format(time.RFC3339),
 	}
-	for _, result := range evaluation.Results {
-		criterion := byID[result.CriterionID]
-		dto.Results = append(dto.Results, EvaluationResultDTO{
-			CriterionKey: criterion.Key, CriterionName: criterion.Name, Level: result.Level,
-			Justification: result.Justification, Evidence: result.Evidence, InsufficientEvidence: result.InsufficientEvidence,
-		})
+}
+
+func toEvaluationResultDTO(criterion domainexercise.RubricCriterion, result domainexercise.CriterionResult) EvaluationResultDTO {
+	return EvaluationResultDTO{
+		CriterionKey: criterion.Key, CriterionName: criterion.Name, Weight: criterion.Weight, Level: result.Level,
+		Justification: result.Justification, Evidence: result.Evidence, InsufficientEvidence: result.InsufficientEvidence,
 	}
-	return dto
 }
 
 // EvaluateAttempt evaluates the submitted attempt's diagram, or returns the
@@ -833,4 +865,115 @@ func (a *App) GetDefense(attemptID string) (DefenseDTO, error) {
 		return DefenseDTO{}, toExerciseError(err)
 	}
 	return toDefenseDTO(view), nil
+}
+
+// AttemptHistoryItemDTO is one finished attempt in a challenge's history.
+// FinishedAt is RFC 3339.
+type AttemptHistoryItemDTO struct {
+	AttemptID          string `json:"attemptId"`
+	FinishedAt         string `json:"finishedAt"`
+	DiagramScore       int    `json:"diagramScore"`
+	UnderstandingScore int    `json:"understandingScore"`
+	Outcome            string `json:"outcome"`
+}
+
+// ListAttemptHistory returns the challenge's finished attempts, newest first.
+// See specs/phases/phase-03-architecture-lab/13-evaluation-and-history-screen.md.
+func (a *App) ListAttemptHistory(challengeID string) ([]AttemptHistoryItemDTO, error) {
+	challengeID = strings.TrimSpace(challengeID)
+	if challengeID == "" {
+		return nil, invalidInput("challenge id is required")
+	}
+	items, err := a.history.ListHistory(a.ctx, challengeID)
+	if err != nil {
+		return nil, toExerciseError(err)
+	}
+	dtos := make([]AttemptHistoryItemDTO, 0, len(items))
+	for _, item := range items {
+		dtos = append(dtos, AttemptHistoryItemDTO{
+			AttemptID: item.AttemptID, FinishedAt: item.FinishedAt.Format(time.RFC3339),
+			DiagramScore: item.DiagramScore, UnderstandingScore: item.UnderstandingScore, Outcome: string(item.Outcome),
+		})
+	}
+	return dtos, nil
+}
+
+// ResultChallengeDTO is the challenge as a finished attempt answered it, with
+// the statement the exam showed.
+type ResultChallengeDTO struct {
+	ID         string       `json:"id"`
+	Title      string       `json:"title"`
+	Topic      string       `json:"topic"`
+	Difficulty string       `json:"difficulty"`
+	Statement  StatementDTO `json:"statement"`
+}
+
+// AttemptResultDTO is everything the result screen shows of a finished
+// attempt. Times are RFC 3339; Submission is the stored diagram XML.
+type AttemptResultDTO struct {
+	Challenge        ResultChallengeDTO `json:"challenge"`
+	AttemptID        string             `json:"attemptId"`
+	StartedAt        string             `json:"startedAt"`
+	SubmittedAt      string             `json:"submittedAt"`
+	FinishedAt       string             `json:"finishedAt"`
+	TimeSpentSeconds int                `json:"timeSpentSeconds"`
+	SubmitReason     string             `json:"submitReason"`
+	HintsUsed        int                `json:"hintsUsed"`
+	MaxHints         int                `json:"maxHints"`
+	Outcome          OutcomeDTO         `json:"outcome"`
+	Diagram          EvaluationDTO      `json:"diagram"`
+	Understanding    EvaluationDTO      `json:"understanding"`
+	Defense          []DefenseTurnDTO   `json:"defense"`
+	Submission       string             `json:"submission"`
+}
+
+func toAttemptResultDTO(view applicationexercise.AttemptResultView) AttemptResultDTO {
+	statement := view.Challenge.Statement
+	dto := AttemptResultDTO{
+		Challenge: ResultChallengeDTO{
+			ID: view.Challenge.ID, Title: view.Challenge.Title, Topic: view.Challenge.Topic,
+			Difficulty: string(view.Challenge.Difficulty),
+			Statement: StatementDTO{
+				Scenario: statement.Scenario, FunctionalRequirements: statement.FunctionalRequirements,
+				NonFunctionalRequirements: statement.NonFunctionalRequirements,
+				Constraints:               statement.Constraints, Objectives: statement.Objectives,
+			},
+		},
+		AttemptID:        view.Attempt.ID,
+		StartedAt:        view.Attempt.StartedAt.Format(time.RFC3339),
+		SubmittedAt:      view.Attempt.SubmittedAt.Format(time.RFC3339),
+		FinishedAt:       view.FinishedAt.Format(time.RFC3339),
+		TimeSpentSeconds: int(view.TimeSpent / time.Second),
+		SubmitReason:     string(view.Attempt.SubmitReason),
+		HintsUsed:        view.HintsUsed,
+		MaxHints:         domainexercise.MaxHints,
+		Outcome: toOutcomeDTO(applicationexercise.DefenseOutcome{
+			Diagram: view.Diagram.Evaluation, Understanding: view.Understanding.Evaluation,
+			Criteria: view.Criteria, PassScore: view.PassScore, Outcome: view.Outcome,
+		}),
+		Diagram:       toEvaluationViewDTO(view.Diagram),
+		Understanding: toEvaluationViewDTO(view.Understanding),
+		Defense:       make([]DefenseTurnDTO, 0, len(view.Defense)),
+		Submission:    view.Submission,
+	}
+	for _, turn := range view.Defense {
+		dto.Defense = append(dto.Defense, toDefenseTurnDTO(turn))
+	}
+	return dto
+}
+
+// GetAttemptResult returns the full result of a finished attempt: statement,
+// outcome, both evaluations, the tutor's questions and answers, and the
+// submitted diagram. An attempt that is not finished fails with
+// attempt_not_finished.
+func (a *App) GetAttemptResult(attemptID string) (AttemptResultDTO, error) {
+	attemptID = strings.TrimSpace(attemptID)
+	if attemptID == "" {
+		return AttemptResultDTO{}, invalidInput("attempt id is required")
+	}
+	view, err := a.history.GetAttemptResult(a.ctx, attemptID)
+	if err != nil {
+		return AttemptResultDTO{}, toExerciseError(err)
+	}
+	return toAttemptResultDTO(view), nil
 }

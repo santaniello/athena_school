@@ -166,6 +166,11 @@ func main() {
 		transactor, systemClock{},
 	)
 
+	historyService := applicationexercise.NewHistoryService(
+		challengeRepo, rubricRepo, sqlite.NewAttemptRepository(db), sqlite.NewSubmissionRepository(db),
+		sqlite.NewEvaluationRepository(db), sqlite.NewDefenseRepository(db), sqlite.NewHintRepository(db),
+	)
+
 	challengeCatalog := applicationexercise.NewCatalogService(challengeRepo, sqlite.NewAttemptRecordRepository(db))
 	sessionService := applicationexercise.NewSessionService(sqlite.NewSessionOptionRepository(db))
 
@@ -181,6 +186,7 @@ func main() {
 		desktop.WithHintService(hintService),
 		desktop.WithEvaluationService(evaluationService),
 		desktop.WithDefenseService(defenseService),
+		desktop.WithHistoryService(historyService),
 		desktop.WithCatalogService(challengeCatalog),
 		desktop.WithSessionLister(sessionService),
 	)
