@@ -565,6 +565,22 @@ export namespace desktop {
 	
 	
 	
+	export class ExerciseOfferDTO {
+	    id: string;
+	    sessionId: string;
+	    messageId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExerciseOfferDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.sessionId = source["sessionId"];
+	        this.messageId = source["messageId"];
+	    }
+	}
 	export class FailedSectionResult {
 	    heading: string;
 	    reason: string;
@@ -812,6 +828,24 @@ export namespace desktop {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.chat = source["chat"];
 	        this.embedding = source["embedding"];
+	    }
+	}
+	export class SessionExerciseDTO {
+	    challengeId: string;
+	    title: string;
+	    topic: string;
+	    difficulty: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SessionExerciseDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.challengeId = source["challengeId"];
+	        this.title = source["title"];
+	        this.topic = source["topic"];
+	        this.difficulty = source["difficulty"];
 	    }
 	}
 	export class SessionOptionDTO {
