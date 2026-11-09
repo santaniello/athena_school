@@ -180,3 +180,28 @@ func TestErrorCode_mapsAPendingOfferToItsWireCode(t *testing.T) {
 	// Then the chat gets a stable code
 	assert.Equal(t, "offer_pending", errorCode(fmt.Errorf("x: %w", applicationstudy.ErrOfferPending)))
 }
+
+func TestApp_AcceptOffer_isRefusedWhileAChallengeIsBeingGenerated(t *testing.T) {
+	// Given a Lab generation that is still running
+	generator := &blockingGenerator{started: make(chan struct{})}
+	offers := &fakeOffers{}
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, WithOfferService(offers), WithGenerationService(generator))
+	app.ctx = context.Background()
+	first := make(chan error, 1)
+	go func() {
+		_, err := app.GenerateChallenge("session-1", "BEGINNER")
+		first <- err
+	}()
+	<-generator.started
+
+	// When the chat accepts an offer
+	_, err := app.AcceptOffer("offer-1")
+
+	// Then it is refused without touching the offer, and the generation is undisturbed
+	var coded *ExerciseError
+	require.ErrorAs(t, err, &coded)
+	assert.Equal(t, exerciseCodeGenerationInProgress, coded.Code)
+	assert.Empty(t, offers.accept)
+	require.NoError(t, app.CancelChallengeGeneration())
+	<-first
+}

@@ -1037,7 +1037,12 @@ func (a *App) AcceptOffer(offerID string) (SessionExerciseDTO, error) {
 	if offerID == "" {
 		return SessionExerciseDTO{}, invalidInput("offer id is required")
 	}
-	view, err := a.offers.Accept(a.ctx, offerID)
+	ctx, release, ok := a.beginGeneration()
+	if !ok {
+		return SessionExerciseDTO{}, &ExerciseError{Code: exerciseCodeGenerationInProgress, Message: "a challenge is already being generated"}
+	}
+	defer release()
+	view, err := a.offers.Accept(ctx, offerID)
 	if err != nil {
 		return SessionExerciseDTO{}, toExerciseError(err)
 	}

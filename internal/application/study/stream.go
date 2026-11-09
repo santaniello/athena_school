@@ -3,6 +3,7 @@ package study
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -107,8 +108,11 @@ func (s *Service) streamAndPersist(
 	emitContextTransition(priorContext, newUsage, onContext)
 
 	if detectOffer && offered && s.offers != nil {
-		// Best effort: a missed offer is a normal reply, and the user can ask again.
-		_ = s.offers.CreateOffer(ctx, sessionID, assistantMessage.ID)
+		// Best effort: a missed offer is a normal reply and the user can ask
+		// again, but the failure is logged so it can be diagnosed.
+		if err := s.offers.CreateOffer(ctx, sessionID, assistantMessage.ID); err != nil {
+			log.Printf("study: creating exercise offer for session %s: %v", sessionID, err)
+		}
 	}
 
 	switch {

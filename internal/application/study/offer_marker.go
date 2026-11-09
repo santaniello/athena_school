@@ -36,14 +36,12 @@ func stripExerciseOfferMarker(content string) (string, bool) {
 // released by flush.
 type offerMarkerFilter struct {
 	pending string
-	found   bool
 }
 
 // write takes the next chunk and returns the text that is safe to show now.
 func (f *offerMarkerFilter) write(chunk string) string {
 	f.pending += chunk
 	if strings.Contains(f.pending, exerciseOfferMarker) {
-		f.found = true
 		f.pending = strings.ReplaceAll(f.pending, exerciseOfferMarker, "")
 	}
 	held := partialMarkerSuffixLength(f.pending)

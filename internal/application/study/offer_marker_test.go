@@ -55,7 +55,8 @@ func collectFiltered(chunks []string) (emitted string, found bool) {
 		out.WriteString(filter.write(chunk))
 	}
 	out.WriteString(filter.flush())
-	return out.String(), filter.found
+	_, found = stripExerciseOfferMarker(strings.Join(chunks, ""))
+	return out.String(), found
 }
 
 func TestOfferMarkerFilter_neverEmitsTheMarker_howeverTheStreamIsSplit(t *testing.T) {
