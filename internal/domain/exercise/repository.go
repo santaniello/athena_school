@@ -57,6 +57,9 @@ type ChallengeRepository interface {
 	Create(ctx context.Context, challenge Challenge) error
 	// Get returns the challenge, or ErrChallengeNotFound.
 	Get(ctx context.Context, id string) (Challenge, error)
+	// FindLatestBySourceSession returns the most recently created challenge
+	// whose source session is sessionID, or ErrChallengeNotFound.
+	FindLatestBySourceSession(ctx context.Context, sessionID string) (Challenge, error)
 	List(ctx context.Context, filter ChallengeFilter, page Page) (ChallengePage, error)
 	// ListTopics returns the distinct topics of all challenges, alphabetically.
 	ListTopics(ctx context.Context) ([]string, error)
@@ -230,4 +233,34 @@ type AttemptRecordRepository interface {
 	// ListByChallenges returns the attempts of the given challenges, oldest
 	// first, grouped by challenge id. A challenge without attempts has no entry.
 	ListByChallenges(ctx context.Context, challengeIDs []string) (map[string][]AttemptRecord, error)
+}
+
+var (
+	// ErrOfferNotFound is returned when no exercise offer matches.
+	ErrOfferNotFound = errors.New("exercise offer not found")
+	// ErrOfferPending is returned when a session already has a pending
+	// exercise offer.
+	ErrOfferPending = errors.New("an exercise offer is already pending for this session")
+)
+
+// Offer is a pending exercise offer: the tutor's reply to the user's request
+// for an exercise, waiting for Accept or Decline. A resolved offer is
+// deleted, so every stored offer is pending.
+type Offer struct {
+	ID        string
+	SessionID string
+	MessageID string // the assistant message that carries it
+	CreatedAt time.Time
+}
+
+// OfferRepository persists the pending offers, at most one per session.
+type OfferRepository interface {
+	// Create returns ErrOfferPending if the session already has an offer.
+	Create(ctx context.Context, offer Offer) error
+	// Get returns the offer, or ErrOfferNotFound.
+	Get(ctx context.Context, id string) (Offer, error)
+	// GetBySession returns the session's pending offer, or ErrOfferNotFound.
+	GetBySession(ctx context.Context, sessionID string) (Offer, error)
+	// Delete removes the offer. An unknown id is not an error.
+	Delete(ctx context.Context, id string) error
 }

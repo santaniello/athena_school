@@ -69,6 +69,63 @@ func (_c *MockChallengeRepository_Create_Call) RunAndReturn(run func(context.Con
 	return _c
 }
 
+// FindLatestBySourceSession provides a mock function with given fields: ctx, sessionID
+func (_m *MockChallengeRepository) FindLatestBySourceSession(ctx context.Context, sessionID string) (exercise.Challenge, error) {
+	ret := _m.Called(ctx, sessionID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindLatestBySourceSession")
+	}
+
+	var r0 exercise.Challenge
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) (exercise.Challenge, error)); ok {
+		return rf(ctx, sessionID)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) exercise.Challenge); ok {
+		r0 = rf(ctx, sessionID)
+	} else {
+		r0 = ret.Get(0).(exercise.Challenge)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, sessionID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockChallengeRepository_FindLatestBySourceSession_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindLatestBySourceSession'
+type MockChallengeRepository_FindLatestBySourceSession_Call struct {
+	*mock.Call
+}
+
+// FindLatestBySourceSession is a helper method to define mock.On call
+//   - ctx context.Context
+//   - sessionID string
+func (_e *MockChallengeRepository_Expecter) FindLatestBySourceSession(ctx interface{}, sessionID interface{}) *MockChallengeRepository_FindLatestBySourceSession_Call {
+	return &MockChallengeRepository_FindLatestBySourceSession_Call{Call: _e.mock.On("FindLatestBySourceSession", ctx, sessionID)}
+}
+
+func (_c *MockChallengeRepository_FindLatestBySourceSession_Call) Run(run func(ctx context.Context, sessionID string)) *MockChallengeRepository_FindLatestBySourceSession_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockChallengeRepository_FindLatestBySourceSession_Call) Return(_a0 exercise.Challenge, _a1 error) *MockChallengeRepository_FindLatestBySourceSession_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockChallengeRepository_FindLatestBySourceSession_Call) RunAndReturn(run func(context.Context, string) (exercise.Challenge, error)) *MockChallengeRepository_FindLatestBySourceSession_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Get provides a mock function with given fields: ctx, id
 func (_m *MockChallengeRepository) Get(ctx context.Context, id string) (exercise.Challenge, error) {
 	ret := _m.Called(ctx, id)
