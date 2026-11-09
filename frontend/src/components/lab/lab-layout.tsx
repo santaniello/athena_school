@@ -33,6 +33,10 @@ interface LabLayoutProps {
   canFinish: boolean
   // The board: the diagram editor, supplied by the caller.
   board: ReactNode
+  // Set once the diagram was submitted: the stage of the exam that follows (the
+  // evaluation, the tutor's questions). It takes the place of the tutor's
+  // hints, and the clock and Finish are gone: the drawing is over.
+  stage?: ReactNode
   onExpire: () => void
   onAskHint: () => void
   onFinish: () => void
@@ -61,6 +65,7 @@ function LabLayout({
   hintFailed,
   canFinish,
   board,
+  stage,
   onExpire,
   onAskHint,
   onFinish,
@@ -130,13 +135,15 @@ function LabLayout({
             <Badge variant="muted">{topic}</Badge>
           </div>
           <div className="flex items-center gap-3">
-            <LabCountdown deadline={deadline} now={now} onExpire={onExpire} />
+            {!stage && <LabCountdown deadline={deadline} now={now} onExpire={onExpire} />}
             <Button type="button" variant="outline" size="sm" onClick={() => setLeaving(true)}>
               Leave
             </Button>
-            <Button type="button" size="sm" disabled={!canFinish} onClick={onFinish}>
-              Finish and evaluate
-            </Button>
+            {!stage && (
+              <Button type="button" size="sm" disabled={!canFinish} onClick={onFinish}>
+                Finish and evaluate
+              </Button>
+            )}
             <Button
               type="button"
               variant="ghost"
@@ -198,13 +205,15 @@ function LabLayout({
           style={{ overflow: 'hidden' }}
         >
           <div className="flex h-full flex-col divide-y divide-border overflow-y-auto">
-            <LabTutorPanel
-              hints={hints}
-              hintsLeft={hintsLeft}
-              asking={hintAsking}
-              failed={hintFailed}
-              onAskHint={onAskHint}
-            />
+            {stage ?? (
+              <LabTutorPanel
+                hints={hints}
+                hintsLeft={hintsLeft}
+                asking={hintAsking}
+                failed={hintFailed}
+                onAskHint={onAskHint}
+              />
+            )}
             <LabRubricPanel criteria={criteria} />
           </div>
         </ResizablePanel>

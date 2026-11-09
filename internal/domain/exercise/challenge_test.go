@@ -21,6 +21,7 @@ func validChallenge() Challenge {
 		SourceSessionID:        "session-1",
 		Origin:                 OriginManual,
 		TimeLimitMinutes:       45,
+		DefenseQuestions:       5,
 		CreatedAt:              time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC),
 		UpdatedAt:              time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC),
 	}
@@ -166,4 +167,39 @@ func TestDefaultTimeLimit_followsDifficulty(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestChallenge_Validate_acceptsDefenseQuestionsBounds(t *testing.T) {
+	for _, questions := range []int{MinDefenseQuestions, MaxDefenseQuestions} {
+		// Given a challenge asking exactly the lowest or highest allowed number of questions
+		challenge := validChallenge()
+		challenge.DefenseQuestions = questions
+
+		// When validating it
+		err := challenge.Validate()
+
+		// Then it is valid
+		assert.NoError(t, err)
+	}
+}
+
+func TestChallenge_Validate_rejectsDefenseQuestionsOutOfRange(t *testing.T) {
+	for _, questions := range []int{0, MinDefenseQuestions - 1, MaxDefenseQuestions + 1} {
+		// Given a challenge asking fewer than 3 or more than 5 questions
+		challenge := validChallenge()
+		challenge.DefenseQuestions = questions
+
+		// When validating it
+		err := challenge.Validate()
+
+		// Then it is refused
+		assert.ErrorIs(t, err, ErrDefenseQuestionsInvalid)
+	}
+}
+
+func TestDefaultDefenseQuestions_isFive(t *testing.T) {
+	// Given the default number of questions
+	// When reading it
+	// Then the tutor asks five
+	assert.Equal(t, 5, DefaultDefenseQuestions)
 }

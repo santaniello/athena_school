@@ -3,6 +3,8 @@
 import {desktop} from '../models';
 import {context} from '../models';
 
+export function AnswerDefenseQuestion(arg1:string,arg2:string):Promise<desktop.DefenseDTO>;
+
 export function CancelChallengeGeneration():Promise<void>;
 
 export function CompactStudySession(arg1:string):Promise<void>;
@@ -23,9 +25,13 @@ export function DownloadExampleNote():Promise<string>;
 
 export function EvaluateAttempt(arg1:string):Promise<desktop.EvaluationDTO>;
 
+export function EvaluateDefense(arg1:string):Promise<desktop.OutcomeDTO>;
+
 export function GenerateChallenge(arg1:string,arg2:string):Promise<desktop.ChallengeSummaryDTO>;
 
 export function GetAttempt(arg1:string):Promise<desktop.AttemptDTO>;
+
+export function GetDefense(arg1:string):Promise<desktop.DefenseDTO>;
 
 export function GetEvaluation(arg1:string):Promise<desktop.EvaluationDTO>;
 
@@ -70,6 +76,8 @@ export function ListStudyMessagesBefore(arg1:string,arg2:string,arg3:number):Pro
 export function ListStudySessionsByFolder(arg1:string):Promise<Array<desktop.StudySessionResult>>;
 
 export function MoveStudySession(arg1:string,arg2:string):Promise<void>;
+
+export function NextDefenseQuestion(arg1:string):Promise<desktop.DefenseQuestionDTO>;
 
 export function PickNotesFile():Promise<string>;
 

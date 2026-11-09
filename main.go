@@ -158,6 +158,14 @@ func main() {
 		transactor, settingsService, systemClock{},
 	)
 
+	defenseService := applicationexercise.NewDefenseService(
+		challengeRepo, rubricRepo, sqlite.NewAttemptRepository(db), sqlite.NewSubmissionRepository(db),
+		sqlite.NewEvaluationRepository(db), sqlite.NewDefenseRepository(db),
+		applicationarchitecture.NewDefenseQuestionGenerator(llmClient, exercisesource.NewProfiles(profiles)),
+		applicationarchitecture.NewUnderstandingEvaluator(llmClient, exercisesource.NewProfiles(profiles)),
+		transactor, systemClock{},
+	)
+
 	challengeCatalog := applicationexercise.NewCatalogService(challengeRepo, sqlite.NewAttemptRecordRepository(db))
 	sessionService := applicationexercise.NewSessionService(sqlite.NewSessionOptionRepository(db))
 
@@ -172,6 +180,7 @@ func main() {
 		desktop.WithGenerationService(generationService),
 		desktop.WithHintService(hintService),
 		desktop.WithEvaluationService(evaluationService),
+		desktop.WithDefenseService(defenseService),
 		desktop.WithCatalogService(challengeCatalog),
 		desktop.WithSessionLister(sessionService),
 	)

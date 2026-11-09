@@ -24,6 +24,11 @@ const (
 	// MinTimeLimitMinutes and MaxTimeLimitMinutes bound a challenge's exam time.
 	MinTimeLimitMinutes = 1
 	MaxTimeLimitMinutes = 180
+
+	// The number of questions the tutor asks in the defense, per challenge.
+	MinDefenseQuestions     = 3
+	MaxDefenseQuestions     = 5
+	DefaultDefenseQuestions = 5
 )
 
 var (
@@ -57,6 +62,8 @@ var (
 	ErrTooManyListItems = errors.New("challenge list has too many items")
 	// ErrTimeLimitInvalid is returned when the time limit is outside MinTimeLimitMinutes..MaxTimeLimitMinutes.
 	ErrTimeLimitInvalid = errors.New("challenge time limit is out of range")
+	// ErrDefenseQuestionsInvalid is returned when DefenseQuestions is outside MinDefenseQuestions..MaxDefenseQuestions.
+	ErrDefenseQuestionsInvalid = errors.New("challenge defense questions are out of range")
 )
 
 // ChallengeType identifies which lab a challenge belongs to.
@@ -100,6 +107,7 @@ type Challenge struct {
 	SourceSessionID           string // "" once the session is deleted
 	Origin                    ChallengeOrigin
 	TimeLimitMinutes          int // exam length; copied into an attempt's Deadline
+	DefenseQuestions          int // questions the tutor asks after the diagram evaluation, 3 to 5
 	CreatedAt                 time.Time
 	UpdatedAt                 time.Time
 }
@@ -128,6 +136,9 @@ func (c Challenge) Validate() error {
 	}
 	if c.TimeLimitMinutes < MinTimeLimitMinutes || c.TimeLimitMinutes > MaxTimeLimitMinutes {
 		return ErrTimeLimitInvalid
+	}
+	if c.DefenseQuestions < MinDefenseQuestions || c.DefenseQuestions > MaxDefenseQuestions {
+		return ErrDefenseQuestionsInvalid
 	}
 	if len(c.FunctionalRequirements) == 0 {
 		return ErrFunctionalRequirementsRequired

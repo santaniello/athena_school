@@ -49,6 +49,7 @@ func newTestChallenge(id string) exercise.Challenge {
 		SourceSessionID:           "session-1",
 		Origin:                    exercise.OriginAIGenerated,
 		TimeLimitMinutes:          60,
+		DefenseQuestions:          4,
 		CreatedAt:                 at,
 		UpdatedAt:                 at,
 	}

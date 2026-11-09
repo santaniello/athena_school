@@ -380,6 +380,53 @@ func (_c *MockAttemptRepository_FindInProgress_Call) RunAndReturn(run func(conte
 	return _c
 }
 
+// FinishDefense provides a mock function with given fields: ctx, id
+func (_m *MockAttemptRepository) FinishDefense(ctx context.Context, id string) error {
+	ret := _m.Called(ctx, id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FinishDefense")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
+		r0 = rf(ctx, id)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockAttemptRepository_FinishDefense_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FinishDefense'
+type MockAttemptRepository_FinishDefense_Call struct {
+	*mock.Call
+}
+
+// FinishDefense is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id string
+func (_e *MockAttemptRepository_Expecter) FinishDefense(ctx interface{}, id interface{}) *MockAttemptRepository_FinishDefense_Call {
+	return &MockAttemptRepository_FinishDefense_Call{Call: _e.mock.On("FinishDefense", ctx, id)}
+}
+
+func (_c *MockAttemptRepository_FinishDefense_Call) Run(run func(ctx context.Context, id string)) *MockAttemptRepository_FinishDefense_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockAttemptRepository_FinishDefense_Call) Return(_a0 error) *MockAttemptRepository_FinishDefense_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockAttemptRepository_FinishDefense_Call) RunAndReturn(run func(context.Context, string) error) *MockAttemptRepository_FinishDefense_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Get provides a mock function with given fields: ctx, id
 func (_m *MockAttemptRepository) Get(ctx context.Context, id string) (exercise.ChallengeAttempt, error) {
 	ret := _m.Called(ctx, id)
@@ -492,6 +539,53 @@ func (_c *MockAttemptRepository_ListByChallenge_Call) Return(_a0 []exercise.Chal
 }
 
 func (_c *MockAttemptRepository_ListByChallenge_Call) RunAndReturn(run func(context.Context, string) ([]exercise.ChallengeAttempt, error)) *MockAttemptRepository_ListByChallenge_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// StartDefense provides a mock function with given fields: ctx, id
+func (_m *MockAttemptRepository) StartDefense(ctx context.Context, id string) error {
+	ret := _m.Called(ctx, id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for StartDefense")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
+		r0 = rf(ctx, id)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockAttemptRepository_StartDefense_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'StartDefense'
+type MockAttemptRepository_StartDefense_Call struct {
+	*mock.Call
+}
+
+// StartDefense is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id string
+func (_e *MockAttemptRepository_Expecter) StartDefense(ctx interface{}, id interface{}) *MockAttemptRepository_StartDefense_Call {
+	return &MockAttemptRepository_StartDefense_Call{Call: _e.mock.On("StartDefense", ctx, id)}
+}
+
+func (_c *MockAttemptRepository_StartDefense_Call) Run(run func(ctx context.Context, id string)) *MockAttemptRepository_StartDefense_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockAttemptRepository_StartDefense_Call) Return(_a0 error) *MockAttemptRepository_StartDefense_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockAttemptRepository_StartDefense_Call) RunAndReturn(run func(context.Context, string) error) *MockAttemptRepository_StartDefense_Call {
 	_c.Call.Return(run)
 	return _c
 }

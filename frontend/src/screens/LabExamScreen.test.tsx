@@ -4,14 +4,18 @@ import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { DiagramEditorHandle } from '@/components/lab/diagram-editor'
 import {
+  answerDefenseQuestion,
   discardAttempt,
   evaluateAttempt,
+  evaluateDefense,
   listHints,
+  nextDefenseQuestion,
   requestHint,
   startAttempt,
   submitAttempt,
   type Attempt,
   type Evaluation,
+  type Outcome,
 } from '@/lib/exercise'
 import LabExamScreen from './LabExamScreen'
 
@@ -23,6 +27,9 @@ vi.mock('@/lib/exercise', async (importOriginal) => {
     submitAttempt: vi.fn(),
     discardAttempt: vi.fn(),
     evaluateAttempt: vi.fn(),
+    nextDefenseQuestion: vi.fn(),
+    answerDefenseQuestion: vi.fn(),
+    evaluateDefense: vi.fn(),
     requestHint: vi.fn(),
     listHints: vi.fn(),
   }
@@ -98,6 +105,14 @@ const evaluation: Evaluation = {
   ],
 }
 
+const outcome: Outcome = {
+  result: 'FAILED',
+  passScore: 80,
+  diagramScore: 85,
+  understandingScore: 60,
+  reasons: [{ kind: 'UNDERSTANDING_SCORE', evaluation: 'UNDERSTANDING', criterionName: '' }],
+}
+
 const challenge = {
   id: 'c1',
   title: 'Cache and invalidation',
@@ -140,6 +155,13 @@ describe('LabExamScreen', () => {
     vi.mocked(submitAttempt).mockResolvedValue()
     vi.mocked(discardAttempt).mockResolvedValue()
     vi.mocked(evaluateAttempt).mockResolvedValue(evaluation)
+    vi.mocked(nextDefenseQuestion).mockResolvedValue({
+      position: 1,
+      text: 'Why a cache?',
+      total: 2,
+    })
+    vi.mocked(answerDefenseQuestion).mockResolvedValue({ total: 2, complete: false })
+    vi.mocked(evaluateDefense).mockResolvedValue(outcome)
     vi.mocked(listHints).mockResolvedValue([])
   })
   afterEach(() => vi.useRealTimers())
@@ -255,9 +277,8 @@ describe('LabExamScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Finish' }))
 
     expect(submitAttempt).toHaveBeenCalledExactlyOnceWith('a1', FULL_XML)
-    expect(await screen.findByText('72')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Question 1 of 2' })).toBeInTheDocument()
     expect(evaluateAttempt).toHaveBeenCalledExactlyOnceWith('a1')
-    expect(screen.getByText('Invalidation is drawn.')).toBeInTheDocument()
     expect(screen.queryByRole('timer')).not.toBeInTheDocument()
   })
 
@@ -270,7 +291,7 @@ describe('LabExamScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Finish' }))
 
     expect(await screen.findByText('Evaluating your diagram...')).toBeInTheDocument()
-    expect(screen.queryByTestId('editor')).not.toBeInTheDocument()
+    expect(screen.getByTestId('editor')).toBeInTheDocument()
     expect(onExit).not.toHaveBeenCalled()
   })
 
@@ -287,7 +308,7 @@ describe('LabExamScreen', () => {
     ).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Try evaluating again' }))
 
-    expect(await screen.findByText('72')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Question 1 of 2' })).toBeInTheDocument()
     expect(evaluateAttempt).toHaveBeenCalledTimes(2)
     expect(submitAttempt).toHaveBeenCalledOnce()
   })
@@ -332,13 +353,14 @@ describe('LabExamScreen', () => {
     expect(screen.getByRole('timer')).toBeInTheDocument()
   })
 
-  it('discards the submitted attempt and goes back from Back to catalog', async () => {
+  it('discards the submitted attempt and goes back from Back to catalog after a failed evaluation', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    vi.mocked(evaluateAttempt).mockRejectedValue(coded('invalid_evaluation'))
     const { onExit } = await startRunning()
     act(() => editor.onChange(FULL_XML))
     await user.click(screen.getByRole('button', { name: 'Finish and evaluate' }))
     await user.click(screen.getByRole('button', { name: 'Finish' }))
-    await screen.findByText('72')
+    await screen.findByText('The evaluator returned an invalid evaluation.')
 
     await user.click(screen.getByRole('button', { name: 'Back to catalog' }))
 
@@ -396,7 +418,7 @@ describe('LabExamScreen', () => {
     await act(async () => vi.advanceTimersByTime(44 * 60 * 1000))
 
     expect(submitAttempt).toHaveBeenCalledExactlyOnceWith('a1', FULL_XML)
-    expect(await screen.findByText('72')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Question 1 of 2' })).toBeInTheDocument()
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
   })
 
@@ -538,5 +560,155 @@ describe('LabExamScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Ask for a hint' }))
 
     expect(requestHint).toHaveBeenCalledExactlyOnceWith('a1', '')
+  })
+
+  describe('the defense', () => {
+    // Gets to the first question.
+    async function defending(props: { leaveRequested?: boolean } = {}) {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      const view = await startRunning(props)
+      act(() => editor.onChange(FULL_XML))
+      await user.click(screen.getByRole('button', { name: 'Finish and evaluate' }))
+      await user.click(screen.getByRole('button', { name: 'Finish' }))
+      await screen.findByRole('heading', { name: 'Question 1 of 2' })
+      return { user, ...view }
+    }
+
+    it('starts by itself with the statement, the board and the rubric still visible and read-only', async () => {
+      await defending()
+
+      expect(screen.getByText('Why a cache?')).toBeInTheDocument()
+      expect(screen.getByText('A catalog service serves millions of reads.')).toBeInTheDocument()
+      expect(screen.getByTestId('editor')).toBeInTheDocument()
+      expect(screen.getByTestId('board-lock')).toBeInTheDocument()
+      expect(screen.getByText('Consistency')).toBeInTheDocument()
+    })
+
+    it('has no clock, no hint button and no finish button, and shows no score', async () => {
+      await defending()
+
+      expect(screen.queryByRole('timer')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Ask for a hint' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Finish and evaluate' })).not.toBeInTheDocument()
+      expect(screen.queryByText('72')).not.toBeInTheDocument()
+      expect(screen.queryByText('Invalidation is drawn.')).not.toBeInTheDocument()
+    })
+
+    it('goes from the last answer to the outcome with Back to catalog', async () => {
+      const { user, onExit } = await defending()
+      vi.mocked(nextDefenseQuestion).mockResolvedValue({
+        position: 2,
+        text: 'What if it fails?',
+        total: 2,
+      })
+
+      await user.type(screen.getByRole('textbox', { name: 'Your answer' }), 'To cut reads.')
+      await user.click(screen.getByRole('button', { name: 'Send answer' }))
+      expect(await screen.findByRole('heading', { name: 'Question 2 of 2' })).toBeInTheDocument()
+      vi.mocked(answerDefenseQuestion).mockResolvedValue({ total: 2, complete: true })
+      await user.click(screen.getByRole('button', { name: "I don't know" }))
+
+      expect(await screen.findByRole('heading', { name: 'Failed' })).toBeInTheDocument()
+      expect(answerDefenseQuestion).toHaveBeenNthCalledWith(1, 'a1', 'To cut reads.')
+      expect(answerDefenseQuestion).toHaveBeenNthCalledWith(2, 'a1', "I don't know")
+      expect(evaluateDefense).toHaveBeenCalledExactlyOnceWith('a1')
+      expect(
+        screen.getByText('The understanding score is below the minimum of 80.'),
+      ).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Back to catalog' }))
+      expect(onExit).toHaveBeenCalledOnce()
+      expect(discardAttempt).not.toHaveBeenCalled()
+    })
+
+    it('says why a question failed and asks again on request', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      vi.mocked(nextDefenseQuestion).mockRejectedValueOnce(coded('internal'))
+      await startRunning()
+      act(() => editor.onChange(FULL_XML))
+      await user.click(screen.getByRole('button', { name: 'Finish and evaluate' }))
+      await user.click(screen.getByRole('button', { name: 'Finish' }))
+
+      expect(
+        await screen.findByText('The tutor could not continue the defense.'),
+      ).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Try again' }))
+
+      expect(await screen.findByRole('heading', { name: 'Question 1 of 2' })).toBeInTheDocument()
+      expect(evaluateAttempt).toHaveBeenCalledOnce()
+    })
+
+    it('keeps the answers and evaluates again when the final evaluation failed', async () => {
+      const { user } = await defending()
+      vi.mocked(answerDefenseQuestion).mockResolvedValue({ total: 2, complete: true })
+      vi.mocked(evaluateDefense).mockRejectedValueOnce(coded('invalid_evaluation'))
+
+      await user.click(screen.getByRole('button', { name: "I don't know" }))
+      expect(
+        await screen.findByText('The tutor returned an invalid evaluation.'),
+      ).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Try again' }))
+
+      expect(await screen.findByRole('heading', { name: 'Failed' })).toBeInTheDocument()
+      expect(answerDefenseQuestion).toHaveBeenCalledOnce()
+      expect(evaluateDefense).toHaveBeenCalledTimes(2)
+    })
+
+    it('shows a refused answer once, on the question, and not over the board', async () => {
+      const { user } = await defending()
+      vi.mocked(answerDefenseQuestion).mockRejectedValueOnce(coded('invalid_answer'))
+
+      await user.type(screen.getByRole('textbox', { name: 'Your answer' }), 'x')
+      await user.click(screen.getByRole('button', { name: 'Send answer' }))
+
+      expect(await screen.findAllByRole('alert')).toHaveLength(1)
+      expect(
+        screen.getByText('The answer must be between 1 and 4,000 characters.'),
+      ).toBeInTheDocument()
+    })
+
+    it('asks before leaving during the defense and discards the attempt on confirm', async () => {
+      const { user, rerender, onExit } = await defending()
+
+      rerender(
+        <LabExamScreen
+          challenge={challenge}
+          leaveRequested
+          onLeaveCancelled={vi.fn()}
+          onExit={onExit}
+        />,
+      )
+      expect(
+        screen.getByText('Leaving discards this exam. It will not be graded.'),
+      ).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Leave' }))
+
+      expect(discardAttempt).toHaveBeenCalledExactlyOnceWith('a1')
+      expect(onExit).toHaveBeenCalledOnce()
+    })
+
+    it('shows progress while a question is written, while an answer is sent and while the answers are judged', async () => {
+      const { user } = await defending()
+      vi.mocked(answerDefenseQuestion).mockReturnValue(new Promise(() => {}))
+      await user.type(screen.getByRole('textbox', { name: 'Your answer' }), 'x')
+      await user.click(screen.getByRole('button', { name: 'Send answer' }))
+      expect(await screen.findByRole('button', { name: 'Sending...' })).toBeDisabled()
+    })
+
+    it('shows progress while the next question is written', async () => {
+      const { user } = await defending()
+      vi.mocked(nextDefenseQuestion).mockReturnValue(new Promise(() => {}))
+      await user.click(screen.getByRole('button', { name: "I don't know" }))
+      expect(
+        await screen.findByText('The tutor is preparing the next question...'),
+      ).toBeInTheDocument()
+    })
+
+    it('shows progress while the answers are judged', async () => {
+      const { user } = await defending()
+      vi.mocked(answerDefenseQuestion).mockResolvedValue({ total: 2, complete: true })
+      vi.mocked(evaluateDefense).mockReturnValue(new Promise(() => {}))
+      await user.click(screen.getByRole('button', { name: "I don't know" }))
+      expect(await screen.findByText('Evaluating your answers...')).toBeInTheDocument()
+    })
   })
 })

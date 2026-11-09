@@ -202,4 +202,39 @@ describe('LabLayout', () => {
     expect(screen.getByRole('button', { name: 'Hide statement' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Hide tutor and rubric' })).toBeInTheDocument()
   })
+
+  describe('with a stage after the diagram was submitted', () => {
+    it('shows the stage where the tutor was and keeps the statement, the board and the rubric', () => {
+      renderLayout({ stage: <p>Question 1 of 5</p> })
+
+      expect(screen.getByText('Question 1 of 5')).toBeInTheDocument()
+      expect(
+        screen.getByText('A catalog service serves millions of reads per day.'),
+      ).toBeInTheDocument()
+      expect(screen.getByText('the editor')).toBeInTheDocument()
+      expect(screen.getByText('Consistency')).toBeInTheDocument()
+    })
+
+    it('has no hint button, no clock and no Finish button, but still lets the user leave', () => {
+      renderLayout({ stage: <p>Question 1 of 5</p> })
+
+      expect(screen.queryByRole('heading', { name: 'Tutor Athena' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Ask for a hint' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('timer')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Finish and evaluate' })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Leave' })).toBeInTheDocument()
+    })
+
+    it('still asks before leaving', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      const { onLeave } = renderLayout({ stage: <p>Question 1 of 5</p> })
+
+      await user.click(screen.getByRole('button', { name: 'Leave' }))
+      await user.click(
+        within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Leave' }),
+      )
+
+      expect(onLeave).toHaveBeenCalledOnce()
+    })
+  })
 })

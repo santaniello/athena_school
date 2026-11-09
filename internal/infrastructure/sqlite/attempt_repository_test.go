@@ -446,8 +446,9 @@ func attemptInState(t *testing.T, repo *AttemptRepository, id string, state exer
 	}
 	require.NoError(t, repo.StartEvaluation(ctx, id))
 	switch state {
-	case exercise.AttemptEvaluated:
+	case exercise.AttemptEvaluated, exercise.AttemptDefending, exercise.AttemptFinished:
 		require.NoError(t, repo.CompleteEvaluation(ctx, id, 80))
+		advanceDefense(t, repo, id, state)
 	case exercise.AttemptEvaluationFailed:
 		require.NoError(t, repo.FailEvaluation(ctx, id, "model timeout"))
 	}
@@ -638,4 +639,117 @@ func TestAttemptRepository_Create_storesAFrozenPassScoreOfAnAttemptCreatedWithOn
 	got, err := repo.Get(ctx, "attempt-1")
 	require.NoError(t, err)
 	assert.Equal(t, 90, got.PassScore)
+}
+
+// advanceDefense moves an EVALUATED attempt on to DEFENDING or FINISHED.
+func advanceDefense(t *testing.T, repo *AttemptRepository, id string, state exercise.AttemptState) {
+	t.Helper()
+	ctx := context.Background()
+	if state == exercise.AttemptDefending || state == exercise.AttemptFinished {
+		require.NoError(t, repo.StartDefense(ctx, id))
+	}
+	if state == exercise.AttemptFinished {
+		require.NoError(t, repo.FinishDefense(ctx, id))
+	}
+}
+
+func TestAttemptRepository_StartDefense_movesEvaluatedToDefending(t *testing.T) {
+	// Given an evaluated attempt
+	repo, _ := newTestAttemptRepository(t)
+	ctx := context.Background()
+	attemptInState(t, repo, "attempt-1", exercise.AttemptEvaluated)
+
+	// When starting its defense
+	require.NoError(t, repo.StartDefense(ctx, "attempt-1"))
+
+	// Then it is DEFENDING
+	got, err := repo.Get(ctx, "attempt-1")
+	require.NoError(t, err)
+	assert.Equal(t, exercise.AttemptDefending, got.State)
+}
+
+func TestAttemptRepository_StartDefense_onlyMatchesAnEvaluatedAttempt(t *testing.T) {
+	// Given attempts that are submitted, defending and unknown
+	repo, _ := newTestAttemptRepository(t)
+	ctx := context.Background()
+	attemptInState(t, repo, "submitted", exercise.AttemptSubmitted)
+	attemptInState(t, repo, "defending", exercise.AttemptDefending)
+
+	// When starting a defense on each
+	// Then every one is refused, including a second start
+	assert.ErrorIs(t, repo.StartDefense(ctx, "submitted"), exercise.ErrDefenseNotActive)
+	assert.ErrorIs(t, repo.StartDefense(ctx, "defending"), exercise.ErrDefenseNotActive)
+	assert.ErrorIs(t, repo.StartDefense(ctx, "missing"), exercise.ErrDefenseNotActive)
+}
+
+func TestAttemptRepository_FinishDefense_movesDefendingToFinishedAndNothingElse(t *testing.T) {
+	// Given a defending and an evaluated attempt
+	repo, _ := newTestAttemptRepository(t)
+	ctx := context.Background()
+	attemptInState(t, repo, "defending", exercise.AttemptDefending)
+	attemptInState(t, repo, "evaluated", exercise.AttemptEvaluated)
+
+	// When finishing each
+	require.NoError(t, repo.FinishDefense(ctx, "defending"))
+	errEvaluated := repo.FinishDefense(ctx, "evaluated")
+	errAgain := repo.FinishDefense(ctx, "defending")
+
+	// Then only the defending one finished, once
+	got, err := repo.Get(ctx, "defending")
+	require.NoError(t, err)
+	assert.Equal(t, exercise.AttemptFinished, got.State)
+	assert.ErrorIs(t, errEvaluated, exercise.ErrDefenseNotActive)
+	assert.ErrorIs(t, errAgain, exercise.ErrDefenseNotActive)
+}
+
+func TestAttemptRepository_DeleteUnfinished_removesADefendingAttemptWithItsTurns(t *testing.T) {
+	// Given a defending attempt with an asked question
+	repo, db := newTestAttemptRepository(t)
+	ctx := context.Background()
+	attemptInState(t, repo, "attempt-1", exercise.AttemptDefending)
+	require.NoError(t, NewDefenseRepository(db).AddQuestion(ctx, newTestDefenseTurn("attempt-1", 1)))
+
+	// When discarding the attempt
+	require.NoError(t, repo.DeleteUnfinished(ctx, "attempt-1"))
+
+	// Then the turn goes with it instead of failing on the foreign key
+	assert.Equal(t, 0, countTableRows(t, db, "challenge_attempts"))
+	assert.Equal(t, 0, countTableRows(t, db, "defense_turns"))
+}
+
+func TestAttemptRepository_DeleteAllUnfinished_keepsAFinishedAttemptWithItsDefense(t *testing.T) {
+	// Given a finished attempt and a defending one, each with a turn
+	repo, db := newTestAttemptRepository(t)
+	ctx := context.Background()
+	defense := NewDefenseRepository(db)
+	attemptInState(t, repo, "finished", exercise.AttemptFinished)
+	attemptInState(t, repo, "defending", exercise.AttemptDefending)
+	require.NoError(t, defense.AddQuestion(ctx, newTestDefenseTurn("finished", 1)))
+	require.NoError(t, defense.AddQuestion(ctx, newTestDefenseTurn("defending", 1)))
+
+	// When cleaning every unfinished attempt
+	removed, err := repo.DeleteAllUnfinished(ctx)
+
+	// Then only the defending attempt and its turn are gone
+	require.NoError(t, err)
+	assert.Equal(t, 1, removed)
+	_, err = repo.Get(ctx, "finished")
+	assert.NoError(t, err)
+	assert.Equal(t, 1, countTableRows(t, db, "defense_turns"))
+}
+
+func TestAttemptRepository_DeleteUnfinishedEvaluations_removesTurnsToo(t *testing.T) {
+	// Given an evaluating attempt that somehow holds a defense turn
+	repo, db := newTestAttemptRepository(t)
+	ctx := context.Background()
+	attemptInState(t, repo, "attempt-1", exercise.AttemptEvaluating)
+	require.NoError(t, NewDefenseRepository(db).AddQuestion(ctx, newTestDefenseTurn("attempt-1", 1)))
+
+	// When discarding the unfinished evaluations
+	removed, err := repo.DeleteUnfinishedEvaluations(ctx)
+
+	// Then the turn goes with the attempt
+	require.NoError(t, err)
+	assert.Equal(t, 1, removed)
+	assert.Equal(t, 0, countTableRows(t, db, "defense_turns"))
 }

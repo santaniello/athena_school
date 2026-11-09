@@ -39,6 +39,7 @@ type App struct {
 	generator     challengeGenerator
 	hints         hintGiver
 	evaluations   attemptEvaluator
+	defense       defenseRunner
 	catalog       challengeCatalog
 	sessionLister sessionLister
 	// cancelGeneration cancels the challenge generation in flight, if any.

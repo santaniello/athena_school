@@ -116,6 +116,7 @@ func TestGenerationService_GenerateChallenge_savesChallengeAndRubricInOneTransac
 	assert.Equal(t, "distributed caching", got.Topic)
 	assert.Equal(t, domainexercise.DifficultyIntermediate, got.Difficulty)
 	assert.Equal(t, 45, got.TimeLimitMinutes)
+	assert.Equal(t, 5, got.DefenseQuestions)
 	assert.Equal(t, "Design a global cache", got.Title)
 
 	// And its first rubric version holds the five base criteria plus the generated ones
@@ -254,6 +255,7 @@ func expectedGeneratedChallenge() domainexercise.Challenge {
 		SourceSessionID:           "session-1",
 		Origin:                    domainexercise.OriginAIGenerated,
 		TimeLimitMinutes:          45,
+		DefenseQuestions:          5,
 		CreatedAt:                 fixedNow,
 		UpdatedAt:                 fixedNow,
 	}

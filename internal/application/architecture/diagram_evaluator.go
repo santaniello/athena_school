@@ -36,10 +36,7 @@ func NewDiagramEvaluator(llm domainllm.Provider, profiles ProfileReader) *Diagra
 // before any call. An answer that is not the expected JSON, or names a
 // criterion the rubric does not have, wraps domainexercise.ErrInvalidEvaluation.
 func (e *DiagramEvaluator) Evaluate(ctx context.Context, input domainexercise.EvaluatorInput) (domainexercise.EvaluatorOutput, error) {
-	if input.Submission.ContentType != diagramContentType {
-		return domainexercise.EvaluatorOutput{}, fmt.Errorf("%w: content type %q", ErrInvalidDiagram, input.Submission.ContentType)
-	}
-	summary, err := SummarizeDiagram(input.Submission.Content)
+	summary, err := summarizeSubmission(input.Submission)
 	if err != nil {
 		return domainexercise.EvaluatorOutput{}, err
 	}
