@@ -8,15 +8,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import type { ExamToStart } from '@/lib/exercise'
 import { MAX_HINTS } from '@/lib/lab'
 import { getPassScore } from '@/lib/passScore'
 
-export interface ExamToStart {
-  id: string
-  title: string
-  difficulty: string
-  timeLimitMinutes: number
-}
+export type { ExamToStart }
 
 interface StartExamDialogProps {
   // The challenge whose rules are shown; null keeps the dialog closed.

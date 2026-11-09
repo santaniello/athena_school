@@ -93,7 +93,7 @@ func TestApp_GetPendingOffer_mapsFailures(t *testing.T) {
 func TestApp_AcceptOffer_returnsTheLinkedChallenge(t *testing.T) {
 	// Given an offer that links a challenge
 	offers := &fakeOffers{view: applicationexercise.SessionExerciseView{
-		ChallengeID: "challenge-1", Title: "Design a cache", Topic: "caching", Difficulty: domainexercise.DifficultyAdvanced,
+		ChallengeID: "challenge-1", Title: "Design a cache", Topic: "caching", Difficulty: domainexercise.DifficultyAdvanced, TimeLimitMinutes: 45,
 	}}
 
 	// When the frontend accepts it
@@ -102,7 +102,7 @@ func TestApp_AcceptOffer_returnsTheLinkedChallenge(t *testing.T) {
 	// Then the challenge comes back
 	require.NoError(t, err)
 	assert.Equal(t, "offer-1", offers.accept)
-	assert.Equal(t, SessionExerciseDTO{ChallengeID: "challenge-1", Title: "Design a cache", Topic: "caching", Difficulty: "ADVANCED"}, got)
+	assert.Equal(t, SessionExerciseDTO{ChallengeID: "challenge-1", Title: "Design a cache", Topic: "caching", Difficulty: "ADVANCED", TimeLimitMinutes: 45}, got)
 }
 
 func TestApp_AcceptOffer_mapsErrors(t *testing.T) {

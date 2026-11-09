@@ -1,3 +1,4 @@
+import type { ComponentProps } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -7,6 +8,7 @@ import {
   getAssistantLanguage,
   getPendingOffer,
   type ExerciseOffer,
+  type SessionExercise,
 } from '@/lib/exercise'
 import {
   getStudySessionSummary,
@@ -27,7 +29,10 @@ import {
   type StudyDoneEvent,
   type StudyErrorEvent,
 } from '@/lib/study'
+import { getPassScore } from '@/lib/passScore'
 import StudyChatScreen from './StudyChatScreen'
+
+vi.mock('@/lib/passScore', () => ({ getPassScore: vi.fn() }))
 
 vi.mock('@/lib/exercise', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/exercise')>()),
@@ -92,7 +97,15 @@ function subscribe(): Handlers {
 
 const CONTEXT = { state: 'normal', model: '', usedTokens: 0, contextLength: 0, estimated: false }
 
-async function renderResumed() {
+const EXERCISE: SessionExercise = {
+  challengeId: 'c1',
+  title: 'Design a cache',
+  topic: 'caching',
+  difficulty: 'ADVANCED',
+  timeLimitMinutes: 45,
+}
+
+async function renderResumed(props: Partial<ComponentProps<typeof StudyChatScreen>> = {}) {
   vi.mocked(resumeStudySession).mockResolvedValue({
     session: {
       id: 'session-1',
@@ -123,6 +136,8 @@ async function renderResumed() {
       mode="resume"
       onStartNewSession={vi.fn()}
       startingNewSession={false}
+      onStartExam={vi.fn()}
+      {...props}
     />,
   )
   await screen.findByText('Sure, let us practice.')
@@ -131,6 +146,7 @@ async function renderResumed() {
 describe('StudyChatScreen — exercise offer', () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    vi.mocked(getPassScore).mockResolvedValue(70)
     vi.mocked(getStudySessionSummary).mockResolvedValue({
       found: false,
       coversUntilMessageId: '',
@@ -211,6 +227,7 @@ describe('StudyChatScreen — exercise offer', () => {
       title: 'Design a cache',
       topic: 'caching',
       difficulty: 'ADVANCED',
+      timeLimitMinutes: 45,
     })
     await renderResumed()
     const user = userEvent.setup()
@@ -219,6 +236,64 @@ describe('StudyChatScreen — exercise offer', () => {
 
     expect(await screen.findByText('Exercise ready: Design a cache')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('Type your answer...')).toBeEnabled()
+  })
+
+  it('opens the exam rules from the ready card and starts the exam with the session', async () => {
+    subscribe()
+    vi.mocked(getPendingOffer).mockResolvedValue(OFFER)
+    vi.mocked(acceptOffer).mockResolvedValue(EXERCISE)
+    const onStartExam = vi.fn()
+    await renderResumed({ onStartExam })
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Accept' }))
+
+    await user.click(await screen.findByRole('button', { name: 'Open in Architecture Lab' }))
+    expect(onStartExam).not.toHaveBeenCalled()
+    expect(screen.getByText('Time limit: 45 minutes')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Start exam' }))
+
+    expect(onStartExam).toHaveBeenCalledExactlyOnceWith(EXERCISE, 'session-1')
+  })
+
+  it('does not start the exam when the rules are cancelled', async () => {
+    subscribe()
+    vi.mocked(getPendingOffer).mockResolvedValue(null)
+    const onStartExam = vi.fn()
+    await renderResumed({ onStartExam, initialExercise: EXERCISE })
+    const user = userEvent.setup()
+
+    await user.click(screen.getByRole('button', { name: 'Open in Architecture Lab' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(onStartExam).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Start exam' })).not.toBeInTheDocument()
+  })
+
+  it('reports the accepted exercise, and its removal when a message is sent', async () => {
+    subscribe()
+    vi.mocked(getPendingOffer).mockResolvedValue(OFFER)
+    vi.mocked(acceptOffer).mockResolvedValue(EXERCISE)
+    vi.mocked(sendStudyMessage).mockResolvedValue()
+    const onExerciseChange = vi.fn()
+    await renderResumed({ onExerciseChange })
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Accept' }))
+    expect(onExerciseChange).toHaveBeenLastCalledWith('session-1', EXERCISE)
+    await user.type(screen.getByPlaceholderText('Type your answer...'), 'thanks')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(onExerciseChange).toHaveBeenLastCalledWith('session-1', null)
+  })
+
+  it('shows the ready exercise again when the chat comes back from the lab', async () => {
+    subscribe()
+    vi.mocked(getPendingOffer).mockResolvedValue(null)
+
+    await renderResumed({ initialExercise: EXERCISE })
+
+    expect(screen.getByText('Exercise ready: Design a cache')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Open in Architecture Lab' })).toBeInTheDocument()
   })
 
   it('keeps the input disabled while accepting fails and the offer stays', async () => {
@@ -261,6 +336,7 @@ describe('StudyChatScreen — exercise offer', () => {
       title: 'Design a cache',
       topic: 'caching',
       difficulty: 'ADVANCED',
+      timeLimitMinutes: 45,
     })
     vi.mocked(sendStudyMessage).mockResolvedValue()
     await renderResumed()

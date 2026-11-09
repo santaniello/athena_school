@@ -1010,6 +1010,8 @@ type SessionExerciseDTO struct {
 	Title       string `json:"title"`
 	Topic       string `json:"topic"`
 	Difficulty  string `json:"difficulty"`
+	// TimeLimitMinutes is the exam time shown in the rules dialog.
+	TimeLimitMinutes int `json:"timeLimitMinutes"`
 }
 
 // GetPendingOffer returns the session's pending exercise offer, or null when
@@ -1048,6 +1050,7 @@ func (a *App) AcceptOffer(offerID string) (SessionExerciseDTO, error) {
 	}
 	return SessionExerciseDTO{
 		ChallengeID: view.ChallengeID, Title: view.Title, Topic: view.Topic, Difficulty: string(view.Difficulty),
+		TimeLimitMinutes: view.TimeLimitMinutes,
 	}, nil
 }
 

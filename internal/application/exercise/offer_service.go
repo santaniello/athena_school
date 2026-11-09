@@ -19,6 +19,8 @@ type SessionExerciseView struct {
 	Title       string
 	Topic       string
 	Difficulty  domainexercise.Difficulty
+	// TimeLimitMinutes is the exam time, shown in the rules before it starts.
+	TimeLimitMinutes int
 }
 
 // OfferService runs the exercise offer of the study chat: the tutor's answer
@@ -201,6 +203,7 @@ func (s *OfferService) link(ctx context.Context, offer domainexercise.Offer, cha
 func sessionExerciseViewOf(challenge domainexercise.Challenge) SessionExerciseView {
 	return SessionExerciseView{
 		ChallengeID: challenge.ID, Title: challenge.Title, Topic: challenge.Topic, Difficulty: challenge.Difficulty,
+		TimeLimitMinutes: challenge.TimeLimitMinutes,
 	}
 }
 

@@ -11,14 +11,19 @@ import type { ExamToStart } from '@/components/lab/start-exam-dialog'
 import { Button } from '@/components/ui/button'
 import { useExam } from '@/hooks/use-exam'
 import { useHints } from '@/hooks/use-hints'
+import { labReturnLabel, type LabReturn } from '@/lib/lab'
 
 interface LabExamScreenProps {
   challenge: ExamToStart
+  // Where the exam goes back to; it also links the attempt to the study
+  // session it was started from.
+  returnTo: LabReturn
   // The user tried to navigate away through the sidebar. The screen asks the
   // same question as Leave and answers through onExit or onLeaveCancelled.
   leaveRequested: boolean
   onLeaveCancelled: () => void
-  // The exam is over; the shell shows the catalog, with the notice if given.
+  // The exam is over; the shell shows the return target, with the notice if
+  // given.
   onExit: (notice?: string) => void
   now?: () => number
 }
@@ -29,12 +34,14 @@ interface LabExamScreenProps {
 // specs/phases/phase-03-architecture-lab/10-diagram-workspace.md.
 function LabExamScreen({
   challenge,
+  returnTo,
   leaveRequested,
   onLeaveCancelled,
   onExit,
   now,
 }: LabExamScreenProps) {
-  const exam = useExam(challenge.id, onExit)
+  const exam = useExam(challenge.id, onExit, returnTo.kind === 'study' ? returnTo.sessionId : '')
+  const backLabel = labReturnLabel(returnTo)
   const editorRef = useRef<DiagramEditorHandle>(null)
   const [finishing, setFinishing] = useState(false)
   const [connectionLost, setConnectionLost] = useState(false)
@@ -88,7 +95,7 @@ function LabExamScreen({
       <>
         <AttemptResultView
           attemptId={attempt.id}
-          backLabel="Back to catalog"
+          backLabel={backLabel}
           onBack={() => void exam.leave()}
         />
         {leaveDialog}
@@ -107,7 +114,7 @@ function LabExamScreen({
             Try again
           </Button>
           <Button type="button" variant="outline" onClick={() => onExit()}>
-            Back to catalog
+            {backLabel}
           </Button>
         </div>
       </CenteredMessage>
@@ -119,7 +126,7 @@ function LabExamScreen({
       <CenteredMessage>
         <p className="text-sm text-destructive">{exam.message}</p>
         <Button type="button" variant="outline" onClick={() => onExit()}>
-          Back to catalog
+          {backLabel}
         </Button>
       </CenteredMessage>
     )
@@ -167,7 +174,7 @@ function LabExamScreen({
         hintAsking={tutor.asking}
         hintFailed={tutor.failed}
         canFinish={exam.hasContent && phase === 'running'}
-        stage={stageFor(exam)}
+        stage={stageFor(exam, backLabel)}
         board={
           <>
             {editor}
@@ -212,7 +219,7 @@ function LabExamScreen({
 
 // The stage that takes the place of the tutor once the diagram was submitted:
 // the evaluation, then the tutor's questions. While drawing there is none.
-function stageFor(exam: ReturnType<typeof useExam>): ReactNode {
+function stageFor(exam: ReturnType<typeof useExam>, backLabel: string): ReactNode {
   switch (exam.phase) {
     case 'evaluating':
     case 'evaluationFailed':
@@ -220,6 +227,7 @@ function stageFor(exam: ReturnType<typeof useExam>): ReactNode {
         <EvaluationStage
           phase={exam.phase}
           message={exam.message}
+          backLabel={backLabel}
           onRetry={() => void exam.retryEvaluation()}
           onBack={() => void exam.leave()}
         />

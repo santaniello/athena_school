@@ -20,6 +20,8 @@ import SettingsScreen from '@/screens/SettingsScreen'
 import DocumentationScreen from '@/screens/DocumentationScreen'
 import ArchitectureLabScreen from '@/screens/ArchitectureLabScreen'
 import LabExamScreen from '@/screens/LabExamScreen'
+import type { LabReturn } from '@/lib/lab'
+import { toExamToStart, type SessionExercise } from '@/lib/exercise'
 import type { ExamToStart } from '@/components/lab/start-exam-dialog'
 import { ToastViewport, type ToastItem } from '@/components/toast'
 import { NAVIGATION, type AppSection } from '@/lib/navigation'
@@ -83,6 +85,13 @@ function AppShell() {
   // The exam in progress, a full-screen state of the Architecture Lab. While
   // it runs, navigating elsewhere waits for the exam's own leave question.
   const [exam, setExam] = useState<ExamToStart | null>(null)
+  // Where the exam goes back to when it ends: the catalog it was started from
+  // or the study session that offered it. Not persisted.
+  const [labReturn, setLabReturn] = useState<LabReturn>({ kind: 'catalog' })
+  // The accepted exercise of each session, as its chat card shows it, so the
+  // card is still there when the chat mounts again (for example after the lab).
+  // Kept in memory only; the persistent card is spec 3.17.
+  const [sessionExercises, setSessionExercises] = useState<Record<string, SessionExercise>>({})
   const [pendingSection, setPendingSection] = useState<AppSection | null>(null)
   const [notices, setNotices] = useState<ToastItem[]>([])
   const [profile, setProfile] = useState<ProfileDraft | null>(null)
@@ -232,9 +241,41 @@ function AppShell() {
     if (next !== 'challenge') setPendingSection(next)
   }
 
+  function handleExerciseChange(sessionId: string, exercise: SessionExercise | null) {
+    setSessionExercises((current) => {
+      const next = { ...current }
+      if (exercise) next[sessionId] = exercise
+      else delete next[sessionId]
+      return next
+    })
+  }
+
+  // The opening turn was asked for, so any later mount of this chat resumes
+  // the session instead of asking for it again.
+  function handleOpeningTurnRequested(sessionId: string) {
+    setActiveSession((current) =>
+      current?.id === sessionId && current.mode === 'new'
+        ? { ...current, mode: 'resume' }
+        : current,
+    )
+  }
+
+  function startCatalogExam(challenge: ExamToStart) {
+    setLabReturn({ kind: 'catalog' })
+    setExam(challenge)
+  }
+
+  function startSessionExam(exercise: SessionExercise, sessionId: string) {
+    setLabReturn({ kind: 'study', sessionId })
+    setExam(toExamToStart(exercise))
+    setSection('challenge')
+  }
+
   function handleExamExit(notice?: string) {
     setExam(null)
-    if (pendingSection) setSection(pendingSection)
+    const destination = pendingSection ?? (labReturn.kind === 'study' ? 'study' : null)
+    if (destination) setSection(destination)
+    setLabReturn({ kind: 'catalog' })
     setPendingSection(null)
     if (notice) {
       setNotices((current) => [
@@ -469,6 +510,10 @@ function AppShell() {
               initialTopic={activeSession.topic}
               mode={activeSession.mode}
               onTopicResolved={handleTopicResolved}
+              initialExercise={sessionExercises[activeSession.id] ?? null}
+              onExerciseChange={handleExerciseChange}
+              onOpeningTurnRequested={handleOpeningTurnRequested}
+              onStartExam={startSessionExam}
               onStartNewSession={handleStartNewSession}
               startingNewSession={startingNewSession}
               sourceModeSlot={sourceModeSlot}
@@ -498,6 +543,7 @@ function AppShell() {
           exam ? (
             <LabExamScreen
               challenge={exam}
+              returnTo={labReturn}
               leaveRequested={pendingSection !== null}
               onLeaveCancelled={() => setPendingSection(null)}
               onExit={handleExamExit}
@@ -505,7 +551,7 @@ function AppShell() {
           ) : (
             <ArchitectureLabScreen
               experienceLevel={profile?.experienceLevel}
-              onStartExam={setExam}
+              onStartExam={startCatalogExam}
             />
           )
         ) : section === 'documentation' ? (

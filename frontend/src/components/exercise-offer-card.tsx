@@ -18,6 +18,8 @@ interface ExerciseOfferCardProps {
   exercise: SessionExercise | null
   onAccepted: (exercise: SessionExercise) => void
   onDeclined: () => void
+  // The user asked to start the exam of the accepted exercise.
+  onOpenLab: (exercise: SessionExercise) => void
 }
 
 // The tutor's exercise offer, under its reply. Accepting may generate a
@@ -30,6 +32,7 @@ function ExerciseOfferCard({
   exercise,
   onAccepted,
   onDeclined,
+  onOpenLab,
 }: ExerciseOfferCardProps) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -37,7 +40,12 @@ function ExerciseOfferCard({
 
   if (exercise) {
     return (
-      <div className="rounded-lg border bg-card p-3 text-sm">Exercise ready: {exercise.title}</div>
+      <div className="flex flex-col items-start gap-3 rounded-lg border bg-card p-3 text-sm">
+        <p>Exercise ready: {exercise.title}</p>
+        <Button size="sm" onClick={() => onOpenLab(exercise)}>
+          Open in Architecture Lab
+        </Button>
+      </div>
     )
   }
 

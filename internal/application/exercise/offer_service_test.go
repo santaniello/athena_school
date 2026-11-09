@@ -52,7 +52,7 @@ func (f *offerFixture) runTx(ctx context.Context) {
 var testOffer = domainexercise.Offer{ID: "offer-1", SessionID: "session-1", MessageID: "message-1", CreatedAt: fixedNow}
 
 var testOfferChallenge = domainexercise.Challenge{
-	ID: "challenge-1", Title: "Design a cache", Topic: "caching", Difficulty: domainexercise.DifficultyAdvanced,
+	ID: "challenge-1", Title: "Design a cache", Topic: "caching", Difficulty: domainexercise.DifficultyAdvanced, TimeLimitMinutes: 45,
 }
 
 func (f *offerFixture) expectOffer(ctx context.Context) {
@@ -60,7 +60,7 @@ func (f *offerFixture) expectOffer(ctx context.Context) {
 }
 
 func offerView() SessionExerciseView {
-	return SessionExerciseView{ChallengeID: "challenge-1", Title: "Design a cache", Topic: "caching", Difficulty: domainexercise.DifficultyAdvanced}
+	return SessionExerciseView{ChallengeID: "challenge-1", Title: "Design a cache", Topic: "caching", Difficulty: domainexercise.DifficultyAdvanced, TimeLimitMinutes: 45}
 }
 
 func TestOfferService_CreateOffer_storesAPendingOfferForTheMessage(t *testing.T) {

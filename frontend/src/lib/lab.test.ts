@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { countdownTone, diagramHasContent, formatCountdown } from './lab'
+import { countdownTone, diagramHasContent, formatCountdown, labReturnLabel } from './lab'
 
 const SECOND = 1000
 const MINUTE = 60 * SECOND
@@ -70,5 +70,12 @@ describe('diagramHasContent', () => {
     expect(diagramHasContent('')).toBe(false)
     expect(diagramHasContent('<mxGraphModel><root>')).toBe(false)
     expect(diagramHasContent('<mxGraphModel><root><mxCell id="2"/></mxGraphModel>')).toBe(false)
+  })
+})
+
+describe('labReturnLabel', () => {
+  it('names the catalog or the study session the exam returns to', () => {
+    expect(labReturnLabel({ kind: 'catalog' })).toBe('Back to catalog')
+    expect(labReturnLabel({ kind: 'study', sessionId: 's1' })).toBe('Back to study session')
   })
 })

@@ -60,7 +60,7 @@ type XmlSource = () => Promise<string>
 // only after the editor reports ready, so the clock never starts on a board the
 // user cannot use. See
 // specs/phases/phase-03-architecture-lab/10-diagram-workspace.md.
-export function useExam(challengeId: string, onExit: (notice?: string) => void) {
+export function useExam(challengeId: string, onExit: (notice?: string) => void, sessionId = '') {
   const [phase, setPhaseState] = useState<ExamPhase>('preparing')
   const [attempt, setAttempt] = useState<Attempt | null>(null)
   const [hasContent, setHasContent] = useState(false)
@@ -112,7 +112,7 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void) 
   async function begin(discardInProgress: boolean) {
     setPhase('starting')
     try {
-      const started = await startAttempt(challengeId, discardInProgress)
+      const started = await startAttempt(challengeId, discardInProgress, sessionId)
       if (exitedRef.current) {
         // The user left while the attempt was being created.
         await discard(started)

@@ -67,3 +67,11 @@ export function diagramHasContent(xml: string): boolean {
     return id !== '0' && id !== '1'
   })
 }
+
+// Where the exam goes back to when it ends: the catalog it was started from or
+// the study session whose chat offered it.
+export type LabReturn = { kind: 'catalog' } | { kind: 'study'; sessionId: string }
+
+export function labReturnLabel(returnTo: LabReturn): string {
+  return returnTo.kind === 'study' ? 'Back to study session' : 'Back to catalog'
+}

@@ -27,6 +27,7 @@ import { desktop } from '../../wailsjs/go/models'
 import {
   OFFER_PENDING_MESSAGE,
   acceptOffer,
+  toExamToStart,
   declineOffer,
   getAssistantLanguage,
   getPendingOffer,
@@ -343,6 +344,14 @@ describe('attempt bindings', () => {
     await startAttempt('c1', true)
 
     expect(StartAttempt).toHaveBeenCalledWith('c1', '', true)
+  })
+
+  it('links the attempt to a study session when one is given', async () => {
+    vi.mocked(StartAttempt).mockResolvedValueOnce(attemptDto)
+
+    await startAttempt('c1', false, 's1')
+
+    expect(StartAttempt).toHaveBeenCalledWith('c1', 's1', false)
   })
 
   it('submits the diagram XML as drawio-xml', async () => {
@@ -792,6 +801,7 @@ describe('exercise offer', () => {
         title: 'Design a cache',
         topic: 'caching',
         difficulty: 'ADVANCED',
+        timeLimitMinutes: 45,
       }),
     )
 
@@ -803,6 +813,7 @@ describe('exercise offer', () => {
       title: 'Design a cache',
       topic: 'caching',
       difficulty: 'ADVANCED',
+      timeLimitMinutes: 45,
     })
   })
 
@@ -837,5 +848,19 @@ describe('exercise offer', () => {
       'This exercise offer is no longer available.',
     )
     expect(OFFER_PENDING_MESSAGE).toBe('Accept or decline the exercise offer to keep chatting.')
+  })
+})
+
+describe('toExamToStart', () => {
+  it('takes what the rules dialog and the exam need from a session exercise', () => {
+    expect(
+      toExamToStart({
+        challengeId: 'c9',
+        title: 'Design a cache',
+        topic: 'caching',
+        difficulty: 'ADVANCED',
+        timeLimitMinutes: 45,
+      }),
+    ).toEqual({ id: 'c9', title: 'Design a cache', difficulty: 'ADVANCED', timeLimitMinutes: 45 })
   })
 })

@@ -100,6 +100,7 @@ describe('StudyChatScreen — render cost while streaming', () => {
         mode="resume"
         onStartNewSession={vi.fn()}
         startingNewSession={false}
+        onStartExam={vi.fn()}
       />,
     )
     await screen.findByText('first answer')
@@ -169,6 +170,7 @@ describe('StudyChatScreen — render cost while streaming', () => {
         mode="resume"
         onStartNewSession={vi.fn()}
         startingNewSession={false}
+        onStartExam={vi.fn()}
       />,
     )
     await screen.findByText('earlier')

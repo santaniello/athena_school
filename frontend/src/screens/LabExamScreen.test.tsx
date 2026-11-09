@@ -19,6 +19,7 @@ import {
   type Evaluation,
   type Outcome,
 } from '@/lib/exercise'
+import type { LabReturn } from '@/lib/lab'
 import LabExamScreen from './LabExamScreen'
 
 vi.mock('@/lib/exercise', async (importOriginal) => {
@@ -156,11 +157,12 @@ function coded(code: string): Error {
   return new Error(JSON.stringify({ code, message: code }))
 }
 
-function renderScreen(props: { leaveRequested?: boolean } = {}) {
+function renderScreen(props: { leaveRequested?: boolean; returnTo?: LabReturn } = {}) {
   const handlers = { onExit: vi.fn(), onLeaveCancelled: vi.fn() }
   const view = render(
     <LabExamScreen
       challenge={challenge}
+      returnTo={{ kind: 'catalog' }}
       leaveRequested={false}
       now={() => Date.now()}
       {...handlers}
@@ -170,7 +172,7 @@ function renderScreen(props: { leaveRequested?: boolean } = {}) {
   return { ...handlers, ...view }
 }
 
-async function startRunning(props: { leaveRequested?: boolean } = {}) {
+async function startRunning(props: { leaveRequested?: boolean; returnTo?: LabReturn } = {}) {
   const view = renderScreen(props)
   await act(async () => editor.onReady())
   await screen.findByRole('timer')
@@ -211,7 +213,7 @@ describe('LabExamScreen', () => {
   it('creates the attempt once the editor is ready and shows the exam from its deadline', async () => {
     await startRunning()
 
-    expect(startAttempt).toHaveBeenCalledExactlyOnceWith('c1', false)
+    expect(startAttempt).toHaveBeenCalledExactlyOnceWith('c1', false, '')
     expect(screen.getByText('A catalog service serves millions of reads.')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Cache and invalidation' })).toBeInTheDocument()
     expect(screen.getByText('Intermediate')).toBeInTheDocument()
@@ -257,7 +259,7 @@ describe('LabExamScreen', () => {
     ).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'OK' }))
 
-    expect(startAttempt).toHaveBeenLastCalledWith('c1', true)
+    expect(startAttempt).toHaveBeenLastCalledWith('c1', true, '')
     expect(await screen.findByRole('timer')).toBeInTheDocument()
   })
 
@@ -359,6 +361,7 @@ describe('LabExamScreen', () => {
     view.rerender(
       <LabExamScreen
         challenge={challenge}
+        returnTo={{ kind: 'catalog' }}
         leaveRequested
         onLeaveCancelled={onLeaveCancelled}
         onExit={view.onExit}
@@ -499,6 +502,7 @@ describe('LabExamScreen', () => {
     rerender(
       <LabExamScreen
         challenge={challenge}
+        returnTo={{ kind: 'catalog' }}
         leaveRequested
         now={() => Date.now()}
         onExit={onExit}
@@ -521,6 +525,7 @@ describe('LabExamScreen', () => {
     rerender(
       <LabExamScreen
         challenge={challenge}
+        returnTo={{ kind: 'catalog' }}
         leaveRequested
         now={() => Date.now()}
         onExit={onExit}
@@ -540,6 +545,7 @@ describe('LabExamScreen', () => {
     rerender(
       <LabExamScreen
         challenge={challenge}
+        returnTo={{ kind: 'catalog' }}
         leaveRequested
         now={() => Date.now()}
         onExit={onExit}
@@ -597,7 +603,7 @@ describe('LabExamScreen', () => {
 
   describe('the defense', () => {
     // Gets to the first question.
-    async function defending(props: { leaveRequested?: boolean } = {}) {
+    async function defending(props: { leaveRequested?: boolean; returnTo?: LabReturn } = {}) {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
       const view = await startRunning(props)
       act(() => editor.onChange(FULL_XML))
@@ -656,6 +662,18 @@ describe('LabExamScreen', () => {
       expect(discardAttempt).not.toHaveBeenCalled()
     })
 
+    it('ends the result with Back to study session when started from a session', async () => {
+      const { user, onExit } = await defending({ returnTo: { kind: 'study', sessionId: 's1' } })
+      vi.mocked(answerDefenseQuestion).mockResolvedValue({ total: 2, complete: true })
+      await user.click(screen.getByRole('button', { name: "I don't know" }))
+      await screen.findByRole('heading', { name: 'Failed' })
+
+      await user.click(screen.getByRole('button', { name: 'Back to study session' }))
+
+      expect(onExit).toHaveBeenCalledOnce()
+      expect(discardAttempt).not.toHaveBeenCalled()
+    })
+
     it('says why a question failed and asks again on request', async () => {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
       vi.mocked(nextDefenseQuestion).mockRejectedValueOnce(coded('internal'))
@@ -708,6 +726,7 @@ describe('LabExamScreen', () => {
       rerender(
         <LabExamScreen
           challenge={challenge}
+          returnTo={{ kind: 'catalog' }}
           leaveRequested
           onLeaveCancelled={vi.fn()}
           onExit={onExit}
@@ -745,6 +764,49 @@ describe('LabExamScreen', () => {
       vi.mocked(evaluateDefense).mockReturnValue(new Promise(() => {}))
       await user.click(screen.getByRole('button', { name: "I don't know" }))
       expect(await screen.findByText('Evaluating your answers...')).toBeInTheDocument()
+    })
+  })
+
+  describe('started from a study session', () => {
+    const returnTo: LabReturn = { kind: 'study', sessionId: 's1' }
+
+    it('links the attempt to the session', async () => {
+      renderScreen({ returnTo })
+      await act(async () => editor.onReady())
+
+      expect(startAttempt).toHaveBeenCalledExactlyOnceWith('c1', false, 's1')
+    })
+
+    it('offers Back to study session when the attempt cannot start', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      vi.mocked(startAttempt).mockRejectedValueOnce(coded('source_session_not_found'))
+      const { onExit } = renderScreen({ returnTo })
+      await act(async () => editor.onReady())
+
+      await user.click(await screen.findByRole('button', { name: 'Back to study session' }))
+
+      expect(screen.queryByRole('button', { name: 'Back to catalog' })).not.toBeInTheDocument()
+      expect(onExit).toHaveBeenCalledOnce()
+    })
+
+    it('offers Back to study session when the editor is unavailable', async () => {
+      renderScreen({ returnTo })
+      await act(async () => vi.advanceTimersByTime(15000))
+
+      expect(screen.getByRole('button', { name: 'Back to study session' })).toBeInTheDocument()
+    })
+
+    it('offers Back to study session after a failed evaluation', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      vi.mocked(evaluateAttempt).mockRejectedValue(coded('invalid_evaluation'))
+      await startRunning({ returnTo })
+      act(() => editor.onChange(FULL_XML))
+      await user.click(screen.getByRole('button', { name: 'Finish and evaluate' }))
+      await user.click(screen.getByRole('button', { name: 'Finish' }))
+      await screen.findByText('The evaluator returned an invalid evaluation.')
+
+      expect(screen.getByRole('button', { name: 'Back to study session' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Back to catalog' })).not.toBeInTheDocument()
     })
   })
 })
