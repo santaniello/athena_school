@@ -59,6 +59,7 @@ const (
 	errorCodeTurnInProgress      = "turn_in_progress"
 	errorCodeBudgetImpossible    = "budget_impossible"
 	errorCodeMessageTooLarge     = "message_too_large"
+	errorCodeOfferPending        = "offer_pending"
 )
 
 // errorCode maps a study error to its stable wire code, or "" if it isn't
@@ -73,6 +74,8 @@ func errorCode(err error) string {
 		return errorCodeBudgetImpossible
 	case errors.Is(err, domainstudy.ErrMessageTooLarge):
 		return errorCodeMessageTooLarge
+	case errors.Is(err, applicationstudy.ErrOfferPending):
+		return errorCodeOfferPending
 	default:
 		return ""
 	}

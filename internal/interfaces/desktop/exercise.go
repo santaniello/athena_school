@@ -98,6 +98,18 @@ func WithHistoryService(history historyReader) Option {
 	return func(a *App) { a.history = history }
 }
 
+// exerciseOffers is the use case behind the exercise offer bindings (spec 3.14).
+type exerciseOffers interface {
+	GetPending(ctx context.Context, sessionID string) (domainexercise.Offer, bool, error)
+	Accept(ctx context.Context, offerID string) (applicationexercise.SessionExerciseView, error)
+	Decline(ctx context.Context, offerID string) error
+}
+
+// WithOfferService wires the exercise offers of the study chat.
+func WithOfferService(offers exerciseOffers) Option {
+	return func(a *App) { a.offers = offers }
+}
+
 // Stable ExerciseError.Code values the frontend switches on.
 const (
 	exerciseCodeInvalidInput         = "invalid_input"
@@ -128,6 +140,8 @@ const (
 	exerciseCodeNoQuestionPending    = "no_question_pending"
 	exerciseCodeInvalidAnswer        = "invalid_answer"
 	exerciseCodeEmptyQuestion        = "empty_question"
+	exerciseCodeOfferNotFound        = "offer_not_found"
+	exerciseCodeOfferPending         = "offer_pending"
 	exerciseCodeInternal             = "internal"
 )
 
@@ -200,6 +214,10 @@ func toExerciseError(err error) *ExerciseError {
 		return &ExerciseError{Code: exerciseCodeInvalidAnswer, Message: "the answer must be 1 to 4000 characters"}
 	case errors.Is(err, applicationexercise.ErrEmptyQuestion):
 		return &ExerciseError{Code: exerciseCodeEmptyQuestion, Message: "the tutor wrote an empty question"}
+	case errors.Is(err, domainexercise.ErrOfferNotFound):
+		return &ExerciseError{Code: exerciseCodeOfferNotFound, Message: "the exercise offer is no longer pending"}
+	case errors.Is(err, domainexercise.ErrOfferPending):
+		return &ExerciseError{Code: exerciseCodeOfferPending, Message: "an exercise offer is already pending"}
 	case errors.Is(err, context.Canceled):
 		return &ExerciseError{Code: exerciseCodeCancelled, Message: "cancelled"}
 	case errors.Is(err, domainexercise.ErrSubmissionTooLarge):
@@ -976,4 +994,66 @@ func (a *App) GetAttemptResult(attemptID string) (AttemptResultDTO, error) {
 		return AttemptResultDTO{}, toExerciseError(err)
 	}
 	return toAttemptResultDTO(view), nil
+}
+
+// ExerciseOfferDTO is a pending exercise offer: it hangs under the assistant
+// message MessageID.
+type ExerciseOfferDTO struct {
+	ID        string `json:"id"`
+	SessionID string `json:"sessionId"`
+	MessageID string `json:"messageId"`
+}
+
+// SessionExerciseDTO is the challenge an accepted offer linked to the session.
+type SessionExerciseDTO struct {
+	ChallengeID string `json:"challengeId"`
+	Title       string `json:"title"`
+	Topic       string `json:"topic"`
+	Difficulty  string `json:"difficulty"`
+}
+
+// GetPendingOffer returns the session's pending exercise offer, or null when
+// there is none. See
+// specs/phases/phase-03-architecture-lab/14-ai-challenge-generation.md.
+func (a *App) GetPendingOffer(sessionID string) (*ExerciseOfferDTO, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, invalidInput("session id is required")
+	}
+	offer, found, err := a.offers.GetPending(a.ctx, sessionID)
+	if err != nil {
+		return nil, toExerciseError(err)
+	}
+	if !found {
+		return nil, nil
+	}
+	return &ExerciseOfferDTO{ID: offer.ID, SessionID: offer.SessionID, MessageID: offer.MessageID}, nil
+}
+
+// AcceptOffer links a challenge to the offer's session, generating one when
+// the session has none, and returns it. On failure the offer stays pending.
+func (a *App) AcceptOffer(offerID string) (SessionExerciseDTO, error) {
+	offerID = strings.TrimSpace(offerID)
+	if offerID == "" {
+		return SessionExerciseDTO{}, invalidInput("offer id is required")
+	}
+	view, err := a.offers.Accept(a.ctx, offerID)
+	if err != nil {
+		return SessionExerciseDTO{}, toExerciseError(err)
+	}
+	return SessionExerciseDTO{
+		ChallengeID: view.ChallengeID, Title: view.Title, Topic: view.Topic, Difficulty: string(view.Difficulty),
+	}, nil
+}
+
+// DeclineOffer removes the offer. Nothing is created.
+func (a *App) DeclineOffer(offerID string) error {
+	offerID = strings.TrimSpace(offerID)
+	if offerID == "" {
+		return invalidInput("offer id is required")
+	}
+	if err := a.offers.Decline(a.ctx, offerID); err != nil {
+		return toExerciseError(err)
+	}
+	return nil
 }

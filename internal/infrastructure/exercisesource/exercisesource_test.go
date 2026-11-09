@@ -154,3 +154,71 @@ func TestNotes_SearchNotes_returnsARetrievalFailure(t *testing.T) {
 	// Then the failure is returned for the caller to skip
 	require.ErrorIs(t, err, domainknowledge.ErrVectorStoreUnavailable)
 }
+
+type fakeOfferService struct {
+	pending              bool
+	err                  error
+	sessionID, messageID string
+	askedSession         string
+}
+
+func (f *fakeOfferService) GetPending(_ context.Context, sessionID string) (domainexercise.Offer, bool, error) {
+	f.askedSession = sessionID
+	return domainexercise.Offer{}, f.pending, f.err
+}
+
+func (f *fakeOfferService) CreateOffer(_ context.Context, sessionID, messageID string) (domainexercise.Offer, error) {
+	f.sessionID, f.messageID = sessionID, messageID
+	return domainexercise.Offer{}, f.err
+}
+
+func TestOfferGate_HasPending(t *testing.T) {
+	ctx := context.Background()
+	boom := errors.New("boom")
+	tests := []struct {
+		name    string
+		offers  *fakeOfferService
+		want    bool
+		wantErr error
+	}{
+		{"pending", &fakeOfferService{pending: true}, true, nil},
+		{"none", &fakeOfferService{}, false, nil},
+		{"failure", &fakeOfferService{err: boom}, false, boom},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given an offer service
+			// When asking the chat's gate
+			got, err := NewOfferGate(tt.offers).HasPending(ctx, "session-1")
+
+			// Then the answer is the service's
+			assert.Equal(t, tt.want, got)
+			assert.ErrorIs(t, err, tt.wantErr)
+			assert.Equal(t, "session-1", tt.offers.askedSession)
+		})
+	}
+}
+
+func TestOfferGate_CreateOffer_createsTheOfferUnderTheMessage(t *testing.T) {
+	// Given an offer service
+	offers := &fakeOfferService{}
+
+	// When the chat creates an offer
+	err := NewOfferGate(offers).CreateOffer(context.Background(), "session-1", "message-1")
+
+	// Then the service got the session and message
+	require.NoError(t, err)
+	assert.Equal(t, "session-1", offers.sessionID)
+	assert.Equal(t, "message-1", offers.messageID)
+}
+
+func TestOfferGate_CreateOffer_passesFailuresThrough(t *testing.T) {
+	// Given a service that refuses a second offer
+	offers := &fakeOfferService{err: domainexercise.ErrOfferPending}
+
+	// When the chat creates an offer
+	err := NewOfferGate(offers).CreateOffer(context.Background(), "session-1", "message-1")
+
+	// Then the error comes back
+	assert.ErrorIs(t, err, domainexercise.ErrOfferPending)
+}
