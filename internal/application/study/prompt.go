@@ -29,7 +29,8 @@ func buildSystemPrompt(profile domainprofile.UserProfile, topic, sessionGoal str
 			"- Open with a brief one-sentence greeting and a single focused question about the topic to gauge where the user is starting from. Do not explain or teach anything yet.\n"+
 			"- Wait for the user's answer before introducing any new material.\n"+
 			"- Keep every message short and conversational — a few sentences, not an essay. Only go deeper (long explanations, multiple examples, code) if the user explicitly asks for more detail.\n"+
-			"- After each answer, give brief feedback, then ask a follow-up question that builds on it.",
+			"- After each answer, give brief feedback, then ask a follow-up question that builds on it."+
+			exerciseOfferInstruction,
 		profile.AssistantName, profile.Name,
 		profile.Area, profile.ExperienceLevel,
 		profile.StudyStyle, goalFragment(sessionGoal),
