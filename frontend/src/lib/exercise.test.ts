@@ -16,6 +16,7 @@ import {
   ListChallengeCatalog,
   ListChallengeTopics,
   ListHints,
+  ListSessionExercises,
   ListSessionsForGeneration,
   NextDefenseQuestion,
   AnswerDefenseQuestion,
@@ -31,6 +32,7 @@ import {
   declineOffer,
   getAssistantLanguage,
   getPendingOffer,
+  listSessionExercises,
   offerLabels,
   DIFFICULTY_LABELS,
   STATUS_LABELS,
@@ -70,6 +72,7 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   AcceptOffer: vi.fn(),
   DeclineOffer: vi.fn(),
   GetPendingOffer: vi.fn(),
+  ListSessionExercises: vi.fn(),
   GetProfile: vi.fn(),
   CancelChallengeGeneration: vi.fn(),
   GenerateChallenge: vi.fn(),
@@ -794,27 +797,14 @@ describe('exercise offer', () => {
     expect(await getPendingOffer('s1')).toBeNull()
   })
 
-  it('accepts an offer and returns the linked challenge', async () => {
+  it('accepts an offer', async () => {
     vi.mocked(AcceptOffer).mockResolvedValueOnce(
-      desktop.SessionExerciseDTO.createFrom({
-        challengeId: 'c1',
-        title: 'Design a cache',
-        topic: 'caching',
-        difficulty: 'ADVANCED',
-        timeLimitMinutes: 45,
-      }),
+      desktop.SessionExerciseDTO.createFrom({ challengeId: 'c1' }),
     )
 
-    const exercise = await acceptOffer('o1')
+    await expect(acceptOffer('o1')).resolves.toBeUndefined()
 
     expect(AcceptOffer).toHaveBeenCalledWith('o1')
-    expect(exercise).toEqual({
-      challengeId: 'c1',
-      title: 'Design a cache',
-      topic: 'caching',
-      difficulty: 'ADVANCED',
-      timeLimitMinutes: 45,
-    })
   })
 
   it('declines an offer', async () => {
@@ -852,15 +842,86 @@ describe('exercise offer', () => {
 })
 
 describe('toExamToStart', () => {
-  it('takes what the rules dialog and the exam need from a session exercise', () => {
+  it('takes what the rules dialog and the exam need from the card of a session exercise', () => {
     expect(
       toExamToStart({
+        sessionExerciseId: 'l1',
+        messageId: 'm1',
         challengeId: 'c9',
         title: 'Design a cache',
-        topic: 'caching',
         difficulty: 'ADVANCED',
         timeLimitMinutes: 45,
+        status: 'NOT_STARTED',
+        attempts: 0,
+        latest: null,
       }),
     ).toEqual({ id: 'c9', title: 'Design a cache', difficulty: 'ADVANCED', timeLimitMinutes: 45 })
+  })
+})
+
+describe('listSessionExercises', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('maps each card, with and without a latest result', async () => {
+    vi.mocked(ListSessionExercises).mockResolvedValueOnce([
+      desktop.SessionExerciseCardDTO.createFrom({
+        sessionExerciseId: 'l1',
+        messageId: 'm1',
+        challengeId: 'c1',
+        title: 'Design a feed',
+        difficulty: 'ADVANCED',
+        timeLimitMinutes: 60,
+        status: 'COMPLETED',
+        attempts: 2,
+        latest: { outcome: 'FAILED', diagramScore: 40, understandingScore: 55 },
+      }),
+      desktop.SessionExerciseCardDTO.createFrom({
+        sessionExerciseId: 'l2',
+        messageId: 'm2',
+        challengeId: 'c2',
+        title: 'Second',
+        difficulty: 'BEGINNER',
+        timeLimitMinutes: 30,
+        status: 'NOT_STARTED',
+        attempts: 0,
+        latest: null,
+      }),
+    ])
+
+    const cards = await listSessionExercises('s1')
+
+    expect(ListSessionExercises).toHaveBeenCalledWith('s1')
+    expect(cards).toEqual([
+      {
+        sessionExerciseId: 'l1',
+        messageId: 'm1',
+        challengeId: 'c1',
+        title: 'Design a feed',
+        difficulty: 'ADVANCED',
+        timeLimitMinutes: 60,
+        status: 'COMPLETED',
+        attempts: 2,
+        latest: { outcome: 'FAILED', diagramScore: 40, understandingScore: 55 },
+      },
+      {
+        sessionExerciseId: 'l2',
+        messageId: 'm2',
+        challengeId: 'c2',
+        title: 'Second',
+        difficulty: 'BEGINNER',
+        timeLimitMinutes: 30,
+        status: 'NOT_STARTED',
+        attempts: 0,
+        latest: null,
+      },
+    ])
+  })
+
+  it('reads a null list as no cards', async () => {
+    vi.mocked(ListSessionExercises).mockResolvedValueOnce(
+      null as unknown as desktop.SessionExerciseCardDTO[],
+    )
+
+    expect(await listSessionExercises('s1')).toEqual([])
   })
 })

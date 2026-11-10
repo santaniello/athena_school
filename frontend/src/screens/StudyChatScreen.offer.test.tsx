@@ -6,9 +6,11 @@ import {
   acceptOffer,
   declineOffer,
   getAssistantLanguage,
+  listAttemptHistory,
   getPendingOffer,
+  listSessionExercises,
   type ExerciseOffer,
-  type SessionExercise,
+  type SessionExerciseCard,
 } from '@/lib/exercise'
 import {
   getStudySessionSummary,
@@ -37,6 +39,8 @@ vi.mock('@/lib/passScore', () => ({ getPassScore: vi.fn() }))
 vi.mock('@/lib/exercise', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/exercise')>()),
   getPendingOffer: vi.fn(),
+  listAttemptHistory: vi.fn(),
+  listSessionExercises: vi.fn(),
   getAssistantLanguage: vi.fn(),
   acceptOffer: vi.fn(),
   declineOffer: vi.fn(),
@@ -97,13 +101,19 @@ function subscribe(): Handlers {
 
 const CONTEXT = { state: 'normal', model: '', usedTokens: 0, contextLength: 0, estimated: false }
 
-const EXERCISE: SessionExercise = {
+const CARD: SessionExerciseCard = {
+  sessionExerciseId: 'link-1',
+  messageId: 'm2',
   challengeId: 'c1',
   title: 'Design a cache',
-  topic: 'caching',
   difficulty: 'ADVANCED',
   timeLimitMinutes: 45,
+  status: 'NOT_STARTED',
+  attempts: 0,
+  latest: null,
 }
+
+const EXAM = { id: 'c1', title: 'Design a cache', difficulty: 'ADVANCED', timeLimitMinutes: 45 }
 
 async function renderResumed(props: Partial<ComponentProps<typeof StudyChatScreen>> = {}) {
   vi.mocked(resumeStudySession).mockResolvedValue({
@@ -154,6 +164,7 @@ describe('StudyChatScreen — exercise offer', () => {
     vi.mocked(getStudySessionUsage).mockRejectedValue(new Error('no usage'))
     vi.mocked(getAssistantLanguage).mockResolvedValue('en')
     vi.mocked(getPendingOffer).mockResolvedValue(null)
+    vi.mocked(listSessionExercises).mockResolvedValue([])
   })
 
   it('shows no card and keeps the input enabled when no offer is pending', async () => {
@@ -219,81 +230,177 @@ describe('StudyChatScreen — exercise offer', () => {
     expect(screen.getByPlaceholderText('Type your answer...')).toBeEnabled()
   })
 
-  it('accepting shows the ready exercise and re-enables the input', async () => {
+  it('accepting replaces the offer with the exercise card under the same message and re-enables the input', async () => {
     subscribe()
     vi.mocked(getPendingOffer).mockResolvedValue(OFFER)
-    vi.mocked(acceptOffer).mockResolvedValue({
-      challengeId: 'c1',
-      title: 'Design a cache',
-      topic: 'caching',
-      difficulty: 'ADVANCED',
-      timeLimitMinutes: 45,
-    })
+    vi.mocked(acceptOffer).mockResolvedValue()
     await renderResumed()
     const user = userEvent.setup()
+    vi.mocked(listSessionExercises).mockResolvedValue([CARD])
 
     await user.click(await screen.findByRole('button', { name: 'Accept' }))
 
-    expect(await screen.findByText('Exercise ready: Design a cache')).toBeInTheDocument()
+    expect(await screen.findByText('Design a cache')).toBeInTheDocument()
+    expect(screen.getByText('Not started')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Type your answer...')).toBeEnabled()
+    // right after the assistant message that carried the offer
+    const bubbles = document.querySelectorAll('[data-slot="message-bubble"]')
+    const card = screen.getByText('Design a cache').closest('div.rounded-lg')!
+    expect(bubbles[1].compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('shows the stored card where it hangs when the session is opened', async () => {
+    subscribe()
+    vi.mocked(listSessionExercises).mockResolvedValue([CARD])
+
+    await renderResumed()
+
+    expect(await screen.findByText('Design a cache')).toBeInTheDocument()
+    expect(listSessionExercises).toHaveBeenCalledWith('session-1')
+    expect(screen.getByRole('button', { name: 'Open in Architecture Lab' })).toBeInTheDocument()
+  })
+
+  it('shows no card under a message other than the one it names', async () => {
+    subscribe()
+    vi.mocked(listSessionExercises).mockResolvedValue([{ ...CARD, messageId: 'other' }])
+
+    await renderResumed()
+
+    await waitFor(() => expect(listSessionExercises).toHaveBeenCalled())
+    expect(screen.queryByText('Design a cache')).not.toBeInTheDocument()
+  })
+
+  it('keeps the chat working when the cards cannot be read', async () => {
+    subscribe()
+    vi.mocked(listSessionExercises).mockRejectedValue(new Error('boom'))
+
+    await renderResumed()
+
+    await waitFor(() => expect(listSessionExercises).toHaveBeenCalled())
     expect(screen.getByPlaceholderText('Type your answer...')).toBeEnabled()
   })
 
-  it('opens the exam rules from the ready card and starts the exam with the session', async () => {
+  it('opens the exam rules from the card and starts the exam with the session', async () => {
     subscribe()
-    vi.mocked(getPendingOffer).mockResolvedValue(OFFER)
-    vi.mocked(acceptOffer).mockResolvedValue(EXERCISE)
+    vi.mocked(listSessionExercises).mockResolvedValue([CARD])
     const onStartExam = vi.fn()
     await renderResumed({ onStartExam })
     const user = userEvent.setup()
-    await user.click(await screen.findByRole('button', { name: 'Accept' }))
 
     await user.click(await screen.findByRole('button', { name: 'Open in Architecture Lab' }))
     expect(onStartExam).not.toHaveBeenCalled()
     expect(screen.getByText('Time limit: 45 minutes')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Start exam' }))
 
-    expect(onStartExam).toHaveBeenCalledExactlyOnceWith(EXERCISE, 'session-1')
+    expect(onStartExam).toHaveBeenCalledExactlyOnceWith(EXAM, 'session-1')
   })
 
   it('does not start the exam when the rules are cancelled', async () => {
     subscribe()
-    vi.mocked(getPendingOffer).mockResolvedValue(null)
+    vi.mocked(listSessionExercises).mockResolvedValue([CARD])
     const onStartExam = vi.fn()
-    await renderResumed({ onStartExam, initialExercise: EXERCISE })
+    await renderResumed({ onStartExam })
     const user = userEvent.setup()
 
-    await user.click(screen.getByRole('button', { name: 'Open in Architecture Lab' }))
+    await user.click(await screen.findByRole('button', { name: 'Open in Architecture Lab' }))
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
 
     expect(onStartExam).not.toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: 'Start exam' })).not.toBeInTheDocument()
   })
 
-  it('reports the accepted exercise, and its removal when a message is sent', async () => {
+  it("opens the history of the card's challenge", async () => {
     subscribe()
-    vi.mocked(getPendingOffer).mockResolvedValue(OFFER)
-    vi.mocked(acceptOffer).mockResolvedValue(EXERCISE)
-    vi.mocked(sendStudyMessage).mockResolvedValue()
-    const onExerciseChange = vi.fn()
-    await renderResumed({ onExerciseChange })
+    vi.mocked(listSessionExercises).mockResolvedValue([
+      {
+        ...CARD,
+        status: 'COMPLETED',
+        attempts: 1,
+        latest: { outcome: 'PASSED', diagramScore: 90, understandingScore: 80 },
+      },
+    ])
+    vi.mocked(listAttemptHistory).mockResolvedValue([])
+    await renderResumed()
     const user = userEvent.setup()
 
-    await user.click(await screen.findByRole('button', { name: 'Accept' }))
-    expect(onExerciseChange).toHaveBeenLastCalledWith('session-1', EXERCISE)
+    await user.click(await screen.findByRole('button', { name: 'History' }))
+
+    await waitFor(() => expect(listAttemptHistory).toHaveBeenCalledWith('c1'))
+  })
+
+  it('keeps the card when the next message is sent', async () => {
+    subscribe()
+    vi.mocked(listSessionExercises).mockResolvedValue([CARD])
+    vi.mocked(sendStudyMessage).mockResolvedValue()
+    await renderResumed()
+    const user = userEvent.setup()
+    await screen.findByText('Design a cache')
+
     await user.type(screen.getByPlaceholderText('Type your answer...'), 'thanks')
     await user.click(screen.getByRole('button', { name: 'Send' }))
 
-    expect(onExerciseChange).toHaveBeenLastCalledWith('session-1', null)
+    expect(screen.getByText('Design a cache')).toBeInTheDocument()
   })
 
-  it('shows the ready exercise again when the chat comes back from the lab', async () => {
+  it('keeps a streamed reply mounted when its stored id is adopted', async () => {
+    const handlers = subscribe()
+    await renderResumed()
+    vi.mocked(sendStudyMessage).mockResolvedValue()
+    vi.mocked(getPendingOffer).mockResolvedValue({ ...OFFER, messageId: 'stored-id' })
+    const user = userEvent.setup()
+    await user.type(screen.getByPlaceholderText('Type your answer...'), 'practice')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+    act(() => handlers.done?.({ sessionId: 'session-1' }))
+    const bubbles = () => document.querySelectorAll('[data-slot="message-bubble"]')
+    const streamed = bubbles()[3]
+
+    await screen.findByRole('button', { name: 'Accept' })
+
+    expect(streamed.isConnected).toBe(true)
+    expect(bubbles()[3]).toBe(streamed)
+  })
+
+  it('does not give an offer id to a reply that is already stored', async () => {
     subscribe()
-    vi.mocked(getPendingOffer).mockResolvedValue(null)
+    vi.mocked(getPendingOffer).mockResolvedValue({ ...OFFER, messageId: 'not-loaded' })
+    vi.mocked(listSessionExercises).mockResolvedValue([CARD])
 
-    await renderResumed({ initialExercise: EXERCISE })
+    await renderResumed()
 
-    expect(screen.getByText('Exercise ready: Design a cache')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Open in Architecture Lab' })).toBeInTheDocument()
+    // the card still hangs under the stored m2, and the offer is not shown under it
+    expect(await screen.findByText('Design a cache')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument()
+  })
+
+  it('tells the user when the card cannot be loaded after accepting', async () => {
+    subscribe()
+    vi.mocked(getPendingOffer).mockResolvedValue(OFFER)
+    vi.mocked(acceptOffer).mockResolvedValue()
+    await renderResumed()
+    vi.mocked(listSessionExercises).mockRejectedValue(new Error('boom'))
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Accept' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('could not be loaded')
+  })
+
+  it('hangs the offer of a reply streamed here under that reply', async () => {
+    const handlers = subscribe()
+    await renderResumed()
+    vi.mocked(sendStudyMessage).mockResolvedValue()
+    vi.mocked(getPendingOffer).mockResolvedValue({ ...OFFER, messageId: 'stored-id' })
+    vi.mocked(acceptOffer).mockResolvedValue()
+    const user = userEvent.setup()
+    await user.type(screen.getByPlaceholderText('Type your answer...'), 'practice')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+    act(() => handlers.done?.({ sessionId: 'session-1' }))
+    vi.mocked(listSessionExercises).mockResolvedValue([{ ...CARD, messageId: 'stored-id' }])
+
+    await user.click(await screen.findByRole('button', { name: 'Accept' }))
+
+    expect(await screen.findByText('Design a cache')).toBeInTheDocument()
   })
 
   it('keeps the input disabled while accepting fails and the offer stays', async () => {
@@ -326,28 +433,6 @@ describe('StudyChatScreen — exercise offer', () => {
     // the optimistic bubble is gone and the draft is back in the composer
     expect(document.querySelectorAll('[data-slot="message-bubble"]')).toHaveLength(2)
     expect(screen.getByPlaceholderText(PENDING_TEXT)).toHaveValue('hello')
-  })
-
-  it('clears the ready exercise card when the next message is sent', async () => {
-    subscribe()
-    vi.mocked(getPendingOffer).mockResolvedValue(OFFER)
-    vi.mocked(acceptOffer).mockResolvedValue({
-      challengeId: 'c1',
-      title: 'Design a cache',
-      topic: 'caching',
-      difficulty: 'ADVANCED',
-      timeLimitMinutes: 45,
-    })
-    vi.mocked(sendStudyMessage).mockResolvedValue()
-    await renderResumed()
-    const user = userEvent.setup()
-    await user.click(await screen.findByRole('button', { name: 'Accept' }))
-    await screen.findByText('Exercise ready: Design a cache')
-
-    await user.type(screen.getByPlaceholderText('Type your answer...'), 'thanks')
-    await user.click(screen.getByRole('button', { name: 'Send' }))
-
-    expect(screen.queryByText('Exercise ready: Design a cache')).not.toBeInTheDocument()
   })
 
   it('explains the refusal when a send is rejected because an offer is pending', async () => {

@@ -205,3 +205,89 @@ func TestApp_AcceptOffer_isRefusedWhileAChallengeIsBeingGenerated(t *testing.T) 
 	require.NoError(t, app.CancelChallengeGeneration())
 	<-first
 }
+
+type fakeSessionExercises struct {
+	cards   []applicationexercise.SessionExerciseCard
+	err     error
+	session string
+}
+
+func (f *fakeSessionExercises) ListSessionExercises(_ context.Context, sessionID string) ([]applicationexercise.SessionExerciseCard, error) {
+	f.session = sessionID
+	return f.cards, f.err
+}
+
+func newSessionExercisesApp(cards sessionExerciseCards) *App {
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, WithSessionExerciseService(cards))
+	app.ctx = context.Background()
+	return app
+}
+
+func TestApp_ListSessionExercises_mapsEachCardWithAndWithoutALatestResult(t *testing.T) {
+	// Given a session with a card that has a latest result and one that has not
+	cards := &fakeSessionExercises{cards: []applicationexercise.SessionExerciseCard{
+		{
+			SessionExerciseID: "link-1", MessageID: "message-1", ChallengeID: "challenge-1", Title: "Design a feed",
+			Difficulty: domainexercise.DifficultyAdvanced, TimeLimitMinutes: 60, Status: domainexercise.ProgressCompleted, Attempts: 2,
+			Latest: &applicationexercise.LatestResult{Outcome: domainexercise.ResultFailed, DiagramScore: 40, UnderstandingScore: 55},
+		},
+		{SessionExerciseID: "link-2", Status: domainexercise.ProgressNotStarted},
+	}}
+
+	// When listing the session's exercises
+	got, err := newSessionExercisesApp(cards).ListSessionExercises(" session-1 ")
+
+	// Then the session is trimmed and both cards are mapped
+	require.NoError(t, err)
+	assert.Equal(t, "session-1", cards.session)
+	assert.Equal(t, []SessionExerciseCardDTO{
+		{
+			SessionExerciseID: "link-1", MessageID: "message-1", ChallengeID: "challenge-1", Title: "Design a feed",
+			Difficulty: "ADVANCED", TimeLimitMinutes: 60, Status: "COMPLETED", Attempts: 2,
+			Latest: &LatestResultDTO{Outcome: "FAILED", DiagramScore: 40, UnderstandingScore: 55},
+		},
+		{SessionExerciseID: "link-2", Status: "NOT_STARTED"},
+	}, got)
+}
+
+func TestApp_ListSessionExercises_returnsAnEmptyListWhenThereAreNone(t *testing.T) {
+	// Given a session without cards
+	got, err := newSessionExercisesApp(&fakeSessionExercises{}).ListSessionExercises("session-1")
+
+	// Then the list is empty and not nil, so it serializes as []
+	require.NoError(t, err)
+	assert.Equal(t, []SessionExerciseCardDTO{}, got)
+}
+
+func TestApp_ListSessionExercises_rejectsABlankSession(t *testing.T) {
+	// When the session id is blank
+	_, err := newSessionExercisesApp(&fakeSessionExercises{}).ListSessionExercises("  ")
+
+	// Then it is invalid input
+	var exerciseErr *ExerciseError
+	require.ErrorAs(t, err, &exerciseErr)
+	assert.Equal(t, exerciseCodeInvalidInput, exerciseErr.Code)
+}
+
+func TestApp_ListSessionExercises_mapsFailures(t *testing.T) {
+	// When the service fails
+	_, err := newSessionExercisesApp(&fakeSessionExercises{err: errors.New("boom")}).ListSessionExercises("session-1")
+
+	// Then an exercise error comes back
+	var exerciseErr *ExerciseError
+	require.ErrorAs(t, err, &exerciseErr)
+}
+
+func TestApp_ListSessionExercises_failsWithATypedErrorWhenTheServiceIsNotWired(t *testing.T) {
+	// Given an app built without the session exercise service
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	app.ctx = context.Background()
+
+	// When listing the session's exercises
+	_, err := app.ListSessionExercises("session-1")
+
+	// Then a typed error comes back instead of a panic
+	var exerciseErr *ExerciseError
+	require.ErrorAs(t, err, &exerciseErr)
+	assert.Equal(t, exerciseCodeUnavailable, exerciseErr.Code)
+}

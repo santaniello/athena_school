@@ -11,6 +11,7 @@ import {
   GetAttemptResult,
   GetEvaluation,
   GetPendingOffer,
+  ListSessionExercises,
   GetProfile,
   ListAttemptHistory,
   ListChallengeCatalog,
@@ -511,12 +512,41 @@ export interface ExerciseOffer {
   messageId: string
 }
 
-export interface SessionExercise {
+// The persistent chat card of an accepted exercise: a view of the session's
+// link, never the scenario, requirements or rubric. See
+// specs/phases/phase-03-architecture-lab/17-session-exercises-ui.md.
+export interface SessionExerciseCard {
+  sessionExerciseId: string
+  messageId: string
   challengeId: string
   title: string
-  topic: string
   difficulty: string
   timeLimitMinutes: number
+  status: string
+  attempts: number
+  // null until the challenge has a finished attempt.
+  latest: { outcome: string; diagramScore: number; understandingScore: number } | null
+}
+
+export async function listSessionExercises(sessionId: string): Promise<SessionExerciseCard[]> {
+  const cards = (await ListSessionExercises(sessionId)) ?? []
+  return cards.map((card) => ({
+    sessionExerciseId: card.sessionExerciseId,
+    messageId: card.messageId,
+    challengeId: card.challengeId,
+    title: card.title,
+    difficulty: card.difficulty,
+    timeLimitMinutes: card.timeLimitMinutes,
+    status: card.status,
+    attempts: card.attempts,
+    latest: card.latest
+      ? {
+          outcome: card.latest.outcome,
+          diagramScore: card.latest.diagramScore,
+          understandingScore: card.latest.understandingScore,
+        }
+      : null,
+  }))
 }
 
 // What the rules dialog and the exam screen need to start the exam of a
@@ -529,12 +559,12 @@ export interface ExamToStart {
 }
 
 // The exam of a challenge linked to a study session.
-export function toExamToStart(exercise: SessionExercise): ExamToStart {
+export function toExamToStart(card: SessionExerciseCard): ExamToStart {
   return {
-    id: exercise.challengeId,
-    title: exercise.title,
-    difficulty: exercise.difficulty,
-    timeLimitMinutes: exercise.timeLimitMinutes,
+    id: card.challengeId,
+    title: card.title,
+    difficulty: card.difficulty,
+    timeLimitMinutes: card.timeLimitMinutes,
   }
 }
 
@@ -546,15 +576,8 @@ export async function getPendingOffer(sessionId: string): Promise<ExerciseOffer 
   return { id: offer.id, sessionId: offer.sessionId, messageId: offer.messageId }
 }
 
-export async function acceptOffer(offerId: string): Promise<SessionExercise> {
-  const exercise = await AcceptOffer(offerId)
-  return {
-    challengeId: exercise.challengeId,
-    title: exercise.title,
-    topic: exercise.topic,
-    difficulty: exercise.difficulty,
-    timeLimitMinutes: exercise.timeLimitMinutes,
-  }
+export async function acceptOffer(offerId: string): Promise<void> {
+  await AcceptOffer(offerId)
 }
 
 export function declineOffer(offerId: string): Promise<void> {

@@ -110,9 +110,21 @@ func WithOfferService(offers exerciseOffers) Option {
 	return func(a *App) { a.offers = offers }
 }
 
+// sessionExerciseCards is the use case behind the exercise cards of the study
+// chat (spec 3.17).
+type sessionExerciseCards interface {
+	ListSessionExercises(ctx context.Context, sessionID string) ([]applicationexercise.SessionExerciseCard, error)
+}
+
+// WithSessionExerciseService wires the exercise cards of the study chat.
+func WithSessionExerciseService(cards sessionExerciseCards) Option {
+	return func(a *App) { a.sessionCards = cards }
+}
+
 // Stable ExerciseError.Code values the frontend switches on.
 const (
 	exerciseCodeInvalidInput         = "invalid_input"
+	exerciseCodeUnavailable          = "unavailable"
 	exerciseCodeChallengeNotFound    = "challenge_not_found"
 	exerciseCodeChallengeHasNoRubric = "challenge_has_no_rubric"
 	exerciseCodeAttemptInProgress    = "attempt_in_progress"
@@ -1064,4 +1076,57 @@ func (a *App) DeclineOffer(offerID string) error {
 		return toExerciseError(err)
 	}
 	return nil
+}
+
+// LatestResultDTO is the outcome of the latest finished attempt on a card.
+type LatestResultDTO struct {
+	Outcome            string `json:"outcome"` // PASSED or FAILED
+	DiagramScore       int    `json:"diagramScore"`
+	UnderstandingScore int    `json:"understandingScore"`
+}
+
+// SessionExerciseCardDTO is the chat card of an accepted exercise. It never
+// carries the scenario, requirements or rubric. Latest is null until the
+// challenge has a finished attempt.
+type SessionExerciseCardDTO struct {
+	SessionExerciseID string           `json:"sessionExerciseId"`
+	MessageID         string           `json:"messageId"`
+	ChallengeID       string           `json:"challengeId"`
+	Title             string           `json:"title"`
+	Difficulty        string           `json:"difficulty"`
+	TimeLimitMinutes  int              `json:"timeLimitMinutes"`
+	Status            string           `json:"status"`
+	Attempts          int              `json:"attempts"`
+	Latest            *LatestResultDTO `json:"latest"`
+}
+
+// ListSessionExercises returns the exercise cards of a study session. See
+// specs/phases/phase-03-architecture-lab/17-session-exercises-ui.md.
+func (a *App) ListSessionExercises(sessionID string) ([]SessionExerciseCardDTO, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, invalidInput("session id is required")
+	}
+	if a.sessionCards == nil {
+		return nil, &ExerciseError{Code: exerciseCodeUnavailable, Message: "session exercises are not available"}
+	}
+	cards, err := a.sessionCards.ListSessionExercises(a.ctx, sessionID)
+	if err != nil {
+		return nil, toExerciseError(err)
+	}
+	dtos := make([]SessionExerciseCardDTO, len(cards))
+	for i, card := range cards {
+		dtos[i] = SessionExerciseCardDTO{
+			SessionExerciseID: card.SessionExerciseID, MessageID: card.MessageID, ChallengeID: card.ChallengeID,
+			Title: card.Title, Difficulty: string(card.Difficulty), TimeLimitMinutes: card.TimeLimitMinutes,
+			Status: string(card.Status), Attempts: card.Attempts,
+		}
+		if card.Latest != nil {
+			dtos[i].Latest = &LatestResultDTO{
+				Outcome: string(card.Latest.Outcome), DiagramScore: card.Latest.DiagramScore,
+				UnderstandingScore: card.Latest.UnderstandingScore,
+			}
+		}
+	}
+	return dtos, nil
 }

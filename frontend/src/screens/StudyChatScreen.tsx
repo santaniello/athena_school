@@ -15,7 +15,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { AttemptHistoryDialog, type HistoryChallenge } from '@/components/attempt-history-dialog'
 import { ExerciseOfferCard } from '@/components/exercise-offer-card'
+import { SessionExerciseCard } from '@/components/session-exercise-card'
 import { MessageBubble } from '@/components/message-bubble'
 import { ThinkingIndicator } from '@/components/thinking-indicator'
 import { SourceModeSelect } from '@/components/source-mode-select'
@@ -33,8 +35,10 @@ import {
   toExamToStart,
   getAssistantLanguage,
   getPendingOffer,
+  listSessionExercises,
+  type ExamToStart,
   type ExerciseOffer,
-  type SessionExercise,
+  type SessionExerciseCard as ExerciseCard,
 } from '@/lib/exercise'
 import { FIND_IGNORE_PROPS } from '@/lib/find-in-page'
 import {
@@ -86,19 +90,12 @@ interface StudyChatScreenProps {
   // in contexts that never open the panel (e.g. this screen rendered
   // standalone, as in its own tests).
   onOpenCitation?: (source: StudySource) => void
-  // The exercise accepted before the chat left for the lab, so the card is
-  // still here on the way back. See
-  // specs/phases/phase-03-architecture-lab/15-open-lab-from-chat.md.
-  initialExercise?: SessionExercise | null
-  // The ready card changed (accepted, or dropped by a new message or offer):
-  // the shell keeps it per session for when this screen mounts again.
-  onExerciseChange?: (sessionId: string, exercise: SessionExercise | null) => void
   // The opening turn was requested: from now on this session is resumed, never
   // opened as a new one again.
   onOpeningTurnRequested?: (sessionId: string) => void
   // The user confirmed the rules of the accepted exercise's exam; the shell
   // opens the lab and brings the user back to this session.
-  onStartExam: (exercise: SessionExercise, sessionId: string) => void
+  onStartExam: (exam: ExamToStart, sessionId: string) => void
 }
 
 // ContextState mirrors the persisted study.ContextState the backend tracks
@@ -181,8 +178,13 @@ const FAILURE_TOAST_MS = 10_000
 
 interface ChatMessage {
   // Persisted id for resumed messages; client-generated for the optimistic
-  // user message and the streamed assistant message. Used as the list key.
+  // user message and the streamed assistant message until it is adopted.
   id: string
+  // The list key: set once and never changed, so adopting the persisted id
+  // does not remount the row.
+  key: string
+  // True while the id is client-generated and not yet the stored one.
+  local?: boolean
   role: 'user' | 'assistant'
   content: string
   // Only ever set on a completed assistant message; undefined for the
@@ -190,9 +192,15 @@ interface ChatMessage {
   sources?: StudySource[]
 }
 
+function localMessage(role: ChatMessage['role'], content: string): ChatMessage {
+  const id = crypto.randomUUID()
+  return { id, key: id, local: true, role, content }
+}
+
 function toChatMessage(message: StudyMessage): ChatMessage {
   return {
     id: message.id,
+    key: message.id,
     role: message.role as ChatMessage['role'],
     content: message.content,
     sources: message.sources,
@@ -281,8 +289,6 @@ function StudyChatScreen({
   startingNewSession,
   sourceModeSlot,
   onOpenCitation,
-  initialExercise = null,
-  onExerciseChange,
   onOpeningTurnRequested,
   onStartExam,
 }: StudyChatScreenProps) {
@@ -322,20 +328,11 @@ function StudyChatScreen({
   // specs/phases/phase-03-architecture-lab/14-ai-challenge-generation.md.
   const [offer, setOffer] = useState<ExerciseOffer | null>(null)
   const [offerLanguage, setOfferLanguage] = useState('en')
-  const [readyExercise, setReadyExerciseState] = useState<SessionExercise | null>(initialExercise)
-  // A ref, so reporting a change never makes the callbacks below change.
-  const onExerciseChangeRef = useRef(onExerciseChange)
-  useEffect(() => {
-    onExerciseChangeRef.current = onExerciseChange
-  }, [onExerciseChange])
-  const setReadyExercise = useCallback(
-    (next: SessionExercise | null) => {
-      setReadyExerciseState(next)
-      onExerciseChangeRef.current?.(sessionId, next)
-    },
-    [sessionId],
-  )
-  const [examRules, setExamRules] = useState<SessionExercise | null>(null)
+  // The exercises accepted in this session, shown under the message that offered
+  // them (spec 3.17). They live in the backend, so they are loaded on open.
+  const [exerciseCards, setExerciseCards] = useState<ExerciseCard[]>([])
+  const [historyFor, setHistoryFor] = useState<HistoryChallenge | null>(null)
+  const [examRules, setExamRules] = useState<ExamToStart | null>(null)
   // The last message folded into the session's summary; empty when none. The
   // transcript shows a marker right after it.
   const [summaryCoversUntilId, setSummaryCoversUntilId] = useState('')
@@ -455,14 +452,48 @@ function StudyChatScreen({
     })
   }, [sessionId])
 
+  // A reply streamed in this screen has a client-made id until the session is
+  // opened again; the offer names the stored one, so the last assistant message
+  // still holding a client-made id takes it and the cards can hang under it.
+  // The row keeps its key, so it is not remounted.
+  const adoptMessageId = useCallback((messageId: string) => {
+    setMessages((previous) => {
+      if (previous.some((message) => message.id === messageId)) return previous
+      const index = previous.findLastIndex((message) => message.role === 'assistant')
+      if (index === -1 || !previous[index].local) return previous
+      return previous.map((message, i) =>
+        i === index ? { ...message, id: messageId, local: false } : message,
+      )
+    })
+  }, [])
+
   const refreshPendingOffer = useCallback(() => {
     void fetchPendingOffer(sessionId).then((pending) => {
       if (!pending || currentSessionIdRef.current !== sessionId) return
       setOffer(pending.offer)
       setOfferLanguage(pending.language)
-      setReadyExercise(null)
+      adoptMessageId(pending.offer.messageId)
     })
-  }, [sessionId, setReadyExercise])
+  }, [sessionId, adoptMessageId])
+
+  // A failed read keeps the cards as they were: they are an extra and must
+  // never break the chat.
+  const refreshExerciseCards = useCallback(
+    (reportFailure = false) => {
+      void listSessionExercises(sessionId)
+        .then((cards) => {
+          if (currentSessionIdRef.current === sessionId) setExerciseCards(cards)
+        })
+        .catch(() => {
+          if (reportFailure && currentSessionIdRef.current === sessionId) {
+            setError(
+              'The exercise was added, but its card could not be loaded. Reopen the session.',
+            )
+          }
+        })
+    },
+    [sessionId],
+  )
 
   const registerStreamPush = useCallback((push: ((text: string) => void) | null) => {
     streamPushRef.current = push
@@ -564,6 +595,7 @@ function StudyChatScreen({
         })
         refreshSessionUsage()
         refreshPendingOffer()
+        refreshExerciseCards()
         startHistory(history.hasMore, history.nextCursor)
         // Rendering a long history (markdown of every message) is the slow
         // part of opening a session. As a transition it is rendered in
@@ -604,10 +636,7 @@ function StudyChatScreen({
       pendingSourcesRef.current = []
       setStreamingSources([])
       pendingSendRef.current = null
-      setMessages((previous) => [
-        ...previous,
-        { id: crypto.randomUUID(), role: 'assistant', content, sources },
-      ])
+      setMessages((previous) => [...previous, { ...localMessage('assistant', content), sources }])
       setIsStreaming(false)
       setCompacting(false)
       refreshSessionUsage()
@@ -723,7 +752,7 @@ function StudyChatScreen({
       offCompacted()
       offCompactionFailed()
     }
-  }, [sessionId, refreshSessionUsage, refreshPendingOffer, pushToast])
+  }, [sessionId, refreshSessionUsage, refreshPendingOffer, refreshExerciseCards, pushToast])
 
   // The blocked alert's primary action: compaction progress and outcome come
   // back as events; a rejection without a failure event (nothing to compact,
@@ -749,10 +778,7 @@ function StudyChatScreen({
     const content = draft.trim()
     if (!content || offer) return
     pendingSendRef.current = content
-    // The "Exercise ready" card belongs to the exchange that produced it; a new
-    // message moves the conversation on.
-    setReadyExercise(null)
-    setMessages((previous) => [...previous, { id: crypto.randomUUID(), role: 'user', content }])
+    setMessages((previous) => [...previous, localMessage('user', content)])
     setDraft('')
     setError(null)
     setIsStreaming(true)
@@ -830,7 +856,7 @@ function StudyChatScreen({
         onClose={() => setSummaryOpen(false)}
       />
       <StartExamDialog
-        challenge={examRules && toExamToStart(examRules)}
+        challenge={examRules}
         onCancel={() => setExamRules(null)}
         onConfirm={() => {
           if (!examRules) return
@@ -838,6 +864,7 @@ function StudyChatScreen({
           onStartExam(examRules, sessionId)
         }}
       />
+      <AttemptHistoryDialog challenge={historyFor} onClose={() => setHistoryFor(null)} />
       <SessionUsageBar context={{ state: contextState, ...contextTokens }} usage={sessionUsage} />
       {findOpen && (
         <FindBar
@@ -883,8 +910,31 @@ function StudyChatScreen({
             the marker then sits above the first loaded message. */}
         {summaryCoversUntilId && summaryMarkerIndex === -1 && summaryMarker}
         {messages.map((message, index) => (
-          <Fragment key={message.id}>
+          <Fragment key={message.key}>
             <MessageRow message={message} onOpenCitation={onOpenCitation} />
+            {exerciseCards
+              .filter((card) => card.messageId === message.id)
+              .map((card) => (
+                <SessionExerciseCard
+                  key={card.sessionExerciseId}
+                  card={card}
+                  onStart={(started) => setExamRules(toExamToStart(started))}
+                  onHistory={(viewed) =>
+                    setHistoryFor({ id: viewed.challengeId, title: viewed.title })
+                  }
+                />
+              ))}
+            {offer?.messageId === message.id && !isStreaming && (
+              <ExerciseOfferCard
+                offerId={offer.id}
+                language={offerLanguage}
+                onAccepted={() => {
+                  setOffer(null)
+                  refreshExerciseCards(true)
+                }}
+                onDeclined={() => setOffer(null)}
+              />
+            )}
             {index === summaryMarkerIndex && summaryMarker}
           </Fragment>
         ))}
@@ -894,19 +944,6 @@ function StudyChatScreen({
             registerPush={registerStreamPush}
             onContentChange={scrollToBottomIfFollowing}
             compacting={compacting}
-          />
-        )}
-        {(offer || readyExercise) && !isStreaming && (
-          <ExerciseOfferCard
-            offerId={offer?.id ?? ''}
-            language={offerLanguage}
-            exercise={readyExercise}
-            onAccepted={(exercise) => {
-              setReadyExercise(exercise)
-              setOffer(null)
-            }}
-            onDeclined={() => setOffer(null)}
-            onOpenLab={setExamRules}
           />
         )}
       </div>
