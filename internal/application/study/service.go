@@ -57,6 +57,7 @@ type Service struct {
 	summaries      domainstudy.ConversationSummaryRepository
 	summaryWindow  SummaryWindowSource
 	offers         OfferGate
+	feedback       ExerciseFeedbackReader
 	inFlight       *inFlightCoordinator
 }
 

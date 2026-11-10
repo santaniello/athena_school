@@ -44,7 +44,7 @@ type compactionFixture struct {
 	service    *Service
 }
 
-func newCompactionFixture(t *testing.T) *compactionFixture {
+func newCompactionFixture(t *testing.T, extra ...Option) *compactionFixture {
 	t.Helper()
 	f := &compactionFixture{
 		sessions:   studymocks.NewMockSessionRepository(t),
@@ -64,7 +64,7 @@ func newCompactionFixture(t *testing.T) *compactionFixture {
 	f.service = NewService(
 		f.sessions, f.messages, f.llm, f.profiles, foldermocks.NewMockRepository(t), f.retriever,
 		tx, nil, f.sources, nil, nil,
-		WithSummarizer(f.summarizer), WithSummaries(f.summaries),
+		append([]Option{WithSummarizer(f.summarizer), WithSummaries(f.summaries)}, extra...)...,
 	)
 	return f
 }

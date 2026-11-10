@@ -70,14 +70,14 @@ In `internal/application/exercise`:
 Each slice is TDD (Go tests with testify and Mockery mocks), keeps the build green and is
 committed on its own.
 
-- [ ] `FeedbackService`: finished attempts of a session only, three most recent, fields of
+- [x] `FeedbackService`: finished attempts of a session only, three most recent, fields of
       decision 1, nothing for a standalone attempt or a session with none
-- [ ] `buildExerciseFeedbackContext`: framing, escaping, strict-notes clause, caps (200 per item,
+- [x] `buildExerciseFeedbackContext`: framing, escaping, strict-notes clause, caps (200 per item,
       2,000 total, oldest dropped first), empty input gives no message
-- [ ] `SendMessage`: reader called on each send, block placed after the summary, reader error
+- [x] `SendMessage`: reader called on each send, block placed after the summary, reader error
       does not fail the send
-- [ ] Context budget: the block counts toward the prompt budget (test with a full context)
-- [ ] Mocks regenerated; docs: CHANGELOG
+- [x] Context budget: the block counts toward the prompt budget (test with a full context)
+- [x] Mocks regenerated; docs: CHANGELOG
 
 ## Acceptance Criteria
 

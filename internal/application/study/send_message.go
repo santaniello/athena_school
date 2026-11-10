@@ -199,13 +199,16 @@ func (s *Service) SendMessage(
 		return fmt.Errorf("study: loading profile: %w", err)
 	}
 
-	llmMessages := make([]domainllm.Message, 0, len(history)+3)
+	llmMessages := make([]domainllm.Message, 0, len(history)+4)
 	llmMessages = append(llmMessages, domainllm.Message{Role: "system", Content: buildSystemPrompt(profile, topic, sessionGoal)})
 	if knowledgeMessage != nil {
 		llmMessages = append(llmMessages, *knowledgeMessage)
 	}
 	if summary != nil {
 		llmMessages = append(llmMessages, buildSummaryContext(summary.Content, sourceMode))
+	}
+	if feedbackMessage, ok := s.exerciseFeedbackContext(ctx, sessionID, sourceMode); ok {
+		llmMessages = append(llmMessages, feedbackMessage)
 	}
 	for _, message := range history {
 		content := message.Content

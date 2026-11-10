@@ -24,12 +24,24 @@ import (
 type replyOutcome struct {
 	received []string
 	stored   domainstudy.Message
+	prompt   []domainllm.Message // what the model was sent
 }
 
 // streamReply sends a message whose reply streams the given chunks, with the
 // offer gate in place (nil for none), and reports what the user saw and what
 // was stored.
 func streamReply(t *testing.T, chunks []string, gate OfferGate) (replyOutcome, error) {
+	t.Helper()
+	options := []Option{}
+	if gate != nil {
+		options = append(options, WithOfferGate(gate))
+	}
+	return streamReplyWith(t, chunks, options...)
+}
+
+// streamReplyWith is streamReply with arbitrary service options; the outcome
+// also holds the prompt the model received.
+func streamReplyWith(t *testing.T, chunks []string, options ...Option) (replyOutcome, error) {
 	t.Helper()
 	sessions := studymocks.NewMockSessionRepository(t)
 	messages := studymocks.NewMockMessageRepository(t)
@@ -43,23 +55,20 @@ func streamReply(t *testing.T, chunks []string, gate OfferGate) (replyOutcome, e
 	messages.EXPECT().Append(context.Background(), mock.MatchedBy(func(m domainstudy.Message) bool { return m.Role == domainstudy.RoleUser })).Return(nil).Once()
 	messages.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil).Once()
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}, nil)
+	var outcome replyOutcome
 	llm.EXPECT().
 		ChatStream(context.Background(), mock.AnythingOfType("llm.ChatRequest"), mock.AnythingOfType("func(string) error")).
-		Run(func(_ context.Context, _ domainllm.ChatRequest, handler func(string) error) {
+		Run(func(_ context.Context, request domainllm.ChatRequest, handler func(string) error) {
+			outcome.prompt = request.Messages
 			for _, chunk := range chunks {
 				require.NoError(t, handler(chunk))
 			}
 		}).
 		Return(domainllm.StreamResponse{}, nil).Once()
-	var outcome replyOutcome
 	messages.EXPECT().Append(context.Background(), mock.MatchedBy(func(m domainstudy.Message) bool { return m.Role == domainstudy.RoleAssistant })).
 		Run(func(_ context.Context, m domainstudy.Message) { outcome.stored = m }).Return(nil).Once()
 	messageSources := mockMessageSourceSave(t, nil)
 
-	options := []Option{}
-	if gate != nil {
-		options = append(options, WithOfferGate(gate))
-	}
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, tx, nil, messageSources, nil, nil, options...)
 
 	err := service.SendMessage(context.Background(), "session-1", "Caching", "give me an exercise", domainknowledge.SourceModeNotes,

@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	applicationexercise "github.com/santaniello/athena/internal/application/exercise"
+	applicationstudy "github.com/santaniello/athena/internal/application/study"
 	domainexercise "github.com/santaniello/athena/internal/domain/exercise"
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	domainprofile "github.com/santaniello/athena/internal/domain/profile"
@@ -121,4 +122,38 @@ func (g *OfferGate) HasPending(ctx context.Context, sessionID string) (bool, err
 func (g *OfferGate) CreateOffer(ctx context.Context, sessionID, messageID string) error {
 	_, err := g.offers.CreateOffer(ctx, sessionID, messageID)
 	return err
+}
+
+// feedbackService is what FeedbackReader needs from the lab's feedback service.
+type feedbackService interface {
+	SessionExerciseFeedback(ctx context.Context, sessionID string) ([]applicationexercise.SessionFeedback, error)
+}
+
+// FeedbackReader implements the study chat's ExerciseFeedbackReader on top of
+// the lab's feedback service, so the chat package imports no lab code. See
+// specs/phases/phase-03-architecture-lab/16-session-feedback.md.
+type FeedbackReader struct{ feedback feedbackService }
+
+// NewFeedbackReader creates a FeedbackReader backed by feedback.
+func NewFeedbackReader(feedback feedbackService) *FeedbackReader {
+	return &FeedbackReader{feedback: feedback}
+}
+
+// SessionExerciseFeedback returns the session's finished exams as the chat's
+// plain values.
+func (r *FeedbackReader) SessionExerciseFeedback(ctx context.Context, sessionID string) ([]applicationstudy.ExerciseFeedback, error) {
+	items, err := r.feedback.SessionExerciseFeedback(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	feedback := make([]applicationstudy.ExerciseFeedback, len(items))
+	for i, item := range items {
+		feedback[i] = applicationstudy.ExerciseFeedback{
+			ChallengeTitle: item.ChallengeTitle, Topic: item.Topic, Difficulty: string(item.Difficulty),
+			Passed:       item.Result == domainexercise.ResultPassed,
+			DiagramScore: item.DiagramScore, UnderstandingScore: item.UnderstandingScore, PassScore: item.PassScore,
+			UnmetMandatory: item.UnmetMandatory, Gaps: item.Gaps, Recommendations: item.Recommendations,
+		}
+	}
+	return feedback, nil
 }
