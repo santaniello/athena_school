@@ -77,6 +77,8 @@ export function ListHints(arg1:string):Promise<Array<desktop.HintDTO>>;
 
 export function ListSelectableModels():Promise<desktop.SelectableModelsResult>;
 
+export function ListSessionExercises(arg1:string):Promise<Array<desktop.SessionExerciseCardDTO>>;
+
 export function ListSessionSources(arg1:string):Promise<Array<desktop.SessionSourceResult>>;
 
 export function ListSessionsForGeneration():Promise<Array<desktop.SessionOptionDTO>>;

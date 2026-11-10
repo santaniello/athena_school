@@ -131,6 +131,10 @@ func main() {
 		sqlite.NewEvaluationRepository(db),
 	)
 
+	sessionExerciseService := applicationexercise.NewSessionExerciseService(
+		sqlite.NewSessionExerciseRepository(db), challengeRepo, sqlite.NewAttemptRecordRepository(db),
+	)
+
 	studyService := study.NewService(
 		studySessions, studyMessages, llmClient, profiles, folders, knowledgeService, transactor, contextResolver,
 		messageSources, knowledgeService, queryEnricher,
@@ -200,6 +204,7 @@ func main() {
 		desktop.WithDefenseService(defenseService),
 		desktop.WithHistoryService(historyService),
 		desktop.WithOfferService(offerService),
+		desktop.WithSessionExerciseService(sessionExerciseService),
 		desktop.WithCatalogService(challengeCatalog),
 		desktop.WithSessionLister(sessionService),
 	)

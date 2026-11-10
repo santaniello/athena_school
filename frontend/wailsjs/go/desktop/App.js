@@ -150,6 +150,10 @@ export function ListSelectableModels() {
   return window['go']['desktop']['App']['ListSelectableModels']();
 }
 
+export function ListSessionExercises(arg1) {
+  return window['go']['desktop']['App']['ListSessionExercises'](arg1);
+}
+
 export function ListSessionSources(arg1) {
   return window['go']['desktop']['App']['ListSessionSources'](arg1);
 }
