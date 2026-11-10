@@ -78,10 +78,10 @@ func buildExerciseFeedbackContext(feedback []ExerciseFeedback, sourceMode string
 	for len(entries) > 1 && feedbackBodyLength(entries) > maxFeedbackBlockChars {
 		entries = entries[:len(entries)-1]
 	}
-	body := strings.Join(entries, "\n\n")
-	if utf8.RuneCountInString(body) > maxFeedbackBlockChars {
-		body = string([]rune(body)[:maxFeedbackBlockChars])
-	}
+	// A single attempt can still pass the cap (escaping grows the text), so
+	// the body is hard cut as a last resort.
+	body := []rune(strings.Join(entries, "\n\n"))
+	body = body[:min(len(body), maxFeedbackBlockChars)]
 
 	framing := feedbackFraming
 	if sourceMode == domainknowledge.SourceModeStrictNotes {
@@ -89,7 +89,7 @@ func buildExerciseFeedbackContext(feedback []ExerciseFeedback, sourceMode string
 	}
 	return domainllm.Message{
 		Role:    "system",
-		Content: framing + "\n\n<exercise_results>\n" + body + "\n</exercise_results>",
+		Content: framing + "\n\n<exercise_results>\n" + string(body) + "\n</exercise_results>",
 	}, true
 }
 
@@ -126,9 +126,7 @@ func renderFeedbackEntry(position int, item ExerciseFeedback) string {
 const maxFeedbackListItems = 3
 
 func writeFeedbackList(b *strings.Builder, title string, items []string) {
-	if len(items) > maxFeedbackListItems {
-		items = items[:maxFeedbackListItems]
-	}
+	items = items[:min(len(items), maxFeedbackListItems)]
 	if len(items) == 0 {
 		return
 	}
@@ -142,10 +140,8 @@ func writeFeedbackList(b *strings.Builder, title string, items []string) {
 // maxFeedbackItemChars runes and escapes it.
 func feedbackText(text string) string {
 	text = strings.Join(strings.Fields(text), " ")
-	if runes := []rune(text); len(runes) > maxFeedbackItemChars {
-		text = string(runes[:maxFeedbackItemChars])
-	}
-	return escapePromptData(text)
+	runes := []rune(text)
+	return escapePromptData(string(runes[:min(len(runes), maxFeedbackItemChars)]))
 }
 
 // exerciseFeedbackContext asks the reader for the session's results and

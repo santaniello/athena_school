@@ -80,9 +80,7 @@ func (s *FeedbackService) SessionExerciseFeedback(ctx context.Context, sessionID
 	}
 	// One attempt runs at a time, so the submission time orders the sittings.
 	sort.SliceStable(finished, func(i, j int) bool { return finished[i].SubmittedAt.After(finished[j].SubmittedAt) })
-	if len(finished) > MaxFeedbackAttempts {
-		finished = finished[:MaxFeedbackAttempts]
-	}
+	finished = finished[:min(len(finished), MaxFeedbackAttempts)]
 
 	feedback := make([]SessionFeedback, 0, len(finished))
 	for _, attempt := range finished {

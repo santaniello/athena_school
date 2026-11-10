@@ -149,6 +149,68 @@ func TestBuildExerciseFeedbackContext_dropsTheOldestAttemptFirstWhenOverTheCap(t
 	assert.NotContains(t, body, "OLDEST")
 }
 
+// feedbackOfEntryLength returns an attempt whose rendered entry is exactly
+// length runes, so tests can land the body on the cap.
+func feedbackOfEntryLength(t *testing.T, length int) ExerciseFeedback {
+	t.Helper()
+	item := sampleFeedback()
+	item.ChallengeTitle = ""
+	item.Gaps = []string{"g", "g", "g"}
+	item.Recommendations = []string{"r", "r", "r"}
+	// Spread most of the length over the six list items, then pad the title.
+	each := min(maxFeedbackItemChars, max(1, (length-utf8.RuneCountInString(renderFeedbackEntry(1, item)))/6+1))
+	item.Gaps = []string{strings.Repeat("g", each), strings.Repeat("g", each), strings.Repeat("g", each)}
+	item.Recommendations = []string{strings.Repeat("r", each), strings.Repeat("r", each), strings.Repeat("r", each)}
+	missing := length - utf8.RuneCountInString(renderFeedbackEntry(1, item))
+	require.True(t, missing >= 0 && missing <= maxFeedbackItemChars, "cannot pad the entry to %d (missing %d)", length, missing)
+	item.ChallengeTitle = strings.Repeat("t", missing)
+	require.Equal(t, length, utf8.RuneCountInString(renderFeedbackEntry(1, item)))
+	return item
+}
+
+func TestBuildExerciseFeedbackContext_theCapIsInclusive(t *testing.T) {
+	for _, c := range []struct {
+		name       string
+		entry      int
+		wantSecond bool
+	}{
+		{"a body of exactly 2,000 characters keeps both attempts", 999, true},
+		{"a body of 2,001 characters drops the oldest", 1000, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			// Given two attempts whose body is 2,000 or 2,001 characters
+			item := feedbackOfEntryLength(t, c.entry)
+
+			// When building the block
+			message, _ := buildExerciseFeedbackContext([]ExerciseFeedback{item, item}, domainknowledge.SourceModeNotes)
+
+			// Then the second one is kept only when the body fits
+			assert.Equal(t, c.wantSecond, strings.Contains(message.Content, "Exercise 2:"))
+		})
+	}
+}
+
+func TestBuildExerciseFeedbackContext_theCapCountsEverySeparatorOfThreeAttempts(t *testing.T) {
+	for _, c := range []struct {
+		name      string
+		lengths   [3]int
+		wantThird bool
+	}{
+		{"three entries and two separators making exactly 2,000 are kept", [3]int{665, 665, 666}, true},
+		{"one character more drops the oldest", [3]int{665, 666, 666}, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			feedback := []ExerciseFeedback{
+				feedbackOfEntryLength(t, c.lengths[0]), feedbackOfEntryLength(t, c.lengths[1]), feedbackOfEntryLength(t, c.lengths[2]),
+			}
+
+			message, _ := buildExerciseFeedbackContext(feedback, domainknowledge.SourceModeNotes)
+
+			assert.Equal(t, c.wantThird, strings.Contains(message.Content, "Exercise 3:"))
+		})
+	}
+}
+
 func TestBuildExerciseFeedbackContext_keepsTwoAttemptsThatFitTheCapExactlyAsIs(t *testing.T) {
 	// Given two small attempts
 	feedback := []ExerciseFeedback{sampleFeedback(), sampleFeedback()}
