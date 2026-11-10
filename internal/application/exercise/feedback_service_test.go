@@ -221,11 +221,14 @@ func TestSessionExerciseFeedback_wrapsRepositoryErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Given a repository that fails at this step
 			f := newFeedbackFixture(t)
 			tt.setup(f)
 
+			// When reading the feedback
 			feedback, err := f.service.SessionExerciseFeedback(ctx, "session-1")
 
+			// Then the error is wrapped and nothing is returned
 			require.ErrorIs(t, err, boom)
 			assert.Nil(t, feedback)
 		})

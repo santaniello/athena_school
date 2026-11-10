@@ -260,10 +260,13 @@ func TestFeedbackReader_mapsTheLabFeedbackToTheChatValues(t *testing.T) {
 }
 
 func TestFeedbackReader_passesAFailureThrough(t *testing.T) {
+	// Given a feedback service that fails
 	boom := errors.New("boom")
 
+	// When reading the feedback
 	got, err := NewFeedbackReader(fakeFeedbackService{err: boom}).SessionExerciseFeedback(context.Background(), "session-1")
 
+	// Then the error is passed through and nothing is returned
 	require.ErrorIs(t, err, boom)
 	assert.Nil(t, got)
 }
