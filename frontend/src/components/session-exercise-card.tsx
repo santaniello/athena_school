@@ -27,9 +27,9 @@ function SessionExerciseCard({ card, onStart, onHistory }: SessionExerciseCardPr
     <div className="flex flex-col items-start gap-3 rounded-lg border bg-card p-3 text-sm">
       <p className="font-medium">{card.title}</p>
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="outline">{difficulty}</Badge>
-        <Badge variant="outline">{card.timeLimitMinutes} min</Badge>
-        <Badge variant="secondary">{status}</Badge>
+        <Badge variant="muted">{difficulty}</Badge>
+        <Badge variant="muted">{card.timeLimitMinutes} min</Badge>
+        <Badge variant="default">{status}</Badge>
       </div>
       {latest && (
         <p className="flex flex-wrap gap-x-3 text-muted-foreground">

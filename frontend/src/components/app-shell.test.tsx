@@ -10,7 +10,6 @@ import {
   onStudyDone,
   onStudySources,
   requestOpeningTurn,
-  sendStudyMessage,
   resumeStudySession,
   startStudySession,
 } from '@/lib/study'
@@ -31,6 +30,7 @@ import { deleteFolder, listFolders } from '@/lib/folder'
 import {
   acceptOffer,
   getPendingOffer,
+  listSessionExercises,
   listChallengeCatalog,
   listChallengeTopics,
 } from '@/lib/exercise'
@@ -128,6 +128,7 @@ vi.mock('@/lib/exercise', async (importOriginal) => {
     }),
     listChallengeTopics: vi.fn().mockResolvedValue(['rate limiting']),
     getPendingOffer: vi.fn().mockResolvedValue(null),
+    listSessionExercises: vi.fn().mockResolvedValue([]),
     getAssistantLanguage: vi.fn().mockResolvedValue('en'),
     acceptOffer: vi.fn(),
     listSessionsForGeneration: vi
@@ -1726,6 +1727,19 @@ describe('AppShell knowledge index lifecycle', () => {
         })
         await user.click(screen.getByText('General'))
         await user.click(await screen.findByText('Caching'))
+        vi.mocked(listSessionExercises).mockResolvedValue([
+          {
+            sessionExerciseId: 'link-1',
+            messageId: 'm2',
+            challengeId: 'c9',
+            title: 'Design a cache',
+            difficulty: 'ADVANCED',
+            timeLimitMinutes: 45,
+            status: 'NOT_STARTED',
+            attempts: 0,
+            latest: null,
+          },
+        ])
         await user.click(await screen.findByRole('button', { name: 'Accept' }))
         await user.click(await screen.findByRole('button', { name: 'Open in Architecture Lab' }))
         await user.click(await screen.findByRole('button', { name: 'Start exam' }))
@@ -1747,37 +1761,22 @@ describe('AppShell knowledge index lifecycle', () => {
         await user.click(screen.getByRole('button', { name: 'finish exam' }))
 
         expect(await screen.findByText('Sure, let us practice.')).toBeInTheDocument()
-        expect(screen.getByText('Exercise ready: Design a cache')).toBeInTheDocument()
+        expect(screen.getByText('Design a cache')).toBeInTheDocument()
         expect(screen.getByRole('button', { name: 'Open in Architecture Lab' })).toBeInTheDocument()
         expect(screen.getByRole('heading', { name: 'Caching', level: 1 })).toBeInTheDocument()
         expect(requestOpeningTurn).not.toHaveBeenCalled()
         expect(screen.queryByRole('region', { name: 'Exam' })).not.toBeInTheDocument()
       })
 
-      it('keeps the accepted card when the user leaves and comes back without opening the lab', async () => {
+      it('shows the stored card again when the user leaves and comes back without opening the lab', async () => {
         const user = await startFromSession()
         await user.click(screen.getByRole('button', { name: 'finish exam' }))
-        await screen.findByText('Exercise ready: Design a cache')
+        await screen.findByText('Design a cache')
 
         await user.click(screen.getByRole('button', { name: 'Home' }))
         await user.click(screen.getByRole('button', { name: 'Study' }))
 
-        expect(await screen.findByText('Exercise ready: Design a cache')).toBeInTheDocument()
-      })
-
-      it('does not bring the card back once a message moved the conversation on', async () => {
-        const user = await startFromSession()
-        await user.click(screen.getByRole('button', { name: 'finish exam' }))
-        await screen.findByText('Exercise ready: Design a cache')
-        vi.mocked(sendStudyMessage).mockResolvedValue()
-
-        await user.type(screen.getByPlaceholderText('Type your answer...'), 'thanks')
-        await user.click(screen.getByRole('button', { name: 'Send' }))
-        await user.click(screen.getByRole('button', { name: 'Home' }))
-        await user.click(screen.getByRole('button', { name: 'Study' }))
-
-        await screen.findByText('Sure, let us practice.')
-        expect(screen.queryByText('Exercise ready: Design a cache')).not.toBeInTheDocument()
+        expect(await screen.findByText('Design a cache')).toBeInTheDocument()
       })
 
       it('goes where the user navigated, not to the session, when the exam ends then', async () => {

@@ -18,21 +18,18 @@ const exercise: SessionExercise = {
   timeLimitMinutes: 45,
 }
 
-function setup(props: { language?: string; exercise?: SessionExercise | null } = {}) {
+function setup(props: { language?: string } = {}) {
   const onAccepted = vi.fn()
   const onDeclined = vi.fn()
-  const onOpenLab = vi.fn()
   render(
     <ExerciseOfferCard
       offerId="o1"
       language={props.language ?? 'en'}
-      exercise={props.exercise ?? null}
       onAccepted={onAccepted}
       onDeclined={onDeclined}
-      onOpenLab={onOpenLab}
     />,
   )
-  return { onAccepted, onDeclined, onOpenLab, user: userEvent.setup() }
+  return { onAccepted, onDeclined, user: userEvent.setup() }
 }
 
 describe('ExerciseOfferCard', () => {
@@ -52,7 +49,7 @@ describe('ExerciseOfferCard', () => {
     expect(screen.getByRole('button', { name: 'Recusar' })).toBeInTheDocument()
   })
 
-  it('accepts: shows progress with both buttons disabled, then reports the exercise', async () => {
+  it('accepts: shows progress with both buttons disabled, then tells the screen', async () => {
     let resolve: (value: SessionExercise) => void = () => {}
     vi.mocked(acceptOffer).mockReturnValueOnce(new Promise((r) => (resolve = r)))
     const { user, onAccepted } = setup()
@@ -65,7 +62,7 @@ describe('ExerciseOfferCard', () => {
     expect(screen.getByRole('button', { name: 'Decline' })).toBeDisabled()
 
     resolve(exercise)
-    await waitFor(() => expect(onAccepted).toHaveBeenCalledWith(exercise))
+    await waitFor(() => expect(onAccepted).toHaveBeenCalledExactlyOnceWith())
   })
 
   it('keeps the offer with the error and Accept available again when generation fails', async () => {
@@ -117,22 +114,5 @@ describe('ExerciseOfferCard', () => {
     )
     expect(onDeclined).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Decline' })).toBeEnabled()
-  })
-
-  it('shows the ready exercise with only Open in Architecture Lab once accepted', () => {
-    setup({ exercise })
-
-    expect(screen.getByText('Exercise ready: Design a cache')).toBeInTheDocument()
-    expect(screen.getAllByRole('button')).toHaveLength(1)
-    expect(screen.getByRole('button', { name: 'Open in Architecture Lab' })).toBeEnabled()
-  })
-
-  it('opens the lab with the exercise only when the user asks', async () => {
-    const { user, onOpenLab } = setup({ exercise })
-    expect(onOpenLab).not.toHaveBeenCalled()
-
-    await user.click(screen.getByRole('button', { name: 'Open in Architecture Lab' }))
-
-    expect(onOpenLab).toHaveBeenCalledExactlyOnceWith(exercise)
   })
 })

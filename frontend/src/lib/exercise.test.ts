@@ -855,12 +855,11 @@ describe('exercise offer', () => {
 })
 
 describe('toExamToStart', () => {
-  it('takes what the rules dialog and the exam need from a session exercise', () => {
+  it('takes what the rules dialog and the exam need from a session exercise or its card', () => {
     expect(
       toExamToStart({
         challengeId: 'c9',
         title: 'Design a cache',
-        topic: 'caching',
         difficulty: 'ADVANCED',
         timeLimitMinutes: 45,
       }),
