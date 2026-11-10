@@ -16,6 +16,7 @@ import {
   ListChallengeCatalog,
   ListChallengeTopics,
   ListHints,
+  ListSessionExercises,
   ListSessionsForGeneration,
   NextDefenseQuestion,
   AnswerDefenseQuestion,
@@ -31,6 +32,7 @@ import {
   declineOffer,
   getAssistantLanguage,
   getPendingOffer,
+  listSessionExercises,
   offerLabels,
   DIFFICULTY_LABELS,
   STATUS_LABELS,
@@ -70,6 +72,7 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   AcceptOffer: vi.fn(),
   DeclineOffer: vi.fn(),
   GetPendingOffer: vi.fn(),
+  ListSessionExercises: vi.fn(),
   GetProfile: vi.fn(),
   CancelChallengeGeneration: vi.fn(),
   GenerateChallenge: vi.fn(),
@@ -862,5 +865,72 @@ describe('toExamToStart', () => {
         timeLimitMinutes: 45,
       }),
     ).toEqual({ id: 'c9', title: 'Design a cache', difficulty: 'ADVANCED', timeLimitMinutes: 45 })
+  })
+})
+
+describe('listSessionExercises', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('maps each card, with and without a latest result', async () => {
+    vi.mocked(ListSessionExercises).mockResolvedValueOnce([
+      desktop.SessionExerciseCardDTO.createFrom({
+        sessionExerciseId: 'l1',
+        messageId: 'm1',
+        challengeId: 'c1',
+        title: 'Design a feed',
+        difficulty: 'ADVANCED',
+        timeLimitMinutes: 60,
+        status: 'COMPLETED',
+        attempts: 2,
+        latest: { outcome: 'FAILED', diagramScore: 40, understandingScore: 55 },
+      }),
+      desktop.SessionExerciseCardDTO.createFrom({
+        sessionExerciseId: 'l2',
+        messageId: 'm2',
+        challengeId: 'c2',
+        title: 'Second',
+        difficulty: 'BEGINNER',
+        timeLimitMinutes: 30,
+        status: 'NOT_STARTED',
+        attempts: 0,
+        latest: null,
+      }),
+    ])
+
+    const cards = await listSessionExercises('s1')
+
+    expect(ListSessionExercises).toHaveBeenCalledWith('s1')
+    expect(cards).toEqual([
+      {
+        sessionExerciseId: 'l1',
+        messageId: 'm1',
+        challengeId: 'c1',
+        title: 'Design a feed',
+        difficulty: 'ADVANCED',
+        timeLimitMinutes: 60,
+        status: 'COMPLETED',
+        attempts: 2,
+        latest: { outcome: 'FAILED', diagramScore: 40, understandingScore: 55 },
+      },
+      {
+        sessionExerciseId: 'l2',
+        messageId: 'm2',
+        challengeId: 'c2',
+        title: 'Second',
+        difficulty: 'BEGINNER',
+        timeLimitMinutes: 30,
+        status: 'NOT_STARTED',
+        attempts: 0,
+        latest: null,
+      },
+    ])
+  })
+
+  it('reads a null list as no cards', async () => {
+    vi.mocked(ListSessionExercises).mockResolvedValueOnce(
+      null as unknown as desktop.SessionExerciseCardDTO[],
+    )
+
+    expect(await listSessionExercises('s1')).toEqual([])
   })
 })
