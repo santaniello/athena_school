@@ -1718,13 +1718,7 @@ describe('AppShell knowledge index lifecycle', () => {
           sessionId: 'session-lab',
           messageId: 'm2',
         })
-        vi.mocked(acceptOffer).mockResolvedValueOnce({
-          challengeId: 'c9',
-          title: 'Design a cache',
-          topic: 'caching',
-          difficulty: 'ADVANCED',
-          timeLimitMinutes: 45,
-        })
+        vi.mocked(acceptOffer).mockResolvedValueOnce()
         await user.click(screen.getByText('General'))
         await user.click(await screen.findByText('Caching'))
         vi.mocked(listSessionExercises).mockResolvedValue([

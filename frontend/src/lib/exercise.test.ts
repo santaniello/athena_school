@@ -797,27 +797,14 @@ describe('exercise offer', () => {
     expect(await getPendingOffer('s1')).toBeNull()
   })
 
-  it('accepts an offer and returns the linked challenge', async () => {
+  it('accepts an offer', async () => {
     vi.mocked(AcceptOffer).mockResolvedValueOnce(
-      desktop.SessionExerciseDTO.createFrom({
-        challengeId: 'c1',
-        title: 'Design a cache',
-        topic: 'caching',
-        difficulty: 'ADVANCED',
-        timeLimitMinutes: 45,
-      }),
+      desktop.SessionExerciseDTO.createFrom({ challengeId: 'c1' }),
     )
 
-    const exercise = await acceptOffer('o1')
+    await expect(acceptOffer('o1')).resolves.toBeUndefined()
 
     expect(AcceptOffer).toHaveBeenCalledWith('o1')
-    expect(exercise).toEqual({
-      challengeId: 'c1',
-      title: 'Design a cache',
-      topic: 'caching',
-      difficulty: 'ADVANCED',
-      timeLimitMinutes: 45,
-    })
   })
 
   it('declines an offer', async () => {
@@ -855,13 +842,18 @@ describe('exercise offer', () => {
 })
 
 describe('toExamToStart', () => {
-  it('takes what the rules dialog and the exam need from a session exercise or its card', () => {
+  it('takes what the rules dialog and the exam need from the card of a session exercise', () => {
     expect(
       toExamToStart({
+        sessionExerciseId: 'l1',
+        messageId: 'm1',
         challengeId: 'c9',
         title: 'Design a cache',
         difficulty: 'ADVANCED',
         timeLimitMinutes: 45,
+        status: 'NOT_STARTED',
+        attempts: 0,
+        latest: null,
       }),
     ).toEqual({ id: 'c9', title: 'Design a cache', difficulty: 'ADVANCED', timeLimitMinutes: 45 })
   })

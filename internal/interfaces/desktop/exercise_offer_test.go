@@ -277,3 +277,17 @@ func TestApp_ListSessionExercises_mapsFailures(t *testing.T) {
 	var exerciseErr *ExerciseError
 	require.ErrorAs(t, err, &exerciseErr)
 }
+
+func TestApp_ListSessionExercises_failsWithATypedErrorWhenTheServiceIsNotWired(t *testing.T) {
+	// Given an app built without the session exercise service
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	app.ctx = context.Background()
+
+	// When listing the session's exercises
+	_, err := app.ListSessionExercises("session-1")
+
+	// Then a typed error comes back instead of a panic
+	var exerciseErr *ExerciseError
+	require.ErrorAs(t, err, &exerciseErr)
+	assert.Equal(t, exerciseCodeUnavailable, exerciseErr.Code)
+}

@@ -233,7 +233,7 @@ describe('StudyChatScreen — exercise offer', () => {
   it('accepting replaces the offer with the exercise card under the same message and re-enables the input', async () => {
     subscribe()
     vi.mocked(getPendingOffer).mockResolvedValue(OFFER)
-    vi.mocked(acceptOffer).mockResolvedValue({ ...CARD, topic: 'caching' })
+    vi.mocked(acceptOffer).mockResolvedValue()
     await renderResumed()
     const user = userEvent.setup()
     vi.mocked(listSessionExercises).mockResolvedValue([CARD])
@@ -343,12 +343,55 @@ describe('StudyChatScreen — exercise offer', () => {
     expect(screen.getByText('Design a cache')).toBeInTheDocument()
   })
 
+  it('keeps a streamed reply mounted when its stored id is adopted', async () => {
+    const handlers = subscribe()
+    await renderResumed()
+    vi.mocked(sendStudyMessage).mockResolvedValue()
+    vi.mocked(getPendingOffer).mockResolvedValue({ ...OFFER, messageId: 'stored-id' })
+    const user = userEvent.setup()
+    await user.type(screen.getByPlaceholderText('Type your answer...'), 'practice')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+    act(() => handlers.done?.({ sessionId: 'session-1' }))
+    const bubbles = () => document.querySelectorAll('[data-slot="message-bubble"]')
+    const streamed = bubbles()[3]
+
+    await screen.findByRole('button', { name: 'Accept' })
+
+    expect(streamed.isConnected).toBe(true)
+    expect(bubbles()[3]).toBe(streamed)
+  })
+
+  it('does not give an offer id to a reply that is already stored', async () => {
+    subscribe()
+    vi.mocked(getPendingOffer).mockResolvedValue({ ...OFFER, messageId: 'not-loaded' })
+    vi.mocked(listSessionExercises).mockResolvedValue([CARD])
+
+    await renderResumed()
+
+    // the card still hangs under the stored m2, and the offer is not shown under it
+    expect(await screen.findByText('Design a cache')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument()
+  })
+
+  it('tells the user when the card cannot be loaded after accepting', async () => {
+    subscribe()
+    vi.mocked(getPendingOffer).mockResolvedValue(OFFER)
+    vi.mocked(acceptOffer).mockResolvedValue()
+    await renderResumed()
+    vi.mocked(listSessionExercises).mockRejectedValue(new Error('boom'))
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Accept' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('could not be loaded')
+  })
+
   it('hangs the offer of a reply streamed here under that reply', async () => {
     const handlers = subscribe()
     await renderResumed()
     vi.mocked(sendStudyMessage).mockResolvedValue()
     vi.mocked(getPendingOffer).mockResolvedValue({ ...OFFER, messageId: 'stored-id' })
-    vi.mocked(acceptOffer).mockResolvedValue({ ...CARD, topic: 'caching' })
+    vi.mocked(acceptOffer).mockResolvedValue()
     const user = userEvent.setup()
     await user.type(screen.getByPlaceholderText('Type your answer...'), 'practice')
     await user.click(screen.getByRole('button', { name: 'Send' }))

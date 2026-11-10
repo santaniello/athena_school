@@ -512,14 +512,6 @@ export interface ExerciseOffer {
   messageId: string
 }
 
-export interface SessionExercise {
-  challengeId: string
-  title: string
-  topic: string
-  difficulty: string
-  timeLimitMinutes: number
-}
-
 // The persistent chat card of an accepted exercise: a view of the session's
 // link, never the scenario, requirements or rubric. See
 // specs/phases/phase-03-architecture-lab/17-session-exercises-ui.md.
@@ -567,14 +559,12 @@ export interface ExamToStart {
 }
 
 // The exam of a challenge linked to a study session.
-export function toExamToStart(
-  exercise: Pick<SessionExercise, 'challengeId' | 'title' | 'difficulty' | 'timeLimitMinutes'>,
-): ExamToStart {
+export function toExamToStart(card: SessionExerciseCard): ExamToStart {
   return {
-    id: exercise.challengeId,
-    title: exercise.title,
-    difficulty: exercise.difficulty,
-    timeLimitMinutes: exercise.timeLimitMinutes,
+    id: card.challengeId,
+    title: card.title,
+    difficulty: card.difficulty,
+    timeLimitMinutes: card.timeLimitMinutes,
   }
 }
 
@@ -586,15 +576,8 @@ export async function getPendingOffer(sessionId: string): Promise<ExerciseOffer 
   return { id: offer.id, sessionId: offer.sessionId, messageId: offer.messageId }
 }
 
-export async function acceptOffer(offerId: string): Promise<SessionExercise> {
-  const exercise = await AcceptOffer(offerId)
-  return {
-    challengeId: exercise.challengeId,
-    title: exercise.title,
-    topic: exercise.topic,
-    difficulty: exercise.difficulty,
-    timeLimitMinutes: exercise.timeLimitMinutes,
-  }
+export async function acceptOffer(offerId: string): Promise<void> {
+  await AcceptOffer(offerId)
 }
 
 export function declineOffer(offerId: string): Promise<void> {

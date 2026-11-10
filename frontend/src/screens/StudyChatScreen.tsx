@@ -178,8 +178,13 @@ const FAILURE_TOAST_MS = 10_000
 
 interface ChatMessage {
   // Persisted id for resumed messages; client-generated for the optimistic
-  // user message and the streamed assistant message. Used as the list key.
+  // user message and the streamed assistant message until it is adopted.
   id: string
+  // The list key: set once and never changed, so adopting the persisted id
+  // does not remount the row.
+  key: string
+  // True while the id is client-generated and not yet the stored one.
+  local?: boolean
   role: 'user' | 'assistant'
   content: string
   // Only ever set on a completed assistant message; undefined for the
@@ -187,9 +192,15 @@ interface ChatMessage {
   sources?: StudySource[]
 }
 
+function localMessage(role: ChatMessage['role'], content: string): ChatMessage {
+  const id = crypto.randomUUID()
+  return { id, key: id, local: true, role, content }
+}
+
 function toChatMessage(message: StudyMessage): ChatMessage {
   return {
     id: message.id,
+    key: message.id,
     role: message.role as ChatMessage['role'],
     content: message.content,
     sources: message.sources,
@@ -443,13 +454,16 @@ function StudyChatScreen({
 
   // A reply streamed in this screen has a client-made id until the session is
   // opened again; the offer names the stored one, so the last assistant message
-  // takes it and the cards can hang under it.
+  // still holding a client-made id takes it and the cards can hang under it.
+  // The row keeps its key, so it is not remounted.
   const adoptMessageId = useCallback((messageId: string) => {
     setMessages((previous) => {
       if (previous.some((message) => message.id === messageId)) return previous
-      const index = previous.map((message) => message.role).lastIndexOf('assistant')
-      if (index === -1) return previous
-      return previous.map((message, i) => (i === index ? { ...message, id: messageId } : message))
+      const index = previous.findLastIndex((message) => message.role === 'assistant')
+      if (index === -1 || !previous[index].local) return previous
+      return previous.map((message, i) =>
+        i === index ? { ...message, id: messageId, local: false } : message,
+      )
     })
   }, [])
 
@@ -464,13 +478,22 @@ function StudyChatScreen({
 
   // A failed read keeps the cards as they were: they are an extra and must
   // never break the chat.
-  const refreshExerciseCards = useCallback(() => {
-    void listSessionExercises(sessionId)
-      .then((cards) => {
-        if (currentSessionIdRef.current === sessionId) setExerciseCards(cards)
-      })
-      .catch(() => undefined)
-  }, [sessionId])
+  const refreshExerciseCards = useCallback(
+    (reportFailure = false) => {
+      void listSessionExercises(sessionId)
+        .then((cards) => {
+          if (currentSessionIdRef.current === sessionId) setExerciseCards(cards)
+        })
+        .catch(() => {
+          if (reportFailure && currentSessionIdRef.current === sessionId) {
+            setError(
+              'The exercise was added, but its card could not be loaded. Reopen the session.',
+            )
+          }
+        })
+    },
+    [sessionId],
+  )
 
   const registerStreamPush = useCallback((push: ((text: string) => void) | null) => {
     streamPushRef.current = push
@@ -613,10 +636,7 @@ function StudyChatScreen({
       pendingSourcesRef.current = []
       setStreamingSources([])
       pendingSendRef.current = null
-      setMessages((previous) => [
-        ...previous,
-        { id: crypto.randomUUID(), role: 'assistant', content, sources },
-      ])
+      setMessages((previous) => [...previous, { ...localMessage('assistant', content), sources }])
       setIsStreaming(false)
       setCompacting(false)
       refreshSessionUsage()
@@ -758,7 +778,7 @@ function StudyChatScreen({
     const content = draft.trim()
     if (!content || offer) return
     pendingSendRef.current = content
-    setMessages((previous) => [...previous, { id: crypto.randomUUID(), role: 'user', content }])
+    setMessages((previous) => [...previous, localMessage('user', content)])
     setDraft('')
     setError(null)
     setIsStreaming(true)
@@ -890,7 +910,7 @@ function StudyChatScreen({
             the marker then sits above the first loaded message. */}
         {summaryCoversUntilId && summaryMarkerIndex === -1 && summaryMarker}
         {messages.map((message, index) => (
-          <Fragment key={message.id}>
+          <Fragment key={message.key}>
             <MessageRow message={message} onOpenCitation={onOpenCitation} />
             {exerciseCards
               .filter((card) => card.messageId === message.id)
@@ -910,7 +930,7 @@ function StudyChatScreen({
                 language={offerLanguage}
                 onAccepted={() => {
                   setOffer(null)
-                  refreshExerciseCards()
+                  refreshExerciseCards(true)
                 }}
                 onDeclined={() => setOffer(null)}
               />

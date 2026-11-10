@@ -124,6 +124,7 @@ func WithSessionExerciseService(cards sessionExerciseCards) Option {
 // Stable ExerciseError.Code values the frontend switches on.
 const (
 	exerciseCodeInvalidInput         = "invalid_input"
+	exerciseCodeUnavailable          = "unavailable"
 	exerciseCodeChallengeNotFound    = "challenge_not_found"
 	exerciseCodeChallengeHasNoRubric = "challenge_has_no_rubric"
 	exerciseCodeAttemptInProgress    = "attempt_in_progress"
@@ -1105,6 +1106,9 @@ func (a *App) ListSessionExercises(sessionID string) ([]SessionExerciseCardDTO, 
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
 		return nil, invalidInput("session id is required")
+	}
+	if a.sessionCards == nil {
+		return nil, &ExerciseError{Code: exerciseCodeUnavailable, Message: "session exercises are not available"}
 	}
 	cards, err := a.sessionCards.ListSessionExercises(a.ctx, sessionID)
 	if err != nil {

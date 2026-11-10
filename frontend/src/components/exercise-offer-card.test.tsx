@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { acceptOffer, declineOffer, type SessionExercise } from '@/lib/exercise'
+import { acceptOffer, declineOffer } from '@/lib/exercise'
 import { ExerciseOfferCard } from './exercise-offer-card'
 
 vi.mock('@/lib/exercise', async (importOriginal) => ({
@@ -9,14 +9,6 @@ vi.mock('@/lib/exercise', async (importOriginal) => ({
   acceptOffer: vi.fn(),
   declineOffer: vi.fn(),
 }))
-
-const exercise: SessionExercise = {
-  challengeId: 'c1',
-  title: 'Design a cache',
-  topic: 'caching',
-  difficulty: 'ADVANCED',
-  timeLimitMinutes: 45,
-}
 
 function setup(props: { language?: string } = {}) {
   const onAccepted = vi.fn()
@@ -50,7 +42,7 @@ describe('ExerciseOfferCard', () => {
   })
 
   it('accepts: shows progress with both buttons disabled, then tells the screen', async () => {
-    let resolve: (value: SessionExercise) => void = () => {}
+    let resolve: () => void = () => {}
     vi.mocked(acceptOffer).mockReturnValueOnce(new Promise((r) => (resolve = r)))
     const { user, onAccepted } = setup()
 
@@ -61,8 +53,8 @@ describe('ExerciseOfferCard', () => {
     expect(screen.getByRole('button', { name: 'Accept' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Decline' })).toBeDisabled()
 
-    resolve(exercise)
-    await waitFor(() => expect(onAccepted).toHaveBeenCalledExactlyOnceWith())
+    resolve()
+    await waitFor(() => expect(onAccepted).toHaveBeenCalledOnce())
   })
 
   it('keeps the offer with the error and Accept available again when generation fails', async () => {
@@ -83,7 +75,7 @@ describe('ExerciseOfferCard', () => {
 
   it('clears the previous error when accepting again', async () => {
     vi.mocked(acceptOffer).mockRejectedValueOnce(new Error('boom'))
-    vi.mocked(acceptOffer).mockResolvedValueOnce(exercise)
+    vi.mocked(acceptOffer).mockResolvedValueOnce()
     const { user } = setup()
 
     await user.click(screen.getByRole('button', { name: 'Accept' }))
