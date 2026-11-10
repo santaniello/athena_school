@@ -94,7 +94,7 @@ func cardOf(link domainexercise.SessionExercise, challenge domainexercise.Challe
 			return SessionExerciseCard{}, err
 		}
 		summaries = append(summaries, summary)
-		if len(summaries) == 1 || !record.Attempt.SubmittedAt.Before(latestRecord.Attempt.SubmittedAt) {
+		if !record.Attempt.SubmittedAt.Before(latestRecord.Attempt.SubmittedAt) {
 			latestRecord, latestOutcome = record, summary.Outcome.Result
 		}
 	}
