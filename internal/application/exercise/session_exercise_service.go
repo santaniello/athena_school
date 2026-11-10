@@ -80,33 +80,37 @@ func (s *SessionExerciseService) ListSessionExercises(ctx context.Context, sessi
 	return cards, nil
 }
 
+// cardOf derives the status from every attempt of the challenge, as the
+// catalog does, so the two always agree; the count and the latest result only
+// concern the finished ones.
 func cardOf(link domainexercise.SessionExercise, challenge domainexercise.Challenge, records []domainexercise.AttemptRecord) (SessionExerciseCard, error) {
-	var summaries []domainexercise.AttemptSummary
-	var latestRecord domainexercise.AttemptRecord
+	summaries := make([]domainexercise.AttemptSummary, len(records))
+	var finished []domainexercise.AttemptRecord
+	var latest domainexercise.AttemptRecord
 	var latestOutcome domainexercise.AttemptResult
-	for _, record := range records {
-		// A finished attempt always has both evaluations; one without is not a result.
-		if record.Attempt.State != domainexercise.AttemptFinished || record.Diagram == nil || record.Understanding == nil {
-			continue
-		}
+	for i, record := range records {
 		summary, err := summarizeRecord(record)
 		if err != nil {
 			return SessionExerciseCard{}, err
 		}
-		summaries = append(summaries, summary)
-		if !record.Attempt.SubmittedAt.Before(latestRecord.Attempt.SubmittedAt) {
-			latestRecord, latestOutcome = record, summary.Outcome.Result
+		summaries[i] = summary
+		// A finished attempt always has both evaluations; one without is not a result.
+		if record.Attempt.State != domainexercise.AttemptFinished || record.Diagram == nil || record.Understanding == nil {
+			continue
+		}
+		finished = append(finished, record)
+		if !record.Attempt.SubmittedAt.Before(latest.Attempt.SubmittedAt) {
+			latest, latestOutcome = record, summary.Outcome.Result
 		}
 	}
-	progress := domainexercise.DeriveProgress(summaries)
 	card := SessionExerciseCard{
 		SessionExerciseID: link.ID, MessageID: link.MessageID, ChallengeID: challenge.ID, Title: challenge.Title,
 		Difficulty: challenge.Difficulty, TimeLimitMinutes: challenge.TimeLimitMinutes,
-		Status: progress.Status, Attempts: progress.Attempts,
+		Status: domainexercise.DeriveProgress(summaries).Status, Attempts: len(finished),
 	}
-	if len(summaries) > 0 {
+	if len(finished) > 0 {
 		card.Latest = &LatestResult{
-			Outcome: latestOutcome, DiagramScore: latestRecord.Diagram.Score, UnderstandingScore: latestRecord.Understanding.Score,
+			Outcome: latestOutcome, DiagramScore: latest.Diagram.Score, UnderstandingScore: latest.Understanding.Score,
 		}
 	}
 	return card, nil

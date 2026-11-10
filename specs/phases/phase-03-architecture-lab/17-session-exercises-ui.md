@@ -14,7 +14,8 @@ It is the last piece that ties the study session to the Architecture Lab.
    `SessionExercise` ([3.3](03-attempts-and-session-link.md)), not a chat message of its own, so
    it never reaches the model and does not affect sending.
 2. **What the card shows:** the challenge title, its difficulty and time limit, and the progress
-   label from [3.6](06-completion-rules.md): `Not started`, `Needs improvement` or `Completed`.
+   label from [3.6](06-completion-rules.md): `Not started`, `In progress`, `Needs improvement` or
+   `Completed`, the same as the catalog.
    When there are finished attempts it also shows their count and the latest result: Passed or
    Failed with the diagram and understanding scores. It never shows the scenario, requirements or
    rubric, as in the catalog ([3.7](07-challenge-catalog-ui.md)).
@@ -67,9 +68,9 @@ func (s *SessionExerciseService) ListSessionExercises(ctx, sessionID string) ([]
 ```
 
 It lists the session's links, reads each challenge, derives progress with `DeriveProgress`
-([3.6](06-completion-rules.md)) from its finished attempts and takes the latest finished one for
-`Latest`. The attempts counted are all finished attempts of the challenge, not only those started
-from this session, so the card agrees with the catalog. Bulk loading follows the catalog's fixed
+([3.6](06-completion-rules.md)) from every attempt of the challenge, as the catalog does, and takes
+the latest finished one for `Latest`. `Attempts` counts the finished attempts only. Both cover the
+challenge, not only the attempts started from this session, so the card agrees with the catalog. Bulk loading follows the catalog's fixed
 number of queries ([3.7](07-challenge-catalog-ui.md)). It is read-only and returns no scenario.
 
 Binding in `internal/interfaces/desktop/exercise.go`: `ListSessionExercises(sessionId)`, thin.

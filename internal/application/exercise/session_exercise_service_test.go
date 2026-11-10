@@ -102,12 +102,53 @@ func TestSessionExerciseService_ListSessionExercises_reportsTheLatestFinishedAtt
 	// When listing the session's exercises
 	cards, err := f.service.ListSessionExercises(context.Background(), "session-1")
 
-	// Then only finished attempts count, a past pass keeps it completed and the latest is the day-5 failure
+	// Then only finished attempts are counted, a past pass keeps it completed and the latest is the day-5 failure
 	require.NoError(t, err)
 	require.Len(t, cards, 1)
 	assert.Equal(t, domainexercise.ProgressCompleted, cards[0].Status)
 	assert.Equal(t, 3, cards[0].Attempts)
 	assert.Equal(t, &LatestResult{Outcome: domainexercise.ResultFailed, DiagramScore: 40, UnderstandingScore: 55}, cards[0].Latest)
+}
+
+func TestSessionExerciseService_ListSessionExercises_aRunningAttemptMakesTheStatusInProgressLikeTheCatalog(t *testing.T) {
+	// Given a challenge with one failed finished attempt and one running attempt
+	f := newSessionExerciseFixture(t)
+	f.expectLinks(cardLink("link-1", "challenge-1", "message-1"))
+	f.challenges.EXPECT().Get(context.Background(), "challenge-1").Return(cardChallenge("challenge-1", "Design a feed"), nil).Once()
+	f.records.EXPECT().ListByChallenges(context.Background(), []string{"challenge-1"}).Return(map[string][]domainexercise.AttemptRecord{
+		"challenge-1": {
+			finishedRecord("failed", 5, 1, 40, 55),
+			{Attempt: domainexercise.ChallengeAttempt{ID: "running", State: domainexercise.AttemptInProgress}},
+		},
+	}, nil).Once()
+
+	// When listing the session's exercises
+	cards, err := f.service.ListSessionExercises(context.Background(), "session-1")
+
+	// Then the status is In progress, while the count and the latest stay with the finished attempt
+	require.NoError(t, err)
+	assert.Equal(t, domainexercise.ProgressInProgress, cards[0].Status)
+	assert.Equal(t, 1, cards[0].Attempts)
+	assert.Equal(t, domainexercise.ResultFailed, cards[0].Latest.Outcome)
+}
+
+func TestSessionExerciseService_ListSessionExercises_anAttemptStillBeingEvaluatedMakesTheStatusInProgress(t *testing.T) {
+	// Given a challenge whose only attempt was submitted and is not finished
+	f := newSessionExerciseFixture(t)
+	f.expectLinks(cardLink("link-1", "challenge-1", "message-1"))
+	f.challenges.EXPECT().Get(context.Background(), "challenge-1").Return(cardChallenge("challenge-1", "Design a feed"), nil).Once()
+	submitted := domainexercise.AttemptRecord{Attempt: domainexercise.ChallengeAttempt{ID: "submitted", State: domainexercise.AttemptSubmitted}}
+	f.records.EXPECT().ListByChallenges(context.Background(), []string{"challenge-1"}).
+		Return(map[string][]domainexercise.AttemptRecord{"challenge-1": {submitted}}, nil).Once()
+
+	// When listing the session's exercises
+	cards, err := f.service.ListSessionExercises(context.Background(), "session-1")
+
+	// Then the catalog would say In progress, so the card does, with no finished attempt to report
+	require.NoError(t, err)
+	assert.Equal(t, domainexercise.ProgressInProgress, cards[0].Status)
+	assert.Equal(t, 0, cards[0].Attempts)
+	assert.Nil(t, cards[0].Latest)
 }
 
 func TestSessionExerciseService_ListSessionExercises_aFailedOnlyChallengeNeedsImprovement(t *testing.T) {
