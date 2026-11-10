@@ -126,6 +126,11 @@ func main() {
 		generationService, exercisesource.NewProfiles(profiles), transactor,
 	)
 
+	feedbackService := applicationexercise.NewFeedbackService(
+		sqlite.NewSessionExerciseRepository(db), challengeRepo, rubricRepo, sqlite.NewAttemptRepository(db),
+		sqlite.NewEvaluationRepository(db),
+	)
+
 	studyService := study.NewService(
 		studySessions, studyMessages, llmClient, profiles, folders, knowledgeService, transactor, contextResolver,
 		messageSources, knowledgeService, queryEnricher,
@@ -134,6 +139,7 @@ func main() {
 		study.WithSummaryWindow(summaryWindow),
 		study.WithSummaries(sqlite.NewConversationSummaryRepository(db)),
 		study.WithOfferGate(exercisesource.NewOfferGate(offerService)),
+		study.WithExerciseFeedback(exercisesource.NewFeedbackReader(feedbackService)),
 	)
 	folderService := folder.NewService(folders, studySessions, knowledgeService)
 

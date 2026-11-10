@@ -14,6 +14,17 @@ import (
 // 8,000-character retrieved-data budget plus the framing text.
 const knowledgeContextAllowanceTokens = 3000
 
+// fixedPromptTokens is the part of the prompt that does not depend on the
+// history: the system prompt, the room for the knowledge message and, when the
+// exam results are wired, the room for their block.
+func (s *Service) fixedPromptTokens(systemPrompt string) int {
+	fixed := domainstudy.EstimateTokens(systemPrompt) + knowledgeContextAllowanceTokens
+	if s.feedback != nil {
+		fixed += exerciseFeedbackAllowanceTokens
+	}
+	return fixed
+}
+
 // ConversationSummarizer folds study messages into the session's incremental
 // summary. Defined here (consumer side); implemented by *Summarizer.
 type ConversationSummarizer interface {
@@ -142,7 +153,7 @@ func (s *Service) compact(ctx context.Context, sessionID, pendingContent string,
 		Messages:            history,
 		ContextLength:       window,
 		SummaryWindowTokens: s.summaryWindowTokens(),
-		FixedTokens:         domainstudy.EstimateTokens(buildSystemPrompt(profile, session.Topic, session.Goal)) + knowledgeContextAllowanceTokens,
+		FixedTokens:         s.fixedPromptTokens(buildSystemPrompt(profile, session.Topic, session.Goal)),
 	}
 	if pendingContent != "" {
 		input.PendingTokens = domainstudy.EstimateTokens(pendingContent)

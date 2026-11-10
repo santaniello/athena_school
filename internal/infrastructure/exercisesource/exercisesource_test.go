@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	applicationexercise "github.com/santaniello/athena/internal/application/exercise"
+	applicationstudy "github.com/santaniello/athena/internal/application/study"
 	domainexercise "github.com/santaniello/athena/internal/domain/exercise"
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
@@ -221,4 +222,51 @@ func TestOfferGate_CreateOffer_passesFailuresThrough(t *testing.T) {
 
 	// Then the error comes back
 	assert.ErrorIs(t, err, domainexercise.ErrOfferPending)
+}
+
+type fakeFeedbackService struct {
+	items []applicationexercise.SessionFeedback
+	err   error
+}
+
+func (f fakeFeedbackService) SessionExerciseFeedback(context.Context, string) ([]applicationexercise.SessionFeedback, error) {
+	return f.items, f.err
+}
+
+func TestFeedbackReader_mapsTheLabFeedbackToTheChatValues(t *testing.T) {
+	// Given a passed and a failed attempt
+	reader := NewFeedbackReader(fakeFeedbackService{items: []applicationexercise.SessionFeedback{
+		{
+			ChallengeTitle: "Feed", Topic: "caching", Difficulty: domainexercise.DifficultyAdvanced,
+			Result: domainexercise.ResultFailed, DiagramScore: 70, UnderstandingScore: 80, PassScore: 85,
+			UnmetMandatory: []string{"Scalability"}, Gaps: []string{"g"}, Recommendations: []string{"r"},
+		},
+		{ChallengeTitle: "Chat", Result: domainexercise.ResultPassed},
+	}})
+
+	// When reading the feedback
+	got, err := reader.SessionExerciseFeedback(context.Background(), "session-1")
+
+	// Then the values are copied and only PASSED is passed
+	require.NoError(t, err)
+	assert.Equal(t, []applicationstudy.ExerciseFeedback{
+		{
+			ChallengeTitle: "Feed", Topic: "caching", Difficulty: "ADVANCED", Passed: false,
+			DiagramScore: 70, UnderstandingScore: 80, PassScore: 85,
+			UnmetMandatory: []string{"Scalability"}, Gaps: []string{"g"}, Recommendations: []string{"r"},
+		},
+		{ChallengeTitle: "Chat", Passed: true},
+	}, got)
+}
+
+func TestFeedbackReader_passesAFailureThrough(t *testing.T) {
+	// Given a feedback service that fails
+	boom := errors.New("boom")
+
+	// When reading the feedback
+	got, err := NewFeedbackReader(fakeFeedbackService{err: boom}).SessionExerciseFeedback(context.Background(), "session-1")
+
+	// Then the error is passed through and nothing is returned
+	require.ErrorIs(t, err, boom)
+	assert.Nil(t, got)
 }
