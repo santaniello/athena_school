@@ -17,8 +17,8 @@ editor in [3.10](10-diagram-workspace.md). This spec does not start attempts.
 │  12 challenges      3 completed      2 in progress                                  │
 │  [ Search ...        ]  [Status ▾]  [Difficulty ▾]  [Topic ▾]                       │
 │ ┌─────────────────────────────────────────────────────────────────────────────┐ │
-│ │ Cache and invalidation in a catalog                          Intermediate   │ │
-│ │ Caching · 45 min · 2 attempts                  Best 86 · Needs improvement  │ │
+│ │ Cache and invalidation in a catalog         Needs improvement  Intermediate │ │
+│ │ Caching · 45 min · 2 attempts                                                │ │
 │ │                                                              [ Start again ]│ │
 │ ├─────────────────────────────────────────────────────────────────────────────┤ │
 │ │ Rate limiter for a public API                                Beginner       │ │
@@ -37,7 +37,10 @@ A structure reference only: colors, components and spacing follow the existing f
 2. **The catalog is the list of choices.** "Choose a challenge" is the list itself: there is no
    separate picker. The two entry actions are picking a row and **Generate challenge with AI**.
 3. **A row shows only what does not give away the exam:** title, topic, difficulty, time limit,
-   status, attempt count and the best diagram score. Never the scenario, requirements or rubric.
+   status and attempt count. Never the scenario, requirements or rubric. The best diagram score
+   is no longer shown on the row (it stays in `CatalogItem` and in the attempt history). The
+   difficulty is a tag colored by level (green, amber, red) shown after the status, and only
+   `Needs improvement` is bold. **History** is an outline button like **Start again**.
 4. **Status labels.** `Not started`, `In progress`, `Needs improvement`, `Completed`, from
    [3.6](06-completion-rules.md). There is no "awaiting defense" status: the evaluation and the
    tutor's questions run in the same sitting as the exam ([3.10](10-diagram-workspace.md)), and
@@ -138,7 +141,7 @@ its own.
   visible and highlighted; cancel stops the call; a failure keeps the dialog open with a retry.
 - With no study sessions the dialog says to study first and offers no Generate button.
 - A row never shows the scenario, requirements or rubric.
-- Status, attempt count and best score on each row match the backend.
+- Status and attempt count on each row match the backend.
 - The counts at the top match the list; search and the three filters combine with AND, and
   searching by words that appear only in the scenario still finds the challenge.
 - **Start** is disabled with its tooltip; nothing starts an attempt from this screen.
