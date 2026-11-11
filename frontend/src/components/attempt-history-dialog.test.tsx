@@ -75,6 +75,16 @@ describe('AttemptHistoryDialog', () => {
     expect(screen.getByText('Failed')).toHaveClass('bg-muted')
   })
 
+  it('widens past the default dialog width so the result fits', async () => {
+    vi.mocked(listAttemptHistory).mockResolvedValue(items)
+
+    render(<AttemptHistoryDialog challenge={challenge} onClose={vi.fn()} />)
+    await screen.findAllByRole('listitem')
+
+    // An unprefixed max-w loses to the base sm:max-w-sm, so the override needs the sm: prefix.
+    expect(screen.getByRole('dialog')).toHaveClass('sm:max-w-5xl')
+  })
+
   it('offers no action that changes or deletes an attempt', async () => {
     vi.mocked(listAttemptHistory).mockResolvedValue(items)
 
