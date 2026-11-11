@@ -1,9 +1,8 @@
 import { Badge } from '@/components/ui/badge'
+import { DifficultyBadge } from '@/components/difficulty-badge'
 import { Button } from '@/components/ui/button'
 import {
-  DIFFICULTY_LABELS,
   STATUS_LABELS,
-  type ChallengeDifficulty,
   type ChallengeStatus,
   type SessionExerciseCard as Card,
 } from '@/lib/exercise'
@@ -19,7 +18,6 @@ interface SessionExerciseCardProps {
 // its history. It never shows the scenario, requirements or rubric. See
 // specs/phases/phase-03-architecture-lab/17-session-exercises-ui.md.
 function SessionExerciseCard({ card, onStart, onHistory }: SessionExerciseCardProps) {
-  const difficulty = DIFFICULTY_LABELS[card.difficulty as ChallengeDifficulty] ?? card.difficulty
   const status = STATUS_LABELS[card.status as ChallengeStatus] ?? card.status
   const { latest } = card
 
@@ -27,7 +25,7 @@ function SessionExerciseCard({ card, onStart, onHistory }: SessionExerciseCardPr
     <div className="flex flex-col items-start gap-3 rounded-lg border bg-card p-3 text-sm">
       <p className="font-medium">{card.title}</p>
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="muted">{difficulty}</Badge>
+        <DifficultyBadge difficulty={card.difficulty} />
         <Badge variant="muted">{card.timeLimitMinutes} min</Badge>
         <Badge variant="default">{status}</Badge>
       </div>

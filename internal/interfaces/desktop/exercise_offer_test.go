@@ -15,13 +15,14 @@ import (
 )
 
 type fakeOffers struct {
-	offer   domainexercise.Offer
-	found   bool
-	view    applicationexercise.SessionExerciseView
-	err     error
-	pending string
-	accept  string
-	decline string
+	offer            domainexercise.Offer
+	found            bool
+	view             applicationexercise.SessionExerciseView
+	err              error
+	pending          string
+	accept           string
+	acceptDifficulty domainexercise.Difficulty
+	decline          string
 }
 
 func (f *fakeOffers) GetPending(_ context.Context, sessionID string) (domainexercise.Offer, bool, error) {
@@ -29,8 +30,9 @@ func (f *fakeOffers) GetPending(_ context.Context, sessionID string) (domainexer
 	return f.offer, f.found, f.err
 }
 
-func (f *fakeOffers) Accept(_ context.Context, offerID string) (applicationexercise.SessionExerciseView, error) {
+func (f *fakeOffers) Accept(_ context.Context, offerID string, difficulty domainexercise.Difficulty) (applicationexercise.SessionExerciseView, error) {
 	f.accept = offerID
+	f.acceptDifficulty = difficulty
 	return f.view, f.err
 }
 
@@ -97,11 +99,12 @@ func TestApp_AcceptOffer_returnsTheLinkedChallenge(t *testing.T) {
 	}}
 
 	// When the frontend accepts it
-	got, err := newOfferApp(offers).AcceptOffer(" offer-1 ")
+	got, err := newOfferApp(offers).AcceptOffer(" offer-1 ", " BEGINNER ")
 
 	// Then the challenge comes back
 	require.NoError(t, err)
 	assert.Equal(t, "offer-1", offers.accept)
+	assert.Equal(t, domainexercise.DifficultyBeginner, offers.acceptDifficulty)
 	assert.Equal(t, SessionExerciseDTO{ChallengeID: "challenge-1", Title: "Design a cache", Topic: "caching", Difficulty: "ADVANCED", TimeLimitMinutes: 45}, got)
 }
 
@@ -119,7 +122,7 @@ func TestApp_AcceptOffer_mapsErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Given a failing accept
 			// When the frontend accepts
-			_, err := newOfferApp(&fakeOffers{err: tt.err}).AcceptOffer("offer-1")
+			_, err := newOfferApp(&fakeOffers{err: tt.err}).AcceptOffer("offer-1", "ADVANCED")
 
 			// Then the code is stable
 			var coded *ExerciseError
@@ -132,12 +135,38 @@ func TestApp_AcceptOffer_mapsErrors(t *testing.T) {
 func TestApp_AcceptOffer_rejectsABlankId(t *testing.T) {
 	// Given a blank offer id
 	// When the frontend accepts
-	_, err := newOfferApp(&fakeOffers{}).AcceptOffer(" ")
+	_, err := newOfferApp(&fakeOffers{}).AcceptOffer(" ", "ADVANCED")
 
 	// Then it is invalid input
 	var coded *ExerciseError
 	require.ErrorAs(t, err, &coded)
 	assert.Equal(t, exerciseCodeInvalidInput, coded.Code)
+}
+
+func TestApp_AcceptOffer_withoutADifficultyLeavesTheChoiceToTheProfile(t *testing.T) {
+	// Given an offer accepted with no difficulty
+	offers := &fakeOffers{}
+
+	// When the frontend accepts
+	_, err := newOfferApp(offers).AcceptOffer("offer-1", " ")
+
+	// Then the service gets an empty difficulty
+	require.NoError(t, err)
+	assert.Empty(t, offers.acceptDifficulty)
+}
+
+func TestApp_AcceptOffer_rejectsAnUnknownDifficulty(t *testing.T) {
+	// Given an unknown difficulty
+	offers := &fakeOffers{}
+
+	// When the frontend accepts
+	_, err := newOfferApp(offers).AcceptOffer("offer-1", "EXPERT")
+
+	// Then it is invalid input and the offer is untouched
+	var coded *ExerciseError
+	require.ErrorAs(t, err, &coded)
+	assert.Equal(t, exerciseCodeInvalidInput, coded.Code)
+	assert.Empty(t, offers.accept)
 }
 
 func TestApp_DeclineOffer_declinesIt(t *testing.T) {
@@ -195,7 +224,7 @@ func TestApp_AcceptOffer_isRefusedWhileAChallengeIsBeingGenerated(t *testing.T) 
 	<-generator.started
 
 	// When the chat accepts an offer
-	_, err := app.AcceptOffer("offer-1")
+	_, err := app.AcceptOffer("offer-1", "ADVANCED")
 
 	// Then it is refused without touching the offer, and the generation is undisturbed
 	var coded *ExerciseError

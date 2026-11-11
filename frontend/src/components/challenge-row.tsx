@@ -1,12 +1,6 @@
-import { Badge } from '@/components/ui/badge'
+import { DifficultyBadge } from '@/components/difficulty-badge'
 import { Button } from '@/components/ui/button'
-import {
-  DIFFICULTY_LABELS,
-  STATUS_LABELS,
-  type CatalogItem,
-  type ChallengeDifficulty,
-  type ChallengeStatus,
-} from '@/lib/exercise'
+import { STATUS_LABELS, type CatalogItem, type ChallengeStatus } from '@/lib/exercise'
 import { cn } from '@/lib/utils'
 
 interface ChallengeRowProps {
@@ -29,33 +23,38 @@ function attemptsText(attempts: number): string {
 // specs/phases/phase-03-architecture-lab/07-challenge-catalog-ui.md and
 // 10-diagram-workspace.md.
 function ChallengeRow({ item, highlighted, onStart, onHistory }: ChallengeRowProps) {
-  const difficulty = DIFFICULTY_LABELS[item.difficulty as ChallengeDifficulty] ?? item.difficulty
   const status = STATUS_LABELS[item.status as ChallengeStatus] ?? item.status
-  const progress = item.bestDiagramScore > 0 ? `Best ${item.bestDiagramScore} · ${status}` : status
 
   return (
     <li
       aria-current={highlighted ? 'true' : undefined}
       className={cn(
-        'flex items-center justify-between gap-4 px-4 py-3',
+        'flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3',
         highlighted && 'bg-primary/10 ring-1 ring-primary/40',
       )}
     >
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1 basis-48">
         <p className="truncate text-sm font-semibold text-foreground">{item.title}</p>
         <p className="text-sm text-muted-foreground">
           {item.topic} · {item.timeLimitMinutes} min · {attemptsText(item.attempts)}
         </p>
       </div>
-      <div className="flex shrink-0 items-center gap-3">
-        <div className="flex flex-col items-end gap-1">
-          <Badge variant="muted">{difficulty}</Badge>
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        <div className="flex items-center gap-3">
           {item.status !== 'NOT_STARTED' && (
-            <span className="text-sm text-muted-foreground">{progress}</span>
+            <span
+              className={cn(
+                'text-sm text-muted-foreground',
+                item.status === 'NEEDS_IMPROVEMENT' && 'font-semibold',
+              )}
+            >
+              {status}
+            </span>
           )}
+          <DifficultyBadge difficulty={item.difficulty} />
         </div>
         {item.attempts > 0 && (
-          <Button type="button" variant="ghost" size="sm" onClick={() => onHistory(item)}>
+          <Button type="button" variant="outline" size="sm" onClick={() => onHistory(item)}>
             History
           </Button>
         )}

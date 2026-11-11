@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 import { AttemptResultView } from '@/components/lab/attempt-result-view'
 import { formatSessionDate, listAttemptHistory, type AttemptHistoryItem } from '@/lib/exercise'
 
@@ -54,7 +55,9 @@ function HistoryContent({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+      <DialogContent
+        className={cn('max-h-[90vh] overflow-y-auto', selected ? 'sm:max-w-5xl' : 'sm:max-w-md')}
+      >
         {selected ? (
           <>
             <DialogHeader className="sr-only">

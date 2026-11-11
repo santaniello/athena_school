@@ -1,11 +1,6 @@
-import { Badge } from '@/components/ui/badge'
+import { DifficultyBadge } from '@/components/difficulty-badge'
 import { formatCountdown } from '@/lib/lab'
-import {
-  DIFFICULTY_LABELS,
-  formatSessionDate,
-  type AttemptResult,
-  type ChallengeDifficulty,
-} from '@/lib/exercise'
+import { formatSessionDate, type AttemptResult } from '@/lib/exercise'
 
 interface ResultHeaderProps {
   result: AttemptResult
@@ -20,14 +15,12 @@ const SUBMIT_REASON_LABELS: Record<AttemptResult['submitReason'], string> = {
 // ended and how many hints it used.
 export function ResultHeader({ result }: ResultHeaderProps) {
   const { challenge } = result
-  const difficulty =
-    DIFFICULTY_LABELS[challenge.difficulty as ChallengeDifficulty] ?? challenge.difficulty
   return (
     <header className="flex flex-col gap-1">
       <h2 className="text-2xl font-semibold text-foreground">{challenge.title}</h2>
       <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
         <span>{challenge.topic}</span>
-        <Badge variant="muted">{difficulty}</Badge>
+        <DifficultyBadge difficulty={challenge.difficulty} />
       </p>
       <p className="text-sm text-muted-foreground">
         {formatSessionDate(result.finishedAt)} · Time spent{' '}

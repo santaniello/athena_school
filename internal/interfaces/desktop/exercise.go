@@ -101,7 +101,7 @@ func WithHistoryService(history historyReader) Option {
 // exerciseOffers is the use case behind the exercise offer bindings (spec 3.14).
 type exerciseOffers interface {
 	GetPending(ctx context.Context, sessionID string) (domainexercise.Offer, bool, error)
-	Accept(ctx context.Context, offerID string) (applicationexercise.SessionExerciseView, error)
+	Accept(ctx context.Context, offerID string, difficulty domainexercise.Difficulty) (applicationexercise.SessionExerciseView, error)
 	Decline(ctx context.Context, offerID string) error
 }
 
@@ -1044,19 +1044,25 @@ func (a *App) GetPendingOffer(sessionID string) (*ExerciseOfferDTO, error) {
 	return &ExerciseOfferDTO{ID: offer.ID, SessionID: offer.SessionID, MessageID: offer.MessageID}, nil
 }
 
-// AcceptOffer links a challenge to the offer's session, generating one when
-// the session has none, and returns it. On failure the offer stays pending.
-func (a *App) AcceptOffer(offerID string) (SessionExerciseDTO, error) {
+// AcceptOffer links a challenge of the chosen difficulty (BEGINNER,
+// INTERMEDIATE or ADVANCED; empty uses the profile's) to the offer's session,
+// generating one when the session has none of that difficulty, and returns it.
+// On failure the offer stays pending.
+func (a *App) AcceptOffer(offerID string, difficulty string) (SessionExerciseDTO, error) {
 	offerID = strings.TrimSpace(offerID)
 	if offerID == "" {
 		return SessionExerciseDTO{}, invalidInput("offer id is required")
+	}
+	wanted, err := parseOfferDifficulty(difficulty)
+	if err != nil {
+		return SessionExerciseDTO{}, err
 	}
 	ctx, release, ok := a.beginGeneration()
 	if !ok {
 		return SessionExerciseDTO{}, &ExerciseError{Code: exerciseCodeGenerationInProgress, Message: "a challenge is already being generated"}
 	}
 	defer release()
-	view, err := a.offers.Accept(ctx, offerID)
+	view, err := a.offers.Accept(ctx, offerID, wanted)
 	if err != nil {
 		return SessionExerciseDTO{}, toExerciseError(err)
 	}
@@ -1064,6 +1070,17 @@ func (a *App) AcceptOffer(offerID string) (SessionExerciseDTO, error) {
 		ChallengeID: view.ChallengeID, Title: view.Title, Topic: view.Topic, Difficulty: string(view.Difficulty),
 		TimeLimitMinutes: view.TimeLimitMinutes,
 	}, nil
+}
+
+// parseOfferDifficulty reads the difficulty chosen on an offer; blank means no
+// choice.
+func parseOfferDifficulty(value string) (domainexercise.Difficulty, error) {
+	switch difficulty := domainexercise.Difficulty(strings.TrimSpace(value)); difficulty {
+	case "", domainexercise.DifficultyBeginner, domainexercise.DifficultyIntermediate, domainexercise.DifficultyAdvanced:
+		return difficulty, nil
+	default:
+		return "", invalidInput("difficulty must be BEGINNER, INTERMEDIATE or ADVANCED")
+	}
 }
 
 // DeclineOffer removes the offer. Nothing is created.
