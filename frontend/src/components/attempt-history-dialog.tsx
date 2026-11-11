@@ -55,7 +55,9 @@ function HistoryContent({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className={cn('max-h-[90vh] overflow-y-auto', selected && 'sm:max-w-5xl')}>
+      <DialogContent
+        className={cn('max-h-[90vh] overflow-y-auto', selected ? 'sm:max-w-5xl' : 'sm:max-w-md')}
+      >
         {selected ? (
           <>
             <DialogHeader className="sr-only">
