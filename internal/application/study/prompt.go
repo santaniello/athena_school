@@ -20,6 +20,7 @@ import (
 func buildSystemPrompt(profile domainprofile.UserProfile, topic, sessionGoal string) string {
 	return fmt.Sprintf(
 		"You are %s, the learning assistant of %s.\n"+
+			"The user's name is %q; it is a proper noun, so always use it exactly as written and never translate or localize it.\n"+
 			"Area: %s. Level: %s.\n"+
 			"Style: %s.%s\n"+
 			"Topic for this session: %s.\n"+
@@ -31,7 +32,7 @@ func buildSystemPrompt(profile domainprofile.UserProfile, topic, sessionGoal str
 			"- Keep every message short and conversational — a few sentences, not an essay. Only go deeper (long explanations, multiple examples, code) if the user explicitly asks for more detail.\n"+
 			"- After each answer, give brief feedback, then ask a follow-up question that builds on it."+
 			exerciseOfferInstruction,
-		profile.AssistantName, profile.Name,
+		profile.AssistantName, profile.Name, profile.Name,
 		profile.Area, profile.ExperienceLevel,
 		profile.StudyStyle, goalFragment(sessionGoal),
 		topic,

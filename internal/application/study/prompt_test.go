@@ -1,6 +1,7 @@
 package study
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -124,4 +125,26 @@ func TestBuildSystemPrompt_omitsLanguageInstructionWhenUnset(t *testing.T) {
 
 	// Then it adds no language instruction, preserving prior behavior
 	assert.NotContains(t, prompt, "Respond in")
+}
+
+func TestBuildSystemPrompt_instructsToNeverTranslateTheUserName(t *testing.T) {
+	// Given any user name or nickname, including ones that are common words
+	// in another language (the nickname "Santa" was rendered as "Papai Noel")
+	for _, name := range []string{"Santa", "Rei", "Gato", "Ana"} {
+		t.Run(name, func(t *testing.T) {
+			profile := domainprofile.UserProfile{
+				Name:              name,
+				AssistantName:     "Atena",
+				AssistantLanguage: domainprofile.AssistantLanguagePortuguese,
+			}
+
+			// When building the system prompt
+			prompt := buildSystemPrompt(profile, "Cache", "")
+
+			// Then it tells the model the name is a proper noun to be used
+			// verbatim, never translated
+			assert.Contains(t, prompt, fmt.Sprintf("The user's name is %q", name))
+			assert.Contains(t, prompt, "never translate")
+		})
+	}
 }
