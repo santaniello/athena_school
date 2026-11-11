@@ -159,12 +159,19 @@ func (s *OfferService) existingLink(ctx context.Context, offer domainexercise.Of
 // challengeFor reuses the session's latest challenge when no message of the
 // session has taken it yet (for example one generated in the Lab) and it has
 // the wanted difficulty, else generates a new one with no transaction open.
-// An empty difficulty accepts any reused challenge and generates at the
-// profile's difficulty.
+// An empty difficulty means the profile's, resolved before anything else so
+// that reuse and generation follow the same rule.
 func (s *OfferService) challengeFor(ctx context.Context, sessionID string, difficulty domainexercise.Difficulty) (domainexercise.Challenge, error) {
+	if difficulty == "" {
+		profile, err := s.profiles.ReadProfile(ctx)
+		if err != nil {
+			return domainexercise.Challenge{}, fmt.Errorf("exercise: reading profile: %w", err)
+		}
+		difficulty = difficultyFor(profile.ExperienceLevel)
+	}
 	challenge, err := s.challenges.FindLatestBySourceSession(ctx, sessionID)
 	switch {
-	case err == nil && (difficulty == "" || challenge.Difficulty == difficulty):
+	case err == nil && challenge.Difficulty == difficulty:
 		_, linkErr := s.links.GetBySessionAndChallenge(ctx, sessionID, challenge.ID)
 		if errors.Is(linkErr, domainexercise.ErrSessionExerciseNotFound) {
 			return challenge, nil
@@ -174,13 +181,6 @@ func (s *OfferService) challengeFor(ctx context.Context, sessionID string, diffi
 		}
 	case err != nil && !errors.Is(err, domainexercise.ErrChallengeNotFound):
 		return domainexercise.Challenge{}, fmt.Errorf("exercise: finding challenge: %w", err)
-	}
-	if difficulty == "" {
-		profile, err := s.profiles.ReadProfile(ctx)
-		if err != nil {
-			return domainexercise.Challenge{}, fmt.Errorf("exercise: reading profile: %w", err)
-		}
-		difficulty = difficultyFor(profile.ExperienceLevel)
 	}
 	challenge, err = s.generator.GenerateChallenge(ctx, sessionID, difficulty)
 	if err != nil {
