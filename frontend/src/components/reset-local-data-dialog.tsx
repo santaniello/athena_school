@@ -26,9 +26,9 @@ function ResetLocalDataDialog({ open, pending, onCancel, onConfirm }: ResetLocal
         <AlertDialogHeader>
           <AlertDialogTitle>Reset local data?</AlertDialogTitle>
           <AlertDialogDescription>
-            This permanently deletes every study session, every folder you created, and your entire
-            knowledge base. This action cannot be undone. Your OpenRouter key and profile are not
-            affected.
+            This permanently deletes every study session, every folder you created, your entire
+            knowledge base and every Architecture Lab challenge with its attempts and results. This
+            action cannot be undone. Your OpenRouter key and profile are not affected.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

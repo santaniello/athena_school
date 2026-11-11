@@ -12,8 +12,11 @@ the account-deletion flow removed in
 
 Deletes: every study session and message, every folder except the seeded
 `default` one, and every knowledge-domain row (items, chunks, evidence,
-reconciliation proposals, ingested-file dedup records), plus the
-in-memory vector index built from them.
+reconciliation proposals, ingested-file dedup records), every
+Architecture Lab row (challenges, rubrics, attempts, submissions,
+evaluations, hints, defense turns, session links and pending offers),
+plus the in-memory vector index built from them. The Lab tables do not
+cascade, so the reset deletes them explicitly, children first.
 
 Does **not** delete: `~/.athena/config.yaml` (OpenRouter key, extraction
 limit), `~/.athena/profile.json` (onboarding profile), or `usage` (LLM
