@@ -102,12 +102,14 @@ func (s *OfferService) Decline(ctx context.Context, offerID string) error {
 	return nil
 }
 
-// Accept links a challenge to the offer's session and deletes the offer. It
-// reuses the session's latest challenge when there is one, else generates one
-// at the profile's difficulty. It serializes per session, so two concurrent
-// accepts never both generate: the second one finds the offer resolved and
-// returns the existing link. A failure leaves the offer pending.
-func (s *OfferService) Accept(ctx context.Context, offerID string) (SessionExerciseView, error) {
+// Accept links a challenge to the offer's session and deletes the offer. The
+// difficulty is the user's choice on the offer; empty means no choice and the
+// profile's difficulty is used. It reuses the session's latest challenge when
+// no message has taken it yet and it has the chosen difficulty, else generates
+// one. It serializes per session, so two concurrent accepts never both
+// generate: the second one finds the offer resolved and returns the existing
+// link. A failure leaves the offer pending.
+func (s *OfferService) Accept(ctx context.Context, offerID string, difficulty domainexercise.Difficulty) (SessionExerciseView, error) {
 	first, err := s.offers.Get(ctx, offerID)
 	if err != nil {
 		return SessionExerciseView{}, fmt.Errorf("exercise: reading offer: %w", err)
@@ -123,7 +125,7 @@ func (s *OfferService) Accept(ctx context.Context, offerID string) (SessionExerc
 		return SessionExerciseView{}, fmt.Errorf("exercise: reading offer: %w", err)
 	}
 
-	challenge, err := s.challengeFor(ctx, offer.SessionID)
+	challenge, err := s.challengeFor(ctx, offer.SessionID, difficulty)
 	if err != nil {
 		return SessionExerciseView{}, err
 	}
@@ -155,12 +157,14 @@ func (s *OfferService) existingLink(ctx context.Context, offer domainexercise.Of
 }
 
 // challengeFor reuses the session's latest challenge when no message of the
-// session has taken it yet (for example one generated in the Lab), else
-// generates a new one with no transaction open.
-func (s *OfferService) challengeFor(ctx context.Context, sessionID string) (domainexercise.Challenge, error) {
+// session has taken it yet (for example one generated in the Lab) and it has
+// the wanted difficulty, else generates a new one with no transaction open.
+// An empty difficulty accepts any reused challenge and generates at the
+// profile's difficulty.
+func (s *OfferService) challengeFor(ctx context.Context, sessionID string, difficulty domainexercise.Difficulty) (domainexercise.Challenge, error) {
 	challenge, err := s.challenges.FindLatestBySourceSession(ctx, sessionID)
 	switch {
-	case err == nil:
+	case err == nil && (difficulty == "" || challenge.Difficulty == difficulty):
 		_, linkErr := s.links.GetBySessionAndChallenge(ctx, sessionID, challenge.ID)
 		if errors.Is(linkErr, domainexercise.ErrSessionExerciseNotFound) {
 			return challenge, nil
@@ -168,14 +172,17 @@ func (s *OfferService) challengeFor(ctx context.Context, sessionID string) (doma
 		if linkErr != nil {
 			return domainexercise.Challenge{}, fmt.Errorf("exercise: finding link: %w", linkErr)
 		}
-	case !errors.Is(err, domainexercise.ErrChallengeNotFound):
+	case err != nil && !errors.Is(err, domainexercise.ErrChallengeNotFound):
 		return domainexercise.Challenge{}, fmt.Errorf("exercise: finding challenge: %w", err)
 	}
-	profile, err := s.profiles.ReadProfile(ctx)
-	if err != nil {
-		return domainexercise.Challenge{}, fmt.Errorf("exercise: reading profile: %w", err)
+	if difficulty == "" {
+		profile, err := s.profiles.ReadProfile(ctx)
+		if err != nil {
+			return domainexercise.Challenge{}, fmt.Errorf("exercise: reading profile: %w", err)
+		}
+		difficulty = difficultyFor(profile.ExperienceLevel)
 	}
-	challenge, err = s.generator.GenerateChallenge(ctx, sessionID, difficultyFor(profile.ExperienceLevel))
+	challenge, err = s.generator.GenerateChallenge(ctx, sessionID, difficulty)
 	if err != nil {
 		return domainexercise.Challenge{}, fmt.Errorf("exercise: generating challenge for offer: %w", err)
 	}

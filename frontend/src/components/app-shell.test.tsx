@@ -129,7 +129,7 @@ vi.mock('@/lib/exercise', async (importOriginal) => {
     listChallengeTopics: vi.fn().mockResolvedValue(['rate limiting']),
     getPendingOffer: vi.fn().mockResolvedValue(null),
     listSessionExercises: vi.fn().mockResolvedValue([]),
-    getAssistantLanguage: vi.fn().mockResolvedValue('en'),
+    getOfferProfile: vi.fn().mockResolvedValue({ language: 'en', difficulty: 'INTERMEDIATE' }),
     acceptOffer: vi.fn(),
     listSessionsForGeneration: vi
       .fn()

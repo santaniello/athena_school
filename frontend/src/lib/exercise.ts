@@ -576,8 +576,8 @@ export async function getPendingOffer(sessionId: string): Promise<ExerciseOffer 
   return { id: offer.id, sessionId: offer.sessionId, messageId: offer.messageId }
 }
 
-export async function acceptOffer(offerId: string): Promise<void> {
-  await AcceptOffer(offerId)
+export async function acceptOffer(offerId: string, difficulty: ChallengeDifficulty): Promise<void> {
+  await AcceptOffer(offerId, difficulty)
 }
 
 export function declineOffer(offerId: string): Promise<void> {
@@ -586,6 +586,8 @@ export function declineOffer(offerId: string): Promise<void> {
 
 export interface OfferLabels {
   title: string
+  difficulty: string
+  levels: Record<ChallengeDifficulty, string>
   accept: string
   decline: string
   preparing: string
@@ -597,6 +599,8 @@ export function offerLabels(language: string | undefined): OfferLabels {
   if (language === 'pt') {
     return {
       title: 'Praticar com um exercício de arquitetura',
+      difficulty: 'Dificuldade',
+      levels: { BEGINNER: 'Iniciante', INTERMEDIATE: 'Intermediário', ADVANCED: 'Avançado' },
       accept: 'Aceitar',
       decline: 'Recusar',
       preparing: 'Preparando seu exercício…',
@@ -604,17 +608,31 @@ export function offerLabels(language: string | undefined): OfferLabels {
   }
   return {
     title: 'Practice with an architecture exercise',
+    difficulty: 'Difficulty',
+    levels: DIFFICULTY_LABELS,
     accept: 'Accept',
     decline: 'Decline',
     preparing: 'Preparing your exercise…',
   }
 }
 
-// The profile's assistant language ('pt' or 'en'); English when it cannot be read.
-export async function getAssistantLanguage(): Promise<string> {
+export interface OfferProfile {
+  // The assistant language ('pt' or 'en').
+  language: string
+  // The difficulty the offer starts with, from the profile's experience level.
+  difficulty: ChallengeDifficulty
+}
+
+// What the exercise offer takes from the profile: the assistant language and
+// the preselected difficulty. English and Intermediate when it cannot be read.
+export async function getOfferProfile(): Promise<OfferProfile> {
   try {
-    return (await GetProfile()).assistantLanguage || 'en'
+    const profile = await GetProfile()
+    return {
+      language: profile.assistantLanguage || 'en',
+      difficulty: difficultyForExperience(profile.experienceLevel),
+    }
   } catch {
-    return 'en'
+    return { language: 'en', difficulty: 'INTERMEDIATE' }
   }
 }

@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event'
 import {
   acceptOffer,
   declineOffer,
-  getAssistantLanguage,
+  getOfferProfile,
   listAttemptHistory,
   getPendingOffer,
   listSessionExercises,
@@ -41,7 +41,7 @@ vi.mock('@/lib/exercise', async (importOriginal) => ({
   getPendingOffer: vi.fn(),
   listAttemptHistory: vi.fn(),
   listSessionExercises: vi.fn(),
-  getAssistantLanguage: vi.fn(),
+  getOfferProfile: vi.fn(),
   acceptOffer: vi.fn(),
   declineOffer: vi.fn(),
 }))
@@ -162,7 +162,7 @@ describe('StudyChatScreen — exercise offer', () => {
       coversUntilMessageId: '',
     } as Awaited<ReturnType<typeof getStudySessionSummary>>)
     vi.mocked(getStudySessionUsage).mockRejectedValue(new Error('no usage'))
-    vi.mocked(getAssistantLanguage).mockResolvedValue('en')
+    vi.mocked(getOfferProfile).mockResolvedValue({ language: 'en', difficulty: 'INTERMEDIATE' })
     vi.mocked(getPendingOffer).mockResolvedValue(null)
     vi.mocked(listSessionExercises).mockResolvedValue([])
   })
@@ -191,7 +191,7 @@ describe('StudyChatScreen — exercise offer', () => {
   it('uses the assistant language for the buttons', async () => {
     subscribe()
     vi.mocked(getPendingOffer).mockResolvedValue(OFFER)
-    vi.mocked(getAssistantLanguage).mockResolvedValue('pt')
+    vi.mocked(getOfferProfile).mockResolvedValue({ language: 'pt', difficulty: 'INTERMEDIATE' })
 
     await renderResumed()
 

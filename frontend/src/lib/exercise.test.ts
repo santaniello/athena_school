@@ -30,7 +30,7 @@ import {
   acceptOffer,
   toExamToStart,
   declineOffer,
-  getAssistantLanguage,
+  getOfferProfile,
   getPendingOffer,
   listSessionExercises,
   offerLabels,
@@ -802,9 +802,9 @@ describe('exercise offer', () => {
       desktop.SessionExerciseDTO.createFrom({ challengeId: 'c1' }),
     )
 
-    await expect(acceptOffer('o1')).resolves.toBeUndefined()
+    await expect(acceptOffer('o1', 'ADVANCED')).resolves.toBeUndefined()
 
-    expect(AcceptOffer).toHaveBeenCalledWith('o1')
+    expect(AcceptOffer).toHaveBeenCalledWith('o1', 'ADVANCED')
   })
 
   it('declines an offer', async () => {
@@ -823,14 +823,16 @@ describe('exercise offer', () => {
     expect(offerLabels('pt').preparing).not.toBe(offerLabels('en').preparing)
   })
 
-  it('reads the assistant language from the profile, English when it cannot', async () => {
+  it('reads the language and the starting difficulty from the profile', async () => {
     vi.mocked(GetProfile).mockResolvedValueOnce(
-      desktop.UserProfileInput.createFrom({ assistantLanguage: 'pt' }),
+      desktop.UserProfileInput.createFrom({ assistantLanguage: 'pt', experienceLevel: 'beginner' }),
     )
-    expect(await getAssistantLanguage()).toBe('pt')
+    expect(await getOfferProfile()).toEqual({ language: 'pt', difficulty: 'BEGINNER' })
+  })
 
+  it('falls back to English and Intermediate when the profile cannot be read', async () => {
     vi.mocked(GetProfile).mockRejectedValueOnce(new Error('boom'))
-    expect(await getAssistantLanguage()).toBe('en')
+    expect(await getOfferProfile()).toEqual({ language: 'en', difficulty: 'INTERMEDIATE' })
   })
 
   it('explains a vanished offer and keeps the pending message', () => {

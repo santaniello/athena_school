@@ -33,11 +33,12 @@ import { useMessageHistory } from '@/hooks/use-message-history'
 import {
   OFFER_PENDING_MESSAGE,
   toExamToStart,
-  getAssistantLanguage,
+  getOfferProfile,
   getPendingOffer,
   listSessionExercises,
   type ExamToStart,
   type ExerciseOffer,
+  type OfferProfile,
   type SessionExerciseCard as ExerciseCard,
 } from '@/lib/exercise'
 import { FIND_IGNORE_PROPS } from '@/lib/find-in-page'
@@ -124,16 +125,16 @@ async function fetchSummaryCursor(sessionId: string): Promise<string | null> {
   }
 }
 
-// The session's pending exercise offer with the language its card speaks, or
-// null when there is none or it could not be read — the offer is an extra on
-// top of the chat and must never break it.
+// The session's pending exercise offer with the language its card speaks and
+// the difficulty it starts with, or null when there is none or it could not be
+// read — the offer is an extra on top of the chat and must never break it.
 async function fetchPendingOffer(
   sessionId: string,
-): Promise<{ offer: ExerciseOffer; language: string } | null> {
+): Promise<{ offer: ExerciseOffer; profile: OfferProfile } | null> {
   try {
     const offer = await getPendingOffer(sessionId)
     if (!offer) return null
-    return { offer, language: await getAssistantLanguage() }
+    return { offer, profile: await getOfferProfile() }
   } catch {
     return null
   }
@@ -327,7 +328,10 @@ function StudyChatScreen({
   // accepts or declines) and, once accepted, the exercise it linked. See
   // specs/phases/phase-03-architecture-lab/14-ai-challenge-generation.md.
   const [offer, setOffer] = useState<ExerciseOffer | null>(null)
-  const [offerLanguage, setOfferLanguage] = useState('en')
+  const [offerProfile, setOfferProfile] = useState<OfferProfile>({
+    language: 'en',
+    difficulty: 'INTERMEDIATE',
+  })
   // The exercises accepted in this session, shown under the message that offered
   // them (spec 3.17). They live in the backend, so they are loaded on open.
   const [exerciseCards, setExerciseCards] = useState<ExerciseCard[]>([])
@@ -471,7 +475,7 @@ function StudyChatScreen({
     void fetchPendingOffer(sessionId).then((pending) => {
       if (!pending || currentSessionIdRef.current !== sessionId) return
       setOffer(pending.offer)
-      setOfferLanguage(pending.language)
+      setOfferProfile(pending.profile)
       adoptMessageId(pending.offer.messageId)
     })
   }, [sessionId, adoptMessageId])
@@ -927,7 +931,8 @@ function StudyChatScreen({
             {offer?.messageId === message.id && !isStreaming && (
               <ExerciseOfferCard
                 offerId={offer.id}
-                language={offerLanguage}
+                language={offerProfile.language}
+                defaultDifficulty={offerProfile.difficulty}
                 onAccepted={() => {
                   setOffer(null)
                   refreshExerciseCards(true)

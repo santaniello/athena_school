@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { acceptOffer, declineOffer } from '@/lib/exercise'
+import { acceptOffer, declineOffer, type ChallengeDifficulty } from '@/lib/exercise'
 import { ExerciseOfferCard } from './exercise-offer-card'
 
 vi.mock('@/lib/exercise', async (importOriginal) => ({
@@ -10,13 +10,14 @@ vi.mock('@/lib/exercise', async (importOriginal) => ({
   declineOffer: vi.fn(),
 }))
 
-function setup(props: { language?: string } = {}) {
+function setup(props: { language?: string; defaultDifficulty?: ChallengeDifficulty } = {}) {
   const onAccepted = vi.fn()
   const onDeclined = vi.fn()
   render(
     <ExerciseOfferCard
       offerId="o1"
       language={props.language ?? 'en'}
+      defaultDifficulty={props.defaultDifficulty ?? 'INTERMEDIATE'}
       onAccepted={onAccepted}
       onDeclined={onDeclined}
     />,
@@ -41,6 +42,44 @@ describe('ExerciseOfferCard', () => {
     expect(screen.getByRole('button', { name: 'Recusar' })).toBeInTheDocument()
   })
 
+  it('starts with the difficulty of the profile and accepts it', async () => {
+    vi.mocked(acceptOffer).mockResolvedValueOnce()
+    const { user } = setup({ defaultDifficulty: 'BEGINNER' })
+
+    expect(screen.getByRole('combobox', { name: 'Difficulty' })).toHaveTextContent('Beginner')
+    await user.click(screen.getByRole('button', { name: 'Accept' }))
+
+    expect(acceptOffer).toHaveBeenCalledWith('o1', 'BEGINNER')
+  })
+
+  it('accepts the difficulty the user picked instead of the default', async () => {
+    vi.mocked(acceptOffer).mockResolvedValueOnce()
+    const { user } = setup({ defaultDifficulty: 'BEGINNER' })
+
+    await user.click(screen.getByRole('combobox', { name: 'Difficulty' }))
+    await user.click(await screen.findByRole('option', { name: 'Advanced' }))
+    await user.click(screen.getByRole('button', { name: 'Accept' }))
+
+    expect(acceptOffer).toHaveBeenCalledWith('o1', 'ADVANCED')
+  })
+
+  it('speaks Portuguese in the difficulty choice for a Portuguese assistant', async () => {
+    const { user } = setup({ language: 'pt', defaultDifficulty: 'ADVANCED' })
+
+    expect(screen.getByRole('combobox', { name: 'Dificuldade' })).toHaveTextContent('Avançado')
+    await user.click(screen.getByRole('combobox', { name: 'Dificuldade' }))
+    expect(await screen.findByRole('option', { name: 'Iniciante' })).toBeInTheDocument()
+  })
+
+  it('locks the difficulty while the exercise is being prepared', async () => {
+    vi.mocked(acceptOffer).mockReturnValueOnce(new Promise(() => {}))
+    const { user } = setup()
+
+    await user.click(screen.getByRole('button', { name: 'Accept' }))
+
+    expect(screen.getByRole('combobox', { name: 'Difficulty' })).toBeDisabled()
+  })
+
   it('accepts: shows progress with both buttons disabled, then tells the screen', async () => {
     let resolve: () => void = () => {}
     vi.mocked(acceptOffer).mockReturnValueOnce(new Promise((r) => (resolve = r)))
@@ -48,7 +87,7 @@ describe('ExerciseOfferCard', () => {
 
     await user.click(screen.getByRole('button', { name: 'Accept' }))
 
-    expect(acceptOffer).toHaveBeenCalledWith('o1')
+    expect(acceptOffer).toHaveBeenCalledWith('o1', 'INTERMEDIATE')
     expect(screen.getByText('Preparing your exercise…')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Accept' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Decline' })).toBeDisabled()

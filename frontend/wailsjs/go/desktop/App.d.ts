@@ -3,7 +3,7 @@
 import {desktop} from '../models';
 import {context} from '../models';
 
-export function AcceptOffer(arg1:string):Promise<desktop.SessionExerciseDTO>;
+export function AcceptOffer(arg1:string,arg2:string):Promise<desktop.SessionExerciseDTO>;
 
 export function AnswerDefenseQuestion(arg1:string,arg2:string):Promise<desktop.DefenseDTO>;
 

@@ -39,11 +39,11 @@ and avoids creating duplicates. The catalog route of 3.6.1 and 3.7 stays as it i
    offer's message id, so the card of [3.17](17-session-exercises-ui.md) stays under that message.
 8. **Reuse before generating.** On accept, if a challenge already exists whose source session is
    this one (from the chat or from the catalog) and no message of the session has taken it yet, the
-   most recent one is reused and no AI call is made. A challenge already linked to an earlier
-   message is not reused: a second offer in the same session gets a new challenge, so the user
-   never receives the same exercise twice. Otherwise a challenge is generated through
-   [3.6.1](06-01-challenge-generation.md) for this session, with the difficulty from the profile's
-   experience level and no question to the user. The accept also takes the app's single
+   most recent one is reused and no AI call is made, but only when it has the difficulty the user
+   chose on the offer (decision 13). A challenge already linked to an earlier message is not
+   reused: a second offer in the same session gets a new challenge, so the user never receives
+   the same exercise twice. Otherwise a challenge is generated through
+   [3.6.1](06-01-challenge-generation.md) for this session, at the chosen difficulty. The accept also takes the app's single
    generation slot, so it never runs alongside **Generate challenge with AI** in the catalog, and
    cancelling a generation cancels it.
 9. **Failure leaves the offer pending.** If generation fails (provider error, invalid output), the
@@ -56,6 +56,14 @@ and avoids creating duplicates. The catalog route of 3.6.1 and 3.7 stays as it i
 11. **Same model and cost rules** as the rest of the lab: one generation call at most per accept,
     with the Architecture Lab model ([3.6.1](06-01-challenge-generation.md) decision 10).
 12. **No data compatibility to keep.**
+13. **The user chooses the difficulty on the offer.** The offer card has a **Difficulty** select
+    (**Dificuldade** with Iniciante, Intermediário and Avançado when the assistant speaks
+    Portuguese) next to **Accept** and **Decline**, preselected from the profile's experience level
+    as in the catalog's generation dialog (an unknown level is Intermediate). **Accept** sends the
+    choice: `AcceptOffer(offerId, difficulty)`, where an empty difficulty means no choice and the
+    profile's level is used. An unlinked challenge of the session is reused only when it has the
+    chosen difficulty (decision 8); the older one stays in the catalog. The select is locked while
+    the exercise is being prepared. The tutor never asks about it in the chat.
 
 ## Domain and application
 
@@ -82,7 +90,7 @@ func (s *OfferService) Decline(ctx, offerID string) error
   (`ErrOfferNotFound`; a second call finds it already resolved and returns the existing link);
   look for a challenge by source session
   (`ChallengeRepository.FindLatestBySourceSession`, added here); if none, call
-  `GenerationService.GenerateChallenge` with the session and the profile's difficulty, with no
+  `GenerationService.GenerateChallenge` with the session and the chosen difficulty, with no
   transaction open; then, in one transaction, create the `SessionExercise` (an existing link for
   the same session and challenge is accepted as is) and delete the offer. `SessionExerciseView`
   carries the challenge id, title, topic and difficulty.
@@ -117,7 +125,7 @@ deleted, so every stored row is pending.
 ## Desktop bindings and frontend
 
 - Bindings in `internal/interfaces/desktop/exercise.go`: `GetPendingOffer(sessionId)`,
-  `AcceptOffer(offerId)`, `DeclineOffer(offerId)`, thin, an error code per sentinel. The
+  `AcceptOffer(offerId, difficulty)`, `DeclineOffer(offerId)`, thin, an error code per sentinel. The
   existing send-message binding maps `ErrOfferPending`. `wailsjs` regenerated.
 - `components/exercise-offer-card.tsx`: the card under the assistant message, with the localized
   buttons, the progress state and the error with the retry.
@@ -154,8 +162,8 @@ build green and is committed on its own.
 - While an offer is pending, sending a message fails with `ErrOfferPending`, nothing is stored or
   sent to the model, and the input is disabled; this still holds after reopening the app.
 - **Decline** removes the card and its record, keeps the tutor's text, and re-enables the input.
-- **Accept** with no earlier challenge for the session generates one with the profile's
-  difficulty and links it; with an earlier one that no message has taken yet it reuses the latest and makes no AI call; with
+- **Accept** with no earlier challenge for the session generates one at the chosen difficulty
+  and links it; with an earlier one that no message has taken yet and has the chosen difficulty it reuses the latest and makes no AI call; with an unlinked one of another difficulty it generates a new one; with
   one already linked to a message it generates a new one. Either
   way the offer is deleted and the input is enabled.
 - A generation failure leaves the offer pending with the error and **Accept** available again;
@@ -169,8 +177,7 @@ build green and is committed on its own.
 ## Out of scope
 
 - The tutor proposing an exercise by itself, a "Practice this topic" button and a typed command.
-- Choosing the difficulty in the offer, and generating more than one challenge per session from
-  the chat.
+- Generating more than one challenge per session from the chat.
 - Opening the lab and returning to the chat ([3.15](15-open-lab-from-chat.md)), the persistent
   exercise card and the Exercises tab ([3.17](17-session-exercises-ui.md)), and the result flowing
   back into the chat ([3.16](16-session-feedback.md)).
