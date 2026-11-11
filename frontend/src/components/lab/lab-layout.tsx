@@ -2,9 +2,9 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { PanelLeft, PanelRight } from 'lucide-react'
 import type { PanelImperativeHandle } from 'react-resizable-panels'
 import { Badge } from '@/components/ui/badge'
+import { DifficultyBadge } from '@/components/difficulty-badge'
 import { Button } from '@/components/ui/button'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
-import { DIFFICULTY_LABELS, type ChallengeDifficulty } from '@/lib/exercise'
 import type { LabCriterion, LabHint, LabStatement } from '@/lib/lab'
 import { LabCountdown } from './lab-countdown'
 import { LabLeaveDialog } from './lab-leave-dialog'
@@ -105,8 +105,6 @@ function LabLayout({
   }
   // Stryker restore BlockStatement,ConditionalExpression,OptionalChaining,ArrayDeclaration,CallExpression
 
-  const difficultyLabel = DIFFICULTY_LABELS[difficulty as ChallengeDifficulty] ?? difficulty
-
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-3">
       <header className="flex flex-col gap-2">
@@ -131,7 +129,7 @@ function LabLayout({
               <PanelLeft className="size-4" aria-hidden="true" />
             </Button>
             <h1 className="truncate text-lg font-semibold text-foreground">{title}</h1>
-            <Badge variant="muted">{difficultyLabel}</Badge>
+            <DifficultyBadge difficulty={difficulty} />
             <Badge variant="muted">{topic}</Badge>
           </div>
           <div className="flex items-center gap-3">

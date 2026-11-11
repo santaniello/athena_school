@@ -35,13 +35,14 @@ function renderRow(item: CatalogItem, highlighted = false, onStart = vi.fn(), on
 }
 
 describe('ChallengeRow', () => {
-  it('shows the title, difficulty, topic, time limit, attempts, best score and status', () => {
+  it('shows the title, difficulty, topic, time limit, attempts and status, without the score', () => {
     renderRow(attempted)
 
     expect(screen.getByText('Cache and invalidation in a catalog')).toBeInTheDocument()
     expect(screen.getByText('Intermediate')).toBeInTheDocument()
     expect(screen.getByText('caching · 45 min · 2 attempts')).toBeInTheDocument()
-    expect(screen.getByText('Best 86 · Needs improvement')).toBeInTheDocument()
+    expect(screen.getByText('Needs improvement')).toBeInTheDocument()
+    expect(screen.queryByText(/Best/)).not.toBeInTheDocument()
   })
 
   it('says "not started" and shows no score for a challenge nobody tried', () => {
@@ -129,5 +130,15 @@ describe('ChallengeRow', () => {
     renderRow(fresh)
 
     expect(screen.queryByRole('button', { name: 'History' })).not.toBeInTheDocument()
+  })
+
+  it('highlights only the needs improvement status in bold', () => {
+    renderRow(attempted)
+    expect(screen.getByText('Needs improvement')).toHaveClass('font-semibold')
+  })
+
+  it('keeps the other statuses in regular weight', () => {
+    renderRow({ ...attempted, status: 'COMPLETED' })
+    expect(screen.getByText('Completed')).not.toHaveClass('font-semibold')
   })
 })
