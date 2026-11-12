@@ -203,7 +203,10 @@ func TestBuildGenerationPrompt_practiceFocusesOnOneConceptWithLeanCriteria(t *te
 	assert.Contains(t, system, "practice exercise")
 	assert.Contains(t, system, "<practice_goal>")
 	assert.Contains(t, system, "Write 1 to 3 criteria")
-	assert.Contains(t, system, "Do not include a solution, an architecture, or the names of the components")
+	assert.Contains(t, system, "name the services, data stores and clients that already exist")
+	assert.Contains(t, system, "Never write a generic story")
+	assert.Contains(t, system, "Do not include a solution or the names of the components the learner should add or choose")
+	assert.Contains(t, system, "prescribing the fix is forbidden")
 	assert.NotContains(t, system, "a concrete product, its users and its scale")
 	assert.NotContains(t, system, "1 to 6 criteria")
 }
