@@ -683,7 +683,9 @@ func TestOfferService_Accept_interviewDoesNotReuseAPracticeChallenge(t *testing.
 	fresh := domainexercise.Challenge{ID: "challenge-2", Kind: domainexercise.ChallengeKindInterview, Title: "Design a counter", Topic: "counters", Difficulty: domainexercise.DifficultyAdvanced}
 	f.generator.EXPECT().GenerateChallenge(ctx, "session-1", interviewSpec(domainexercise.DifficultyAdvanced)).Return(fresh, nil)
 	f.runTx(ctx)
-	f.links.EXPECT().Create(insideTx(), mock.Anything).Return(nil)
+	f.links.EXPECT().Create(insideTx(), domainexercise.SessionExercise{
+		ID: "generated-id", SessionID: "session-1", ChallengeID: "challenge-2", MessageID: "message-1", CreatedAt: fixedNow,
+	}).Return(nil)
 	f.offers.EXPECT().Delete(insideTx(), "offer-1").Return(nil)
 
 	// When accepting

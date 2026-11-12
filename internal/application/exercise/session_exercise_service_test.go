@@ -266,3 +266,24 @@ func TestSessionExerciseService_ListSessionExercises_wrapsRepositoryFailures(t *
 		})
 	}
 }
+
+func TestSessionExerciseService_ListSessionExercises_carriesTheKindAndTheUntimedLimit(t *testing.T) {
+	// Given a link to a practice challenge with no time limit
+	f := newSessionExerciseFixture(t)
+	f.expectLinks(cardLink("link-1", "challenge-1", "message-1"))
+	practice := cardChallenge("challenge-1", "Cache aside")
+	practice.Kind = domainexercise.ChallengeKindPractice
+	practice.TimeLimitMinutes = 0
+	f.challenges.EXPECT().Get(context.Background(), "challenge-1").Return(practice, nil).Once()
+	f.records.EXPECT().ListByChallenges(context.Background(), []string{"challenge-1"}).
+		Return(map[string][]domainexercise.AttemptRecord{}, nil).Once()
+
+	// When listing the session's exercises
+	cards, err := f.service.ListSessionExercises(context.Background(), "session-1")
+
+	// Then the card says it is a practice with no time limit
+	require.NoError(t, err)
+	require.Len(t, cards, 1)
+	assert.Equal(t, domainexercise.ChallengeKindPractice, cards[0].Kind)
+	assert.Equal(t, 0, cards[0].TimeLimitMinutes)
+}
