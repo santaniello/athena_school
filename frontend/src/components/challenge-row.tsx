@@ -1,6 +1,13 @@
 import { DifficultyBadge } from '@/components/difficulty-badge'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { STATUS_LABELS, type CatalogItem, type ChallengeStatus } from '@/lib/exercise'
+import {
+  KIND_LABELS,
+  STATUS_LABELS,
+  formatTimeLimit,
+  type CatalogItem,
+  type ChallengeStatus,
+} from '@/lib/exercise'
 import { cn } from '@/lib/utils'
 
 interface ChallengeRowProps {
@@ -34,9 +41,12 @@ function ChallengeRow({ item, highlighted, onStart, onHistory }: ChallengeRowPro
       )}
     >
       <div className="min-w-0 flex-1 basis-48">
-        <p className="truncate text-sm font-semibold text-foreground">{item.title}</p>
+        <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <span className="truncate">{item.title}</span>
+          {item.kind === 'PRACTICE' && <Badge variant="muted">{KIND_LABELS.PRACTICE}</Badge>}
+        </p>
         <p className="text-sm text-muted-foreground">
-          {item.topic} · {item.timeLimitMinutes} min · {attemptsText(item.attempts)}
+          {item.topic} · {formatTimeLimit(item.timeLimitMinutes)} · {attemptsText(item.attempts)}
         </p>
       </div>
       <div className="flex flex-wrap items-center justify-end gap-3">

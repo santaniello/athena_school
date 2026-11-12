@@ -82,6 +82,24 @@ func TestAttemptRepository_CreateThenGet_keepsStandaloneAttemptWithoutOptionalFi
 	assert.True(t, got.SubmittedAt.IsZero())
 }
 
+func TestAttemptRepository_CreateThenGet_keepsAnUntimedAttemptWithoutDeadline(t *testing.T) {
+	// Given an in-progress attempt on an untimed practice challenge: a zero deadline
+	repo, _ := newTestAttemptRepository(t)
+	ctx := context.Background()
+	attempt := newTestAttempt("attempt-1")
+	attempt.Deadline = time.Time{}
+
+	// When creating and reading it back
+	require.NoError(t, repo.Create(ctx, attempt))
+	got, err := repo.Get(ctx, "attempt-1")
+
+	// Then the deadline is still zero and the attempt is untimed
+	require.NoError(t, err)
+	assert.True(t, got.Deadline.IsZero())
+	assert.True(t, got.Untimed())
+	assert.Equal(t, attempt, got)
+}
+
 func TestAttemptRepository_Get_returnsNotFound(t *testing.T) {
 	// Given an empty repository
 	repo, _ := newTestAttemptRepository(t)

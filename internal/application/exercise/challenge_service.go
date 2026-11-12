@@ -42,7 +42,9 @@ type CreateChallengeInput struct {
 	Constraints               []string
 	Objectives                []string
 	Difficulty                domainexercise.Difficulty
-	Origin                    domainexercise.ChallengeOrigin
+	// Kind is INTERVIEW when empty.
+	Kind   domainexercise.ChallengeKind
+	Origin domainexercise.ChallengeOrigin
 }
 
 // Create validates and persists a challenge. Its topic is a snapshot of the
@@ -59,10 +61,15 @@ func (s *ChallengeService) Create(ctx context.Context, input CreateChallengeInpu
 		return domainexercise.Challenge{}, fmt.Errorf("exercise: reading source session: %w", err)
 	}
 
+	kind := input.Kind
+	if kind == "" {
+		kind = domainexercise.ChallengeKindInterview
+	}
 	now := s.now()
 	challenge := domainexercise.Challenge{
 		ID:                        s.newID(),
 		Type:                      domainexercise.ChallengeTypeArchitecture,
+		Kind:                      kind,
 		Title:                     strings.TrimSpace(input.Title),
 		Scenario:                  strings.TrimSpace(input.Scenario),
 		FunctionalRequirements:    trimItems(input.FunctionalRequirements),
@@ -73,7 +80,7 @@ func (s *ChallengeService) Create(ctx context.Context, input CreateChallengeInpu
 		Topic:                     domainexercise.NormalizeTopic(session.Topic),
 		SourceSessionID:           sessionID,
 		Origin:                    input.Origin,
-		TimeLimitMinutes:          domainexercise.DefaultTimeLimit(input.Difficulty),
+		TimeLimitMinutes:          domainexercise.TimeLimitFor(kind, input.Difficulty),
 		DefenseQuestions:          domainexercise.DefaultDefenseQuestions,
 		CreatedAt:                 now,
 		UpdatedAt:                 now,

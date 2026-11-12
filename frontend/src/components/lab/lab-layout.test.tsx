@@ -164,6 +164,14 @@ describe('LabLayout', () => {
     expect(handlers.onExpire).toHaveBeenCalledOnce()
   })
 
+  it('shows no countdown for an untimed practice and never expires it', () => {
+    const handlers = renderLayout({ deadline: '' })
+
+    expect(screen.queryByRole('timer')).not.toBeInTheDocument()
+    expect(handlers.onExpire).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Finish and evaluate' })).toBeEnabled()
+  })
+
   it('toggles the side panels from the top bar', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     renderLayout()

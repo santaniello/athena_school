@@ -40,6 +40,8 @@ var (
 	ErrChallengeTopicRequired = errors.New("challenge topic is required")
 	// ErrChallengeTypeInvalid is returned for a type other than ARCHITECTURE.
 	ErrChallengeTypeInvalid = errors.New("challenge type is invalid")
+	// ErrChallengeKindInvalid is returned for a kind other than INTERVIEW or PRACTICE.
+	ErrChallengeKindInvalid = errors.New("challenge kind is invalid")
 	// ErrDifficultyInvalid is returned for an unknown difficulty.
 	ErrDifficultyInvalid = errors.New("challenge difficulty is invalid")
 	// ErrOriginInvalid is returned for an unknown origin.
@@ -72,6 +74,19 @@ type ChallengeType string
 // ChallengeTypeArchitecture is the only type accepted today.
 const ChallengeTypeArchitecture ChallengeType = "ARCHITECTURE"
 
+// ChallengeKind says how a challenge is shaped. It is separate from
+// ChallengeType, which says which lab the challenge belongs to. See
+// specs/phases/phase-03-architecture-lab/18-practice-challenges.md.
+type ChallengeKind string
+
+// The two challenge kinds. An interview simulates a job interview: a broad
+// product scenario, a time limit and the full rubric. A practice trains one
+// concept: a short focused scenario, no time limit and a lean rubric.
+const (
+	ChallengeKindInterview ChallengeKind = "INTERVIEW"
+	ChallengeKindPractice  ChallengeKind = "PRACTICE"
+)
+
 // ChallengeOrigin records how a challenge came to exist.
 type ChallengeOrigin string
 
@@ -96,6 +111,7 @@ const (
 type Challenge struct {
 	ID                        string
 	Type                      ChallengeType
+	Kind                      ChallengeKind
 	Title                     string
 	Scenario                  string
 	FunctionalRequirements    []string
@@ -106,7 +122,7 @@ type Challenge struct {
 	Topic                     string // snapshot of the source session's topic
 	SourceSessionID           string // "" once the session is deleted
 	Origin                    ChallengeOrigin
-	TimeLimitMinutes          int // exam length; copied into an attempt's Deadline
+	TimeLimitMinutes          int // exam length; copied into an attempt's Deadline. 0 means untimed (PRACTICE only)
 	DefenseQuestions          int // questions the tutor asks after the diagram evaluation, 3 to 5
 	CreatedAt                 time.Time
 	UpdatedAt                 time.Time
@@ -134,8 +150,8 @@ func (c Challenge) Validate() error {
 	if err := c.validateEnums(); err != nil {
 		return err
 	}
-	if c.TimeLimitMinutes < MinTimeLimitMinutes || c.TimeLimitMinutes > MaxTimeLimitMinutes {
-		return ErrTimeLimitInvalid
+	if err := c.validateTimeLimit(); err != nil {
+		return err
 	}
 	if c.DefenseQuestions < MinDefenseQuestions || c.DefenseQuestions > MaxDefenseQuestions {
 		return ErrDefenseQuestionsInvalid
@@ -154,9 +170,30 @@ func (c Challenge) Validate() error {
 	return nil
 }
 
+// Untimed reports whether the challenge has no time limit, which only a
+// practice challenge may have.
+func (c Challenge) Untimed() bool {
+	return c.Kind == ChallengeKindPractice && c.TimeLimitMinutes == 0
+}
+
+func (c Challenge) validateTimeLimit() error {
+	if c.Untimed() {
+		return nil
+	}
+	if c.TimeLimitMinutes < MinTimeLimitMinutes || c.TimeLimitMinutes > MaxTimeLimitMinutes {
+		return ErrTimeLimitInvalid
+	}
+	return nil
+}
+
 func (c Challenge) validateEnums() error {
 	if c.Type != ChallengeTypeArchitecture {
 		return ErrChallengeTypeInvalid
+	}
+	switch c.Kind {
+	case ChallengeKindInterview, ChallengeKindPractice:
+	default:
+		return ErrChallengeKindInvalid
 	}
 	switch c.Difficulty {
 	case DifficultyBeginner, DifficultyIntermediate, DifficultyAdvanced:
@@ -183,6 +220,16 @@ func DefaultTimeLimit(d Difficulty) int {
 		return 60
 	}
 	return 0
+}
+
+// TimeLimitFor returns the exam length in minutes a new challenge of the
+// given kind and difficulty starts with: none (0) for a practice, the
+// difficulty's default for an interview.
+func TimeLimitFor(kind ChallengeKind, d Difficulty) int {
+	if kind == ChallengeKindPractice {
+		return 0
+	}
+	return DefaultTimeLimit(d)
 }
 
 func validateText(value string, errRequired error, maxLength int, errTooLong error) error {

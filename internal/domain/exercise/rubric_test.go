@@ -54,3 +54,13 @@ func TestBaseRubric_returnsAFreshCopyEachCall(t *testing.T) {
 	require.NotEqual(t, "changed", second[0].Name)
 	assert.Equal(t, 20, second[0].Weight)
 }
+
+func TestBaseCriteriaFor_isEmptyForAPractice(t *testing.T) {
+	// Given the two challenge kinds
+	// When reading the base criteria and base version of each
+	// Then an interview gets the base rubric and a practice gets none
+	assert.Equal(t, BaseRubric(), BaseCriteriaFor(ChallengeKindInterview))
+	assert.Equal(t, BaseRubricVersion, BaseVersionFor(ChallengeKindInterview))
+	assert.Empty(t, BaseCriteriaFor(ChallengeKindPractice))
+	assert.Equal(t, NoBaseRubricVersion, BaseVersionFor(ChallengeKindPractice))
+}

@@ -951,6 +951,45 @@ func TestOpen_addsDefenseQuestionsToExistingChallengesWithTheDefaultOfFive(t *te
 	assert.Equal(t, 5, questions)
 }
 
+func TestOpen_addsKindToExistingChallengesAsInterview(t *testing.T) {
+	// Given a database from before spec 3.18: a challenge stored without kind
+	path := filepath.Join(t.TempDir(), "athena.db")
+	first, err := Open(path)
+	require.NoError(t, err)
+	_, err = first.Exec(`ALTER TABLE challenges DROP COLUMN kind`)
+	require.NoError(t, err)
+	_, err = first.Exec(`INSERT INTO challenges (id, type, title, scenario, functional_requirements,
+		non_functional_requirements, constraints, objectives, difficulty, topic, origin, created_at, updated_at)
+		VALUES ('legacy', 'ARCHITECTURE', 't', 's', '[]', '[]', '[]', '[]', 'BEGINNER', 'x', 'MANUAL', 'now', 'now')`)
+	require.NoError(t, err)
+	require.NoError(t, first.Close())
+
+	// When opening it again
+	second, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = second.Close() }()
+
+	// Then the existing challenge is an interview
+	var kind string
+	require.NoError(t, second.QueryRow(`SELECT kind FROM challenges WHERE id = 'legacy'`).Scan(&kind))
+	assert.Equal(t, "INTERVIEW", kind)
+}
+
+func TestOpen_refusesAChallengeKindOtherThanInterviewOrPractice(t *testing.T) {
+	// Given a migrated database
+	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// When storing a challenge of an unknown kind
+	_, err = db.Exec(`INSERT INTO challenges (id, type, kind, title, scenario, functional_requirements,
+		non_functional_requirements, constraints, objectives, difficulty, topic, origin, created_at, updated_at)
+		VALUES ('c', 'ARCHITECTURE', 'QUIZ', 't', 's', '[]', '[]', '[]', '[]', 'BEGINNER', 'x', 'MANUAL', 'now', 'now')`)
+
+	// Then the database refuses it
+	assert.Error(t, err)
+}
+
 func TestOpen_refusesDefenseQuestionsOutsideThreeToFive(t *testing.T) {
 	for _, questions := range []int{2, 6} {
 		// Given a migrated database

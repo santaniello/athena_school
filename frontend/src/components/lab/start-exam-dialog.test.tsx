@@ -67,6 +67,14 @@ describe('StartExamDialog', () => {
     expect(await screen.findByText('Time limit: 1 minute')).toBeInTheDocument()
   })
 
+  it('says there is no time limit for an untimed practice', async () => {
+    renderDialog({ challenge: { ...challenge, timeLimitMinutes: 0 } })
+
+    expect(await screen.findByText('No time limit')).toBeInTheDocument()
+    expect(screen.queryByText(/Time limit:/)).not.toBeInTheDocument()
+    expect(screen.getByText('There is no pause and you cannot resume.')).toBeInTheDocument()
+  })
+
   it('cancels without starting', async () => {
     const user = userEvent.setup()
     const props = renderDialog()

@@ -824,3 +824,26 @@ func TestAttemptService_ListAttempts_failuresAreReturned(t *testing.T) {
 		})
 	}
 }
+
+func TestAttemptService_SubmitAttempt_untimedAttemptIsNeverTooLateAndIsAUserSubmit(t *testing.T) {
+	// Given an untimed attempt (zero deadline) submitted days after it started
+	f := newAttemptFixture(t)
+	ctx := context.Background()
+	f.service.newID = func() string { return "submission-1" }
+	untimed := storedAttempt()
+	untimed.Deadline = time.Time{}
+	now := untimed.StartedAt.Add(72 * time.Hour)
+	f.clock.now = now
+	f.attempts.EXPECT().Get(ctx, "attempt-1").Return(untimed, nil)
+	submitted, submission := expectedSubmission(now, domainexercise.SubmitReasonUser)
+	submitted.Deadline = time.Time{}
+	f.attempts.EXPECT().Submit(ctx, submitted, submission).Return(nil)
+	f.expectView(ctx)
+
+	// When submitting
+	view, err := f.service.SubmitAttempt(ctx, "attempt-1", "application/drawio", "<mxfile/>")
+
+	// Then it is accepted as a user submit, not discarded for being late
+	require.NoError(t, err)
+	assert.Equal(t, domainexercise.SubmitReasonUser, view.Attempt.SubmitReason)
+}

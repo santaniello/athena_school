@@ -1726,6 +1726,7 @@ describe('AppShell knowledge index lifecycle', () => {
             sessionExerciseId: 'link-1',
             messageId: 'm2',
             challengeId: 'c9',
+            kind: 'INTERVIEW',
             title: 'Design a cache',
             difficulty: 'ADVANCED',
             timeLimitMinutes: 45,

@@ -6,6 +6,7 @@ import { ChallengeRow } from './challenge-row'
 
 const attempted: CatalogItem = {
   id: 'c1',
+  kind: 'INTERVIEW',
   title: 'Cache and invalidation in a catalog',
   topic: 'caching',
   difficulty: 'INTERMEDIATE',
@@ -16,6 +17,7 @@ const attempted: CatalogItem = {
 }
 const fresh: CatalogItem = {
   id: 'c2',
+  kind: 'INTERVIEW',
   title: 'Rate limiter for a public API',
   topic: 'rate limiting',
   difficulty: 'BEGINNER',
@@ -23,6 +25,15 @@ const fresh: CatalogItem = {
   status: 'NOT_STARTED',
   attempts: 0,
   bestDiagramScore: 0,
+}
+
+const practice: CatalogItem = {
+  ...fresh,
+  id: 'c3',
+  kind: 'PRACTICE',
+  title: 'A slow price API',
+  topic: 'caching',
+  timeLimitMinutes: 0,
 }
 
 function renderRow(item: CatalogItem, highlighted = false, onStart = vi.fn(), onHistory = vi.fn()) {
@@ -35,6 +46,20 @@ function renderRow(item: CatalogItem, highlighted = false, onStart = vi.fn(), on
 }
 
 describe('ChallengeRow', () => {
+  it('shows a practice with no time limit and its kind', () => {
+    renderRow(practice)
+
+    expect(screen.getByText('caching · No time limit · not started')).toBeInTheDocument()
+    expect(screen.getByText('Practice')).toBeInTheDocument()
+  })
+
+  it('does not label an interview with its kind', () => {
+    renderRow({ ...fresh, kind: 'INTERVIEW' })
+
+    expect(screen.queryByText('Interview')).not.toBeInTheDocument()
+    expect(screen.queryByText('Practice')).not.toBeInTheDocument()
+  })
+
   it('shows the title, difficulty, topic, time limit, attempts and status, without the score', () => {
     renderRow(attempted)
 

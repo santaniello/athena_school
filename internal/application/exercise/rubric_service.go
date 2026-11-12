@@ -50,16 +50,17 @@ type ChallengeCriterionInput struct {
 	Levels      [domainexercise.LevelCount]string
 }
 
-// SetChallengeRubric merges the base criteria with the given challenge
-// criteria, validates the result and stores it as the challenge's next
+// SetChallengeRubric merges the base criteria (none for a practice challenge,
+// whose rubric is lean) with the given challenge criteria, validates the result and stores it as the challenge's next
 // version (1 if it has none). It returns domainexercise.ErrChallengeNotFound
 // for an unknown challenge, and stores nothing when the criteria are invalid.
 func (s *RubricService) SetChallengeRubric(ctx context.Context, challengeID string, criteria []ChallengeCriterionInput) (domainexercise.RubricVersion, error) {
-	if _, err := s.challenges.Get(ctx, challengeID); err != nil {
+	challenge, err := s.challenges.Get(ctx, challengeID)
+	if err != nil {
 		return domainexercise.RubricVersion{}, fmt.Errorf("exercise: getting challenge: %w", err)
 	}
 
-	merged, err := domainexercise.MergeRubric(domainexercise.BaseRubric(), s.toCriteria(criteria))
+	merged, err := domainexercise.MergeRubric(domainexercise.BaseCriteriaFor(challenge.Kind), s.toCriteria(criteria))
 	if err != nil {
 		return domainexercise.RubricVersion{}, fmt.Errorf("exercise: merging rubric: %w", err)
 	}
@@ -70,7 +71,7 @@ func (s *RubricService) SetChallengeRubric(ctx context.Context, challengeID stri
 	version := domainexercise.RubricVersion{
 		ID:          s.newID(),
 		ChallengeID: challengeID,
-		BaseVersion: domainexercise.BaseRubricVersion,
+		BaseVersion: domainexercise.BaseVersionFor(challenge.Kind),
 		Criteria:    merged,
 		CreatedAt:   s.now(),
 	}

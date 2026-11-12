@@ -60,7 +60,11 @@ function StartExamContent({
           <DialogDescription>Read the rules before you start.</DialogDescription>
         </DialogHeader>
         <ul className="list-disc space-y-1 pl-5 text-sm text-foreground">
-          <li>{`Time limit: ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`}</li>
+          <li>
+            {minutes === 0
+              ? 'No time limit'
+              : `Time limit: ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`}
+          </li>
           <li>There is no pause and you cannot resume.</li>
           <li>Leaving discards the exam. It will not be graded.</li>
           <li>{`You can ask the tutor for up to ${MAX_HINTS} hints.`}</li>

@@ -8,6 +8,7 @@ const baseCard: Card = {
   sessionExerciseId: 'l1',
   messageId: 'm1',
   challengeId: 'c1',
+  kind: 'INTERVIEW',
   title: 'Design a feed',
   difficulty: 'ADVANCED',
   timeLimitMinutes: 60,
@@ -31,6 +32,20 @@ describe('SessionExerciseCard', () => {
     expect(screen.getByText('Advanced')).toBeInTheDocument()
     expect(screen.getByText('60 min')).toBeInTheDocument()
     expect(screen.getByText('Not started')).toBeInTheDocument()
+  })
+
+  it('shows a practice with its kind and no time limit instead of minutes', () => {
+    setup({ ...baseCard, kind: 'PRACTICE', timeLimitMinutes: 0 })
+
+    expect(screen.getByText('Practice')).toBeInTheDocument()
+    expect(screen.getByText('No time limit')).toBeInTheDocument()
+    expect(screen.queryByText(/\bmin\b/)).not.toBeInTheDocument()
+  })
+
+  it('does not label an interview with its kind', () => {
+    setup(baseCard)
+
+    expect(screen.queryByText('Interview')).not.toBeInTheDocument()
   })
 
   it('offers only Open in Architecture Lab before a finished attempt', async () => {

@@ -139,3 +139,60 @@ func TestRubricVersion_Validate_acceptsAWeightOfExactlyOnePoint(t *testing.T) {
 	// Then a weight of 1 is accepted
 	assert.NoError(t, RubricVersion{Criteria: merged}.Validate())
 }
+
+func leanRubricVersion(t *testing.T, keys ...string) RubricVersion {
+	t.Helper()
+	challenge := make([]RubricCriterion, len(keys))
+	for i, key := range keys {
+		challenge[i] = challengeCriterion(key, 10)
+	}
+	merged, err := MergeRubric(nil, challenge)
+	require.NoError(t, err)
+	return RubricVersion{ID: "rubric-1", ChallengeID: "challenge-1", Version: 1, BaseVersion: NoBaseRubricVersion, Criteria: merged}
+}
+
+func TestRubricVersion_Validate_acceptsALeanRubricWithoutBaseCriteria(t *testing.T) {
+	for _, keys := range [][]string{{"a"}, {"a", "b"}, {"a", "b", "c"}} {
+		// Given a lean rubric of one to three concept criteria and no base criteria
+		version := leanRubricVersion(t, keys...)
+
+		// When validating it
+		// Then it is valid
+		assert.NoError(t, version.Validate(), "%d criteria", len(keys))
+	}
+}
+
+func TestRubricVersion_Validate_rejectsALeanRubricOutsideOneToThreeCriteria(t *testing.T) {
+	// Given a lean rubric with four criteria
+	version := leanRubricVersion(t, "a", "b", "c", "d")
+
+	// When validating it
+	err := version.Validate()
+
+	// Then the practice limit applies
+	assert.ErrorIs(t, err, ErrChallengeCriteriaCount)
+}
+
+func TestRubricVersion_Validate_rejectsABaseCriterionInALeanRubric(t *testing.T) {
+	// Given a lean rubric that carries a base criterion
+	version := leanRubricVersion(t, "a")
+	version.Criteria = append(BaseRubric()[:1], version.Criteria...)
+
+	// When validating it
+	err := version.Validate()
+
+	// Then it is refused
+	assert.ErrorIs(t, err, ErrCriterionSourceInvalid)
+}
+
+func TestRubricVersion_Validate_stillRequiresBaseCriteriaWhenTheBaseVersionIsNotNone(t *testing.T) {
+	// Given a rubric with the standard base version but only challenge criteria
+	version := leanRubricVersion(t, "a")
+	version.BaseVersion = BaseRubricVersion
+
+	// When validating it
+	err := version.Validate()
+
+	// Then the base criteria are still required
+	assert.ErrorIs(t, err, ErrBaseCriteriaMissing)
+}

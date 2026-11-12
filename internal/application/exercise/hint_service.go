@@ -89,7 +89,7 @@ func (s *HintService) RequestHint(ctx context.Context, attemptID, boardXML strin
 	if err != nil {
 		return domainexercise.Hint{}, err
 	}
-	callCtx, cancel := context.WithTimeout(ctx, min(hintTimeout, attempt.Deadline.Sub(s.clock.Now())))
+	callCtx, cancel := context.WithTimeout(ctx, hintBudget(attempt, s.clock.Now()))
 	defer cancel()
 	content, err := s.generator.GenerateHint(callCtx, input)
 	if err != nil {
@@ -149,4 +149,13 @@ func (s *HintService) ListHints(ctx context.Context, attemptID string) ([]domain
 		return nil, fmt.Errorf("exercise: listing hints: %w", err)
 	}
 	return hints, nil
+}
+
+// hintBudget is how long a hint call may run: the hint timeout, cut at the
+// end of the exam. An untimed attempt has no end, so only the timeout applies.
+func hintBudget(attempt domainexercise.ChallengeAttempt, now time.Time) time.Duration {
+	if attempt.Untimed() {
+		return hintTimeout
+	}
+	return min(hintTimeout, attempt.Deadline.Sub(now))
 }

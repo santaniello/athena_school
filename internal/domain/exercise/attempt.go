@@ -69,19 +69,30 @@ func NewAttempt(challenge Challenge, rubric RubricVersion, sessionExerciseID str
 	if rubric.ChallengeID != challenge.ID {
 		return ChallengeAttempt{}, ErrRubricChallengeMismatch
 	}
+	var deadline time.Time
+	if !challenge.Untimed() {
+		deadline = now.Add(time.Duration(challenge.TimeLimitMinutes) * time.Minute)
+	}
 	return ChallengeAttempt{
 		ChallengeID:       challenge.ID,
 		RubricVersionID:   rubric.ID,
 		SessionExerciseID: sessionExerciseID,
 		State:             AttemptInProgress,
 		StartedAt:         now,
-		Deadline:          now.Add(time.Duration(challenge.TimeLimitMinutes) * time.Minute),
+		Deadline:          deadline,
 	}, nil
 }
 
-// Expired reports whether the deadline has been reached.
+// Untimed reports whether the attempt has no deadline: its challenge is an
+// untimed practice.
+func (a ChallengeAttempt) Untimed() bool {
+	return a.Deadline.IsZero()
+}
+
+// Expired reports whether the deadline has been reached. An untimed attempt
+// never expires.
 func (a ChallengeAttempt) Expired(now time.Time) bool {
-	return !now.Before(a.Deadline)
+	return !a.Untimed() && !now.Before(a.Deadline)
 }
 
 var (

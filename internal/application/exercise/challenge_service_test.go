@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	domainexercise "github.com/santaniello/athena/internal/domain/exercise"
@@ -51,6 +52,7 @@ func TestChallengeService_Create_snapshotsNormalizedTopicAndPersists(t *testing.
 	expected := domainexercise.Challenge{
 		ID:                        "challenge-1",
 		Type:                      domainexercise.ChallengeTypeArchitecture,
+		Kind:                      domainexercise.ChallengeKindInterview,
 		Title:                     "Design a URL shortener",
 		Scenario:                  "A startup needs a service that shortens URLs.",
 		FunctionalRequirements:    []string{"Create a short link"},
@@ -89,6 +91,7 @@ func TestChallengeService_Create_trimsTextFields(t *testing.T) {
 	repo.EXPECT().Create(ctx, domainexercise.Challenge{
 		ID:                        "challenge-1",
 		Type:                      domainexercise.ChallengeTypeArchitecture,
+		Kind:                      domainexercise.ChallengeKindInterview,
 		Title:                     "Padded title",
 		Scenario:                  "Padded scenario",
 		FunctionalRequirements:    []string{"First", "Second"},
@@ -188,7 +191,7 @@ func TestChallengeService_Create_returnsRepositoryFailure(t *testing.T) {
 	boom := errors.New("disk full")
 	sessions.EXPECT().ReadSession(ctx, "session-1").Return(domainexercise.SourceSession{Topic: "caching"}, nil)
 	repo.EXPECT().Create(ctx, domainexercise.Challenge{
-		ID: "challenge-1", Type: domainexercise.ChallengeTypeArchitecture,
+		ID: "challenge-1", Type: domainexercise.ChallengeTypeArchitecture, Kind: domainexercise.ChallengeKindInterview,
 		Title: "Design a URL shortener", Scenario: "A startup needs a service that shortens URLs.",
 		FunctionalRequirements: []string{"Create a short link"}, NonFunctionalRequirements: []string{}, Constraints: []string{},
 		Objectives: []string{"Justify the storage choice"}, Difficulty: domainexercise.DifficultyBeginner,
@@ -261,4 +264,25 @@ func TestChallengeService_List_returnsRepositoryFailure(t *testing.T) {
 
 	// Then the failure surfaces
 	require.ErrorIs(t, err, boom)
+}
+
+func TestChallengeService_Create_practiceHasNoTimeLimit(t *testing.T) {
+	// Given a practice input
+	service, repo, sessions := newTestService(t)
+	ctx := context.Background()
+	sessions.EXPECT().ReadSession(ctx, "session-1").Return(domainexercise.SourceSession{Topic: "Caching"}, nil)
+	input := validInput()
+	input.Kind = domainexercise.ChallengeKindPractice
+	var stored domainexercise.Challenge
+	repo.EXPECT().Create(ctx, mock.MatchedBy(func(c domainexercise.Challenge) bool { stored = c; return true })).Return(nil)
+
+	// When creating the challenge
+	got, err := service.Create(ctx, input)
+
+	// Then it is a practice with no time limit
+	require.NoError(t, err)
+	assert.Equal(t, stored, got)
+	assert.Equal(t, domainexercise.ChallengeKindPractice, got.Kind)
+	assert.Equal(t, 0, got.TimeLimitMinutes)
+	assert.True(t, got.Untimed())
 }

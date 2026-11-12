@@ -933,6 +933,7 @@ function StudyChatScreen({
                 offerId={offer.id}
                 language={offerProfile.language}
                 defaultDifficulty={offerProfile.difficulty}
+                topic={sessionTopic}
                 onAccepted={() => {
                   setOffer(null)
                   refreshExerciseCards(true)

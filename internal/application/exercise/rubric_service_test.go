@@ -337,3 +337,50 @@ func TestRubricService_reads_delegateToTheRepository(t *testing.T) {
 		assert.ErrorIs(t, err, boom)
 	})
 }
+
+func TestRubricService_SetChallengeRubric_practiceStoresALeanRubricWithoutBaseCriteria(t *testing.T) {
+	// Given a practice challenge with no rubric yet
+	service, challenges, rubrics := newTestRubricService(t)
+	ctx := context.Background()
+	challenges.EXPECT().Get(ctx, "challenge-1").
+		Return(domainexercise.Challenge{ID: "challenge-1", Kind: domainexercise.ChallengeKindPractice}, nil)
+	rubrics.EXPECT().Latest(ctx, "challenge-1").Return(domainexercise.RubricVersion{}, domainexercise.ErrRubricNotFound)
+	var stored domainexercise.RubricVersion
+	rubrics.EXPECT().Create(ctx, mockRubricVersion(&stored)).Return(nil)
+
+	// When setting two concept criteria
+	got, err := service.SetChallengeRubric(ctx, "challenge-1", []ChallengeCriterionInput{criterionInput("cache-hit", 30), criterionInput("invalidation", 10)})
+
+	// Then the rubric has only those criteria, weights sum to 100 and it records no base version
+	require.NoError(t, err)
+	assert.Equal(t, stored, got)
+	assert.Equal(t, domainexercise.NoBaseRubricVersion, got.BaseVersion)
+	require.Len(t, got.Criteria, 2)
+	assert.Equal(t, []int{75, 25}, weightsOfCriteria(got.Criteria))
+	for _, criterion := range got.Criteria {
+		assert.Equal(t, domainexercise.CriterionSourceChallenge, criterion.Source)
+	}
+}
+
+func TestRubricService_SetChallengeRubric_practiceRejectsMoreThanThreeCriteriaAndStoresNothing(t *testing.T) {
+	// Given a practice challenge and four criteria
+	service, challenges, _ := newTestRubricService(t)
+	ctx := context.Background()
+	challenges.EXPECT().Get(ctx, "challenge-1").
+		Return(domainexercise.Challenge{ID: "challenge-1", Kind: domainexercise.ChallengeKindPractice}, nil)
+	criteria := []ChallengeCriterionInput{criterionInput("a", 1), criterionInput("b", 1), criterionInput("c", 1), criterionInput("d", 1)}
+
+	// When setting them
+	_, err := service.SetChallengeRubric(ctx, "challenge-1", criteria)
+
+	// Then the lean limit refuses them (strict mocks: nothing is stored)
+	assert.ErrorIs(t, err, domainexercise.ErrChallengeCriteriaCount)
+}
+
+func weightsOfCriteria(criteria []domainexercise.RubricCriterion) []int {
+	weights := make([]int, len(criteria))
+	for i, criterion := range criteria {
+		weights[i] = criterion.Weight
+	}
+	return weights
+}

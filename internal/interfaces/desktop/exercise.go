@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -20,7 +21,7 @@ func WithAttemptService(service *applicationexercise.AttemptService) Option {
 
 // challengeGenerator is the use case behind GenerateChallenge (spec 3.6.1).
 type challengeGenerator interface {
-	GenerateChallenge(ctx context.Context, sessionID string, difficulty domainexercise.Difficulty) (domainexercise.Challenge, error)
+	GenerateChallenge(ctx context.Context, sessionID string, spec domainexercise.ChallengeSpec) (domainexercise.Challenge, error)
 }
 
 // WithGenerationService wires challenge generation from a studied session.
@@ -101,7 +102,7 @@ func WithHistoryService(history historyReader) Option {
 // exerciseOffers is the use case behind the exercise offer bindings (spec 3.14).
 type exerciseOffers interface {
 	GetPending(ctx context.Context, sessionID string) (domainexercise.Offer, bool, error)
-	Accept(ctx context.Context, offerID string, difficulty domainexercise.Difficulty) (applicationexercise.SessionExerciseView, error)
+	Accept(ctx context.Context, offerID string, spec domainexercise.ChallengeSpec) (applicationexercise.SessionExerciseView, error)
 	Decline(ctx context.Context, offerID string) error
 }
 
@@ -288,12 +289,21 @@ type AttemptDTO struct {
 	SessionExerciseID string         `json:"sessionExerciseId"`
 	State             string         `json:"state"`
 	StartedAt         string         `json:"startedAt"`
-	Deadline          string         `json:"deadline"`
+	Deadline          string         `json:"deadline"` // empty when untimed
 	SubmittedAt       string         `json:"submittedAt"`
 	SubmitReason      string         `json:"submitReason"`
 	Statement         StatementDTO   `json:"statement"`
 	Criteria          []CriterionDTO `json:"criteria"`
 	Submission        *SubmissionDTO `json:"submission"`
+}
+
+// deadlineText is the attempt's deadline in RFC 3339, or empty for an untimed
+// attempt, which has none.
+func deadlineText(attempt domainexercise.ChallengeAttempt) string {
+	if attempt.Untimed() {
+		return ""
+	}
+	return attempt.Deadline.Format(time.RFC3339)
 }
 
 func toAttemptDTO(view applicationexercise.AttemptView) AttemptDTO {
@@ -306,7 +316,7 @@ func toAttemptDTO(view applicationexercise.AttemptView) AttemptDTO {
 		SessionExerciseID: attempt.SessionExerciseID,
 		State:             string(attempt.State),
 		StartedAt:         attempt.StartedAt.Format(time.RFC3339),
-		Deadline:          attempt.Deadline.Format(time.RFC3339),
+		Deadline:          deadlineText(attempt),
 		SubmitReason:      string(attempt.SubmitReason),
 		Statement: StatementDTO{
 			Scenario:                  view.Statement.Scenario,
@@ -428,37 +438,42 @@ func (a *App) discardStaleAttempts() {
 // ChallengeSummaryDTO is the short read model of a challenge: enough for the
 // catalog to list it.
 type ChallengeSummaryDTO struct {
-	ID               string `json:"id"`
-	Title            string `json:"title"`
-	Topic            string `json:"topic"`
-	Difficulty       string `json:"difficulty"`
-	TimeLimitMinutes int    `json:"timeLimitMinutes"`
+	ID         string `json:"id"`
+	Kind       string `json:"kind"` // INTERVIEW or PRACTICE
+	Title      string `json:"title"`
+	Topic      string `json:"topic"`
+	Difficulty string `json:"difficulty"`
+	// TimeLimitMinutes is 0 for an untimed practice.
+	TimeLimitMinutes int `json:"timeLimitMinutes"`
 }
 
 // GenerateChallenge asks the AI for a challenge and its rubric from a studied
-// session and saves them to the catalog; it does not start the exam. A failure
-// stores nothing and may be retried. See
-// specs/phases/phase-03-architecture-lab/06-01-challenge-generation.md.
-func (a *App) GenerateChallenge(sessionID, difficulty string) (ChallengeSummaryDTO, error) {
+// session and saves them to the catalog; it does not start the exam. The kind
+// is INTERVIEW (empty means the same) or PRACTICE, and a practice needs the
+// goal the user wants to practice. A failure stores nothing and may be
+// retried. See specs/phases/phase-03-architecture-lab/06-01-challenge-generation.md
+// and 18-practice-challenges.md.
+func (a *App) GenerateChallenge(sessionID, difficulty, kind, practiceGoal string) (ChallengeSummaryDTO, error) {
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
 		return ChallengeSummaryDTO{}, invalidInput("session id is required")
 	}
-	level := domainexercise.Difficulty(difficulty)
-	if domainexercise.DefaultTimeLimit(level) == 0 {
-		return ChallengeSummaryDTO{}, invalidInput("difficulty must be BEGINNER, INTERMEDIATE or ADVANCED")
+	spec, err := parseChallengeSpec(difficulty, kind, practiceGoal, false)
+	if err != nil {
+		return ChallengeSummaryDTO{}, err
 	}
 	ctx, release, ok := a.beginGeneration()
 	if !ok {
 		return ChallengeSummaryDTO{}, &ExerciseError{Code: exerciseCodeGenerationInProgress, Message: "a challenge is already being generated"}
 	}
 	defer release()
-	challenge, err := a.generator.GenerateChallenge(ctx, sessionID, level)
+	challenge, err := a.generator.GenerateChallenge(ctx, sessionID, spec)
 	if err != nil {
 		return ChallengeSummaryDTO{}, toExerciseError(err)
 	}
 	return ChallengeSummaryDTO{
 		ID:               challenge.ID,
+		Kind:             string(challenge.Kind),
 		Title:            challenge.Title,
 		Topic:            challenge.Topic,
 		Difficulty:       string(challenge.Difficulty),
@@ -479,6 +494,7 @@ type CatalogFilterDTO struct {
 // requirements or rubric: a row must not give the exam away.
 type ChallengeCatalogItemDTO struct {
 	ID               string `json:"id"`
+	Kind             string `json:"kind"`
 	Title            string `json:"title"`
 	Topic            string `json:"topic"`
 	Difficulty       string `json:"difficulty"`
@@ -528,7 +544,7 @@ func (a *App) ListChallengeCatalog(filter CatalogFilterDTO) (ChallengeCatalogDTO
 	}
 	for _, item := range catalog.Items {
 		dto.Items = append(dto.Items, ChallengeCatalogItemDTO{
-			ID: item.ChallengeID, Title: item.Title, Topic: item.Topic, Difficulty: string(item.Difficulty),
+			ID: item.ChallengeID, Kind: string(item.Kind), Title: item.Title, Topic: item.Topic, Difficulty: string(item.Difficulty),
 			TimeLimitMinutes: item.TimeLimitMinutes, Status: string(item.Status),
 			Attempts: item.Attempts, BestDiagramScore: item.BestDiagramScore,
 		})
@@ -1019,10 +1035,12 @@ type ExerciseOfferDTO struct {
 // SessionExerciseDTO is the challenge an accepted offer linked to the session.
 type SessionExerciseDTO struct {
 	ChallengeID string `json:"challengeId"`
+	Kind        string `json:"kind"`
 	Title       string `json:"title"`
 	Topic       string `json:"topic"`
 	Difficulty  string `json:"difficulty"`
-	// TimeLimitMinutes is the exam time shown in the rules dialog.
+	// TimeLimitMinutes is the exam time shown in the rules dialog. It is 0 for
+	// an untimed practice.
 	TimeLimitMinutes int `json:"timeLimitMinutes"`
 }
 
@@ -1045,15 +1063,16 @@ func (a *App) GetPendingOffer(sessionID string) (*ExerciseOfferDTO, error) {
 }
 
 // AcceptOffer links a challenge of the chosen difficulty (BEGINNER,
-// INTERMEDIATE or ADVANCED; empty uses the profile's) to the offer's session,
-// generating one when the session has none of that difficulty, and returns it.
-// On failure the offer stays pending.
-func (a *App) AcceptOffer(offerID string, difficulty string) (SessionExerciseDTO, error) {
+// INTERMEDIATE or ADVANCED; empty uses the profile's) and kind (INTERVIEW,
+// empty meaning the same, or PRACTICE with the goal to practice) to the
+// offer's session, generating one when the session has none to reuse, and
+// returns it. On failure the offer stays pending.
+func (a *App) AcceptOffer(offerID, difficulty, kind, practiceGoal string) (SessionExerciseDTO, error) {
 	offerID = strings.TrimSpace(offerID)
 	if offerID == "" {
 		return SessionExerciseDTO{}, invalidInput("offer id is required")
 	}
-	wanted, err := parseOfferDifficulty(difficulty)
+	wanted, err := parseChallengeSpec(difficulty, kind, practiceGoal, true)
 	if err != nil {
 		return SessionExerciseDTO{}, err
 	}
@@ -1067,19 +1086,35 @@ func (a *App) AcceptOffer(offerID string, difficulty string) (SessionExerciseDTO
 		return SessionExerciseDTO{}, toExerciseError(err)
 	}
 	return SessionExerciseDTO{
-		ChallengeID: view.ChallengeID, Title: view.Title, Topic: view.Topic, Difficulty: string(view.Difficulty),
+		ChallengeID: view.ChallengeID, Kind: string(view.Kind), Title: view.Title, Topic: view.Topic, Difficulty: string(view.Difficulty),
 		TimeLimitMinutes: view.TimeLimitMinutes,
 	}, nil
 }
 
-// parseOfferDifficulty reads the difficulty chosen on an offer; blank means no
-// choice.
-func parseOfferDifficulty(value string) (domainexercise.Difficulty, error) {
-	switch difficulty := domainexercise.Difficulty(strings.TrimSpace(value)); difficulty {
-	case "", domainexercise.DifficultyBeginner, domainexercise.DifficultyIntermediate, domainexercise.DifficultyAdvanced:
-		return difficulty, nil
+// parseChallengeSpec reads what the user chose when creating a challenge. The
+// kind defaults to INTERVIEW and a practice needs its goal. A blank difficulty
+// is allowed only where the profile's is used (allowBlankDifficulty).
+func parseChallengeSpec(difficulty, kind, practiceGoal string, allowBlankDifficulty bool) (domainexercise.ChallengeSpec, error) {
+	spec := domainexercise.ChallengeSpec{
+		Difficulty:   domainexercise.Difficulty(strings.TrimSpace(difficulty)),
+		Kind:         domainexercise.ChallengeKind(strings.TrimSpace(kind)),
+		PracticeGoal: practiceGoal,
+	}.Normalized()
+	probe := spec
+	if allowBlankDifficulty && probe.Difficulty == "" {
+		probe.Difficulty = domainexercise.DifficultyIntermediate
+	}
+	switch err := probe.Validate(); {
+	case err == nil:
+		return spec, nil
+	case errors.Is(err, domainexercise.ErrDifficultyInvalid):
+		return spec, invalidInput("difficulty must be BEGINNER, INTERMEDIATE or ADVANCED")
+	case errors.Is(err, domainexercise.ErrChallengeKindInvalid):
+		return spec, invalidInput("kind must be INTERVIEW or PRACTICE")
+	case errors.Is(err, domainexercise.ErrPracticeGoalRequired):
+		return spec, invalidInput("say what you want to practice")
 	default:
-		return "", invalidInput("difficulty must be BEGINNER, INTERMEDIATE or ADVANCED")
+		return spec, invalidInput(fmt.Sprintf("the practice goal must have at most %d characters", domainexercise.MaxPracticeGoalLength))
 	}
 }
 
@@ -1109,6 +1144,7 @@ type SessionExerciseCardDTO struct {
 	SessionExerciseID string           `json:"sessionExerciseId"`
 	MessageID         string           `json:"messageId"`
 	ChallengeID       string           `json:"challengeId"`
+	Kind              string           `json:"kind"`
 	Title             string           `json:"title"`
 	Difficulty        string           `json:"difficulty"`
 	TimeLimitMinutes  int              `json:"timeLimitMinutes"`
@@ -1135,7 +1171,7 @@ func (a *App) ListSessionExercises(sessionID string) ([]SessionExerciseCardDTO, 
 	for i, card := range cards {
 		dtos[i] = SessionExerciseCardDTO{
 			SessionExerciseID: card.SessionExerciseID, MessageID: card.MessageID, ChallengeID: card.ChallengeID,
-			Title: card.Title, Difficulty: string(card.Difficulty), TimeLimitMinutes: card.TimeLimitMinutes,
+			Kind: string(card.Kind), Title: card.Title, Difficulty: string(card.Difficulty), TimeLimitMinutes: card.TimeLimitMinutes,
 			Status: string(card.Status), Attempts: card.Attempts,
 		}
 		if card.Latest != nil {

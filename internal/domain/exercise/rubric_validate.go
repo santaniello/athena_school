@@ -29,16 +29,23 @@ var (
 // Validate reports the first rule the rubric breaks, each with its own
 // error: every base criterion present, 1 to 6 challenge criteria, at most 11
 // in total, weights of at least 1 summing to exactly 100, unique keys and
-// non-empty, bounded text.
+// non-empty, bounded text. A lean rubric (BaseVersion "none") has no base
+// criteria at all and 1 to 3 challenge criteria.
 func (v RubricVersion) Validate() error {
 	challengeCount, err := countBySource(v.Criteria)
 	if err != nil {
 		return err
 	}
-	if err := checkBaseCriteriaPresent(v.Criteria); err != nil {
+	maxChallenge := MaxChallengeCriteria
+	if v.Lean() {
+		if challengeCount != len(v.Criteria) {
+			return ErrCriterionSourceInvalid
+		}
+		maxChallenge = MaxPracticeCriteria
+	} else if err := checkBaseCriteriaPresent(v.Criteria); err != nil {
 		return err
 	}
-	if challengeCount < 1 || challengeCount > MaxChallengeCriteria {
+	if challengeCount < 1 || challengeCount > maxChallenge {
 		return ErrChallengeCriteriaCount
 	}
 	if len(v.Criteria) > maxRubricCriteria {

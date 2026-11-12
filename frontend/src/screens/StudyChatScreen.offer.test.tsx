@@ -105,6 +105,7 @@ const CARD: SessionExerciseCard = {
   sessionExerciseId: 'link-1',
   messageId: 'm2',
   challengeId: 'c1',
+  kind: 'INTERVIEW',
   title: 'Design a cache',
   difficulty: 'ADVANCED',
   timeLimitMinutes: 45,

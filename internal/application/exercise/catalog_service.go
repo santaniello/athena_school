@@ -26,10 +26,11 @@ func NewCatalogService(challenges domainexercise.ChallengeRepository, records do
 // plus the challenge's progress.
 type CatalogItem struct {
 	ChallengeID      string
+	Kind             domainexercise.ChallengeKind
 	Title            string
 	Topic            string
 	Difficulty       domainexercise.Difficulty
-	TimeLimitMinutes int
+	TimeLimitMinutes int // 0 for an untimed practice
 	Status           domainexercise.ProgressStatus
 	Attempts         int
 	BestDiagramScore int
@@ -184,7 +185,7 @@ func deriveEntry(challenge domainexercise.Challenge, records []domainexercise.At
 	return catalogEntry{
 		running: slices.ContainsFunc(summaries, func(summary domainexercise.AttemptSummary) bool { return summary.Running }),
 		item: CatalogItem{
-			ChallengeID: challenge.ID, Title: challenge.Title, Topic: challenge.Topic,
+			ChallengeID: challenge.ID, Kind: challenge.Kind, Title: challenge.Title, Topic: challenge.Topic,
 			Difficulty: challenge.Difficulty, TimeLimitMinutes: challenge.TimeLimitMinutes,
 			Status: progress.Status, Attempts: progress.Attempts, BestDiagramScore: progress.BestDiagramScore,
 		},
