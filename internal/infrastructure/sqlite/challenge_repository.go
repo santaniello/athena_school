@@ -15,7 +15,7 @@ import (
 // ordering the TEXT columns lexicographically is ordering them by time.
 const challengeTimeLayout = "2006-01-02T15:04:05.000000000Z"
 
-const challengeColumns = `id, type, title, scenario, functional_requirements, non_functional_requirements,
+const challengeColumns = `id, type, kind, title, scenario, functional_requirements, non_functional_requirements,
 	constraints, objectives, difficulty, topic, source_session_id, origin, time_limit_minutes, defense_questions, created_at, updated_at`
 
 // ChallengeRepository is the SQLite-backed implementation of
@@ -41,8 +41,8 @@ func (r *ChallengeRepository) Create(ctx context.Context, challenge exercise.Cha
 		sourceSessionID = challenge.SourceSessionID
 	}
 	_, err = execer(ctx, r.db).ExecContext(ctx,
-		`INSERT INTO challenges (`+challengeColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		challenge.ID, string(challenge.Type), challenge.Title, challenge.Scenario,
+		`INSERT INTO challenges (`+challengeColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		challenge.ID, string(challenge.Type), string(challenge.Kind), challenge.Title, challenge.Scenario,
 		lists[0], lists[1], lists[2], lists[3],
 		string(challenge.Difficulty), challenge.Topic, sourceSessionID, string(challenge.Origin),
 		challenge.TimeLimitMinutes, challenge.DefenseQuestions,
@@ -197,17 +197,18 @@ func encodeChallengeLists(challenge exercise.Challenge) ([4]string, error) {
 
 func scanChallenge(row rowScanner) (exercise.Challenge, error) {
 	var c exercise.Challenge
-	var challengeType, difficulty, origin, createdAt, updatedAt string
+	var challengeType, kind, difficulty, origin, createdAt, updatedAt string
 	var lists [4]string
 	var sourceSessionID sql.NullString
 	err := row.Scan(
-		&c.ID, &challengeType, &c.Title, &c.Scenario, &lists[0], &lists[1], &lists[2], &lists[3],
+		&c.ID, &challengeType, &kind, &c.Title, &c.Scenario, &lists[0], &lists[1], &lists[2], &lists[3],
 		&difficulty, &c.Topic, &sourceSessionID, &origin, &c.TimeLimitMinutes, &c.DefenseQuestions, &createdAt, &updatedAt,
 	)
 	if err != nil {
 		return exercise.Challenge{}, err
 	}
 	c.Type = exercise.ChallengeType(challengeType)
+	c.Kind = exercise.ChallengeKind(kind)
 	c.Difficulty = exercise.Difficulty(difficulty)
 	c.Origin = exercise.ChallengeOrigin(origin)
 	c.SourceSessionID = sourceSessionID.String

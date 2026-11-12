@@ -246,6 +246,11 @@ var migrations = []func(*sql.DB) error{
 	// attempt, deleted explicitly. See
 	// specs/phases/phase-03-architecture-lab/12-architecture-defense.md.
 	addChallengesDefenseQuestionsColumn,
+	// challenges.kind is INTERVIEW or PRACTICE. Challenges stored before it
+	// existed are interviews. A practice challenge may have a time limit of 0
+	// (untimed), so its attempts store a zero deadline. See
+	// specs/phases/phase-03-architecture-lab/18-practice-challenges.md.
+	addChallengesKindColumn,
 	execSQL(`CREATE TABLE IF NOT EXISTS defense_turns (
 		id           TEXT PRIMARY KEY,
 		attempt_id   TEXT NOT NULL REFERENCES challenge_attempts(id),
@@ -327,6 +332,21 @@ func addChallengesDefenseQuestionsColumn(db *sql.DB) error {
 	_, err = db.Exec(fmt.Sprintf(
 		`ALTER TABLE challenges ADD COLUMN defense_questions INTEGER NOT NULL DEFAULT %d CHECK (defense_questions BETWEEN %d AND %d)`,
 		exercise.DefaultDefenseQuestions, exercise.MinDefenseQuestions, exercise.MaxDefenseQuestions))
+	return err
+}
+
+// addChallengesKindColumn adds challenges.kind if it does not already exist
+// (SQLite has no "ADD COLUMN IF NOT EXISTS"). Stored challenges become
+// interviews.
+func addChallengesKindColumn(db *sql.DB) error {
+	has, err := hasColumn(db, "challenges", "kind")
+	if err != nil {
+		return err
+	}
+	if has {
+		return nil
+	}
+	_, err = db.Exec(`ALTER TABLE challenges ADD COLUMN kind TEXT NOT NULL DEFAULT 'INTERVIEW' CHECK (kind IN ('INTERVIEW', 'PRACTICE'))`)
 	return err
 }
 

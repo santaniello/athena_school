@@ -48,8 +48,10 @@ type generationCriterion struct {
 // parseGeneration turns the model's answer into a challenge and its criteria
 // and validates both with the domain rules, so nothing invalid reaches
 // storage. Every failure wraps ErrInvalidGeneration. The topic is the source
-// session's topic, used only to validate.
-func parseGeneration(content, topic string, difficulty domainexercise.Difficulty) (generatedChallenge, error) {
+// session's topic, used only to validate. The spec is the normalized one the
+// challenge was requested with: it sets the difficulty and the kind, and a
+// practice is checked against the lean rubric rules.
+func parseGeneration(content, topic string, spec domainexercise.ChallengeSpec) (generatedChallenge, error) {
 	var output generationOutput
 	if err := json.Unmarshal(stripCodeFence(content), &output); err != nil {
 		return generatedChallenge{}, fmt.Errorf("%w: reading the JSON: %w", ErrInvalidGeneration, err)
@@ -66,7 +68,8 @@ func parseGeneration(content, topic string, difficulty domainexercise.Difficulty
 			NonFunctionalRequirements: trimItems(output.NonFunctionalRequirements),
 			Constraints:               trimItems(output.Constraints),
 			Objectives:                trimItems(output.Objectives),
-			Difficulty:                difficulty,
+			Difficulty:                spec.Difficulty,
+			Kind:                      spec.Kind,
 			Origin:                    domainexercise.OriginAIGenerated,
 		},
 		Criteria: criteria,
@@ -146,6 +149,7 @@ func slugOf(name string) string {
 func validateGenerated(generated generatedChallenge, topic string) error {
 	probe := domainexercise.Challenge{
 		Type:                      domainexercise.ChallengeTypeArchitecture,
+		Kind:                      generated.Challenge.Kind,
 		Title:                     generated.Challenge.Title,
 		Scenario:                  generated.Challenge.Scenario,
 		FunctionalRequirements:    generated.Challenge.FunctionalRequirements,
@@ -155,7 +159,7 @@ func validateGenerated(generated generatedChallenge, topic string) error {
 		Difficulty:                generated.Challenge.Difficulty,
 		Topic:                     topic,
 		Origin:                    generated.Challenge.Origin,
-		TimeLimitMinutes:          domainexercise.DefaultTimeLimit(generated.Challenge.Difficulty),
+		TimeLimitMinutes:          domainexercise.TimeLimitFor(generated.Challenge.Kind, generated.Challenge.Difficulty),
 		DefenseQuestions:          domainexercise.DefaultDefenseQuestions,
 	}
 	if err := probe.Validate(); err != nil {
@@ -168,9 +172,10 @@ func validateGenerated(generated generatedChallenge, topic string) error {
 			Weight: input.Weight, Mandatory: input.Mandatory, Levels: input.Levels,
 		}
 	}
-	merged, err := domainexercise.MergeRubric(domainexercise.BaseRubric(), criteria)
+	kind := generated.Challenge.Kind
+	merged, err := domainexercise.MergeRubric(domainexercise.BaseCriteriaFor(kind), criteria)
 	if err != nil {
 		return err
 	}
-	return domainexercise.RubricVersion{Criteria: merged}.Validate()
+	return domainexercise.RubricVersion{BaseVersion: domainexercise.BaseVersionFor(kind), Criteria: merged}.Validate()
 }

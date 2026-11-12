@@ -32,6 +32,27 @@ import type { LabCriterion, LabHint, LabStatement } from './lab'
 
 export type ChallengeStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'NEEDS_IMPROVEMENT' | 'COMPLETED'
 export type ChallengeDifficulty = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED'
+// An interview simulates a job interview (broad scenario, timed, full rubric).
+// A practice trains one concept the user names (no time limit, lean rubric).
+// See specs/phases/phase-03-architecture-lab/18-practice-challenges.md.
+export type ChallengeKind = 'INTERVIEW' | 'PRACTICE'
+
+export const KIND_LABELS: Record<ChallengeKind, string> = {
+  INTERVIEW: 'Interview',
+  PRACTICE: 'Practice',
+}
+
+// A practice has no time limit, which the backend sends as 0 minutes.
+export function formatTimeLimit(minutes: number): string {
+  return minutes === 0 ? 'No time limit' : `${minutes} min`
+}
+
+// What a practice could be about, offered as one-click chips: the topic of the
+// study session. No model call.
+export function practiceSuggestions(topic: string | undefined): string[] {
+  const trimmed = topic?.trim() ?? ''
+  return trimmed === '' ? [] : [trimmed]
+}
 
 export const STATUS_LABELS: Record<ChallengeStatus, string> = {
   NOT_STARTED: 'Not started',
@@ -57,6 +78,7 @@ export interface CatalogFilter {
 // A row shows only what does not give the exam away.
 export interface CatalogItem {
   id: string
+  kind: string
   title: string
   topic: string
   difficulty: string
@@ -82,6 +104,7 @@ export interface SessionOption {
 
 export interface GeneratedChallenge {
   id: string
+  kind: string
   title: string
   topic: string
   difficulty: string
@@ -112,13 +135,17 @@ export async function listSessionsForGeneration(): Promise<SessionOption[]> {
   return sessions.map((session) => ({ ...session }))
 }
 
+// The kind defaults to an interview. A practice carries the goal the user wrote.
 export async function generateChallenge(
   sessionId: string,
   difficulty: ChallengeDifficulty,
+  kind: ChallengeKind = 'INTERVIEW',
+  practiceGoal = '',
 ): Promise<GeneratedChallenge> {
-  const created = await GenerateChallenge(sessionId, difficulty)
+  const created = await GenerateChallenge(sessionId, difficulty, kind, practiceGoal)
   return {
     id: created.id,
+    kind: created.kind,
     title: created.title,
     topic: created.topic,
     difficulty: created.difficulty,
@@ -189,7 +216,7 @@ export interface Attempt {
   challengeId: string
   title: string
   topic: string
-  // ISO timestamp; the backend owns the clock.
+  // ISO timestamp; the backend owns the clock. Empty for an untimed practice.
   deadline: string
   statement: LabStatement
   criteria: LabCriterion[]
@@ -519,6 +546,7 @@ export interface SessionExerciseCard {
   sessionExerciseId: string
   messageId: string
   challengeId: string
+  kind: string
   title: string
   difficulty: string
   timeLimitMinutes: number
@@ -534,6 +562,7 @@ export async function listSessionExercises(sessionId: string): Promise<SessionEx
     sessionExerciseId: card.sessionExerciseId,
     messageId: card.messageId,
     challengeId: card.challengeId,
+    kind: card.kind,
     title: card.title,
     difficulty: card.difficulty,
     timeLimitMinutes: card.timeLimitMinutes,
@@ -576,8 +605,14 @@ export async function getPendingOffer(sessionId: string): Promise<ExerciseOffer 
   return { id: offer.id, sessionId: offer.sessionId, messageId: offer.messageId }
 }
 
-export async function acceptOffer(offerId: string, difficulty: ChallengeDifficulty): Promise<void> {
-  await AcceptOffer(offerId, difficulty)
+// The kind defaults to an interview. A practice carries the goal the user wrote.
+export async function acceptOffer(
+  offerId: string,
+  difficulty: ChallengeDifficulty,
+  kind: ChallengeKind = 'INTERVIEW',
+  practiceGoal = '',
+): Promise<void> {
+  await AcceptOffer(offerId, difficulty, kind, practiceGoal)
 }
 
 export function declineOffer(offerId: string): Promise<void> {
@@ -588,6 +623,10 @@ export interface OfferLabels {
   title: string
   difficulty: string
   levels: Record<ChallengeDifficulty, string>
+  kind: string
+  kinds: Record<ChallengeKind, string>
+  goal: string
+  goalPlaceholder: string
   accept: string
   decline: string
   preparing: string
@@ -601,6 +640,10 @@ export function offerLabels(language: string | undefined): OfferLabels {
       title: 'Praticar com um exercício de arquitetura',
       difficulty: 'Dificuldade',
       levels: { BEGINNER: 'Iniciante', INTERMEDIATE: 'Intermediário', ADVANCED: 'Avançado' },
+      kind: 'Tipo',
+      kinds: { INTERVIEW: 'Entrevista', PRACTICE: 'Prática' },
+      goal: 'O que você quer praticar?',
+      goalPlaceholder: 'Ex.: cache aside, uma API lenta que depende de outra…',
       accept: 'Aceitar',
       decline: 'Recusar',
       preparing: 'Preparando seu exercício…',
@@ -610,6 +653,10 @@ export function offerLabels(language: string | undefined): OfferLabels {
     title: 'Practice with an architecture exercise',
     difficulty: 'Difficulty',
     levels: DIFFICULTY_LABELS,
+    kind: 'Type',
+    kinds: KIND_LABELS,
+    goal: 'What do you want to practice?',
+    goalPlaceholder: 'E.g. cache aside, a slow API that another one depends on…',
     accept: 'Accept',
     decline: 'Decline',
     preparing: 'Preparing your exercise…',

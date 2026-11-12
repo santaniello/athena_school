@@ -38,6 +38,7 @@ func newTestChallenge(id string) exercise.Challenge {
 	return exercise.Challenge{
 		ID:                        id,
 		Type:                      exercise.ChallengeTypeArchitecture,
+		Kind:                      exercise.ChallengeKindInterview,
 		Title:                     "Design a URL shortener",
 		Scenario:                  "A startup needs a service that shortens URLs.",
 		FunctionalRequirements:    []string{"Create a short link", "Redirect a short link"},
@@ -66,6 +67,23 @@ func TestChallengeRepository_CreateThenGet_roundTripsEveryField(t *testing.T) {
 	got, err := repo.Get(ctx, "challenge-1")
 
 	// Then every field, including list order and timestamps, is preserved
+	require.NoError(t, err)
+	assert.Equal(t, challenge, got)
+}
+
+func TestChallengeRepository_CreateThenGet_roundTripsAnUntimedPractice(t *testing.T) {
+	// Given a practice challenge with no time limit
+	repo, _ := newTestChallengeRepository(t)
+	ctx := context.Background()
+	challenge := newTestChallenge("challenge-1")
+	challenge.Kind = exercise.ChallengeKindPractice
+	challenge.TimeLimitMinutes = 0
+
+	// When creating and reading it back
+	require.NoError(t, repo.Create(ctx, challenge))
+	got, err := repo.Get(ctx, "challenge-1")
+
+	// Then the kind and the zero time limit are preserved
 	require.NoError(t, err)
 	assert.Equal(t, challenge, got)
 }

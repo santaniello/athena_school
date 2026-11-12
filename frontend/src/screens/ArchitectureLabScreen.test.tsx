@@ -61,6 +61,7 @@ vi.mock('@/components/generate-challenge-dialog', () => ({
 function item(id: string, overrides: Partial<CatalogItem> = {}): CatalogItem {
   return {
     id,
+    kind: 'INTERVIEW',
     title: `Challenge ${id}`,
     topic: 'caching',
     difficulty: 'INTERMEDIATE',

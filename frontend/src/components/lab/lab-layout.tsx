@@ -22,7 +22,8 @@ interface LabLayoutProps {
   difficulty: string
   statement: LabStatement
   criteria: LabCriterion[]
-  // ISO timestamp of the attempt's deadline, owned by the backend.
+  // ISO timestamp of the attempt's deadline, owned by the backend. Empty for an
+  // untimed practice, which shows no countdown and never expires.
   deadline: string
   now?: () => number
   hints: LabHint[]
@@ -133,7 +134,9 @@ function LabLayout({
             <Badge variant="muted">{topic}</Badge>
           </div>
           <div className="flex items-center gap-3">
-            {!stage && <LabCountdown deadline={deadline} now={now} onExpire={onExpire} />}
+            {!stage && deadline !== '' && (
+              <LabCountdown deadline={deadline} now={now} onExpire={onExpire} />
+            )}
             <Button type="button" variant="outline" size="sm" onClick={() => setLeaving(true)}>
               Leave
             </Button>

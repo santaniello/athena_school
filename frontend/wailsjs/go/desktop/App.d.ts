@@ -3,7 +3,7 @@
 import {desktop} from '../models';
 import {context} from '../models';
 
-export function AcceptOffer(arg1:string,arg2:string):Promise<desktop.SessionExerciseDTO>;
+export function AcceptOffer(arg1:string,arg2:string,arg3:string,arg4:string):Promise<desktop.SessionExerciseDTO>;
 
 export function AnswerDefenseQuestion(arg1:string,arg2:string):Promise<desktop.DefenseDTO>;
 
@@ -31,7 +31,7 @@ export function EvaluateAttempt(arg1:string):Promise<desktop.EvaluationDTO>;
 
 export function EvaluateDefense(arg1:string):Promise<desktop.OutcomeDTO>;
 
-export function GenerateChallenge(arg1:string,arg2:string):Promise<desktop.ChallengeSummaryDTO>;
+export function GenerateChallenge(arg1:string,arg2:string,arg3:string,arg4:string):Promise<desktop.ChallengeSummaryDTO>;
 
 export function GetAttempt(arg1:string):Promise<desktop.AttemptDTO>;
 

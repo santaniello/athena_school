@@ -22,9 +22,9 @@ func (_m *MockChallengeGenerator) EXPECT() *MockChallengeGenerator_Expecter {
 	return &MockChallengeGenerator_Expecter{mock: &_m.Mock}
 }
 
-// GenerateChallenge provides a mock function with given fields: ctx, sessionID, difficulty
-func (_m *MockChallengeGenerator) GenerateChallenge(ctx context.Context, sessionID string, difficulty exercise.Difficulty) (exercise.Challenge, error) {
-	ret := _m.Called(ctx, sessionID, difficulty)
+// GenerateChallenge provides a mock function with given fields: ctx, sessionID, spec
+func (_m *MockChallengeGenerator) GenerateChallenge(ctx context.Context, sessionID string, spec exercise.ChallengeSpec) (exercise.Challenge, error) {
+	ret := _m.Called(ctx, sessionID, spec)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GenerateChallenge")
@@ -32,17 +32,17 @@ func (_m *MockChallengeGenerator) GenerateChallenge(ctx context.Context, session
 
 	var r0 exercise.Challenge
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, exercise.Difficulty) (exercise.Challenge, error)); ok {
-		return rf(ctx, sessionID, difficulty)
+	if rf, ok := ret.Get(0).(func(context.Context, string, exercise.ChallengeSpec) (exercise.Challenge, error)); ok {
+		return rf(ctx, sessionID, spec)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string, exercise.Difficulty) exercise.Challenge); ok {
-		r0 = rf(ctx, sessionID, difficulty)
+	if rf, ok := ret.Get(0).(func(context.Context, string, exercise.ChallengeSpec) exercise.Challenge); ok {
+		r0 = rf(ctx, sessionID, spec)
 	} else {
 		r0 = ret.Get(0).(exercise.Challenge)
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, string, exercise.Difficulty) error); ok {
-		r1 = rf(ctx, sessionID, difficulty)
+	if rf, ok := ret.Get(1).(func(context.Context, string, exercise.ChallengeSpec) error); ok {
+		r1 = rf(ctx, sessionID, spec)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -58,14 +58,14 @@ type MockChallengeGenerator_GenerateChallenge_Call struct {
 // GenerateChallenge is a helper method to define mock.On call
 //   - ctx context.Context
 //   - sessionID string
-//   - difficulty exercise.Difficulty
-func (_e *MockChallengeGenerator_Expecter) GenerateChallenge(ctx interface{}, sessionID interface{}, difficulty interface{}) *MockChallengeGenerator_GenerateChallenge_Call {
-	return &MockChallengeGenerator_GenerateChallenge_Call{Call: _e.mock.On("GenerateChallenge", ctx, sessionID, difficulty)}
+//   - spec exercise.ChallengeSpec
+func (_e *MockChallengeGenerator_Expecter) GenerateChallenge(ctx interface{}, sessionID interface{}, spec interface{}) *MockChallengeGenerator_GenerateChallenge_Call {
+	return &MockChallengeGenerator_GenerateChallenge_Call{Call: _e.mock.On("GenerateChallenge", ctx, sessionID, spec)}
 }
 
-func (_c *MockChallengeGenerator_GenerateChallenge_Call) Run(run func(ctx context.Context, sessionID string, difficulty exercise.Difficulty)) *MockChallengeGenerator_GenerateChallenge_Call {
+func (_c *MockChallengeGenerator_GenerateChallenge_Call) Run(run func(ctx context.Context, sessionID string, spec exercise.ChallengeSpec)) *MockChallengeGenerator_GenerateChallenge_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(string), args[2].(exercise.Difficulty))
+		run(args[0].(context.Context), args[1].(string), args[2].(exercise.ChallengeSpec))
 	})
 	return _c
 }
@@ -75,7 +75,7 @@ func (_c *MockChallengeGenerator_GenerateChallenge_Call) Return(_a0 exercise.Cha
 	return _c
 }
 
-func (_c *MockChallengeGenerator_GenerateChallenge_Call) RunAndReturn(run func(context.Context, string, exercise.Difficulty) (exercise.Challenge, error)) *MockChallengeGenerator_GenerateChallenge_Call {
+func (_c *MockChallengeGenerator_GenerateChallenge_Call) RunAndReturn(run func(context.Context, string, exercise.ChallengeSpec) (exercise.Challenge, error)) *MockChallengeGenerator_GenerateChallenge_Call {
 	_c.Call.Return(run)
 	return _c
 }

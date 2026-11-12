@@ -35,6 +35,22 @@ func TestNewAttempt_setsDeadlineFromChallengeTimeLimit(t *testing.T) {
 	}, attempt)
 }
 
+func TestNewAttempt_leavesTheDeadlineZeroForAnUntimedChallenge(t *testing.T) {
+	// Given a practice challenge with no time limit
+	challenge := validChallenge()
+	challenge.Kind = ChallengeKindPractice
+	challenge.TimeLimitMinutes = 0
+
+	// When starting an attempt
+	attempt, err := NewAttempt(challenge, attemptRubricVersion(), "", attemptStart)
+
+	// Then it has no deadline, is untimed and never expires
+	require.NoError(t, err)
+	assert.True(t, attempt.Deadline.IsZero())
+	assert.True(t, attempt.Untimed())
+	assert.False(t, attempt.Expired(attemptStart.Add(1000*time.Hour)))
+}
+
 func TestNewAttempt_allowsStandaloneAttempt(t *testing.T) {
 	// Given no session link
 	// When starting an attempt

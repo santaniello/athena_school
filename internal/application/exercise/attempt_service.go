@@ -182,7 +182,8 @@ const submitGracePeriod = 15 * time.Second
 // SubmitAttempt ends the attempt with the given artifact. The backend decides
 // from its own clock: before the deadline the reason is USER, up to the grace
 // period after it TIME_EXPIRED, and later the attempt is discarded and the
-// call fails with ErrSubmissionTooLate.
+// call fails with ErrSubmissionTooLate. An untimed attempt (a practice, with
+// no deadline) is never late and always a USER submit.
 func (s *AttemptService) SubmitAttempt(ctx context.Context, attemptID, contentType, content string) (AttemptView, error) {
 	attempt, err := s.attempts.Get(ctx, attemptID)
 	if err != nil {
@@ -193,7 +194,7 @@ func (s *AttemptService) SubmitAttempt(ctx context.Context, attemptID, contentTy
 	}
 
 	now := s.clock.Now()
-	if now.After(attempt.Deadline.Add(submitGracePeriod)) {
+	if !attempt.Untimed() && now.After(attempt.Deadline.Add(submitGracePeriod)) {
 		return AttemptView{}, s.discardLate(ctx, attempt.ID)
 	}
 	reason := domainexercise.SubmitReasonUser

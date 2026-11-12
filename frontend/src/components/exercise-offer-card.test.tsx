@@ -10,7 +10,9 @@ vi.mock('@/lib/exercise', async (importOriginal) => ({
   declineOffer: vi.fn(),
 }))
 
-function setup(props: { language?: string; defaultDifficulty?: ChallengeDifficulty } = {}) {
+function setup(
+  props: { language?: string; defaultDifficulty?: ChallengeDifficulty; topic?: string } = {},
+) {
   const onAccepted = vi.fn()
   const onDeclined = vi.fn()
   render(
@@ -18,6 +20,7 @@ function setup(props: { language?: string; defaultDifficulty?: ChallengeDifficul
       offerId="o1"
       language={props.language ?? 'en'}
       defaultDifficulty={props.defaultDifficulty ?? 'INTERMEDIATE'}
+      topic={props.topic}
       onAccepted={onAccepted}
       onDeclined={onDeclined}
     />,
@@ -49,7 +52,7 @@ describe('ExerciseOfferCard', () => {
     expect(screen.getByRole('combobox', { name: 'Difficulty' })).toHaveTextContent('Beginner')
     await user.click(screen.getByRole('button', { name: 'Accept' }))
 
-    expect(acceptOffer).toHaveBeenCalledWith('o1', 'BEGINNER')
+    expect(acceptOffer).toHaveBeenCalledWith('o1', 'BEGINNER', 'INTERVIEW', '')
   })
 
   it('accepts the difficulty the user picked instead of the default', async () => {
@@ -60,7 +63,88 @@ describe('ExerciseOfferCard', () => {
     await user.click(await screen.findByRole('option', { name: 'Advanced' }))
     await user.click(screen.getByRole('button', { name: 'Accept' }))
 
-    expect(acceptOffer).toHaveBeenCalledWith('o1', 'ADVANCED')
+    expect(acceptOffer).toHaveBeenCalledWith('o1', 'ADVANCED', 'INTERVIEW', '')
+  })
+
+  it('starts as an interview, with no practice goal asked', () => {
+    setup()
+
+    expect(screen.getByRole('combobox', { name: 'Type' })).toHaveTextContent('Interview')
+    expect(screen.queryByLabelText('What do you want to practice?')).not.toBeInTheDocument()
+  })
+
+  it('asks what to practice once Practice is chosen, and Accept waits for it', async () => {
+    const { user } = setup()
+
+    await user.click(screen.getByRole('combobox', { name: 'Type' }))
+    await user.click(await screen.findByRole('option', { name: 'Practice' }))
+
+    expect(screen.getByLabelText('What do you want to practice?')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeDisabled()
+    await user.type(screen.getByLabelText('What do you want to practice?'), '   ')
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeDisabled()
+  })
+
+  it('accepts a practice with the trimmed goal', async () => {
+    vi.mocked(acceptOffer).mockResolvedValueOnce()
+    const { user } = setup({ defaultDifficulty: 'BEGINNER' })
+
+    await user.click(screen.getByRole('combobox', { name: 'Type' }))
+    await user.click(await screen.findByRole('option', { name: 'Practice' }))
+    await user.type(screen.getByLabelText('What do you want to practice?'), '  cache aside ')
+    await user.click(screen.getByRole('button', { name: 'Accept' }))
+
+    expect(acceptOffer).toHaveBeenCalledWith('o1', 'BEGINNER', 'PRACTICE', 'cache aside')
+  })
+
+  it('fills the goal with the session topic from a suggestion chip', async () => {
+    const { user } = setup({ topic: 'Distributed caching' })
+
+    await user.click(screen.getByRole('combobox', { name: 'Type' }))
+    await user.click(await screen.findByRole('option', { name: 'Practice' }))
+    await user.click(screen.getByRole('button', { name: 'Distributed caching' }))
+
+    expect(screen.getByLabelText('What do you want to practice?')).toHaveValue(
+      'Distributed caching',
+    )
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeEnabled()
+  })
+
+  it('does not send a goal typed before switching back to an interview', async () => {
+    vi.mocked(acceptOffer).mockResolvedValueOnce()
+    const { user } = setup()
+
+    await user.click(screen.getByRole('combobox', { name: 'Type' }))
+    await user.click(await screen.findByRole('option', { name: 'Practice' }))
+    await user.type(screen.getByLabelText('What do you want to practice?'), 'cache aside')
+    await user.click(screen.getByRole('combobox', { name: 'Type' }))
+    await user.click(await screen.findByRole('option', { name: 'Interview' }))
+    await user.click(screen.getByRole('button', { name: 'Accept' }))
+
+    expect(acceptOffer).toHaveBeenCalledWith('o1', 'INTERMEDIATE', 'INTERVIEW', '')
+  })
+
+  it('speaks Portuguese in the kind choice and the goal question', async () => {
+    const { user } = setup({ language: 'pt' })
+
+    expect(screen.getByRole('combobox', { name: 'Tipo' })).toHaveTextContent('Entrevista')
+    await user.click(screen.getByRole('combobox', { name: 'Tipo' }))
+    await user.click(await screen.findByRole('option', { name: 'Prática' }))
+
+    expect(screen.getByLabelText('O que você quer praticar?')).toBeInTheDocument()
+  })
+
+  it('locks the kind and the goal while the exercise is being prepared', async () => {
+    vi.mocked(acceptOffer).mockReturnValueOnce(new Promise(() => {}))
+    const { user } = setup()
+
+    await user.click(screen.getByRole('combobox', { name: 'Type' }))
+    await user.click(await screen.findByRole('option', { name: 'Practice' }))
+    await user.type(screen.getByLabelText('What do you want to practice?'), 'cache aside')
+    await user.click(screen.getByRole('button', { name: 'Accept' }))
+
+    expect(screen.getByRole('combobox', { name: 'Type' })).toBeDisabled()
+    expect(screen.getByLabelText('What do you want to practice?')).toBeDisabled()
   })
 
   it('speaks Portuguese in the difficulty choice for a Portuguese assistant', async () => {
@@ -87,7 +171,7 @@ describe('ExerciseOfferCard', () => {
 
     await user.click(screen.getByRole('button', { name: 'Accept' }))
 
-    expect(acceptOffer).toHaveBeenCalledWith('o1', 'INTERMEDIATE')
+    expect(acceptOffer).toHaveBeenCalledWith('o1', 'INTERMEDIATE', 'INTERVIEW', '')
     expect(screen.getByText('Preparing your exercise…')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Accept' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Decline' })).toBeDisabled()

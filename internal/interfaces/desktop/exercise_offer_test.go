@@ -15,14 +15,14 @@ import (
 )
 
 type fakeOffers struct {
-	offer            domainexercise.Offer
-	found            bool
-	view             applicationexercise.SessionExerciseView
-	err              error
-	pending          string
-	accept           string
-	acceptDifficulty domainexercise.Difficulty
-	decline          string
+	offer      domainexercise.Offer
+	found      bool
+	view       applicationexercise.SessionExerciseView
+	err        error
+	pending    string
+	accept     string
+	acceptSpec domainexercise.ChallengeSpec
+	decline    string
 }
 
 func (f *fakeOffers) GetPending(_ context.Context, sessionID string) (domainexercise.Offer, bool, error) {
@@ -30,9 +30,9 @@ func (f *fakeOffers) GetPending(_ context.Context, sessionID string) (domainexer
 	return f.offer, f.found, f.err
 }
 
-func (f *fakeOffers) Accept(_ context.Context, offerID string, difficulty domainexercise.Difficulty) (applicationexercise.SessionExerciseView, error) {
+func (f *fakeOffers) Accept(_ context.Context, offerID string, spec domainexercise.ChallengeSpec) (applicationexercise.SessionExerciseView, error) {
 	f.accept = offerID
-	f.acceptDifficulty = difficulty
+	f.acceptSpec = spec
 	return f.view, f.err
 }
 
@@ -95,17 +95,17 @@ func TestApp_GetPendingOffer_mapsFailures(t *testing.T) {
 func TestApp_AcceptOffer_returnsTheLinkedChallenge(t *testing.T) {
 	// Given an offer that links a challenge
 	offers := &fakeOffers{view: applicationexercise.SessionExerciseView{
-		ChallengeID: "challenge-1", Title: "Design a cache", Topic: "caching", Difficulty: domainexercise.DifficultyAdvanced, TimeLimitMinutes: 45,
+		ChallengeID: "challenge-1", Kind: domainexercise.ChallengeKindInterview, Title: "Design a cache", Topic: "caching", Difficulty: domainexercise.DifficultyAdvanced, TimeLimitMinutes: 45,
 	}}
 
 	// When the frontend accepts it
-	got, err := newOfferApp(offers).AcceptOffer(" offer-1 ", " BEGINNER ")
+	got, err := newOfferApp(offers).AcceptOffer(" offer-1 ", " BEGINNER ", "", "")
 
 	// Then the challenge comes back
 	require.NoError(t, err)
 	assert.Equal(t, "offer-1", offers.accept)
-	assert.Equal(t, domainexercise.DifficultyBeginner, offers.acceptDifficulty)
-	assert.Equal(t, SessionExerciseDTO{ChallengeID: "challenge-1", Title: "Design a cache", Topic: "caching", Difficulty: "ADVANCED", TimeLimitMinutes: 45}, got)
+	assert.Equal(t, domainexercise.ChallengeSpec{Difficulty: domainexercise.DifficultyBeginner, Kind: domainexercise.ChallengeKindInterview}, offers.acceptSpec)
+	assert.Equal(t, SessionExerciseDTO{ChallengeID: "challenge-1", Kind: "INTERVIEW", Title: "Design a cache", Topic: "caching", Difficulty: "ADVANCED", TimeLimitMinutes: 45}, got)
 }
 
 func TestApp_AcceptOffer_mapsErrors(t *testing.T) {
@@ -122,7 +122,7 @@ func TestApp_AcceptOffer_mapsErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Given a failing accept
 			// When the frontend accepts
-			_, err := newOfferApp(&fakeOffers{err: tt.err}).AcceptOffer("offer-1", "ADVANCED")
+			_, err := newOfferApp(&fakeOffers{err: tt.err}).AcceptOffer("offer-1", "ADVANCED", "", "")
 
 			// Then the code is stable
 			var coded *ExerciseError
@@ -135,7 +135,7 @@ func TestApp_AcceptOffer_mapsErrors(t *testing.T) {
 func TestApp_AcceptOffer_rejectsABlankId(t *testing.T) {
 	// Given a blank offer id
 	// When the frontend accepts
-	_, err := newOfferApp(&fakeOffers{}).AcceptOffer(" ", "ADVANCED")
+	_, err := newOfferApp(&fakeOffers{}).AcceptOffer(" ", "ADVANCED", "", "")
 
 	// Then it is invalid input
 	var coded *ExerciseError
@@ -148,11 +148,11 @@ func TestApp_AcceptOffer_withoutADifficultyLeavesTheChoiceToTheProfile(t *testin
 	offers := &fakeOffers{}
 
 	// When the frontend accepts
-	_, err := newOfferApp(offers).AcceptOffer("offer-1", " ")
+	_, err := newOfferApp(offers).AcceptOffer("offer-1", " ", "", "")
 
 	// Then the service gets an empty difficulty
 	require.NoError(t, err)
-	assert.Empty(t, offers.acceptDifficulty)
+	assert.Empty(t, offers.acceptSpec.Difficulty)
 }
 
 func TestApp_AcceptOffer_rejectsAnUnknownDifficulty(t *testing.T) {
@@ -160,7 +160,7 @@ func TestApp_AcceptOffer_rejectsAnUnknownDifficulty(t *testing.T) {
 	offers := &fakeOffers{}
 
 	// When the frontend accepts
-	_, err := newOfferApp(offers).AcceptOffer("offer-1", "EXPERT")
+	_, err := newOfferApp(offers).AcceptOffer("offer-1", "EXPERT", "", "")
 
 	// Then it is invalid input and the offer is untouched
 	var coded *ExerciseError
@@ -218,13 +218,13 @@ func TestApp_AcceptOffer_isRefusedWhileAChallengeIsBeingGenerated(t *testing.T) 
 	app.ctx = context.Background()
 	first := make(chan error, 1)
 	go func() {
-		_, err := app.GenerateChallenge("session-1", "BEGINNER")
+		_, err := app.GenerateChallenge("session-1", "BEGINNER", "", "")
 		first <- err
 	}()
 	<-generator.started
 
 	// When the chat accepts an offer
-	_, err := app.AcceptOffer("offer-1", "ADVANCED")
+	_, err := app.AcceptOffer("offer-1", "ADVANCED", "", "")
 
 	// Then it is refused without touching the offer, and the generation is undisturbed
 	var coded *ExerciseError
@@ -319,4 +319,46 @@ func TestApp_ListSessionExercises_failsWithATypedErrorWhenTheServiceIsNotWired(t
 	var exerciseErr *ExerciseError
 	require.ErrorAs(t, err, &exerciseErr)
 	assert.Equal(t, exerciseCodeUnavailable, exerciseErr.Code)
+}
+
+func TestApp_AcceptOffer_practiceSendsTheKindAndTrimmedGoal(t *testing.T) {
+	// Given an offer that links an untimed practice
+	offers := &fakeOffers{view: applicationexercise.SessionExerciseView{
+		ChallengeID: "challenge-2", Kind: domainexercise.ChallengeKindPractice, Title: "Slow price API", Topic: "caching", Difficulty: domainexercise.DifficultyBeginner,
+	}}
+
+	// When the frontend accepts it as a practice
+	got, err := newOfferApp(offers).AcceptOffer("offer-1", "BEGINNER", "PRACTICE", " cache aside ")
+
+	// Then the service gets the practice spec and the card says practice, with no time
+	require.NoError(t, err)
+	assert.Equal(t, domainexercise.ChallengeSpec{
+		Difficulty: domainexercise.DifficultyBeginner, Kind: domainexercise.ChallengeKindPractice, PracticeGoal: "cache aside",
+	}, offers.acceptSpec)
+	assert.Equal(t, "PRACTICE", got.Kind)
+	assert.Equal(t, 0, got.TimeLimitMinutes)
+}
+
+func TestApp_AcceptOffer_practiceWithoutADifficultyStillNeedsAGoal(t *testing.T) {
+	// Given a practice accepted with no difficulty and no goal
+	offers := &fakeOffers{}
+
+	// When the frontend accepts
+	_, err := newOfferApp(offers).AcceptOffer("offer-1", "", "PRACTICE", " ")
+
+	// Then it is invalid input and the offer is untouched
+	assert.Equal(t, exerciseCodeInvalidInput, codeOf(t, err).Code)
+	assert.Empty(t, offers.accept)
+}
+
+func TestApp_AcceptOffer_rejectsAnUnknownKind(t *testing.T) {
+	// Given an unknown kind
+	offers := &fakeOffers{}
+
+	// When the frontend accepts
+	_, err := newOfferApp(offers).AcceptOffer("offer-1", "BEGINNER", "QUIZ", "")
+
+	// Then it is invalid input and the offer is untouched
+	assert.Equal(t, exerciseCodeInvalidInput, codeOf(t, err).Code)
+	assert.Empty(t, offers.accept)
 }

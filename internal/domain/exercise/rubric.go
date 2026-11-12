@@ -7,6 +7,14 @@ import "time"
 // specs/phases/phase-03-architecture-lab/02-rubrics.md.
 const BaseRubricVersion = "base-v1"
 
+// NoBaseRubricVersion is the BaseVersion of a lean rubric: one with no base
+// criteria, used by a practice challenge. See
+// specs/phases/phase-03-architecture-lab/18-practice-challenges.md.
+const NoBaseRubricVersion = "none"
+
+// MaxPracticeCriteria is the most criteria a lean practice rubric may have.
+const MaxPracticeCriteria = 3
+
 // CriterionSource records where a rubric criterion came from.
 type CriterionSource string
 
@@ -43,6 +51,30 @@ type RubricVersion struct {
 	BaseVersion string
 	Criteria    []RubricCriterion
 	CreatedAt   time.Time
+}
+
+// BaseCriteriaFor returns the base criteria a rubric of the given challenge
+// kind starts from: the built-in ones for an interview, none for a practice.
+func BaseCriteriaFor(kind ChallengeKind) []RubricCriterion {
+	if kind == ChallengeKindPractice {
+		return nil
+	}
+	return BaseRubric()
+}
+
+// BaseVersionFor returns the BaseVersion a rubric of the given challenge kind
+// records.
+func BaseVersionFor(kind ChallengeKind) string {
+	if kind == ChallengeKindPractice {
+		return NoBaseRubricVersion
+	}
+	return BaseRubricVersion
+}
+
+// Lean reports whether the rubric has no base criteria: its challenge is a
+// practice.
+func (v RubricVersion) Lean() bool {
+	return v.BaseVersion == NoBaseRubricVersion
 }
 
 // BaseRubric returns the built-in criteria every rubric starts from, in

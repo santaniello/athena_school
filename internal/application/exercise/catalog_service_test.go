@@ -302,3 +302,27 @@ func TestCatalogService_ListTopics_wrapsRepositoryErrors(t *testing.T) {
 	// Then the error is wrapped
 	require.ErrorIs(t, err, boom)
 }
+
+func TestCatalogService_ListCatalog_carriesTheKindAndTheUntimedLimit(t *testing.T) {
+	// Given a practice with no time limit and an interview
+	f := newCatalogFixture(t)
+	practice := catalogChallenge("c1", "Cache aside")
+	practice.Kind = domainexercise.ChallengeKindPractice
+	practice.TimeLimitMinutes = 0
+	interview := catalogChallenge("c2", "Design a shop")
+	interview.Kind = domainexercise.ChallengeKindInterview
+	f.expectScope(domainexercise.ChallengeFilter{}, practice, interview)
+	f.records.EXPECT().ListByChallenges(context.Background(), []string{"c1", "c2"}).
+		Return(map[string][]domainexercise.AttemptRecord{}, nil)
+
+	// When listing the catalog
+	catalog, err := f.service.ListCatalog(context.Background(), CatalogFilter{})
+
+	// Then each item says its kind and the practice has no time limit
+	require.NoError(t, err)
+	require.Len(t, catalog.Items, 2)
+	assert.Equal(t, domainexercise.ChallengeKindPractice, catalog.Items[0].Kind)
+	assert.Equal(t, 0, catalog.Items[0].TimeLimitMinutes)
+	assert.Equal(t, domainexercise.ChallengeKindInterview, catalog.Items[1].Kind)
+	assert.Equal(t, 45, catalog.Items[1].TimeLimitMinutes)
+}

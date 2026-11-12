@@ -14,6 +14,7 @@ function catalogOf(...ids: string[]): Catalog {
     inProgress: 0,
     items: ids.map((id) => ({
       id,
+      kind: 'INTERVIEW',
       title: id,
       topic: 'caching',
       difficulty: 'BEGINNER',

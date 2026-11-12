@@ -14,9 +14,10 @@ type SessionExerciseCard struct {
 	SessionExerciseID string
 	MessageID         string
 	ChallengeID       string
+	Kind              domainexercise.ChallengeKind
 	Title             string
 	Difficulty        domainexercise.Difficulty
-	TimeLimitMinutes  int
+	TimeLimitMinutes  int // 0 for an untimed practice
 	Status            domainexercise.ProgressStatus
 	Attempts          int
 	Latest            *LatestResult // nil when no finished attempt
@@ -104,7 +105,7 @@ func cardOf(link domainexercise.SessionExercise, challenge domainexercise.Challe
 		}
 	}
 	card := SessionExerciseCard{
-		SessionExerciseID: link.ID, MessageID: link.MessageID, ChallengeID: challenge.ID, Title: challenge.Title,
+		SessionExerciseID: link.ID, MessageID: link.MessageID, ChallengeID: challenge.ID, Kind: challenge.Kind, Title: challenge.Title,
 		Difficulty: challenge.Difficulty, TimeLimitMinutes: challenge.TimeLimitMinutes,
 		Status: domainexercise.DeriveProgress(summaries).Status, Attempts: len(finished),
 	}

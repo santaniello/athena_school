@@ -51,7 +51,7 @@ func TestParseGeneration_buildsTheChallengeAndItsCriteria(t *testing.T) {
 	content := encode(t, validOutput())
 
 	// When it is parsed
-	got, err := parseGeneration(content, "distributed caching", domainexercise.DifficultyAdvanced)
+	got, err := parseGeneration(content, "distributed caching", interviewSpec(domainexercise.DifficultyAdvanced))
 
 	// Then the challenge input carries the content, the difficulty and the AI origin
 	require.NoError(t, err)
@@ -81,7 +81,7 @@ func TestParseGeneration_keepsTheMandatoryFlag(t *testing.T) {
 	}}
 
 	// When it is parsed
-	got, err := parseGeneration(encode(t, output), "caching", domainexercise.DifficultyBeginner)
+	got, err := parseGeneration(encode(t, output), "caching", interviewSpec(domainexercise.DifficultyBeginner))
 
 	// Then the flag is kept
 	require.NoError(t, err)
@@ -93,7 +93,7 @@ func TestParseGeneration_acceptsOutputInsideACodeFence(t *testing.T) {
 	content := "```json\n" + encode(t, validOutput()) + "\n```"
 
 	// When it is parsed
-	_, err := parseGeneration(content, "caching", domainexercise.DifficultyBeginner)
+	_, err := parseGeneration(content, "caching", interviewSpec(domainexercise.DifficultyBeginner))
 
 	// Then it is accepted
 	require.NoError(t, err)
@@ -123,7 +123,7 @@ func TestParseGeneration_derivesCriterionKeysFromNames(t *testing.T) {
 			output["criteria"] = criteria
 
 			// When the output is parsed
-			got, err := parseGeneration(encode(t, output), "caching", domainexercise.DifficultyBeginner)
+			got, err := parseGeneration(encode(t, output), "caching", interviewSpec(domainexercise.DifficultyBeginner))
 
 			// Then the keys are derived by code
 			require.NoError(t, err)
@@ -198,7 +198,7 @@ func TestParseGeneration_rejectsInvalidOutput(t *testing.T) {
 			}
 
 			// When it is parsed
-			_, err := parseGeneration(content, "caching", domainexercise.DifficultyBeginner)
+			_, err := parseGeneration(content, "caching", interviewSpec(domainexercise.DifficultyBeginner))
 
 			// Then it is rejected as an invalid generation
 			require.ErrorIs(t, err, ErrInvalidGeneration)
@@ -214,7 +214,7 @@ func TestParseGeneration_namesTheCriterionWithTheWrongLevelCount(t *testing.T) {
 	output["criteria"] = []any{criterionJSON("Cache invalidation", 10), bad}
 
 	// When it is parsed
-	_, err := parseGeneration(encode(t, output), "caching", domainexercise.DifficultyBeginner)
+	_, err := parseGeneration(encode(t, output), "caching", interviewSpec(domainexercise.DifficultyBeginner))
 
 	// Then the error says which criterion and how many levels it had
 	require.ErrorIs(t, err, ErrInvalidGeneration)
@@ -229,9 +229,48 @@ func TestParseGeneration_namesTheCriterionWithoutAMandatoryFlag(t *testing.T) {
 	output["criteria"] = []any{criterionJSON("Cache invalidation", 10), bad}
 
 	// When it is parsed
-	_, err := parseGeneration(encode(t, output), "caching", domainexercise.DifficultyBeginner)
+	_, err := parseGeneration(encode(t, output), "caching", interviewSpec(domainexercise.DifficultyBeginner))
 
 	// Then the error says which criterion is missing the flag
 	require.ErrorIs(t, err, ErrInvalidGeneration)
 	assert.Contains(t, err.Error(), "criterion 2 has no mandatory flag")
+}
+
+func TestParseGeneration_practiceHasNoTimeLimitKindAndLeanCriteria(t *testing.T) {
+	// Given a valid output with two criteria and a practice spec
+	content := encode(t, validOutput())
+
+	// When it is parsed as a practice
+	got, err := parseGeneration(content, "caching", practiceSpec("cache aside"))
+
+	// Then the challenge input is a practice with its criteria
+	require.NoError(t, err)
+	assert.Equal(t, domainexercise.ChallengeKindPractice, got.Challenge.Kind)
+	assert.Equal(t, domainexercise.DifficultyIntermediate, got.Challenge.Difficulty)
+	assert.Len(t, got.Criteria, 2)
+}
+
+func TestParseGeneration_practiceRejectsMoreThanThreeCriteria(t *testing.T) {
+	// Given an output with four criteria, which an interview accepts
+	output := validOutput()
+	output["criteria"] = []any{criterionJSON("A", 1), criterionJSON("B", 1), criterionJSON("C", 1), criterionJSON("D", 1)}
+	content := encode(t, output)
+
+	// When it is parsed as a practice and as an interview
+	_, practiceErr := parseGeneration(content, "caching", practiceSpec("cache aside"))
+	_, interviewErr := parseGeneration(content, "caching", interviewSpec(domainexercise.DifficultyBeginner))
+
+	// Then only the practice is refused
+	assert.ErrorIs(t, practiceErr, ErrInvalidGeneration)
+	assert.ErrorIs(t, practiceErr, domainexercise.ErrChallengeCriteriaCount)
+	assert.NoError(t, interviewErr)
+}
+
+func TestParseGeneration_interviewIsAnInterview(t *testing.T) {
+	// When an interview output is parsed
+	got, err := parseGeneration(encode(t, validOutput()), "caching", interviewSpec(domainexercise.DifficultyBeginner))
+
+	// Then the kind is interview
+	require.NoError(t, err)
+	assert.Equal(t, domainexercise.ChallengeKindInterview, got.Challenge.Kind)
 }

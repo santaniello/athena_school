@@ -12,6 +12,7 @@ func validChallenge() Challenge {
 	return Challenge{
 		ID:                     "challenge-1",
 		Type:                   ChallengeTypeArchitecture,
+		Kind:                   ChallengeKindInterview,
 		Title:                  "Design a URL shortener",
 		Scenario:               "A startup needs a service that shortens URLs.",
 		FunctionalRequirements: []string{"Create a short link", "Redirect a short link"},
@@ -69,6 +70,8 @@ func TestChallenge_Validate_rejectsInvalidChallenge(t *testing.T) {
 		{"blank topic", func(c *Challenge) { c.Topic = " " }, ErrChallengeTopicRequired},
 		{"unknown type", func(c *Challenge) { c.Type = "ALGORITHMS" }, ErrChallengeTypeInvalid},
 		{"empty type", func(c *Challenge) { c.Type = "" }, ErrChallengeTypeInvalid},
+		{"unknown kind", func(c *Challenge) { c.Kind = "QUIZ" }, ErrChallengeKindInvalid},
+		{"empty kind", func(c *Challenge) { c.Kind = "" }, ErrChallengeKindInvalid},
 		{"unknown difficulty", func(c *Challenge) { c.Difficulty = "EXPERT" }, ErrDifficultyInvalid},
 		{"unknown origin", func(c *Challenge) { c.Origin = "IMPORTED" }, ErrOriginInvalid},
 		{"no functional requirement", func(c *Challenge) { c.FunctionalRequirements = nil }, ErrFunctionalRequirementsRequired},
@@ -100,6 +103,42 @@ func TestChallenge_Validate_rejectsInvalidChallenge(t *testing.T) {
 			assert.ErrorIs(t, err, tt.want)
 		})
 	}
+}
+
+func TestChallenge_Validate_acceptsAnUntimedPractice(t *testing.T) {
+	// Given a practice challenge with no time limit
+	challenge := validChallenge()
+	challenge.Kind = ChallengeKindPractice
+	challenge.TimeLimitMinutes = 0
+
+	// When validating it
+	err := challenge.Validate()
+
+	// Then it is valid and untimed
+	assert.NoError(t, err)
+	assert.True(t, challenge.Untimed())
+}
+
+func TestChallenge_Validate_rejectsAPracticeTimeOutOfRange(t *testing.T) {
+	for _, minutes := range []int{-1, MaxTimeLimitMinutes + 1} {
+		// Given a practice challenge with a limit that is neither 0 nor in range
+		challenge := validChallenge()
+		challenge.Kind = ChallengeKindPractice
+		challenge.TimeLimitMinutes = minutes
+
+		// When validating it
+		err := challenge.Validate()
+
+		// Then it is refused
+		assert.ErrorIs(t, err, ErrTimeLimitInvalid)
+	}
+}
+
+func TestChallenge_Untimed_isFalseForAnInterview(t *testing.T) {
+	// Given an interview challenge
+	// When asking whether it is untimed
+	// Then it is not
+	assert.False(t, validChallenge().Untimed())
 }
 
 func TestChallenge_Validate_acceptsLimitsExactly(t *testing.T) {
@@ -202,4 +241,13 @@ func TestDefaultDefenseQuestions_isFive(t *testing.T) {
 	// When reading it
 	// Then the tutor asks five
 	assert.Equal(t, 5, DefaultDefenseQuestions)
+}
+
+func TestTimeLimitFor_isZeroForAPracticeAndTheDefaultForAnInterview(t *testing.T) {
+	// Given each kind
+	// When reading the time limit a new challenge starts with
+	// Then a practice is untimed and an interview follows its difficulty
+	assert.Equal(t, 0, TimeLimitFor(ChallengeKindPractice, DifficultyAdvanced))
+	assert.Equal(t, 60, TimeLimitFor(ChallengeKindInterview, DifficultyAdvanced))
+	assert.Equal(t, 30, TimeLimitFor(ChallengeKindInterview, DifficultyBeginner))
 }

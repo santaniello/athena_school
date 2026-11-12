@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -377,14 +378,14 @@ func TestApp_bindings_rejectBlankIDsWithoutCallingTheService(t *testing.T) {
 }
 
 type fakeChallengeGenerator struct {
-	challenge  domainexercise.Challenge
-	err        error
-	sessionID  string
-	difficulty domainexercise.Difficulty
+	challenge domainexercise.Challenge
+	err       error
+	sessionID string
+	spec      domainexercise.ChallengeSpec
 }
 
-func (g *fakeChallengeGenerator) GenerateChallenge(_ context.Context, sessionID string, difficulty domainexercise.Difficulty) (domainexercise.Challenge, error) {
-	g.sessionID, g.difficulty = sessionID, difficulty
+func (g *fakeChallengeGenerator) GenerateChallenge(_ context.Context, sessionID string, spec domainexercise.ChallengeSpec) (domainexercise.Challenge, error) {
+	g.sessionID, g.spec = sessionID, spec
 	return g.challenge, g.err
 }
 
@@ -397,23 +398,23 @@ func newGenerationApp(generator challengeGenerator) *App {
 func TestApp_GenerateChallenge_returnsTheChallengeSummary(t *testing.T) {
 	// Given a generator that creates a challenge
 	generator := &fakeChallengeGenerator{challenge: domainexercise.Challenge{
-		ID: "challenge-1", Title: "Design a global cache", Topic: "distributed caching",
+		ID: "challenge-1", Kind: domainexercise.ChallengeKindInterview, Title: "Design a global cache", Topic: "distributed caching",
 		Difficulty: domainexercise.DifficultyAdvanced, TimeLimitMinutes: 60,
 		Scenario: "not part of the summary",
 	}}
 	app := newGenerationApp(generator)
 
 	// When the frontend generates a challenge for a session
-	got, err := app.GenerateChallenge(" session-1 ", "ADVANCED")
+	got, err := app.GenerateChallenge(" session-1 ", "ADVANCED", "", "")
 
 	// Then the summary is returned and the use case got the trimmed id and the difficulty
 	require.NoError(t, err)
 	assert.Equal(t, ChallengeSummaryDTO{
-		ID: "challenge-1", Title: "Design a global cache", Topic: "distributed caching",
+		ID: "challenge-1", Kind: "INTERVIEW", Title: "Design a global cache", Topic: "distributed caching",
 		Difficulty: "ADVANCED", TimeLimitMinutes: 60,
 	}, got)
 	assert.Equal(t, "session-1", generator.sessionID)
-	assert.Equal(t, domainexercise.DifficultyAdvanced, generator.difficulty)
+	assert.Equal(t, domainexercise.ChallengeSpec{Difficulty: domainexercise.DifficultyAdvanced, Kind: domainexercise.ChallengeKindInterview}, generator.spec)
 }
 
 func TestApp_GenerateChallenge_rejectsInvalidInputBeforeCallingTheUseCase(t *testing.T) {
@@ -424,6 +425,7 @@ func TestApp_GenerateChallenge_rejectsInvalidInputBeforeCallingTheUseCase(t *tes
 	}{
 		{"blank session id", "  ", "BEGINNER"},
 		{"unknown difficulty", "session-1", "EXPERT"},
+		{"blank difficulty", "session-1", " "},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -432,7 +434,7 @@ func TestApp_GenerateChallenge_rejectsInvalidInputBeforeCallingTheUseCase(t *tes
 			app := newGenerationApp(generator)
 
 			// When the frontend generates with that input
-			_, err := app.GenerateChallenge(tt.sessionID, tt.difficulty)
+			_, err := app.GenerateChallenge(tt.sessionID, tt.difficulty, "", "")
 
 			// Then it is an invalid_input error and nothing reached the use case
 			assert.Equal(t, exerciseCodeInvalidInput, codeOf(t, err).Code)
@@ -457,7 +459,7 @@ func TestApp_GenerateChallenge_mapsUseCaseErrorsToCodes(t *testing.T) {
 			app := newGenerationApp(&fakeChallengeGenerator{err: tt.err})
 
 			// When the frontend generates a challenge
-			_, err := app.GenerateChallenge("session-1", "BEGINNER")
+			_, err := app.GenerateChallenge("session-1", "BEGINNER", "", "")
 
 			// Then the error carries the stable code
 			assert.Equal(t, tt.code, codeOf(t, err).Code)
@@ -650,7 +652,7 @@ func TestApp_ListSessionsForGeneration_mapsFailuresToAnInternalError(t *testing.
 // blockingGenerator waits until its context is cancelled, like a slow model call.
 type blockingGenerator struct{ started chan struct{} }
 
-func (g *blockingGenerator) GenerateChallenge(ctx context.Context, _ string, _ domainexercise.Difficulty) (domainexercise.Challenge, error) {
+func (g *blockingGenerator) GenerateChallenge(ctx context.Context, _ string, _ domainexercise.ChallengeSpec) (domainexercise.Challenge, error) {
 	close(g.started)
 	<-ctx.Done()
 	return domainexercise.Challenge{}, fmt.Errorf("generating: %w", ctx.Err())
@@ -662,7 +664,7 @@ func TestApp_CancelChallengeGeneration_stopsTheRunningGeneration(t *testing.T) {
 	app := newGenerationApp(generator)
 	result := make(chan error, 1)
 	go func() {
-		_, err := app.GenerateChallenge("session-1", "BEGINNER")
+		_, err := app.GenerateChallenge("session-1", "BEGINNER", "", "")
 		result <- err
 	}()
 	<-generator.started
@@ -692,13 +694,13 @@ func TestApp_GenerateChallenge_refusesASecondGenerationWhileOneRuns(t *testing.T
 	app := newGenerationApp(generator)
 	first := make(chan error, 1)
 	go func() {
-		_, err := app.GenerateChallenge("session-1", "BEGINNER")
+		_, err := app.GenerateChallenge("session-1", "BEGINNER", "", "")
 		first <- err
 	}()
 	<-generator.started
 
 	// When the frontend starts another one
-	_, err := app.GenerateChallenge("session-2", "BEGINNER")
+	_, err := app.GenerateChallenge("session-2", "BEGINNER", "", "")
 
 	// Then it is refused and the first one is not disturbed
 	assert.Equal(t, exerciseCodeGenerationInProgress, codeOf(t, err).Code)
@@ -710,13 +712,87 @@ func TestApp_GenerateChallenge_canRunAgainAfterOneFinished(t *testing.T) {
 	// Given a generation that failed
 	generator := &fakeChallengeGenerator{err: errors.New("provider down")}
 	app := newGenerationApp(generator)
-	_, err := app.GenerateChallenge("session-1", "BEGINNER")
+	_, err := app.GenerateChallenge("session-1", "BEGINNER", "", "")
 	require.Error(t, err)
 
 	// When the frontend retries
 	generator.err = nil
-	_, retryErr := app.GenerateChallenge("session-1", "BEGINNER")
+	_, retryErr := app.GenerateChallenge("session-1", "BEGINNER", "", "")
 
 	// Then it is not refused as a concurrent generation
 	require.NoError(t, retryErr)
+}
+
+func TestApp_GenerateChallenge_practiceSendsTheKindAndTrimmedGoalAndReturnsAnUntimedSummary(t *testing.T) {
+	// Given a generator that creates an untimed practice
+	generator := &fakeChallengeGenerator{challenge: domainexercise.Challenge{
+		ID: "challenge-2", Kind: domainexercise.ChallengeKindPractice, Title: "Slow price API", Topic: "caching",
+		Difficulty: domainexercise.DifficultyBeginner, TimeLimitMinutes: 0,
+	}}
+	app := newGenerationApp(generator)
+
+	// When the frontend generates a practice with a padded goal
+	got, err := app.GenerateChallenge("session-1", "BEGINNER", " PRACTICE ", "  cache aside \n")
+
+	// Then the use case got the practice spec and the summary says it is a practice with no time
+	require.NoError(t, err)
+	assert.Equal(t, domainexercise.ChallengeSpec{
+		Difficulty: domainexercise.DifficultyBeginner, Kind: domainexercise.ChallengeKindPractice, PracticeGoal: "cache aside",
+	}, generator.spec)
+	assert.Equal(t, ChallengeSummaryDTO{ID: "challenge-2", Kind: "PRACTICE", Title: "Slow price API", Topic: "caching", Difficulty: "BEGINNER", TimeLimitMinutes: 0}, got)
+}
+
+func TestApp_GenerateChallenge_rejectsAnInvalidKindOrAPracticeWithoutAGoal(t *testing.T) {
+	tests := []struct {
+		name, kind, goal string
+	}{
+		{"unknown kind", "QUIZ", ""},
+		{"practice without a goal", "PRACTICE", "   "},
+		{"practice goal too long", "PRACTICE", strings.Repeat("g", domainexercise.MaxPracticeGoalLength+1)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given a generator that must not be called
+			generator := &fakeChallengeGenerator{}
+			app := newGenerationApp(generator)
+
+			// When the frontend generates with that input
+			_, err := app.GenerateChallenge("session-1", "BEGINNER", tt.kind, tt.goal)
+
+			// Then it is invalid input and nothing reached the use case
+			assert.Equal(t, exerciseCodeInvalidInput, codeOf(t, err).Code)
+			assert.Empty(t, generator.sessionID)
+		})
+	}
+}
+
+func TestApp_GenerateChallenge_interviewIgnoresAStrayGoal(t *testing.T) {
+	// Given a generator and an empty kind with a goal left over in the form
+	generator := &fakeChallengeGenerator{}
+	app := newGenerationApp(generator)
+
+	// When the frontend generates
+	_, err := app.GenerateChallenge("session-1", "BEGINNER", "", "leftover")
+
+	// Then it is an interview and the goal is dropped
+	require.NoError(t, err)
+	assert.Equal(t, domainexercise.ChallengeSpec{Difficulty: domainexercise.DifficultyBeginner, Kind: domainexercise.ChallengeKindInterview}, generator.spec)
+}
+
+func TestApp_GetAttempt_leavesTheDeadlineEmptyForAnUntimedAttempt(t *testing.T) {
+	// Given an in-progress attempt with no deadline (an untimed practice)
+	f := newExerciseFixture(t)
+	ctx := context.Background()
+	untimed := storedBindingAttempt()
+	untimed.Deadline = time.Time{}
+	f.attempts.EXPECT().Get(ctx, "attempt-1").Return(untimed, nil)
+	f.expectView(ctx)
+
+	// When the frontend reads it
+	dto, err := f.app.GetAttempt("attempt-1")
+
+	// Then the deadline is empty, not the zero time formatted as a date
+	require.NoError(t, err)
+	assert.Empty(t, dto.Deadline)
+	assert.Equal(t, "2026-11-01T10:00:00Z", dto.StartedAt)
 }

@@ -394,6 +394,7 @@ export namespace desktop {
 	}
 	export class ChallengeCatalogItemDTO {
 	    id: string;
+	    kind: string;
 	    title: string;
 	    topic: string;
 	    difficulty: string;
@@ -409,6 +410,7 @@ export namespace desktop {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
+	        this.kind = source["kind"];
 	        this.title = source["title"];
 	        this.topic = source["topic"];
 	        this.difficulty = source["difficulty"];
@@ -457,6 +459,7 @@ export namespace desktop {
 	
 	export class ChallengeSummaryDTO {
 	    id: string;
+	    kind: string;
 	    title: string;
 	    topic: string;
 	    difficulty: string;
@@ -469,6 +472,7 @@ export namespace desktop {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
+	        this.kind = source["kind"];
 	        this.title = source["title"];
 	        this.topic = source["topic"];
 	        this.difficulty = source["difficulty"];
@@ -850,6 +854,7 @@ export namespace desktop {
 	    sessionExerciseId: string;
 	    messageId: string;
 	    challengeId: string;
+	    kind: string;
 	    title: string;
 	    difficulty: string;
 	    timeLimitMinutes: number;
@@ -866,6 +871,7 @@ export namespace desktop {
 	        this.sessionExerciseId = source["sessionExerciseId"];
 	        this.messageId = source["messageId"];
 	        this.challengeId = source["challengeId"];
+	        this.kind = source["kind"];
 	        this.title = source["title"];
 	        this.difficulty = source["difficulty"];
 	        this.timeLimitMinutes = source["timeLimitMinutes"];
@@ -894,6 +900,7 @@ export namespace desktop {
 	}
 	export class SessionExerciseDTO {
 	    challengeId: string;
+	    kind: string;
 	    title: string;
 	    topic: string;
 	    difficulty: string;
@@ -906,6 +913,7 @@ export namespace desktop {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.challengeId = source["challengeId"];
+	        this.kind = source["kind"];
 	        this.title = source["title"];
 	        this.topic = source["topic"];
 	        this.difficulty = source["difficulty"];

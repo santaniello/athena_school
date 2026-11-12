@@ -487,3 +487,31 @@ func TestHintService_RequestHint_neverOutlivesTheExam(t *testing.T) {
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
 	assert.LessOrEqual(t, remaining, 5*time.Second)
 }
+
+func TestHintService_RequestHint_untimedAttemptIsBoundedOnlyByTheHintTimeout(t *testing.T) {
+	// Given a running attempt with no deadline (an untimed practice)
+	f := newHintFixture(t)
+	ctx := context.Background()
+	attempt := hintAttempt()
+	attempt.Deadline = time.Time{}
+	f.attempts.EXPECT().Get(ctx, "attempt-1").Return(attempt, nil)
+	f.hints.EXPECT().ListByAttempt(ctx, "attempt-1").Return([]domainexercise.Hint{}, nil)
+	f.challenges.EXPECT().Get(ctx, "challenge-1").Return(attemptChallenge(), nil)
+	f.rubrics.EXPECT().Get(ctx, "rubric-2").Return(attemptRubric(), nil)
+	var remaining time.Duration
+	f.generator.EXPECT().GenerateHint(withinTimeout(), expectedHintInput("", []domainexercise.Hint{})).
+		RunAndReturn(func(ctx context.Context, _ domainexercise.HintInput) (string, error) {
+			deadline, _ := ctx.Deadline()
+			remaining = time.Until(deadline)
+			return "A hint", nil
+		})
+	f.hints.EXPECT().Add(ctx, expectedHint(1, "A hint")).Return(nil)
+
+	// When requesting a hint
+	_, err := f.service.RequestHint(ctx, "attempt-1", "")
+
+	// Then the call is not cut short by the missing deadline: it keeps the full hint timeout
+	require.NoError(t, err)
+	assert.Greater(t, remaining, hintTimeout-5*time.Second)
+	assert.LessOrEqual(t, remaining, hintTimeout)
+}

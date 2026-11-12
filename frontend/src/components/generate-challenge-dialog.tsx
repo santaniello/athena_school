@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -19,13 +20,16 @@ import {
 } from '@/components/ui/select'
 import {
   DIFFICULTY_LABELS,
+  KIND_LABELS,
   cancelChallengeGeneration,
   exerciseErrorCode,
   exerciseErrorMessage,
   formatSessionDate,
   generateChallenge,
   listSessionsForGeneration,
+  practiceSuggestions,
   type ChallengeDifficulty,
+  type ChallengeKind,
   type GeneratedChallenge,
   type SessionOption,
 } from '@/lib/exercise'
@@ -44,6 +48,7 @@ interface GenerateChallengeDialogProps {
 }
 
 const DIFFICULTIES = Object.keys(DIFFICULTY_LABELS) as ChallengeDifficulty[]
+const KINDS = Object.keys(KIND_LABELS) as ChallengeKind[]
 
 // Opened by "Generate challenge with AI". The content is its own component, so
 // the chosen session, the search text and any error are discarded each time
@@ -67,6 +72,8 @@ function GenerateChallengeContent({
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [difficulty, setDifficulty] = useState(defaultDifficulty)
+  const [kind, setKind] = useState<ChallengeKind>('INTERVIEW')
+  const [goal, setGoal] = useState('')
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // False once the dialog has closed, so a late answer is told apart from one
@@ -113,7 +120,12 @@ function GenerateChallengeContent({
     setError(null)
     setGenerating(true)
     try {
-      const challenge = await generateChallenge(selectedId, difficulty)
+      const challenge = await generateChallenge(
+        selectedId,
+        difficulty,
+        kind,
+        practice ? trimmedGoal : '',
+      )
       if (mountedRef.current) onGenerated(challenge)
       else onGeneratedAfterClose(challenge)
     } catch (err) {
@@ -130,7 +142,10 @@ function GenerateChallengeContent({
     onClose()
   }
 
+  const practice = kind === 'PRACTICE'
+  const trimmedGoal = goal.trim()
   const list = sessions.state === 'ready' ? sessions.list : []
+  const selectedTopic = list.find((session) => session.id === selectedId)?.topic
   const needle = search.trim().toLowerCase()
   const visible = list.filter(
     (session) =>
@@ -140,7 +155,7 @@ function GenerateChallengeContent({
 
   return (
     <Dialog open onOpenChange={(nextOpen) => !nextOpen && handleDismiss()}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Generate challenge with AI</DialogTitle>
           <DialogDescription>
@@ -224,6 +239,53 @@ function GenerateChallengeContent({
                 </SelectContent>
               </Select>
             </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Type</span>
+              <Select
+                value={kind}
+                disabled={generating}
+                onValueChange={(value) => setKind(value as ChallengeKind)}
+              >
+                <SelectTrigger aria-label="Type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {KINDS.map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {KIND_LABELS[value]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {practice && (
+              <div className="space-y-2">
+                <label htmlFor="practice-goal" className="text-sm text-muted-foreground">
+                  What do you want to practice?
+                </label>
+                <Textarea
+                  id="practice-goal"
+                  value={goal}
+                  disabled={generating}
+                  placeholder="E.g. cache aside, a slow API that another one depends on…"
+                  onChange={(event) => setGoal(event.target.value)}
+                />
+                <div className="flex flex-wrap gap-2">
+                  {practiceSuggestions(selectedTopic).map((suggestion) => (
+                    <Button
+                      key={suggestion}
+                      type="button"
+                      size="xs"
+                      variant="outline"
+                      disabled={generating}
+                      onClick={() => setGoal(suggestion)}
+                    >
+                      {suggestion}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -248,7 +310,11 @@ function GenerateChallengeContent({
             Cancel
           </Button>
           {sessions.state === 'ready' && list.length > 0 && !generating && (
-            <Button type="button" disabled={!selectedId} onClick={() => void handleGenerate()}>
+            <Button
+              type="button"
+              disabled={!selectedId || (practice && trimmedGoal === '')}
+              onClick={() => void handleGenerate()}
+            >
               {error ? 'Try again' : 'Generate'}
             </Button>
           )}

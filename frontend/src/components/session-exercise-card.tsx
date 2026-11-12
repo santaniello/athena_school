@@ -2,7 +2,9 @@ import { Badge } from '@/components/ui/badge'
 import { DifficultyBadge } from '@/components/difficulty-badge'
 import { Button } from '@/components/ui/button'
 import {
+  KIND_LABELS,
   STATUS_LABELS,
+  formatTimeLimit,
   type ChallengeStatus,
   type SessionExerciseCard as Card,
 } from '@/lib/exercise'
@@ -26,7 +28,8 @@ function SessionExerciseCard({ card, onStart, onHistory }: SessionExerciseCardPr
       <p className="font-medium">{card.title}</p>
       <div className="flex flex-wrap items-center gap-2">
         <DifficultyBadge difficulty={card.difficulty} />
-        <Badge variant="muted">{card.timeLimitMinutes} min</Badge>
+        {card.kind === 'PRACTICE' && <Badge variant="muted">{KIND_LABELS.PRACTICE}</Badge>}
+        <Badge variant="muted">{formatTimeLimit(card.timeLimitMinutes)}</Badge>
         <Badge variant="default">{status}</Badge>
       </div>
       {latest && (

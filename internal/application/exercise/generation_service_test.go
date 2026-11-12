@@ -69,7 +69,7 @@ func (f *generationFixture) expectChat(ctx context.Context, content string, err 
 	f.llm.EXPECT().Chat(ctx, domainllm.ChatRequest{
 		SessionID: "session-1",
 		Task:      domainllm.TaskArchitectureLab,
-		Messages:  buildGenerationPrompt(generationContextOf(), domainexercise.DifficultyIntermediate),
+		Messages:  buildGenerationPrompt(generationContextOf(), interviewSpec(domainexercise.DifficultyIntermediate)),
 	}).Return(domainllm.ChatResponse{Content: content}, err).Once()
 }
 
@@ -106,7 +106,7 @@ func TestGenerationService_GenerateChallenge_savesChallengeAndRubricInOneTransac
 	f.rubrics.EXPECT().Create(insideTx(), rubric).Return(nil)
 
 	// When the challenge is generated
-	got, err := f.service.GenerateChallenge(ctx, "session-1", domainexercise.DifficultyIntermediate)
+	got, err := f.service.GenerateChallenge(ctx, "session-1", interviewSpec(domainexercise.DifficultyIntermediate))
 
 	// Then an AI-generated challenge of that session and difficulty is saved
 	require.NoError(t, err)
@@ -134,7 +134,7 @@ func TestGenerationService_GenerateChallenge_failsForAnUnknownSession(t *testing
 	f.sessions.EXPECT().ReadSession(ctx, "session-1").Return(domainexercise.SourceSession{}, ErrSourceSessionNotFound)
 
 	// When a challenge is generated for it
-	_, err := f.service.GenerateChallenge(ctx, "session-1", domainexercise.DifficultyIntermediate)
+	_, err := f.service.GenerateChallenge(ctx, "session-1", interviewSpec(domainexercise.DifficultyIntermediate))
 
 	// Then it fails before any model call
 	require.ErrorIs(t, err, ErrSourceSessionNotFound)
@@ -145,7 +145,7 @@ func TestGenerationService_GenerateChallenge_failsForABlankSessionID(t *testing.
 	f := newGenerationFixture(t)
 
 	// When a challenge is generated
-	_, err := f.service.GenerateChallenge(context.Background(), "  ", domainexercise.DifficultyIntermediate)
+	_, err := f.service.GenerateChallenge(context.Background(), "  ", interviewSpec(domainexercise.DifficultyIntermediate))
 
 	// Then it fails before reading anything
 	require.ErrorIs(t, err, ErrSourceSessionNotFound)
@@ -156,7 +156,7 @@ func TestGenerationService_GenerateChallenge_failsForAnInvalidDifficulty(t *test
 	f := newGenerationFixture(t)
 
 	// When a challenge is generated
-	_, err := f.service.GenerateChallenge(context.Background(), "session-1", domainexercise.Difficulty("EXPERT"))
+	_, err := f.service.GenerateChallenge(context.Background(), "session-1", interviewSpec(domainexercise.Difficulty("EXPERT")))
 
 	// Then it fails before reading anything
 	require.ErrorIs(t, err, domainexercise.ErrDifficultyInvalid)
@@ -179,7 +179,7 @@ func TestGenerationService_GenerateChallenge_storesNothingWhenTheModelFails(t *t
 			f.expectChat(ctx, "", tt.err)
 
 			// When a challenge is generated
-			_, err := f.service.GenerateChallenge(ctx, "session-1", domainexercise.DifficultyIntermediate)
+			_, err := f.service.GenerateChallenge(ctx, "session-1", interviewSpec(domainexercise.DifficultyIntermediate))
 
 			// Then the error is returned and no transaction is opened
 			require.ErrorIs(t, err, tt.err)
@@ -195,7 +195,7 @@ func TestGenerationService_GenerateChallenge_storesNothingWhenTheOutputIsInvalid
 	f.expectChat(ctx, "I cannot do that.", nil)
 
 	// When a challenge is generated
-	_, err := f.service.GenerateChallenge(ctx, "session-1", domainexercise.DifficultyIntermediate)
+	_, err := f.service.GenerateChallenge(ctx, "session-1", interviewSpec(domainexercise.DifficultyIntermediate))
 
 	// Then the output is rejected and no transaction is opened
 	require.ErrorIs(t, err, ErrInvalidGeneration)
@@ -210,7 +210,7 @@ func TestGenerationService_GenerateChallenge_failsWhenContextCannotBeBuilt(t *te
 	f.profiles.EXPECT().ReadProfile(ctx).Return(domainexercise.GenerationProfile{}, errors.New("no profile"))
 
 	// When a challenge is generated
-	_, err := f.service.GenerateChallenge(ctx, "session-1", domainexercise.DifficultyIntermediate)
+	_, err := f.service.GenerateChallenge(ctx, "session-1", interviewSpec(domainexercise.DifficultyIntermediate))
 
 	// Then it fails before any model call
 	require.Error(t, err)
@@ -232,7 +232,7 @@ func TestGenerationService_GenerateChallenge_returnsTheErrorWhenTheRubricCannotB
 	f.rubrics.EXPECT().Create(insideTx(), expectedGeneratedRubric(t)).Return(saveFailure)
 
 	// When a challenge is generated
-	_, err := f.service.GenerateChallenge(ctx, "session-1", domainexercise.DifficultyIntermediate)
+	_, err := f.service.GenerateChallenge(ctx, "session-1", interviewSpec(domainexercise.DifficultyIntermediate))
 
 	// Then the error is returned out of the transaction, which rolls the challenge back
 	require.ErrorIs(t, err, saveFailure)
@@ -244,6 +244,7 @@ func expectedGeneratedChallenge() domainexercise.Challenge {
 	return domainexercise.Challenge{
 		ID:                        "challenge-1",
 		Type:                      domainexercise.ChallengeTypeArchitecture,
+		Kind:                      domainexercise.ChallengeKindInterview,
 		Title:                     "Design a global cache",
 		Scenario:                  "A shop serves 50k requests per second worldwide.",
 		FunctionalRequirements:    []string{"Serve product pages"},
@@ -266,7 +267,7 @@ func expectedGeneratedChallenge() domainexercise.Challenge {
 // (id-1 to id-7 for the criteria, id-8 for the version) and clock.
 func expectedGeneratedRubric(t *testing.T) domainexercise.RubricVersion {
 	t.Helper()
-	generated, err := parseGeneration(encode(t, validOutput()), "distributed caching", domainexercise.DifficultyIntermediate)
+	generated, err := parseGeneration(encode(t, validOutput()), "distributed caching", interviewSpec(domainexercise.DifficultyIntermediate))
 	require.NoError(t, err)
 	criteria := make([]domainexercise.RubricCriterion, len(generated.Criteria))
 	for i, input := range generated.Criteria {
@@ -284,4 +285,58 @@ func expectedGeneratedRubric(t *testing.T) domainexercise.RubricVersion {
 		ID: fmt.Sprintf("id-%d", len(merged)+1), ChallengeID: "challenge-1", Version: 1,
 		BaseVersion: domainexercise.BaseRubricVersion, Criteria: merged, CreatedAt: fixedNow,
 	}
+}
+
+func TestGenerationService_GenerateChallenge_practiceSavesAnUntimedChallengeWithALeanRubric(t *testing.T) {
+	// Given a studied session and a model that answers a practice with two criteria
+	f := newGenerationFixture(t)
+	ctx := context.Background()
+	spec := practiceSpec("cache aside")
+	f.expectContextPieces(ctx)
+	f.sessions.EXPECT().ReadSession(insideTx(), "session-1").Return(testSession, nil).Once()
+	f.llm.EXPECT().Chat(ctx, domainllm.ChatRequest{
+		SessionID: "session-1",
+		Task:      domainllm.TaskArchitectureLab,
+		Messages:  buildGenerationPrompt(generationContextOf(), spec),
+	}).Return(domainllm.ChatResponse{Content: encode(t, validOutput())}, nil).Once()
+	f.runTx(ctx)
+	var stored domainexercise.Challenge
+	f.challenges.EXPECT().Create(insideTx(), mock.MatchedBy(func(c domainexercise.Challenge) bool { stored = c; return true })).Return(nil)
+	f.challenges.EXPECT().Get(insideTx(), "challenge-1").RunAndReturn(func(context.Context, string) (domainexercise.Challenge, error) { return stored, nil })
+	f.rubrics.EXPECT().Latest(insideTx(), "challenge-1").Return(domainexercise.RubricVersion{}, domainexercise.ErrRubricNotFound)
+	var rubric domainexercise.RubricVersion
+	f.rubrics.EXPECT().Create(insideTx(), mockRubricVersion(&rubric)).Return(nil)
+
+	// When the practice is generated
+	got, err := f.service.GenerateChallenge(ctx, "session-1", spec)
+
+	// Then it is an untimed practice and its rubric holds only the two generated criteria
+	require.NoError(t, err)
+	assert.Equal(t, domainexercise.ChallengeKindPractice, got.Kind)
+	assert.Equal(t, 0, got.TimeLimitMinutes)
+	assert.Equal(t, domainexercise.NoBaseRubricVersion, rubric.BaseVersion)
+	assert.Len(t, rubric.Criteria, 2)
+}
+
+func TestGenerationService_GenerateChallenge_refusesAPracticeWithoutAGoalBeforeAnyModelCall(t *testing.T) {
+	// Given a practice spec with a blank goal
+	f := newGenerationFixture(t)
+
+	// When generating
+	_, err := f.service.GenerateChallenge(context.Background(), "session-1", practiceSpec("   "))
+
+	// Then it is refused before reading the session or calling the model (strict mocks)
+	assert.ErrorIs(t, err, domainexercise.ErrPracticeGoalRequired)
+}
+
+func TestGenerationService_GenerateChallenge_refusesAnUnknownKind(t *testing.T) {
+	// Given a spec of an unknown kind
+	f := newGenerationFixture(t)
+	spec := domainexercise.ChallengeSpec{Difficulty: domainexercise.DifficultyBeginner, Kind: "QUIZ"}
+
+	// When generating
+	_, err := f.service.GenerateChallenge(context.Background(), "session-1", spec)
+
+	// Then it is refused
+	assert.ErrorIs(t, err, domainexercise.ErrChallengeKindInvalid)
 }

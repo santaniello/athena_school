@@ -42,15 +42,18 @@ func NewGenerationService(
 	}
 }
 
-// GenerateChallenge asks the model for a challenge about the session's topic
-// at the given difficulty and saves it, with its first rubric version, in one
+// GenerateChallenge asks the model for a challenge about the session's topic,
+// of the kind and difficulty in spec (a practice also carries what to
+// practice), and saves it, with its first rubric version, in one
 // transaction. It makes exactly one model call and never retries: on any
 // failure nothing is stored and the caller may call again. It returns
 // ErrSourceSessionNotFound for an unknown session and ErrInvalidGeneration
-// when the model's answer breaks a challenge or rubric rule.
-func (s *GenerationService) GenerateChallenge(ctx context.Context, sessionID string, difficulty domainexercise.Difficulty) (domainexercise.Challenge, error) {
-	if domainexercise.DefaultTimeLimit(difficulty) == 0 {
-		return domainexercise.Challenge{}, domainexercise.ErrDifficultyInvalid
+// when the model's answer breaks a challenge or rubric rule. An invalid spec
+// is refused before anything else.
+func (s *GenerationService) GenerateChallenge(ctx context.Context, sessionID string, spec domainexercise.ChallengeSpec) (domainexercise.Challenge, error) {
+	spec = spec.Normalized()
+	if err := spec.Validate(); err != nil {
+		return domainexercise.Challenge{}, err
 	}
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
@@ -68,12 +71,12 @@ func (s *GenerationService) GenerateChallenge(ctx context.Context, sessionID str
 	response, err := s.llm.Chat(ctx, domainllm.ChatRequest{
 		SessionID: sessionID,
 		Task:      generationTask,
-		Messages:  buildGenerationPrompt(gc, difficulty),
+		Messages:  buildGenerationPrompt(gc, spec),
 	})
 	if err != nil {
 		return domainexercise.Challenge{}, fmt.Errorf("exercise: generating challenge: %w", err)
 	}
-	generated, err := parseGeneration(response.Content, session.Topic, difficulty)
+	generated, err := parseGeneration(response.Content, session.Topic, spec)
 	if err != nil {
 		return domainexercise.Challenge{}, err
 	}

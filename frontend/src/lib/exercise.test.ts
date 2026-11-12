@@ -54,6 +54,9 @@ import {
   difficultyForExperience,
   exerciseErrorMessage,
   formatSessionDate,
+  formatTimeLimit,
+  practiceSuggestions,
+  KIND_LABELS,
   generateChallenge,
   getAttempt,
   getAttemptResult,
@@ -168,6 +171,7 @@ describe('exercise bindings', () => {
   it('generates a challenge for a session and difficulty', async () => {
     vi.mocked(GenerateChallenge).mockResolvedValueOnce({
       id: 'c9',
+      kind: 'INTERVIEW',
       title: 'New',
       topic: 'caching',
       difficulty: 'BEGINNER',
@@ -176,14 +180,31 @@ describe('exercise bindings', () => {
 
     const created = await generateChallenge('s1', 'BEGINNER')
 
-    expect(GenerateChallenge).toHaveBeenCalledWith('s1', 'BEGINNER')
+    expect(GenerateChallenge).toHaveBeenCalledWith('s1', 'BEGINNER', 'INTERVIEW', '')
     expect(created).toEqual({
       id: 'c9',
+      kind: 'INTERVIEW',
       title: 'New',
       topic: 'caching',
       difficulty: 'BEGINNER',
       timeLimitMinutes: 30,
     })
+  })
+
+  it('generates a practice with its goal and gets it back untimed', async () => {
+    vi.mocked(GenerateChallenge).mockResolvedValueOnce({
+      id: 'c10',
+      kind: 'PRACTICE',
+      title: 'Slow price API',
+      topic: 'caching',
+      difficulty: 'BEGINNER',
+      timeLimitMinutes: 0,
+    })
+
+    const created = await generateChallenge('s1', 'BEGINNER', 'PRACTICE', 'cache aside')
+
+    expect(GenerateChallenge).toHaveBeenCalledWith('s1', 'BEGINNER', 'PRACTICE', 'cache aside')
+    expect(created).toMatchObject({ kind: 'PRACTICE', timeLimitMinutes: 0 })
   })
 
   it('cancels the generation in flight', async () => {
@@ -804,7 +825,17 @@ describe('exercise offer', () => {
 
     await expect(acceptOffer('o1', 'ADVANCED')).resolves.toBeUndefined()
 
-    expect(AcceptOffer).toHaveBeenCalledWith('o1', 'ADVANCED')
+    expect(AcceptOffer).toHaveBeenCalledWith('o1', 'ADVANCED', 'INTERVIEW', '')
+  })
+
+  it('accepts an offer as a practice with its goal', async () => {
+    vi.mocked(AcceptOffer).mockResolvedValueOnce(
+      desktop.SessionExerciseDTO.createFrom({ challengeId: 'c2' }),
+    )
+
+    await acceptOffer('o1', 'BEGINNER', 'PRACTICE', 'cache aside')
+
+    expect(AcceptOffer).toHaveBeenCalledWith('o1', 'BEGINNER', 'PRACTICE', 'cache aside')
   })
 
   it('declines an offer', async () => {
@@ -821,6 +852,20 @@ describe('exercise offer', () => {
     expect(offerLabels(undefined)).toMatchObject({ accept: 'Accept', decline: 'Decline' })
     expect(offerLabels('pt').title).not.toBe(offerLabels('en').title)
     expect(offerLabels('pt').preparing).not.toBe(offerLabels('en').preparing)
+  })
+
+  it('labels the kind choice and the practice goal in the assistant language', () => {
+    expect(offerLabels('en')).toMatchObject({
+      kind: 'Type',
+      kinds: { INTERVIEW: 'Interview', PRACTICE: 'Practice' },
+      goal: 'What do you want to practice?',
+    })
+    expect(offerLabels('pt')).toMatchObject({
+      kind: 'Tipo',
+      kinds: { INTERVIEW: 'Entrevista', PRACTICE: 'Prática' },
+      goal: 'O que você quer praticar?',
+    })
+    expect(offerLabels('pt').goalPlaceholder).not.toBe(offerLabels('en').goalPlaceholder)
   })
 
   it('reads the language and the starting difficulty from the profile', async () => {
@@ -850,6 +895,7 @@ describe('toExamToStart', () => {
         sessionExerciseId: 'l1',
         messageId: 'm1',
         challengeId: 'c9',
+        kind: 'INTERVIEW',
         title: 'Design a cache',
         difficulty: 'ADVANCED',
         timeLimitMinutes: 45,
@@ -870,6 +916,7 @@ describe('listSessionExercises', () => {
         sessionExerciseId: 'l1',
         messageId: 'm1',
         challengeId: 'c1',
+        kind: 'INTERVIEW',
         title: 'Design a feed',
         difficulty: 'ADVANCED',
         timeLimitMinutes: 60,
@@ -881,9 +928,10 @@ describe('listSessionExercises', () => {
         sessionExerciseId: 'l2',
         messageId: 'm2',
         challengeId: 'c2',
+        kind: 'PRACTICE',
         title: 'Second',
         difficulty: 'BEGINNER',
-        timeLimitMinutes: 30,
+        timeLimitMinutes: 0,
         status: 'NOT_STARTED',
         attempts: 0,
         latest: null,
@@ -898,6 +946,7 @@ describe('listSessionExercises', () => {
         sessionExerciseId: 'l1',
         messageId: 'm1',
         challengeId: 'c1',
+        kind: 'INTERVIEW',
         title: 'Design a feed',
         difficulty: 'ADVANCED',
         timeLimitMinutes: 60,
@@ -909,9 +958,10 @@ describe('listSessionExercises', () => {
         sessionExerciseId: 'l2',
         messageId: 'm2',
         challengeId: 'c2',
+        kind: 'PRACTICE',
         title: 'Second',
         difficulty: 'BEGINNER',
-        timeLimitMinutes: 30,
+        timeLimitMinutes: 0,
         status: 'NOT_STARTED',
         attempts: 0,
         latest: null,
@@ -925,5 +975,33 @@ describe('listSessionExercises', () => {
     )
 
     expect(await listSessionExercises('s1')).toEqual([])
+  })
+})
+
+describe('formatTimeLimit', () => {
+  it('says there is no limit for an untimed practice', () => {
+    expect(formatTimeLimit(0)).toBe('No time limit')
+  })
+
+  it('writes the minutes of a timed exam', () => {
+    expect(formatTimeLimit(45)).toBe('45 min')
+    expect(formatTimeLimit(1)).toBe('1 min')
+  })
+})
+
+describe('practiceSuggestions', () => {
+  it('suggests the study topic as what to practice', () => {
+    expect(practiceSuggestions('  Distributed caching ')).toEqual(['Distributed caching'])
+  })
+
+  it('suggests nothing without a topic', () => {
+    expect(practiceSuggestions('  ')).toEqual([])
+    expect(practiceSuggestions(undefined)).toEqual([])
+  })
+})
+
+describe('KIND_LABELS', () => {
+  it('names both kinds', () => {
+    expect(KIND_LABELS).toEqual({ INTERVIEW: 'Interview', PRACTICE: 'Practice' })
   })
 })
