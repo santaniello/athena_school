@@ -133,6 +133,7 @@ Design reference: [ADR-005](../decisions/ADR-005-exercise-engine.md). The lab sc
 | [16-session-feedback.md](phase-03-architecture-lab/16-session-feedback.md) | Short derived result summary in the session's next tutor replies, no XML or transcript |
 | [17-session-exercises-ui.md](phase-03-architecture-lab/17-session-exercises-ui.md) | Persistent exercise card in the chat with progress, Start again and History |
 | [18-practice-challenges.md](phase-03-architecture-lab/18-practice-challenges.md) | Practice kind: one concept, no time limit, lean rubric, chosen next to the difficulty |
+| [19-practice-starter-diagram.md](phase-03-architecture-lab/19-practice-starter-diagram.md) | Practice challenges start from a generated diagram of the current system; the user edits it |
 
 > Spec files are added one at a time, after review. Algorithms Lab (code editor, runner, tests) is a future phase and is not specified yet.
 > Manual challenge creation (the `MANUAL` origin of a challenge) is also future work: the model keeps the field, but no screen writes it yet.
