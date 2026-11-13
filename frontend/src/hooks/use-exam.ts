@@ -16,7 +16,7 @@ import {
   type Attempt,
   type DefenseQuestion,
 } from '@/lib/exercise'
-import { diagramHasContent } from '@/lib/lab'
+import { diagramIsAnswer } from '@/lib/lab'
 
 // The editor has this long to report ready before the exam gives up on it.
 const EDITOR_TIMEOUT_MS = 15000
@@ -156,7 +156,7 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void, 
   }
 
   function editorChanged(xml: string) {
-    setHasContent(diagramHasContent(xml))
+    setHasContent(diagramIsAnswer(xml, attemptRef.current?.starterDiagram ?? ''))
   }
 
   async function send(current: Attempt, xml: string) {
@@ -274,7 +274,7 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void, 
     setPhase('submitting')
     setMessage(null)
     const xml = await getXml()
-    if (diagramHasContent(xml)) {
+    if (diagramIsAnswer(xml, current.starterDiagram)) {
       await send(current, xml)
       return
     }

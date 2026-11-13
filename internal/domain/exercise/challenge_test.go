@@ -119,6 +119,32 @@ func TestChallenge_Validate_acceptsAnUntimedPractice(t *testing.T) {
 	assert.True(t, challenge.Untimed())
 }
 
+func TestChallenge_Validate_acceptsAStarterDiagramOnAPractice(t *testing.T) {
+	// Given a practice challenge with a starter diagram
+	challenge := validChallenge()
+	challenge.Kind = ChallengeKindPractice
+	challenge.TimeLimitMinutes = 0
+	challenge.StarterDiagram = "<mxGraphModel/>"
+
+	// When validating it
+	err := challenge.Validate()
+
+	// Then it is valid
+	assert.NoError(t, err)
+}
+
+func TestChallenge_Validate_rejectsAStarterDiagramOnAnInterview(t *testing.T) {
+	// Given an interview challenge with a starter diagram
+	challenge := validChallenge()
+	challenge.StarterDiagram = "<mxGraphModel/>"
+
+	// When validating it
+	err := challenge.Validate()
+
+	// Then it is refused, since an interview starts blank
+	assert.ErrorIs(t, err, ErrStarterDiagramNotAllowed)
+}
+
 func TestChallenge_Validate_rejectsAPracticeTimeOutOfRange(t *testing.T) {
 	for _, minutes := range []int{-1, MaxTimeLimitMinutes + 1} {
 		// Given a practice challenge with a limit that is neither 0 nor in range

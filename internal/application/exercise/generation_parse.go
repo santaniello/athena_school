@@ -34,6 +34,7 @@ type generationOutput struct {
 	NonFunctionalRequirements []string              `json:"nonFunctionalRequirements"`
 	Constraints               []string              `json:"constraints"`
 	Objectives                []string              `json:"objectives"`
+	Diagram                   json.RawMessage       `json:"diagram"` // practice only
 	Criteria                  []generationCriterion `json:"criteria"`
 }
 
@@ -50,13 +51,19 @@ type generationCriterion struct {
 // storage. Every failure wraps ErrInvalidGeneration. The topic is the source
 // session's topic, used only to validate. The spec is the normalized one the
 // challenge was requested with: it sets the difficulty and the kind, and a
-// practice is checked against the lean rubric rules.
-func parseGeneration(content, topic string, spec domainexercise.ChallengeSpec) (generatedChallenge, error) {
+// practice is checked against the lean rubric rules and must carry the
+// diagram structure, which the renderer draws into its starter diagram; an
+// interview ignores the diagram and starts blank.
+func parseGeneration(content, topic string, spec domainexercise.ChallengeSpec, renderer StarterDiagramRenderer) (generatedChallenge, error) {
 	var output generationOutput
 	if err := json.Unmarshal(stripCodeFence(content), &output); err != nil {
 		return generatedChallenge{}, fmt.Errorf("%w: reading the JSON: %w", ErrInvalidGeneration, err)
 	}
 	criteria, err := toCriterionInputs(output.Criteria)
+	if err != nil {
+		return generatedChallenge{}, err
+	}
+	starter, err := renderStarter(output.Diagram, spec, renderer)
 	if err != nil {
 		return generatedChallenge{}, err
 	}
@@ -70,6 +77,7 @@ func parseGeneration(content, topic string, spec domainexercise.ChallengeSpec) (
 			Objectives:                trimItems(output.Objectives),
 			Difficulty:                spec.Difficulty,
 			Kind:                      spec.Kind,
+			StarterDiagram:            starter,
 			Origin:                    domainexercise.OriginAIGenerated,
 		},
 		Criteria: criteria,
@@ -78,6 +86,22 @@ func parseGeneration(content, topic string, spec domainexercise.ChallengeSpec) (
 		return generatedChallenge{}, fmt.Errorf("%w: %w", ErrInvalidGeneration, err)
 	}
 	return generated, nil
+}
+
+// renderStarter draws the diagram structure of a practice. An interview has
+// no starter diagram.
+func renderStarter(diagram json.RawMessage, spec domainexercise.ChallengeSpec, renderer StarterDiagramRenderer) (string, error) {
+	if spec.Kind != domainexercise.ChallengeKindPractice {
+		return "", nil
+	}
+	if len(diagram) == 0 || string(diagram) == "null" {
+		return "", fmt.Errorf("%w: a practice has no diagram", ErrInvalidGeneration)
+	}
+	starter, err := renderer.Render(diagram)
+	if err != nil {
+		return "", fmt.Errorf("%w: %w", ErrInvalidGeneration, err)
+	}
+	return starter, nil
 }
 
 // stripCodeFence removes a Markdown code fence some models wrap around JSON.
@@ -157,6 +181,7 @@ func validateGenerated(generated generatedChallenge, topic string) error {
 		Constraints:               generated.Challenge.Constraints,
 		Objectives:                generated.Challenge.Objectives,
 		Difficulty:                generated.Challenge.Difficulty,
+		StarterDiagram:            generated.Challenge.StarterDiagram,
 		Topic:                     topic,
 		Origin:                    generated.Challenge.Origin,
 		TimeLimitMinutes:          domainexercise.TimeLimitFor(generated.Challenge.Kind, generated.Challenge.Difficulty),

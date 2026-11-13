@@ -37,10 +37,17 @@ func expectEvaluationCall(t *testing.T, provider *llmmocks.MockProvider, input d
 	t.Helper()
 	summary, err := SummarizeDiagram(input.Submission.Content)
 	require.NoError(t, err)
+	var baseline *DiagramSummary
+	if input.Challenge.StarterDiagram != "" {
+		starter, err := SummarizeDiagram(input.Challenge.StarterDiagram)
+		if err == nil {
+			baseline = &starter
+		}
+	}
 	return provider.EXPECT().Chat(context.Background(), domainllm.ChatRequest{
 		Task: domainllm.TaskArchitectureLab,
 		Messages: []domainllm.Message{
-			{Role: "user", Content: BuildEvaluationPrompt(input.Challenge, input.Rubric, summary, language)},
+			{Role: "user", Content: BuildEvaluationPrompt(input.Challenge, input.Rubric, summary, baseline, language)},
 		},
 	})
 }
@@ -64,6 +71,49 @@ func TestDiagramEvaluator_Evaluate_mapsTheModelAnswerToEvaluatorOutput(t *testin
 			{CriterionID: "c-res", Level: 0, Justification: "Nothing written.", InsufficientEvidence: true},
 		},
 	}, output)
+}
+
+func TestDiagramEvaluator_Evaluate_sendsTheStarterDiagramAsTheBaseline(t *testing.T) {
+	// Given a practice challenge with a starter diagram
+	provider := llmmocks.NewMockProvider(t)
+	input := testEvaluatorInput()
+	input.Challenge.StarterDiagram = wrapModel(`<mxCell id="a" parent="1" value="Starter API" vertex="1"/>`)
+	var sent string
+	provider.EXPECT().Chat(context.Background(), domainllm.ChatRequest{
+		Task:     domainllm.TaskArchitectureLab,
+		Messages: []domainllm.Message{{Role: "user", Content: expectedPromptWithBaseline(t, input)}},
+	}).Run(func(_ context.Context, request domainllm.ChatRequest) { sent = request.Messages[0].Content }).
+		Return(domainllm.ChatResponse{Content: validEvaluation}, nil).Once()
+
+	// When evaluating
+	_, err := NewDiagramEvaluator(provider, fakeLanguage{code: "en"}).Evaluate(context.Background(), input)
+
+	// Then the prompt carries the starter as the baseline
+	require.NoError(t, err)
+	assert.Contains(t, sent, "<baseline>\nComponents:\n1. Starter API")
+}
+
+func expectedPromptWithBaseline(t *testing.T, input domainexercise.EvaluatorInput) string {
+	t.Helper()
+	summary, err := SummarizeDiagram(input.Submission.Content)
+	require.NoError(t, err)
+	baseline, err := SummarizeDiagram(input.Challenge.StarterDiagram)
+	require.NoError(t, err)
+	return BuildEvaluationPrompt(input.Challenge, input.Rubric, summary, &baseline, "en")
+}
+
+func TestDiagramEvaluator_Evaluate_goesOnWithoutABaselineWhenTheStarterIsUnreadable(t *testing.T) {
+	// Given a challenge whose stored starter diagram cannot be read
+	provider := llmmocks.NewMockProvider(t)
+	input := testEvaluatorInput()
+	input.Challenge.StarterDiagram = "not xml"
+	expectEvaluationCall(t, provider, input, "en").Return(domainllm.ChatResponse{Content: validEvaluation}, nil).Once()
+
+	// When evaluating
+	_, err := NewDiagramEvaluator(provider, fakeLanguage{code: "en"}).Evaluate(context.Background(), input)
+
+	// Then the evaluation still runs, without a baseline
+	require.NoError(t, err)
 }
 
 func TestDiagramEvaluator_Evaluate_acceptsAnswerInAMarkdownFence(t *testing.T) {

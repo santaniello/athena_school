@@ -28,6 +28,7 @@ type generationFixture struct {
 	challenges *domainmocks.MockChallengeRepository
 	rubrics    *domainmocks.MockRubricRepository
 	tx         *exercisemocks.MockTransactor
+	renderer   *exercisemocks.MockStarterDiagramRenderer
 }
 
 // txMarker is set on the context a fake transaction hands to its function, so a
@@ -45,6 +46,7 @@ func newGenerationFixture(t *testing.T) *generationFixture {
 		challenges: domainmocks.NewMockChallengeRepository(t),
 		rubrics:    domainmocks.NewMockRubricRepository(t),
 		tx:         exercisemocks.NewMockTransactor(t),
+		renderer:   exercisemocks.NewMockStarterDiagramRenderer(t),
 	}
 	challengeService := NewChallengeService(f.challenges, f.sessions)
 	challengeService.now = func() time.Time { return fixedNow }
@@ -53,7 +55,7 @@ func newGenerationFixture(t *testing.T) *generationFixture {
 	rubricService.now = func() time.Time { return fixedNow }
 	ids := 0
 	rubricService.newID = func() string { ids++; return fmt.Sprintf("id-%d", ids) }
-	f.service = NewGenerationService(f.sessions, f.summaries, f.profiles, f.notes, f.llm, challengeService, rubricService, f.tx)
+	f.service = NewGenerationService(f.sessions, f.summaries, f.profiles, f.notes, f.llm, f.renderer, challengeService, rubricService, f.tx)
 	return f
 }
 
@@ -267,7 +269,7 @@ func expectedGeneratedChallenge() domainexercise.Challenge {
 // (id-1 to id-7 for the criteria, id-8 for the version) and clock.
 func expectedGeneratedRubric(t *testing.T) domainexercise.RubricVersion {
 	t.Helper()
-	generated, err := parseGeneration(encode(t, validOutput()), "distributed caching", interviewSpec(domainexercise.DifficultyIntermediate))
+	generated, err := parseGeneration(encode(t, validOutput()), "distributed caching", interviewSpec(domainexercise.DifficultyIntermediate), nil)
 	require.NoError(t, err)
 	criteria := make([]domainexercise.RubricCriterion, len(generated.Criteria))
 	for i, input := range generated.Criteria {
@@ -298,7 +300,8 @@ func TestGenerationService_GenerateChallenge_practiceSavesAnUntimedChallengeWith
 		SessionID: "session-1",
 		Task:      domainllm.TaskArchitectureLab,
 		Messages:  buildGenerationPrompt(generationContextOf(), spec),
-	}).Return(domainllm.ChatResponse{Content: encode(t, validOutput())}, nil).Once()
+	}).Return(domainllm.ChatResponse{Content: encode(t, practiceOutput())}, nil).Once()
+	f.renderer.EXPECT().Render([]byte(encode(t, starterStructureOutput()))).Return("<mxGraphModel>drawn</mxGraphModel>", nil).Once()
 	f.runTx(ctx)
 	var stored domainexercise.Challenge
 	f.challenges.EXPECT().Create(insideTx(), mock.MatchedBy(func(c domainexercise.Challenge) bool { stored = c; return true })).Return(nil)
@@ -314,6 +317,7 @@ func TestGenerationService_GenerateChallenge_practiceSavesAnUntimedChallengeWith
 	require.NoError(t, err)
 	assert.Equal(t, domainexercise.ChallengeKindPractice, got.Kind)
 	assert.Equal(t, 0, got.TimeLimitMinutes)
+	assert.Equal(t, "<mxGraphModel>drawn</mxGraphModel>", got.StarterDiagram)
 	assert.Equal(t, domainexercise.NoBaseRubricVersion, rubric.BaseVersion)
 	assert.Len(t, rubric.Criteria, 2)
 }

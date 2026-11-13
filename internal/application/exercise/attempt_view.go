@@ -15,11 +15,14 @@ type AttemptView struct {
 }
 
 // ChallengeStatement is what the exam screen shows of a challenge: the
-// scenario and the four lists. Never the rubric.
+// scenario and the four lists. Never the rubric. StarterDiagram is the diagram
+// a practice attempt starts from; it is empty for the history and the result,
+// which do not need it.
 type ChallengeStatement struct {
 	Scenario                  string
 	FunctionalRequirements    []string
 	NonFunctionalRequirements []string
 	Constraints               []string
 	Objectives                []string
+	StarterDiagram            string
 }

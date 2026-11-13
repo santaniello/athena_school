@@ -42,6 +42,7 @@ const attempt: Attempt = {
     constraints: [],
     objectives: [],
   },
+  starterDiagram: '',
   criteria: [],
 }
 
@@ -238,6 +239,22 @@ describe('useExam', () => {
 
     act(() => result.current.editorChanged(EMPTY_XML))
     expect(result.current.hasContent).toBe(false)
+  })
+
+  it('enables Finish for a practice only once the board differs from its starter diagram', async () => {
+    vi.mocked(startAttempt).mockResolvedValue({ ...attempt, starterDiagram: FULL_XML })
+    const view = setup()
+    await act(async () => view.result.current.editorReady())
+
+    act(() => view.result.current.editorChanged(FULL_XML))
+    expect(view.result.current.hasContent).toBe(false)
+
+    act(() =>
+      view.result.current.editorChanged(
+        FULL_XML.replace('</root>', '<mxCell id="3" value="Cache" vertex="1" parent="1"/></root>'),
+      ),
+    )
+    expect(view.result.current.hasContent).toBe(true)
   })
 
   it('submits the XML the editor returns, then evaluates the attempt', async () => {

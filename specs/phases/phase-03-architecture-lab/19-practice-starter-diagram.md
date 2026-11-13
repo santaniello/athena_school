@@ -37,11 +37,13 @@ carries the "who calls whom".
    fails the generation like any other invalid model output.
 5. **The diagram is part of the challenge.** `Challenge` gains `StarterDiagram` (mxGraphModel XML,
    empty for interviews). It is stored in a new `challenges.starter_diagram TEXT NOT NULL DEFAULT ''`
-   column, exposed in the challenge DTO and loaded into the editor when an attempt starts. It is
-   not copied to the attempt: the challenge is the single source.
+   column and loaded into the editor when an attempt starts. It is not copied to the attempt: the
+   challenge is the single source. The exam screen reads it from the attempt view
+   (`statement.starterDiagram`), because the board's editor is created after the attempt exists and
+   the screen has no other challenge DTO at that point.
 6. **The editor starts from it.** `DiagramEditor` seeds `latestXml` from the `xml` prop in editable
    mode too, so `init` loads it, and a recovered iframe reloads the user's latest work as today.
-   `LabExamScreen` passes `challenge.starterDiagram`.
+   `LabExamScreen` passes `attempt.starterDiagram` to the board's editor.
 7. **An untouched diagram is not an answer.** `diagramHasContent` is true as soon as the seed
    loads, so the submit button would enable at once. Submit stays disabled until the diagram
    differs from the seed, compared on the parsed components and connections, not on raw XML,

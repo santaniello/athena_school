@@ -46,6 +46,7 @@ export namespace desktop {
 	    nonFunctionalRequirements: string[];
 	    constraints: string[];
 	    objectives: string[];
+	    starterDiagram: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new StatementDTO(source);
@@ -58,6 +59,7 @@ export namespace desktop {
 	        this.nonFunctionalRequirements = source["nonFunctionalRequirements"];
 	        this.constraints = source["constraints"];
 	        this.objectives = source["objectives"];
+	        this.starterDiagram = source["starterDiagram"];
 	    }
 	}
 	export class AttemptDTO {

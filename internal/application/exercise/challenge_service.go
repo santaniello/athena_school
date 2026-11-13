@@ -45,6 +45,8 @@ type CreateChallengeInput struct {
 	// Kind is INTERVIEW when empty.
 	Kind   domainexercise.ChallengeKind
 	Origin domainexercise.ChallengeOrigin
+	// StarterDiagram is the diagram a practice starts from; empty for a blank board.
+	StarterDiagram string
 }
 
 // Create validates and persists a challenge. Its topic is a snapshot of the
@@ -82,6 +84,7 @@ func (s *ChallengeService) Create(ctx context.Context, input CreateChallengeInpu
 		Origin:                    input.Origin,
 		TimeLimitMinutes:          domainexercise.TimeLimitFor(kind, input.Difficulty),
 		DefenseQuestions:          domainexercise.DefaultDefenseQuestions,
+		StarterDiagram:            input.StarterDiagram,
 		CreatedAt:                 now,
 		UpdatedAt:                 now,
 	}

@@ -19,6 +19,7 @@ type GenerationService struct {
 	challenges *ChallengeService
 	rubrics    *RubricService
 	tx         Transactor
+	starters   StarterDiagramRenderer
 }
 
 // NewGenerationService creates a GenerationService backed by the given ports.
@@ -28,6 +29,7 @@ func NewGenerationService(
 	profiles ProfileReader,
 	notes NotesSearcher,
 	llm domainllm.Provider,
+	starters StarterDiagramRenderer,
 	challenges *ChallengeService,
 	rubrics *RubricService,
 	tx Transactor,
@@ -39,6 +41,7 @@ func NewGenerationService(
 		challenges: challenges,
 		rubrics:    rubrics,
 		tx:         tx,
+		starters:   starters,
 	}
 }
 
@@ -76,7 +79,7 @@ func (s *GenerationService) GenerateChallenge(ctx context.Context, sessionID str
 	if err != nil {
 		return domainexercise.Challenge{}, fmt.Errorf("exercise: generating challenge: %w", err)
 	}
-	generated, err := parseGeneration(response.Content, session.Topic, spec)
+	generated, err := parseGeneration(response.Content, session.Topic, spec, s.starters)
 	if err != nil {
 		return domainexercise.Challenge{}, err
 	}

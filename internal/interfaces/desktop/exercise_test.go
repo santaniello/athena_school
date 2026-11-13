@@ -78,7 +78,7 @@ func (f *exerciseFixture) expectView(ctx context.Context) {
 		ID: "challenge-1", Title: "Design a URL shortener", Topic: "caching",
 		Scenario: "A link service.", FunctionalRequirements: []string{"Shorten a URL"},
 		NonFunctionalRequirements: []string{"p99 under 100 ms"}, Constraints: []string{"No new database"},
-		Objectives: []string{"Cut read load"},
+		Objectives: []string{"Cut read load"}, StarterDiagram: "<mxGraphModel/>",
 	}, nil)
 	f.rubrics.EXPECT().Get(ctx, "rubric-1").Return(domainexercise.RubricVersion{
 		ID: "rubric-1", Criteria: []domainexercise.RubricCriterion{{
@@ -107,7 +107,7 @@ func TestApp_GetAttempt_mapsAnInProgressAttemptToItsDTO(t *testing.T) {
 		Statement: StatementDTO{
 			Scenario: "A link service.", FunctionalRequirements: []string{"Shorten a URL"},
 			NonFunctionalRequirements: []string{"p99 under 100 ms"}, Constraints: []string{"No new database"},
-			Objectives: []string{"Cut read load"},
+			Objectives: []string{"Cut read load"}, StarterDiagram: "<mxGraphModel/>",
 		},
 		Criteria: []CriterionDTO{{
 			Key: "architecture", Name: "Overall architecture", Description: "Coherent.", Weight: 100, Mandatory: true,

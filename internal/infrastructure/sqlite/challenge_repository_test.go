@@ -88,6 +88,27 @@ func TestChallengeRepository_CreateThenGet_roundTripsAnUntimedPractice(t *testin
 	assert.Equal(t, challenge, got)
 }
 
+func TestChallengeRepository_CreateThenGet_roundTripsTheStarterDiagram(t *testing.T) {
+	// Given a practice challenge with a starter diagram
+	repo, _ := newTestChallengeRepository(t)
+	ctx := context.Background()
+	challenge := newTestChallenge("challenge-1")
+	challenge.Kind = exercise.ChallengeKindPractice
+	challenge.TimeLimitMinutes = 0
+	challenge.StarterDiagram = `<mxGraphModel><root><mxCell id="0"/></root></mxGraphModel>`
+
+	// When creating it, then reading it by id and in a list
+	require.NoError(t, repo.Create(ctx, challenge))
+	got, err := repo.Get(ctx, "challenge-1")
+	require.NoError(t, err)
+	page, err := repo.List(ctx, exercise.ChallengeFilter{}, exercise.Page{})
+
+	// Then the diagram is preserved both ways
+	require.NoError(t, err)
+	assert.Equal(t, challenge.StarterDiagram, got.StarterDiagram)
+	assert.Equal(t, challenge.StarterDiagram, page.Items[0].StarterDiagram)
+}
+
 func TestChallengeRepository_CreateThenGet_returnsEmptyListsWhenOptionalListsAreNil(t *testing.T) {
 	// Given a challenge without optional lists
 	repo, _ := newTestChallengeRepository(t)

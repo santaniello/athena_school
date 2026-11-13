@@ -75,6 +75,7 @@ function LabExamScreen({
     <DiagramEditor
       key={exam.editorKey}
       ref={editorRef}
+      xml={attempt?.starterDiagram}
       onReady={exam.editorReady}
       onChange={exam.editorChanged}
       onConnectionLost={() => setConnectionLost(true)}

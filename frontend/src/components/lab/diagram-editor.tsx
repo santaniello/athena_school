@@ -31,6 +31,8 @@ interface DiagramEditorProps {
   // Shows `xml` with no way to edit it. The connection is not probed: a
   // diagram that does not load says so instead.
   readOnly?: boolean
+  // The diagram the board opens with; empty is a blank board. An editable
+  // board starts from it, and a recovered one reloads the latest work instead.
   xml?: string
   onReady: () => void
   onChange: (xml: string) => void
@@ -75,7 +77,7 @@ function DiagramEditor({
   const [generation, setGeneration] = useState(0)
   // Stryker disable next-line StringLiteral: only 'ready' and 'lost' are ever compared.
   const phase = useRef<Phase>('loading')
-  const latestXml = useRef(readOnly ? xml : '')
+  const latestXml = useRef(xml)
   const [unavailable, setUnavailable] = useState(readOnly && !navigator.onLine)
   const waiting = useRef<Array<(xml: string) => void>>([])
   // Stryker disable next-line ObjectLiteral: the effect below sets the callbacks before any message can arrive.

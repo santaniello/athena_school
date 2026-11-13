@@ -41,6 +41,7 @@ vi.mock('@/lib/exercise', async (importOriginal) => {
 
 interface EditorProps {
   ref?: Ref<DiagramEditorHandle>
+  xml?: string
   onReady: () => void
   onChange: (xml: string) => void
   onConnectionLost: () => void
@@ -56,7 +57,7 @@ vi.mock('@/components/lab/diagram-editor', () => ({
   DiagramEditor: (props: EditorProps) => {
     editor = props
     useImperativeHandle(props.ref, () => ({ getXml: () => Promise.resolve(xmlOnBoard) }))
-    return <div data-testid="editor" />
+    return <div data-testid="editor" data-xml={props.xml ?? ''} />
   },
 }))
 
@@ -73,6 +74,7 @@ const attempt: Attempt = {
   title: 'Cache and invalidation',
   topic: 'caching',
   deadline: new Date(NOW + 44 * 60 * 1000).toISOString(),
+  starterDiagram: '',
   statement: {
     scenario: 'A catalog service serves millions of reads.',
     functionalRequirements: ['Browse products'],
@@ -297,6 +299,23 @@ describe('LabExamScreen', () => {
 
     act(() => editor.onChange(EMPTY_XML))
     expect(finish).toBeDisabled()
+  })
+
+  it('opens the board on the starter diagram and keeps Finish disabled until it changes', async () => {
+    vi.mocked(startAttempt).mockResolvedValue({ ...attempt, starterDiagram: FULL_XML })
+    await startRunning()
+    const finish = screen.getByRole('button', { name: 'Finish and evaluate' })
+
+    expect(screen.getByTestId('editor')).toHaveAttribute('data-xml', FULL_XML)
+    act(() => editor.onChange(FULL_XML))
+    expect(finish).toBeDisabled()
+
+    act(() =>
+      editor.onChange(
+        FULL_XML.replace('</root>', '<mxCell id="3" value="Cache" vertex="1" parent="1"/></root>'),
+      ),
+    )
+    expect(finish).toBeEnabled()
   })
 
   it('asks before finishing and submits the diagram when confirmed', async () => {
