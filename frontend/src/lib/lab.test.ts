@@ -125,6 +125,11 @@ describe('diagramChangedFrom', () => {
     expect(diagramChangedFrom(model(box + inside + db + edge), before)).toBe(true)
   })
 
+  it('ignores cells that are neither a component nor a connection, such as an empty layer', () => {
+    const layer = '<mxCell id="layer2" value="Layer 2" parent="0"/>'
+    expect(diagramChangedFrom(model(api + db + edge + layer), seed)).toBe(false)
+  })
+
   it('reads a cell wrapped in an object element by the wrapper id and label', () => {
     const wrapped = '<object id="n0" label="API"><mxCell vertex="1" parent="1"/></object>'
     expect(diagramChangedFrom(model(wrapped + db + edge), seed)).toBe(false)

@@ -137,6 +137,22 @@ func TestStarterDiagramRendererEscapesLabelsAndBoundsTheirLength(t *testing.T) {
 	assert.Equal(t, "<i>", summary.Connections[0].Label)
 }
 
+func TestStarterDiagramRendererDropsCharactersXMLForbids(t *testing.T) {
+	// Given labels with a NUL and a form feed, which XML 1.0 forbids
+	raw := "{\"nodes\":[{\"id\":\"a\",\"label\":\"A\\u0000PI\\f\",\"kind\":\"service\"},{\"id\":\"b\",\"label\":\"B\",\"kind\":\"service\"}]," +
+		"\"edges\":[{\"from\":\"a\",\"to\":\"b\",\"label\":\"x\\u0001y\"}]}"
+
+	// When it is rendered and read back
+	rendered, err := StarterDiagramRenderer{}.Render([]byte(raw))
+	require.NoError(t, err)
+	summary, err := SummarizeDiagram(rendered)
+
+	// Then the XML is readable and the forbidden characters are gone
+	require.NoError(t, err)
+	assert.Equal(t, "API", summary.Components[0].Label)
+	assert.Equal(t, "xy", summary.Connections[0].Label)
+}
+
 func TestStarterDiagramRendererAcceptsTheLimits(t *testing.T) {
 	// Given 10 nodes and 15 edges
 	nodes := make([]string, 10)

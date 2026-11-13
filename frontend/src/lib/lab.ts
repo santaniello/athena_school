@@ -77,6 +77,8 @@ function diagramSignature(xml: string): string[] {
   if (document.querySelector('parsererror')) return []
   const signature: string[] = []
   for (const cell of Array.from(document.getElementsByTagName('mxCell'))) {
+    // A layer, for one, is a cell that is neither a component nor a connection.
+    if (cell.getAttribute('vertex') !== '1' && cell.getAttribute('edge') !== '1') continue
     const wrapper = cell.parentElement
     const wrapped = wrapper?.tagName === 'object' || wrapper?.tagName === 'UserObject'
     const id = (wrapped ? wrapper.getAttribute('id') : cell.getAttribute('id')) ?? ''

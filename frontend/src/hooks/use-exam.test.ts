@@ -257,6 +257,26 @@ describe('useExam', () => {
     expect(view.result.current.hasContent).toBe(true)
   })
 
+  it('does not submit a board that went back to the starter diagram before the next autosave', async () => {
+    vi.mocked(startAttempt).mockResolvedValue({ ...attempt, starterDiagram: FULL_XML })
+    const view = setup()
+    await act(async () => view.result.current.editorReady())
+    act(() =>
+      view.result.current.editorChanged(
+        FULL_XML.replace('</root>', '<mxCell id="3" value="Cache" vertex="1" parent="1"/></root>'),
+      ),
+    )
+    expect(view.result.current.hasContent).toBe(true)
+
+    await act(async () => view.result.current.submit(async () => FULL_XML))
+
+    expect(submitAttempt).not.toHaveBeenCalled()
+    expect(discardAttempt).not.toHaveBeenCalled()
+    expect(view.result.current.phase).toBe('running')
+    expect(view.result.current.hasContent).toBe(false)
+    expect(view.result.current.message).toBe('Change the diagram before finishing.')
+  })
+
   it('submits the XML the editor returns, then evaluates the attempt', async () => {
     const { result } = await running()
 

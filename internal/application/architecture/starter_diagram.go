@@ -145,10 +145,23 @@ func styleOf(kind string) string {
 	return kindStyles[kindOther]
 }
 
-// escapeLabel trims the label, bounds its length and escapes it for an XML attribute.
+// escapeLabel drops the characters XML 1.0 forbids, trims the label, bounds
+// its length and escapes it for an XML attribute.
 func escapeLabel(label string) string {
-	runes := []rune(strings.TrimSpace(label))
+	runes := []rune(strings.TrimSpace(strings.Map(xmlRune, label)))
 	return html.EscapeString(string(runes[:min(len(runes), MaxLabelLength)]))
+}
+
+// xmlRune keeps a rune XML 1.0 allows and drops any other (-1).
+func xmlRune(r rune) rune {
+	switch {
+	case r == '\t', r == '\n', r == '\r',
+		r >= 0x20 && r <= 0xD7FF,
+		r >= 0xE000 && r <= 0xFFFD,
+		r >= 0x10000 && r <= 0x10FFFF:
+		return r
+	}
+	return -1
 }
 
 // columnsOf returns each node's column: its distance from the entry node

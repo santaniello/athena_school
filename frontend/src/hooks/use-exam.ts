@@ -21,6 +21,8 @@ import { diagramIsAnswer } from '@/lib/lab'
 // The editor has this long to report ready before the exam gives up on it.
 const EDITOR_TIMEOUT_MS = 15000
 
+const UNCHANGED_BOARD_MESSAGE = 'Change the diagram before finishing.'
+
 const EMPTY_BOARD_NOTICE = 'Time is up and the board was empty. The exam was discarded.'
 
 export type ExamPhase =
@@ -263,7 +265,16 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void, 
     if (!current || phaseRef.current !== 'running') return
     setPhase('submitting')
     setMessage(null)
-    await send(current, await getXml())
+    const xml = await getXml()
+    // The Finish button follows the last autosave, so the board may have gone
+    // back to the starter diagram since. The exam stays open.
+    if (!diagramIsAnswer(xml, current.starterDiagram)) {
+      setHasContent(false)
+      setMessage(UNCHANGED_BOARD_MESSAGE)
+      setPhase('running')
+      return
+    }
+    await send(current, xml)
   }
 
   // Time ran out: a board with content is submitted as it is; an empty one is
