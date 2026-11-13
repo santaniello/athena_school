@@ -116,6 +116,7 @@ func main() {
 		exercisesource.NewProfiles(profiles),
 		exercisesource.NewNotes(knowledgeService),
 		llmClient,
+		applicationarchitecture.StarterDiagramRenderer{},
 		applicationexercise.NewChallengeService(challengeRepo, sessionTopics),
 		applicationexercise.NewRubricService(challengeRepo, rubricRepo),
 		transactor,

@@ -68,6 +68,41 @@ export function diagramHasContent(xml: string): boolean {
   })
 }
 
+// What a diagram holds that counts as an answer: each component and
+// connection with its label, ends and container. Styles and geometry are left
+// out, because draw.io rewrites them when it loads a diagram. A cell wrapped
+// in an object element takes its id and label from the wrapper.
+function diagramSignature(xml: string): string[] {
+  const document = new DOMParser().parseFromString(xml, 'application/xml')
+  if (document.querySelector('parsererror')) return []
+  const signature: string[] = []
+  for (const cell of Array.from(document.getElementsByTagName('mxCell'))) {
+    // A layer, for one, is a cell that is neither a component nor a connection.
+    if (cell.getAttribute('vertex') !== '1' && cell.getAttribute('edge') !== '1') continue
+    const wrapper = cell.parentElement
+    const wrapped = wrapper?.tagName === 'object' || wrapper?.tagName === 'UserObject'
+    const id = (wrapped ? wrapper.getAttribute('id') : cell.getAttribute('id')) ?? ''
+    if (id === '0' || id === '1') continue
+    const label = (wrapped ? wrapper.getAttribute('label') : cell.getAttribute('value')) ?? ''
+    const kind = cell.getAttribute('edge') === '1' ? 'edge' : 'vertex'
+    const ends = `${cell.getAttribute('source') ?? ''}>${cell.getAttribute('target') ?? ''}`
+    signature.push([id, kind, label, ends, cell.getAttribute('parent') ?? ''].join('|'))
+  }
+  return signature.sort()
+}
+
+// True when the board differs from the diagram the exam started from, in its
+// components or connections.
+export function diagramChangedFrom(xml: string, seed: string): boolean {
+  return diagramSignature(xml).join('\n') !== diagramSignature(seed).join('\n')
+}
+
+// True when the board can be submitted as the learner's answer: it has
+// content and, when the exam started from a diagram, differs from it.
+export function diagramIsAnswer(xml: string, seed: string): boolean {
+  return diagramHasContent(xml) && (seed === '' || diagramChangedFrom(xml, seed))
+}
+
 // Where the exam goes back to when it ends: the catalog it was started from or
 // the study session whose chat offered it.
 export type LabReturn = { kind: 'catalog' } | { kind: 'study'; sessionId: string }

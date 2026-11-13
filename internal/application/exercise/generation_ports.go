@@ -18,6 +18,14 @@ type SummaryReader interface {
 	ReadSummary(ctx context.Context, sessionID string) (string, error)
 }
 
+// StarterDiagramRenderer turns the diagram structure a model describes (nodes
+// and edges, as JSON) into the diagram XML a practice attempt starts from.
+// Defined here (consumer side) so this package never imports the architecture
+// package. It returns an error for a structure that cannot be drawn.
+type StarterDiagramRenderer interface {
+	Render(raw []byte) (string, error)
+}
+
 // ProfileReader reads the user's profile.
 type ProfileReader interface {
 	ReadProfile(ctx context.Context) (domainexercise.GenerationProfile, error)

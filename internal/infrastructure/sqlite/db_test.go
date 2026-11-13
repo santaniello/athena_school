@@ -975,6 +975,30 @@ func TestOpen_addsKindToExistingChallengesAsInterview(t *testing.T) {
 	assert.Equal(t, "INTERVIEW", kind)
 }
 
+func TestOpen_addsAnEmptyStarterDiagramToExistingChallenges(t *testing.T) {
+	// Given a database from before spec 3.19: a challenge stored without starter_diagram
+	path := filepath.Join(t.TempDir(), "athena.db")
+	first, err := Open(path)
+	require.NoError(t, err)
+	_, err = first.Exec(`ALTER TABLE challenges DROP COLUMN starter_diagram`)
+	require.NoError(t, err)
+	_, err = first.Exec(`INSERT INTO challenges (id, type, title, scenario, functional_requirements,
+		non_functional_requirements, constraints, objectives, difficulty, topic, origin, created_at, updated_at)
+		VALUES ('legacy', 'ARCHITECTURE', 't', 's', '[]', '[]', '[]', '[]', 'BEGINNER', 'x', 'MANUAL', 'now', 'now')`)
+	require.NoError(t, err)
+	require.NoError(t, first.Close())
+
+	// When opening it again
+	second, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = second.Close() }()
+
+	// Then the existing challenge opens blank
+	var diagram string
+	require.NoError(t, second.QueryRow(`SELECT starter_diagram FROM challenges WHERE id = 'legacy'`).Scan(&diagram))
+	assert.Equal(t, "", diagram)
+}
+
 func TestOpen_refusesAChallengeKindOtherThanInterviewOrPractice(t *testing.T) {
 	// Given a migrated database
 	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))

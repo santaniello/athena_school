@@ -42,6 +42,8 @@ var (
 	ErrChallengeTypeInvalid = errors.New("challenge type is invalid")
 	// ErrChallengeKindInvalid is returned for a kind other than INTERVIEW or PRACTICE.
 	ErrChallengeKindInvalid = errors.New("challenge kind is invalid")
+	// ErrStarterDiagramNotAllowed is returned when an interview carries a starter diagram.
+	ErrStarterDiagramNotAllowed = errors.New("an interview challenge cannot have a starter diagram")
 	// ErrDifficultyInvalid is returned for an unknown difficulty.
 	ErrDifficultyInvalid = errors.New("challenge difficulty is invalid")
 	// ErrOriginInvalid is returned for an unknown origin.
@@ -124,8 +126,12 @@ type Challenge struct {
 	Origin                    ChallengeOrigin
 	TimeLimitMinutes          int // exam length; copied into an attempt's Deadline. 0 means untimed (PRACTICE only)
 	DefenseQuestions          int // questions the tutor asks after the diagram evaluation, 3 to 5
-	CreatedAt                 time.Time
-	UpdatedAt                 time.Time
+	// StarterDiagram is the opaque diagram (mxGraphModel XML) a practice
+	// attempt starts from. Empty means a blank board, and an interview is
+	// always blank. See specs/phases/phase-03-architecture-lab/19-practice-starter-diagram.md.
+	StarterDiagram string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 // SourceSession is what a challenge needs from the study session it comes
@@ -152,6 +158,9 @@ func (c Challenge) Validate() error {
 	}
 	if err := c.validateTimeLimit(); err != nil {
 		return err
+	}
+	if c.Kind == ChallengeKindInterview && c.StarterDiagram != "" {
+		return ErrStarterDiagramNotAllowed
 	}
 	if c.DefenseQuestions < MinDefenseQuestions || c.DefenseQuestions > MaxDefenseQuestions {
 		return ErrDefenseQuestionsInvalid

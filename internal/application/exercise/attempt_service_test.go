@@ -67,6 +67,7 @@ func attemptChallenge() domainexercise.Challenge {
 		NonFunctionalRequirements: []string{"p99 under 100 ms"},
 		Constraints:               []string{"No new database"},
 		Objectives:                []string{"Cut read load"},
+		StarterDiagram:            "<mxGraphModel/>",
 	}
 }
 
@@ -77,6 +78,7 @@ func attemptStatement() ChallengeStatement {
 		NonFunctionalRequirements: []string{"p99 under 100 ms"},
 		Constraints:               []string{"No new database"},
 		Objectives:                []string{"Cut read load"},
+		StarterDiagram:            "<mxGraphModel/>",
 	}
 }
 

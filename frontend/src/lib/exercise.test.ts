@@ -313,6 +313,7 @@ const attemptDto = desktop.AttemptDTO.createFrom({
     nonFunctionalRequirements: ['p99 under 100 ms'],
     constraints: ['No new database'],
     objectives: ['Cut read load'],
+    starterDiagram: '<mxGraphModel/>',
   },
   criteria: [
     {
@@ -332,6 +333,7 @@ const attempt = {
   title: 'Cache',
   topic: 'caching',
   deadline: '2026-11-01T10:45:00Z',
+  starterDiagram: '<mxGraphModel/>',
   statement: {
     scenario: 'A link service.',
     functionalRequirements: ['Shorten a URL'],

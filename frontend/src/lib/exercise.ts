@@ -218,6 +218,8 @@ export interface Attempt {
   topic: string
   // ISO timestamp; the backend owns the clock. Empty for an untimed practice.
   deadline: string
+  // The diagram a practice starts from (mxGraphModel XML); empty for a blank board.
+  starterDiagram: string
   statement: LabStatement
   criteria: LabCriterion[]
 }
@@ -232,6 +234,7 @@ function toAttempt(dto: desktop.AttemptDTO): Attempt {
     title: dto.challengeTitle,
     topic: dto.challengeTopic,
     deadline: dto.deadline,
+    starterDiagram: dto.statement.starterDiagram,
     statement: {
       scenario: dto.statement.scenario,
       functionalRequirements: dto.statement.functionalRequirements,

@@ -288,6 +288,7 @@ func viewOf(attempt domainexercise.ChallengeAttempt, challenge domainexercise.Ch
 			NonFunctionalRequirements: challenge.NonFunctionalRequirements,
 			Constraints:               challenge.Constraints,
 			Objectives:                challenge.Objectives,
+			StarterDiagram:            challenge.StarterDiagram,
 		},
 		Criteria:   rubric.Criteria,
 		Submission: submission,

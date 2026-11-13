@@ -16,7 +16,7 @@ import (
 const challengeTimeLayout = "2006-01-02T15:04:05.000000000Z"
 
 const challengeColumns = `id, type, kind, title, scenario, functional_requirements, non_functional_requirements,
-	constraints, objectives, difficulty, topic, source_session_id, origin, time_limit_minutes, defense_questions, created_at, updated_at`
+	constraints, objectives, difficulty, topic, source_session_id, origin, time_limit_minutes, defense_questions, starter_diagram, created_at, updated_at`
 
 // ChallengeRepository is the SQLite-backed implementation of
 // exercise.ChallengeRepository.
@@ -41,11 +41,11 @@ func (r *ChallengeRepository) Create(ctx context.Context, challenge exercise.Cha
 		sourceSessionID = challenge.SourceSessionID
 	}
 	_, err = execer(ctx, r.db).ExecContext(ctx,
-		`INSERT INTO challenges (`+challengeColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO challenges (`+challengeColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		challenge.ID, string(challenge.Type), string(challenge.Kind), challenge.Title, challenge.Scenario,
 		lists[0], lists[1], lists[2], lists[3],
 		string(challenge.Difficulty), challenge.Topic, sourceSessionID, string(challenge.Origin),
-		challenge.TimeLimitMinutes, challenge.DefenseQuestions,
+		challenge.TimeLimitMinutes, challenge.DefenseQuestions, challenge.StarterDiagram,
 		formatChallengeTime(challenge.CreatedAt), formatChallengeTime(challenge.UpdatedAt),
 	)
 	if err != nil {
@@ -202,7 +202,7 @@ func scanChallenge(row rowScanner) (exercise.Challenge, error) {
 	var sourceSessionID sql.NullString
 	err := row.Scan(
 		&c.ID, &challengeType, &kind, &c.Title, &c.Scenario, &lists[0], &lists[1], &lists[2], &lists[3],
-		&difficulty, &c.Topic, &sourceSessionID, &origin, &c.TimeLimitMinutes, &c.DefenseQuestions, &createdAt, &updatedAt,
+		&difficulty, &c.Topic, &sourceSessionID, &origin, &c.TimeLimitMinutes, &c.DefenseQuestions, &c.StarterDiagram, &createdAt, &updatedAt,
 	)
 	if err != nil {
 		return exercise.Challenge{}, err

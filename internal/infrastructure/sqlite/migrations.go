@@ -251,6 +251,10 @@ var migrations = []func(*sql.DB) error{
 	// (untimed), so its attempts store a zero deadline. See
 	// specs/phases/phase-03-architecture-lab/18-practice-challenges.md.
 	addChallengesKindColumn,
+	// challenges.starter_diagram is the diagram a practice attempt starts
+	// from. Challenges stored before it existed open blank. See
+	// specs/phases/phase-03-architecture-lab/19-practice-starter-diagram.md.
+	addChallengesStarterDiagramColumn,
 	execSQL(`CREATE TABLE IF NOT EXISTS defense_turns (
 		id           TEXT PRIMARY KEY,
 		attempt_id   TEXT NOT NULL REFERENCES challenge_attempts(id),
@@ -347,6 +351,21 @@ func addChallengesKindColumn(db *sql.DB) error {
 		return nil
 	}
 	_, err = db.Exec(`ALTER TABLE challenges ADD COLUMN kind TEXT NOT NULL DEFAULT 'INTERVIEW' CHECK (kind IN ('INTERVIEW', 'PRACTICE'))`)
+	return err
+}
+
+// addChallengesStarterDiagramColumn adds challenges.starter_diagram if it does
+// not already exist (SQLite has no "ADD COLUMN IF NOT EXISTS"). Stored
+// challenges get an empty one.
+func addChallengesStarterDiagramColumn(db *sql.DB) error {
+	has, err := hasColumn(db, "challenges", "starter_diagram")
+	if err != nil {
+		return err
+	}
+	if has {
+		return nil
+	}
+	_, err = db.Exec(`ALTER TABLE challenges ADD COLUMN starter_diagram TEXT NOT NULL DEFAULT ''`)
 	return err
 }
 

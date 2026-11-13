@@ -163,7 +163,7 @@ func TestHistoryService_GetAttemptResult_joinsEverythingTheResultViewShows(t *te
 	require.NoError(t, err)
 	assert.Equal(t, ChallengeSnapshot{
 		ID: "challenge-1", Title: "Design a URL shortener", Topic: "caching", Difficulty: domainexercise.DifficultyIntermediate,
-		Statement: attemptStatement(),
+		Statement: statementWithoutStarter(),
 	}, view.Challenge)
 	assert.Equal(t, attempt, view.Attempt)
 	assert.Equal(t, finishedAt, view.FinishedAt)
@@ -279,4 +279,12 @@ func TestHistoryService_GetAttemptResult_failsWhenTheSubmissionCannotBeRead(t *t
 
 	// Then the failure surfaces
 	require.ErrorIs(t, err, domainexercise.ErrSubmissionNotFound)
+}
+
+// statementWithoutStarter is the statement the result view shows: the starter
+// diagram is only for the board, so the history leaves it out.
+func statementWithoutStarter() ChallengeStatement {
+	statement := attemptStatement()
+	statement.StarterDiagram = ""
+	return statement
 }

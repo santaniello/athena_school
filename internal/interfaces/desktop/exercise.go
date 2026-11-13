@@ -276,6 +276,9 @@ type StatementDTO struct {
 	NonFunctionalRequirements []string `json:"nonFunctionalRequirements"`
 	Constraints               []string `json:"constraints"`
 	Objectives                []string `json:"objectives"`
+	// StarterDiagram is the mxGraphModel XML a practice attempt starts from;
+	// empty when the board starts blank.
+	StarterDiagram string `json:"starterDiagram"`
 }
 
 // AttemptDTO is the desktop-facing read model of an exam attempt. Times are
@@ -324,6 +327,7 @@ func toAttemptDTO(view applicationexercise.AttemptView) AttemptDTO {
 			NonFunctionalRequirements: view.Statement.NonFunctionalRequirements,
 			Constraints:               view.Statement.Constraints,
 			Objectives:                view.Statement.Objectives,
+			StarterDiagram:            view.Statement.StarterDiagram,
 		},
 		Criteria: make([]CriterionDTO, 0, len(view.Criteria)),
 	}

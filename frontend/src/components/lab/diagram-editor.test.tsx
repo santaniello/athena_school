@@ -112,6 +112,23 @@ describe('DiagramEditor', () => {
     expect(load.xml).toContain('<mxGraphModel>')
   })
 
+  it('loads the starter diagram it was given instead of an empty one', () => {
+    const callbacks = {
+      onReady: vi.fn(),
+      onChange: vi.fn(),
+      onConnectionLost: vi.fn(),
+      onConnectionRestored: vi.fn(),
+    }
+    const starter = '<mxGraphModel><root><mxCell id="0"/></root></mxGraphModel>'
+    const view = render(<DiagramEditor xml={starter} {...callbacks} />)
+    const iframe = currentIframe(view.container)
+    const sent = sentTo(iframe)
+
+    fromEditor(iframe, { event: 'init' })
+
+    expect(sent.messages()).toEqual([{ action: 'load', xml: starter, autosave: 1 }])
+  })
+
   it('reports ready once the editor acknowledges the load', () => {
     const { iframe, onReady } = setup()
 

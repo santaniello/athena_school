@@ -2,6 +2,7 @@ package exercise
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -9,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	exercisemocks "github.com/santaniello/athena/internal/application/exercise/mocks"
 	domainexercise "github.com/santaniello/athena/internal/domain/exercise"
 )
 
@@ -51,7 +53,7 @@ func TestParseGeneration_buildsTheChallengeAndItsCriteria(t *testing.T) {
 	content := encode(t, validOutput())
 
 	// When it is parsed
-	got, err := parseGeneration(content, "distributed caching", interviewSpec(domainexercise.DifficultyAdvanced))
+	got, err := parseGeneration(content, "distributed caching", interviewSpec(domainexercise.DifficultyAdvanced), nil)
 
 	// Then the challenge input carries the content, the difficulty and the AI origin
 	require.NoError(t, err)
@@ -81,7 +83,7 @@ func TestParseGeneration_keepsTheMandatoryFlag(t *testing.T) {
 	}}
 
 	// When it is parsed
-	got, err := parseGeneration(encode(t, output), "caching", interviewSpec(domainexercise.DifficultyBeginner))
+	got, err := parseGeneration(encode(t, output), "caching", interviewSpec(domainexercise.DifficultyBeginner), nil)
 
 	// Then the flag is kept
 	require.NoError(t, err)
@@ -93,7 +95,7 @@ func TestParseGeneration_acceptsOutputInsideACodeFence(t *testing.T) {
 	content := "```json\n" + encode(t, validOutput()) + "\n```"
 
 	// When it is parsed
-	_, err := parseGeneration(content, "caching", interviewSpec(domainexercise.DifficultyBeginner))
+	_, err := parseGeneration(content, "caching", interviewSpec(domainexercise.DifficultyBeginner), nil)
 
 	// Then it is accepted
 	require.NoError(t, err)
@@ -123,7 +125,7 @@ func TestParseGeneration_derivesCriterionKeysFromNames(t *testing.T) {
 			output["criteria"] = criteria
 
 			// When the output is parsed
-			got, err := parseGeneration(encode(t, output), "caching", interviewSpec(domainexercise.DifficultyBeginner))
+			got, err := parseGeneration(encode(t, output), "caching", interviewSpec(domainexercise.DifficultyBeginner), nil)
 
 			// Then the keys are derived by code
 			require.NoError(t, err)
@@ -198,7 +200,7 @@ func TestParseGeneration_rejectsInvalidOutput(t *testing.T) {
 			}
 
 			// When it is parsed
-			_, err := parseGeneration(content, "caching", interviewSpec(domainexercise.DifficultyBeginner))
+			_, err := parseGeneration(content, "caching", interviewSpec(domainexercise.DifficultyBeginner), nil)
 
 			// Then it is rejected as an invalid generation
 			require.ErrorIs(t, err, ErrInvalidGeneration)
@@ -214,7 +216,7 @@ func TestParseGeneration_namesTheCriterionWithTheWrongLevelCount(t *testing.T) {
 	output["criteria"] = []any{criterionJSON("Cache invalidation", 10), bad}
 
 	// When it is parsed
-	_, err := parseGeneration(encode(t, output), "caching", interviewSpec(domainexercise.DifficultyBeginner))
+	_, err := parseGeneration(encode(t, output), "caching", interviewSpec(domainexercise.DifficultyBeginner), nil)
 
 	// Then the error says which criterion and how many levels it had
 	require.ErrorIs(t, err, ErrInvalidGeneration)
@@ -229,19 +231,42 @@ func TestParseGeneration_namesTheCriterionWithoutAMandatoryFlag(t *testing.T) {
 	output["criteria"] = []any{criterionJSON("Cache invalidation", 10), bad}
 
 	// When it is parsed
-	_, err := parseGeneration(encode(t, output), "caching", interviewSpec(domainexercise.DifficultyBeginner))
+	_, err := parseGeneration(encode(t, output), "caching", interviewSpec(domainexercise.DifficultyBeginner), nil)
 
 	// Then the error says which criterion is missing the flag
 	require.ErrorIs(t, err, ErrInvalidGeneration)
 	assert.Contains(t, err.Error(), "criterion 2 has no mandatory flag")
 }
 
+func starterStructureOutput() map[string]any {
+	return map[string]any{
+		"nodes": []any{
+			map[string]any{"id": "api", "label": "Product API", "kind": "service"},
+			map[string]any{"id": "db", "label": "Prices DB", "kind": "database"},
+		},
+		"edges": []any{map[string]any{"from": "api", "to": "db", "label": "300 ms"}},
+	}
+}
+
+func practiceOutput() map[string]any {
+	output := validOutput()
+	output["diagram"] = starterStructureOutput()
+	return output
+}
+
+func rendererReturning(t *testing.T, xml string, err error) *exercisemocks.MockStarterDiagramRenderer {
+	t.Helper()
+	renderer := exercisemocks.NewMockStarterDiagramRenderer(t)
+	renderer.EXPECT().Render([]byte(encode(t, starterStructureOutput()))).Return(xml, err).Once()
+	return renderer
+}
+
 func TestParseGeneration_practiceHasNoTimeLimitKindAndLeanCriteria(t *testing.T) {
-	// Given a valid output with two criteria and a practice spec
-	content := encode(t, validOutput())
+	// Given a valid practice output with two criteria and a diagram
+	content := encode(t, practiceOutput())
 
 	// When it is parsed as a practice
-	got, err := parseGeneration(content, "caching", practiceSpec("cache aside"))
+	got, err := parseGeneration(content, "caching", practiceSpec("cache aside"), rendererReturning(t, "<mxGraphModel/>", nil))
 
 	// Then the challenge input is a practice with its criteria
 	require.NoError(t, err)
@@ -250,15 +275,71 @@ func TestParseGeneration_practiceHasNoTimeLimitKindAndLeanCriteria(t *testing.T)
 	assert.Len(t, got.Criteria, 2)
 }
 
+func TestParseGeneration_practiceCarriesTheRenderedStarterDiagram(t *testing.T) {
+	// Given a practice output whose diagram structure the renderer draws
+	content := encode(t, practiceOutput())
+
+	// When it is parsed as a practice
+	got, err := parseGeneration(content, "caching", practiceSpec("cache aside"), rendererReturning(t, "<mxGraphModel>drawn</mxGraphModel>", nil))
+
+	// Then the challenge input holds the rendered XML
+	require.NoError(t, err)
+	assert.Equal(t, "<mxGraphModel>drawn</mxGraphModel>", got.Challenge.StarterDiagram)
+}
+
+func TestParseGeneration_practiceRejectsAMissingDiagram(t *testing.T) {
+	for name, diagram := range map[string]any{"absent": nil, "null": json.RawMessage("null")} {
+		t.Run(name, func(t *testing.T) {
+			// Given a practice output without a diagram
+			output := validOutput()
+			if name == "null" {
+				output["diagram"] = diagram
+			}
+
+			// When it is parsed as a practice (the renderer is never called)
+			_, err := parseGeneration(encode(t, output), "caching", practiceSpec("cache aside"), exercisemocks.NewMockStarterDiagramRenderer(t))
+
+			// Then the generation is invalid
+			assert.ErrorIs(t, err, ErrInvalidGeneration)
+			assert.Contains(t, err.Error(), "no diagram")
+		})
+	}
+}
+
+func TestParseGeneration_practiceRejectsADiagramTheRendererRefuses(t *testing.T) {
+	// Given a renderer that refuses the structure
+	refusal := errors.New("one node")
+	content := encode(t, practiceOutput())
+
+	// When it is parsed as a practice
+	_, err := parseGeneration(content, "caching", practiceSpec("cache aside"), rendererReturning(t, "", refusal))
+
+	// Then the generation is invalid and says why
+	assert.ErrorIs(t, err, ErrInvalidGeneration)
+	assert.ErrorIs(t, err, refusal)
+}
+
+func TestParseGeneration_interviewIgnoresADiagramAndStartsBlank(t *testing.T) {
+	// Given an interview output that carries a diagram anyway
+	content := encode(t, practiceOutput())
+
+	// When it is parsed as an interview (the renderer is never called)
+	got, err := parseGeneration(content, "caching", interviewSpec(domainexercise.DifficultyBeginner), exercisemocks.NewMockStarterDiagramRenderer(t))
+
+	// Then the starter diagram is empty
+	require.NoError(t, err)
+	assert.Empty(t, got.Challenge.StarterDiagram)
+}
+
 func TestParseGeneration_practiceRejectsMoreThanThreeCriteria(t *testing.T) {
-	// Given an output with four criteria, which an interview accepts
-	output := validOutput()
+	// Given an output with four criteria and a diagram, which an interview accepts
+	output := practiceOutput()
 	output["criteria"] = []any{criterionJSON("A", 1), criterionJSON("B", 1), criterionJSON("C", 1), criterionJSON("D", 1)}
 	content := encode(t, output)
 
 	// When it is parsed as a practice and as an interview
-	_, practiceErr := parseGeneration(content, "caching", practiceSpec("cache aside"))
-	_, interviewErr := parseGeneration(content, "caching", interviewSpec(domainexercise.DifficultyBeginner))
+	_, practiceErr := parseGeneration(content, "caching", practiceSpec("cache aside"), rendererReturning(t, "<mxGraphModel/>", nil))
+	_, interviewErr := parseGeneration(content, "caching", interviewSpec(domainexercise.DifficultyBeginner), nil)
 
 	// Then only the practice is refused
 	assert.ErrorIs(t, practiceErr, ErrInvalidGeneration)
@@ -268,7 +349,7 @@ func TestParseGeneration_practiceRejectsMoreThanThreeCriteria(t *testing.T) {
 
 func TestParseGeneration_interviewIsAnInterview(t *testing.T) {
 	// When an interview output is parsed
-	got, err := parseGeneration(encode(t, validOutput()), "caching", interviewSpec(domainexercise.DifficultyBeginner))
+	got, err := parseGeneration(encode(t, validOutput()), "caching", interviewSpec(domainexercise.DifficultyBeginner), nil)
 
 	// Then the kind is interview
 	require.NoError(t, err)

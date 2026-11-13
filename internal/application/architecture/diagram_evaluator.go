@@ -47,7 +47,7 @@ func (e *DiagramEvaluator) Evaluate(ctx context.Context, input domainexercise.Ev
 	response, err := e.llm.Chat(ctx, domainllm.ChatRequest{
 		Task: evaluationTask,
 		Messages: []domainllm.Message{
-			{Role: "user", Content: BuildEvaluationPrompt(input.Challenge, input.Rubric, summary, profile.Language)},
+			{Role: "user", Content: BuildEvaluationPrompt(input.Challenge, input.Rubric, summary, starterBaseline(input.Challenge), profile.Language)},
 		},
 	})
 	if err != nil {
@@ -59,6 +59,20 @@ func (e *DiagramEvaluator) Evaluate(ctx context.Context, input domainexercise.Ev
 	}
 	output.Model = response.Model
 	return output, nil
+}
+
+// starterBaseline summarizes the diagram a practice started from, or returns
+// nil when there is none. A stored starter that cannot be read must not block
+// the learner's evaluation, so it is treated as no baseline.
+func starterBaseline(challenge domainexercise.Challenge) *DiagramSummary {
+	if challenge.StarterDiagram == "" {
+		return nil
+	}
+	summary, err := SummarizeDiagram(challenge.StarterDiagram)
+	if err != nil {
+		return nil
+	}
+	return &summary
 }
 
 type evaluationAnswer struct {

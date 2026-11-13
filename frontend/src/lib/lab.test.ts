@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { countdownTone, diagramHasContent, formatCountdown, labReturnLabel } from './lab'
+import {
+  countdownTone,
+  diagramChangedFrom,
+  diagramHasContent,
+  diagramIsAnswer,
+  formatCountdown,
+  labReturnLabel,
+} from './lab'
 
 const SECOND = 1000
 const MINUTE = 60 * SECOND
@@ -70,6 +77,86 @@ describe('diagramHasContent', () => {
     expect(diagramHasContent('')).toBe(false)
     expect(diagramHasContent('<mxGraphModel><root>')).toBe(false)
     expect(diagramHasContent('<mxGraphModel><root><mxCell id="2"/></mxGraphModel>')).toBe(false)
+  })
+})
+
+describe('diagramChangedFrom', () => {
+  const root = '<mxCell id="0"/><mxCell id="1" parent="0"/>'
+  const api = '<mxCell id="n0" value="API" vertex="1" parent="1"/>'
+  const db = '<mxCell id="n1" value="DB" vertex="1" parent="1"/>'
+  const edge = '<mxCell id="e0" edge="1" parent="1" source="n0" target="n1"/>'
+  const model = (cells: string) => `<mxGraphModel><root>${root}${cells}</root></mxGraphModel>`
+  const seed = model(api + db + edge)
+
+  it('is false for the very same diagram', () => {
+    expect(diagramChangedFrom(seed, seed)).toBe(false)
+  })
+
+  it('is false when draw.io rewrites the XML without changing the components or connections', () => {
+    const rewritten = `<mxfile host="embed.diagrams.net"><diagram id="d" name="Page-1"><mxGraphModel dx="1" dy="2"><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell parent="1" vertex="1" value="DB" id="n1"><mxGeometry x="9" y="9" as="geometry"/></mxCell><mxCell id="e0" source="n0" target="n1" parent="1" edge="1" style="edgeStyle=x;"/><mxCell id="n0" value="API" vertex="1" parent="1" style="rounded=1;"><mxGeometry x="1" y="2" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>`
+    expect(diagramChangedFrom(rewritten, seed)).toBe(false)
+  })
+
+  it('is true when a component is added', () => {
+    const cache = '<mxCell id="x" value="Cache" vertex="1" parent="1"/>'
+    expect(diagramChangedFrom(model(api + db + edge + cache), seed)).toBe(true)
+  })
+
+  it('is true when a component or a connection is removed', () => {
+    expect(diagramChangedFrom(model(api + db), seed)).toBe(true)
+    expect(diagramChangedFrom(model(db + edge), seed)).toBe(true)
+  })
+
+  it('is true when a component is relabelled', () => {
+    expect(diagramChangedFrom(model(api.replace('API', 'Gateway') + db + edge), seed)).toBe(true)
+  })
+
+  it('is true when a connection is rewired or relabelled', () => {
+    const rewired = '<mxCell id="e0" edge="1" parent="1" source="n1" target="n0"/>'
+    const labelled = '<mxCell id="e0" value="300 ms" edge="1" parent="1" source="n0" target="n1"/>'
+    expect(diagramChangedFrom(model(api + db + rewired), seed)).toBe(true)
+    expect(diagramChangedFrom(model(api + db + labelled), seed)).toBe(true)
+  })
+
+  it('is true when a component moves into a container', () => {
+    const box = '<mxCell id="box" value="VPC" vertex="1" parent="1"/>'
+    const inside = '<mxCell id="n0" value="API" vertex="1" parent="box"/>'
+    const before = model(box + api + db + edge)
+    expect(diagramChangedFrom(model(box + inside + db + edge), before)).toBe(true)
+  })
+
+  it('ignores cells that are neither a component nor a connection, such as an empty layer', () => {
+    const layer = '<mxCell id="layer2" value="Layer 2" parent="0"/>'
+    expect(diagramChangedFrom(model(api + db + edge + layer), seed)).toBe(false)
+  })
+
+  it('reads a cell wrapped in an object element by the wrapper id and label', () => {
+    const wrapped = '<object id="n0" label="API"><mxCell vertex="1" parent="1"/></object>'
+    expect(diagramChangedFrom(model(wrapped + db + edge), seed)).toBe(false)
+    const relabelled = '<object id="n0" label="Gateway"><mxCell vertex="1" parent="1"/></object>'
+    expect(diagramChangedFrom(model(relabelled + db + edge), seed)).toBe(true)
+  })
+})
+
+describe('diagramIsAnswer', () => {
+  const root = '<mxCell id="0"/><mxCell id="1" parent="0"/>'
+  const api = '<mxCell id="n0" value="API" vertex="1" parent="1"/>'
+  const seed = `<mxGraphModel><root>${root}${api}</root></mxGraphModel>`
+  const edited = `<mxGraphModel><root>${root}${api}<mxCell id="c" value="Cache" vertex="1" parent="1"/></root></mxGraphModel>`
+  const empty = `<mxGraphModel><root>${root}</root></mxGraphModel>`
+
+  it('without a seed it is any diagram with content', () => {
+    expect(diagramIsAnswer(seed, '')).toBe(true)
+    expect(diagramIsAnswer(empty, '')).toBe(false)
+  })
+
+  it('with a seed it needs a change', () => {
+    expect(diagramIsAnswer(seed, seed)).toBe(false)
+    expect(diagramIsAnswer(edited, seed)).toBe(true)
+  })
+
+  it('with a seed, a board that was emptied is not an answer', () => {
+    expect(diagramIsAnswer(empty, seed)).toBe(false)
   })
 })
 
