@@ -4,6 +4,7 @@
 export const en = {
   common: {
     cancel: 'Cancel',
+    close: 'Close',
     tryAgain: 'Try again',
     retry: 'Retry',
     leave: 'Leave',
@@ -162,6 +163,7 @@ export const en = {
   },
   layout: {
     breadcrumb: 'Breadcrumb',
+    board: 'Board',
     hideStatement: 'Hide statement',
     showStatement: 'Show statement',
     hideSidebar: 'Hide tutor and rubric',

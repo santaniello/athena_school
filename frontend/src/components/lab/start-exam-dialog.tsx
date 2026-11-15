@@ -56,7 +56,7 @@ function StartExamContent({
   const minutes = challenge.timeLimitMinutes
   return (
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>{challenge.title}</DialogTitle>
           <DialogDescription>{t('startExam.rules')}</DialogDescription>

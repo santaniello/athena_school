@@ -58,6 +58,7 @@ function HistoryContent({
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
+        closeLabel={t('common.close')}
         className={cn('max-h-[90vh] overflow-y-auto', selected ? 'sm:max-w-5xl' : 'sm:max-w-md')}
       >
         {selected ? (

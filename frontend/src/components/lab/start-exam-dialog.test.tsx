@@ -123,6 +123,7 @@ describe('StartExamDialog in Portuguese', () => {
     expect(await screen.findByText('Nota mínima para aprovação: 70')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Cancelar' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Iniciar prova' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Fechar' })).toBeInTheDocument()
   })
 
   it('says the exam has no time limit in the profile language', async () => {

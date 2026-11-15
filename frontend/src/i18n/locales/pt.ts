@@ -5,6 +5,7 @@ import type { LabResources } from './en'
 export const pt: LabResources = {
   common: {
     cancel: 'Cancelar',
+    close: 'Fechar',
     tryAgain: 'Tentar novamente',
     retry: 'Tentar de novo',
     leave: 'Sair',
@@ -164,6 +165,7 @@ export const pt: LabResources = {
   },
   layout: {
     breadcrumb: 'Trilha de navegação',
+    board: 'Quadro',
     hideStatement: 'Ocultar enunciado',
     showStatement: 'Mostrar enunciado',
     hideSidebar: 'Ocultar tutora e rubrica',

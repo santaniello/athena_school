@@ -189,7 +189,7 @@ function LabLayout({
           // Stryker disable next-line ObjectLiteral,StringLiteral: layout style, no layout engine in jsdom, checked by eye in the dev preview.
           style={{ overflow: 'hidden' }}
         >
-          <section aria-label="Board" className="relative h-full bg-muted/30">
+          <section aria-label={t('layout.board')} className="relative h-full bg-muted/30">
             {board}
           </section>
         </ResizablePanel>
