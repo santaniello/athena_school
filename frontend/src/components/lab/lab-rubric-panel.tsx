@@ -1,5 +1,6 @@
 import { Star } from 'lucide-react'
 import type { LabCriterion } from '@/lib/lab'
+import { useTranslation } from 'react-i18next'
 
 interface LabRubricPanelProps {
   criteria: LabCriterion[]
@@ -8,9 +9,10 @@ interface LabRubricPanelProps {
 // The rubric while the exam runs: each criterion with its weight and a marker
 // on the mandatory ones. No score, level or percentage is shown.
 function LabRubricPanel({ criteria }: LabRubricPanelProps) {
+  const { t } = useTranslation()
   return (
     <section className="flex flex-col gap-2 p-4">
-      <h3 className="text-sm font-semibold text-foreground">Rubric</h3>
+      <h3 className="text-sm font-semibold text-foreground">{t('rubric.title')}</h3>
       <ul className="flex flex-col gap-2">
         {criteria.map((criterion) => (
           <li key={criterion.id} className="flex items-start justify-between gap-3">
@@ -22,7 +24,7 @@ function LabRubricPanel({ criteria }: LabRubricPanelProps) {
               {criterion.mandatory && (
                 <Star
                   className="size-3.5 fill-current text-primary"
-                  aria-label="Mandatory"
+                  aria-label={t('rubric.mandatory')}
                   role="img"
                 />
               )}

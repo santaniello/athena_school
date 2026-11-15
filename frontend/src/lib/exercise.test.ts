@@ -1,3 +1,4 @@
+import { setLabLanguage } from '@/i18n'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AcceptOffer,
@@ -26,16 +27,18 @@ import {
 } from '../../wailsjs/go/desktop/App'
 import { desktop } from '../../wailsjs/go/models'
 import {
-  OFFER_PENDING_MESSAGE,
+  offerPendingMessage,
   acceptOffer,
   toExamToStart,
   declineOffer,
   getOfferProfile,
   getPendingOffer,
   listSessionExercises,
-  offerLabels,
-  DIFFICULTY_LABELS,
-  STATUS_LABELS,
+  CHALLENGE_DIFFICULTIES,
+  CHALLENGE_KINDS,
+  CHALLENGE_STATUSES,
+  difficultyLabel,
+  statusLabel,
   ATTEMPT_IN_PROGRESS,
   DIAGRAM_CONTENT_TYPE,
   SUBMISSION_TOO_LARGE,
@@ -56,7 +59,7 @@ import {
   formatSessionDate,
   formatTimeLimit,
   practiceSuggestions,
-  KIND_LABELS,
+  kindLabel,
   generateChallenge,
   getAttempt,
   getAttemptResult,
@@ -218,20 +221,54 @@ describe('exercise bindings', () => {
 
 describe('labels', () => {
   it('names every status the way the catalog shows it', () => {
-    expect(STATUS_LABELS).toEqual({
-      NOT_STARTED: 'Not started',
-      IN_PROGRESS: 'In progress',
-      NEEDS_IMPROVEMENT: 'Needs improvement',
-      COMPLETED: 'Completed',
-    })
+    expect(CHALLENGE_STATUSES.map(statusLabel)).toEqual([
+      'Not started',
+      'In progress',
+      'Needs improvement',
+      'Completed',
+    ])
   })
 
   it('names every difficulty', () => {
-    expect(DIFFICULTY_LABELS).toEqual({
-      BEGINNER: 'Beginner',
-      INTERMEDIATE: 'Intermediate',
-      ADVANCED: 'Advanced',
-    })
+    expect(CHALLENGE_DIFFICULTIES.map(difficultyLabel)).toEqual([
+      'Beginner',
+      'Intermediate',
+      'Advanced',
+    ])
+  })
+
+  it('shows a value it does not know as it came', () => {
+    expect(statusLabel('ARCHIVED')).toBe('ARCHIVED')
+    expect(difficultyLabel('EXPERT')).toBe('EXPERT')
+    expect(kindLabel('QUIZ')).toBe('QUIZ')
+  })
+
+  it('follows the profile language', () => {
+    setLabLanguage('pt')
+
+    expect(CHALLENGE_STATUSES.map(statusLabel)).toEqual([
+      'Não iniciado',
+      'Em andamento',
+      'Precisa melhorar',
+      'Concluído',
+    ])
+    expect(CHALLENGE_DIFFICULTIES.map(difficultyLabel)).toEqual([
+      'Iniciante',
+      'Intermediário',
+      'Avançado',
+    ])
+    expect(formatTimeLimit(0)).toBe('Sem limite de tempo')
+    expect(exerciseErrorMessage(undefined)).toBe('Algo deu errado. Tente novamente.')
+    expect(offerPendingMessage()).toBe(
+      'Aceite ou recuse a oferta de exercício para continuar a conversa.',
+    )
+    expect(formatSessionDate('2026-11-02T12:00:00Z')).toBe('2 de nov. de 2026')
+  })
+
+  it('falls back to English for a language it does not have', () => {
+    setLabLanguage('fr')
+
+    expect(statusLabel('COMPLETED')).toBe('Completed')
   })
 })
 
@@ -848,45 +885,23 @@ describe('exercise offer', () => {
     expect(DeclineOffer).toHaveBeenCalledWith('o1')
   })
 
-  it('labels the buttons in the assistant language', () => {
-    expect(offerLabels('en')).toMatchObject({ accept: 'Accept', decline: 'Decline' })
-    expect(offerLabels('pt')).toMatchObject({ accept: 'Aceitar', decline: 'Recusar' })
-    expect(offerLabels(undefined)).toMatchObject({ accept: 'Accept', decline: 'Decline' })
-    expect(offerLabels('pt').title).not.toBe(offerLabels('en').title)
-    expect(offerLabels('pt').preparing).not.toBe(offerLabels('en').preparing)
-  })
-
-  it('labels the kind choice and the practice goal in the assistant language', () => {
-    expect(offerLabels('en')).toMatchObject({
-      kind: 'Type',
-      kinds: { INTERVIEW: 'Interview', PRACTICE: 'Practice' },
-      goal: 'What do you want to practice?',
-    })
-    expect(offerLabels('pt')).toMatchObject({
-      kind: 'Tipo',
-      kinds: { INTERVIEW: 'Entrevista', PRACTICE: 'Prática' },
-      goal: 'O que você quer praticar?',
-    })
-    expect(offerLabels('pt').goalPlaceholder).not.toBe(offerLabels('en').goalPlaceholder)
-  })
-
-  it('reads the language and the starting difficulty from the profile', async () => {
+  it('reads the starting difficulty from the profile', async () => {
     vi.mocked(GetProfile).mockResolvedValueOnce(
       desktop.UserProfileInput.createFrom({ assistantLanguage: 'pt', experienceLevel: 'beginner' }),
     )
-    expect(await getOfferProfile()).toEqual({ language: 'pt', difficulty: 'BEGINNER' })
+    expect(await getOfferProfile()).toEqual({ difficulty: 'BEGINNER' })
   })
 
-  it('falls back to English and Intermediate when the profile cannot be read', async () => {
+  it('falls back to Intermediate when the profile cannot be read', async () => {
     vi.mocked(GetProfile).mockRejectedValueOnce(new Error('boom'))
-    expect(await getOfferProfile()).toEqual({ language: 'en', difficulty: 'INTERMEDIATE' })
+    expect(await getOfferProfile()).toEqual({ difficulty: 'INTERMEDIATE' })
   })
 
   it('explains a vanished offer and keeps the pending message', () => {
     expect(exerciseErrorMessage(new Error('{"code":"offer_not_found","message":"x"}'))).toBe(
       'This exercise offer is no longer available.',
     )
-    expect(OFFER_PENDING_MESSAGE).toBe('Accept or decline the exercise offer to keep chatting.')
+    expect(offerPendingMessage()).toBe('Accept or decline the exercise offer to keep chatting.')
   })
 })
 
@@ -1002,8 +1017,8 @@ describe('practiceSuggestions', () => {
   })
 })
 
-describe('KIND_LABELS', () => {
+describe('kindLabel', () => {
   it('names both kinds', () => {
-    expect(KIND_LABELS).toEqual({ INTERVIEW: 'Interview', PRACTICE: 'Practice' })
+    expect(CHALLENGE_KINDS.map(kindLabel)).toEqual(['Interview', 'Practice'])
   })
 })

@@ -1,3 +1,5 @@
+import { DONT_KNOW_ANSWER } from '@/lib/exercise'
+import { setLabLanguage } from '@/i18n'
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -171,4 +173,18 @@ describe('DefenseStage', () => {
       expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
     },
   )
+})
+
+describe('DefenseStage in Portuguese', () => {
+  it('translates the label of the button but sends the literal the backend recognises', async () => {
+    setLabLanguage('pt')
+    const user = userEvent.setup()
+    const { onSend } = setup()
+
+    expect(screen.getByRole('heading', { name: 'Pergunta 2 de 5' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Não sei' }))
+
+    expect(onSend).toHaveBeenCalledExactlyOnceWith(DONT_KNOW_ANSWER)
+    expect(DONT_KNOW_ANSWER).toBe("I don't know")
+  })
 })

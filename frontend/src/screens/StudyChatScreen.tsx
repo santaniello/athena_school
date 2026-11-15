@@ -31,7 +31,7 @@ import { ToastViewport, type ToastItem } from '@/components/toast'
 import { useFindInPage } from '@/hooks/use-find-in-page'
 import { useMessageHistory } from '@/hooks/use-message-history'
 import {
-  OFFER_PENDING_MESSAGE,
+  offerPendingMessage,
   toExamToStart,
   getOfferProfile,
   getPendingOffer,
@@ -125,8 +125,7 @@ async function fetchSummaryCursor(sessionId: string): Promise<string | null> {
   }
 }
 
-// The session's pending exercise offer with the language its card speaks and
-// the difficulty it starts with, or null when there is none or it could not be
+// The session's pending exercise offer with the difficulty it starts with, or null when there is none or it could not be
 // read — the offer is an extra on top of the chat and must never break it.
 async function fetchPendingOffer(
   sessionId: string,
@@ -328,10 +327,7 @@ function StudyChatScreen({
   // accepts or declines) and, once accepted, the exercise it linked. See
   // specs/phases/phase-03-architecture-lab/14-ai-challenge-generation.md.
   const [offer, setOffer] = useState<ExerciseOffer | null>(null)
-  const [offerProfile, setOfferProfile] = useState<OfferProfile>({
-    language: 'en',
-    difficulty: 'INTERMEDIATE',
-  })
+  const [offerProfile, setOfferProfile] = useState<OfferProfile>({ difficulty: 'INTERMEDIATE' })
   // The exercises accepted in this session, shown under the message that offered
   // them (spec 3.17). They live in the backend, so they are loaded on open.
   const [exerciseCards, setExerciseCards] = useState<ExerciseCard[]>([])
@@ -931,7 +927,6 @@ function StudyChatScreen({
             {offer?.messageId === message.id && !isStreaming && (
               <ExerciseOfferCard
                 offerId={offer.id}
-                language={offerProfile.language}
                 defaultDifficulty={offerProfile.difficulty}
                 topic={sessionTopic}
                 onAccepted={() => {
@@ -1015,7 +1010,7 @@ function StudyChatScreen({
           value={draft}
           onChange={handleDraftChange}
           onKeyDown={handleDraftKeyDown}
-          placeholder={offer ? OFFER_PENDING_MESSAGE : 'Type your answer...'}
+          placeholder={offer ? offerPendingMessage() : 'Type your answer...'}
           disabled={offer !== null}
           className="min-h-24 max-h-[200px] resize-none overflow-y-auto pb-11"
         />

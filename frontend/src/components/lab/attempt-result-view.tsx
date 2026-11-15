@@ -8,6 +8,7 @@ import { OutcomeCard } from '@/components/lab/outcome-card'
 import { ResultDiagram } from '@/components/lab/result-diagram'
 import { ResultHeader } from '@/components/lab/result-header'
 import { getAttemptResult, type AttemptResult } from '@/lib/exercise'
+import { useTranslation } from 'react-i18next'
 
 interface AttemptResultViewProps {
   attemptId: string
@@ -20,6 +21,7 @@ interface AttemptResultViewProps {
 // weeks later. It is read-only and shows what the backend returns. See
 // specs/phases/phase-03-architecture-lab/13-evaluation-and-history-screen.md.
 export function AttemptResultView({ attemptId, backLabel, onBack }: AttemptResultViewProps) {
+  const { t } = useTranslation()
   const [result, setResult] = useState<AttemptResult | null>(null)
   const [failed, setFailed] = useState(false)
   // Bumping this reads the result again after a failure.
@@ -46,7 +48,7 @@ export function AttemptResultView({ attemptId, backLabel, onBack }: AttemptResul
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-center">
         <p role="alert" className="text-sm text-destructive">
-          Could not load the result.
+          {t('result.loadFailed')}
         </p>
         <div className="flex gap-2">
           <Button
@@ -56,7 +58,7 @@ export function AttemptResultView({ attemptId, backLabel, onBack }: AttemptResul
               setAttempt((current) => current + 1)
             }}
           >
-            Try again
+            {t('common.tryAgain')}
           </Button>
           {backButton}
         </div>
@@ -69,7 +71,7 @@ export function AttemptResultView({ attemptId, backLabel, onBack }: AttemptResul
       <div className="flex h-full w-full flex-col items-center justify-center gap-3">
         <Loader2 className="size-5 animate-spin text-muted-foreground" aria-hidden="true" />
         <p role="status" className="text-sm text-muted-foreground">
-          Loading the result...
+          {t('result.loading')}
         </p>
       </div>
     )
@@ -79,19 +81,19 @@ export function AttemptResultView({ attemptId, backLabel, onBack }: AttemptResul
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-6 overflow-y-auto p-6">
       <div>{backButton}</div>
       <ResultHeader result={result} />
-      <section aria-label="Statement" className="rounded-md border border-border">
+      <section aria-label={t('result.statement')} className="rounded-md border border-border">
         <LabStatementPanel statement={result.challenge.statement} />
       </section>
       <OutcomeCard outcome={result.outcome} />
       <EvaluationTable
-        title="Diagram evaluation"
+        title={t('result.diagramEvaluation')}
         evaluation={result.diagram}
-        notJudgedLabel="Not judged from the diagram"
+        notJudgedLabel={t('result.notJudgedDiagram')}
       />
       <EvaluationTable
-        title="Understanding evaluation"
+        title={t('result.understandingEvaluation')}
         evaluation={result.understanding}
-        notJudgedLabel="Not asked"
+        notJudgedLabel={t('result.notAsked')}
       />
       <DefenseTranscript turns={result.defense} />
       <ResultDiagram xml={result.submission} />

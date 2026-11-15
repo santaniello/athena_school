@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { AttemptResultView } from '@/components/lab/attempt-result-view'
 import { formatSessionDate, listAttemptHistory, type AttemptHistoryItem } from '@/lib/exercise'
+import { useTranslation } from 'react-i18next'
 
 export interface HistoryChallenge {
   id: string
@@ -37,6 +38,7 @@ function HistoryContent({
   challenge: HistoryChallenge
   onClose: () => void
 }) {
+  const { t } = useTranslation()
   const [items, setItems] = useState<AttemptHistoryItem[] | null>(null)
   const [failed, setFailed] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
@@ -61,19 +63,19 @@ function HistoryContent({
         {selected ? (
           <>
             <DialogHeader className="sr-only">
-              <DialogTitle>Attempt result</DialogTitle>
-              <DialogDescription>The result of a finished attempt.</DialogDescription>
+              <DialogTitle>{t('historyDialog.resultTitle')}</DialogTitle>
+              <DialogDescription>{t('historyDialog.resultDescription')}</DialogDescription>
             </DialogHeader>
             <AttemptResultView
               attemptId={selected}
-              backLabel="Back to history"
+              backLabel={t('back.history')}
               onBack={() => setSelected(null)}
             />
           </>
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle>History</DialogTitle>
+              <DialogTitle>{t('common.history')}</DialogTitle>
               <DialogDescription>{challenge.title}</DialogDescription>
             </DialogHeader>
             <HistoryList items={items} failed={failed} onSelect={setSelected} />
@@ -93,14 +95,15 @@ function HistoryList({
   failed: boolean
   onSelect: (attemptId: string) => void
 }) {
+  const { t } = useTranslation()
   if (failed) {
     return (
       <p role="alert" className="text-sm text-destructive">
-        Could not load the history.
+        {t('historyDialog.loadFailed')}
       </p>
     )
   }
-  if (!items) return <p className="text-sm text-muted-foreground">Loading the history...</p>
+  if (!items) return <p className="text-sm text-muted-foreground">{t('historyDialog.loading')}</p>
   return (
     <ul className="divide-y divide-border rounded-md border border-border">
       {items.map((item) => (
@@ -110,12 +113,13 @@ function HistoryList({
               {formatSessionDate(item.finishedAt)}
             </span>
             <span className="text-muted-foreground">
-              Diagram {item.diagramScore} · Understanding {item.understandingScore}
+              {t('sessionCard.diagram', { score: item.diagramScore })} ·{' '}
+              {t('sessionCard.understanding', { score: item.understandingScore })}
             </span>
           </div>
           <div className="flex items-center gap-3">
             <Badge variant={item.outcome === 'PASSED' ? 'default' : 'muted'}>
-              {item.outcome === 'PASSED' ? 'Passed' : 'Failed'}
+              {item.outcome === 'PASSED' ? t('common.passed') : t('common.failed')}
             </Badge>
             <Button
               type="button"
@@ -123,7 +127,7 @@ function HistoryList({
               size="sm"
               onClick={() => onSelect(item.attemptId)}
             >
-              Open
+              {t('common.open')}
             </Button>
           </div>
         </li>

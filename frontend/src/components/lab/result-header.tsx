@@ -1,19 +1,16 @@
 import { DifficultyBadge } from '@/components/difficulty-badge'
 import { formatCountdown } from '@/lib/lab'
 import { formatSessionDate, type AttemptResult } from '@/lib/exercise'
+import { useTranslation } from 'react-i18next'
 
 interface ResultHeaderProps {
   result: AttemptResult
 }
 
-const SUBMIT_REASON_LABELS: Record<AttemptResult['submitReason'], string> = {
-  USER: 'Finished by you',
-  TIME_EXPIRED: 'Ended by time',
-}
-
 // The title of a finished attempt and how it went: when, how long, how it
 // ended and how many hints it used.
 export function ResultHeader({ result }: ResultHeaderProps) {
+  const { t } = useTranslation()
   const { challenge } = result
   return (
     <header className="flex flex-col gap-1">
@@ -23,9 +20,10 @@ export function ResultHeader({ result }: ResultHeaderProps) {
         <DifficultyBadge difficulty={challenge.difficulty} />
       </p>
       <p className="text-sm text-muted-foreground">
-        {formatSessionDate(result.finishedAt)} · Time spent{' '}
-        {formatCountdown(result.timeSpentSeconds * 1000)} ·{' '}
-        {SUBMIT_REASON_LABELS[result.submitReason]} · Hints {result.hintsUsed} of {result.maxHints}
+        {formatSessionDate(result.finishedAt)} ·{' '}
+        {t('result.timeSpent', { time: formatCountdown(result.timeSpentSeconds * 1000) })} ·{' '}
+        {t(`result.submitReason.${result.submitReason}`)} ·{' '}
+        {t('result.hints', { used: result.hintsUsed, max: result.maxHints })}
       </p>
     </header>
   )

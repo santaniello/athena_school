@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import i18n from '@/i18n'
 import { listChallengeCatalog, type Catalog, type CatalogFilter } from '@/lib/exercise'
 
 export interface UseChallengeCatalogResult {
@@ -33,7 +34,7 @@ export function useChallengeCatalog(filter: CatalogFilter): UseChallengeCatalogR
       .catch(() => {
         if (stale) return
         setCatalog(null)
-        setError('Could not load the challenges.')
+        setError(i18n.t('errors.loadChallenges'))
         setLoading(false)
       })
     return () => {

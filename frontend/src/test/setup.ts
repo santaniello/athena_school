@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest'
 import { afterEach } from 'vitest'
 import { cleanup, configure } from '@testing-library/react'
+import { setLabLanguage } from '../i18n'
 import {
   installIntersectionObserverMock,
   resetIntersectionObserverMock,
@@ -8,6 +9,8 @@ import {
 
 afterEach(() => {
   cleanup()
+  // A test that switches the Architecture Lab language must not leak it.
+  setLabLanguage('en')
   resetIntersectionObserverMock()
 })
 

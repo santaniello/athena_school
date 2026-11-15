@@ -1,4 +1,5 @@
 import type { DefenseTurn } from '@/lib/exercise'
+import { useTranslation } from 'react-i18next'
 
 interface DefenseTranscriptProps {
   turns: DefenseTurn[]
@@ -6,9 +7,10 @@ interface DefenseTranscriptProps {
 
 // The tutor's questions and the user's answers, in the order they happened.
 export function DefenseTranscript({ turns }: DefenseTranscriptProps) {
+  const { t } = useTranslation()
   return (
-    <section aria-label="Tutor questions" className="flex flex-col gap-3">
-      <h3 className="text-lg font-semibold text-foreground">Tutor questions</h3>
+    <section aria-label={t('result.tutorQuestions')} className="flex flex-col gap-3">
+      <h3 className="text-lg font-semibold text-foreground">{t('result.tutorQuestions')}</h3>
       <ol className="flex flex-col gap-3">
         {turns.map((turn) => (
           <li

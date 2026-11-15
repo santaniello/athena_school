@@ -1,5 +1,7 @@
+import i18n from '@/i18n'
 import { describe, expect, it, vi } from 'vitest'
 import { SaveProfile, UpdateProfile } from '../../wailsjs/go/desktop/App'
+import { desktop } from '../../wailsjs/go/models'
 import { saveUserProfile, updateUserProfile, type ProfileDraft } from './profile'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
@@ -64,5 +66,25 @@ describe('updateUserProfile', () => {
     // When updating the draft
     // Then the same error propagates, unmapped
     await expect(updateUserProfile(draft)).rejects.toThrow(err)
+  })
+})
+
+describe('the Architecture Lab language', () => {
+  it('follows the assistant language of a saved profile', async () => {
+    vi.mocked(SaveProfile).mockResolvedValueOnce()
+
+    await saveUserProfile({ ...draft, assistantLanguage: 'pt' })
+
+    expect(i18n.language).toBe('pt')
+  })
+
+  it('follows the assistant language of an updated profile', async () => {
+    vi.mocked(UpdateProfile).mockResolvedValueOnce(
+      desktop.UserProfileInput.createFrom({ ...draft, assistantLanguage: 'pt' }),
+    )
+
+    await updateUserProfile(draft)
+
+    expect(i18n.language).toBe('pt')
   })
 })

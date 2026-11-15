@@ -11,6 +11,7 @@ import {
 import type { ExamToStart } from '@/lib/exercise'
 import { MAX_HINTS } from '@/lib/lab'
 import { getPassScore } from '@/lib/passScore'
+import { useTranslation } from 'react-i18next'
 
 export type { ExamToStart }
 
@@ -51,32 +52,29 @@ function StartExamContent({
   }, [])
   // Stryker restore BooleanLiteral,BlockStatement,ArrayDeclaration
 
+  const { t } = useTranslation()
   const minutes = challenge.timeLimitMinutes
   return (
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{challenge.title}</DialogTitle>
-          <DialogDescription>Read the rules before you start.</DialogDescription>
+          <DialogDescription>{t('startExam.rules')}</DialogDescription>
         </DialogHeader>
         <ul className="list-disc space-y-1 pl-5 text-sm text-foreground">
-          <li>
-            {minutes === 0
-              ? 'No time limit'
-              : `Time limit: ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`}
-          </li>
-          <li>There is no pause and you cannot resume.</li>
-          <li>Leaving discards the exam. It will not be graded.</li>
-          <li>{`You can ask the tutor for up to ${MAX_HINTS} hints.`}</li>
-          {passScore !== null && <li>{`Minimum passing score: ${passScore}`}</li>}
-          <li>After you submit, the tutor will ask you questions about your choices.</li>
+          <li>{minutes === 0 ? t('time.none') : t('startExam.timeLimit', { count: minutes })}</li>
+          <li>{t('startExam.noPause')}</li>
+          <li>{t('startExam.leaveDiscards')}</li>
+          <li>{t('startExam.hints', { count: MAX_HINTS })}</li>
+          {passScore !== null && <li>{t('startExam.passScore', { score: passScore })}</li>}
+          <li>{t('startExam.afterSubmit')}</li>
         </ul>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onCancel}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button type="button" onClick={() => onConfirm(challenge)}>
-            Start exam
+            {t('startExam.start')}
           </Button>
         </DialogFooter>
       </DialogContent>

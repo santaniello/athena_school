@@ -1,3 +1,4 @@
+import { setLabLanguage } from '@/i18n'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -15,10 +16,11 @@ function setup(
 ) {
   const onAccepted = vi.fn()
   const onDeclined = vi.fn()
+  // The card speaks the Lab's language, which follows the profile.
+  setLabLanguage(props.language)
   render(
     <ExerciseOfferCard
       offerId="o1"
-      language={props.language ?? 'en'}
       defaultDifficulty={props.defaultDifficulty ?? 'INTERMEDIATE'}
       topic={props.topic}
       onAccepted={onAccepted}

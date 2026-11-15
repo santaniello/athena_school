@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { MAX_HINTS, type LabHint } from '@/lib/lab'
+import { useTranslation } from 'react-i18next'
 
 interface LabTutorPanelProps {
   hints: LabHint[]
@@ -16,27 +17,30 @@ interface LabTutorPanelProps {
 // caller. See specs/phases/phase-03-architecture-lab/08-lab-layout-sketch.md
 // and 10-01-tutor-hints.md.
 function LabTutorPanel({ hints, hintsLeft, asking, failed, onAskHint }: LabTutorPanelProps) {
+  const { t } = useTranslation()
   return (
     <section className="flex flex-col gap-3 p-4">
-      <h3 className="text-sm font-semibold text-foreground">Tutor Athena</h3>
-      <p className="text-sm text-muted-foreground">Ask for a hint if you get stuck.</p>
+      <h3 className="text-sm font-semibold text-foreground">{t('tutor.title')}</h3>
+      <p className="text-sm text-muted-foreground">{t('tutor.intro')}</p>
       <div className="flex items-center justify-between gap-3">
         <span className="text-sm text-foreground">
-          {hintsLeft > 0 ? `Hints left: ${hintsLeft} of ${MAX_HINTS}` : 'No hints left'}
+          {hintsLeft > 0
+            ? t('tutor.hintsLeft', { left: hintsLeft, max: MAX_HINTS })
+            : t('tutor.noHintsLeft')}
         </span>
         {hintsLeft > 0 && (
           <Button type="button" size="sm" variant="outline" disabled={asking} onClick={onAskHint}>
-            {asking ? 'Asking the tutor...' : 'Ask for a hint'}
+            {asking ? t('tutor.asking') : t('tutor.ask')}
           </Button>
         )}
       </div>
       {failed && (
         <p role="alert" className="text-sm text-destructive">
-          Could not get a hint. Try again.
+          {t('tutor.failed')}
         </p>
       )}
       {hints.length > 0 && (
-        <div role="log" aria-label="Hints" className="flex flex-col gap-2">
+        <div role="log" aria-label={t('tutor.hintsLabel')} className="flex flex-col gap-2">
           {hints.map((hint) => (
             <article
               key={hint.id}

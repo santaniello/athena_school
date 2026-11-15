@@ -1,4 +1,5 @@
 import type { LabStatement } from '@/lib/lab'
+import { useTranslation } from 'react-i18next'
 
 interface LabStatementPanelProps {
   statement: LabStatement
@@ -22,19 +23,20 @@ function StatementList({ title, items }: { title: string; items: string[] }) {
 // rubric, a deliverables checklist or any hint. See
 // specs/phases/phase-03-architecture-lab/08-lab-layout-sketch.md.
 function LabStatementPanel({ statement }: LabStatementPanelProps) {
+  const { t } = useTranslation()
   return (
     <div className="flex h-full flex-col gap-4 overflow-y-auto p-4">
       <section className="flex flex-col gap-1.5">
-        <h3 className="text-sm font-semibold text-foreground">Scenario</h3>
+        <h3 className="text-sm font-semibold text-foreground">{t('statement.scenario')}</h3>
         <p className="text-sm whitespace-pre-line text-muted-foreground">{statement.scenario}</p>
       </section>
-      <StatementList title="Functional requirements" items={statement.functionalRequirements} />
+      <StatementList title={t('statement.functional')} items={statement.functionalRequirements} />
       <StatementList
-        title="Non-functional requirements"
+        title={t('statement.nonFunctional')}
         items={statement.nonFunctionalRequirements}
       />
-      <StatementList title="Constraints" items={statement.constraints} />
-      <StatementList title="Objectives" items={statement.objectives} />
+      <StatementList title={t('statement.constraints')} items={statement.constraints} />
+      <StatementList title={t('statement.objectives')} items={statement.objectives} />
     </div>
   )
 }

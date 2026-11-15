@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { useExam } from '@/hooks/use-exam'
 import { useHints } from '@/hooks/use-hints'
 import { labReturnLabel, type LabReturn } from '@/lib/lab'
+import { useTranslation } from 'react-i18next'
 
 interface LabExamScreenProps {
   challenge: ExamToStart
@@ -40,6 +41,7 @@ function LabExamScreen({
   onExit,
   now,
 }: LabExamScreenProps) {
+  const { t } = useTranslation()
   const exam = useExam(challenge.id, onExit, returnTo.kind === 'study' ? returnTo.sessionId : '')
   const backLabel = labReturnLabel(returnTo)
   const editorRef = useRef<DiagramEditorHandle>(null)
@@ -107,12 +109,10 @@ function LabExamScreen({
   if (phase === 'editorUnavailable') {
     return (
       <CenteredMessage>
-        <p className="text-sm text-foreground">
-          The editor needs an internet connection. Try again.
-        </p>
+        <p className="text-sm text-foreground">{t('exam.editorNeedsInternet')}</p>
         <div className="flex gap-2">
           <Button type="button" onClick={exam.retryEditor}>
-            Try again
+            {t('common.tryAgain')}
           </Button>
           <Button type="button" variant="outline" onClick={() => onExit()}>
             {backLabel}
@@ -140,7 +140,7 @@ function LabExamScreen({
       <>
         <CenteredMessage>
           <Loader2 className="size-5 animate-spin text-muted-foreground" aria-hidden="true" />
-          <p className="text-sm text-muted-foreground">Preparing the editor</p>
+          <p className="text-sm text-muted-foreground">{t('exam.preparing')}</p>
         </CenteredMessage>
         <div
           aria-hidden="true"
@@ -150,9 +150,9 @@ function LabExamScreen({
         </div>
         <LabConfirmDialog
           open={phase === 'conflict'}
-          title="Exam in progress"
-          description="You have an exam in progress. Starting a new one discards it."
-          confirmLabel="OK"
+          title={t('exam.conflictTitle')}
+          description={t('exam.conflictDescription')}
+          confirmLabel={t('exam.ok')}
           onCancel={exam.cancelReplace}
           onConfirm={exam.confirmReplace}
         />
@@ -184,7 +184,7 @@ function LabExamScreen({
                 role="status"
                 className="absolute inset-x-0 top-0 z-10 bg-amber-500/90 px-3 py-1 text-center text-sm text-black"
               >
-                Connection lost. Reconnecting...
+                {t('exam.reconnecting')}
               </p>
             )}
             {phase === 'running' && exam.message && (
@@ -207,9 +207,9 @@ function LabExamScreen({
       />
       <LabConfirmDialog
         open={finishing && phase === 'running'}
-        title="Finish the exam?"
-        description="Finish now? You cannot edit the diagram after this."
-        confirmLabel="Finish"
+        title={t('exam.finishTitle')}
+        description={t('exam.finishDescription')}
+        confirmLabel={t('exam.finish')}
         onCancel={() => setFinishing(false)}
         onConfirm={handleConfirmFinish}
       />

@@ -1,4 +1,6 @@
+import type { TFunction } from 'i18next'
 import type { Outcome, OutcomeReason } from '@/lib/exercise'
+import { useTranslation } from 'react-i18next'
 
 interface OutcomeCardProps {
   outcome: Outcome
@@ -8,21 +10,26 @@ interface OutcomeCardProps {
 // reason. The outcome and the reasons come from the backend, never derived
 // here. See specs/phases/phase-03-architecture-lab/13-evaluation-and-history-screen.md.
 export function OutcomeCard({ outcome }: OutcomeCardProps) {
+  const { t } = useTranslation()
   const passed = outcome.result === 'PASSED'
   return (
-    <section aria-label="Outcome" className="flex flex-col gap-4">
+    <section aria-label={t('outcome.label')} className="flex flex-col gap-4">
       <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-foreground">{passed ? 'Passed' : 'Failed'}</h1>
-        <p className="text-sm text-muted-foreground">Minimum to pass: {outcome.passScore}</p>
+        <h1 className="text-2xl font-semibold text-foreground">
+          {passed ? t('common.passed') : t('common.failed')}
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          {t('outcome.minimum', { score: outcome.passScore })}
+        </p>
       </header>
       <div className="grid grid-cols-2 gap-3">
-        <Score label="Diagram" value={outcome.diagramScore} />
-        <Score label="Understanding" value={outcome.understandingScore} />
+        <Score label={t('outcome.diagram')} value={outcome.diagramScore} />
+        <Score label={t('outcome.understanding')} value={outcome.understandingScore} />
       </div>
       {outcome.reasons.length > 0 && (
         <ul className="list-disc pl-5 text-sm text-foreground">
           {outcome.reasons.map((reason, index) => (
-            <li key={index}>{reasonText(reason, outcome.passScore)}</li>
+            <li key={index}>{reasonText(reason, outcome.passScore, t)}</li>
           ))}
         </ul>
       )}
@@ -42,15 +49,16 @@ function Score({ label, value }: { label: string; value: number }) {
   )
 }
 
-function reasonText(reason: OutcomeReason, passScore: number): string {
+function reasonText(reason: OutcomeReason, passScore: number, t: TFunction): string {
   switch (reason.kind) {
     case 'DIAGRAM_SCORE':
-      return `The diagram score is below the minimum of ${passScore}.`
+      return t('outcome.diagramBelow', { score: passScore })
     case 'UNDERSTANDING_SCORE':
-      return `The understanding score is below the minimum of ${passScore}.`
-    case 'MANDATORY_CRITERION': {
-      const where = reason.evaluation === 'DIAGRAM' ? 'diagram' : 'defense'
-      return `Mandatory criterion not met in the ${where}: ${reason.criterionName}.`
-    }
+      return t('outcome.understandingBelow', { score: passScore })
+    case 'MANDATORY_CRITERION':
+      return t(
+        reason.evaluation === 'DIAGRAM' ? 'outcome.mandatoryDiagram' : 'outcome.mandatoryDefense',
+        { name: reason.criterionName },
+      )
   }
 }

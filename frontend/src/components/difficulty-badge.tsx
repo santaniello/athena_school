@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge'
-import { DIFFICULTY_LABELS, type ChallengeDifficulty } from '@/lib/exercise'
+import { difficultyLabel, type ChallengeDifficulty } from '@/lib/exercise'
+import { useTranslation } from 'react-i18next'
 
 // One color per level so the difficulty reads at a glance: green is easy,
 // amber is in between, red is hard. An unknown value falls back to muted.
@@ -14,11 +15,11 @@ interface DifficultyBadgeProps {
 }
 
 function DifficultyBadge({ difficulty }: DifficultyBadgeProps) {
+  // Subscribes the badge to the language, which difficultyLabel reads.
+  useTranslation()
   const level = difficulty as ChallengeDifficulty
   return (
-    <Badge variant={DIFFICULTY_VARIANTS[level] ?? 'muted'}>
-      {DIFFICULTY_LABELS[level] ?? difficulty}
-    </Badge>
+    <Badge variant={DIFFICULTY_VARIANTS[level] ?? 'muted'}>{difficultyLabel(difficulty)}</Badge>
   )
 }
 

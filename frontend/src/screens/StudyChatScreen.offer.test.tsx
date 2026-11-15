@@ -1,3 +1,4 @@
+import { setLabLanguage } from '@/i18n'
 import type { ComponentProps } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor } from '@testing-library/react'
@@ -163,7 +164,7 @@ describe('StudyChatScreen — exercise offer', () => {
       coversUntilMessageId: '',
     } as Awaited<ReturnType<typeof getStudySessionSummary>>)
     vi.mocked(getStudySessionUsage).mockRejectedValue(new Error('no usage'))
-    vi.mocked(getOfferProfile).mockResolvedValue({ language: 'en', difficulty: 'INTERMEDIATE' })
+    vi.mocked(getOfferProfile).mockResolvedValue({ difficulty: 'INTERMEDIATE' })
     vi.mocked(getPendingOffer).mockResolvedValue(null)
     vi.mocked(listSessionExercises).mockResolvedValue([])
   })
@@ -192,7 +193,7 @@ describe('StudyChatScreen — exercise offer', () => {
   it('uses the assistant language for the buttons', async () => {
     subscribe()
     vi.mocked(getPendingOffer).mockResolvedValue(OFFER)
-    vi.mocked(getOfferProfile).mockResolvedValue({ language: 'pt', difficulty: 'INTERMEDIATE' })
+    setLabLanguage('pt')
 
     await renderResumed()
 

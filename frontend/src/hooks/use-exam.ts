@@ -17,13 +17,10 @@ import {
   type DefenseQuestion,
 } from '@/lib/exercise'
 import { diagramIsAnswer } from '@/lib/lab'
+import i18n from '@/i18n'
 
 // The editor has this long to report ready before the exam gives up on it.
 const EDITOR_TIMEOUT_MS = 15000
-
-const UNCHANGED_BOARD_MESSAGE = 'Change the diagram before finishing.'
-
-const EMPTY_BOARD_NOTICE = 'Time is up and the board was empty. The exam was discarded.'
 
 export type ExamPhase =
   // The editor is loading; no attempt exists and no clock runs.
@@ -270,7 +267,7 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void, 
     // back to the starter diagram since. The exam stays open.
     if (!diagramIsAnswer(xml, current.starterDiagram)) {
       setHasContent(false)
-      setMessage(UNCHANGED_BOARD_MESSAGE)
+      setMessage(i18n.t('errors.unchangedBoard'))
       setPhase('running')
       return
     }
@@ -290,7 +287,7 @@ export function useExam(challengeId: string, onExit: (notice?: string) => void, 
       return
     }
     await discard(current)
-    exit(EMPTY_BOARD_NOTICE)
+    exit(i18n.t('errors.emptyBoard'))
   }
 
   async function leave() {

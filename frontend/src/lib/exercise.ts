@@ -24,6 +24,7 @@ import {
   SubmitAttempt,
 } from '../../wailsjs/go/desktop/App'
 import type { desktop } from '../../wailsjs/go/models'
+import i18n from '@/i18n'
 import type { LabCriterion, LabHint, LabStatement } from './lab'
 
 // The Architecture Lab catalog. The frontend only renders what the backend
@@ -37,14 +38,17 @@ export type ChallengeDifficulty = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED'
 // See specs/phases/phase-03-architecture-lab/18-practice-challenges.md.
 export type ChallengeKind = 'INTERVIEW' | 'PRACTICE'
 
-export const KIND_LABELS: Record<ChallengeKind, string> = {
-  INTERVIEW: 'Interview',
-  PRACTICE: 'Practice',
+export const CHALLENGE_KINDS: ChallengeKind[] = ['INTERVIEW', 'PRACTICE']
+
+// The labels follow the profile's assistant language (see src/i18n). A value
+// the backend sends that is not known here is shown as it came.
+export function kindLabel(kind: string): string {
+  return CHALLENGE_KINDS.includes(kind as ChallengeKind) ? i18n.t(`kind.${kind}`) : kind
 }
 
 // A practice has no time limit, which the backend sends as 0 minutes.
 export function formatTimeLimit(minutes: number): string {
-  return minutes === 0 ? 'No time limit' : `${minutes} min`
+  return minutes === 0 ? i18n.t('time.none') : i18n.t('time.minutes', { count: minutes })
 }
 
 // What a practice could be about, offered as one-click chips: the topic of the
@@ -54,17 +58,29 @@ export function practiceSuggestions(topic: string | undefined): string[] {
   return trimmed === '' ? [] : [trimmed]
 }
 
-export const STATUS_LABELS: Record<ChallengeStatus, string> = {
-  NOT_STARTED: 'Not started',
-  IN_PROGRESS: 'In progress',
-  NEEDS_IMPROVEMENT: 'Needs improvement',
-  COMPLETED: 'Completed',
+export const CHALLENGE_STATUSES: ChallengeStatus[] = [
+  'NOT_STARTED',
+  'IN_PROGRESS',
+  'NEEDS_IMPROVEMENT',
+  'COMPLETED',
+]
+
+export function statusLabel(status: string): string {
+  return CHALLENGE_STATUSES.includes(status as ChallengeStatus)
+    ? i18n.t(`status.${status}`)
+    : status
 }
 
-export const DIFFICULTY_LABELS: Record<ChallengeDifficulty, string> = {
-  BEGINNER: 'Beginner',
-  INTERMEDIATE: 'Intermediate',
-  ADVANCED: 'Advanced',
+export const CHALLENGE_DIFFICULTIES: ChallengeDifficulty[] = [
+  'BEGINNER',
+  'INTERMEDIATE',
+  'ADVANCED',
+]
+
+export function difficultyLabel(difficulty: string): string {
+  return CHALLENGE_DIFFICULTIES.includes(difficulty as ChallengeDifficulty)
+    ? i18n.t(`difficulty.${difficulty}`)
+    : difficulty
 }
 
 // An unset field does not filter.
@@ -177,32 +193,30 @@ export const ATTEMPT_IN_PROGRESS = 'attempt_in_progress'
 export const SUBMISSION_TOO_LATE = 'submission_too_late'
 export const SUBMISSION_TOO_LARGE = 'submission_too_large'
 
-const GENERIC_MESSAGE = 'Something went wrong. Please try again.'
-
-const ERROR_MESSAGES: Record<string, string> = {
-  invalid_generation: 'The generated challenge was not valid. Try again.',
-  offer_not_found: 'This exercise offer is no longer available.',
-  source_session_not_found: 'That study session no longer exists. Pick another one.',
-  generation_in_progress: 'A challenge is already being generated.',
-  [SUBMISSION_TOO_LARGE]: 'The diagram is too large to submit. Remove some elements.',
-  [SUBMISSION_TOO_LATE]: 'The time was over and the exam could not be submitted.',
-}
+const ERROR_CODES = [
+  'invalid_generation',
+  'offer_not_found',
+  'source_session_not_found',
+  'generation_in_progress',
+  SUBMISSION_TOO_LARGE,
+  SUBMISSION_TOO_LATE,
+]
 
 export function exerciseErrorMessage(err: unknown): string {
-  return ERROR_MESSAGES[exerciseErrorCode(err)] ?? GENERIC_MESSAGE
+  const code = exerciseErrorCode(err)
+  return ERROR_CODES.includes(code) ? i18n.t(`errors.${code}`) : i18n.t('errors.generic')
 }
 
 // Preselects the generation dialog's difficulty from the profile's experience
 // level (beginner, intermediate or advanced).
 export function difficultyForExperience(level: string | undefined): ChallengeDifficulty {
-  const match = (Object.keys(DIFFICULTY_LABELS) as ChallengeDifficulty[]).find(
-    (difficulty) => difficulty.toLowerCase() === level,
-  )
+  const match = CHALLENGE_DIFFICULTIES.find((difficulty) => difficulty.toLowerCase() === level)
   return match ?? 'INTERMEDIATE'
 }
 
 export function formatSessionDate(startedAt: string): string {
-  return new Date(startedAt).toLocaleDateString('en-US', {
+  const locale = i18n.language === 'pt' ? 'pt-BR' : 'en-US'
+  return new Date(startedAt).toLocaleDateString(locale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -345,22 +359,21 @@ export async function getEvaluation(attemptId: string): Promise<Evaluation> {
   return toEvaluation(await GetEvaluation(attemptId))
 }
 
-const EVALUATION_FAILED_MESSAGE = 'The evaluator could not complete the evaluation.'
-
-const EVALUATION_ERROR_MESSAGES: Record<string, string> = {
-  invalid_diagram: 'The diagram could not be read.',
-  empty_diagram: 'The diagram is empty.',
-  invalid_evaluation: 'The evaluator returned an invalid evaluation.',
-}
+const EVALUATION_ERROR_CODES = ['invalid_diagram', 'empty_diagram', 'invalid_evaluation']
 
 export function evaluationErrorMessage(err: unknown): string {
-  return EVALUATION_ERROR_MESSAGES[exerciseErrorCode(err)] ?? EVALUATION_FAILED_MESSAGE
+  const code = exerciseErrorCode(err)
+  return EVALUATION_ERROR_CODES.includes(code)
+    ? i18n.t(`errors.evaluation.${code}`)
+    : i18n.t('errors.evaluationFailed')
 }
 
 // The tutor's defense: questions one at a time, then the outcome. See
 // specs/phases/phase-03-architecture-lab/12-architecture-defense.md.
 
-// The text the backend recognises as no knowledge of the criterion.
+// The text the backend recognises as no knowledge of the criterion. It is sent
+// as is whatever the language: the button shows a translated label but the
+// domain compares this English literal.
 export const DONT_KNOW_ANSWER = "I don't know"
 export const MAX_ANSWER_LENGTH = 4000
 
@@ -427,16 +440,13 @@ function toOutcome(dto: desktop.OutcomeDTO): Outcome {
   }
 }
 
-const DEFENSE_FAILED_MESSAGE = 'The tutor could not continue the defense.'
-
-const DEFENSE_ERROR_MESSAGES: Record<string, string> = {
-  invalid_answer: 'The answer must be between 1 and 4,000 characters.',
-  invalid_evaluation: 'The tutor returned an invalid evaluation.',
-  invalid_diagram: 'The diagram could not be read.',
-}
+const DEFENSE_ERROR_CODES = ['invalid_answer', 'invalid_evaluation', 'invalid_diagram']
 
 export function defenseErrorMessage(err: unknown): string {
-  return DEFENSE_ERROR_MESSAGES[exerciseErrorCode(err)] ?? DEFENSE_FAILED_MESSAGE
+  const code = exerciseErrorCode(err)
+  return DEFENSE_ERROR_CODES.includes(code)
+    ? i18n.t(`errors.defense.${code}`)
+    : i18n.t('errors.defenseFailed')
 }
 
 // The history and the result of finished attempts, read-only. The backend
@@ -600,7 +610,9 @@ export function toExamToStart(card: SessionExerciseCard): ExamToStart {
   }
 }
 
-export const OFFER_PENDING_MESSAGE = 'Accept or decline the exercise offer to keep chatting.'
+export function offerPendingMessage(): string {
+  return i18n.t('offer.pending')
+}
 
 export async function getPendingOffer(sessionId: string): Promise<ExerciseOffer | null> {
   const offer = await GetPendingOffer(sessionId)
@@ -622,67 +634,19 @@ export function declineOffer(offerId: string): Promise<void> {
   return DeclineOffer(offerId)
 }
 
-export interface OfferLabels {
-  title: string
-  difficulty: string
-  levels: Record<ChallengeDifficulty, string>
-  kind: string
-  kinds: Record<ChallengeKind, string>
-  goal: string
-  goalPlaceholder: string
-  accept: string
-  decline: string
-  preparing: string
-}
-
-// The offer speaks the assistant language; the rest of the interface stays in
-// English.
-export function offerLabels(language: string | undefined): OfferLabels {
-  if (language === 'pt') {
-    return {
-      title: 'Praticar com um exercício de arquitetura',
-      difficulty: 'Dificuldade',
-      levels: { BEGINNER: 'Iniciante', INTERMEDIATE: 'Intermediário', ADVANCED: 'Avançado' },
-      kind: 'Tipo',
-      kinds: { INTERVIEW: 'Entrevista', PRACTICE: 'Prática' },
-      goal: 'O que você quer praticar?',
-      goalPlaceholder: 'Ex.: cache aside, uma API lenta que depende de outra…',
-      accept: 'Aceitar',
-      decline: 'Recusar',
-      preparing: 'Preparando seu exercício…',
-    }
-  }
-  return {
-    title: 'Practice with an architecture exercise',
-    difficulty: 'Difficulty',
-    levels: DIFFICULTY_LABELS,
-    kind: 'Type',
-    kinds: KIND_LABELS,
-    goal: 'What do you want to practice?',
-    goalPlaceholder: 'E.g. cache aside, a slow API that another one depends on…',
-    accept: 'Accept',
-    decline: 'Decline',
-    preparing: 'Preparing your exercise…',
-  }
-}
-
 export interface OfferProfile {
-  // The assistant language ('pt' or 'en').
-  language: string
   // The difficulty the offer starts with, from the profile's experience level.
   difficulty: ChallengeDifficulty
 }
 
-// What the exercise offer takes from the profile: the assistant language and
-// the preselected difficulty. English and Intermediate when it cannot be read.
+// What the exercise offer takes from the profile: the preselected difficulty.
+// Intermediate when it cannot be read. The card's language is the Lab's, which
+// follows the profile (see src/i18n).
 export async function getOfferProfile(): Promise<OfferProfile> {
   try {
     const profile = await GetProfile()
-    return {
-      language: profile.assistantLanguage || 'en',
-      difficulty: difficultyForExperience(profile.experienceLevel),
-    }
+    return { difficulty: difficultyForExperience(profile.experienceLevel) }
   } catch {
-    return { language: 'en', difficulty: 'INTERMEDIATE' }
+    return { difficulty: 'INTERMEDIATE' }
   }
 }

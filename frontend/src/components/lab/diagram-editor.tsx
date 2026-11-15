@@ -1,4 +1,5 @@
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react'
+import { useTranslation } from 'react-i18next'
 
 const EMBED_ORIGIN = 'https://embed.diagrams.net'
 const EMBED_URL =
@@ -72,6 +73,7 @@ function DiagramEditor({
   onConnectionLost,
   onConnectionRestored,
 }: DiagramEditorProps) {
+  const { t } = useTranslation()
   const iframeRef = useRef<HTMLIFrameElement>(null)
   // A new key replaces the iframe, which is how a lost editor is recovered.
   const [generation, setGeneration] = useState(0)
@@ -199,7 +201,7 @@ function DiagramEditor({
       <iframe
         key={generation}
         ref={iframeRef}
-        title="Diagram editor"
+        title={t('editor.title')}
         src={readOnly ? READ_ONLY_URL : EMBED_URL}
         className="size-full border-0"
       />
@@ -208,7 +210,7 @@ function DiagramEditor({
           role="status"
           className="absolute inset-0 flex items-center justify-center bg-background p-4 text-center text-sm text-muted-foreground"
         >
-          The diagram needs an internet connection to display.
+          {t('editor.offline')}
         </p>
       )}
     </>

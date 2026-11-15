@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { DONT_KNOW_ANSWER, MAX_ANSWER_LENGTH, type DefenseQuestion } from '@/lib/exercise'
+import { useTranslation } from 'react-i18next'
 
 interface DefenseStageProps {
   phase:
@@ -19,15 +20,10 @@ interface DefenseStageProps {
 // or whether an answer was right: that is only in the final outcome. See
 // specs/phases/phase-03-architecture-lab/12-architecture-defense.md.
 export function DefenseStage({ phase, question, message, onSend, onRetry }: DefenseStageProps) {
+  const { t } = useTranslation()
   if (phase === 'questioning' || phase === 'judging') {
     return (
-      <Progress
-        text={
-          phase === 'questioning'
-            ? 'The tutor is preparing the next question...'
-            : 'Evaluating your answers...'
-        }
-      />
+      <Progress text={phase === 'questioning' ? t('defense.preparing') : t('defense.judging')} />
     )
   }
 
@@ -39,7 +35,7 @@ export function DefenseStage({ phase, question, message, onSend, onRetry }: Defe
         </p>
         <div>
           <Button type="button" onClick={onRetry}>
-            Try again
+            {t('common.tryAgain')}
           </Button>
         </div>
       </div>
@@ -66,16 +62,17 @@ interface AnswerFormProps {
 }
 
 function AnswerForm({ question, sending, message, onSend }: AnswerFormProps) {
+  const { t } = useTranslation()
   const [answer, setAnswer] = useState('')
 
   return (
     <section className="flex flex-col gap-3 p-4">
       <h2 className="text-sm font-semibold text-foreground">
-        Question {question.position} of {question.total}
+        {t('defense.question', { position: question.position, total: question.total })}
       </h2>
       <p className="text-sm text-foreground">{question.text}</p>
       <Textarea
-        aria-label="Your answer"
+        aria-label={t('defense.answerLabel')}
         value={answer}
         maxLength={MAX_ANSWER_LENGTH}
         disabled={sending}
@@ -95,7 +92,7 @@ function AnswerForm({ question, sending, message, onSend }: AnswerFormProps) {
           disabled={sending || answer.trim() === ''}
           onClick={() => onSend(answer)}
         >
-          {sending ? 'Sending...' : 'Send answer'}
+          {sending ? t('defense.sending') : t('defense.send')}
         </Button>
         <Button
           type="button"
@@ -103,7 +100,7 @@ function AnswerForm({ question, sending, message, onSend }: AnswerFormProps) {
           disabled={sending}
           onClick={() => onSend(DONT_KNOW_ANSWER)}
         >
-          I don&apos;t know
+          {t('defense.dontKnow')}
         </Button>
       </div>
     </section>

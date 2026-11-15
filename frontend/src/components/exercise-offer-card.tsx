@@ -10,24 +10,21 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
-  DIFFICULTY_LABELS,
+  CHALLENGE_DIFFICULTIES,
+  CHALLENGE_KINDS,
   acceptOffer,
   declineOffer,
+  difficultyLabel,
   exerciseErrorMessage,
-  offerLabels,
+  kindLabel,
   practiceSuggestions,
   type ChallengeDifficulty,
   type ChallengeKind,
 } from '@/lib/exercise'
-
-const DIFFICULTIES = Object.keys(DIFFICULTY_LABELS) as ChallengeDifficulty[]
-const KINDS: ChallengeKind[] = ['INTERVIEW', 'PRACTICE']
+import { useTranslation } from 'react-i18next'
 
 interface ExerciseOfferCardProps {
   offerId: string
-  // The assistant language ('pt' or 'en'): the card is the one place the
-  // interface speaks it.
-  language: string
   // The difficulty the choice starts with: the profile's experience level.
   defaultDifficulty: ChallengeDifficulty
   // The session's topic, offered as a suggestion for what to practice.
@@ -46,7 +43,6 @@ interface ExerciseOfferCardProps {
 // 18-practice-challenges.md.
 function ExerciseOfferCard({
   offerId,
-  language,
   defaultDifficulty,
   topic,
   onAccepted,
@@ -57,7 +53,7 @@ function ExerciseOfferCard({
   const [goal, setGoal] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const labels = offerLabels(language)
+  const { t } = useTranslation()
   const practice = kind === 'PRACTICE'
   const trimmedGoal = goal.trim()
 
@@ -75,40 +71,40 @@ function ExerciseOfferCard({
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border bg-card p-3 text-sm">
-      <p className="font-medium">{labels.title}</p>
+      <p className="font-medium">{t('offer.title')}</p>
       <div className="flex items-center gap-2">
-        <span className="text-muted-foreground">{labels.difficulty}</span>
+        <span className="text-muted-foreground">{t('generate.difficulty')}</span>
         <Select
           value={difficulty}
           disabled={busy}
           onValueChange={(value) => setDifficulty(value as ChallengeDifficulty)}
         >
-          <SelectTrigger aria-label={labels.difficulty}>
+          <SelectTrigger aria-label={t('generate.difficulty')}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {DIFFICULTIES.map((value) => (
+            {CHALLENGE_DIFFICULTIES.map((value) => (
               <SelectItem key={value} value={value}>
-                {labels.levels[value]}
+                {difficultyLabel(value)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
       <div className="flex items-center gap-2">
-        <span className="text-muted-foreground">{labels.kind}</span>
+        <span className="text-muted-foreground">{t('generate.type')}</span>
         <Select
           value={kind}
           disabled={busy}
           onValueChange={(value) => setKind(value as ChallengeKind)}
         >
-          <SelectTrigger aria-label={labels.kind}>
+          <SelectTrigger aria-label={t('generate.type')}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {KINDS.map((value) => (
+            {CHALLENGE_KINDS.map((value) => (
               <SelectItem key={value} value={value}>
-                {labels.kinds[value]}
+                {kindLabel(value)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -117,13 +113,13 @@ function ExerciseOfferCard({
       {practice && (
         <div className="flex flex-col gap-2">
           <label htmlFor={`practice-goal-${offerId}`} className="text-muted-foreground">
-            {labels.goal}
+            {t('generate.goal')}
           </label>
           <Textarea
             id={`practice-goal-${offerId}`}
             value={goal}
             disabled={busy}
-            placeholder={labels.goalPlaceholder}
+            placeholder={t('generate.goalPlaceholder')}
             onChange={(event) => setGoal(event.target.value)}
           />
           <div className="flex flex-wrap gap-2">
@@ -142,7 +138,7 @@ function ExerciseOfferCard({
           </div>
         </div>
       )}
-      {busy && <p className="text-muted-foreground">{labels.preparing}</p>}
+      {busy && <p className="text-muted-foreground">{t('offer.preparing')}</p>}
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
@@ -159,7 +155,7 @@ function ExerciseOfferCard({
             )
           }
         >
-          {labels.accept}
+          {t('offer.accept')}
         </Button>
         <Button
           size="sm"
@@ -167,7 +163,7 @@ function ExerciseOfferCard({
           disabled={busy}
           onClick={() => void run(() => declineOffer(offerId), onDeclined)}
         >
-          {labels.decline}
+          {t('offer.decline')}
         </Button>
       </div>
     </div>
