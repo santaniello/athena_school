@@ -884,8 +884,9 @@ Estes itens devem ser considerados em todas as fases:
 - Grace period de validação de licença offline — só se aplica quando houver licenciamento remoto (Fase 5+); não existe licença para validar na Fase 1
 
 ### Internacionalização
-- App inicialmente em Português (BR)
-- Prompts do LLM: Language do UserProfile (futuro)
+- Interface em inglês (menu, navegação, Settings e demais telas)
+- Architecture Lab e card de oferta de exercício seguem o idioma do assistente do UserProfile (`pt`/`en`), via i18next (spec 3.20)
+- Prompts do LLM: Language do UserProfile
 
 ---
 

@@ -8,6 +8,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { useTranslation } from 'react-i18next'
 
 interface LabLeaveDialogProps {
   open: boolean
@@ -18,17 +19,16 @@ interface LabLeaveDialogProps {
 // Confirms leaving the exam. The handlers belong to the caller: this dialog
 // discards nothing by itself.
 function LabLeaveDialog({ open, onCancel, onConfirm }: LabLeaveDialogProps) {
+  const { t } = useTranslation()
   return (
     <AlertDialog open={open} onOpenChange={(next) => !next && onCancel()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Leave the exam?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Leaving discards this exam. It will not be graded.
-          </AlertDialogDescription>
+          <AlertDialogTitle>{t('exam.leaveTitle')}</AlertDialogTitle>
+          <AlertDialogDescription>{t('exam.leaveDescription')}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
           <AlertDialogAction
             // The action closes the dialog on click unless prevented, which
             // would also report a cancel. Closing is the caller's decision.
@@ -37,7 +37,7 @@ function LabLeaveDialog({ open, onCancel, onConfirm }: LabLeaveDialogProps) {
               onConfirm()
             }}
           >
-            Leave
+            {t('common.leave')}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

@@ -19,13 +19,15 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
-  DIFFICULTY_LABELS,
-  KIND_LABELS,
+  CHALLENGE_DIFFICULTIES,
+  CHALLENGE_KINDS,
   cancelChallengeGeneration,
+  difficultyLabel,
   exerciseErrorCode,
   exerciseErrorMessage,
   formatSessionDate,
   generateChallenge,
+  kindLabel,
   listSessionsForGeneration,
   practiceSuggestions,
   type ChallengeDifficulty,
@@ -33,6 +35,7 @@ import {
   type GeneratedChallenge,
   type SessionOption,
 } from '@/lib/exercise'
+import { useTranslation } from 'react-i18next'
 
 interface GenerateChallengeDialogProps {
   open: boolean
@@ -46,9 +49,6 @@ interface GenerateChallengeDialogProps {
   // waiting for it, so the caller must not touch a dialog opened since.
   onGeneratedAfterClose: (challenge: GeneratedChallenge) => void
 }
-
-const DIFFICULTIES = Object.keys(DIFFICULTY_LABELS) as ChallengeDifficulty[]
-const KINDS = Object.keys(KIND_LABELS) as ChallengeKind[]
 
 // Opened by "Generate challenge with AI". The content is its own component, so
 // the chosen session, the search text and any error are discarded each time
@@ -67,6 +67,7 @@ function GenerateChallengeContent({
   onGenerated,
   onGeneratedAfterClose,
 }: Omit<GenerateChallengeDialogProps, 'open'>) {
+  const { t } = useTranslation()
   const [sessions, setSessions] = useState<Sessions>({ state: 'loading' })
   const [reloadToken, setReloadToken] = useState(0)
   const [search, setSearch] = useState('')
@@ -155,43 +156,42 @@ function GenerateChallengeContent({
 
   return (
     <Dialog open onOpenChange={(nextOpen) => !nextOpen && handleDismiss()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent
+        closeLabel={t('common.close')}
+        className="max-h-[90vh] overflow-y-auto sm:max-w-lg"
+      >
         <DialogHeader>
-          <DialogTitle>Generate challenge with AI</DialogTitle>
-          <DialogDescription>
-            Pick a study session. The challenge is generated from what you studied in it.
-          </DialogDescription>
+          <DialogTitle>{t('generate.title')}</DialogTitle>
+          <DialogDescription>{t('generate.description')}</DialogDescription>
         </DialogHeader>
 
         {sessions.state === 'loading' && (
-          <p className="text-sm text-muted-foreground">Loading your study sessions…</p>
+          <p className="text-sm text-muted-foreground">{t('generate.loadingSessions')}</p>
         )}
         {sessions.state === 'failed' && (
           <div role="alert" className="flex items-center justify-between gap-3 text-sm">
-            <span className="text-destructive">Could not load your study sessions.</span>
+            <span className="text-destructive">{t('generate.sessionsFailed')}</span>
             <Button type="button" variant="outline" size="sm" onClick={retryLoading}>
-              Retry
+              {t('common.retry')}
             </Button>
           </div>
         )}
         {sessions.state === 'ready' && list.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            Study a topic first. A challenge is generated from a session you have already studied.
-          </p>
+          <p className="text-sm text-muted-foreground">{t('generate.noSessions')}</p>
         )}
         {sessions.state === 'ready' && list.length > 0 && (
           <div className="space-y-3">
             <Input
               type="search"
-              aria-label="Search study sessions"
-              placeholder="Search by topic or folder"
+              aria-label={t('generate.searchLabel')}
+              placeholder={t('generate.searchPlaceholder')}
               value={search}
               disabled={generating}
               onChange={(event) => setSearch(event.target.value)}
             />
             <div
               role="radiogroup"
-              aria-label="Study sessions"
+              aria-label={t('generate.sessionsLabel')}
               className="thin-scroll max-h-64 space-y-1 overflow-y-auto"
             >
               {visible.map((session) => (
@@ -215,44 +215,42 @@ function GenerateChallengeContent({
                 </label>
               ))}
               {visible.length === 0 && (
-                <p className="py-2 text-sm text-muted-foreground">
-                  No study session matches your search.
-                </p>
+                <p className="py-2 text-sm text-muted-foreground">{t('generate.noSessionMatch')}</p>
               )}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Difficulty</span>
+              <span className="text-sm text-muted-foreground">{t('generate.difficulty')}</span>
               <Select
                 value={difficulty}
                 disabled={generating}
                 onValueChange={(value) => setDifficulty(value as ChallengeDifficulty)}
               >
-                <SelectTrigger aria-label="Difficulty">
+                <SelectTrigger aria-label={t('generate.difficulty')}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {DIFFICULTIES.map((value) => (
+                  {CHALLENGE_DIFFICULTIES.map((value) => (
                     <SelectItem key={value} value={value}>
-                      {DIFFICULTY_LABELS[value]}
+                      {difficultyLabel(value)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Type</span>
+              <span className="text-sm text-muted-foreground">{t('generate.type')}</span>
               <Select
                 value={kind}
                 disabled={generating}
                 onValueChange={(value) => setKind(value as ChallengeKind)}
               >
-                <SelectTrigger aria-label="Type">
+                <SelectTrigger aria-label={t('generate.type')}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {KINDS.map((value) => (
+                  {CHALLENGE_KINDS.map((value) => (
                     <SelectItem key={value} value={value}>
-                      {KIND_LABELS[value]}
+                      {kindLabel(value)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -261,13 +259,13 @@ function GenerateChallengeContent({
             {practice && (
               <div className="space-y-2">
                 <label htmlFor="practice-goal" className="text-sm text-muted-foreground">
-                  What do you want to practice?
+                  {t('generate.goal')}
                 </label>
                 <Textarea
                   id="practice-goal"
                   value={goal}
                   disabled={generating}
-                  placeholder="E.g. cache aside, a slow API that another one depends on…"
+                  placeholder={t('generate.goalPlaceholder')}
                   onChange={(event) => setGoal(event.target.value)}
                 />
                 <div className="flex flex-wrap gap-2">
@@ -297,7 +295,7 @@ function GenerateChallengeContent({
         {generating && (
           <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-            Generating the challenge. This can take a minute…
+            {t('generate.generating')}
           </p>
         )}
 
@@ -307,7 +305,7 @@ function GenerateChallengeContent({
             variant="outline"
             onClick={generating ? () => void cancelChallengeGeneration() : onClose}
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
           {sessions.state === 'ready' && list.length > 0 && !generating && (
             <Button
@@ -315,7 +313,7 @@ function GenerateChallengeContent({
               disabled={!selectedId || (practice && trimmedGoal === '')}
               onClick={() => void handleGenerate()}
             >
-              {error ? 'Try again' : 'Generate'}
+              {error ? t('common.tryAgain') : t('generate.submit')}
             </Button>
           )}
         </DialogFooter>

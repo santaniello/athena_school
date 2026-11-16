@@ -14,15 +14,18 @@ import { GenerateChallengeDialog } from '@/components/generate-challenge-dialog'
 import { StartExamDialog, type ExamToStart } from '@/components/lab/start-exam-dialog'
 import { useChallengeCatalog } from '@/hooks/use-challenge-catalog'
 import {
-  DIFFICULTY_LABELS,
-  STATUS_LABELS,
+  CHALLENGE_DIFFICULTIES,
+  CHALLENGE_STATUSES,
   difficultyForExperience,
+  difficultyLabel,
+  statusLabel,
   listChallengeTopics,
   type CatalogFilter,
   type ChallengeDifficulty,
   type ChallengeStatus,
   type GeneratedChallenge,
 } from '@/lib/exercise'
+import { useTranslation } from 'react-i18next'
 
 interface ArchitectureLabScreenProps {
   // The profile's experience level, which preselects the generation difficulty.
@@ -35,10 +38,6 @@ const ALL = 'all'
 
 const NO_FILTER = { query: '', status: '', difficulty: '', topic: '' } as const
 
-function plural(count: number, noun: string): string {
-  return `${count} ${noun}${count === 1 ? '' : 's'}`
-}
-
 // The Architecture Lab's entry screen: the user's challenges with search,
 // filters and progress at a glance, plus the Generate challenge with AI
 // action. Everything shown, statuses and counts included, comes from the
@@ -46,6 +45,7 @@ function plural(count: number, noun: string): string {
 // the shell. See specs/phases/phase-03-architecture-lab/07-challenge-catalog-ui.md
 // and 10-diagram-workspace.md.
 function ArchitectureLabScreen({ experienceLevel, onStartExam }: ArchitectureLabScreenProps) {
+  const { t } = useTranslation()
   const [filter, setFilter] = useState<Required<CatalogFilter>>({ ...NO_FILTER })
   const { catalog, loading, error, reload } = useChallengeCatalog(filter)
   const [topics, setTopics] = useState<string[]>([])
@@ -90,44 +90,50 @@ function ArchitectureLabScreen({ experienceLevel, onStartExam }: ArchitectureLab
       <div className="flex items-center justify-between gap-4">
         {catalog ? (
           <p className="flex gap-4 text-sm text-muted-foreground">
-            <span>{plural(catalog.total, 'challenge')}</span>
-            <span>{catalog.completed} completed</span>
-            <span>{catalog.inProgress} in progress</span>
+            <span>{t('catalog.challenges', { count: catalog.total })}</span>
+            <span>{t('catalog.completed', { count: catalog.completed })}</span>
+            <span>{t('catalog.inProgress', { count: catalog.inProgress })}</span>
           </p>
         ) : (
           <span />
         )}
         <Button type="button" onClick={() => setDialogOpen(true)}>
-          Generate challenge with AI
+          {t('catalog.generate')}
         </Button>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <Input
           type="search"
-          aria-label="Search challenges"
-          placeholder="Search"
+          aria-label={t('catalog.searchLabel')}
+          placeholder={t('catalog.searchPlaceholder')}
           className="max-w-64"
           value={filter.query}
           onChange={(event) => setFilter({ ...filter, query: event.target.value })}
         />
         <FilterSelect
-          label="Status"
-          allLabel="All statuses"
+          label={t('catalog.status')}
+          allLabel={t('catalog.allStatuses')}
           value={filter.status}
-          options={Object.entries(STATUS_LABELS) as [ChallengeStatus, string][]}
+          options={CHALLENGE_STATUSES.map((value): [ChallengeStatus, string] => [
+            value,
+            statusLabel(value),
+          ])}
           onChange={(status) => setFilter({ ...filter, status })}
         />
         <FilterSelect
-          label="Difficulty"
-          allLabel="All difficulties"
+          label={t('catalog.difficulty')}
+          allLabel={t('catalog.allDifficulties')}
           value={filter.difficulty}
-          options={Object.entries(DIFFICULTY_LABELS) as [ChallengeDifficulty, string][]}
+          options={CHALLENGE_DIFFICULTIES.map((value): [ChallengeDifficulty, string] => [
+            value,
+            difficultyLabel(value),
+          ])}
           onChange={(difficulty) => setFilter({ ...filter, difficulty })}
         />
         <FilterSelect
-          label="Topic"
-          allLabel="All topics"
+          label={t('catalog.topic')}
+          allLabel={t('catalog.allTopics')}
           value={filter.topic}
           options={topics.map((topic): [string, string] => [topic, topic])}
           onChange={(topic) => setFilter({ ...filter, topic })}
@@ -139,11 +145,11 @@ function ArchitectureLabScreen({ experienceLevel, onStartExam }: ArchitectureLab
           <div role="alert" className="flex items-center gap-3 text-sm">
             <span className="text-destructive">{error}</span>
             <Button type="button" variant="outline" size="sm" onClick={reload}>
-              Retry
+              {t('common.retry')}
             </Button>
           </div>
         ) : !catalog && loading ? (
-          <p className="text-sm text-muted-foreground">Loading challenges…</p>
+          <p className="text-sm text-muted-foreground">{t('catalog.loading')}</p>
         ) : items.length > 0 ? (
           <ul className="divide-y divide-border rounded-lg border border-border">
             {items.map((item) => (
@@ -158,20 +164,17 @@ function ArchitectureLabScreen({ experienceLevel, onStartExam }: ArchitectureLab
           </ul>
         ) : filtersActive ? (
           <div className="flex flex-col items-center gap-2 py-10 text-center">
-            <p className="text-sm text-muted-foreground">No challenges match your filters.</p>
+            <p className="text-sm text-muted-foreground">{t('catalog.noMatch')}</p>
             <Button type="button" variant="outline" onClick={() => setFilter({ ...NO_FILTER })}>
-              Clear filters
+              {t('catalog.clearFilters')}
             </Button>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2 py-10 text-center">
-            <p className="text-sm font-semibold text-foreground">No challenges yet</p>
-            <p className="max-w-80 text-sm text-muted-foreground">
-              Study a topic, then generate one from a study session. Each challenge is built from
-              what you studied.
-            </p>
+            <p className="text-sm font-semibold text-foreground">{t('catalog.emptyTitle')}</p>
+            <p className="max-w-80 text-sm text-muted-foreground">{t('catalog.emptyBody')}</p>
             <Button type="button" onClick={() => setDialogOpen(true)}>
-              Generate your first challenge
+              {t('catalog.generateFirst')}
             </Button>
           </div>
         )}

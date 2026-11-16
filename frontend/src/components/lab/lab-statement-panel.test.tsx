@@ -1,3 +1,4 @@
+import { setLabLanguage } from '@/i18n'
 import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import type { LabStatement } from '@/lib/lab'
@@ -50,5 +51,18 @@ describe('LabStatementPanel', () => {
     expect(screen.queryByText(/tip/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/hint/i)).not.toBeInTheDocument()
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+  })
+})
+
+describe('LabStatementPanel in Portuguese', () => {
+  it('shows the headings in the profile language', () => {
+    setLabLanguage('pt')
+    render(<LabStatementPanel statement={statement} />)
+
+    expect(screen.getByRole('heading', { name: 'Cenário' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Requisitos funcionais' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Requisitos não funcionais' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Restrições' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Objetivos' })).toBeInTheDocument()
   })
 })

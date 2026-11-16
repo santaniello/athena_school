@@ -1,14 +1,9 @@
 import { DifficultyBadge } from '@/components/difficulty-badge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  KIND_LABELS,
-  STATUS_LABELS,
-  formatTimeLimit,
-  type CatalogItem,
-  type ChallengeStatus,
-} from '@/lib/exercise'
+import { formatTimeLimit, kindLabel, statusLabel, type CatalogItem } from '@/lib/exercise'
 import { cn } from '@/lib/utils'
+import { useTranslation } from 'react-i18next'
 
 interface ChallengeRowProps {
   item: CatalogItem
@@ -20,17 +15,15 @@ interface ChallengeRowProps {
   onHistory: (item: CatalogItem) => void
 }
 
-function attemptsText(attempts: number): string {
-  if (attempts === 0) return 'not started'
-  return `${attempts} ${attempts === 1 ? 'attempt' : 'attempts'}`
-}
-
 // One catalog row. It shows only what does not give the exam away: never the
 // scenario, requirements or rubric. Start opens the exam rules. See
 // specs/phases/phase-03-architecture-lab/07-challenge-catalog-ui.md and
 // 10-diagram-workspace.md.
 function ChallengeRow({ item, highlighted, onStart, onHistory }: ChallengeRowProps) {
-  const status = STATUS_LABELS[item.status as ChallengeStatus] ?? item.status
+  const { t } = useTranslation()
+  const status = statusLabel(item.status)
+  const attempts =
+    item.attempts === 0 ? t('attempts.notStarted') : t('attempts.count', { count: item.attempts })
 
   return (
     <li
@@ -43,10 +36,10 @@ function ChallengeRow({ item, highlighted, onStart, onHistory }: ChallengeRowPro
       <div className="min-w-0 flex-1 basis-48">
         <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <span className="truncate">{item.title}</span>
-          {item.kind === 'PRACTICE' && <Badge variant="muted">{KIND_LABELS.PRACTICE}</Badge>}
+          {item.kind === 'PRACTICE' && <Badge variant="muted">{kindLabel('PRACTICE')}</Badge>}
         </p>
         <p className="text-sm text-muted-foreground">
-          {item.topic} · {formatTimeLimit(item.timeLimitMinutes)} · {attemptsText(item.attempts)}
+          {item.topic} · {formatTimeLimit(item.timeLimitMinutes)} · {attempts}
         </p>
       </div>
       <div className="flex flex-wrap items-center justify-end gap-3">
@@ -65,11 +58,11 @@ function ChallengeRow({ item, highlighted, onStart, onHistory }: ChallengeRowPro
         </div>
         {item.attempts > 0 && (
           <Button type="button" variant="outline" size="sm" onClick={() => onHistory(item)}>
-            History
+            {t('common.history')}
           </Button>
         )}
         <Button type="button" variant="outline" size="sm" onClick={() => onStart(item)}>
-          {item.attempts === 0 ? 'Start' : 'Start again'}
+          {item.attempts === 0 ? t('catalog.start') : t('catalog.startAgain')}
         </Button>
       </div>
     </li>

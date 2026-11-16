@@ -2,6 +2,8 @@
 // renders what its caller passes in. See
 // specs/phases/phase-03-architecture-lab/08-lab-layout-sketch.md.
 
+import i18n from '@/i18n'
+
 const SECOND_MS = 1000
 const MINUTE_MS = 60 * SECOND_MS
 
@@ -108,5 +110,5 @@ export function diagramIsAnswer(xml: string, seed: string): boolean {
 export type LabReturn = { kind: 'catalog' } | { kind: 'study'; sessionId: string }
 
 export function labReturnLabel(returnTo: LabReturn): string {
-  return returnTo.kind === 'study' ? 'Back to study session' : 'Back to catalog'
+  return i18n.t(returnTo.kind === 'study' ? 'back.study' : 'back.catalog')
 }

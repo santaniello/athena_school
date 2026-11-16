@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { listChallengeCatalog, type Catalog, type CatalogFilter } from '@/lib/exercise'
 
 export interface UseChallengeCatalogResult {
@@ -14,10 +15,12 @@ export interface UseChallengeCatalogResult {
 // no longer matches what the screen asks for. The previous catalog stays
 // shown while the next one loads, so the list does not flash empty.
 export function useChallengeCatalog(filter: CatalogFilter): UseChallengeCatalogResult {
+  const { t } = useTranslation()
   const { query, status, difficulty, topic } = filter
   const [catalog, setCatalog] = useState<Catalog | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  // Only the failure is kept: the message is written at render, in the language of the moment.
+  const [failed, setFailed] = useState(false)
   // Bumping this re-runs the effect below for the same filter.
   const [reloadToken, setReloadToken] = useState(0)
 
@@ -27,13 +30,13 @@ export function useChallengeCatalog(filter: CatalogFilter): UseChallengeCatalogR
       .then((result) => {
         if (stale) return
         setCatalog(result)
-        setError(null)
+        setFailed(false)
         setLoading(false)
       })
       .catch(() => {
         if (stale) return
         setCatalog(null)
-        setError('Could not load the challenges.')
+        setFailed(true)
         setLoading(false)
       })
     return () => {
@@ -43,9 +46,9 @@ export function useChallengeCatalog(filter: CatalogFilter): UseChallengeCatalogR
 
   const reload = useCallback(() => {
     setLoading(true)
-    setError(null)
+    setFailed(false)
     setReloadToken((token) => token + 1)
   }, [])
 
-  return { catalog, loading, error, reload }
+  return { catalog, loading, error: failed ? t('errors.loadChallenges') : null, reload }
 }

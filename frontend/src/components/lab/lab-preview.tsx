@@ -8,6 +8,7 @@ import {
   previewHints,
   previewStatement,
 } from './lab-preview-fixtures'
+import { useTranslation } from 'react-i18next'
 
 function noop() {}
 
@@ -16,6 +17,7 @@ function noop() {}
 // and creates no attempt. See
 // specs/phases/phase-03-architecture-lab/08-lab-layout-sketch.md.
 function LabPreview() {
+  const { t } = useTranslation()
   const [deadline] = useState(() => previewDeadline(Date.now()))
   const [hintsShown, setHintsShown] = useState(0)
 
@@ -34,7 +36,7 @@ function LabPreview() {
       canFinish={false}
       board={
         <p className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
-          The diagram editor will appear here.
+          {t('editor.placeholder')}
         </p>
       }
       onExpire={noop}

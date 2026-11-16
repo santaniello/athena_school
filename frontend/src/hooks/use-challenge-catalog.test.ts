@@ -1,3 +1,4 @@
+import { setLabLanguage } from '@/i18n'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { listChallengeCatalog, type Catalog } from '@/lib/exercise'
@@ -212,5 +213,21 @@ describe('useChallengeCatalog', () => {
 
     // Then each reload fetched again
     expect(listChallengeCatalog).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('useChallengeCatalog error language', () => {
+  it('writes the failure in the language of the moment, not the one it happened in', async () => {
+    // Given a catalog that fails while the Lab is still in English
+    vi.mocked(listChallengeCatalog).mockRejectedValueOnce(new Error('boom'))
+    const { result } = renderHook(() => useChallengeCatalog({}))
+    await waitFor(() => expect(result.current.error).toBe('Could not load the challenges.'))
+
+    // When the profile turns out to be Portuguese, without a new request
+    act(() => setLabLanguage('pt'))
+
+    // Then the same failure reads in Portuguese
+    await waitFor(() => expect(result.current.error).toBe('Não foi possível carregar os desafios.'))
+    expect(listChallengeCatalog).toHaveBeenCalledOnce()
   })
 })

@@ -8,6 +8,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { useTranslation } from 'react-i18next'
 
 interface LabConfirmDialogProps {
   open: boolean
@@ -28,6 +29,7 @@ function LabConfirmDialog({
   onCancel,
   onConfirm,
 }: LabConfirmDialogProps) {
+  const { t } = useTranslation()
   return (
     <AlertDialog open={open} onOpenChange={(next) => !next && onCancel()}>
       <AlertDialogContent>
@@ -36,7 +38,7 @@ function LabConfirmDialog({
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
           <AlertDialogAction
             onClick={(event) => {
               event.preventDefault()

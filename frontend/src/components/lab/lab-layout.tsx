@@ -11,6 +11,7 @@ import { LabLeaveDialog } from './lab-leave-dialog'
 import { LabRubricPanel } from './lab-rubric-panel'
 import { LabStatementPanel } from './lab-statement-panel'
 import { LabTutorPanel } from './lab-tutor-panel'
+import { useTranslation } from 'react-i18next'
 
 // Below this window width the side panels start collapsed, so the board keeps
 // the screen. There is no mobile layout.
@@ -72,6 +73,7 @@ function LabLayout({
   onFinish,
   onLeave,
 }: LabLayoutProps) {
+  const { t } = useTranslation()
   const statementRef = useRef<PanelImperativeHandle>(null)
   const sidebarRef = useRef<PanelImperativeHandle>(null)
   const [wideWindow] = useState(() => window.innerWidth >= MIN_WIDTH_FOR_SIDE_PANELS)
@@ -109,9 +111,9 @@ function LabLayout({
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-3">
       <header className="flex flex-col gap-2">
-        <nav aria-label="Breadcrumb" className="text-xs text-muted-foreground">
+        <nav aria-label={t('layout.breadcrumb')} className="text-xs text-muted-foreground">
           <ol className="flex items-center gap-1.5">
-            <li>Architecture Lab</li>
+            <li>{t('common.architectureLab')}</li>
             <li aria-hidden="true">›</li>
             <li>{topic}</li>
             <li aria-hidden="true">›</li>
@@ -124,7 +126,7 @@ function LabLayout({
               type="button"
               variant="ghost"
               size="icon-sm"
-              aria-label={statementOpen ? 'Hide statement' : 'Show statement'}
+              aria-label={statementOpen ? t('layout.hideStatement') : t('layout.showStatement')}
               onClick={handleToggleStatement}
             >
               <PanelLeft className="size-4" aria-hidden="true" />
@@ -138,18 +140,18 @@ function LabLayout({
               <LabCountdown deadline={deadline} now={now} onExpire={onExpire} />
             )}
             <Button type="button" variant="outline" size="sm" onClick={() => setLeaving(true)}>
-              Leave
+              {t('common.leave')}
             </Button>
             {!stage && (
               <Button type="button" size="sm" disabled={!canFinish} onClick={onFinish}>
-                Finish and evaluate
+                {t('layout.finish')}
               </Button>
             )}
             <Button
               type="button"
               variant="ghost"
               size="icon-sm"
-              aria-label={sidebarOpen ? 'Hide tutor and rubric' : 'Show tutor and rubric'}
+              aria-label={sidebarOpen ? t('layout.hideSidebar') : t('layout.showSidebar')}
               onClick={handleToggleSidebar}
             >
               <PanelRight className="size-4" aria-hidden="true" />
@@ -187,7 +189,7 @@ function LabLayout({
           // Stryker disable next-line ObjectLiteral,StringLiteral: layout style, no layout engine in jsdom, checked by eye in the dev preview.
           style={{ overflow: 'hidden' }}
         >
-          <section aria-label="Board" className="relative h-full bg-muted/30">
+          <section aria-label={t('layout.board')} className="relative h-full bg-muted/30">
             {board}
           </section>
         </ResizablePanel>

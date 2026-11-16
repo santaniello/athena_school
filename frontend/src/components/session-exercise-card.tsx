@@ -2,12 +2,12 @@ import { Badge } from '@/components/ui/badge'
 import { DifficultyBadge } from '@/components/difficulty-badge'
 import { Button } from '@/components/ui/button'
 import {
-  KIND_LABELS,
-  STATUS_LABELS,
   formatTimeLimit,
-  type ChallengeStatus,
+  kindLabel,
+  statusLabel,
   type SessionExerciseCard as Card,
 } from '@/lib/exercise'
+import { useTranslation } from 'react-i18next'
 
 interface SessionExerciseCardProps {
   card: Card
@@ -20,7 +20,8 @@ interface SessionExerciseCardProps {
 // its history. It never shows the scenario, requirements or rubric. See
 // specs/phases/phase-03-architecture-lab/17-session-exercises-ui.md.
 function SessionExerciseCard({ card, onStart, onHistory }: SessionExerciseCardProps) {
-  const status = STATUS_LABELS[card.status as ChallengeStatus] ?? card.status
+  const { t } = useTranslation()
+  const status = statusLabel(card.status)
   const { latest } = card
 
   return (
@@ -28,27 +29,29 @@ function SessionExerciseCard({ card, onStart, onHistory }: SessionExerciseCardPr
       <p className="font-medium">{card.title}</p>
       <div className="flex flex-wrap items-center gap-2">
         <DifficultyBadge difficulty={card.difficulty} />
-        {card.kind === 'PRACTICE' && <Badge variant="muted">{KIND_LABELS.PRACTICE}</Badge>}
+        {card.kind === 'PRACTICE' && <Badge variant="muted">{kindLabel('PRACTICE')}</Badge>}
         <Badge variant="muted">{formatTimeLimit(card.timeLimitMinutes)}</Badge>
         <Badge variant="default">{status}</Badge>
       </div>
       {latest && (
         <p className="flex flex-wrap gap-x-3 text-muted-foreground">
+          <span>{t('attempts.count', { count: card.attempts })}</span>
           <span>
-            {card.attempts} {card.attempts === 1 ? 'attempt' : 'attempts'}
+            {t('sessionCard.latest', {
+              outcome: latest.outcome === 'PASSED' ? t('common.passed') : t('common.failed'),
+            })}
           </span>
-          <span>Latest: {latest.outcome === 'PASSED' ? 'Passed' : 'Failed'}</span>
-          <span>Diagram {latest.diagramScore}</span>
-          <span>Understanding {latest.understandingScore}</span>
+          <span>{t('sessionCard.diagram', { score: latest.diagramScore })}</span>
+          <span>{t('sessionCard.understanding', { score: latest.understandingScore })}</span>
         </p>
       )}
       <div className="flex gap-2">
         <Button size="sm" onClick={() => onStart(card)}>
-          {latest ? 'Start again' : 'Open in Architecture Lab'}
+          {latest ? t('catalog.startAgain') : t('sessionCard.open')}
         </Button>
         {latest && (
           <Button size="sm" variant="outline" onClick={() => onHistory(card)}>
-            History
+            {t('common.history')}
           </Button>
         )}
       </div>

@@ -1,5 +1,6 @@
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useTranslation } from 'react-i18next'
 
 interface EvaluationStageProps {
   phase: 'evaluating' | 'evaluationFailed'
@@ -23,12 +24,13 @@ export function EvaluationStage({
   onRetry,
   onBack,
 }: EvaluationStageProps) {
+  const { t } = useTranslation()
   if (phase === 'evaluating') {
     return (
       <Centered>
         <Loader2 className="size-5 animate-spin text-muted-foreground" aria-hidden="true" />
         <p role="status" className="text-sm text-muted-foreground">
-          Evaluating your diagram...
+          {t('evaluation.evaluating')}
         </p>
       </Centered>
     )
@@ -41,7 +43,7 @@ export function EvaluationStage({
       </p>
       <div className="flex gap-2">
         <Button type="button" onClick={onRetry}>
-          Try evaluating again
+          {t('evaluation.retry')}
         </Button>
         <Button type="button" variant="outline" onClick={onBack}>
           {backLabel}

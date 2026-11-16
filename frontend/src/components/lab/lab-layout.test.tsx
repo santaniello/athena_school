@@ -1,3 +1,4 @@
+import { setLabLanguage } from '@/i18n'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -244,5 +245,14 @@ describe('LabLayout', () => {
 
       expect(onLeave).toHaveBeenCalledOnce()
     })
+  })
+})
+
+describe('LabLayout in Portuguese', () => {
+  it('names the board in the profile language', () => {
+    setLabLanguage('pt')
+    renderLayout()
+
+    expect(screen.getByRole('region', { name: 'Quadro' })).toHaveTextContent('the editor')
   })
 })

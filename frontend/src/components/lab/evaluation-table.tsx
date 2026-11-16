@@ -1,4 +1,5 @@
 import type { Evaluation } from '@/lib/exercise'
+import { useTranslation } from 'react-i18next'
 
 interface EvaluationTableProps {
   title: string
@@ -28,11 +29,14 @@ function FeedbackList({ title, items }: { title: string; items: string[] }) {
 // as level 0. See
 // specs/phases/phase-03-architecture-lab/13-evaluation-and-history-screen.md.
 export function EvaluationTable({ title, evaluation, notJudgedLabel }: EvaluationTableProps) {
+  const { t } = useTranslation()
   return (
     <section aria-label={title} className="flex flex-col gap-3">
       <header className="flex items-baseline justify-between gap-2">
         <h3 className="text-lg font-semibold text-foreground">{title}</h3>
-        <p className="text-sm text-muted-foreground">Score {evaluation.score} / 100</p>
+        <p className="text-sm text-muted-foreground">
+          {t('evaluationTable.score', { score: evaluation.score })}
+        </p>
       </header>
       {evaluation.summary && (
         <p className="text-sm whitespace-pre-line text-muted-foreground">{evaluation.summary}</p>
@@ -43,24 +47,33 @@ export function EvaluationTable({ title, evaluation, notJudgedLabel }: Evaluatio
             <p className="flex items-baseline justify-between gap-2 text-sm">
               <span className="font-medium text-foreground">
                 {result.name}{' '}
-                <span className="text-muted-foreground">· weight {result.weight}%</span>
+                <span className="text-muted-foreground">
+                  · {t('evaluationTable.weight', { weight: result.weight })}
+                </span>
               </span>
               <span className="text-foreground">
-                {result.insufficientEvidence ? notJudgedLabel : `Level ${result.level} / 4`}
+                {result.insufficientEvidence
+                  ? notJudgedLabel
+                  : t('evaluationTable.level', { level: result.level })}
               </span>
             </p>
             {result.justification && (
               <p className="text-sm text-muted-foreground">{result.justification}</p>
             )}
             {result.evidence && (
-              <p className="text-sm text-muted-foreground italic">Evidence: {result.evidence}</p>
+              <p className="text-sm text-muted-foreground italic">
+                {t('evaluationTable.evidence', { evidence: result.evidence })}
+              </p>
             )}
           </li>
         ))}
       </ul>
-      <FeedbackList title="Strengths" items={evaluation.strengths} />
-      <FeedbackList title="Gaps" items={evaluation.gaps} />
-      <FeedbackList title="Recommendations" items={evaluation.recommendations} />
+      <FeedbackList title={t('evaluationTable.strengths')} items={evaluation.strengths} />
+      <FeedbackList title={t('evaluationTable.gaps')} items={evaluation.gaps} />
+      <FeedbackList
+        title={t('evaluationTable.recommendations')}
+        items={evaluation.recommendations}
+      />
     </section>
   )
 }

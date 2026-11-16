@@ -1,3 +1,4 @@
+import { setLabLanguage } from '@/i18n'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -103,5 +104,39 @@ describe('StartExamDialog', () => {
 
     expect(props.onCancel).toHaveBeenCalledTimes(1)
     expect(props.onConfirm).not.toHaveBeenCalled()
+  })
+})
+
+describe('StartExamDialog in Portuguese', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(getPassScore).mockResolvedValue(70)
+  })
+
+  it('shows the rules and the buttons in the profile language', async () => {
+    setLabLanguage('pt')
+    renderDialog()
+
+    expect(await screen.findByText('Limite de tempo: 45 minutos')).toBeInTheDocument()
+    expect(screen.getByText('Leia as regras antes de começar.')).toBeInTheDocument()
+    expect(screen.getByText('Você pode pedir até 3 dicas ao tutor.')).toBeInTheDocument()
+    expect(await screen.findByText('Nota mínima para aprovação: 70')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Iniciar prova' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Fechar' })).toBeInTheDocument()
+  })
+
+  it('says the exam has no time limit in the profile language', async () => {
+    setLabLanguage('pt')
+    renderDialog({ challenge: { ...challenge, timeLimitMinutes: 0 } })
+
+    expect(await screen.findByText('Sem limite de tempo')).toBeInTheDocument()
+  })
+
+  it('uses the singular for one minute', async () => {
+    setLabLanguage('pt')
+    renderDialog({ challenge: { ...challenge, timeLimitMinutes: 1 } })
+
+    expect(await screen.findByText('Limite de tempo: 1 minuto')).toBeInTheDocument()
   })
 })
