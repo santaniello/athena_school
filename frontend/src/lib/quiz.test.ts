@@ -240,6 +240,19 @@ describe('quiz offers of the study chat', () => {
   })
 })
 
+describe('quiz error messages for the offer', () => {
+  it.each([
+    ['offer_pending', 'A test offer is already waiting for an answer.'],
+    ['cancelled', 'The test generation was cancelled.'],
+  ])('writes a message for %s, in the profile language', (code, message) => {
+    expect(quizErrorMessage(JSON.stringify({ code }))).toBe(message)
+    setLabLanguage('pt')
+    expect(quizErrorMessage(JSON.stringify({ code }))).not.toBe(message)
+    expect(quizErrorMessage(JSON.stringify({ code }))).not.toBe('Algo deu errado. Tente novamente.')
+    setLabLanguage('en')
+  })
+})
+
 describe('quiz errors', () => {
   it('reads the code of a coded error, from an Error or a string', () => {
     const raw = JSON.stringify({ code: 'quiz_not_found', message: 'x' })

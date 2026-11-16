@@ -106,6 +106,8 @@ export const quizEn = {
     generation_in_progress: 'A test is already being generated.',
     selection_invalid: 'Some answers were not valid. Reopen the test and try again.',
     offer_not_found: 'This test offer is no longer available.',
+    offer_pending: 'A test offer is already waiting for an answer.',
+    cancelled: 'The test generation was cancelled.',
   },
   offer: {
     title: 'Take a test about this session',

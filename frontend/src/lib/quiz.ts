@@ -231,6 +231,8 @@ const ERROR_CODES = [
   'generation_in_progress',
   'selection_invalid',
   'offer_not_found',
+  'offer_pending',
+  'cancelled',
 ]
 
 export function quizErrorMessage(err: unknown): string {

@@ -234,20 +234,11 @@ func (r *QuizRepository) GetAttempt(ctx context.Context, id string) (quiz.Attemp
 	return attempt, nil
 }
 
-// ListAttempts returns the attempts of a quiz, newest first, each with its answers.
+// ListAttempts returns the attempts of a quiz, newest first, without their
+// answers: the list is a summary, and reading the answers of each attempt would
+// cost one more query per attempt. GetAttempt returns one with its answers.
 func (r *QuizRepository) ListAttempts(ctx context.Context, quizID string) ([]quiz.Attempt, error) {
-	attempts, err := r.queryAttempts(ctx, quizID)
-	if err != nil {
-		return nil, err
-	}
-	// The connection pool holds one connection, so the attempts' rows are read
-	// and closed (above) before the answers are queried.
-	for i := range attempts {
-		if attempts[i].Answers, err = r.listAnswers(ctx, attempts[i].ID); err != nil {
-			return nil, err
-		}
-	}
-	return attempts, nil
+	return r.queryAttempts(ctx, quizID)
 }
 
 func (r *QuizRepository) queryAttempts(ctx context.Context, quizID string) ([]quiz.Attempt, error) {

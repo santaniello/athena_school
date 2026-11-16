@@ -43,11 +43,10 @@ func (r *Resetter) Reset(ctx context.Context) error {
 		query string
 		args  []any
 	}{
-		// The Architecture Lab goes first and children before parents: no
-		// Phase 3 table cascades (a challenge is never deleted by anything
-		// else), so each level is cleared explicitly.
-		// Interactive Quiz rows cascade from their quiz; they are deleted
-		// explicitly, children first, like the lab's.
+		// The Interactive Quiz goes first, then the Architecture Lab, each
+		// with children before parents: no Phase 3 table cascades (a challenge
+		// or a quiz is never deleted by anything else), so each level is
+		// cleared explicitly.
 		{`DELETE FROM quiz_answers`, nil},
 		{`DELETE FROM quiz_attempts`, nil},
 		{`DELETE FROM quiz_questions`, nil},

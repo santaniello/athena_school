@@ -65,6 +65,7 @@ const (
 	quizCodeGenerationInProgress = "generation_in_progress"
 	quizCodeSelectionInvalid     = "selection_invalid"
 	quizCodeCancelled            = "cancelled"
+	quizCodeUnavailable          = "unavailable"
 	quizCodeInternal             = "internal"
 )
 
@@ -111,6 +112,13 @@ func toQuizError(err error) *QuizError {
 	}
 	log.Printf("quiz binding failed: %v", err)
 	return &QuizError{Code: quizCodeInternal, Message: "something went wrong"}
+}
+
+// quizUnavailable is the error of a quiz binding whose service was not wired,
+// which the chat would otherwise hit with a nil dereference on every session it
+// opens.
+func quizUnavailable() *QuizError {
+	return &QuizError{Code: quizCodeUnavailable, Message: "the interactive test is not available"}
 }
 
 // QuizSummaryDTO is a quiz as the catalog lists it. CreatedAt is RFC 3339.
@@ -222,6 +230,9 @@ type QuizAttemptResultDTO struct {
 // the default) of the given difficulty (blank for medium). Only one generation
 // runs at a time.
 func (a *App) GenerateQuiz(sessionID string, count int, difficulty string) (QuizSummaryDTO, error) {
+	if a.quizGenerator == nil {
+		return QuizSummaryDTO{}, quizUnavailable()
+	}
 	spec := domainquiz.Spec{Count: count, Difficulty: domainquiz.Difficulty(strings.TrimSpace(difficulty))}
 	ctx, release, ok := a.quizGeneration.begin(a.ctx)
 	if !ok {
@@ -278,6 +289,9 @@ func (s *generationSlot) cancel() {
 
 // ListQuizzes returns every quiz, newest first, without its questions.
 func (a *App) ListQuizzes() ([]QuizSummaryDTO, error) {
+	if a.quizzes == nil {
+		return nil, quizUnavailable()
+	}
 	summaries, err := a.quizzes.ListQuizzes(a.ctx)
 	if err != nil {
 		return nil, toQuizError(err)
@@ -287,6 +301,9 @@ func (a *App) ListQuizzes() ([]QuizSummaryDTO, error) {
 
 // GetQuiz returns a quiz to take. The answer key stays on the Go side.
 func (a *App) GetQuiz(id string) (QuizDTO, error) {
+	if a.quizzes == nil {
+		return QuizDTO{}, quizUnavailable()
+	}
 	quiz, err := a.quizzes.GetQuiz(a.ctx, id)
 	if err != nil {
 		return QuizDTO{}, toQuizError(err)
@@ -306,6 +323,9 @@ func (a *App) GetQuiz(id string) (QuizDTO, error) {
 // SubmitQuizAttempt grades the user's answers and stores the attempt. A
 // question left out, or with a null selectedIndex, is blank.
 func (a *App) SubmitQuizAttempt(quizID string, selections []QuizSelectionDTO) (QuizAttemptSummaryDTO, error) {
+	if a.quizzes == nil {
+		return QuizAttemptSummaryDTO{}, quizUnavailable()
+	}
 	chosen := make([]domainquiz.Selection, len(selections))
 	for i, selection := range selections {
 		chosen[i] = domainquiz.Selection{QuestionID: selection.QuestionID, SelectedIndex: selection.SelectedIndex}
@@ -319,6 +339,9 @@ func (a *App) SubmitQuizAttempt(quizID string, selections []QuizSelectionDTO) (Q
 
 // ListQuizAttempts returns the attempts of a quiz, newest first.
 func (a *App) ListQuizAttempts(quizID string) ([]QuizAttemptSummaryDTO, error) {
+	if a.quizzes == nil {
+		return nil, quizUnavailable()
+	}
 	attempts, err := a.quizzes.ListAttempts(a.ctx, quizID)
 	if err != nil {
 		return nil, toQuizError(err)
@@ -333,6 +356,9 @@ func (a *App) ListQuizAttempts(quizID string) ([]QuizAttemptSummaryDTO, error) {
 // GetQuizAttemptResult returns a graded attempt with the answer key, the
 // explanations and what the user chose, for every question of the quiz.
 func (a *App) GetQuizAttemptResult(attemptID string) (QuizAttemptResultDTO, error) {
+	if a.quizzes == nil {
+		return QuizAttemptResultDTO{}, quizUnavailable()
+	}
 	result, err := a.quizzes.GetAttemptResult(a.ctx, attemptID)
 	if err != nil {
 		return QuizAttemptResultDTO{}, toQuizError(err)
@@ -360,6 +386,9 @@ func (a *App) GetQuizAttemptResult(attemptID string) (QuizAttemptResultDTO, erro
 
 // DeleteQuiz removes a quiz with its attempts.
 func (a *App) DeleteQuiz(id string) error {
+	if a.quizzes == nil {
+		return quizUnavailable()
+	}
 	if err := a.quizzes.DeleteQuiz(a.ctx, id); err != nil {
 		return toQuizError(err)
 	}
@@ -382,6 +411,9 @@ func quizInvalidInput(message string) *QuizError {
 // session, oldest first, without their questions: the cards the chat shows under
 // the messages that offered them.
 func (a *App) ListSessionQuizzes(sessionID string) ([]QuizSummaryDTO, error) {
+	if a.quizzes == nil {
+		return nil, quizUnavailable()
+	}
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
 		return nil, quizInvalidInput("session id is required")
@@ -397,6 +429,9 @@ func (a *App) ListSessionQuizzes(sessionID string) ([]QuizSummaryDTO, error) {
 // there is none. See
 // specs/phases/phase-03-architecture-lab/23-interactive-quiz-chat-offer.md.
 func (a *App) GetPendingQuizOffer(sessionID string) (*QuizOfferDTO, error) {
+	if a.quizOffers == nil {
+		return nil, quizUnavailable()
+	}
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
 		return nil, quizInvalidInput("session id is required")
@@ -417,6 +452,9 @@ func (a *App) GetPendingQuizOffer(sessionID string) (*QuizOfferDTO, error) {
 // GenerateQuiz, so CancelQuizGeneration cancels it. On failure the offer stays
 // pending.
 func (a *App) AcceptQuizOffer(offerID string, count int, difficulty string) (QuizSummaryDTO, error) {
+	if a.quizOffers == nil {
+		return QuizSummaryDTO{}, quizUnavailable()
+	}
 	offerID = strings.TrimSpace(offerID)
 	if offerID == "" {
 		return QuizSummaryDTO{}, quizInvalidInput("offer id is required")
@@ -436,6 +474,9 @@ func (a *App) AcceptQuizOffer(offerID string, count int, difficulty string) (Qui
 
 // DeclineQuizOffer removes the offer. Nothing is created.
 func (a *App) DeclineQuizOffer(offerID string) error {
+	if a.quizOffers == nil {
+		return quizUnavailable()
+	}
 	offerID = strings.TrimSpace(offerID)
 	if offerID == "" {
 		return quizInvalidInput("offer id is required")

@@ -223,8 +223,11 @@ func TestQuizRepository_ListAttempts_newestFirstOfOneQuiz(t *testing.T) {
 	// When listing the first quiz's attempts
 	got, err := repo.ListAttempts(ctx, "quiz-1")
 
-	// Then only its attempts come back, newest first, each with its answers
+	// Then only its attempts come back, newest first, without their answers
+	// (the list is a summary; GetAttempt reads the answers)
 	require.NoError(t, err)
+	require.NotEmpty(t, first.Answers)
+	second.Answers, first.Answers = nil, nil
 	assert.Equal(t, []quiz.Attempt{second, first}, got)
 }
 

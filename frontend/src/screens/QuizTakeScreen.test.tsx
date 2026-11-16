@@ -286,6 +286,34 @@ describe('QuizTakeScreen', () => {
     expect(view.onLeaveCancelled).not.toHaveBeenCalled()
   })
 
+  it('does not ask to leave while the answers are being graded, and leaves once they are', async () => {
+    const user = userEvent.setup()
+    let grade: (value: typeof ATTEMPT) => void = () => {}
+    vi.mocked(submitQuizAttempt).mockReturnValueOnce(new Promise((resolve) => (grade = resolve)))
+    const view = await loaded()
+    await answerEverything(user)
+    await user.click(screen.getByRole('button', { name: 'Finish' }))
+
+    view.rerender(<QuizTakeScreen {...view} leaveRequested />)
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(view.onExit).not.toHaveBeenCalled()
+
+    grade(ATTEMPT)
+    await waitFor(() => expect(view.onExit).toHaveBeenCalledOnce())
+  })
+
+  it('asks to leave after a failed submission', async () => {
+    const user = userEvent.setup()
+    vi.mocked(submitQuizAttempt).mockRejectedValueOnce(new Error('boom'))
+    const view = await loaded()
+    await answerEverything(user)
+    await user.click(screen.getByRole('button', { name: 'Finish' }))
+    view.rerender(<QuizTakeScreen {...view} leaveRequested />)
+
+    await screen.findByRole('alertdialog')
+    expect(view.onExit).not.toHaveBeenCalled()
+  })
+
   it('lets the shell navigate away once it asks while the quiz is still loading', async () => {
     vi.mocked(getQuiz).mockReturnValueOnce(new Promise(() => {}))
     const view = renderScreen()
@@ -334,6 +362,20 @@ describe('QuizTakeScreen', () => {
       expect(await screen.findByRole('alert')).toHaveTextContent('Could not load the result.')
       await user.click(screen.getByRole('button', { name: 'Retry' }))
       expect(await screen.findByText('1 of 3 correct')).toBeInTheDocument()
+    })
+
+    it('lets the user go back when the result cannot be read', async () => {
+      const user = userEvent.setup()
+      vi.mocked(getQuizAttemptResult).mockRejectedValue(new Error('nope'))
+      vi.mocked(submitQuizAttempt).mockResolvedValue(ATTEMPT)
+      const { onExit } = await loaded({ returnTo: { kind: 'study', sessionId: 'session-1' } })
+      await answerEverything(user)
+      await user.click(screen.getByRole('button', { name: 'Finish' }))
+
+      await screen.findByRole('alert')
+      await user.click(screen.getByRole('button', { name: 'Back to study session' }))
+
+      expect(onExit).toHaveBeenCalledOnce()
     })
 
     it('shows the result only once it has loaded', async () => {

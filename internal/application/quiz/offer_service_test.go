@@ -116,7 +116,7 @@ func TestOfferService_Decline_deletesTheOffer(t *testing.T) {
 	// Given a pending offer
 	f := newOfferFixture(t)
 	ctx := context.Background()
-	f.offers.EXPECT().Get(ctx, "offer-1").Return(pendingOffer(), nil).Once()
+	f.offers.EXPECT().Get(ctx, "offer-1").Return(pendingOffer(), nil).Twice()
 	f.offers.EXPECT().Delete(ctx, "offer-1").Return(nil).Once()
 
 	// When declining it
@@ -138,8 +138,32 @@ func TestOfferService_Decline_anOfferThatIsGoneIsNotAnError(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestOfferService_Decline_anOfferResolvedWhileWaitingIsNotFound(t *testing.T) {
+	// Given an offer that an accept resolved while the decline waited for the session lock
+	f := newOfferFixture(t)
+	ctx := context.Background()
+	f.offers.EXPECT().Get(ctx, "offer-1").Return(pendingOffer(), nil).Once()
+	f.offers.EXPECT().Get(ctx, "offer-1").Return(domainquiz.Offer{}, domainquiz.ErrOfferNotFound).Once()
+
+	// When declining it
+	err := f.service.Decline(ctx, "offer-1")
+
+	// Then nothing is deleted and the caller is told the offer was not pending
+	require.ErrorIs(t, err, domainquiz.ErrOfferNotFound)
+}
+
 func TestOfferService_Decline_failures(t *testing.T) {
 	boom := errors.New("db down")
+	t.Run("re-reading the offer under the lock", func(t *testing.T) {
+		f := newOfferFixture(t)
+		f.offers.EXPECT().Get(context.Background(), "offer-1").Return(pendingOffer(), nil).Once()
+		f.offers.EXPECT().Get(context.Background(), "offer-1").Return(domainquiz.Offer{}, boom).Once()
+
+		err := f.service.Decline(context.Background(), "offer-1")
+
+		require.ErrorIs(t, err, boom)
+		assert.NotErrorIs(t, err, domainquiz.ErrOfferNotFound)
+	})
 	t.Run("reading the offer", func(t *testing.T) {
 		f := newOfferFixture(t)
 		f.offers.EXPECT().Get(context.Background(), "offer-1").Return(domainquiz.Offer{}, boom).Once()
@@ -150,7 +174,7 @@ func TestOfferService_Decline_failures(t *testing.T) {
 	})
 	t.Run("deleting the offer", func(t *testing.T) {
 		f := newOfferFixture(t)
-		f.offers.EXPECT().Get(context.Background(), "offer-1").Return(pendingOffer(), nil).Once()
+		f.offers.EXPECT().Get(context.Background(), "offer-1").Return(pendingOffer(), nil).Twice()
 		f.offers.EXPECT().Delete(context.Background(), "offer-1").Return(boom).Once()
 
 		err := f.service.Decline(context.Background(), "offer-1")

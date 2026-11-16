@@ -69,7 +69,8 @@ func (s *Service) SubmitAttempt(ctx context.Context, quizID string, selections [
 	return attempt, nil
 }
 
-// ListAttempts returns the attempts of a quiz, newest first.
+// ListAttempts returns the attempts of a quiz, newest first, without their
+// answers.
 func (s *Service) ListAttempts(ctx context.Context, quizID string) ([]domainquiz.Attempt, error) {
 	attempts, err := s.repo.ListAttempts(ctx, quizID)
 	if err != nil {

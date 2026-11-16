@@ -225,15 +225,15 @@ func (s *Service) SendMessage(
 }
 
 // rejectWhileOfferPending returns ErrOfferPending when the session has an
-// exercise offer waiting for Accept or Decline, before anything is stored or
-// sent to the model.
+// offer (exercise or quiz) waiting for Accept or Decline, before anything is
+// stored or sent to the model.
 func (s *Service) rejectWhileOfferPending(ctx context.Context, sessionID string) error {
 	if s.offers == nil {
 		return nil
 	}
 	pending, err := s.offers.HasPending(ctx, sessionID)
 	if err != nil {
-		return fmt.Errorf("study: checking pending exercise offer: %w", err)
+		return fmt.Errorf("study: checking pending offer: %w", err)
 	}
 	if pending {
 		return ErrOfferPending

@@ -107,6 +107,8 @@ export const quizPt: QuizLocale = {
     generation_in_progress: 'Já existe um teste sendo gerado.',
     selection_invalid: 'Algumas respostas não eram válidas. Reabra o teste e tente de novo.',
     offer_not_found: 'Esta oferta de teste não está mais disponível.',
+    offer_pending: 'Já existe uma oferta de teste aguardando resposta.',
+    cancelled: 'A geração do teste foi cancelada.',
   },
   offer: {
     title: 'Faça um teste sobre esta sessão',

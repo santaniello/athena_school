@@ -228,7 +228,7 @@ function TakingStage({
       </footer>
 
       <QuizLeaveDialog
-        open={leaving || leaveRequested}
+        open={(leaving || leaveRequested) && !session.submitting}
         onCancel={() => {
           setLeaving(false)
           onLeaveCancelled()
@@ -262,6 +262,9 @@ function ResultStage({
           <span className="text-destructive">{t('result.loadFailed')}</span>
           <Button type="button" variant="outline" size="sm" onClick={reload}>
             {t('common.retry')}
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={onBack}>
+            {t(backTo === 'study' ? 'result.backToSession' : 'result.back')}
           </Button>
         </div>
       )}

@@ -605,3 +605,31 @@ func TestApp_quizOfferBindings_mapUseCaseErrorsToCodes(t *testing.T) {
 		})
 	}
 }
+
+func TestApp_quizBindings_reportUnavailableWhenTheirServiceIsNotWired(t *testing.T) {
+	// Given an app composed without any quiz service
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	app.ctx = context.Background()
+
+	calls := map[string]func() error{
+		"GenerateQuiz":         func() error { _, err := app.GenerateQuiz("s", 0, ""); return err },
+		"ListQuizzes":          func() error { _, err := app.ListQuizzes(); return err },
+		"GetQuiz":              func() error { _, err := app.GetQuiz("q"); return err },
+		"SubmitQuizAttempt":    func() error { _, err := app.SubmitQuizAttempt("q", nil); return err },
+		"ListQuizAttempts":     func() error { _, err := app.ListQuizAttempts("q"); return err },
+		"GetQuizAttemptResult": func() error { _, err := app.GetQuizAttemptResult("a"); return err },
+		"DeleteQuiz":           func() error { return app.DeleteQuiz("q") },
+		"ListSessionQuizzes":   func() error { _, err := app.ListSessionQuizzes("s"); return err },
+		"GetPendingQuizOffer":  func() error { _, err := app.GetPendingQuizOffer("s"); return err },
+		"AcceptQuizOffer":      func() error { _, err := app.AcceptQuizOffer("o", 0, ""); return err },
+		"DeclineQuizOffer":     func() error { return app.DeclineQuizOffer("o") },
+	}
+	for name, call := range calls {
+		t.Run(name, func(t *testing.T) {
+			// When calling the binding, Then it answers with the unavailable code instead of panicking
+			var quizErr *QuizError
+			require.ErrorAs(t, call(), &quizErr)
+			assert.Equal(t, quizCodeUnavailable, quizErr.Code)
+		})
+	}
+}

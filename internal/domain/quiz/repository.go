@@ -48,6 +48,7 @@ type Repository interface {
 	CreateAttempt(ctx context.Context, attempt Attempt) error
 	// GetAttempt returns the attempt with its answers, or ErrAttemptNotFound.
 	GetAttempt(ctx context.Context, id string) (Attempt, error)
-	// ListAttempts returns the attempts of a quiz, newest first, each with its answers.
+	// ListAttempts returns the attempts of a quiz, newest first, without their
+	// answers: it is a summary list. GetAttempt returns the answers.
 	ListAttempts(ctx context.Context, quizID string) ([]Attempt, error)
 }

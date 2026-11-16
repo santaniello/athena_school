@@ -59,9 +59,11 @@ func (s *OfferService) GetPending(ctx context.Context, sessionID string) (domain
 	return offer, true, nil
 }
 
-// Decline deletes the offer and nothing else. An offer that is already gone is
-// not an error. It takes the session lock, so it never interleaves with an
-// accept of the same offer.
+// Decline deletes the offer and nothing else. An offer that is already gone
+// when the call arrives is not an error. It takes the session lock, so it never
+// interleaves with an accept of the same offer; if that accept resolved the
+// offer while this call waited, the offer is reported as not found, because
+// nothing was declined and a quiz now exists.
 func (s *OfferService) Decline(ctx context.Context, offerID string) error {
 	offer, err := s.offers.Get(ctx, offerID)
 	if errors.Is(err, domainquiz.ErrOfferNotFound) {
@@ -72,6 +74,12 @@ func (s *OfferService) Decline(ctx context.Context, offerID string) error {
 	}
 	unlock := s.locks.lock(offer.SessionID)
 	defer unlock()
+	if _, err := s.offers.Get(ctx, offerID); err != nil {
+		if errors.Is(err, domainquiz.ErrOfferNotFound) {
+			return err
+		}
+		return fmt.Errorf("quiz: reading offer: %w", err)
+	}
 	if err := s.offers.Delete(ctx, offerID); err != nil {
 		return fmt.Errorf("quiz: declining offer: %w", err)
 	}
@@ -80,11 +88,14 @@ func (s *OfferService) Decline(ctx context.Context, offerID string) error {
 
 // Accept generates a quiz of the user's chosen size and difficulty for the
 // offer's session, links it to the offer's message and deletes the offer. It
-// serializes per session, so two concurrent accepts never both generate: the
-// second one finds the offer resolved and returns the quiz the first made.
-// Before generating it looks for a quiz already linked to the message, which a
-// previous accept left behind if the app closed before the offer was deleted,
-// so no duplicate appears. A failure leaves the offer pending.
+// serializes per session, so two concurrent accepts never both generate: an
+// accept that waited for the lock and finds the offer resolved returns the quiz
+// the first one made. An accept that arrives after the offer was resolved finds
+// no offer at all and fails with domainquiz.ErrOfferNotFound, since the offer
+// alone no longer says which message to look under. Before generating it looks
+// for a quiz already linked to the message, which a previous accept left
+// behind if the app closed before the offer was deleted, so no duplicate
+// appears. A failure leaves the offer pending.
 func (s *OfferService) Accept(ctx context.Context, offerID string, spec domainquiz.Spec) (domainquiz.Summary, error) {
 	first, err := s.offers.Get(ctx, offerID)
 	if err != nil {
