@@ -186,15 +186,15 @@ so the one-offer rule holds across tables.
 
 Each slice is TDD, keeps the build green and is committed on its own.
 
-- [ ] Marker generalization and the quiz instruction in the study prompt (pure, no wiring)
-- [ ] `OfferKind` on the study gate, and the kind-neutral composer text
-- [ ] Domain: `Offer`, `OfferRepository`, `Quiz.MessageID`, `FindByMessage`, `ListBySession`
-- [ ] SQLite: `quiz_offers`, `message_id` column, repositories, reset
-- [ ] `quiz.OfferService`, `GenerateForMessage` and `ListSessionQuizzes`
-- [ ] Bindings, `wailsjs` and mocks regenerated; composition adapter in `main.go`
-- [ ] Frontend: `quiz-offer-card`, `session-quiz-card`, chat integration
-- [ ] Frontend: `quizReturn`, the labels and the return flow
-- [ ] Docs: ADR-007 amendment, CHANGELOG, README and `lib/documentation.ts`
+- [x] Marker generalization and the quiz instruction in the study prompt (pure, no wiring)
+- [x] `OfferKind` on the study gate, and the kind-neutral composer text
+- [x] Domain: `Offer`, `OfferRepository`, `Quiz.MessageID`, `FindByMessage`, `ListBySession`
+- [x] SQLite: `quiz_offers`, `message_id` column, repositories, reset
+- [x] `quiz.OfferService`, `GenerateForMessage` and `ListSessionQuizzes`
+- [x] Bindings, `wailsjs` and mocks regenerated; composition adapter in `main.go`
+- [x] Frontend: `quiz-offer-card`, `session-quiz-card`, chat integration
+- [x] Frontend: `quizReturn`, the labels and the return flow
+- [x] Docs: ADR-007 amendment, CHANGELOG, README and `lib/documentation.ts`
 
 ## Acceptance Criteria
 

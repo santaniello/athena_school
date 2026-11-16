@@ -167,6 +167,30 @@ const DOCUMENTATION: DocSection[] = [
     ],
   },
   {
+    id: 'interactive-test',
+    title: 'Interactive Test',
+    status: 'available',
+    summary: 'Tests of multiple-choice and true/false questions about what you studied.',
+    body: [
+      'The Interactive Test makes an exam from a study session you already had. Use Generate test with AI, pick the session, the number of questions (3 to 20) and the difficulty (preselected from your experience level), and Athena writes the questions from that session in your assistant language. The tests are listed newest first with the session, difficulty, number of questions and your latest grade out of 10, or Not taken yet.',
+      'Take opens the test one question at a time, with a numbered strip that shows which ones are answered. You can change or clear an answer, but nothing is saved until you press Finish, so leaving discards the attempt and Athena asks before you go. Finishing with blank questions asks first, because a blank question counts as wrong. The grade is computed by the app, never by the model: correct answers over total, on a scale from 0 to 10.',
+      'The result shows the grade, then every question with your answer, the correct one and an explanation, with a filter for the questions you missed. The answer key only appears here, at the end. Each test keeps its attempts: History lists them and opens any result, and Take again starts a new attempt.',
+      'You can also ask for a test from a study session: say, for example, quiz me or give me a test, and the tutor answers with an offer, Accept or Decline (Aceitar or Recusar when your assistant speaks Portuguese), with the number of questions and the difficulty to choose before accepting. The tutor never offers on its own. While the offer is pending the message box is disabled, even after you reopen the app. Decline removes the offer. Accept writes the test and replaces the offer with a card under the same message, with the difficulty, the number of questions and your latest grade, which stays with the session. Take test opens the test in the same window; when it ends, or you leave it, you come back to the same study session (the result ends with Back to study session) and the card shows the new grade. If the test cannot be written the offer stays, with the error and Accept available again.',
+    ],
+    topics: [
+      {
+        term: 'Always tied to a session',
+        description:
+          'A test is written from one study session. It keeps the session title, so it stays in your list even if you delete the session; only deleting the test removes it.',
+      },
+      {
+        term: 'No pass or fail',
+        description:
+          'The grade is only shown out of 10. Colors help you read it, but nothing is blocked or unlocked by it.',
+      },
+    ],
+  },
+  {
     id: 'reference',
     title: 'Quick reference',
     status: 'available',
