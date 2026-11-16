@@ -25,8 +25,11 @@ history for the Architecture Lab.
 3. **What is shared is shared through ports, not imports.** Session context is read through a
    consumer-side port with its own adapter. The `Transactor`, the language helper and the
    generation cancellation pattern are copied in shape, not imported across contexts.
-4. **The one place the contexts meet is the study chat offer** (spec 3.23), where `exercise_offers`
-   gets a `kind` column. That is plumbing in the study context, not a dependency between the two.
+4. **The one place the contexts meet is the study chat offer** (spec 3.23). The quiz keeps its own
+   `quiz_offers` table and offer service, and the study context sees both through one `OfferGate`
+   composed in `main.go`. That is plumbing in the study context, not a dependency between the
+   two. (An earlier draft planned a `kind` column on `exercise_offers`; it would have put a quiz
+   concept inside the exercise context.)
 
 ## Consequences
 
