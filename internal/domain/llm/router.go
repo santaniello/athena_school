@@ -32,6 +32,10 @@ const (
 	// specs/phases/phase-03-architecture-lab/06-01-challenge-generation.md).
 	// Its output is read by the user, so it is routed medium.
 	TaskArchitectureLab TaskType = "architecture_lab"
+	// TaskQuiz generates an Interactive Quiz from a study session (see
+	// specs/phases/phase-03-architecture-lab/21-interactive-quiz-core.md). Its
+	// output is read by the user, so it is routed medium.
+	TaskQuiz TaskType = "quiz"
 )
 
 // Tier is a cost/capability class of model.
@@ -65,7 +69,7 @@ func TierFor(task TaskType) Tier {
 	switch task {
 	case TaskOnboarding, TaskQueryEnrichment, TaskConversationSummary:
 		return TierCheap
-	case TaskStudy, TaskChallengeFeedback, TaskNoteFormatting, TaskArchitectureLab:
+	case TaskStudy, TaskChallengeFeedback, TaskNoteFormatting, TaskArchitectureLab, TaskQuiz:
 		return TierMedium
 	case TaskInterviewEvaluation, TaskComplexReasoning:
 		return TierPremium
