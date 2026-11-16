@@ -163,6 +163,63 @@ func (_c *MockRepository_DeleteQuiz_Call) RunAndReturn(run func(context.Context,
 	return _c
 }
 
+// FindByMessage provides a mock function with given fields: ctx, messageID
+func (_m *MockRepository) FindByMessage(ctx context.Context, messageID string) (quiz.Summary, error) {
+	ret := _m.Called(ctx, messageID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindByMessage")
+	}
+
+	var r0 quiz.Summary
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) (quiz.Summary, error)); ok {
+		return rf(ctx, messageID)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) quiz.Summary); ok {
+		r0 = rf(ctx, messageID)
+	} else {
+		r0 = ret.Get(0).(quiz.Summary)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, messageID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockRepository_FindByMessage_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindByMessage'
+type MockRepository_FindByMessage_Call struct {
+	*mock.Call
+}
+
+// FindByMessage is a helper method to define mock.On call
+//   - ctx context.Context
+//   - messageID string
+func (_e *MockRepository_Expecter) FindByMessage(ctx interface{}, messageID interface{}) *MockRepository_FindByMessage_Call {
+	return &MockRepository_FindByMessage_Call{Call: _e.mock.On("FindByMessage", ctx, messageID)}
+}
+
+func (_c *MockRepository_FindByMessage_Call) Run(run func(ctx context.Context, messageID string)) *MockRepository_FindByMessage_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockRepository_FindByMessage_Call) Return(_a0 quiz.Summary, _a1 error) *MockRepository_FindByMessage_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockRepository_FindByMessage_Call) RunAndReturn(run func(context.Context, string) (quiz.Summary, error)) *MockRepository_FindByMessage_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetAttempt provides a mock function with given fields: ctx, id
 func (_m *MockRepository) GetAttempt(ctx context.Context, id string) (quiz.Attempt, error) {
 	ret := _m.Called(ctx, id)
@@ -332,6 +389,65 @@ func (_c *MockRepository_ListAttempts_Call) Return(_a0 []quiz.Attempt, _a1 error
 }
 
 func (_c *MockRepository_ListAttempts_Call) RunAndReturn(run func(context.Context, string) ([]quiz.Attempt, error)) *MockRepository_ListAttempts_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListBySession provides a mock function with given fields: ctx, sessionID
+func (_m *MockRepository) ListBySession(ctx context.Context, sessionID string) ([]quiz.Summary, error) {
+	ret := _m.Called(ctx, sessionID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListBySession")
+	}
+
+	var r0 []quiz.Summary
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) ([]quiz.Summary, error)); ok {
+		return rf(ctx, sessionID)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) []quiz.Summary); ok {
+		r0 = rf(ctx, sessionID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]quiz.Summary)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, sessionID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockRepository_ListBySession_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListBySession'
+type MockRepository_ListBySession_Call struct {
+	*mock.Call
+}
+
+// ListBySession is a helper method to define mock.On call
+//   - ctx context.Context
+//   - sessionID string
+func (_e *MockRepository_Expecter) ListBySession(ctx interface{}, sessionID interface{}) *MockRepository_ListBySession_Call {
+	return &MockRepository_ListBySession_Call{Call: _e.mock.On("ListBySession", ctx, sessionID)}
+}
+
+func (_c *MockRepository_ListBySession_Call) Run(run func(ctx context.Context, sessionID string)) *MockRepository_ListBySession_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockRepository_ListBySession_Call) Return(_a0 []quiz.Summary, _a1 error) *MockRepository_ListBySession_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockRepository_ListBySession_Call) RunAndReturn(run func(context.Context, string) ([]quiz.Summary, error)) *MockRepository_ListBySession_Call {
 	_c.Call.Return(run)
 	return _c
 }

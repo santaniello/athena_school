@@ -319,6 +319,35 @@ var migrations = []func(*sql.DB) error{
 		correct        INTEGER NOT NULL,
 		PRIMARY KEY (attempt_id, question_id)
 	)`),
+	// Spec 3.23: the quiz offers of the study chat, shaped like exercise_offers
+	// and kept apart from it so neither context knows the other. A quiz born
+	// from an offer keeps the message id in quizzes.message_id, with no foreign
+	// key: the quiz outlives its session and its messages. See
+	// specs/phases/phase-03-architecture-lab/23-interactive-quiz-chat-offer.md.
+	execSQL(`CREATE TABLE IF NOT EXISTS quiz_offers (
+		id         TEXT PRIMARY KEY,
+		session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+		message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+		created_at TEXT NOT NULL,
+		UNIQUE (session_id)
+	)`),
+	addQuizzesMessageIDColumn,
+	execSQL(`CREATE INDEX IF NOT EXISTS idx_quizzes_session_message ON quizzes (session_id, message_id)`),
+}
+
+// addQuizzesMessageIDColumn adds quizzes.message_id if it does not already
+// exist (SQLite has no "ADD COLUMN IF NOT EXISTS"). Quizzes stored before it
+// existed came from the menu and have none.
+func addQuizzesMessageIDColumn(db *sql.DB) error {
+	has, err := hasColumn(db, "quizzes", "message_id")
+	if err != nil {
+		return err
+	}
+	if has {
+		return nil
+	}
+	_, err = db.Exec(`ALTER TABLE quizzes ADD COLUMN message_id TEXT`)
+	return err
 }
 
 // addAttemptsFailureReasonColumn adds challenge_attempts.failure_reason if it

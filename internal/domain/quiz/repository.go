@@ -23,6 +23,7 @@ type Summary struct {
 	CreatedAt     time.Time
 	AttemptCount  int
 	LatestScore   *float64 // nil until the quiz has an attempt
+	MessageID     string   // empty unless an offer in the study chat produced the quiz
 }
 
 // Repository stores quizzes and their attempts. A quiz is saved with its
@@ -35,6 +36,12 @@ type Repository interface {
 	GetQuiz(ctx context.Context, id string) (Quiz, error)
 	// ListQuizzes returns every quiz, newest first.
 	ListQuizzes(ctx context.Context) ([]Summary, error)
+	// FindByMessage returns the quiz an offer produced under the chat message,
+	// or ErrQuizNotFound.
+	FindByMessage(ctx context.Context, messageID string) (Summary, error)
+	// ListBySession returns the quizzes an offer produced in the session, in the
+	// order of their messages' creation (oldest first).
+	ListBySession(ctx context.Context, sessionID string) ([]Summary, error)
 	// DeleteQuiz removes the quiz and everything under it, or returns ErrQuizNotFound.
 	DeleteQuiz(ctx context.Context, id string) error
 	// CreateAttempt stores a graded attempt and its answers.

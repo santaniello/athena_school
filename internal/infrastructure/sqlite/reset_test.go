@@ -40,7 +40,8 @@ func TestReset_clearsEveryArchitectureLabAndQuizTable(t *testing.T) {
 		INSERT INTO attempt_hints (id, attempt_id, position, content, created_at) VALUES ('hint-1', 'attempt-1', 1, 'h', 'now');
 		INSERT INTO defense_turns (id, attempt_id, position, criterion_id, question, asked_at) VALUES ('turn-1', 'attempt-1', 1, 'crit-1', 'q', 'now');
 		INSERT INTO exercise_offers (id, session_id, message_id, created_at) VALUES ('offer-1', 'session-2', 'message-2', 'now');
-		INSERT INTO quizzes (id, session_id, session_title, difficulty, created_at) VALUES ('quiz-1', 'session-1', 'Go', 'EASY', 'now');
+		INSERT INTO quiz_offers (id, session_id, message_id, created_at) VALUES ('qoffer-1', 'session-1', 'message-1', 'now');
+		INSERT INTO quizzes (id, session_id, session_title, difficulty, created_at, message_id) VALUES ('quiz-1', 'session-1', 'Go', 'EASY', 'now', 'message-1');
 		INSERT INTO quiz_questions (id, quiz_id, position, kind, prompt, options, correct_index, explanation)
 			VALUES ('qq-1', 'quiz-1', 1, 'TRUE_FALSE', 'p', '["True","False"]', 0, 'e');
 		INSERT INTO quiz_attempts (id, quiz_id, correct_count, total, score, finished_at) VALUES ('qa-1', 'quiz-1', 1, 1, 10, 'now');
@@ -54,7 +55,7 @@ func TestReset_clearsEveryArchitectureLabAndQuizTable(t *testing.T) {
 	// Then every Architecture Lab table is empty
 	for _, table := range []string{
 		"challenges", "rubric_versions", "rubric_criteria", "session_exercises", "challenge_attempts",
-		"submissions", "evaluations", "criterion_results", "attempt_hints", "defense_turns", "exercise_offers",
+		"submissions", "evaluations", "criterion_results", "attempt_hints", "defense_turns", "exercise_offers", "quiz_offers",
 		"quizzes", "quiz_questions", "quiz_attempts", "quiz_answers",
 	} {
 		var count int

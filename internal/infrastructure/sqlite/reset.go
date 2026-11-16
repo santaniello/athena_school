@@ -51,6 +51,7 @@ func (r *Resetter) Reset(ctx context.Context) error {
 		{`DELETE FROM quiz_answers`, nil},
 		{`DELETE FROM quiz_attempts`, nil},
 		{`DELETE FROM quiz_questions`, nil},
+		{`DELETE FROM quiz_offers`, nil},
 		{`DELETE FROM quizzes`, nil},
 		{`DELETE FROM defense_turns`, nil},
 		{`DELETE FROM attempt_hints`, nil},

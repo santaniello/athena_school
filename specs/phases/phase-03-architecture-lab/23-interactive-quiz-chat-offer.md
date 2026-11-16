@@ -117,16 +117,17 @@ no lab or quiz code leaks into the `study` package.
 
 - Domain: `Offer{ID, SessionID, MessageID, CreatedAt}`, `OfferRepository` (`Create`, `Get`,
   `GetBySession`, `Delete`) and `ErrOfferNotFound`, `ErrOfferPending`. `Quiz.MessageID` optional.
-  `Repository.FindByMessage(ctx, messageID) (Quiz, error)` and
-  `ListBySession(ctx, sessionID) ([]Summary, error)`, where `Summary` carries the attempt count
-  and the latest score already used by the menu list.
+  `Repository.FindByMessage(ctx, messageID) (Summary, error)` and
+  `ListBySession(ctx, sessionID) ([]Summary, error)`, oldest first and only for quizzes an offer
+  produced. `Summary` gains `MessageID` and already carries the attempt count and the latest score
+  the menu list uses.
 - `application/quiz.OfferService`: `CreateOffer`, `GetPending`, `Accept`, `Decline`, with the
   per-session lock pattern of `exercise.OfferService`, copied in shape and not imported. It
   depends on the generator through a consumer-side port, `QuizGenerator.GenerateForMessage(ctx,
   sessionID, messageID, spec)`, which `GenerationService` implements by sharing its internals with
   `Generate`.
-- `Service.ListSessionQuizzes(ctx, sessionID)` returns the cards of decision 12 in message order,
-  with no questions.
+- `Service.ListSessionQuizzes(ctx, sessionID)` returns the cards of decision 12, oldest first, with
+  no questions.
 
 ### Persistence (`internal/infrastructure/sqlite`)
 

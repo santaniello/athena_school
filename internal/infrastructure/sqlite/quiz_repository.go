@@ -24,8 +24,8 @@ func NewQuizRepository(db *sql.DB) *QuizRepository {
 func (r *QuizRepository) CreateQuiz(ctx context.Context, q quiz.Quiz) error {
 	err := withTx(ctx, r.db, func(x sqlExecer) error {
 		if _, err := x.ExecContext(ctx,
-			`INSERT INTO quizzes (id, session_id, session_title, difficulty, created_at) VALUES (?, ?, ?, ?, ?)`,
-			q.ID, q.SessionID, q.SessionTitle, string(q.Difficulty), formatChallengeTime(q.CreatedAt),
+			`INSERT INTO quizzes (id, session_id, session_title, difficulty, created_at, message_id) VALUES (?, ?, ?, ?, ?, ?)`,
+			q.ID, q.SessionID, q.SessionTitle, string(q.Difficulty), formatChallengeTime(q.CreatedAt), nullableText(q.MessageID),
 		); err != nil {
 			return err
 		}
@@ -55,10 +55,11 @@ func (r *QuizRepository) GetQuiz(ctx context.Context, id string) (quiz.Quiz, err
 	var (
 		q                  quiz.Quiz
 		difficulty, create string
+		messageID          sql.NullString
 	)
 	err := execer(ctx, r.db).QueryRowContext(ctx,
-		`SELECT id, session_id, session_title, difficulty, created_at FROM quizzes WHERE id = ?`, id,
-	).Scan(&q.ID, &q.SessionID, &q.SessionTitle, &difficulty, &create)
+		`SELECT id, session_id, session_title, difficulty, created_at, message_id FROM quizzes WHERE id = ?`, id,
+	).Scan(&q.ID, &q.SessionID, &q.SessionTitle, &difficulty, &create, &messageID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return quiz.Quiz{}, quiz.ErrQuizNotFound
 	}
@@ -66,6 +67,7 @@ func (r *QuizRepository) GetQuiz(ctx context.Context, id string) (quiz.Quiz, err
 		return quiz.Quiz{}, fmt.Errorf("sqlite: reading quiz: %w", err)
 	}
 	q.Difficulty = quiz.Difficulty(difficulty)
+	q.MessageID = messageID.String
 	if q.CreatedAt, err = parseChallengeTime(create); err != nil {
 		return quiz.Quiz{}, err
 	}
@@ -105,15 +107,43 @@ func (r *QuizRepository) listQuestions(ctx context.Context, quizID string) ([]qu
 	return questions, nil
 }
 
-// ListQuizzes returns every quiz, newest first, with its attempt count and the
-// score of its latest attempt.
-func (r *QuizRepository) ListQuizzes(ctx context.Context) ([]quiz.Summary, error) {
-	rows, err := execer(ctx, r.db).QueryContext(ctx, `
+// summarySelect is the catalog row of a quiz: its attempt count, the score of
+// its latest attempt and the chat message that produced it.
+const summarySelect = `
 		SELECT z.id, z.session_id, z.session_title, z.difficulty, z.created_at,
 		       (SELECT COUNT(*) FROM quiz_questions WHERE quiz_id = z.id),
 		       (SELECT COUNT(*) FROM quiz_attempts WHERE quiz_id = z.id),
-		       (SELECT score FROM quiz_attempts WHERE quiz_id = z.id ORDER BY finished_at DESC, id DESC LIMIT 1)
-		FROM quizzes z ORDER BY z.created_at DESC, z.id DESC`)
+		       (SELECT score FROM quiz_attempts WHERE quiz_id = z.id ORDER BY finished_at DESC, id DESC LIMIT 1),
+		       z.message_id
+		FROM quizzes z `
+
+// ListQuizzes returns every quiz, newest first, with its attempt count and the
+// score of its latest attempt.
+func (r *QuizRepository) ListQuizzes(ctx context.Context) ([]quiz.Summary, error) {
+	return r.querySummaries(ctx, `ORDER BY z.created_at DESC, z.id DESC`)
+}
+
+// FindByMessage returns the quiz the offer under the chat message produced, or
+// quiz.ErrQuizNotFound. A quiz from the menu has no message, so it never matches.
+func (r *QuizRepository) FindByMessage(ctx context.Context, messageID string) (quiz.Summary, error) {
+	summaries, err := r.querySummaries(ctx, `WHERE z.message_id = ? ORDER BY z.created_at ASC, z.id ASC LIMIT 1`, messageID)
+	if err != nil {
+		return quiz.Summary{}, err
+	}
+	if len(summaries) == 0 {
+		return quiz.Summary{}, quiz.ErrQuizNotFound
+	}
+	return summaries[0], nil
+}
+
+// ListBySession returns the quizzes the session's offers produced, oldest
+// first. A quiz from the menu is not one of them.
+func (r *QuizRepository) ListBySession(ctx context.Context, sessionID string) ([]quiz.Summary, error) {
+	return r.querySummaries(ctx, `WHERE z.session_id = ? AND z.message_id IS NOT NULL ORDER BY z.created_at ASC, z.id ASC`, sessionID)
+}
+
+func (r *QuizRepository) querySummaries(ctx context.Context, tail string, args ...any) ([]quiz.Summary, error) {
+	rows, err := execer(ctx, r.db).QueryContext(ctx, summarySelect+tail, args...)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: listing quizzes: %w", err)
 	}
@@ -124,12 +154,14 @@ func (r *QuizRepository) ListQuizzes(ctx context.Context) ([]quiz.Summary, error
 			summary           quiz.Summary
 			difficulty, stamp string
 			latest            sql.NullFloat64
+			messageID         sql.NullString
 		)
 		if err := rows.Scan(&summary.ID, &summary.SessionID, &summary.SessionTitle, &difficulty, &stamp,
-			&summary.QuestionCount, &summary.AttemptCount, &latest); err != nil {
+			&summary.QuestionCount, &summary.AttemptCount, &latest, &messageID); err != nil {
 			return nil, fmt.Errorf("sqlite: scanning quiz summary: %w", err)
 		}
 		summary.Difficulty = quiz.Difficulty(difficulty)
+		summary.MessageID = messageID.String
 		if summary.CreatedAt, err = parseChallengeTime(stamp); err != nil {
 			return nil, err
 		}
@@ -278,4 +310,9 @@ func (r *QuizRepository) listAnswers(ctx context.Context, attemptID string) ([]q
 		return nil, fmt.Errorf("sqlite: reading quiz answers: %w", err)
 	}
 	return answers, nil
+}
+
+// nullableText stores an empty string as NULL.
+func nullableText(text string) sql.NullString {
+	return sql.NullString{String: text, Valid: text != ""}
 }

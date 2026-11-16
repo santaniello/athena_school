@@ -51,6 +51,10 @@ type Quiz struct {
 	Difficulty   Difficulty
 	Questions    []Question
 	CreatedAt    time.Time
+	// MessageID is the study-chat message whose offer produced the quiz. It is
+	// empty for a quiz generated from the menu, and it is not a reference the
+	// database enforces: the quiz outlives the session and its messages.
+	MessageID string
 }
 
 // Validate reports the first rule the quiz breaks, questions included.

@@ -276,3 +276,130 @@ func TestQuizRepository_reads_failOnCorruptRows(t *testing.T) {
 		assert.Error(t, listErr)
 	})
 }
+
+func TestQuizRepository_CreateQuizThenGetQuiz_roundTripsTheMessageID(t *testing.T) {
+	// Given a quiz an offer produced under a chat message
+	repo := newTestQuizRepository(t)
+	ctx := context.Background()
+	original := newTestQuiz("quiz-1", quizEpoch)
+	original.MessageID = "message-1"
+
+	// When storing it and reading it back
+	require.NoError(t, repo.CreateQuiz(ctx, original))
+	got, err := repo.GetQuiz(ctx, "quiz-1")
+
+	// Then the message id is preserved, and a quiz from the menu has none
+	require.NoError(t, err)
+	assert.Equal(t, "message-1", got.MessageID)
+	require.NoError(t, repo.CreateQuiz(ctx, newTestQuiz("quiz-2", quizEpoch)))
+	menu, err := repo.GetQuiz(ctx, "quiz-2")
+	require.NoError(t, err)
+	assert.Empty(t, menu.MessageID)
+}
+
+func TestQuizRepository_FindByMessage_returnsTheQuizTheOfferProduced(t *testing.T) {
+	// Given two offer quizzes and one from the menu, the first with an attempt
+	repo := newTestQuizRepository(t)
+	ctx := context.Background()
+	first, second := newTestQuiz("quiz-1", quizEpoch), newTestQuiz("quiz-2", quizEpoch.Add(time.Hour))
+	first.MessageID, second.MessageID = "message-1", "message-2"
+	require.NoError(t, repo.CreateQuiz(ctx, first))
+	require.NoError(t, repo.CreateQuiz(ctx, second))
+	require.NoError(t, repo.CreateQuiz(ctx, newTestQuiz("quiz-menu", quizEpoch)))
+	require.NoError(t, repo.CreateAttempt(ctx, newTestQuizAttempt("a1", "quiz-1", 3.3, quizEpoch.Add(2*time.Hour))))
+
+	// When finding by message
+	got, err := repo.FindByMessage(ctx, "message-1")
+
+	// Then it is that quiz's summary, with its attempt data
+	require.NoError(t, err)
+	latest := 3.3
+	assert.Equal(t, quiz.Summary{
+		ID: "quiz-1", SessionID: "session-gone", SessionTitle: "Caching", Difficulty: quiz.DifficultyHard,
+		QuestionCount: 3, CreatedAt: first.CreatedAt, AttemptCount: 1, LatestScore: &latest, MessageID: "message-1",
+	}, got)
+}
+
+func TestQuizRepository_FindByMessage_isNotFoundForAnUnknownOrEmptyMessage(t *testing.T) {
+	// Given a quiz that came from the menu, with no message
+	repo := newTestQuizRepository(t)
+	ctx := context.Background()
+	require.NoError(t, repo.CreateQuiz(ctx, newTestQuiz("quiz-menu", quizEpoch)))
+
+	// When finding by an unknown message and by the empty one
+	_, unknown := repo.FindByMessage(ctx, "message-9")
+	_, empty := repo.FindByMessage(ctx, "")
+
+	// Then neither matches, so the empty id never finds a menu quiz
+	assert.ErrorIs(t, unknown, quiz.ErrQuizNotFound)
+	assert.ErrorIs(t, empty, quiz.ErrQuizNotFound)
+}
+
+func TestQuizRepository_ListBySession_returnsOnlyTheOfferQuizzesOfThatSessionOldestFirst(t *testing.T) {
+	// Given offer quizzes in two sessions and a menu quiz in the first
+	repo := newTestQuizRepository(t)
+	ctx := context.Background()
+	older, newer, other, menu := newTestQuiz("quiz-old", quizEpoch), newTestQuiz("quiz-new", quizEpoch.Add(time.Hour)),
+		newTestQuiz("quiz-other", quizEpoch), newTestQuiz("quiz-menu", quizEpoch)
+	older.MessageID, newer.MessageID, other.MessageID = "message-1", "message-2", "message-3"
+	other.SessionID = "session-2"
+	for _, q := range []quiz.Quiz{newer, other, menu, older} {
+		require.NoError(t, repo.CreateQuiz(ctx, q))
+	}
+	require.NoError(t, repo.CreateAttempt(ctx, newTestQuizAttempt("a1", "quiz-new", 8.0, quizEpoch.Add(2*time.Hour))))
+
+	// When listing the first session's quizzes
+	got, err := repo.ListBySession(ctx, "session-gone")
+
+	// Then the two offer quizzes come back, the oldest first, with their attempt data
+	require.NoError(t, err)
+	latest := 8.0
+	assert.Equal(t, []quiz.Summary{
+		{ID: "quiz-old", SessionID: "session-gone", SessionTitle: "Caching", Difficulty: quiz.DifficultyHard, QuestionCount: 3, CreatedAt: older.CreatedAt, MessageID: "message-1"},
+		{ID: "quiz-new", SessionID: "session-gone", SessionTitle: "Caching", Difficulty: quiz.DifficultyHard, QuestionCount: 3, CreatedAt: newer.CreatedAt, AttemptCount: 1, LatestScore: &latest, MessageID: "message-2"},
+	}, got)
+}
+
+func TestQuizRepository_ListBySession_noneIsAnEmptyList(t *testing.T) {
+	got, err := newTestQuizRepository(t).ListBySession(context.Background(), "session-1")
+
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
+func TestQuizRepository_ListQuizzes_includesTheMessageID(t *testing.T) {
+	// Given an offer quiz
+	repo := newTestQuizRepository(t)
+	ctx := context.Background()
+	offered := newTestQuiz("quiz-1", quizEpoch)
+	offered.MessageID = "message-1"
+	require.NoError(t, repo.CreateQuiz(ctx, offered))
+
+	// When listing every quiz
+	got, err := repo.ListQuizzes(ctx)
+
+	// Then the summary carries the message id
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "message-1", got[0].MessageID)
+}
+
+func TestQuizRepository_FindByMessageAndListBySession_failOnACorruptTime(t *testing.T) {
+	// Given an offer quiz with a corrupt creation time
+	db := newTestDB(t)
+	repo := NewQuizRepository(db)
+	ctx := context.Background()
+	offered := newTestQuiz("quiz-1", quizEpoch)
+	offered.MessageID = "message-1"
+	require.NoError(t, repo.CreateQuiz(ctx, offered))
+	_, err := db.Exec(`UPDATE quizzes SET created_at = 'yesterday'`)
+	require.NoError(t, err)
+
+	// When reading it by message and by session
+	_, findErr := repo.FindByMessage(ctx, "message-1")
+	_, listErr := repo.ListBySession(ctx, "session-gone")
+
+	// Then both fail
+	assert.Error(t, findErr)
+	assert.Error(t, listErr)
+}
