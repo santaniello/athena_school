@@ -96,3 +96,30 @@ func (r *Notes) SearchNotes(ctx context.Context, sessionID, query string) ([]dom
 	}
 	return excerpts, nil
 }
+
+// offerService is what OfferGate needs from the quiz offer service.
+type offerService interface {
+	GetPending(ctx context.Context, sessionID string) (domainquiz.Offer, bool, error)
+	CreateOffer(ctx context.Context, sessionID, messageID string) (domainquiz.Offer, error)
+}
+
+// OfferGate adapts the quiz offer service to the shape the study chat's
+// composed offer gate (package studyoffers) expects, so the chat package
+// imports no quiz code. See
+// specs/phases/phase-03-architecture-lab/23-interactive-quiz-chat-offer.md.
+type OfferGate struct{ offers offerService }
+
+// NewOfferGate creates an OfferGate backed by offers.
+func NewOfferGate(offers offerService) *OfferGate { return &OfferGate{offers: offers} }
+
+// HasPending reports whether the session has a pending quiz offer.
+func (g *OfferGate) HasPending(ctx context.Context, sessionID string) (bool, error) {
+	_, found, err := g.offers.GetPending(ctx, sessionID)
+	return found, err
+}
+
+// CreateOffer stores a pending quiz offer under the assistant message.
+func (g *OfferGate) CreateOffer(ctx context.Context, sessionID, messageID string) error {
+	_, err := g.offers.CreateOffer(ctx, sessionID, messageID)
+	return err
+}

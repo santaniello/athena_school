@@ -6,6 +6,10 @@ export function AcceptOffer(arg1, arg2, arg3, arg4) {
   return window['go']['desktop']['App']['AcceptOffer'](arg1, arg2, arg3, arg4);
 }
 
+export function AcceptQuizOffer(arg1, arg2, arg3) {
+  return window['go']['desktop']['App']['AcceptQuizOffer'](arg1, arg2, arg3);
+}
+
 export function AnswerDefenseQuestion(arg1, arg2) {
   return window['go']['desktop']['App']['AnswerDefenseQuestion'](arg1, arg2);
 }
@@ -36,6 +40,10 @@ export function CreateFolder(arg1) {
 
 export function DeclineOffer(arg1) {
   return window['go']['desktop']['App']['DeclineOffer'](arg1);
+}
+
+export function DeclineQuizOffer(arg1) {
+  return window['go']['desktop']['App']['DeclineQuizOffer'](arg1);
 }
 
 export function DeleteFolder(arg1) {
@@ -104,6 +112,10 @@ export function GetPassScore() {
 
 export function GetPendingOffer(arg1) {
   return window['go']['desktop']['App']['GetPendingOffer'](arg1);
+}
+
+export function GetPendingQuizOffer(arg1) {
+  return window['go']['desktop']['App']['GetPendingQuizOffer'](arg1);
 }
 
 export function GetProfile() {
@@ -180,6 +192,10 @@ export function ListSelectableModels() {
 
 export function ListSessionExercises(arg1) {
   return window['go']['desktop']['App']['ListSessionExercises'](arg1);
+}
+
+export function ListSessionQuizzes(arg1) {
+  return window['go']['desktop']['App']['ListSessionQuizzes'](arg1);
 }
 
 export function ListSessionSources(arg1) {

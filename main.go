@@ -139,6 +139,18 @@ func main() {
 		sqlite.NewSessionExerciseRepository(db), challengeRepo, sqlite.NewAttemptRecordRepository(db),
 	)
 
+	quizRepo := sqlite.NewQuizRepository(db)
+	quizGenerationService := applicationquiz.NewGenerationService(
+		quizsource.NewSessions(studySessions),
+		quizsource.NewSummaries(sqlite.NewConversationSummaryRepository(db)),
+		quizsource.NewProfiles(profiles),
+		quizsource.NewNotes(knowledgeService),
+		llmClient,
+		quizRepo,
+	)
+	quizService := applicationquiz.NewService(quizRepo)
+	quizOfferService := applicationquiz.NewOfferService(sqlite.NewQuizOfferRepository(db), quizRepo, quizGenerationService)
+
 	studyService := study.NewService(
 		studySessions, studyMessages, llmClient, profiles, folders, knowledgeService, transactor, contextResolver,
 		messageSources, knowledgeService, queryEnricher,
@@ -146,7 +158,7 @@ func main() {
 		study.WithSummarizer(study.NewSummarizer(llmClient, profiles, study.WithSummaryModelWindow(summaryWindow))),
 		study.WithSummaryWindow(summaryWindow),
 		study.WithSummaries(sqlite.NewConversationSummaryRepository(db)),
-		study.WithOfferGate(studyoffers.NewGate(exercisesource.NewOfferGate(offerService), nil)),
+		study.WithOfferGate(studyoffers.NewGate(exercisesource.NewOfferGate(offerService), quizsource.NewOfferGate(quizOfferService))),
 		study.WithExerciseFeedback(exercisesource.NewFeedbackReader(feedbackService)),
 	)
 	folderService := folder.NewService(folders, studySessions, knowledgeService)
@@ -194,17 +206,6 @@ func main() {
 	challengeCatalog := applicationexercise.NewCatalogService(challengeRepo, sqlite.NewAttemptRecordRepository(db))
 	sessionService := applicationexercise.NewSessionService(sqlite.NewSessionOptionRepository(db))
 
-	quizRepo := sqlite.NewQuizRepository(db)
-	quizGenerationService := applicationquiz.NewGenerationService(
-		quizsource.NewSessions(studySessions),
-		quizsource.NewSummaries(sqlite.NewConversationSummaryRepository(db)),
-		quizsource.NewProfiles(profiles),
-		quizsource.NewNotes(knowledgeService),
-		llmClient,
-		quizRepo,
-	)
-	quizService := applicationquiz.NewService(quizRepo)
-
 	resetter := sqlite.NewResetter(db)
 	resetService := applicationreset.NewService(resetter, vectorStore)
 
@@ -224,6 +225,7 @@ func main() {
 		desktop.WithSessionLister(sessionService),
 		desktop.WithQuizGenerationService(quizGenerationService),
 		desktop.WithQuizService(quizService),
+		desktop.WithQuizOfferService(quizOfferService),
 	)
 
 	err = wails.Run(&options.App{

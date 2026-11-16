@@ -970,6 +970,22 @@ export namespace desktop {
 		    return a;
 		}
 	}
+	export class QuizOfferDTO {
+	    id: string;
+	    sessionId: string;
+	    messageId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new QuizOfferDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.sessionId = source["sessionId"];
+	        this.messageId = source["messageId"];
+	    }
+	}
 	
 	
 	export class QuizSelectionDTO {
@@ -995,6 +1011,7 @@ export namespace desktop {
 	    createdAt: string;
 	    attemptCount: number;
 	    latestScore?: number;
+	    messageId: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new QuizSummaryDTO(source);
@@ -1010,6 +1027,7 @@ export namespace desktop {
 	        this.createdAt = source["createdAt"];
 	        this.attemptCount = source["attemptCount"];
 	        this.latestScore = source["latestScore"];
+	        this.messageId = source["messageId"];
 	    }
 	}
 	

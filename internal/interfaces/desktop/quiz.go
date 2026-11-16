@@ -27,6 +27,7 @@ func WithQuizGenerationService(generator quizGenerator) Option {
 // bindings of the Interactive Quiz (spec 3.21).
 type quizUseCases interface {
 	ListQuizzes(ctx context.Context) ([]domainquiz.Summary, error)
+	ListSessionQuizzes(ctx context.Context, sessionID string) ([]domainquiz.Summary, error)
 	GetQuiz(ctx context.Context, id string) (domainquiz.Quiz, error)
 	SubmitAttempt(ctx context.Context, quizID string, selections []domainquiz.Selection) (domainquiz.Attempt, error)
 	ListAttempts(ctx context.Context, quizID string) ([]domainquiz.Attempt, error)
@@ -39,12 +40,27 @@ func WithQuizService(quizzes quizUseCases) Option {
 	return func(a *App) { a.quizzes = quizzes }
 }
 
+// quizOffers is the use case behind the quiz offer bindings of the study chat
+// (spec 3.23).
+type quizOffers interface {
+	GetPending(ctx context.Context, sessionID string) (domainquiz.Offer, bool, error)
+	Accept(ctx context.Context, offerID string, spec domainquiz.Spec) (domainquiz.Summary, error)
+	Decline(ctx context.Context, offerID string) error
+}
+
+// WithQuizOfferService wires the quiz offers of the study chat.
+func WithQuizOfferService(offers quizOffers) Option {
+	return func(a *App) { a.quizOffers = offers }
+}
+
 // Stable QuizError.Code values the frontend switches on.
 const (
 	quizCodeInvalidInput         = "invalid_input"
 	quizCodeSessionNotFound      = "source_session_not_found"
 	quizCodeQuizNotFound         = "quiz_not_found"
 	quizCodeAttemptNotFound      = "attempt_not_found"
+	quizCodeOfferNotFound        = "offer_not_found"
+	quizCodeOfferPending         = "offer_pending"
 	quizCodeInvalidGeneration    = "invalid_generation"
 	quizCodeGenerationInProgress = "generation_in_progress"
 	quizCodeSelectionInvalid     = "selection_invalid"
@@ -78,6 +94,10 @@ func toQuizError(err error) *QuizError {
 		return &QuizError{Code: quizCodeQuizNotFound, Message: "quiz not found"}
 	case errors.Is(err, domainquiz.ErrAttemptNotFound):
 		return &QuizError{Code: quizCodeAttemptNotFound, Message: "quiz attempt not found"}
+	case errors.Is(err, domainquiz.ErrOfferNotFound):
+		return &QuizError{Code: quizCodeOfferNotFound, Message: "the quiz offer is no longer pending"}
+	case errors.Is(err, domainquiz.ErrOfferPending):
+		return &QuizError{Code: quizCodeOfferPending, Message: "a quiz offer is already pending"}
 	case errors.Is(err, applicationquiz.ErrInvalidGeneration):
 		return &QuizError{Code: quizCodeInvalidGeneration, Message: "the generated quiz was not valid, try again"}
 	case errors.Is(err, domainquiz.ErrQuestionCountInvalid), errors.Is(err, domainquiz.ErrDifficultyInvalid):
@@ -94,7 +114,8 @@ func toQuizError(err error) *QuizError {
 }
 
 // QuizSummaryDTO is a quiz as the catalog lists it. CreatedAt is RFC 3339.
-// LatestScore is null until the quiz has been taken.
+// LatestScore is null until the quiz has been taken. MessageID is the study-chat
+// message whose offer produced the quiz, empty for a quiz from the menu.
 type QuizSummaryDTO struct {
 	ID            string   `json:"id"`
 	SessionID     string   `json:"sessionId"`
@@ -104,12 +125,30 @@ type QuizSummaryDTO struct {
 	CreatedAt     string   `json:"createdAt"`
 	AttemptCount  int      `json:"attemptCount"`
 	LatestScore   *float64 `json:"latestScore"`
+	MessageID     string   `json:"messageId"`
 }
 
 func toQuizSummaryDTO(quiz domainquiz.Quiz) QuizSummaryDTO {
 	return QuizSummaryDTO{
 		ID: quiz.ID, SessionID: quiz.SessionID, SessionTitle: quiz.SessionTitle, Difficulty: string(quiz.Difficulty),
-		QuestionCount: len(quiz.Questions), CreatedAt: quiz.CreatedAt.Format(time.RFC3339),
+		QuestionCount: len(quiz.Questions), CreatedAt: quiz.CreatedAt.Format(time.RFC3339), MessageID: quiz.MessageID,
+	}
+}
+
+func toQuizSummaryDTOs(summaries []domainquiz.Summary) []QuizSummaryDTO {
+	dtos := make([]QuizSummaryDTO, 0, len(summaries))
+	for _, summary := range summaries {
+		dtos = append(dtos, toQuizCardDTO(summary))
+	}
+	return dtos
+}
+
+func toQuizCardDTO(summary domainquiz.Summary) QuizSummaryDTO {
+	return QuizSummaryDTO{
+		ID: summary.ID, SessionID: summary.SessionID, SessionTitle: summary.SessionTitle,
+		Difficulty: string(summary.Difficulty), QuestionCount: summary.QuestionCount,
+		CreatedAt: summary.CreatedAt.Format(time.RFC3339), AttemptCount: summary.AttemptCount, LatestScore: summary.LatestScore,
+		MessageID: summary.MessageID,
 	}
 }
 
@@ -243,15 +282,7 @@ func (a *App) ListQuizzes() ([]QuizSummaryDTO, error) {
 	if err != nil {
 		return nil, toQuizError(err)
 	}
-	dtos := make([]QuizSummaryDTO, 0, len(summaries))
-	for _, summary := range summaries {
-		dtos = append(dtos, QuizSummaryDTO{
-			ID: summary.ID, SessionID: summary.SessionID, SessionTitle: summary.SessionTitle,
-			Difficulty: string(summary.Difficulty), QuestionCount: summary.QuestionCount,
-			CreatedAt: summary.CreatedAt.Format(time.RFC3339), AttemptCount: summary.AttemptCount, LatestScore: summary.LatestScore,
-		})
-	}
-	return dtos, nil
+	return toQuizSummaryDTOs(summaries), nil
 }
 
 // GetQuiz returns a quiz to take. The answer key stays on the Go side.
@@ -330,6 +361,86 @@ func (a *App) GetQuizAttemptResult(attemptID string) (QuizAttemptResultDTO, erro
 // DeleteQuiz removes a quiz with its attempts.
 func (a *App) DeleteQuiz(id string) error {
 	if err := a.quizzes.DeleteQuiz(a.ctx, id); err != nil {
+		return toQuizError(err)
+	}
+	return nil
+}
+
+// QuizOfferDTO is a pending quiz offer: it hangs under the assistant message
+// MessageID of the study chat.
+type QuizOfferDTO struct {
+	ID        string `json:"id"`
+	SessionID string `json:"sessionId"`
+	MessageID string `json:"messageId"`
+}
+
+func quizInvalidInput(message string) *QuizError {
+	return &QuizError{Code: quizCodeInvalidInput, Message: message}
+}
+
+// ListSessionQuizzes returns the quizzes the study chat's offers produced in the
+// session, oldest first, without their questions: the cards the chat shows under
+// the messages that offered them.
+func (a *App) ListSessionQuizzes(sessionID string) ([]QuizSummaryDTO, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, quizInvalidInput("session id is required")
+	}
+	summaries, err := a.quizzes.ListSessionQuizzes(a.ctx, sessionID)
+	if err != nil {
+		return nil, toQuizError(err)
+	}
+	return toQuizSummaryDTOs(summaries), nil
+}
+
+// GetPendingQuizOffer returns the session's pending quiz offer, or null when
+// there is none. See
+// specs/phases/phase-03-architecture-lab/23-interactive-quiz-chat-offer.md.
+func (a *App) GetPendingQuizOffer(sessionID string) (*QuizOfferDTO, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, quizInvalidInput("session id is required")
+	}
+	offer, found, err := a.quizOffers.GetPending(a.ctx, sessionID)
+	if err != nil {
+		return nil, toQuizError(err)
+	}
+	if !found {
+		return nil, nil
+	}
+	return &QuizOfferDTO{ID: offer.ID, SessionID: offer.SessionID, MessageID: offer.MessageID}, nil
+}
+
+// AcceptQuizOffer generates a quiz of count questions (0 for the default) and
+// the given difficulty (blank for medium) for the offer's session, links it to
+// the offer's message and returns its card. It shares the generation slot with
+// GenerateQuiz, so CancelQuizGeneration cancels it. On failure the offer stays
+// pending.
+func (a *App) AcceptQuizOffer(offerID string, count int, difficulty string) (QuizSummaryDTO, error) {
+	offerID = strings.TrimSpace(offerID)
+	if offerID == "" {
+		return QuizSummaryDTO{}, quizInvalidInput("offer id is required")
+	}
+	spec := domainquiz.Spec{Count: count, Difficulty: domainquiz.Difficulty(strings.TrimSpace(difficulty))}
+	ctx, release, ok := a.quizGeneration.begin(a.ctx)
+	if !ok {
+		return QuizSummaryDTO{}, &QuizError{Code: quizCodeGenerationInProgress, Message: "a quiz is already being generated"}
+	}
+	defer release()
+	summary, err := a.quizOffers.Accept(ctx, offerID, spec)
+	if err != nil {
+		return QuizSummaryDTO{}, toQuizError(err)
+	}
+	return toQuizCardDTO(summary), nil
+}
+
+// DeclineQuizOffer removes the offer. Nothing is created.
+func (a *App) DeclineQuizOffer(offerID string) error {
+	offerID = strings.TrimSpace(offerID)
+	if offerID == "" {
+		return quizInvalidInput("offer id is required")
+	}
+	if err := a.quizOffers.Decline(a.ctx, offerID); err != nil {
 		return toQuizError(err)
 	}
 	return nil

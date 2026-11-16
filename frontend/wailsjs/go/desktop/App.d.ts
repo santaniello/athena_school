@@ -5,6 +5,8 @@ import {context} from '../models';
 
 export function AcceptOffer(arg1:string,arg2:string,arg3:string,arg4:string):Promise<desktop.SessionExerciseDTO>;
 
+export function AcceptQuizOffer(arg1:string,arg2:number,arg3:string):Promise<desktop.QuizSummaryDTO>;
+
 export function AnswerDefenseQuestion(arg1:string,arg2:string):Promise<desktop.DefenseDTO>;
 
 export function CancelChallengeGeneration():Promise<void>;
@@ -20,6 +22,8 @@ export function ConfirmLinkImport(arg1:string,arg2:string,arg3:string):Promise<v
 export function CreateFolder(arg1:string):Promise<desktop.FolderResult>;
 
 export function DeclineOffer(arg1:string):Promise<void>;
+
+export function DeclineQuizOffer(arg1:string):Promise<void>;
 
 export function DeleteFolder(arg1:string):Promise<void>;
 
@@ -54,6 +58,8 @@ export function GetModelSettings():Promise<desktop.ModelSettingsResult>;
 export function GetPassScore():Promise<number>;
 
 export function GetPendingOffer(arg1:string):Promise<desktop.ExerciseOfferDTO>;
+
+export function GetPendingQuizOffer(arg1:string):Promise<desktop.QuizOfferDTO>;
 
 export function GetProfile():Promise<desktop.UserProfileInput>;
 
@@ -92,6 +98,8 @@ export function ListQuizzes():Promise<Array<desktop.QuizSummaryDTO>>;
 export function ListSelectableModels():Promise<desktop.SelectableModelsResult>;
 
 export function ListSessionExercises(arg1:string):Promise<Array<desktop.SessionExerciseCardDTO>>;
+
+export function ListSessionQuizzes(arg1:string):Promise<Array<desktop.QuizSummaryDTO>>;
 
 export function ListSessionSources(arg1:string):Promise<Array<desktop.SessionSourceResult>>;
 

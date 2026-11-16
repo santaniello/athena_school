@@ -47,6 +47,7 @@ type App struct {
 	sessionLister sessionLister
 	quizGenerator quizGenerator
 	quizzes       quizUseCases
+	quizOffers    quizOffers
 	// quizGeneration lets one quiz generation run at a time, and be cancelled.
 	quizGeneration generationSlot
 	// cancelGeneration cancels the challenge generation in flight, if any.
