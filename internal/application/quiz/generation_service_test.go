@@ -110,6 +110,40 @@ func TestGenerationService_Generate_storesTheShuffledQuiz(t *testing.T) {
 	assert.Equal(t, want, got)
 }
 
+func TestGenerationService_GenerateForMessage_storesTheQuizLinkedToTheMessage(t *testing.T) {
+	// Given a studied session and a model that answers with three valid questions
+	f := newGenerationFixture(t)
+	ctx := context.Background()
+	f.expectContext(ctx)
+	f.expectChat(ctx, testSpec, threeQuestions, nil)
+	want := expectedQuiz()
+	want.MessageID = "message-1"
+	f.repo.EXPECT().CreateQuiz(ctx, want).Return(nil).Once()
+
+	// When the quiz is generated for the chat message of an offer
+	got, err := f.service.GenerateForMessage(ctx, "session-1", "message-1", testSpec)
+
+	// Then the stored and returned quiz carries the message id
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+}
+
+func TestGenerationService_Generate_leavesTheMessageIDEmpty(t *testing.T) {
+	// Given a quiz asked for from the menu
+	f := newGenerationFixture(t)
+	ctx := context.Background()
+	f.expectContext(ctx)
+	f.expectChat(ctx, testSpec, threeQuestions, nil)
+	f.repo.EXPECT().CreateQuiz(ctx, expectedQuiz()).Return(nil).Once()
+
+	// When it is generated
+	got, err := f.service.Generate(ctx, "session-1", testSpec)
+
+	// Then it has no message
+	require.NoError(t, err)
+	assert.Empty(t, got.MessageID)
+}
+
 func TestGenerationService_Generate_refusesAnInvalidSpecBeforeAnything(t *testing.T) {
 	// Given a spec with too few questions (the strict mocks fail on any call)
 	f := newGenerationFixture(t)

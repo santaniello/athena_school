@@ -53,6 +53,16 @@ func NewGenerationService(
 // the model's answer breaks a quiz rule. An invalid spec is refused before
 // anything else.
 func (s *GenerationService) Generate(ctx context.Context, sessionID string, spec domainquiz.Spec) (domainquiz.Quiz, error) {
+	return s.generate(ctx, sessionID, "", spec)
+}
+
+// GenerateForMessage is Generate for a quiz an offer in the study chat asked
+// for: the stored quiz carries the id of the message the offer hangs under.
+func (s *GenerationService) GenerateForMessage(ctx context.Context, sessionID, messageID string, spec domainquiz.Spec) (domainquiz.Quiz, error) {
+	return s.generate(ctx, sessionID, messageID, spec)
+}
+
+func (s *GenerationService) generate(ctx context.Context, sessionID, messageID string, spec domainquiz.Spec) (domainquiz.Quiz, error) {
 	spec = spec.Normalized()
 	if err := spec.Validate(); err != nil {
 		return domainquiz.Quiz{}, err
@@ -86,6 +96,7 @@ func (s *GenerationService) Generate(ctx context.Context, sessionID string, spec
 	if err != nil {
 		return domainquiz.Quiz{}, err
 	}
+	quiz.MessageID = messageID
 	if err := s.repo.CreateQuiz(ctx, quiz); err != nil {
 		return domainquiz.Quiz{}, fmt.Errorf("quiz: saving generated quiz: %w", err)
 	}

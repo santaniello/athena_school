@@ -46,3 +46,12 @@ type ProfileReader interface {
 type NotesSearcher interface {
 	SearchNotes(ctx context.Context, sessionID, query string) ([]domainquiz.NoteExcerpt, error)
 }
+
+// Generator writes a quiz from a session and ties it to the study-chat
+// message whose offer asked for it. GenerationService implements it; the offer
+// service depends on this port so it can be tested without a model.
+type Generator interface {
+	// GenerateForMessage generates and stores a quiz for the session, linked to
+	// the message. A failure stores nothing.
+	GenerateForMessage(ctx context.Context, sessionID, messageID string, spec domainquiz.Spec) (domainquiz.Quiz, error)
+}

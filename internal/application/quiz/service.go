@@ -100,3 +100,13 @@ func (s *Service) DeleteQuiz(ctx context.Context, id string) error {
 	}
 	return nil
 }
+
+// ListSessionQuizzes returns the quizzes the study chat's offers produced in
+// the session, oldest first, without their questions: what the chat cards show.
+func (s *Service) ListSessionQuizzes(ctx context.Context, sessionID string) ([]domainquiz.Summary, error) {
+	summaries, err := s.repo.ListBySession(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("quiz: listing session quizzes: %w", err)
+	}
+	return summaries, nil
+}

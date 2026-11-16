@@ -181,3 +181,31 @@ func TestNewService_defaultsAreRealImplementations(t *testing.T) {
 	assert.WithinDuration(t, time.Now(), service.now(), time.Minute)
 	assert.NotEqual(t, service.newID(), service.newID())
 }
+
+func TestService_ListSessionQuizzes_passesThroughTheRepository(t *testing.T) {
+	// Given a repository that knows the session's offer quizzes
+	service, repo := newService(t)
+	ctx := context.Background()
+	want := []domainquiz.Summary{{ID: "quiz-1", SessionID: "session-1", MessageID: "message-1"}}
+	repo.EXPECT().ListBySession(ctx, "session-1").Return(want, nil).Once()
+
+	// When listing the session's quizzes
+	got, err := service.ListSessionQuizzes(ctx, "session-1")
+
+	// Then they come back as they are
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+}
+
+func TestService_ListSessionQuizzes_wrapsAFailureAndKeepsTheCause(t *testing.T) {
+	// Given a failing repository
+	service, repo := newService(t)
+	boom := errors.New("db down")
+	repo.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, boom).Once()
+
+	// When listing the session's quizzes
+	_, err := service.ListSessionQuizzes(context.Background(), "session-1")
+
+	// Then the cause is kept
+	require.ErrorIs(t, err, boom)
+}
