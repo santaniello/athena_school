@@ -8,11 +8,13 @@ import { QuizLeaveDialog } from '@/components/quiz/quiz-leave-dialog'
 import { QuizResultView } from '@/components/quiz/quiz-result-view'
 import { useQuizResult } from '@/hooks/use-quiz-result'
 import { useQuizSession } from '@/hooks/use-quiz-session'
-import { type QuizAttemptSummary } from '@/lib/quiz'
+import { type QuizAttemptSummary, type QuizReturn } from '@/lib/quiz'
 import { cn } from '@/lib/utils'
 
 interface QuizTakeScreenProps {
   quizId: string
+  // Where the quiz goes back to when it ends; it only names the button.
+  returnTo: QuizReturn
   // The shell wants to navigate away; the leave question is asked here.
   leaveRequested: boolean
   onLeaveCancelled: () => void
@@ -24,7 +26,13 @@ interface QuizTakeScreenProps {
 // kept in memory until Finish. Once graded, the same screen shows the result,
 // and Take again starts a fresh run. See
 // specs/phases/phase-03-architecture-lab/22-interactive-quiz-screen.md.
-function QuizTakeScreen({ quizId, leaveRequested, onLeaveCancelled, onExit }: QuizTakeScreenProps) {
+function QuizTakeScreen({
+  quizId,
+  returnTo,
+  leaveRequested,
+  onLeaveCancelled,
+  onExit,
+}: QuizTakeScreenProps) {
   const [attempt, setAttempt] = useState<QuizAttemptSummary | null>(null)
   // Each run is a fresh set of answers: Take again remounts the taking stage.
   const [run, setRun] = useState(0)
@@ -38,6 +46,7 @@ function QuizTakeScreen({ quizId, leaveRequested, onLeaveCancelled, onExit }: Qu
     return (
       <ResultStage
         attemptId={attempt.id}
+        backTo={returnTo.kind}
         onTakeAgain={() => {
           setAttempt(null)
           setRun((current) => current + 1)
@@ -50,6 +59,7 @@ function QuizTakeScreen({ quizId, leaveRequested, onLeaveCancelled, onExit }: Qu
     <TakingStage
       key={run}
       quizId={quizId}
+      returnTo={returnTo}
       leaveRequested={leaveRequested}
       onLeaveCancelled={onLeaveCancelled}
       onExit={onExit}
@@ -64,6 +74,7 @@ interface TakingStageProps extends QuizTakeScreenProps {
 
 function TakingStage({
   quizId,
+  returnTo,
   leaveRequested,
   onLeaveCancelled,
   onExit,
@@ -102,7 +113,7 @@ function TakingStage({
           {t('common.retry')}
         </Button>
         <Button type="button" variant="outline" size="sm" onClick={onExit}>
-          {t('result.back')}
+          {t(returnTo.kind === 'study' ? 'result.backToSession' : 'result.back')}
         </Button>
       </div>
     )
@@ -244,10 +255,12 @@ function TakingStage({
 
 function ResultStage({
   attemptId,
+  backTo,
   onTakeAgain,
   onBack,
 }: {
   attemptId: string
+  backTo: QuizReturn['kind']
   onTakeAgain: () => void
   onBack: () => void
 }) {
@@ -266,7 +279,9 @@ function ResultStage({
           </Button>
         </div>
       )}
-      {result && <QuizResultView result={result} onTakeAgain={onTakeAgain} onBack={onBack} />}
+      {result && (
+        <QuizResultView result={result} onTakeAgain={onTakeAgain} onBack={onBack} backTo={backTo} />
+      )}
     </div>
   )
 }

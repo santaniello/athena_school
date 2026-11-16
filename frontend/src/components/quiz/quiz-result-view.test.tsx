@@ -110,6 +110,17 @@ describe('QuizResultView', () => {
     expect(screen.queryAllByRole('listitem', { name: /^Question/ })).toHaveLength(0)
   })
 
+  it('names the study session as the place to go back to when the quiz came from it', async () => {
+    const user = userEvent.setup()
+    const onBack = vi.fn()
+    render(<QuizResultView result={RESULT} onBack={onBack} backTo="study" />)
+
+    expect(screen.queryByRole('button', { name: 'Back to tests' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Back to study session' }))
+
+    expect(onBack).toHaveBeenCalledOnce()
+  })
+
   it('offers Take again and Back only when given the handlers', async () => {
     const user = userEvent.setup()
     const onTakeAgain = vi.fn()

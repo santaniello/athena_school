@@ -17,6 +17,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { AttemptHistoryDialog, type HistoryChallenge } from '@/components/attempt-history-dialog'
 import { ExerciseOfferCard } from '@/components/exercise-offer-card'
+import { QuizHistoryDialog, type HistoryQuiz } from '@/components/quiz/quiz-history-dialog'
+import { QuizOfferCard } from '@/components/quiz/quiz-offer-card'
+import { SessionQuizCard } from '@/components/quiz/session-quiz-card'
 import { SessionExerciseCard } from '@/components/session-exercise-card'
 import { MessageBubble } from '@/components/message-bubble'
 import { ThinkingIndicator } from '@/components/thinking-indicator'
@@ -37,11 +40,19 @@ import {
   getPendingOffer,
   listSessionExercises,
   type ExamToStart,
+  type ChallengeDifficulty,
   type ExerciseOffer,
-  type OfferProfile,
   type SessionExerciseCard as ExerciseCard,
 } from '@/lib/exercise'
 import { FIND_IGNORE_PROPS } from '@/lib/find-in-page'
+import {
+  getPendingQuizOffer,
+  getQuizOfferDifficulty,
+  listSessionQuizzes,
+  type QuizDifficulty,
+  type QuizOffer,
+  type QuizSummary,
+} from '@/lib/quiz'
 import {
   compactStudySession,
   getStudySessionSummary,
@@ -97,6 +108,8 @@ interface StudyChatScreenProps {
   // The user confirmed the rules of the accepted exercise's exam; the shell
   // opens the lab and brings the user back to this session.
   onStartExam: (exam: ExamToStart, sessionId: string) => void
+  // Starts a quiz from a card of this session; the shell brings the user back here.
+  onStartQuiz: (quizId: string, sessionId: string) => void
 }
 
 // ContextState mirrors the persisted study.ContextState the backend tracks
@@ -125,15 +138,26 @@ async function fetchSummaryCursor(sessionId: string): Promise<string | null> {
   }
 }
 
-// The session's pending exercise offer with the difficulty it starts with, or null when there is none or it could not be
-// read — the offer is an extra on top of the chat and must never break it.
-async function fetchPendingOffer(
-  sessionId: string,
-): Promise<{ offer: ExerciseOffer; profile: OfferProfile } | null> {
+// What the tutor offered the user: an architecture exercise or a quiz, with the
+// difficulty the choice starts from. Both are shown under the message that
+// carried them and block the composer until resolved.
+type PendingOffer =
+  | { kind: 'exercise'; offer: ExerciseOffer; difficulty: ChallengeDifficulty }
+  | { kind: 'quiz'; offer: QuizOffer; difficulty: QuizDifficulty }
+
+// The session's pending offer, or null when there is none or it could not be
+// read — the offer is an extra on top of the chat and must never break it. A
+// session has at most one pending offer across both kinds, so the quiz one is
+// only looked for when there is no exercise one.
+async function fetchPendingOffer(sessionId: string): Promise<PendingOffer | null> {
   try {
-    const offer = await getPendingOffer(sessionId)
-    if (!offer) return null
-    return { offer, profile: await getOfferProfile() }
+    const exercise = await getPendingOffer(sessionId)
+    if (exercise) {
+      return { kind: 'exercise', offer: exercise, difficulty: (await getOfferProfile()).difficulty }
+    }
+    const quiz = await getPendingQuizOffer(sessionId)
+    if (quiz) return { kind: 'quiz', offer: quiz, difficulty: await getQuizOfferDifficulty() }
+    return null
   } catch {
     return null
   }
@@ -169,7 +193,7 @@ const REJECTION_MESSAGES: Record<string, string> = {
     "This conversation no longer fits the model's context window, even summarized. Start a new session on the same topic to continue.",
   message_too_large:
     "This message is too long for the model's context window. Shorten it and try again.",
-  offer_pending: 'Accept or decline the exercise offer before sending another message.',
+  offer_pending: 'Accept or decline the offer before sending another message.',
 }
 
 // A failure toast stays long enough to read; the compaction success notice
@@ -291,6 +315,7 @@ function StudyChatScreen({
   onOpenCitation,
   onOpeningTurnRequested,
   onStartExam,
+  onStartQuiz,
 }: StudyChatScreenProps) {
   const [sessionTopic, setSessionTopic] = useState(initialTopic)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -326,12 +351,15 @@ function StudyChatScreen({
   // The tutor's pending exercise offer (it blocks the composer until the user
   // accepts or declines) and, once accepted, the exercise it linked. See
   // specs/phases/phase-03-architecture-lab/14-ai-challenge-generation.md.
-  const [offer, setOffer] = useState<ExerciseOffer | null>(null)
-  const [offerProfile, setOfferProfile] = useState<OfferProfile>({ difficulty: 'INTERMEDIATE' })
+  const [pendingOffer, setPendingOffer] = useState<PendingOffer | null>(null)
+  const offer = pendingOffer?.offer ?? null
   // The exercises accepted in this session, shown under the message that offered
   // them (spec 3.17). They live in the backend, so they are loaded on open.
   const [exerciseCards, setExerciseCards] = useState<ExerciseCard[]>([])
+  // The quizzes accepted in this session, shown the same way (spec 3.23).
+  const [quizCards, setQuizCards] = useState<QuizSummary[]>([])
   const [historyFor, setHistoryFor] = useState<HistoryChallenge | null>(null)
+  const [quizHistoryFor, setQuizHistoryFor] = useState<HistoryQuiz | null>(null)
   const [examRules, setExamRules] = useState<ExamToStart | null>(null)
   // The last message folded into the session's summary; empty when none. The
   // transcript shows a marker right after it.
@@ -470,8 +498,7 @@ function StudyChatScreen({
   const refreshPendingOffer = useCallback(() => {
     void fetchPendingOffer(sessionId).then((pending) => {
       if (!pending || currentSessionIdRef.current !== sessionId) return
-      setOffer(pending.offer)
-      setOfferProfile(pending.profile)
+      setPendingOffer(pending)
       adoptMessageId(pending.offer.messageId)
     })
   }, [sessionId, adoptMessageId])
@@ -494,6 +521,15 @@ function StudyChatScreen({
     },
     [sessionId],
   )
+
+  // Same rule for the quiz cards: a failed read keeps them as they were.
+  const refreshQuizCards = useCallback(() => {
+    void listSessionQuizzes(sessionId)
+      .then((cards) => {
+        if (currentSessionIdRef.current === sessionId) setQuizCards(cards)
+      })
+      .catch(() => {})
+  }, [sessionId])
 
   const registerStreamPush = useCallback((push: ((text: string) => void) | null) => {
     streamPushRef.current = push
@@ -596,6 +632,7 @@ function StudyChatScreen({
         refreshSessionUsage()
         refreshPendingOffer()
         refreshExerciseCards()
+        refreshQuizCards()
         startHistory(history.hasMore, history.nextCursor)
         // Rendering a long history (markdown of every message) is the slow
         // part of opening a session. As a transition it is rendered in
@@ -752,7 +789,14 @@ function StudyChatScreen({
       offCompacted()
       offCompactionFailed()
     }
-  }, [sessionId, refreshSessionUsage, refreshPendingOffer, refreshExerciseCards, pushToast])
+  }, [
+    sessionId,
+    refreshSessionUsage,
+    refreshPendingOffer,
+    refreshExerciseCards,
+    refreshQuizCards,
+    pushToast,
+  ])
 
   // The blocked alert's primary action: compaction progress and outcome come
   // back as events; a rejection without a failure event (nothing to compact,
@@ -865,6 +909,7 @@ function StudyChatScreen({
         }}
       />
       <AttemptHistoryDialog challenge={historyFor} onClose={() => setHistoryFor(null)} />
+      <QuizHistoryDialog quiz={quizHistoryFor} onClose={() => setQuizHistoryFor(null)} />
       <SessionUsageBar context={{ state: contextState, ...contextTokens }} usage={sessionUsage} />
       {findOpen && (
         <FindBar
@@ -924,18 +969,45 @@ function StudyChatScreen({
                   }
                 />
               ))}
-            {offer?.messageId === message.id && !isStreaming && (
-              <ExerciseOfferCard
-                offerId={offer.id}
-                defaultDifficulty={offerProfile.difficulty}
-                topic={sessionTopic}
-                onAccepted={() => {
-                  setOffer(null)
-                  refreshExerciseCards(true)
-                }}
-                onDeclined={() => setOffer(null)}
-              />
-            )}
+            {quizCards
+              .filter((card) => card.messageId === message.id)
+              .map((card) => (
+                <SessionQuizCard
+                  key={card.id}
+                  quiz={card}
+                  onStart={(started) => onStartQuiz(started.id, sessionId)}
+                  onHistory={(viewed) =>
+                    setQuizHistoryFor({ id: viewed.id, title: viewed.sessionTitle })
+                  }
+                />
+              ))}
+            {pendingOffer?.offer.messageId === message.id &&
+              !isStreaming &&
+              (pendingOffer.kind === 'exercise' ? (
+                <ExerciseOfferCard
+                  offerId={pendingOffer.offer.id}
+                  defaultDifficulty={pendingOffer.difficulty}
+                  topic={sessionTopic}
+                  onAccepted={() => {
+                    setPendingOffer(null)
+                    refreshExerciseCards(true)
+                  }}
+                  onDeclined={() => setPendingOffer(null)}
+                />
+              ) : (
+                <QuizOfferCard
+                  offerId={pendingOffer.offer.id}
+                  defaultDifficulty={pendingOffer.difficulty}
+                  onAccepted={(quiz) => {
+                    setPendingOffer(null)
+                    setQuizCards((current) => [
+                      ...current.filter((card) => card.id !== quiz.id),
+                      quiz,
+                    ])
+                  }}
+                  onDeclined={() => setPendingOffer(null)}
+                />
+              ))}
             {index === summaryMarkerIndex && summaryMarker}
           </Fragment>
         ))}

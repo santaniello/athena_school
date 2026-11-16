@@ -259,9 +259,7 @@ describe('labels', () => {
     ])
     expect(formatTimeLimit(0)).toBe('Sem limite de tempo')
     expect(exerciseErrorMessage(undefined)).toBe('Algo deu errado. Tente novamente.')
-    expect(offerPendingMessage()).toBe(
-      'Aceite ou recuse a oferta de exercício para continuar a conversa.',
-    )
+    expect(offerPendingMessage()).toBe('Aceite ou recuse a oferta para continuar a conversa.')
     expect(formatSessionDate('2026-11-02T12:00:00Z')).toBe('2 de nov. de 2026')
   })
 
@@ -901,7 +899,7 @@ describe('exercise offer', () => {
     expect(exerciseErrorMessage(new Error('{"code":"offer_not_found","message":"x"}'))).toBe(
       'This exercise offer is no longer available.',
     )
-    expect(offerPendingMessage()).toBe('Accept or decline the exercise offer to keep chatting.')
+    expect(offerPendingMessage()).toBe('Accept or decline the offer to keep chatting.')
   })
 })
 

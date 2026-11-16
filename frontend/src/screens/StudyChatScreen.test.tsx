@@ -158,6 +158,7 @@ function renderNewSession(props: Partial<React.ComponentProps<typeof StudyChatSc
       mode="new"
       onStartNewSession={vi.fn()}
       onStartExam={vi.fn()}
+      onStartQuiz={vi.fn()}
       startingNewSession={false}
       {...props}
     />,
@@ -167,7 +168,12 @@ function renderNewSession(props: Partial<React.ComponentProps<typeof StudyChatSc
 // Spread into every direct <StudyChatScreen> render in this file so the two
 // new required context-limit props don't need repeating at every call site.
 function newSessionActionProps() {
-  return { onStartNewSession: vi.fn(), startingNewSession: false, onStartExam: vi.fn() }
+  return {
+    onStartNewSession: vi.fn(),
+    startingNewSession: false,
+    onStartExam: vi.fn(),
+    onStartQuiz: vi.fn(),
+  }
 }
 
 async function renderStartedSession(
@@ -1467,6 +1473,7 @@ describe('StudyChatScreen — context limits', () => {
         onStartNewSession={vi.fn()}
         startingNewSession
         onStartExam={vi.fn()}
+        onStartQuiz={vi.fn()}
       />,
     )
     await screen.findByRole('status', { name: /thinking/i })

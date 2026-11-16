@@ -18,13 +18,16 @@ interface QuizResultViewProps {
   onTakeAgain?: () => void
   // Offered only by a caller that has a screen to go back to.
   onBack?: () => void
+  // What Back goes to: the tests menu (the default) or the study session that
+  // offered the quiz.
+  backTo?: 'menu' | 'study'
 }
 
 // The graded result of one attempt: the grade out of 10, then every question
 // with the user's choice, the correct option and the explanation. It is read
 // only; the backend already decided what is right. See
 // specs/phases/phase-03-architecture-lab/22-interactive-quiz-screen.md.
-function QuizResultView({ result, onTakeAgain, onBack }: QuizResultViewProps) {
+function QuizResultView({ result, onTakeAgain, onBack, backTo = 'menu' }: QuizResultViewProps) {
   const { t } = useTranslation('quiz')
   const [onlyMissed, setOnlyMissed] = useState(false)
   const { attempt, questions } = result
@@ -51,7 +54,7 @@ function QuizResultView({ result, onTakeAgain, onBack }: QuizResultViewProps) {
         <div className="flex items-center gap-2">
           {onBack && (
             <Button type="button" variant="outline" onClick={onBack}>
-              {t('result.back')}
+              {t(backTo === 'study' ? 'result.backToSession' : 'result.back')}
             </Button>
           )}
           {onTakeAgain && (

@@ -53,6 +53,7 @@ const ATTEMPT = {
 function renderScreen(overrides: Partial<React.ComponentProps<typeof QuizTakeScreen>> = {}) {
   const props = {
     quizId: 'quiz-1',
+    returnTo: { kind: 'menu' } as const,
     leaveRequested: false,
     onLeaveCancelled: vi.fn(),
     onExit: vi.fn(),
@@ -89,6 +90,18 @@ describe('QuizTakeScreen', () => {
     expect(
       screen.getAllByRole('radio').every((radio) => !(radio as HTMLInputElement).checked),
     ).toBe(true)
+  })
+
+  it('goes back to the study session when the quiz was started from it and could not load', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getQuiz).mockRejectedValueOnce(new Error('nope'))
+    const { onExit } = renderScreen({ returnTo: { kind: 'study', sessionId: 'session-1' } })
+
+    await screen.findByRole('alert')
+    expect(screen.queryByRole('button', { name: 'Back to tests' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Back to study session' }))
+
+    expect(onExit).toHaveBeenCalledOnce()
   })
 
   it('says the quiz could not load, retries, and goes back', async () => {
@@ -314,9 +327,12 @@ describe('QuizTakeScreen', () => {
   })
 
   describe('after the quiz is graded', () => {
-    async function finishQuiz(user: ReturnType<typeof userEvent.setup>) {
+    async function finishQuiz(
+      user: ReturnType<typeof userEvent.setup>,
+      overrides: Partial<React.ComponentProps<typeof QuizTakeScreen>> = {},
+    ) {
       vi.mocked(submitQuizAttempt).mockResolvedValue(ATTEMPT)
-      const view = await loaded()
+      const view = await loaded(overrides)
       await answerEverything(user)
       await user.click(screen.getByRole('button', { name: 'Finish' }))
       await screen.findByText('1 of 3 correct')
@@ -349,6 +365,18 @@ describe('QuizTakeScreen', () => {
       expect(await screen.findByText('Loading the result...')).toBeInTheDocument()
       expect(screen.queryByRole('alert')).not.toBeInTheDocument()
       expect(screen.queryByText('1 of 3 correct')).not.toBeInTheDocument()
+    })
+
+    it('goes back to the study session when the quiz was started from it', async () => {
+      const user = userEvent.setup()
+      const { onExit } = await finishQuiz(user, {
+        returnTo: { kind: 'study', sessionId: 'session-1' },
+      })
+
+      expect(screen.queryByRole('button', { name: 'Back to tests' })).not.toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Back to study session' }))
+
+      expect(onExit).toHaveBeenCalledOnce()
     })
 
     it('goes back to the catalog', async () => {

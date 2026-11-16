@@ -6,6 +6,7 @@ import {
   DeleteQuiz,
   GenerateQuiz,
   GetPendingQuizOffer,
+  GetProfile,
   GetQuiz,
   GetQuizAttemptResult,
   ListQuizAttempts,
@@ -26,6 +27,7 @@ import {
   generateQuiz,
   getPendingQuizOffer,
   getQuiz,
+  getQuizOfferDifficulty,
   getQuizAttemptResult,
   listQuizAttempts,
   listQuizzes,
@@ -45,6 +47,7 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   DeleteQuiz: vi.fn(),
   GenerateQuiz: vi.fn(),
   GetPendingQuizOffer: vi.fn(),
+  GetProfile: vi.fn(),
   GetQuiz: vi.fn(),
   GetQuizAttemptResult: vi.fn(),
   ListQuizAttempts: vi.fn(),
@@ -209,6 +212,20 @@ describe('quiz offers of the study chat', () => {
       ['message-1', 6],
       ['message-2', null],
     ])
+  })
+
+  it('starts the offer from the difficulty of the experience level in the profile', async () => {
+    vi.mocked(GetProfile).mockResolvedValueOnce({ experienceLevel: 'advanced' } as never)
+    await expect(getQuizOfferDifficulty()).resolves.toBe('HARD')
+
+    vi.mocked(GetProfile).mockResolvedValueOnce({ experienceLevel: 'beginner' } as never)
+    await expect(getQuizOfferDifficulty()).resolves.toBe('EASY')
+  })
+
+  it('falls back to Medium when the profile cannot be read', async () => {
+    vi.mocked(GetProfile).mockRejectedValueOnce(new Error('boom'))
+
+    await expect(getQuizOfferDifficulty()).resolves.toBe('MEDIUM')
   })
 
   it('writes a message for an offer that is gone, in the profile language', () => {

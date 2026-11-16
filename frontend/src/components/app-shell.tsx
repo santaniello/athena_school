@@ -23,6 +23,7 @@ import LabExamScreen from '@/screens/LabExamScreen'
 import QuizScreen from '@/screens/QuizScreen'
 import QuizTakeScreen from '@/screens/QuizTakeScreen'
 import type { LabReturn } from '@/lib/lab'
+import type { QuizReturn } from '@/lib/quiz'
 import type { ExamToStart } from '@/components/lab/start-exam-dialog'
 import { ToastViewport, type ToastItem } from '@/components/toast'
 import { NAVIGATION, type AppSection } from '@/lib/navigation'
@@ -94,6 +95,9 @@ function AppShell() {
   // While it is open, navigating elsewhere waits for the quiz's own leave
   // question. Exam and quiz never run together, so they share pendingSection.
   const [takingQuizId, setTakingQuizId] = useState<string | null>(null)
+  // Where the quiz goes back to when it ends: the menu it was started from or
+  // the study session whose chat offered it. Not persisted.
+  const [quizReturn, setQuizReturn] = useState<QuizReturn>({ kind: 'menu' })
   const [notices, setNotices] = useState<ToastItem[]>([])
   const [profile, setProfile] = useState<ProfileDraft | null>(null)
   const [activeSession, setActiveSession] = useState<ActiveStudySession | null>(null)
@@ -246,9 +250,22 @@ function AppShell() {
     setSection(next)
   }
 
+  function startMenuQuiz(quizId: string) {
+    setQuizReturn({ kind: 'menu' })
+    setTakingQuizId(quizId)
+  }
+
+  function startSessionQuiz(quizId: string, sessionId: string) {
+    setQuizReturn({ kind: 'study', sessionId })
+    setTakingQuizId(quizId)
+    setSection('quiz')
+  }
+
   function handleQuizExit() {
     setTakingQuizId(null)
-    if (pendingSection) setSection(pendingSection)
+    const destination = pendingSection ?? (quizReturn.kind === 'study' ? 'study' : null)
+    if (destination) setSection(destination)
+    setQuizReturn({ kind: 'menu' })
     setPendingSection(null)
   }
 
@@ -514,6 +531,7 @@ function AppShell() {
               onTopicResolved={handleTopicResolved}
               onOpeningTurnRequested={handleOpeningTurnRequested}
               onStartExam={startSessionExam}
+              onStartQuiz={startSessionQuiz}
               onStartNewSession={handleStartNewSession}
               startingNewSession={startingNewSession}
               sourceModeSlot={sourceModeSlot}
@@ -558,12 +576,13 @@ function AppShell() {
           takingQuizId ? (
             <QuizTakeScreen
               quizId={takingQuizId}
+              returnTo={quizReturn}
               leaveRequested={pendingSection !== null}
               onLeaveCancelled={() => setPendingSection(null)}
               onExit={handleQuizExit}
             />
           ) : (
-            <QuizScreen experienceLevel={profile?.experienceLevel} onTake={setTakingQuizId} />
+            <QuizScreen experienceLevel={profile?.experienceLevel} onTake={startMenuQuiz} />
           )
         ) : section === 'documentation' ? (
           <DocumentationScreen />

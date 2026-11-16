@@ -5,6 +5,7 @@ import {
   DeleteQuiz,
   GenerateQuiz,
   GetPendingQuizOffer,
+  GetProfile,
   GetQuiz,
   GetQuizAttemptResult,
   ListQuizAttempts,
@@ -25,6 +26,10 @@ export const QUIZ_DIFFICULTIES: QuizDifficulty[] = ['EASY', 'MEDIUM', 'HARD']
 export const MIN_QUESTIONS = 3
 export const MAX_QUESTIONS = 20
 export const DEFAULT_QUESTIONS = 10
+
+// Where a quiz being taken goes back to when it ends: the menu it was started
+// from or the study session whose chat offered it.
+export type QuizReturn = { kind: 'menu' } | { kind: 'study'; sessionId: string }
 
 // A count field is text while it is typed; only a whole number inside the
 // backend's range is a valid count, and anything else is null.
@@ -142,6 +147,16 @@ export async function acceptQuizOffer(
   difficulty: QuizDifficulty,
 ): Promise<QuizSummary> {
   return toSummary(await AcceptQuizOffer(offerId, count, difficulty))
+}
+
+// The difficulty an offer starts from: the profile's experience level, or
+// Medium when the profile cannot be read.
+export async function getQuizOfferDifficulty(): Promise<QuizDifficulty> {
+  try {
+    return difficultyForExperience((await GetProfile()).experienceLevel)
+  } catch {
+    return 'MEDIUM'
+  }
 }
 
 export function declineQuizOffer(offerId: string): Promise<void> {

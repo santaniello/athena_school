@@ -116,7 +116,7 @@ export const pt: LabResources = {
     preparing: 'Preparando seu exercício…',
     accept: 'Aceitar',
     decline: 'Recusar',
-    pending: 'Aceite ou recuse a oferta de exercício para continuar a conversa.',
+    pending: 'Aceite ou recuse a oferta para continuar a conversa.',
   },
   sessionCard: {
     latest: 'Último: {{outcome}}',

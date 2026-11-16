@@ -114,7 +114,7 @@ export const en = {
     preparing: 'Preparing your exercise…',
     accept: 'Accept',
     decline: 'Decline',
-    pending: 'Accept or decline the exercise offer to keep chatting.',
+    pending: 'Accept or decline the offer to keep chatting.',
   },
   sessionCard: {
     latest: 'Latest: {{outcome}}',

@@ -34,6 +34,7 @@ import {
   listChallengeCatalog,
   listChallengeTopics,
 } from '@/lib/exercise'
+import { listSessionQuizzes } from '@/lib/quiz'
 import { AppShell } from './app-shell'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
@@ -175,8 +176,13 @@ vi.mock('@/lib/quiz', async (importOriginal) => ({
       createdAt: '2026-11-16T09:30:00Z',
       attemptCount: 0,
       latestScore: null,
+      messageId: '',
     },
   ]),
+  getPendingQuizOffer: vi.fn().mockResolvedValue(null),
+  getQuizOfferDifficulty: vi.fn().mockResolvedValue('MEDIUM'),
+  listSessionQuizzes: vi.fn().mockResolvedValue([]),
+  acceptQuizOffer: vi.fn(),
 }))
 
 // The quiz screen is covered by its own tests; this stand-in exposes what the
@@ -184,12 +190,14 @@ vi.mock('@/lib/quiz', async (importOriginal) => ({
 vi.mock('@/screens/QuizTakeScreen', () => ({
   default: (props: {
     quizId: string
+    returnTo: { kind: string; sessionId?: string }
     leaveRequested: boolean
     onLeaveCancelled: () => void
     onExit: () => void
   }) => (
     <div role="region" aria-label="Quiz">
       <span>quiz {props.quizId}</span>
+      <span>{`return to ${props.returnTo.kind} ${props.returnTo.sessionId ?? ''}`.trim()}</span>
       <span>{props.leaveRequested ? 'leave requested' : 'no leave request'}</span>
       <button onClick={() => props.onLeaveCancelled()}>cancel quiz leave</button>
       <button onClick={() => props.onExit()}>exit quiz</button>
@@ -1866,6 +1874,102 @@ describe('AppShell knowledge index lifecycle', () => {
         screen.getByRole('heading', { name: 'Interactive Test', level: 1 }),
       ).toBeInTheDocument()
       expect(await screen.findByRole('listitem', { name: 'Caching basics' })).toBeInTheDocument()
+    })
+
+    it('returns to the catalog for a quiz started from it', async () => {
+      await takeQuiz()
+
+      expect(screen.getByRole('region', { name: 'Quiz' })).toHaveTextContent('return to menu')
+    })
+
+    describe('started from a study session', () => {
+      const session: StudySession = {
+        id: 'session-quiz',
+        topic: 'Caching',
+        folderId: 'default',
+        goal: 'Learn caching',
+        startedAt: '2026-11-09T10:00:00Z',
+        context: CONTEXT_NORMAL,
+      }
+
+      async function startFromSession() {
+        const user = userEvent.setup()
+        renderShell()
+        await screen.findByText(/Felipe\./)
+        await user.click(screen.getByRole('button', { name: 'Study' }))
+        await screen.findByText('General')
+        vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([session])
+        vi.mocked(resumeStudySession).mockResolvedValue({
+          session,
+          messages: [
+            { id: 'm1', role: 'user', content: 'quiz me', createdAt: 't', sources: [] },
+            { id: 'm2', role: 'assistant', content: 'Sure, a quiz.', createdAt: 't', sources: [] },
+          ],
+          hasMore: false,
+          nextCursor: '',
+          summaryCoversUntilMessageId: '',
+        } as Awaited<ReturnType<typeof resumeStudySession>>)
+        vi.mocked(listSessionQuizzes).mockResolvedValue([
+          {
+            id: 'quiz-77',
+            sessionId: 'session-quiz',
+            sessionTitle: 'Caching',
+            difficulty: 'HARD',
+            questionCount: 8,
+            createdAt: '2026-11-16T09:30:00Z',
+            attemptCount: 0,
+            latestScore: null,
+            messageId: 'm2',
+          },
+        ])
+        await user.click(screen.getByText('General'))
+        await user.click(await screen.findByText('Caching'))
+        await user.click(await screen.findByRole('button', { name: 'Take test' }))
+        return user
+      }
+
+      it('opens the quiz in the same window, linked to the session', async () => {
+        await startFromSession()
+
+        const quiz = screen.getByRole('region', { name: 'Quiz' })
+        expect(quiz).toHaveTextContent('quiz quiz-77')
+        expect(quiz).toHaveTextContent('return to study session-quiz')
+        expect(screen.queryByText('Sure, a quiz.')).not.toBeInTheDocument()
+      })
+
+      it('returns to the same resumed session, with its card, when the quiz ends', async () => {
+        const user = await startFromSession()
+
+        await user.click(screen.getByRole('button', { name: 'exit quiz' }))
+
+        expect(await screen.findByText('Sure, a quiz.')).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Take test' })).toBeInTheDocument()
+        expect(screen.getByRole('heading', { name: 'Caching', level: 1 })).toBeInTheDocument()
+        expect(requestOpeningTurn).not.toHaveBeenCalled()
+        expect(screen.queryByRole('region', { name: 'Quiz' })).not.toBeInTheDocument()
+      })
+
+      it('goes where the user navigated, not to the session, when the quiz ends then', async () => {
+        const user = await startFromSession()
+        await user.click(screen.getByRole('button', { name: 'Settings' }))
+
+        await user.click(screen.getByRole('button', { name: 'exit quiz' }))
+
+        expect(
+          await screen.findByRole('heading', { name: 'Settings', level: 1 }),
+        ).toBeInTheDocument()
+      })
+
+      it('goes back to the catalog for a quiz started from the catalog afterwards', async () => {
+        const user = await startFromSession()
+        await user.click(screen.getByRole('button', { name: 'exit quiz' }))
+        await screen.findByText('Sure, a quiz.')
+
+        await user.click(screen.getByRole('button', { name: 'Interactive Test' }))
+        await user.click(await screen.findByRole('button', { name: 'Take' }))
+
+        expect(screen.getByRole('region', { name: 'Quiz' })).toHaveTextContent('return to menu')
+      })
     })
 
     it('opens the quiz full screen when Take is clicked', async () => {
