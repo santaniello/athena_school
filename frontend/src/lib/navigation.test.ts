@@ -7,6 +7,7 @@ const EXPECTED_IDS: AppSection[] = [
   'home',
   'study',
   'challenge',
+  'quiz',
   'progress',
   'flashcards',
   'interview',
@@ -20,9 +21,17 @@ describe('NAVIGATION', () => {
     expect(NAVIGATION.map((item) => item.id)).toEqual(EXPECTED_IDS)
   })
 
-  it('unlocks home, study, the architecture lab, documentation, profile and settings', () => {
+  it('unlocks home, study, the architecture lab, the interactive test, documentation, profile and settings', () => {
     const unlocked = NAVIGATION.filter((item) => item.status === 'unlocked').map((item) => item.id)
-    expect(unlocked).toEqual(['home', 'study', 'challenge', 'documentation', 'profile', 'settings'])
+    expect(unlocked).toEqual([
+      'home',
+      'study',
+      'challenge',
+      'quiz',
+      'documentation',
+      'profile',
+      'settings',
+    ])
   })
 
   it('has no Knowledge section, since knowledge comes only from documents imported into a study session', () => {
@@ -40,6 +49,15 @@ describe('NAVIGATION', () => {
     expect(item?.description).toBe(
       'Architecture challenges generated from what you studied, with a diagram and an evaluation.',
     )
+  })
+
+  it('puts the interactive test right after the architecture lab', () => {
+    const ids = NAVIGATION.map((entry) => entry.id)
+    expect(ids.indexOf('quiz') - ids.indexOf('challenge')).toBe(1)
+    const item = NAVIGATION.find((entry) => entry.id === 'quiz')
+    expect(item?.label).toBe('Interactive Test')
+    expect(item?.group).toBe('primary')
+    expect(item?.description.trim()).not.toBe('')
   })
 
   it('gives every locked item a non-empty description for the coming-soon panel', () => {

@@ -162,6 +162,41 @@ vi.mock('@/screens/LabExamScreen', () => ({
   ),
 }))
 
+// The Interactive Test catalog loads its quizzes as soon as it mounts.
+vi.mock('@/lib/quiz', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/quiz')>()),
+  listQuizzes: vi.fn().mockResolvedValue([
+    {
+      id: 'quiz-1',
+      sessionId: 's1',
+      sessionTitle: 'Caching basics',
+      difficulty: 'EASY',
+      questionCount: 5,
+      createdAt: '2026-11-16T09:30:00Z',
+      attemptCount: 0,
+      latestScore: null,
+    },
+  ]),
+}))
+
+// The quiz screen is covered by its own tests; this stand-in exposes what the
+// shell hands it and lets a test end the quiz.
+vi.mock('@/screens/QuizTakeScreen', () => ({
+  default: (props: {
+    quizId: string
+    leaveRequested: boolean
+    onLeaveCancelled: () => void
+    onExit: () => void
+  }) => (
+    <div role="region" aria-label="Quiz">
+      <span>quiz {props.quizId}</span>
+      <span>{props.leaveRequested ? 'leave requested' : 'no leave request'}</span>
+      <button onClick={() => props.onLeaveCancelled()}>cancel quiz leave</button>
+      <button onClick={() => props.onExit()}>exit quiz</button>
+    </div>
+  ),
+}))
+
 vi.mock('@/lib/folder', () => ({
   listFolders: vi.fn().mockResolvedValue([{ id: 'default', name: 'General' }]),
   createFolder: vi.fn(),
@@ -257,6 +292,7 @@ describe('AppShell', () => {
       'Home',
       'Study',
       'Architecture Lab',
+      'Interactive Test',
       'Progress',
       'Flashcards',
       'Interview',
@@ -1806,6 +1842,87 @@ describe('AppShell knowledge index lifecycle', () => {
       await user.click(screen.getByRole('button', { name: 'Architecture Lab' }))
 
       expect(screen.getByRole('region', { name: 'Exam' })).toHaveTextContent('no leave request')
+    })
+  })
+  describe('Interactive Test section', () => {
+    async function openQuizSection() {
+      const user = userEvent.setup()
+      renderShell()
+      await screen.findByText(/Felipe\./)
+      await user.click(screen.getByRole('button', { name: 'Interactive Test' }))
+      return user
+    }
+
+    async function takeQuiz() {
+      const user = await openQuizSection()
+      await user.click(await screen.findByRole('button', { name: 'Take' }))
+      return user
+    }
+
+    it('opens the catalog of tests, not the coming-soon panel', async () => {
+      await openQuizSection()
+
+      expect(
+        screen.getByRole('heading', { name: 'Interactive Test', level: 1 }),
+      ).toBeInTheDocument()
+      expect(await screen.findByRole('listitem', { name: 'Caching basics' })).toBeInTheDocument()
+    })
+
+    it('opens the quiz full screen when Take is clicked', async () => {
+      await takeQuiz()
+
+      expect(screen.getByRole('region', { name: 'Quiz' })).toHaveTextContent('quiz quiz-1')
+      expect(screen.queryByRole('listitem', { name: 'Caching basics' })).not.toBeInTheDocument()
+    })
+
+    it('makes the quiz ask before leaving for another section, and stays when cancelled', async () => {
+      const user = await takeQuiz()
+
+      await user.click(screen.getByRole('button', { name: 'Settings' }))
+
+      expect(screen.getByRole('region', { name: 'Quiz' })).toHaveTextContent('leave requested')
+      expect(
+        screen.getByRole('heading', { name: 'Interactive Test', level: 1 }),
+      ).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'cancel quiz leave' }))
+      expect(screen.getByRole('region', { name: 'Quiz' })).toHaveTextContent('no leave request')
+    })
+
+    it('goes where the user wanted once the quiz is left', async () => {
+      const user = await takeQuiz()
+      await user.click(screen.getByRole('button', { name: 'Settings' }))
+
+      await user.click(screen.getByRole('button', { name: 'exit quiz' }))
+
+      expect(await screen.findByRole('heading', { name: 'Settings', level: 1 })).toBeInTheDocument()
+      expect(screen.queryByRole('region', { name: 'Quiz' })).not.toBeInTheDocument()
+    })
+
+    it('goes back to the catalog when the quiz ends on its own', async () => {
+      const user = await takeQuiz()
+
+      await user.click(screen.getByRole('button', { name: 'exit quiz' }))
+
+      expect(await screen.findByRole('listitem', { name: 'Caching basics' })).toBeInTheDocument()
+      expect(screen.queryByRole('region', { name: 'Quiz' })).not.toBeInTheDocument()
+    })
+
+    it('keeps the quiz when the Interactive Test entry is clicked again', async () => {
+      const user = await takeQuiz()
+
+      await user.click(screen.getByRole('button', { name: 'Interactive Test' }))
+
+      expect(screen.getByRole('region', { name: 'Quiz' })).toHaveTextContent('no leave request')
+    })
+
+    it('forgets a leave request that was cancelled, so the next exit stays on the catalog', async () => {
+      const user = await takeQuiz()
+      await user.click(screen.getByRole('button', { name: 'Settings' }))
+      await user.click(screen.getByRole('button', { name: 'cancel quiz leave' }))
+
+      await user.click(screen.getByRole('button', { name: 'exit quiz' }))
+
+      expect(await screen.findByRole('listitem', { name: 'Caching basics' })).toBeInTheDocument()
     })
   })
 })

@@ -31,7 +31,7 @@ For each spec, the cycle MUST be followed in this exact order:
 ## Language
 
 - All code must be written in **English**: variable names, functions, types, constants, comments, internal error messages, and file names
-- User-facing UI text is in **English**, except the Architecture Lab (catalog, generation dialog, Start Exam dialog, exam, result and history screens) and the exercise offer card in the study chat. Those follow the profile's assistant language (`pt` or `en`) through i18next: strings live in `frontend/src/i18n/locales/{en,pt}.ts` and components read them with `useTranslation()`. The menu, navigation and the other screens stay in English and do not use i18next. The language follows the profile by itself (see `frontend/src/lib/profile.ts`)
+- User-facing UI text is in **English**, except the Architecture Lab (catalog, generation dialog, Start Exam dialog, exam, result and history screens), the exercise offer card in the study chat and the Interactive Test screens (catalog, generation dialog, quiz, result and history). Those follow the profile's assistant language (`pt` or `en`) through i18next: the lab's strings live in `frontend/src/i18n/locales/{en,pt}.ts` and the quiz's, in their own `quiz` namespace, in `frontend/src/i18n/locales/quiz-{en,pt}.ts`; components read them with `useTranslation()`. The menu, navigation and the other screens stay in English and do not use i18next. The language follows the profile by itself (see `frontend/src/lib/profile.ts`)
 
 ## Architecture rules
 

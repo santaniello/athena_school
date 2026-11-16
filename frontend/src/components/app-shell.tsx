@@ -20,6 +20,8 @@ import SettingsScreen from '@/screens/SettingsScreen'
 import DocumentationScreen from '@/screens/DocumentationScreen'
 import ArchitectureLabScreen from '@/screens/ArchitectureLabScreen'
 import LabExamScreen from '@/screens/LabExamScreen'
+import QuizScreen from '@/screens/QuizScreen'
+import QuizTakeScreen from '@/screens/QuizTakeScreen'
 import type { LabReturn } from '@/lib/lab'
 import type { ExamToStart } from '@/components/lab/start-exam-dialog'
 import { ToastViewport, type ToastItem } from '@/components/toast'
@@ -88,6 +90,10 @@ function AppShell() {
   // or the study session that offered it. Not persisted.
   const [labReturn, setLabReturn] = useState<LabReturn>({ kind: 'catalog' })
   const [pendingSection, setPendingSection] = useState<AppSection | null>(null)
+  // The quiz being taken, a full-screen state of the Interactive Test section.
+  // While it is open, navigating elsewhere waits for the quiz's own leave
+  // question. Exam and quiz never run together, so they share pendingSection.
+  const [takingQuizId, setTakingQuizId] = useState<string | null>(null)
   const [notices, setNotices] = useState<ToastItem[]>([])
   const [profile, setProfile] = useState<ProfileDraft | null>(null)
   const [activeSession, setActiveSession] = useState<ActiveStudySession | null>(null)
@@ -229,11 +235,21 @@ function AppShell() {
   }
 
   function navigate(next: AppSection) {
-    if (!exam) {
-      setSection(next)
+    if (exam) {
+      if (next !== 'challenge') setPendingSection(next)
       return
     }
-    if (next !== 'challenge') setPendingSection(next)
+    if (takingQuizId) {
+      if (next !== 'quiz') setPendingSection(next)
+      return
+    }
+    setSection(next)
+  }
+
+  function handleQuizExit() {
+    setTakingQuizId(null)
+    if (pendingSection) setSection(pendingSection)
+    setPendingSection(null)
   }
 
   // The opening turn was asked for, so any later mount of this chat resumes
@@ -537,6 +553,17 @@ function AppShell() {
               experienceLevel={profile?.experienceLevel}
               onStartExam={startCatalogExam}
             />
+          )
+        ) : section === 'quiz' ? (
+          takingQuizId ? (
+            <QuizTakeScreen
+              quizId={takingQuizId}
+              leaveRequested={pendingSection !== null}
+              onLeaveCancelled={() => setPendingSection(null)}
+              onExit={handleQuizExit}
+            />
+          ) : (
+            <QuizScreen experienceLevel={profile?.experienceLevel} onTake={setTakingQuizId} />
           )
         ) : section === 'documentation' ? (
           <DocumentationScreen />

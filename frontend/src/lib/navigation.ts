@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   BookOpen,
+  ClipboardCheck,
   FileText,
   Home,
   Layers,
@@ -19,6 +20,7 @@ export type AppSection =
   | 'home'
   | 'study'
   | 'challenge'
+  | 'quiz'
   | 'progress'
   | 'flashcards'
   | 'interview'
@@ -67,6 +69,16 @@ export const NAVIGATION: NavItem[] = [
     group: 'primary',
     description:
       'Architecture challenges generated from what you studied, with a diagram and an evaluation.',
+  },
+  {
+    id: 'quiz',
+    label: 'Interactive Test',
+    icon: ClipboardCheck,
+    phase: 3,
+    status: 'unlocked',
+    group: 'primary',
+    description:
+      'Tests made from what you studied in a session, graded from 0 to 10, with every attempt kept.',
   },
   {
     id: 'progress',
