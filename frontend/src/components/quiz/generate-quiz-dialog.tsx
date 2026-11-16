@@ -26,6 +26,7 @@ import {
   QUIZ_DIFFICULTIES,
   cancelQuizGeneration,
   generateQuiz,
+  parseQuestionCount,
   quizDifficultyLabel,
   quizErrorCode,
   quizErrorMessage,
@@ -54,14 +55,6 @@ export function GenerateQuizDialog({ open, ...rest }: GenerateQuizDialogProps) {
 
 type Sessions =
   { state: 'loading' } | { state: 'failed' } | { state: 'ready'; list: SessionOption[] }
-
-// The count field is text while it is typed; only a whole number inside the
-// backend's range is a valid count.
-function parseCount(text: string): number | null {
-  if (!/^\d+$/.test(text)) return null
-  const count = Number(text)
-  return count >= MIN_QUESTIONS && count <= MAX_QUESTIONS ? count : null
-}
 
 function GenerateQuizContent({
   defaultDifficulty,
@@ -108,7 +101,7 @@ function GenerateQuizContent({
     setReloadToken((token) => token + 1)
   }
 
-  const count = parseCount(countText)
+  const count = parseQuestionCount(countText)
 
   async function handleGenerate() {
     if (!selectedId || count === null) return

@@ -35,6 +35,7 @@ function summary(overrides: Partial<QuizSummary>): QuizSummary {
     createdAt: '2026-11-16T09:30:00Z',
     attemptCount: 0,
     latestScore: null,
+    messageId: '',
     ...overrides,
   }
 }

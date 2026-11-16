@@ -89,6 +89,7 @@ export const quizEn = {
     questionNumber: 'Question {{number}}',
     takeAgain: 'Take again',
     back: 'Back to tests',
+    backToSession: 'Back to study session',
   },
   history: {
     title: 'Attempts',
@@ -109,6 +110,19 @@ export const quizEn = {
     invalid_generation: 'The generated test was not valid. Try again.',
     generation_in_progress: 'A test is already being generated.',
     selection_invalid: 'Some answers were not valid. Reopen the test and try again.',
+    offer_not_found: 'This test offer is no longer available.',
+  },
+  offer: {
+    title: 'Take a test about this session',
+    questions: 'Questions',
+    difficulty: 'Difficulty',
+    accept: 'Accept',
+    decline: 'Decline',
+    preparing: 'Writing your test... this can take a moment.',
+  },
+  sessionCard: {
+    start: 'Take test',
+    startAgain: 'Take again',
   },
 }
 

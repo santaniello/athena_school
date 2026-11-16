@@ -90,6 +90,7 @@ export const quizPt: QuizLocale = {
     questionNumber: 'Questão {{number}}',
     takeAgain: 'Fazer de novo',
     back: 'Voltar aos testes',
+    backToSession: 'Voltar à sessão de estudo',
   },
   history: {
     title: 'Tentativas',
@@ -110,5 +111,18 @@ export const quizPt: QuizLocale = {
     invalid_generation: 'O teste gerado não era válido. Tente novamente.',
     generation_in_progress: 'Já existe um teste sendo gerado.',
     selection_invalid: 'Algumas respostas não eram válidas. Reabra o teste e tente de novo.',
+    offer_not_found: 'Esta oferta de teste não está mais disponível.',
+  },
+  offer: {
+    title: 'Faça um teste sobre esta sessão',
+    questions: 'Questões',
+    difficulty: 'Dificuldade',
+    accept: 'Aceitar',
+    decline: 'Recusar',
+    preparing: 'Escrevendo o seu teste... isso pode levar um instante.',
+  },
+  sessionCard: {
+    start: 'Fazer o teste',
+    startAgain: 'Fazer de novo',
   },
 }

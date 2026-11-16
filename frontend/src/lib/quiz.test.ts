@@ -1,27 +1,36 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   CancelQuizGeneration,
+  AcceptQuizOffer,
+  DeclineQuizOffer,
   DeleteQuiz,
   GenerateQuiz,
+  GetPendingQuizOffer,
   GetQuiz,
   GetQuizAttemptResult,
   ListQuizAttempts,
   ListQuizzes,
+  ListSessionQuizzes,
   SubmitQuizAttempt,
 } from '../../wailsjs/go/desktop/App'
 import { setLabLanguage } from '@/i18n'
 import {
+  acceptQuizOffer,
   cancelQuizGeneration,
+  declineQuizOffer,
   countBlank,
   deleteQuiz,
   difficultyForExperience,
   formatQuizDate,
   formatScore,
   generateQuiz,
+  getPendingQuizOffer,
   getQuiz,
   getQuizAttemptResult,
   listQuizAttempts,
   listQuizzes,
+  listSessionQuizzes,
+  parseQuestionCount,
   quizDifficultyLabel,
   quizErrorCode,
   quizErrorMessage,
@@ -30,13 +39,17 @@ import {
 } from './quiz'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
+  AcceptQuizOffer: vi.fn(),
   CancelQuizGeneration: vi.fn(),
+  DeclineQuizOffer: vi.fn(),
   DeleteQuiz: vi.fn(),
   GenerateQuiz: vi.fn(),
+  GetPendingQuizOffer: vi.fn(),
   GetQuiz: vi.fn(),
   GetQuizAttemptResult: vi.fn(),
   ListQuizAttempts: vi.fn(),
   ListQuizzes: vi.fn(),
+  ListSessionQuizzes: vi.fn(),
   SubmitQuizAttempt: vi.fn(),
 }))
 
@@ -136,6 +149,77 @@ describe('quiz bindings', () => {
     await deleteQuiz('quiz-1')
 
     expect(DeleteQuiz).toHaveBeenCalledWith('quiz-1')
+  })
+})
+
+describe('quiz offers of the study chat', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('reads the pending offer of a session', async () => {
+    vi.mocked(GetPendingQuizOffer).mockResolvedValueOnce({
+      id: 'offer-1',
+      sessionId: 'session-1',
+      messageId: 'message-1',
+    } as never)
+
+    const offer = await getPendingQuizOffer('session-1')
+
+    expect(GetPendingQuizOffer).toHaveBeenCalledWith('session-1')
+    expect(offer).toEqual({ id: 'offer-1', sessionId: 'session-1', messageId: 'message-1' })
+  })
+
+  it('reads no offer as null', async () => {
+    vi.mocked(GetPendingQuizOffer).mockResolvedValueOnce(null as never)
+
+    await expect(getPendingQuizOffer('session-1')).resolves.toBeNull()
+  })
+
+  it('accepts an offer with the chosen size and difficulty and returns the card', async () => {
+    vi.mocked(AcceptQuizOffer).mockResolvedValueOnce({
+      id: 'quiz-1',
+      messageId: 'message-1',
+      latestScore: undefined,
+    } as never)
+
+    const quiz = await acceptQuizOffer('offer-1', 8, 'HARD')
+
+    expect(AcceptQuizOffer).toHaveBeenCalledWith('offer-1', 8, 'HARD')
+    expect(quiz.id).toBe('quiz-1')
+    expect(quiz.latestScore).toBeNull()
+  })
+
+  it('declines an offer', async () => {
+    vi.mocked(DeclineQuizOffer).mockResolvedValueOnce(undefined)
+
+    await declineQuizOffer('offer-1')
+
+    expect(DeclineQuizOffer).toHaveBeenCalledWith('offer-1')
+  })
+
+  it('lists the quizzes of a session, turning an absent latest score into null', async () => {
+    vi.mocked(ListSessionQuizzes).mockResolvedValueOnce([
+      { id: 'a', messageId: 'message-1', latestScore: 6 },
+      { id: 'b', messageId: 'message-2' },
+    ] as never)
+
+    const quizzes = await listSessionQuizzes('session-1')
+
+    expect(ListSessionQuizzes).toHaveBeenCalledWith('session-1')
+    expect(quizzes.map((quiz) => [quiz.messageId, quiz.latestScore])).toEqual([
+      ['message-1', 6],
+      ['message-2', null],
+    ])
+  })
+
+  it('writes a message for an offer that is gone, in the profile language', () => {
+    expect(quizErrorMessage(JSON.stringify({ code: 'offer_not_found' }))).toBe(
+      'This test offer is no longer available.',
+    )
+    setLabLanguage('pt')
+    expect(quizErrorMessage(JSON.stringify({ code: 'offer_not_found' }))).toBe(
+      'Esta oferta de teste não está mais disponível.',
+    )
+    setLabLanguage('en')
   })
 })
 
@@ -247,5 +331,27 @@ describe('quiz helpers', () => {
     expect(quizDifficultyLabel('WEIRD')).toBe('WEIRD')
     setLabLanguage('pt')
     expect(quizDifficultyLabel('HARD')).toBe('Difícil')
+  })
+})
+
+describe('parseQuestionCount', () => {
+  it('accepts a whole number inside the backend range, bounds included', () => {
+    expect(parseQuestionCount('3')).toBe(3)
+    expect(parseQuestionCount('10')).toBe(10)
+    expect(parseQuestionCount('20')).toBe(20)
+  })
+
+  it('refuses a count outside the range', () => {
+    expect(parseQuestionCount('2')).toBeNull()
+    expect(parseQuestionCount('21')).toBeNull()
+    expect(parseQuestionCount('0')).toBeNull()
+  })
+
+  it('refuses text that is not a whole number', () => {
+    expect(parseQuestionCount('')).toBeNull()
+    expect(parseQuestionCount('abc')).toBeNull()
+    expect(parseQuestionCount('7.5')).toBeNull()
+    expect(parseQuestionCount('-5')).toBeNull()
+    expect(parseQuestionCount(' 7')).toBeNull()
   })
 })

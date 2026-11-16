@@ -34,6 +34,7 @@ const QUIZ: QuizSummary = {
   createdAt: '2026-11-16T09:30:00Z',
   attemptCount: 0,
   latestScore: null,
+  messageId: '',
 }
 
 function renderDialog(overrides: Partial<React.ComponentProps<typeof GenerateQuizDialog>> = {}) {

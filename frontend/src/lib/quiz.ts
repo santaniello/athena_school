@@ -1,11 +1,15 @@
 import {
+  AcceptQuizOffer,
   CancelQuizGeneration,
+  DeclineQuizOffer,
   DeleteQuiz,
   GenerateQuiz,
+  GetPendingQuizOffer,
   GetQuiz,
   GetQuizAttemptResult,
   ListQuizAttempts,
   ListQuizzes,
+  ListSessionQuizzes,
   SubmitQuizAttempt,
 } from '../../wailsjs/go/desktop/App'
 import i18n, { QUIZ_NAMESPACE } from '@/i18n'
@@ -22,6 +26,14 @@ export const MIN_QUESTIONS = 3
 export const MAX_QUESTIONS = 20
 export const DEFAULT_QUESTIONS = 10
 
+// A count field is text while it is typed; only a whole number inside the
+// backend's range is a valid count, and anything else is null.
+export function parseQuestionCount(text: string): number | null {
+  if (!/^\d+$/.test(text)) return null
+  const count = Number(text)
+  return count >= MIN_QUESTIONS && count <= MAX_QUESTIONS ? count : null
+}
+
 // A quiz as the catalog lists it. latestScore is null until it has been taken.
 export interface QuizSummary {
   id: string
@@ -33,6 +45,9 @@ export interface QuizSummary {
   createdAt: string
   attemptCount: number
   latestScore: number | null
+  // The study-chat message whose offer produced the quiz; empty for one made
+  // from the menu.
+  messageId: string
 }
 
 export interface QuizQuestion {
@@ -104,6 +119,40 @@ export async function generateQuiz(
   return toSummary(await GenerateQuiz(sessionId, count, difficulty))
 }
 
+// A pending quiz offer of the study chat: it hangs under the assistant message
+// messageId. See
+// specs/phases/phase-03-architecture-lab/23-interactive-quiz-chat-offer.md.
+export interface QuizOffer {
+  id: string
+  sessionId: string
+  messageId: string
+}
+
+export async function getPendingQuizOffer(sessionId: string): Promise<QuizOffer | null> {
+  const offer = await GetPendingQuizOffer(sessionId)
+  if (!offer) return null
+  return { id: offer.id, sessionId: offer.sessionId, messageId: offer.messageId }
+}
+
+// Accepting generates the quiz, so it takes as long as generateQuiz and rejects
+// with a coded error the same way. The offer stays pending on a failure.
+export async function acceptQuizOffer(
+  offerId: string,
+  count: number,
+  difficulty: QuizDifficulty,
+): Promise<QuizSummary> {
+  return toSummary(await AcceptQuizOffer(offerId, count, difficulty))
+}
+
+export function declineQuizOffer(offerId: string): Promise<void> {
+  return DeclineQuizOffer(offerId)
+}
+
+// The quizzes the session's offers produced: the cards under the chat messages.
+export async function listSessionQuizzes(sessionId: string): Promise<QuizSummary[]> {
+  return (await ListSessionQuizzes(sessionId)).map(toSummary)
+}
+
 export function cancelQuizGeneration(): Promise<void> {
   return CancelQuizGeneration()
 }
@@ -166,6 +215,7 @@ const ERROR_CODES = [
   'invalid_generation',
   'generation_in_progress',
   'selection_invalid',
+  'offer_not_found',
 ]
 
 export function quizErrorMessage(err: unknown): string {
