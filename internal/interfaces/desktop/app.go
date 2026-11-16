@@ -45,6 +45,10 @@ type App struct {
 	sessionCards  sessionExerciseCards
 	catalog       challengeCatalog
 	sessionLister sessionLister
+	quizGenerator quizGenerator
+	quizzes       quizUseCases
+	// quizGeneration lets one quiz generation run at a time, and be cancelled.
+	quizGeneration generationSlot
 	// cancelGeneration cancels the challenge generation in flight, if any.
 	// Guarded by generationMu; only one generation runs at a time.
 	generationMu     sync.Mutex

@@ -775,6 +775,7 @@ export namespace desktop {
 	    queryEnrichment: string;
 	    noteFormatting: string;
 	    architectureLab: string;
+	    quiz: string;
 	    embedding: string;
 	
 	    static createFrom(source: any = {}) {
@@ -788,6 +789,7 @@ export namespace desktop {
 	        this.queryEnrichment = source["queryEnrichment"];
 	        this.noteFormatting = source["noteFormatting"];
 	        this.architectureLab = source["architectureLab"];
+	        this.quiz = source["quiz"];
 	        this.embedding = source["embedding"];
 	    }
 	}
@@ -825,6 +827,191 @@ export namespace desktop {
 	}
 	
 	
+	export class QuizResultQuestionDTO {
+	    id: string;
+	    position: number;
+	    kind: string;
+	    prompt: string;
+	    options: string[];
+	    correctIndex: number;
+	    explanation: string;
+	    selectedIndex?: number;
+	    correct: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new QuizResultQuestionDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.position = source["position"];
+	        this.kind = source["kind"];
+	        this.prompt = source["prompt"];
+	        this.options = source["options"];
+	        this.correctIndex = source["correctIndex"];
+	        this.explanation = source["explanation"];
+	        this.selectedIndex = source["selectedIndex"];
+	        this.correct = source["correct"];
+	    }
+	}
+	export class QuizAttemptSummaryDTO {
+	    id: string;
+	    quizId: string;
+	    correctCount: number;
+	    total: number;
+	    score: number;
+	    finishedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new QuizAttemptSummaryDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.quizId = source["quizId"];
+	        this.correctCount = source["correctCount"];
+	        this.total = source["total"];
+	        this.score = source["score"];
+	        this.finishedAt = source["finishedAt"];
+	    }
+	}
+	export class QuizAttemptResultDTO {
+	    attempt: QuizAttemptSummaryDTO;
+	    sessionTitle: string;
+	    difficulty: string;
+	    questions: QuizResultQuestionDTO[];
+	
+	    static createFrom(source: any = {}) {
+	        return new QuizAttemptResultDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.attempt = this.convertValues(source["attempt"], QuizAttemptSummaryDTO);
+	        this.sessionTitle = source["sessionTitle"];
+	        this.difficulty = source["difficulty"];
+	        this.questions = this.convertValues(source["questions"], QuizResultQuestionDTO);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class QuizQuestionDTO {
+	    id: string;
+	    position: number;
+	    kind: string;
+	    prompt: string;
+	    options: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new QuizQuestionDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.position = source["position"];
+	        this.kind = source["kind"];
+	        this.prompt = source["prompt"];
+	        this.options = source["options"];
+	    }
+	}
+	export class QuizDTO {
+	    id: string;
+	    sessionTitle: string;
+	    difficulty: string;
+	    questions: QuizQuestionDTO[];
+	
+	    static createFrom(source: any = {}) {
+	        return new QuizDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.sessionTitle = source["sessionTitle"];
+	        this.difficulty = source["difficulty"];
+	        this.questions = this.convertValues(source["questions"], QuizQuestionDTO);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
+	export class QuizSelectionDTO {
+	    questionId: string;
+	    selectedIndex?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new QuizSelectionDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.questionId = source["questionId"];
+	        this.selectedIndex = source["selectedIndex"];
+	    }
+	}
+	export class QuizSummaryDTO {
+	    id: string;
+	    sessionId: string;
+	    sessionTitle: string;
+	    difficulty: string;
+	    questionCount: number;
+	    createdAt: string;
+	    attemptCount: number;
+	    latestScore?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new QuizSummaryDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.sessionId = source["sessionId"];
+	        this.sessionTitle = source["sessionTitle"];
+	        this.difficulty = source["difficulty"];
+	        this.questionCount = source["questionCount"];
+	        this.createdAt = source["createdAt"];
+	        this.attemptCount = source["attemptCount"];
+	        this.latestScore = source["latestScore"];
+	    }
+	}
 	
 	export class SaveModelSettingsResult {
 	    embeddingModelChanged: boolean;

@@ -21,6 +21,7 @@ import (
 	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
 	"github.com/santaniello/athena/internal/application/modelcatalog"
 	"github.com/santaniello/athena/internal/application/onboarding"
+	applicationquiz "github.com/santaniello/athena/internal/application/quiz"
 	applicationreset "github.com/santaniello/athena/internal/application/reset"
 	"github.com/santaniello/athena/internal/application/settings"
 	"github.com/santaniello/athena/internal/application/study"
@@ -31,6 +32,7 @@ import (
 	"github.com/santaniello/athena/internal/infrastructure/exercisesource"
 	"github.com/santaniello/athena/internal/infrastructure/openrouter"
 	"github.com/santaniello/athena/internal/infrastructure/profilefile"
+	"github.com/santaniello/athena/internal/infrastructure/quizsource"
 	"github.com/santaniello/athena/internal/infrastructure/sqlite"
 	"github.com/santaniello/athena/internal/infrastructure/vectorstore"
 	"github.com/santaniello/athena/internal/infrastructure/webfetch"
@@ -191,6 +193,17 @@ func main() {
 	challengeCatalog := applicationexercise.NewCatalogService(challengeRepo, sqlite.NewAttemptRecordRepository(db))
 	sessionService := applicationexercise.NewSessionService(sqlite.NewSessionOptionRepository(db))
 
+	quizRepo := sqlite.NewQuizRepository(db)
+	quizGenerationService := applicationquiz.NewGenerationService(
+		quizsource.NewSessions(studySessions),
+		quizsource.NewSummaries(sqlite.NewConversationSummaryRepository(db)),
+		quizsource.NewProfiles(profiles),
+		quizsource.NewNotes(knowledgeService),
+		llmClient,
+		quizRepo,
+	)
+	quizService := applicationquiz.NewService(quizRepo)
+
 	resetter := sqlite.NewResetter(db)
 	resetService := applicationreset.NewService(resetter, vectorStore)
 
@@ -208,6 +221,8 @@ func main() {
 		desktop.WithSessionExerciseService(sessionExerciseService),
 		desktop.WithCatalogService(challengeCatalog),
 		desktop.WithSessionLister(sessionService),
+		desktop.WithQuizGenerationService(quizGenerationService),
+		desktop.WithQuizService(quizService),
 	)
 
 	err = wails.Run(&options.App{

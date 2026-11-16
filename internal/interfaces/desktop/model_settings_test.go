@@ -59,6 +59,7 @@ func TestApp_GetModelSettings_returnsChoicesAndDefaultsForTheUI(t *testing.T) {
 		QueryEnrichment:     "openai/gpt-4o-mini",
 		NoteFormatting:      "anthropic/claude-sonnet-4.5",
 		ArchitectureLab:     "anthropic/claude-sonnet-4.5",
+		Quiz:                "anthropic/claude-sonnet-4.5",
 		Embedding:           "openai/text-embedding-3-small",
 	}, result.Defaults)
 }
@@ -101,6 +102,20 @@ func TestApp_SaveModelSettings_savesTheArchitectureLabModel(t *testing.T) {
 
 	// When saving it
 	_, err := f.app.SaveModelSettings(ModelChoices{ArchitectureLab: "openai/gpt-5"})
+
+	// Then it reaches the config
+	require.NoError(t, err)
+}
+
+func TestApp_SaveModelSettings_savesTheQuizModel(t *testing.T) {
+	// Given a catalog that knows the chosen quiz model
+	f := newModelSettingsApp(t, nil)
+	f.catalog.EXPECT().ListModels(context.Background()).Return([]domainllm.ModelInfo{{ID: "openai/gpt-5"}}, nil).Once()
+	f.config.EXPECT().Load().Return(domainconfig.Config{OpenRouterKey: "k"}, nil).Once()
+	f.config.EXPECT().Save(domainconfig.Config{OpenRouterKey: "k", Models: domainconfig.ModelSettings{Quiz: "openai/gpt-5"}}).Return(nil).Once()
+
+	// When saving it
+	_, err := f.app.SaveModelSettings(ModelChoices{Quiz: "openai/gpt-5"})
 
 	// Then it reaches the config
 	require.NoError(t, err)

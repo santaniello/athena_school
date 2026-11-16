@@ -65,6 +65,7 @@ func defaultModelSettings() domainconfig.ModelSettings {
 		QueryEnrichment:     defaults.ModelFor(domainllm.TaskQueryEnrichment),
 		NoteFormatting:      defaults.ModelFor(domainllm.TaskNoteFormatting),
 		ArchitectureLab:     defaults.ModelFor(domainllm.TaskArchitectureLab),
+		Quiz:                defaults.ModelFor(domainllm.TaskQuiz),
 		Embedding:           defaults.EmbeddingModel(),
 	}
 }
@@ -108,6 +109,7 @@ func (s *Service) apply(models domainconfig.ModelSettings) {
 		domainllm.TaskQueryEnrichment:     models.QueryEnrichment,
 		domainllm.TaskNoteFormatting:      models.NoteFormatting,
 		domainllm.TaskArchitectureLab:     models.ArchitectureLab,
+		domainllm.TaskQuiz:                models.Quiz,
 	}, models.Embedding)
 }
 
@@ -150,6 +152,7 @@ func trimmed(models domainconfig.ModelSettings) domainconfig.ModelSettings {
 		QueryEnrichment:     strings.TrimSpace(models.QueryEnrichment),
 		NoteFormatting:      strings.TrimSpace(models.NoteFormatting),
 		ArchitectureLab:     strings.TrimSpace(models.ArchitectureLab),
+		Quiz:                strings.TrimSpace(models.Quiz),
 		Embedding:           strings.TrimSpace(models.Embedding),
 	}
 }
@@ -157,7 +160,7 @@ func trimmed(models domainconfig.ModelSettings) domainconfig.ModelSettings {
 // validate checks every non-empty choice against its catalog. A catalog is
 // fetched only when something needs it.
 func (s *Service) validate(ctx context.Context, models domainconfig.ModelSettings) error {
-	chat := []string{models.Study, models.ConversationSummary, models.QueryEnrichment, models.NoteFormatting, models.ArchitectureLab}
+	chat := []string{models.Study, models.ConversationSummary, models.QueryEnrichment, models.NoteFormatting, models.ArchitectureLab, models.Quiz}
 	if slices.ContainsFunc(chat, func(id string) bool { return id != "" }) {
 		listed, err := s.catalog.ListModels(ctx)
 		if err != nil {
