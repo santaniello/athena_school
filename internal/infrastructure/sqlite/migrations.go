@@ -278,6 +278,47 @@ var migrations = []func(*sql.DB) error{
 		created_at TEXT NOT NULL,
 		UNIQUE (session_id)
 	)`),
+	// Interactive Quiz (spec 3.21). A quiz keeps its session_id and a title
+	// snapshot with no foreign key, so it outlives its session: only an explicit
+	// delete removes it. Everything under a quiz cascades from it, and answers
+	// also cascade from their question. options is a JSON list of strings, and
+	// selected_index is NULL for a blank answer. See
+	// specs/phases/phase-03-architecture-lab/21-interactive-quiz-core.md.
+	execSQL(`CREATE TABLE IF NOT EXISTS quizzes (
+		id            TEXT PRIMARY KEY,
+		session_id    TEXT NOT NULL,
+		session_title TEXT NOT NULL,
+		difficulty    TEXT NOT NULL,
+		created_at    TEXT NOT NULL
+	)`),
+	execSQL(`CREATE TABLE IF NOT EXISTS quiz_questions (
+		id            TEXT PRIMARY KEY,
+		quiz_id       TEXT NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
+		position      INTEGER NOT NULL,
+		kind          TEXT NOT NULL,
+		prompt        TEXT NOT NULL,
+		options       TEXT NOT NULL,
+		correct_index INTEGER NOT NULL,
+		explanation   TEXT NOT NULL,
+		UNIQUE (quiz_id, position)
+	)`),
+	execSQL(`CREATE TABLE IF NOT EXISTS quiz_attempts (
+		id            TEXT PRIMARY KEY,
+		quiz_id       TEXT NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
+		correct_count INTEGER NOT NULL,
+		total         INTEGER NOT NULL,
+		score         REAL NOT NULL,
+		finished_at   TEXT NOT NULL
+	)`),
+	execSQL(`CREATE INDEX IF NOT EXISTS idx_quiz_attempts_quiz_finished ON quiz_attempts (quiz_id, finished_at)`),
+	execSQL(`CREATE TABLE IF NOT EXISTS quiz_answers (
+		attempt_id     TEXT NOT NULL REFERENCES quiz_attempts(id) ON DELETE CASCADE,
+		question_id    TEXT NOT NULL REFERENCES quiz_questions(id) ON DELETE CASCADE,
+		position       INTEGER NOT NULL,
+		selected_index INTEGER,
+		correct        INTEGER NOT NULL,
+		PRIMARY KEY (attempt_id, question_id)
+	)`),
 }
 
 // addAttemptsFailureReasonColumn adds challenge_attempts.failure_reason if it
