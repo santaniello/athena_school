@@ -3,6 +3,8 @@ package study
 import (
 	"fmt"
 	"strings"
+
+	domainstudy "github.com/santaniello/athena/internal/domain/study"
 )
 
 // exerciseOfferMarker is the fixed token the model ends a reply with when the
@@ -21,18 +23,56 @@ var exerciseOfferInstruction = fmt.Sprintf(
 	exerciseOfferMarker,
 )
 
-// stripExerciseOfferMarker removes every marker from content and reports
-// whether there was one. Content without a marker is returned untouched.
-func stripExerciseOfferMarker(content string) (string, bool) {
-	if !strings.Contains(content, exerciseOfferMarker) {
-		return content, false
+// quizOfferMarker is the fixed token the model ends a reply with when the user
+// explicitly asked for a quiz or a test about the session. It is handled like
+// exerciseOfferMarker. See
+// specs/phases/phase-03-architecture-lab/23-interactive-quiz-chat-offer.md.
+const quizOfferMarker = "[[ATHENA_QUIZ_OFFER]]"
+
+// quizOfferInstruction is the study-prompt rule that makes the model emit the
+// quiz marker. It is a pure string so the prompt test pins it.
+var quizOfferInstruction = fmt.Sprintf(
+	"\n- If, and only if, the user explicitly asks you for a quiz or a test about this topic "+
+		"(for example \"quiz me\" or \"give me a test\"), answer in one or two short sentences "+
+		"and end the reply with the exact text %s on its own line. "+
+		"Never propose a quiz on your own, and never write that text in any other case.",
+	quizOfferMarker,
+)
+
+// offerMarkers lists every marker, in the order of precedence when a reply
+// carries more than one: the exercise offer wins.
+var offerMarkers = []struct {
+	marker string
+	kind   domainstudy.OfferKind
+}{
+	{exerciseOfferMarker, domainstudy.OfferKindExercise},
+	{quizOfferMarker, domainstudy.OfferKindQuiz},
+}
+
+// stripOfferMarkers removes every marker from content and reports the offer
+// they ask for: the exercise when both kinds are present, domainstudy.OfferKindNone when
+// there is no marker. Content without a marker is returned untouched.
+func stripOfferMarkers(content string) (string, domainstudy.OfferKind) {
+	kind := domainstudy.OfferKindNone
+	stripped := content
+	for _, candidate := range offerMarkers {
+		if !strings.Contains(stripped, candidate.marker) {
+			continue
+		}
+		stripped = strings.ReplaceAll(stripped, candidate.marker, "")
+		if kind == domainstudy.OfferKindNone {
+			kind = candidate.kind
+		}
 	}
-	return strings.TrimSpace(strings.ReplaceAll(content, exerciseOfferMarker, "")), true
+	if kind == domainstudy.OfferKindNone {
+		return content, domainstudy.OfferKindNone
+	}
+	return strings.TrimSpace(stripped), kind
 }
 
 // offerMarkerFilter sits in the chunk stream shown to the user. It drops
 // complete markers and holds back a trailing partial marker, so the user
-// never sees even a fragment of it. A fragment that never completes is
+// never sees even a fragment of one. A fragment that never completes is
 // released by flush.
 type offerMarkerFilter struct {
 	pending string
@@ -41,8 +81,8 @@ type offerMarkerFilter struct {
 // write takes the next chunk and returns the text that is safe to show now.
 func (f *offerMarkerFilter) write(chunk string) string {
 	f.pending += chunk
-	if strings.Contains(f.pending, exerciseOfferMarker) {
-		f.pending = strings.ReplaceAll(f.pending, exerciseOfferMarker, "")
+	for _, candidate := range offerMarkers {
+		f.pending = strings.ReplaceAll(f.pending, candidate.marker, "")
 	}
 	held := partialMarkerSuffixLength(f.pending)
 	safe := f.pending[:len(f.pending)-held]
@@ -58,11 +98,16 @@ func (f *offerMarkerFilter) flush() string {
 }
 
 // partialMarkerSuffixLength is the length of the longest suffix of text that
-// is a proper prefix of the marker.
+// is a proper prefix of any marker.
 func partialMarkerSuffixLength(text string) int {
-	n := len(exerciseOfferMarker) - 1
-	for n > 0 && !strings.HasSuffix(text, exerciseOfferMarker[:n]) {
-		n--
+	longest := 0
+	for _, candidate := range offerMarkers {
+		for n := len(candidate.marker) - 1; n > longest; n-- {
+			if strings.HasSuffix(text, candidate.marker[:n]) {
+				longest = n
+				break
+			}
+		}
 	}
-	return n
+	return longest
 }

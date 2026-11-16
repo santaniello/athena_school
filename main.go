@@ -34,6 +34,7 @@ import (
 	"github.com/santaniello/athena/internal/infrastructure/profilefile"
 	"github.com/santaniello/athena/internal/infrastructure/quizsource"
 	"github.com/santaniello/athena/internal/infrastructure/sqlite"
+	"github.com/santaniello/athena/internal/infrastructure/studyoffers"
 	"github.com/santaniello/athena/internal/infrastructure/vectorstore"
 	"github.com/santaniello/athena/internal/infrastructure/webfetch"
 	"github.com/santaniello/athena/internal/interfaces/desktop"
@@ -145,7 +146,7 @@ func main() {
 		study.WithSummarizer(study.NewSummarizer(llmClient, profiles, study.WithSummaryModelWindow(summaryWindow))),
 		study.WithSummaryWindow(summaryWindow),
 		study.WithSummaries(sqlite.NewConversationSummaryRepository(db)),
-		study.WithOfferGate(exercisesource.NewOfferGate(offerService)),
+		study.WithOfferGate(studyoffers.NewGate(exercisesource.NewOfferGate(offerService), nil)),
 		study.WithExerciseFeedback(exercisesource.NewFeedbackReader(feedbackService)),
 	)
 	folderService := folder.NewService(folders, studySessions, knowledgeService)

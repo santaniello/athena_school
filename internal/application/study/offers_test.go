@@ -120,8 +120,8 @@ func TestSendMessage_createsTheOfferUnderTheStoredReply_andHidesTheMarker(t *tes
 	gate := applicationstudymocks.NewMockOfferGate(t)
 	gate.EXPECT().HasPending(context.Background(), "session-1").Return(false, nil).Once()
 	var offerMessageID string
-	gate.EXPECT().CreateOffer(context.Background(), "session-1", mock.AnythingOfType("string")).
-		Run(func(_ context.Context, _, messageID string) { offerMessageID = messageID }).Return(nil).Once()
+	gate.EXPECT().CreateOffer(context.Background(), "session-1", mock.AnythingOfType("string"), domainstudy.OfferKindExercise).
+		Run(func(_ context.Context, _, messageID string, _ domainstudy.OfferKind) { offerMessageID = messageID }).Return(nil).Once()
 
 	// When it streams
 	outcome, err := streamReply(t, []string{"Sure, let's practice.\n", "[[ATHENA_EXER", "CISE_OFFER]]"}, gate)
@@ -131,6 +131,39 @@ func TestSendMessage_createsTheOfferUnderTheStoredReply_andHidesTheMarker(t *tes
 	require.Equal(t, "Sure, let's practice.\n", joined(outcome.received))
 	require.Equal(t, "Sure, let's practice.", outcome.stored.Content)
 	require.Equal(t, outcome.stored.ID, offerMessageID)
+}
+
+func TestSendMessage_createsAQuizOfferUnderTheStoredReply_andHidesTheMarker(t *testing.T) {
+	// Given a reply that ends with the quiz marker, split mid-marker
+	gate := applicationstudymocks.NewMockOfferGate(t)
+	gate.EXPECT().HasPending(context.Background(), "session-1").Return(false, nil).Once()
+	var offerMessageID string
+	gate.EXPECT().CreateOffer(context.Background(), "session-1", mock.AnythingOfType("string"), domainstudy.OfferKindQuiz).
+		Run(func(_ context.Context, _, messageID string, _ domainstudy.OfferKind) { offerMessageID = messageID }).Return(nil).Once()
+
+	// When it streams
+	outcome, err := streamReply(t, []string{"Sure, a quiz.\n", "[[ATHENA_QU", "IZ_OFFER]]"}, gate)
+
+	// Then the user never saw the marker, the stored text is clean and the quiz offer hangs under that message
+	require.NoError(t, err)
+	require.Equal(t, "Sure, a quiz.\n", joined(outcome.received))
+	require.Equal(t, "Sure, a quiz.", outcome.stored.Content)
+	require.Equal(t, outcome.stored.ID, offerMessageID)
+}
+
+func TestSendMessage_createsOnlyTheExerciseOffer_whenTheReplyHasBothMarkers(t *testing.T) {
+	// Given a reply that carries both markers
+	gate := applicationstudymocks.NewMockOfferGate(t)
+	gate.EXPECT().HasPending(context.Background(), "session-1").Return(false, nil).Once()
+	gate.EXPECT().CreateOffer(context.Background(), "session-1", mock.AnythingOfType("string"), domainstudy.OfferKindExercise).Return(nil).Once()
+
+	// When it streams
+	outcome, err := streamReply(t, []string{"Sure.\n[[ATHENA_QUIZ_OFFER]][[ATHENA_EXERCISE_OFFER]]"}, gate)
+
+	// Then one exercise offer is created and neither marker is shown or stored
+	require.NoError(t, err)
+	require.Equal(t, "Sure.\n", joined(outcome.received))
+	require.Equal(t, "Sure.", outcome.stored.Content)
 }
 
 func TestSendMessage_createsNoOffer_whenTheReplyHasNoMarker(t *testing.T) {
@@ -165,7 +198,7 @@ func TestSendMessage_doesNotFailTheReply_whenTheOfferCannotBeCreated(t *testing.
 	// Given an offer creation that fails
 	gate := applicationstudymocks.NewMockOfferGate(t)
 	gate.EXPECT().HasPending(context.Background(), "session-1").Return(false, nil).Once()
-	gate.EXPECT().CreateOffer(context.Background(), "session-1", mock.AnythingOfType("string")).Return(errors.New("db down")).Once()
+	gate.EXPECT().CreateOffer(context.Background(), "session-1", mock.AnythingOfType("string"), domainstudy.OfferKindExercise).Return(errors.New("db down")).Once()
 
 	// When a reply with the marker streams
 	outcome, err := streamReply(t, []string{"Sure.", exerciseOfferMarker}, gate)
