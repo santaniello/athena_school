@@ -124,7 +124,7 @@ describe('DOCUMENTATION interactive test', () => {
   it('explains the grade, the answer key and what leaving does', () => {
     expect(quiz?.status).toBe('available')
     expect(text).toContain('0 to 10')
-    expect(text).toContain('blank')
+    expect(text).toContain('only appears once every question is answered')
     expect(text).toContain('leaving discards')
     expect(text).toContain('History')
   })

@@ -185,7 +185,7 @@ describe('QuizTakeScreen', () => {
     await user.click(screen.getByRole('radio', { name: 'A' }))
   }
 
-  it('submits without asking when every question is answered, then shows the result', async () => {
+  it('submits when every question is answered, then shows the result', async () => {
     const user = userEvent.setup()
     vi.mocked(submitQuizAttempt).mockResolvedValue(ATTEMPT)
     await loaded()
@@ -203,40 +203,22 @@ describe('QuizTakeScreen', () => {
     expect(getQuizAttemptResult).toHaveBeenCalledWith('attempt-1')
   })
 
-  it('warns about blank questions, and lets the user keep answering', async () => {
+  it('hides Finish until every question is answered, and again when an answer is cleared', async () => {
     const user = userEvent.setup()
     await loaded()
-    await user.click(screen.getByRole('radio', { name: 'FIFO' }))
+    expect(screen.queryByRole('button', { name: 'Finish' })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Finish' }))
-
-    const dialog = screen.getByRole('alertdialog')
-    expect(
-      within(dialog).getByText('2 questions are blank and count as wrong.'),
-    ).toBeInTheDocument()
-    await user.click(within(dialog).getByRole('button', { name: 'Keep answering' }))
-    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
-    expect(submitQuizAttempt).not.toHaveBeenCalled()
-  })
-
-  it('submits anyway when the user insists, and says one blank question in the singular', async () => {
-    const user = userEvent.setup()
-    vi.mocked(submitQuizAttempt).mockResolvedValue(ATTEMPT)
-    await loaded()
     await user.click(screen.getByRole('radio', { name: 'FIFO' }))
     await user.click(screen.getByRole('button', { name: 'Question 2' }))
     await user.click(screen.getByRole('radio', { name: 'False' }))
+    expect(screen.queryByRole('button', { name: 'Finish' })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Finish' }))
-    expect(screen.getByText('1 question is blank and counts as wrong.')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Finish anyway' }))
+    await user.click(screen.getByRole('button', { name: 'Question 3' }))
+    await user.click(screen.getByRole('radio', { name: 'A' }))
+    expect(screen.getByRole('button', { name: 'Finish' })).toBeInTheDocument()
 
-    expect(submitQuizAttempt).toHaveBeenCalledWith('quiz-1', [
-      { questionId: 'q1', selectedIndex: 1 },
-      { questionId: 'q2', selectedIndex: 1 },
-      { questionId: 'q3', selectedIndex: null },
-    ])
-    expect(await screen.findByText('1 of 3 correct')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Clear answer' }))
+    expect(screen.queryByRole('button', { name: 'Finish' })).not.toBeInTheDocument()
   })
 
   it('shows progress while grading and keeps the answers when the submission fails', async () => {
@@ -417,6 +399,6 @@ describe('QuizTakeScreen', () => {
     renderScreen()
 
     expect(await screen.findByText('Questão 1 de 3')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Finalizar' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Próxima' })).toBeInTheDocument()
   })
 })

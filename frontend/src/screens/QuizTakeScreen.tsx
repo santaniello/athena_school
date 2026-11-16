@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
-import { QuizBlankDialog } from '@/components/quiz/quiz-blank-dialog'
 import { QuizDifficultyBadge } from '@/components/quiz/quiz-difficulty-badge'
 import { QuizLeaveDialog } from '@/components/quiz/quiz-leave-dialog'
 import { QuizResultView } from '@/components/quiz/quiz-result-view'
@@ -83,7 +82,6 @@ function TakingStage({
   const { t } = useTranslation('quiz')
   const session = useQuizSession(quizId)
   const [leaving, setLeaving] = useState(false)
-  const [warningBlank, setWarningBlank] = useState(false)
 
   // Until the quiz has loaded there is nothing to lose, so a navigation
   // request is granted instead of asking.
@@ -95,11 +93,6 @@ function TakingStage({
   async function submit() {
     const graded = await session.submit()
     if (graded) onGraded(graded)
-  }
-
-  function handleFinish() {
-    if (session.blankCount > 0) setWarningBlank(true)
-    else void submit()
   }
 
   if (session.state === 'loading') {
@@ -125,7 +118,7 @@ function TakingStage({
   const last = index === quiz.questions.length - 1
 
   return (
-    <div className="flex min-h-0 w-full max-w-3xl flex-col gap-5">
+    <div className="flex min-h-0 mx-auto w-full max-w-3xl flex-col gap-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -227,20 +220,13 @@ function TakingStage({
             {t('take.next')}
           </Button>
         </div>
-        <Button type="button" disabled={session.submitting} onClick={handleFinish}>
-          {t('take.finish')}
-        </Button>
+        {session.blankCount === 0 && (
+          <Button type="button" disabled={session.submitting} onClick={() => void submit()}>
+            {t('take.finish')}
+          </Button>
+        )}
       </footer>
 
-      <QuizBlankDialog
-        open={warningBlank}
-        blankCount={session.blankCount}
-        onKeepAnswering={() => setWarningBlank(false)}
-        onFinish={() => {
-          setWarningBlank(false)
-          void submit()
-        }}
-      />
       <QuizLeaveDialog
         open={leaving || leaveRequested}
         onCancel={() => {
@@ -267,7 +253,7 @@ function ResultStage({
   const { t } = useTranslation('quiz')
   const { state, result, reload } = useQuizResult(attemptId)
   return (
-    <div className="thin-scroll min-h-0 w-full max-w-3xl overflow-y-auto">
+    <div className="thin-scroll min-h-0 mx-auto w-full max-w-3xl overflow-y-auto">
       {state === 'loading' && (
         <p className="text-sm text-muted-foreground">{t('result.loading')}</p>
       )}
