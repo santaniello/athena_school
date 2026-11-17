@@ -19,6 +19,7 @@ import (
 	"github.com/santaniello/athena/internal/application/folder"
 	applicationingest "github.com/santaniello/athena/internal/application/ingest"
 	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
+	applicationmindmap "github.com/santaniello/athena/internal/application/mindmap"
 	"github.com/santaniello/athena/internal/application/modelcatalog"
 	"github.com/santaniello/athena/internal/application/onboarding"
 	applicationquiz "github.com/santaniello/athena/internal/application/quiz"
@@ -30,6 +31,7 @@ import (
 	"github.com/santaniello/athena/internal/infrastructure/athenahome"
 	"github.com/santaniello/athena/internal/infrastructure/configfile"
 	"github.com/santaniello/athena/internal/infrastructure/exercisesource"
+	"github.com/santaniello/athena/internal/infrastructure/mindmapsource"
 	"github.com/santaniello/athena/internal/infrastructure/openrouter"
 	"github.com/santaniello/athena/internal/infrastructure/profilefile"
 	"github.com/santaniello/athena/internal/infrastructure/quizsource"
@@ -151,6 +153,17 @@ func main() {
 	quizService := applicationquiz.NewService(quizRepo)
 	quizOfferService := applicationquiz.NewOfferService(sqlite.NewQuizOfferRepository(db), quizRepo, quizGenerationService)
 
+	mindMapRepo := sqlite.NewMindMapRepository(db)
+	mindMapGenerationService := applicationmindmap.NewGenerationService(
+		mindmapsource.NewSessions(studySessions),
+		mindmapsource.NewSummaries(sqlite.NewConversationSummaryRepository(db)),
+		mindmapsource.NewProfiles(profiles),
+		mindmapsource.NewNotes(knowledgeService),
+		llmClient,
+		mindMapRepo,
+	)
+	mindMapService := applicationmindmap.NewService(mindMapRepo)
+
 	studyService := study.NewService(
 		studySessions, studyMessages, llmClient, profiles, folders, knowledgeService, transactor, contextResolver,
 		messageSources, knowledgeService, queryEnricher,
@@ -226,6 +239,8 @@ func main() {
 		desktop.WithQuizGenerationService(quizGenerationService),
 		desktop.WithQuizService(quizService),
 		desktop.WithQuizOfferService(quizOfferService),
+		desktop.WithMindMapGenerationService(mindMapGenerationService),
+		desktop.WithMindMapService(mindMapService),
 	)
 
 	err = wails.Run(&options.App{

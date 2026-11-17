@@ -769,6 +769,56 @@ export namespace desktop {
 	        this.understandingScore = source["understandingScore"];
 	    }
 	}
+	export class MindMapDTO {
+	    id: string;
+	    sessionId: string;
+	    sessionTitle: string;
+	    title: string;
+	    createdAt: string;
+	    updatedAt: string;
+	    messageId: string;
+	    diagramXml: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MindMapDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.sessionId = source["sessionId"];
+	        this.sessionTitle = source["sessionTitle"];
+	        this.title = source["title"];
+	        this.createdAt = source["createdAt"];
+	        this.updatedAt = source["updatedAt"];
+	        this.messageId = source["messageId"];
+	        this.diagramXml = source["diagramXml"];
+	    }
+	}
+	export class MindMapSummaryDTO {
+	    id: string;
+	    sessionId: string;
+	    sessionTitle: string;
+	    title: string;
+	    createdAt: string;
+	    updatedAt: string;
+	    messageId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MindMapSummaryDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.sessionId = source["sessionId"];
+	        this.sessionTitle = source["sessionTitle"];
+	        this.title = source["title"];
+	        this.createdAt = source["createdAt"];
+	        this.updatedAt = source["updatedAt"];
+	        this.messageId = source["messageId"];
+	    }
+	}
 	export class ModelChoices {
 	    study: string;
 	    conversationSummary: string;

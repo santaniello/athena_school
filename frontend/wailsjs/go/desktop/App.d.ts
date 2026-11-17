@@ -11,6 +11,8 @@ export function AnswerDefenseQuestion(arg1:string,arg2:string):Promise<desktop.D
 
 export function CancelChallengeGeneration():Promise<void>;
 
+export function CancelMindMapGeneration():Promise<void>;
+
 export function CancelQuizGeneration():Promise<void>;
 
 export function CompactStudySession(arg1:string):Promise<void>;
@@ -27,6 +29,8 @@ export function DeclineQuizOffer(arg1:string):Promise<void>;
 
 export function DeleteFolder(arg1:string):Promise<void>;
 
+export function DeleteMindMap(arg1:string):Promise<void>;
+
 export function DeleteQuiz(arg1:string):Promise<void>;
 
 export function DeleteStudySession(arg1:string):Promise<void>;
@@ -41,6 +45,8 @@ export function EvaluateDefense(arg1:string):Promise<desktop.OutcomeDTO>;
 
 export function GenerateChallenge(arg1:string,arg2:string,arg3:string,arg4:string):Promise<desktop.ChallengeSummaryDTO>;
 
+export function GenerateMindMap(arg1:string):Promise<desktop.MindMapSummaryDTO>;
+
 export function GenerateQuiz(arg1:string,arg2:number,arg3:string):Promise<desktop.QuizSummaryDTO>;
 
 export function GetAttempt(arg1:string):Promise<desktop.AttemptDTO>;
@@ -52,6 +58,8 @@ export function GetDefense(arg1:string):Promise<desktop.DefenseDTO>;
 export function GetEvaluation(arg1:string):Promise<desktop.EvaluationDTO>;
 
 export function GetKnowledgeIndexStatus():Promise<desktop.IndexStatusResult>;
+
+export function GetMindMap(arg1:string):Promise<desktop.MindMapDTO>;
 
 export function GetModelSettings():Promise<desktop.ModelSettingsResult>;
 
@@ -91,6 +99,8 @@ export function ListFolders():Promise<Array<desktop.FolderResult>>;
 
 export function ListHints(arg1:string):Promise<Array<desktop.HintDTO>>;
 
+export function ListMindMaps():Promise<Array<desktop.MindMapSummaryDTO>>;
+
 export function ListQuizAttempts(arg1:string):Promise<Array<desktop.QuizAttemptSummaryDTO>>;
 
 export function ListQuizzes():Promise<Array<desktop.QuizSummaryDTO>>;
@@ -98,6 +108,8 @@ export function ListQuizzes():Promise<Array<desktop.QuizSummaryDTO>>;
 export function ListSelectableModels():Promise<desktop.SelectableModelsResult>;
 
 export function ListSessionExercises(arg1:string):Promise<Array<desktop.SessionExerciseCardDTO>>;
+
+export function ListSessionMindMaps(arg1:string):Promise<Array<desktop.MindMapSummaryDTO>>;
 
 export function ListSessionQuizzes(arg1:string):Promise<Array<desktop.QuizSummaryDTO>>;
 
@@ -119,6 +131,8 @@ export function PreviewImport(arg1:string,arg2:string):Promise<desktop.ImportPre
 
 export function PreviewLinkImport(arg1:string,arg2:string):Promise<desktop.ImportPreviewResult>;
 
+export function RegenerateMindMap(arg1:string):Promise<desktop.MindMapDTO>;
+
 export function RemoveSessionSource(arg1:string,arg2:string):Promise<void>;
 
 export function RenameFolder(arg1:string,arg2:string):Promise<void>;
@@ -132,6 +146,8 @@ export function ResetLocalData():Promise<void>;
 export function ResumeStudySession(arg1:string):Promise<desktop.StudySessionHistoryResult>;
 
 export function RetryKnowledgeIndex():Promise<desktop.IndexStatusResult>;
+
+export function SaveMindMapDiagram(arg1:string,arg2:string):Promise<desktop.MindMapDTO>;
 
 export function SaveModelSettings(arg1:desktop.ModelChoices):Promise<desktop.SaveModelSettingsResult>;
 
