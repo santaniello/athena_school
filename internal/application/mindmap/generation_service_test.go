@@ -197,19 +197,14 @@ func TestGenerationService_Generate_rejectsASessionWithoutATopic(t *testing.T) {
 	f := newGenerationFixture(t)
 	ctx := context.Background()
 	f.sessions.EXPECT().ReadSession(ctx, "session-1").Return(domainmindmap.SourceSession{Topic: "  "}, nil).Once()
-	f.summaries.EXPECT().ReadSummary(ctx, "session-1").Return("", nil).Once()
-	f.profiles.EXPECT().ReadProfile(ctx).Return(testProfile, nil).Once()
-	f.notes.EXPECT().SearchNotes(ctx, "session-1", "  ").Return(nil, nil).Once()
-	f.llm.EXPECT().Chat(ctx, domainllm.ChatRequest{
-		SessionID: "session-1", Task: domainllm.TaskMindMap,
-		Messages: buildPrompt(generationContext{Topic: "  ", Profile: testProfile}),
-	}).Return(domainllm.ChatResponse{Content: validTree}, nil).Once()
 
 	// When the mind map is generated
 	_, err := f.service.Generate(ctx, "session-1")
 
-	// Then the domain rule rejects it and nothing is stored
+	// Then the domain rule rejects it before any model call, nothing is stored,
+	// and the error does not blame the model's tree
 	assert.ErrorIs(t, err, domainmindmap.ErrSessionTitleRequired)
+	assert.NotErrorIs(t, err, ErrInvalidTree)
 }
 
 func TestGenerationService_Generate_failsWhenTheMapCannotBeSaved(t *testing.T) {
@@ -338,17 +333,12 @@ func TestGenerationService_Regenerate_rejectsASessionWithoutATopic(t *testing.T)
 	ctx := context.Background()
 	f.repo.EXPECT().Get(ctx, "map-1").Return(storedMindMap(t), nil).Once()
 	f.sessions.EXPECT().ReadSession(ctx, "session-1").Return(domainmindmap.SourceSession{Topic: " "}, nil).Once()
-	f.summaries.EXPECT().ReadSummary(ctx, "session-1").Return("", nil).Once()
-	f.profiles.EXPECT().ReadProfile(ctx).Return(testProfile, nil).Once()
-	f.notes.EXPECT().SearchNotes(ctx, "session-1", " ").Return(nil, nil).Once()
-	f.llm.EXPECT().Chat(ctx, domainllm.ChatRequest{
-		SessionID: "session-1", Task: domainllm.TaskMindMap,
-		Messages: buildPrompt(generationContext{Topic: " ", Profile: testProfile}),
-	}).Return(domainllm.ChatResponse{Content: validTree}, nil).Once()
 
 	// When it is regenerated
 	_, err := f.service.Regenerate(ctx, "map-1")
 
-	// Then the domain rule refuses it and the stored map is not updated
+	// Then the domain rule refuses it before any model call and the stored map
+	// is not updated
 	assert.ErrorIs(t, err, domainmindmap.ErrSessionTitleRequired)
+	assert.NotErrorIs(t, err, ErrInvalidTree)
 }

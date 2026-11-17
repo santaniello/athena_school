@@ -26,6 +26,7 @@ type ModelSettings struct {
 	NoteFormatting      string
 	ArchitectureLab     string
 	Quiz                string
+	MindMap             string
 	Embedding           string
 }
 

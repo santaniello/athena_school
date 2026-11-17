@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
+	"github.com/santaniello/athena/internal/application/llmprompt"
 	domainexercise "github.com/santaniello/athena/internal/domain/exercise"
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
 )
@@ -99,7 +99,7 @@ func invalidEvaluation(format string, args ...any) error {
 // model id. It tolerates a Markdown code fence around the JSON and nothing else.
 func parseEvaluation(content string, rubric domainexercise.RubricVersion) (domainexercise.EvaluatorOutput, error) {
 	var answer evaluationAnswer
-	if err := json.Unmarshal([]byte(stripCodeFence(content)), &answer); err != nil {
+	if err := json.Unmarshal([]byte(llmprompt.StripCodeFence(content)), &answer); err != nil {
 		return domainexercise.EvaluatorOutput{}, invalidEvaluation("the answer is not the expected JSON: %v", err)
 	}
 	if answer.Summary == nil || answer.Strengths == nil || answer.Gaps == nil || answer.Recommendations == nil {
@@ -130,16 +130,4 @@ func parseEvaluation(content string, rubric domainexercise.RubricVersion) (domai
 		Summary: *answer.Summary, Strengths: *answer.Strengths, Gaps: *answer.Gaps,
 		Recommendations: *answer.Recommendations, Results: results,
 	}, nil
-}
-
-// stripCodeFence removes a surrounding ``` fence, with an optional language tag.
-func stripCodeFence(content string) string {
-	text := strings.TrimSpace(content)
-	if !strings.HasPrefix(text, "```") {
-		return text
-	}
-	if newline := strings.Index(text, "\n"); newline >= 0 {
-		text = text[newline+1:]
-	}
-	return strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(text), "```"))
 }
