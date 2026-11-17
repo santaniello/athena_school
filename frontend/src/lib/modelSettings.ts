@@ -33,6 +33,7 @@ export const MODEL_FEATURES: ModelFeature[] = [
   { key: 'noteFormatting', label: 'Note formatting (import)' },
   { key: 'architectureLab', label: 'Architecture Lab' },
   { key: 'quiz', label: 'Interactive Quiz' },
+  { key: 'mindMap', label: 'Mind Map' },
 ]
 
 export async function getModelSettings(): Promise<ModelSettings> {

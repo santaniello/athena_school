@@ -1,7 +1,6 @@
 package quiz
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -64,13 +63,6 @@ func TestParseQuestions_refusesABadAnswer(t *testing.T) {
 			assert.ErrorIs(t, err, ErrInvalidGeneration)
 		})
 	}
-}
-
-func TestStripCodeFence(t *testing.T) {
-	assert.Equal(t, `{"a":1}`, string(stripCodeFence(`  {"a":1}  `)))
-	assert.Equal(t, `{"a":1}`, string(stripCodeFence("```json\n{\"a\":1}\n```")))
-	assert.Equal(t, `{"a":1}`, string(stripCodeFence("```{\"a\":1}```")))
-	assert.False(t, strings.HasPrefix(string(stripCodeFence("```\nx\n```")), "`"))
 }
 
 func TestParseQuestions_namesTheQuestionWithoutACorrectIndex(t *testing.T) {
