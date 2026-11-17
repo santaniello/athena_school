@@ -103,8 +103,16 @@ func (m *fakeMindMaps) DeleteMindMap(_ context.Context, id string) error {
 	return m.err
 }
 
+// newMindMapTestApp builds an App with only the given options wired, so a change
+// to NewApp's parameters breaks one place, not every test.
+func newMindMapTestApp(options ...Option) *App {
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, options...)
+	app.ctx = context.Background()
+	return app
+}
+
 func newMindMapApp(generator mindMapGenerator, mindMaps mindMapUseCases) *App {
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, WithMindMapGenerationService(generator), WithMindMapService(mindMaps))
+	app := newMindMapTestApp(WithMindMapGenerationService(generator), WithMindMapService(mindMaps))
 	app.ctx = context.Background()
 	return app
 }
@@ -368,8 +376,7 @@ func TestMindMapError_errorIsJSON(t *testing.T) {
 
 func TestApp_mindMapBindings_reportUnavailableWhenTheirServiceIsNotWired(t *testing.T) {
 	// Given an app composed without any mind map service
-	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
-	app.ctx = context.Background()
+	app := newMindMapTestApp()
 
 	calls := map[string]func() error{
 		"GenerateMindMap":     func() error { _, err := app.GenerateMindMap("s"); return err },
@@ -388,4 +395,42 @@ func TestApp_mindMapBindings_reportUnavailableWhenTheirServiceIsNotWired(t *test
 			assert.Equal(t, mindMapCodeUnavailable, mindMapErr.Code)
 		})
 	}
+}
+
+func TestApp_mindMapBindings_trimTheID(t *testing.T) {
+	mindMaps := &fakeMindMaps{mindMap: boundMindMap()}
+	app := newMindMapApp(&fakeMindMapGenerator{}, mindMaps)
+
+	_, err := app.GetMindMap("  map-1 ")
+	require.NoError(t, err)
+	assert.Equal(t, "map-1", mindMaps.gotID)
+
+	_, err = app.SaveMindMapDiagram(" map-1\n", "<mxGraphModel/>")
+	require.NoError(t, err)
+	assert.Equal(t, "map-1", mindMaps.savedID)
+
+	require.NoError(t, app.DeleteMindMap("\tmap-1 "))
+	assert.Equal(t, "map-1", mindMaps.deletedID)
+}
+
+func TestApp_mindMapBindings_requireAnID(t *testing.T) {
+	mindMaps := &fakeMindMaps{mindMap: boundMindMap()}
+	app := newMindMapApp(&fakeMindMapGenerator{}, mindMaps)
+
+	_, getErr := app.GetMindMap("  ")
+	_, saveErr := app.SaveMindMapDiagram("", "<mxGraphModel/>")
+	deleteErr := app.DeleteMindMap(" ")
+
+	for _, err := range []error{getErr, saveErr, deleteErr} {
+		assert.Equal(t, mindMapCodeInvalidInput, mindMapCodeOf(t, err).Code)
+	}
+	assert.Empty(t, mindMaps.gotID)
+	assert.Empty(t, mindMaps.savedID)
+	assert.Empty(t, mindMaps.deletedID)
+}
+
+func TestToMindMapError_mapsADeadlineToTimeout(t *testing.T) {
+	err := toMindMapError(fmt.Errorf("generating: %w", context.DeadlineExceeded))
+
+	assert.Equal(t, mindMapCodeTimeout, err.Code)
 }

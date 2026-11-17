@@ -49,6 +49,7 @@ const (
 	mindMapCodeDiagramTooLarge      = "diagram_too_large"
 	mindMapCodeGenerationInProgress = "generation_in_progress"
 	mindMapCodeCancelled            = "cancelled"
+	mindMapCodeTimeout              = "timeout"
 	mindMapCodeUnavailable          = "unavailable"
 	mindMapCodeInternal             = "internal"
 )
@@ -85,6 +86,8 @@ func toMindMapError(err error) *MindMapError {
 		return &MindMapError{Code: mindMapCodeInvalidDiagram, Message: "the diagram is not valid"}
 	case errors.Is(err, context.Canceled):
 		return &MindMapError{Code: mindMapCodeCancelled, Message: "cancelled"}
+	case errors.Is(err, context.DeadlineExceeded):
+		return &MindMapError{Code: mindMapCodeTimeout, Message: "the request took too long, try again"}
 	}
 	log.Printf("mind map binding failed: %v", err)
 	return &MindMapError{Code: mindMapCodeInternal, Message: "something went wrong"}
@@ -115,6 +118,8 @@ type MindMapDTO struct {
 	DiagramXML string `json:"diagramXml"`
 }
 
+// toMindMapSummaryDTO converts a mind map to its catalog form. A Summary goes
+// through it too, so the DTO's fields are mapped in one place.
 func toMindMapSummaryDTO(m domainmindmap.MindMap) MindMapSummaryDTO {
 	return MindMapSummaryDTO{
 		ID: m.ID, SessionID: m.SessionID, SessionTitle: m.SessionTitle, Title: m.Title,
@@ -129,24 +134,44 @@ func toMindMapDTO(m domainmindmap.MindMap) MindMapDTO {
 func toMindMapSummaryDTOs(summaries []domainmindmap.Summary) []MindMapSummaryDTO {
 	dtos := make([]MindMapSummaryDTO, 0, len(summaries))
 	for _, summary := range summaries {
-		dtos = append(dtos, MindMapSummaryDTO{
+		dtos = append(dtos, toMindMapSummaryDTO(domainmindmap.MindMap{
 			ID: summary.ID, SessionID: summary.SessionID, SessionTitle: summary.SessionTitle, Title: summary.Title,
-			CreatedAt: summary.CreatedAt.Format(time.RFC3339), UpdatedAt: summary.UpdatedAt.Format(time.RFC3339),
-			MessageID: summary.MessageID,
-		})
+			CreatedAt: summary.CreatedAt, UpdatedAt: summary.UpdatedAt, MessageID: summary.MessageID,
+		}))
 	}
 	return dtos
+}
+
+// beginMindMapGeneration reserves the generation slot shared by GenerateMindMap
+// and RegenerateMindMap. It returns the context the generation runs under and
+// the function that frees the slot, or the error to return when the service is
+// not wired or a generation already runs.
+func (a *App) beginMindMapGeneration() (context.Context, func(), *MindMapError) {
+	if a.mindMapGenerator == nil {
+		return nil, nil, mindMapUnavailable()
+	}
+	ctx, release, ok := a.mindMapGeneration.begin(a.ctx)
+	if !ok {
+		return nil, nil, &MindMapError{Code: mindMapCodeGenerationInProgress, Message: "a mind map is already being generated"}
+	}
+	return ctx, release, nil
+}
+
+// requireMindMapID trims a mind map id and refuses an empty one.
+func requireMindMapID(id string) (string, *MindMapError) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return "", &MindMapError{Code: mindMapCodeInvalidInput, Message: "mind map id is required"}
+	}
+	return id, nil
 }
 
 // GenerateMindMap asks for a mind map about a studied session. Only one
 // generation runs at a time, regenerations included.
 func (a *App) GenerateMindMap(sessionID string) (MindMapSummaryDTO, error) {
-	if a.mindMapGenerator == nil {
-		return MindMapSummaryDTO{}, mindMapUnavailable()
-	}
-	ctx, release, ok := a.mindMapGeneration.begin(a.ctx)
-	if !ok {
-		return MindMapSummaryDTO{}, &MindMapError{Code: mindMapCodeGenerationInProgress, Message: "a mind map is already being generated"}
+	ctx, release, begun := a.beginMindMapGeneration()
+	if begun != nil {
+		return MindMapSummaryDTO{}, begun
 	}
 	defer release()
 	mindMap, err := a.mindMapGenerator.Generate(ctx, strings.TrimSpace(sessionID))
@@ -160,12 +185,9 @@ func (a *App) GenerateMindMap(sessionID string) (MindMapSummaryDTO, error) {
 // replacing what the user edited by hand. A failure leaves the map untouched.
 // It shares the generation slot with GenerateMindMap.
 func (a *App) RegenerateMindMap(id string) (MindMapDTO, error) {
-	if a.mindMapGenerator == nil {
-		return MindMapDTO{}, mindMapUnavailable()
-	}
-	ctx, release, ok := a.mindMapGeneration.begin(a.ctx)
-	if !ok {
-		return MindMapDTO{}, &MindMapError{Code: mindMapCodeGenerationInProgress, Message: "a mind map is already being generated"}
+	ctx, release, begun := a.beginMindMapGeneration()
+	if begun != nil {
+		return MindMapDTO{}, begun
 	}
 	defer release()
 	mindMap, err := a.mindMapGenerator.Regenerate(ctx, strings.TrimSpace(id))
@@ -218,6 +240,10 @@ func (a *App) GetMindMap(id string) (MindMapDTO, error) {
 	if a.mindMaps == nil {
 		return MindMapDTO{}, mindMapUnavailable()
 	}
+	id, invalid := requireMindMapID(id)
+	if invalid != nil {
+		return MindMapDTO{}, invalid
+	}
 	mindMap, err := a.mindMaps.GetMindMap(a.ctx, id)
 	if err != nil {
 		return MindMapDTO{}, toMindMapError(err)
@@ -230,6 +256,10 @@ func (a *App) SaveMindMapDiagram(id, diagramXML string) (MindMapDTO, error) {
 	if a.mindMaps == nil {
 		return MindMapDTO{}, mindMapUnavailable()
 	}
+	id, invalid := requireMindMapID(id)
+	if invalid != nil {
+		return MindMapDTO{}, invalid
+	}
 	mindMap, err := a.mindMaps.SaveDiagram(a.ctx, id, diagramXML)
 	if err != nil {
 		return MindMapDTO{}, toMindMapError(err)
@@ -241,6 +271,10 @@ func (a *App) SaveMindMapDiagram(id, diagramXML string) (MindMapDTO, error) {
 func (a *App) DeleteMindMap(id string) error {
 	if a.mindMaps == nil {
 		return mindMapUnavailable()
+	}
+	id, invalid := requireMindMapID(id)
+	if invalid != nil {
+		return invalid
 	}
 	if err := a.mindMaps.DeleteMindMap(a.ctx, id); err != nil {
 		return toMindMapError(err)
