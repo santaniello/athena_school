@@ -126,6 +126,9 @@ function Editing({ initial, returnTo, leaveRequested, onLeaveCancelled, onExit }
   const [editorUnavailable, setEditorUnavailable] = useState(!navigator.onLine)
   const [connectionLost, setConnectionLost] = useState(false)
   const [dirty, setDirty] = useState(false)
+  // Counts the editor's change events, so a Save can tell whether the user edited
+  // again while it was in flight: that edit is not in the saved map.
+  const editsRef = useRef(0)
   const [busy, setBusy] = useState<Busy>(null)
   const [message, setMessage] = useState<string | null>(null)
   // The question the user started: Update, Delete or Back with unsaved edits.
@@ -167,10 +170,11 @@ function Editing({ initial, returnTo, leaveRequested, onLeaveCancelled, onExit }
     if (!editor || busy) return
     setMessage(null)
     setBusy('saving')
+    const editsBeforeSave = editsRef.current
     try {
       const saved = await saveMindMapDiagram(mindMap.id, await editor.getXml())
       setMindMap(saved)
-      setDirty(false)
+      setDirty(editsRef.current !== editsBeforeSave)
     } catch (err) {
       setMessage(`${t('view.saveFailed')} ${mindMapErrorMessage(err)}`)
     } finally {
@@ -279,7 +283,10 @@ function Editing({ initial, returnTo, leaveRequested, onLeaveCancelled, onExit }
                 setEditorReady(true)
                 setConnectionLost(false)
               }}
-              onChange={() => setDirty(true)}
+              onChange={() => {
+                editsRef.current += 1
+                setDirty(true)
+              }}
               onConnectionLost={() => setConnectionLost(true)}
               onConnectionRestored={() => setConnectionLost(false)}
             />

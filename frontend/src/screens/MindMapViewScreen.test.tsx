@@ -185,6 +185,24 @@ describe('MindMapViewScreen', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
   })
 
+  it('keeps the unsaved mark when the map is edited again while saving', async () => {
+    const { user } = await openEditor()
+    let finishSave: (saved: MindMap) => void = () => {}
+    vi.mocked(saveMindMapDiagram).mockReturnValue(
+      new Promise((resolve) => {
+        finishSave = resolve
+      }),
+    )
+    edit()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    edit()
+    await act(async () => finishSave({ ...MAP, diagramXml: xmlOnBoard }))
+
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
+  })
+
   it('shows Saving... while the diagram is being saved', async () => {
     const { user } = await openEditor()
     vi.mocked(saveMindMapDiagram).mockReturnValue(new Promise(() => {}))
