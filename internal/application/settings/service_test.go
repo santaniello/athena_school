@@ -61,6 +61,7 @@ func TestGetModelSettings_returnsStoredChoicesAndTheDefaults(t *testing.T) {
 		NoteFormatting:      "anthropic/claude-sonnet-4.5",
 		ArchitectureLab:     "anthropic/claude-sonnet-4.5",
 		Quiz:                "anthropic/claude-sonnet-4.5",
+		MindMap:             "anthropic/claude-sonnet-4.5",
 		Embedding:           "openai/text-embedding-3-small",
 	}, view.Defaults)
 }
@@ -95,7 +96,7 @@ func TestApplyStored_pushesTheStoredChoicesIntoTheResolver(t *testing.T) {
 	// Given a stored config with several models chosen
 	f := newFixture(t)
 	f.config.EXPECT().Load().Return(domainconfig.Config{Models: domainconfig.ModelSettings{
-		Study: "openai/gpt-5", ConversationSummary: "x/y", QueryEnrichment: "q/r", NoteFormatting: "n/f", ArchitectureLab: "a/l", Quiz: "z/q", Embedding: "e/m",
+		Study: "openai/gpt-5", ConversationSummary: "x/y", QueryEnrichment: "q/r", NoteFormatting: "n/f", ArchitectureLab: "a/l", Quiz: "z/q", MindMap: "m/m", Embedding: "e/m",
 	}}, nil).Once()
 	f.applier.EXPECT().SetOverrides(map[domainllm.TaskType]string{
 		domainllm.TaskStudy:               "openai/gpt-5",
@@ -104,6 +105,7 @@ func TestApplyStored_pushesTheStoredChoicesIntoTheResolver(t *testing.T) {
 		domainllm.TaskNoteFormatting:      "n/f",
 		domainllm.TaskArchitectureLab:     "a/l",
 		domainllm.TaskQuiz:                "z/q",
+		domainllm.TaskMindMap:             "m/m",
 	}, "e/m").Once()
 
 	// When applying the stored settings at startup
@@ -132,9 +134,9 @@ func TestSaveModelSettings_validChoices_persistAndUpdateTheResolver(t *testing.T
 	ctx := context.Background()
 	f.catalog.EXPECT().ListModels(ctx).Return(chatCatalog, nil).Once()
 	f.config.EXPECT().Load().Return(domainconfig.Config{OpenRouterKey: "sk-or-key"}, nil).Once()
-	chosen := domainconfig.ModelSettings{Study: "openai/gpt-5", NoteFormatting: "openai/gpt-4o-mini", ArchitectureLab: " openai/gpt-5 ", Quiz: " openai/gpt-5 "}
+	chosen := domainconfig.ModelSettings{Study: "openai/gpt-5", NoteFormatting: "openai/gpt-4o-mini", ArchitectureLab: " openai/gpt-5 ", Quiz: " openai/gpt-5 ", MindMap: " openai/gpt-5 "}
 	f.config.EXPECT().Save(domainconfig.Config{OpenRouterKey: "sk-or-key", Models: domainconfig.ModelSettings{
-		Study: "openai/gpt-5", NoteFormatting: "openai/gpt-4o-mini", ArchitectureLab: "openai/gpt-5", Quiz: "openai/gpt-5",
+		Study: "openai/gpt-5", NoteFormatting: "openai/gpt-4o-mini", ArchitectureLab: "openai/gpt-5", Quiz: "openai/gpt-5", MindMap: "openai/gpt-5",
 	}}).Return(nil).Once()
 	f.applier.EXPECT().SetOverrides(map[domainllm.TaskType]string{
 		domainllm.TaskStudy:               "openai/gpt-5",
@@ -143,6 +145,7 @@ func TestSaveModelSettings_validChoices_persistAndUpdateTheResolver(t *testing.T
 		domainllm.TaskNoteFormatting:      "openai/gpt-4o-mini",
 		domainllm.TaskArchitectureLab:     "openai/gpt-5",
 		domainllm.TaskQuiz:                "openai/gpt-5",
+		domainllm.TaskMindMap:             "openai/gpt-5",
 	}, "").Once()
 
 	// When saving them
@@ -190,6 +193,19 @@ func TestSaveModelSettings_unknownQuizModel_isRejected(t *testing.T) {
 
 	// When saving it
 	_, err := f.service.SaveModelSettings(ctx, domainconfig.ModelSettings{Quiz: "made/up"})
+
+	// Then it is rejected and nothing is saved
+	require.ErrorIs(t, err, ErrUnknownModel)
+}
+
+func TestSaveModelSettings_unknownMindMapModel_isRejected(t *testing.T) {
+	// Given a catalog that does not list the chosen mind map model
+	f := newFixture(t)
+	ctx := context.Background()
+	f.catalog.EXPECT().ListModels(ctx).Return(chatCatalog, nil).Once()
+
+	// When saving it
+	_, err := f.service.SaveModelSettings(ctx, domainconfig.ModelSettings{MindMap: "made/up"})
 
 	// Then it is rejected and nothing is saved
 	require.ErrorIs(t, err, ErrUnknownModel)
@@ -370,6 +386,7 @@ func overridesOf(m domainconfig.ModelSettings) map[domainllm.TaskType]string {
 		domainllm.TaskNoteFormatting:      m.NoteFormatting,
 		domainllm.TaskArchitectureLab:     m.ArchitectureLab,
 		domainllm.TaskQuiz:                m.Quiz,
+		domainllm.TaskMindMap:             m.MindMap,
 	}
 }
 

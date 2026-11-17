@@ -60,6 +60,7 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
       noteFormatting: '',
       architectureLab: '',
       quiz: '',
+      mindMap: '',
       embedding: '',
     },
     defaults: {
@@ -69,6 +70,7 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
       noteFormatting: 'anthropic/claude-sonnet-4.5',
       architectureLab: 'anthropic/claude-sonnet-4.5',
       quiz: 'anthropic/claude-sonnet-4.5',
+      mindMap: 'anthropic/claude-sonnet-4.5',
       embedding: 'openai/text-embedding-3-small',
     },
   }),

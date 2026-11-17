@@ -100,6 +100,25 @@ func TestContextBuilder_continuesWithoutNotesWhenTheSearchFails(t *testing.T) {
 	assert.Empty(t, got.Notes)
 }
 
+func TestContextBuilder_failsWhenTheContextIsCancelledDuringTheNotesSearch(t *testing.T) {
+	// Given a notes search that fails because the caller cancelled
+	f := newContextFixture(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	f.summaries.EXPECT().ReadSummary(ctx, "session-1").Return("", nil).Once()
+	f.profiles.EXPECT().ReadProfile(ctx).Return(testProfile, nil).Once()
+	f.notes.EXPECT().SearchNotes(ctx, "session-1", "Distributed Caching").RunAndReturn(
+		func(context.Context, string, string) ([]domainmindmap.NoteExcerpt, error) {
+			cancel()
+			return nil, context.Canceled
+		}).Once()
+
+	// When the context is built
+	_, err := f.builder.build(ctx, "session-1", testSession)
+
+	// Then the cancellation is reported instead of a context without notes
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
 func TestBoundNotes_keepsAtMostMaxNoteChunks(t *testing.T) {
 	// Given more excerpts than the cap
 	found := make([]domainmindmap.NoteExcerpt, maxNoteChunks+3)

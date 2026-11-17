@@ -119,6 +119,7 @@ func fullModelSettings() config.ModelSettings {
 		NoteFormatting:      "anthropic/claude-sonnet-4.5",
 		ArchitectureLab:     "anthropic/claude-opus-4.5",
 		Quiz:                "openai/gpt-5",
+		MindMap:             "openai/gpt-4o-mini",
 		Embedding:           "openai/text-embedding-3-small",
 	}
 }
@@ -157,6 +158,7 @@ func TestStore_Save_writesTheDocumentedModelsKeys(t *testing.T) {
 	assert.Contains(t, text, "  note_formatting: anthropic/claude-sonnet-4.5")
 	assert.Contains(t, text, "  architecture_lab: anthropic/claude-opus-4.5")
 	assert.Contains(t, text, "  quiz: openai/gpt-5")
+	assert.Contains(t, text, "  mind_map: openai/gpt-4o-mini")
 	assert.Contains(t, text, "  embedding: openai/text-embedding-3-small")
 	assert.Contains(t, text, "openrouter_key: sk-or-abc123")
 }
