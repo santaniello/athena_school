@@ -18,6 +18,10 @@ export function CancelChallengeGeneration() {
   return window['go']['desktop']['App']['CancelChallengeGeneration']();
 }
 
+export function CancelMindMapGeneration() {
+  return window['go']['desktop']['App']['CancelMindMapGeneration']();
+}
+
 export function CancelQuizGeneration() {
   return window['go']['desktop']['App']['CancelQuizGeneration']();
 }
@@ -50,6 +54,10 @@ export function DeleteFolder(arg1) {
   return window['go']['desktop']['App']['DeleteFolder'](arg1);
 }
 
+export function DeleteMindMap(arg1) {
+  return window['go']['desktop']['App']['DeleteMindMap'](arg1);
+}
+
 export function DeleteQuiz(arg1) {
   return window['go']['desktop']['App']['DeleteQuiz'](arg1);
 }
@@ -78,6 +86,10 @@ export function GenerateChallenge(arg1, arg2, arg3, arg4) {
   return window['go']['desktop']['App']['GenerateChallenge'](arg1, arg2, arg3, arg4);
 }
 
+export function GenerateMindMap(arg1) {
+  return window['go']['desktop']['App']['GenerateMindMap'](arg1);
+}
+
 export function GenerateQuiz(arg1, arg2, arg3) {
   return window['go']['desktop']['App']['GenerateQuiz'](arg1, arg2, arg3);
 }
@@ -100,6 +112,10 @@ export function GetEvaluation(arg1) {
 
 export function GetKnowledgeIndexStatus() {
   return window['go']['desktop']['App']['GetKnowledgeIndexStatus']();
+}
+
+export function GetMindMap(arg1) {
+  return window['go']['desktop']['App']['GetMindMap'](arg1);
 }
 
 export function GetModelSettings() {
@@ -178,6 +194,10 @@ export function ListHints(arg1) {
   return window['go']['desktop']['App']['ListHints'](arg1);
 }
 
+export function ListMindMaps() {
+  return window['go']['desktop']['App']['ListMindMaps']();
+}
+
 export function ListQuizAttempts(arg1) {
   return window['go']['desktop']['App']['ListQuizAttempts'](arg1);
 }
@@ -192,6 +212,10 @@ export function ListSelectableModels() {
 
 export function ListSessionExercises(arg1) {
   return window['go']['desktop']['App']['ListSessionExercises'](arg1);
+}
+
+export function ListSessionMindMaps(arg1) {
+  return window['go']['desktop']['App']['ListSessionMindMaps'](arg1);
 }
 
 export function ListSessionQuizzes(arg1) {
@@ -234,6 +258,10 @@ export function PreviewLinkImport(arg1, arg2) {
   return window['go']['desktop']['App']['PreviewLinkImport'](arg1, arg2);
 }
 
+export function RegenerateMindMap(arg1) {
+  return window['go']['desktop']['App']['RegenerateMindMap'](arg1);
+}
+
 export function RemoveSessionSource(arg1, arg2) {
   return window['go']['desktop']['App']['RemoveSessionSource'](arg1, arg2);
 }
@@ -260,6 +288,10 @@ export function ResumeStudySession(arg1) {
 
 export function RetryKnowledgeIndex() {
   return window['go']['desktop']['App']['RetryKnowledgeIndex']();
+}
+
+export function SaveMindMapDiagram(arg1, arg2) {
+  return window['go']['desktop']['App']['SaveMindMapDiagram'](arg1, arg2);
 }
 
 export function SaveModelSettings(arg1) {
