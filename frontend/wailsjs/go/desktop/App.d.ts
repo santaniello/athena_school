@@ -5,9 +5,13 @@ import {context} from '../models';
 
 export function AcceptOffer(arg1:string,arg2:string,arg3:string,arg4:string):Promise<desktop.SessionExerciseDTO>;
 
+export function AcceptQuizOffer(arg1:string,arg2:number,arg3:string):Promise<desktop.QuizSummaryDTO>;
+
 export function AnswerDefenseQuestion(arg1:string,arg2:string):Promise<desktop.DefenseDTO>;
 
 export function CancelChallengeGeneration():Promise<void>;
+
+export function CancelQuizGeneration():Promise<void>;
 
 export function CompactStudySession(arg1:string):Promise<void>;
 
@@ -19,7 +23,11 @@ export function CreateFolder(arg1:string):Promise<desktop.FolderResult>;
 
 export function DeclineOffer(arg1:string):Promise<void>;
 
+export function DeclineQuizOffer(arg1:string):Promise<void>;
+
 export function DeleteFolder(arg1:string):Promise<void>;
+
+export function DeleteQuiz(arg1:string):Promise<void>;
 
 export function DeleteStudySession(arg1:string):Promise<void>;
 
@@ -32,6 +40,8 @@ export function EvaluateAttempt(arg1:string):Promise<desktop.EvaluationDTO>;
 export function EvaluateDefense(arg1:string):Promise<desktop.OutcomeDTO>;
 
 export function GenerateChallenge(arg1:string,arg2:string,arg3:string,arg4:string):Promise<desktop.ChallengeSummaryDTO>;
+
+export function GenerateQuiz(arg1:string,arg2:number,arg3:string):Promise<desktop.QuizSummaryDTO>;
 
 export function GetAttempt(arg1:string):Promise<desktop.AttemptDTO>;
 
@@ -49,7 +59,13 @@ export function GetPassScore():Promise<number>;
 
 export function GetPendingOffer(arg1:string):Promise<desktop.ExerciseOfferDTO>;
 
+export function GetPendingQuizOffer(arg1:string):Promise<desktop.QuizOfferDTO>;
+
 export function GetProfile():Promise<desktop.UserProfileInput>;
+
+export function GetQuiz(arg1:string):Promise<desktop.QuizDTO>;
+
+export function GetQuizAttemptResult(arg1:string):Promise<desktop.QuizAttemptResultDTO>;
 
 export function GetSessionSourceDocument(arg1:string,arg2:string):Promise<desktop.SourceDocumentResult>;
 
@@ -75,9 +91,15 @@ export function ListFolders():Promise<Array<desktop.FolderResult>>;
 
 export function ListHints(arg1:string):Promise<Array<desktop.HintDTO>>;
 
+export function ListQuizAttempts(arg1:string):Promise<Array<desktop.QuizAttemptSummaryDTO>>;
+
+export function ListQuizzes():Promise<Array<desktop.QuizSummaryDTO>>;
+
 export function ListSelectableModels():Promise<desktop.SelectableModelsResult>;
 
 export function ListSessionExercises(arg1:string):Promise<Array<desktop.SessionExerciseCardDTO>>;
+
+export function ListSessionQuizzes(arg1:string):Promise<Array<desktop.QuizSummaryDTO>>;
 
 export function ListSessionSources(arg1:string):Promise<Array<desktop.SessionSourceResult>>;
 
@@ -130,5 +152,7 @@ export function StartStudySession(arg1:string,arg2:string,arg3:string):Promise<d
 export function Startup(arg1:context.Context):Promise<void>;
 
 export function SubmitAttempt(arg1:string,arg2:string,arg3:string):Promise<desktop.AttemptDTO>;
+
+export function SubmitQuizAttempt(arg1:string,arg2:Array<desktop.QuizSelectionDTO>):Promise<desktop.QuizAttemptSummaryDTO>;
 
 export function UpdateProfile(arg1:desktop.UserProfileInput):Promise<desktop.UserProfileInput>;

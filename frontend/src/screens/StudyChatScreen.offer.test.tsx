@@ -67,7 +67,7 @@ vi.mock('@/lib/study', async (importOriginal) => ({
 }))
 
 const OFFER: ExerciseOffer = { id: 'offer-1', sessionId: 'session-1', messageId: 'm2' }
-const PENDING_TEXT = 'Accept or decline the exercise offer to keep chatting.'
+const PENDING_TEXT = 'Accept or decline the offer to keep chatting.'
 
 interface Handlers {
   done?: (event: StudyDoneEvent) => void
@@ -149,6 +149,7 @@ async function renderResumed(props: Partial<ComponentProps<typeof StudyChatScree
       onStartNewSession={vi.fn()}
       startingNewSession={false}
       onStartExam={vi.fn()}
+      onStartQuiz={vi.fn()}
       {...props}
     />,
   )
@@ -450,9 +451,7 @@ describe('StudyChatScreen — exercise offer', () => {
     )
 
     expect(
-      await screen.findByText(
-        'Accept or decline the exercise offer before sending another message.',
-      ),
+      await screen.findByText('Accept or decline the offer before sending another message.'),
     ).toBeInTheDocument()
   })
 })

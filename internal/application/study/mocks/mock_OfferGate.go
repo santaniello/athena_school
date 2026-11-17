@@ -5,6 +5,7 @@ package mocks
 import (
 	context "context"
 
+	study "github.com/santaniello/athena/internal/domain/study"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -21,17 +22,17 @@ func (_m *MockOfferGate) EXPECT() *MockOfferGate_Expecter {
 	return &MockOfferGate_Expecter{mock: &_m.Mock}
 }
 
-// CreateOffer provides a mock function with given fields: ctx, sessionID, messageID
-func (_m *MockOfferGate) CreateOffer(ctx context.Context, sessionID string, messageID string) error {
-	ret := _m.Called(ctx, sessionID, messageID)
+// CreateOffer provides a mock function with given fields: ctx, sessionID, messageID, kind
+func (_m *MockOfferGate) CreateOffer(ctx context.Context, sessionID string, messageID string, kind study.OfferKind) error {
+	ret := _m.Called(ctx, sessionID, messageID, kind)
 
 	if len(ret) == 0 {
 		panic("no return value specified for CreateOffer")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
-		r0 = rf(ctx, sessionID, messageID)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, study.OfferKind) error); ok {
+		r0 = rf(ctx, sessionID, messageID, kind)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -48,13 +49,14 @@ type MockOfferGate_CreateOffer_Call struct {
 //   - ctx context.Context
 //   - sessionID string
 //   - messageID string
-func (_e *MockOfferGate_Expecter) CreateOffer(ctx interface{}, sessionID interface{}, messageID interface{}) *MockOfferGate_CreateOffer_Call {
-	return &MockOfferGate_CreateOffer_Call{Call: _e.mock.On("CreateOffer", ctx, sessionID, messageID)}
+//   - kind study.OfferKind
+func (_e *MockOfferGate_Expecter) CreateOffer(ctx interface{}, sessionID interface{}, messageID interface{}, kind interface{}) *MockOfferGate_CreateOffer_Call {
+	return &MockOfferGate_CreateOffer_Call{Call: _e.mock.On("CreateOffer", ctx, sessionID, messageID, kind)}
 }
 
-func (_c *MockOfferGate_CreateOffer_Call) Run(run func(ctx context.Context, sessionID string, messageID string)) *MockOfferGate_CreateOffer_Call {
+func (_c *MockOfferGate_CreateOffer_Call) Run(run func(ctx context.Context, sessionID string, messageID string, kind study.OfferKind)) *MockOfferGate_CreateOffer_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(string), args[2].(string))
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(study.OfferKind))
 	})
 	return _c
 }
@@ -64,7 +66,7 @@ func (_c *MockOfferGate_CreateOffer_Call) Return(_a0 error) *MockOfferGate_Creat
 	return _c
 }
 
-func (_c *MockOfferGate_CreateOffer_Call) RunAndReturn(run func(context.Context, string, string) error) *MockOfferGate_CreateOffer_Call {
+func (_c *MockOfferGate_CreateOffer_Call) RunAndReturn(run func(context.Context, string, string, study.OfferKind) error) *MockOfferGate_CreateOffer_Call {
 	_c.Call.Return(run)
 	return _c
 }

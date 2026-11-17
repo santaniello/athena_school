@@ -631,6 +631,7 @@ Resumo do que a fase entrega:
 - Avaliação do diagrama por LLM contra a rubrica (o domínio calcula a nota) e defesa com perguntas adaptativas do tutor (5 por padrão), que gera a nota de entendimento
 - Aprovação exige as duas notas acima do mínimo configurável (padrão 80) e os critérios obrigatórios
 - Catálogo, tela de resultado, histórico de tentativas finalizadas e integração com o chat (oferta Accept/Decline, cartão persistente, resultado como contexto do tutor)
+- Teste Interativo (specs 3.21 a 3.23, `ADR-007-interactive-quiz.md`): prova de múltipla escolha e verdadeiro/falso sobre uma sessão de estudo, com nota de 0 a 10 calculada no código (sem LLM na correção), gabarito só no fim e histórico; contexto separado do motor de exercícios
 
 ### Done when (Fase 3)
 

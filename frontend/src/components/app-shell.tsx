@@ -20,7 +20,10 @@ import SettingsScreen from '@/screens/SettingsScreen'
 import DocumentationScreen from '@/screens/DocumentationScreen'
 import ArchitectureLabScreen from '@/screens/ArchitectureLabScreen'
 import LabExamScreen from '@/screens/LabExamScreen'
+import QuizScreen from '@/screens/QuizScreen'
+import QuizTakeScreen from '@/screens/QuizTakeScreen'
 import type { LabReturn } from '@/lib/lab'
+import type { QuizReturn } from '@/lib/quiz'
 import type { ExamToStart } from '@/components/lab/start-exam-dialog'
 import { ToastViewport, type ToastItem } from '@/components/toast'
 import { NAVIGATION, type AppSection } from '@/lib/navigation'
@@ -88,6 +91,13 @@ function AppShell() {
   // or the study session that offered it. Not persisted.
   const [labReturn, setLabReturn] = useState<LabReturn>({ kind: 'catalog' })
   const [pendingSection, setPendingSection] = useState<AppSection | null>(null)
+  // The quiz being taken, a full-screen state of the Interactive Test section.
+  // While it is open, navigating elsewhere waits for the quiz's own leave
+  // question. Exam and quiz never run together, so they share pendingSection.
+  const [takingQuizId, setTakingQuizId] = useState<string | null>(null)
+  // Where the quiz goes back to when it ends: the menu it was started from or
+  // the study session whose chat offered it. Not persisted.
+  const [quizReturn, setQuizReturn] = useState<QuizReturn>({ kind: 'menu' })
   const [notices, setNotices] = useState<ToastItem[]>([])
   const [profile, setProfile] = useState<ProfileDraft | null>(null)
   const [activeSession, setActiveSession] = useState<ActiveStudySession | null>(null)
@@ -229,11 +239,34 @@ function AppShell() {
   }
 
   function navigate(next: AppSection) {
-    if (!exam) {
-      setSection(next)
+    if (exam) {
+      if (next !== 'challenge') setPendingSection(next)
       return
     }
-    if (next !== 'challenge') setPendingSection(next)
+    if (takingQuizId) {
+      if (next !== 'quiz') setPendingSection(next)
+      return
+    }
+    setSection(next)
+  }
+
+  function startMenuQuiz(quizId: string) {
+    setQuizReturn({ kind: 'menu' })
+    setTakingQuizId(quizId)
+  }
+
+  function startSessionQuiz(quizId: string, sessionId: string) {
+    setQuizReturn({ kind: 'study', sessionId })
+    setTakingQuizId(quizId)
+    setSection('quiz')
+  }
+
+  function handleQuizExit() {
+    setTakingQuizId(null)
+    const destination = pendingSection ?? (quizReturn.kind === 'study' ? 'study' : null)
+    if (destination) setSection(destination)
+    setQuizReturn({ kind: 'menu' })
+    setPendingSection(null)
   }
 
   // The opening turn was asked for, so any later mount of this chat resumes
@@ -498,6 +531,7 @@ function AppShell() {
               onTopicResolved={handleTopicResolved}
               onOpeningTurnRequested={handleOpeningTurnRequested}
               onStartExam={startSessionExam}
+              onStartQuiz={startSessionQuiz}
               onStartNewSession={handleStartNewSession}
               startingNewSession={startingNewSession}
               sourceModeSlot={sourceModeSlot}
@@ -537,6 +571,18 @@ function AppShell() {
               experienceLevel={profile?.experienceLevel}
               onStartExam={startCatalogExam}
             />
+          )
+        ) : section === 'quiz' ? (
+          takingQuizId ? (
+            <QuizTakeScreen
+              quizId={takingQuizId}
+              returnTo={quizReturn}
+              leaveRequested={pendingSection !== null}
+              onLeaveCancelled={() => setPendingSection(null)}
+              onExit={handleQuizExit}
+            />
+          ) : (
+            <QuizScreen experienceLevel={profile?.experienceLevel} onTake={startMenuQuiz} />
           )
         ) : section === 'documentation' ? (
           <DocumentationScreen />

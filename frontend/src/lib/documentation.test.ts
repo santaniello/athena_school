@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DOCUMENTATION, plannedSectionIds } from './documentation'
 
 describe('DOCUMENTATION', () => {
-  it('opens with the system purpose, then study, knowledge, the architecture lab, then the reference', () => {
+  it('opens with the system purpose, then study, knowledge, the architecture lab, the interactive test, then the reference', () => {
     // Given the in-app manual
     // When reading its section order
     const ids = DOCUMENTATION.map((section) => section.id)
@@ -13,6 +13,7 @@ describe('DOCUMENTATION', () => {
       'study-sessions',
       'knowledge-engine',
       'architecture-lab',
+      'interactive-test',
       'reference',
     ])
   })
@@ -113,5 +114,26 @@ describe('plannedSectionIds', () => {
 
     // Then no section is reported as planned
     expect(shipped.every((section) => section.status !== 'planned')).toBe(true)
+  })
+})
+
+describe('DOCUMENTATION interactive test', () => {
+  const quiz = DOCUMENTATION.find((section) => section.id === 'interactive-test')
+  const text = quiz ? [quiz.summary, ...quiz.body].join(' ') : ''
+
+  it('explains the grade, the answer key and what leaving does', () => {
+    expect(quiz?.status).toBe('available')
+    expect(text).toContain('0 to 10')
+    expect(text).toContain('only appears once every question is answered')
+    expect(text).toContain('leaving discards')
+    expect(text).toContain('History')
+  })
+
+  it('explains how to ask for a test from a study session', () => {
+    expect(text).toContain('quiz me')
+    expect(text).toContain('Accept or Decline')
+    expect(text).toContain('Take test')
+    expect(text).toContain('Back to study session')
+    expect(text).toContain('never offers on its own')
   })
 })

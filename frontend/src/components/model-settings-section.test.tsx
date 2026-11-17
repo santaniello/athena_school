@@ -20,6 +20,7 @@ const DEFAULTS = {
   queryEnrichment: 'openai/gpt-4o-mini',
   noteFormatting: 'anthropic/claude-sonnet-4.5',
   architectureLab: 'anthropic/claude-sonnet-4.5',
+  quiz: 'anthropic/claude-sonnet-4.5',
   embedding: 'openai/text-embedding-3-small',
 }
 const NONE = {
@@ -28,6 +29,7 @@ const NONE = {
   queryEnrichment: '',
   noteFormatting: '',
   architectureLab: '',
+  quiz: '',
   embedding: '',
 }
 const CHAT_MODELS = [
@@ -71,7 +73,7 @@ describe('ModelSettingsSection', () => {
     expect(screen.getByRole('combobox', { name: 'Study chat model' })).toHaveTextContent(
       'openai/gpt-5',
     )
-    expect(screen.getAllByText('Default: anthropic/claude-sonnet-4.5')).toHaveLength(3)
+    expect(screen.getAllByText('Default: anthropic/claude-sonnet-4.5')).toHaveLength(4)
     expect(screen.getByRole('combobox', { name: 'Conversation summary model' })).toHaveTextContent(
       'openai/gpt-4o-mini',
     )
@@ -80,6 +82,7 @@ describe('ModelSettingsSection', () => {
       screen.getByRole('combobox', { name: 'Note formatting (import) model' }),
     ).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Architecture Lab model' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Interactive Quiz model' })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Embedding model' })).toHaveTextContent(
       'openai/text-embedding-3-small',
     )

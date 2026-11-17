@@ -37,6 +37,7 @@ type modelsFile struct {
 	QueryEnrichment     string `yaml:"query_enrichment,omitempty"`
 	NoteFormatting      string `yaml:"note_formatting,omitempty"`
 	ArchitectureLab     string `yaml:"architecture_lab,omitempty"`
+	Quiz                string `yaml:"quiz,omitempty"`
 	Embedding           string `yaml:"embedding,omitempty"`
 }
 
@@ -51,6 +52,7 @@ func (s *Store) Save(cfg config.Config) error {
 			QueryEnrichment:     cfg.Models.QueryEnrichment,
 			NoteFormatting:      cfg.Models.NoteFormatting,
 			ArchitectureLab:     cfg.Models.ArchitectureLab,
+			Quiz:                cfg.Models.Quiz,
 			Embedding:           cfg.Models.Embedding,
 		},
 		PassScore: cfg.PassScore,
@@ -85,6 +87,7 @@ func (s *Store) Load() (config.Config, error) {
 			QueryEnrichment:     file.Models.QueryEnrichment,
 			NoteFormatting:      file.Models.NoteFormatting,
 			ArchitectureLab:     file.Models.ArchitectureLab,
+			Quiz:                file.Models.Quiz,
 			Embedding:           file.Models.Embedding,
 		},
 		PassScore: file.PassScore,

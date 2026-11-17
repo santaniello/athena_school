@@ -21,6 +21,7 @@ import (
 	applicationknowledge "github.com/santaniello/athena/internal/application/knowledge"
 	"github.com/santaniello/athena/internal/application/modelcatalog"
 	"github.com/santaniello/athena/internal/application/onboarding"
+	applicationquiz "github.com/santaniello/athena/internal/application/quiz"
 	applicationreset "github.com/santaniello/athena/internal/application/reset"
 	"github.com/santaniello/athena/internal/application/settings"
 	"github.com/santaniello/athena/internal/application/study"
@@ -31,7 +32,9 @@ import (
 	"github.com/santaniello/athena/internal/infrastructure/exercisesource"
 	"github.com/santaniello/athena/internal/infrastructure/openrouter"
 	"github.com/santaniello/athena/internal/infrastructure/profilefile"
+	"github.com/santaniello/athena/internal/infrastructure/quizsource"
 	"github.com/santaniello/athena/internal/infrastructure/sqlite"
+	"github.com/santaniello/athena/internal/infrastructure/studyoffers"
 	"github.com/santaniello/athena/internal/infrastructure/vectorstore"
 	"github.com/santaniello/athena/internal/infrastructure/webfetch"
 	"github.com/santaniello/athena/internal/interfaces/desktop"
@@ -136,6 +139,18 @@ func main() {
 		sqlite.NewSessionExerciseRepository(db), challengeRepo, sqlite.NewAttemptRecordRepository(db),
 	)
 
+	quizRepo := sqlite.NewQuizRepository(db)
+	quizGenerationService := applicationquiz.NewGenerationService(
+		quizsource.NewSessions(studySessions),
+		quizsource.NewSummaries(sqlite.NewConversationSummaryRepository(db)),
+		quizsource.NewProfiles(profiles),
+		quizsource.NewNotes(knowledgeService),
+		llmClient,
+		quizRepo,
+	)
+	quizService := applicationquiz.NewService(quizRepo)
+	quizOfferService := applicationquiz.NewOfferService(sqlite.NewQuizOfferRepository(db), quizRepo, quizGenerationService)
+
 	studyService := study.NewService(
 		studySessions, studyMessages, llmClient, profiles, folders, knowledgeService, transactor, contextResolver,
 		messageSources, knowledgeService, queryEnricher,
@@ -143,7 +158,7 @@ func main() {
 		study.WithSummarizer(study.NewSummarizer(llmClient, profiles, study.WithSummaryModelWindow(summaryWindow))),
 		study.WithSummaryWindow(summaryWindow),
 		study.WithSummaries(sqlite.NewConversationSummaryRepository(db)),
-		study.WithOfferGate(exercisesource.NewOfferGate(offerService)),
+		study.WithOfferGate(studyoffers.NewGate(exercisesource.NewOfferGate(offerService), quizsource.NewOfferGate(quizOfferService))),
 		study.WithExerciseFeedback(exercisesource.NewFeedbackReader(feedbackService)),
 	)
 	folderService := folder.NewService(folders, studySessions, knowledgeService)
@@ -208,6 +223,9 @@ func main() {
 		desktop.WithSessionExerciseService(sessionExerciseService),
 		desktop.WithCatalogService(challengeCatalog),
 		desktop.WithSessionLister(sessionService),
+		desktop.WithQuizGenerationService(quizGenerationService),
+		desktop.WithQuizService(quizService),
+		desktop.WithQuizOfferService(quizOfferService),
 	)
 
 	err = wails.Run(&options.App{

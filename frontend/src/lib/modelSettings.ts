@@ -32,6 +32,7 @@ export const MODEL_FEATURES: ModelFeature[] = [
   { key: 'queryEnrichment', label: 'Query enrichment' },
   { key: 'noteFormatting', label: 'Note formatting (import)' },
   { key: 'architectureLab', label: 'Architecture Lab' },
+  { key: 'quiz', label: 'Interactive Quiz' },
 ]
 
 export async function getModelSettings(): Promise<ModelSettings> {

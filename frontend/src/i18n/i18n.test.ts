@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import i18n, { setLabLanguage, toLabLanguage } from '@/i18n'
 import { en } from './locales/en'
 import { pt } from './locales/pt'
+import { quizEn } from './locales/quiz-en'
+import { quizPt } from './locales/quiz-pt'
 
 // The dotted path of every string of a locale.
 function keysOf(tree: object, prefix = ''): string[] {
@@ -35,6 +37,25 @@ describe('locales', () => {
     for (const [key, text] of leaves(pt)) {
       expect(placeholdersOf(text), key).toEqual(placeholdersOf(english.get(key) ?? ''))
     }
+  })
+})
+
+describe('quiz locales', () => {
+  it('have the same keys in English and Portuguese', () => {
+    expect(keysOf(quizPt).sort()).toEqual(keysOf(quizEn).sort())
+  })
+
+  it('use the same placeholders in both languages', () => {
+    const english = new Map(leaves(quizEn))
+    for (const [key, text] of leaves(quizPt)) {
+      expect(placeholdersOf(text), key).toEqual(placeholdersOf(english.get(key) ?? ''))
+    }
+  })
+
+  it('follow the profile language through the quiz namespace', () => {
+    expect(i18n.t('catalog.title', { ns: 'quiz' })).toBe('Interactive Test')
+    setLabLanguage('pt')
+    expect(i18n.t('catalog.title', { ns: 'quiz' })).toBe('Teste Interativo')
   })
 })
 

@@ -31,6 +31,7 @@ describe('SettingsScreen', () => {
         queryEnrichment: '',
         noteFormatting: '',
         architectureLab: '',
+        quiz: '',
         embedding: '',
       },
       defaults: {
@@ -39,6 +40,7 @@ describe('SettingsScreen', () => {
         queryEnrichment: 'openai/gpt-4o-mini',
         noteFormatting: 'anthropic/claude-sonnet-4.5',
         architectureLab: 'anthropic/claude-sonnet-4.5',
+        quiz: 'anthropic/claude-sonnet-4.5',
         embedding: 'openai/text-embedding-3-small',
       },
     } as never)

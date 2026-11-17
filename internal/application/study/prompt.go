@@ -31,7 +31,8 @@ func buildSystemPrompt(profile domainprofile.UserProfile, topic, sessionGoal str
 			"- Wait for the user's answer before introducing any new material.\n"+
 			"- Keep every message short and conversational — a few sentences, not an essay. Only go deeper (long explanations, multiple examples, code) if the user explicitly asks for more detail.\n"+
 			"- After each answer, give brief feedback, then ask a follow-up question that builds on it."+
-			exerciseOfferInstruction,
+			exerciseOfferInstruction+
+			quizOfferInstruction,
 		profile.AssistantName, profile.Name, profile.Name,
 		profile.Area, profile.ExperienceLevel,
 		profile.StudyStyle, goalFragment(sessionGoal),

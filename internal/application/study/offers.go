@@ -1,6 +1,10 @@
 package study
 
-import "context"
+import (
+	"context"
+
+	domainstudy "github.com/santaniello/athena/internal/domain/study"
+)
 
 // OfferGate connects the chat to the exercise offers without importing any lab
 // code. It is defined here (consumer side) and implemented by the composition
@@ -8,8 +12,8 @@ import "context"
 type OfferGate interface {
 	// HasPending reports whether the session has an offer waiting for an answer.
 	HasPending(ctx context.Context, sessionID string) (bool, error)
-	// CreateOffer stores a pending offer under the assistant message.
-	CreateOffer(ctx context.Context, sessionID, messageID string) error
+	// CreateOffer stores a pending offer of the given kind under the assistant message.
+	CreateOffer(ctx context.Context, sessionID, messageID string, kind domainstudy.OfferKind) error
 }
 
 // WithOfferGate wires the exercise offers into the chat. Without it the chat

@@ -24,19 +24,21 @@ const choices = {
   queryEnrichment: '',
   noteFormatting: '',
   architectureLab: '',
+  quiz: '',
   embedding: '',
 }
 
 describe('modelSettings', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('lists the five chat features in the order the Settings screen shows them', () => {
+  it('lists the six chat features in the order the Settings screen shows them', () => {
     expect(MODEL_FEATURES.map((feature) => feature.key)).toEqual([
       'study',
       'conversationSummary',
       'queryEnrichment',
       'noteFormatting',
       'architectureLab',
+      'quiz',
     ])
     expect(MODEL_FEATURES.map((feature) => feature.label)).toEqual([
       'Study chat',
@@ -44,6 +46,7 @@ describe('modelSettings', () => {
       'Query enrichment',
       'Note formatting (import)',
       'Architecture Lab',
+      'Interactive Quiz',
     ])
   })
 

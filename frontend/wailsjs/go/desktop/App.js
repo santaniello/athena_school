@@ -6,12 +6,20 @@ export function AcceptOffer(arg1, arg2, arg3, arg4) {
   return window['go']['desktop']['App']['AcceptOffer'](arg1, arg2, arg3, arg4);
 }
 
+export function AcceptQuizOffer(arg1, arg2, arg3) {
+  return window['go']['desktop']['App']['AcceptQuizOffer'](arg1, arg2, arg3);
+}
+
 export function AnswerDefenseQuestion(arg1, arg2) {
   return window['go']['desktop']['App']['AnswerDefenseQuestion'](arg1, arg2);
 }
 
 export function CancelChallengeGeneration() {
   return window['go']['desktop']['App']['CancelChallengeGeneration']();
+}
+
+export function CancelQuizGeneration() {
+  return window['go']['desktop']['App']['CancelQuizGeneration']();
 }
 
 export function CompactStudySession(arg1) {
@@ -34,8 +42,16 @@ export function DeclineOffer(arg1) {
   return window['go']['desktop']['App']['DeclineOffer'](arg1);
 }
 
+export function DeclineQuizOffer(arg1) {
+  return window['go']['desktop']['App']['DeclineQuizOffer'](arg1);
+}
+
 export function DeleteFolder(arg1) {
   return window['go']['desktop']['App']['DeleteFolder'](arg1);
+}
+
+export function DeleteQuiz(arg1) {
+  return window['go']['desktop']['App']['DeleteQuiz'](arg1);
 }
 
 export function DeleteStudySession(arg1) {
@@ -60,6 +76,10 @@ export function EvaluateDefense(arg1) {
 
 export function GenerateChallenge(arg1, arg2, arg3, arg4) {
   return window['go']['desktop']['App']['GenerateChallenge'](arg1, arg2, arg3, arg4);
+}
+
+export function GenerateQuiz(arg1, arg2, arg3) {
+  return window['go']['desktop']['App']['GenerateQuiz'](arg1, arg2, arg3);
 }
 
 export function GetAttempt(arg1) {
@@ -94,8 +114,20 @@ export function GetPendingOffer(arg1) {
   return window['go']['desktop']['App']['GetPendingOffer'](arg1);
 }
 
+export function GetPendingQuizOffer(arg1) {
+  return window['go']['desktop']['App']['GetPendingQuizOffer'](arg1);
+}
+
 export function GetProfile() {
   return window['go']['desktop']['App']['GetProfile']();
+}
+
+export function GetQuiz(arg1) {
+  return window['go']['desktop']['App']['GetQuiz'](arg1);
+}
+
+export function GetQuizAttemptResult(arg1) {
+  return window['go']['desktop']['App']['GetQuizAttemptResult'](arg1);
 }
 
 export function GetSessionSourceDocument(arg1, arg2) {
@@ -146,12 +178,24 @@ export function ListHints(arg1) {
   return window['go']['desktop']['App']['ListHints'](arg1);
 }
 
+export function ListQuizAttempts(arg1) {
+  return window['go']['desktop']['App']['ListQuizAttempts'](arg1);
+}
+
+export function ListQuizzes() {
+  return window['go']['desktop']['App']['ListQuizzes']();
+}
+
 export function ListSelectableModels() {
   return window['go']['desktop']['App']['ListSelectableModels']();
 }
 
 export function ListSessionExercises(arg1) {
   return window['go']['desktop']['App']['ListSessionExercises'](arg1);
+}
+
+export function ListSessionQuizzes(arg1) {
+  return window['go']['desktop']['App']['ListSessionQuizzes'](arg1);
 }
 
 export function ListSessionSources(arg1) {
@@ -256,6 +300,10 @@ export function Startup(arg1) {
 
 export function SubmitAttempt(arg1, arg2, arg3) {
   return window['go']['desktop']['App']['SubmitAttempt'](arg1, arg2, arg3);
+}
+
+export function SubmitQuizAttempt(arg1, arg2) {
+  return window['go']['desktop']['App']['SubmitQuizAttempt'](arg1, arg2);
 }
 
 export function UpdateProfile(arg1) {

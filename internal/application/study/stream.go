@@ -66,7 +66,7 @@ func (s *Service) streamAndPersist(
 			return "", err
 		}
 	}
-	content, offered := stripExerciseOfferMarker(buf.String())
+	content, offered := stripOfferMarkers(buf.String())
 
 	assistantMessage := domainstudy.Message{
 		ID:        uuid.NewString(),
@@ -107,11 +107,11 @@ func (s *Service) streamAndPersist(
 
 	emitContextTransition(priorContext, newUsage, onContext)
 
-	if detectOffer && offered && s.offers != nil {
+	if detectOffer && offered != domainstudy.OfferKindNone && s.offers != nil {
 		// Best effort: a missed offer is a normal reply and the user can ask
 		// again, but the failure is logged so it can be diagnosed.
-		if err := s.offers.CreateOffer(ctx, sessionID, assistantMessage.ID); err != nil {
-			log.Printf("study: creating exercise offer for session %s: %v", sessionID, err)
+		if err := s.offers.CreateOffer(ctx, sessionID, assistantMessage.ID, offered); err != nil {
+			log.Printf("study: creating %s offer for session %s: %v", offered, sessionID, err)
 		}
 	}
 

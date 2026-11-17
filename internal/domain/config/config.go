@@ -25,6 +25,7 @@ type ModelSettings struct {
 	QueryEnrichment     string
 	NoteFormatting      string
 	ArchitectureLab     string
+	Quiz                string
 	Embedding           string
 }
 

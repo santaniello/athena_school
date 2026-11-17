@@ -278,6 +278,76 @@ var migrations = []func(*sql.DB) error{
 		created_at TEXT NOT NULL,
 		UNIQUE (session_id)
 	)`),
+	// Interactive Quiz (spec 3.21). A quiz keeps its session_id and a title
+	// snapshot with no foreign key, so it outlives its session: only an explicit
+	// delete removes it. Everything under a quiz cascades from it, and answers
+	// also cascade from their question. options is a JSON list of strings, and
+	// selected_index is NULL for a blank answer. See
+	// specs/phases/phase-03-architecture-lab/21-interactive-quiz-core.md.
+	execSQL(`CREATE TABLE IF NOT EXISTS quizzes (
+		id            TEXT PRIMARY KEY,
+		session_id    TEXT NOT NULL,
+		session_title TEXT NOT NULL,
+		difficulty    TEXT NOT NULL,
+		created_at    TEXT NOT NULL
+	)`),
+	execSQL(`CREATE TABLE IF NOT EXISTS quiz_questions (
+		id            TEXT PRIMARY KEY,
+		quiz_id       TEXT NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
+		position      INTEGER NOT NULL,
+		kind          TEXT NOT NULL,
+		prompt        TEXT NOT NULL,
+		options       TEXT NOT NULL,
+		correct_index INTEGER NOT NULL,
+		explanation   TEXT NOT NULL,
+		UNIQUE (quiz_id, position)
+	)`),
+	execSQL(`CREATE TABLE IF NOT EXISTS quiz_attempts (
+		id            TEXT PRIMARY KEY,
+		quiz_id       TEXT NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
+		correct_count INTEGER NOT NULL,
+		total         INTEGER NOT NULL,
+		score         REAL NOT NULL,
+		finished_at   TEXT NOT NULL
+	)`),
+	execSQL(`CREATE INDEX IF NOT EXISTS idx_quiz_attempts_quiz_finished ON quiz_attempts (quiz_id, finished_at)`),
+	execSQL(`CREATE TABLE IF NOT EXISTS quiz_answers (
+		attempt_id     TEXT NOT NULL REFERENCES quiz_attempts(id) ON DELETE CASCADE,
+		question_id    TEXT NOT NULL REFERENCES quiz_questions(id) ON DELETE CASCADE,
+		position       INTEGER NOT NULL,
+		selected_index INTEGER,
+		correct        INTEGER NOT NULL,
+		PRIMARY KEY (attempt_id, question_id)
+	)`),
+	// Spec 3.23: the quiz offers of the study chat, shaped like exercise_offers
+	// and kept apart from it so neither context knows the other. A quiz born
+	// from an offer keeps the message id in quizzes.message_id, with no foreign
+	// key: the quiz outlives its session and its messages. See
+	// specs/phases/phase-03-architecture-lab/23-interactive-quiz-chat-offer.md.
+	execSQL(`CREATE TABLE IF NOT EXISTS quiz_offers (
+		id         TEXT PRIMARY KEY,
+		session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+		message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+		created_at TEXT NOT NULL,
+		UNIQUE (session_id)
+	)`),
+	addQuizzesMessageIDColumn,
+	execSQL(`CREATE INDEX IF NOT EXISTS idx_quizzes_session_message ON quizzes (session_id, message_id)`),
+}
+
+// addQuizzesMessageIDColumn adds quizzes.message_id if it does not already
+// exist (SQLite has no "ADD COLUMN IF NOT EXISTS"). Quizzes stored before it
+// existed came from the menu and have none.
+func addQuizzesMessageIDColumn(db *sql.DB) error {
+	has, err := hasColumn(db, "quizzes", "message_id")
+	if err != nil {
+		return err
+	}
+	if has {
+		return nil
+	}
+	_, err = db.Exec(`ALTER TABLE quizzes ADD COLUMN message_id TEXT`)
+	return err
 }
 
 // addAttemptsFailureReasonColumn adds challenge_attempts.failure_reason if it
