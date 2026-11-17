@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/santaniello/athena/internal/application/llmprompt"
 	domainexercise "github.com/santaniello/athena/internal/domain/exercise"
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
 )
@@ -28,7 +29,7 @@ Answer with only the question.`
 // language code, so its content is unit tested.
 func buildQuestionPrompt(input domainexercise.QuestionInput, summary DiagramSummary, language string) []domainllm.Message {
 	return []domainllm.Message{
-		{Role: "system", Content: fmt.Sprintf(questionSystemPrompt, languageName(language))},
+		{Role: "system", Content: fmt.Sprintf(questionSystemPrompt, llmprompt.LanguageName(language))},
 		{Role: "user", Content: buildQuestionUserPrompt(input, summary)},
 	}
 }
@@ -44,15 +45,15 @@ func buildQuestionUserPrompt(input domainexercise.QuestionInput, summary Diagram
 	writeSummary(&b, summary)
 	b.WriteString("</diagram>\n")
 	fmt.Fprintf(&b, "<criterion key=%q>\n", input.Criterion.Key)
-	writeTag(&b, "name", input.Criterion.Name, false)
-	writeTag(&b, "description", input.Criterion.Description, false)
+	llmprompt.WriteTag(&b, "name", input.Criterion.Name, false)
+	llmprompt.WriteTag(&b, "description", input.Criterion.Description, false)
 	b.WriteString("</criterion>\n")
 	writeDiagramJudgement(&b, input.Criterion.ID, input.Diagram)
 	if len(input.Previous) > 0 {
 		b.WriteString("<transcript>\n")
 		for _, turn := range input.Previous {
-			writeTag(&b, "question", turn.Question, false)
-			writeTag(&b, "answer", turn.Answer, false)
+			llmprompt.WriteTag(&b, "question", turn.Question, false)
+			llmprompt.WriteTag(&b, "answer", turn.Answer, false)
 		}
 		b.WriteString("</transcript>\n")
 	}
@@ -62,8 +63,8 @@ func buildQuestionUserPrompt(input domainexercise.QuestionInput, summary Diagram
 
 func writeChallenge(b *strings.Builder, challenge domainexercise.Challenge) {
 	b.WriteString("<challenge>\n")
-	writeTag(b, "title", challenge.Title, false)
-	writeTag(b, "scenario", challenge.Scenario, true)
+	llmprompt.WriteTag(b, "title", challenge.Title, false)
+	llmprompt.WriteTag(b, "scenario", challenge.Scenario, true)
 	writeTags(b, "requirement", challenge.FunctionalRequirements)
 	writeTags(b, "requirement", challenge.NonFunctionalRequirements)
 	writeTags(b, "constraint", challenge.Constraints)
@@ -82,7 +83,7 @@ func writeDiagramJudgement(b *strings.Builder, criterionID string, diagram domai
 		if result.InsufficientEvidence {
 			text = "The diagram did not show enough to judge this criterion. " + result.Justification
 		}
-		writeTag(b, "diagram_evaluation", strings.TrimSpace(text), false)
+		llmprompt.WriteTag(b, "diagram_evaluation", strings.TrimSpace(text), false)
 		return
 	}
 }
@@ -112,7 +113,7 @@ Answer with only a JSON object, no Markdown fence, in exactly this shape, with o
 // instruction. Pure, so its content is unit tested.
 func BuildUnderstandingPrompt(input domainexercise.UnderstandingInput, summary DiagramSummary, language string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, understandingInstructions, languageName(language))
+	fmt.Fprintf(&b, understandingInstructions, llmprompt.LanguageName(language))
 	b.WriteString("\n\n")
 	writeChallenge(&b, input.Challenge)
 	b.WriteString("\n<rubric>\n")
@@ -132,8 +133,8 @@ func BuildUnderstandingPrompt(input domainexercise.UnderstandingInput, summary D
 	b.WriteString("</diagram>\n\n<transcript>\n")
 	for _, turn := range input.Turns {
 		fmt.Fprintf(&b, "<turn criterionKey=%q>\n", keys[turn.CriterionID])
-		writeTag(&b, "question", turn.Question, false)
-		writeTag(&b, "answer", turn.Answer, false)
+		llmprompt.WriteTag(&b, "question", turn.Question, false)
+		llmprompt.WriteTag(&b, "answer", turn.Answer, false)
 		b.WriteString("</turn>\n")
 	}
 	b.WriteString("</transcript>\n")

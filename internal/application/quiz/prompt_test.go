@@ -11,12 +11,6 @@ import (
 	domainquiz "github.com/santaniello/athena/internal/domain/quiz"
 )
 
-func TestLanguageName(t *testing.T) {
-	assert.Equal(t, "Brazilian Portuguese", languageName("pt"))
-	assert.Equal(t, "English", languageName("en"))
-	assert.Equal(t, "English", languageName(""))
-}
-
 func TestBuildPrompt_systemMessageCarriesTheSpecAndTheLanguage(t *testing.T) {
 	// Given a context in Portuguese and a spec of 7 hard questions
 	gc := generationContext{Topic: "Caching", Profile: domainquiz.GenerationProfile{Language: "pt"}}

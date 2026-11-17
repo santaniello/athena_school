@@ -40,12 +40,17 @@ type Renderer struct{}
 // Render reads the JSON tree and returns the mxGraphModel XML. Labels come
 // cleaned from ParseTree, so drawing only escapes them. Every failure wraps
 // ErrInvalidTree.
-func (Renderer) Render(raw []byte) (string, error) {
+func (r Renderer) Render(raw []byte) (string, error) {
 	root, err := ParseTree(raw)
 	if err != nil {
 		return "", err
 	}
-	return draw(layout(root)), nil
+	return r.RenderTree(root), nil
+}
+
+// RenderTree returns the mxGraphModel XML of a tree ParseTree already checked.
+func (Renderer) RenderTree(root Node) string {
+	return draw(layout(root))
 }
 
 // placed is a node with its position, its branch and the index of its parent
