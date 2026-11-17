@@ -139,8 +139,11 @@ func (s *OfferService) Accept(ctx context.Context, offerID string) (domainmindma
 }
 
 // resolve deletes the accepted offer and returns the mind map that answers it.
+// The map already exists at this point, so the delete is detached from ctx: a
+// cancel that lands as generation finishes must not leave the offer pending
+// and report a failure for a map that was created.
 func (s *OfferService) resolve(ctx context.Context, offer domainmindmap.Offer, mindMap domainmindmap.Summary) (domainmindmap.Summary, error) {
-	if err := s.offers.Delete(ctx, offer.ID); err != nil {
+	if err := s.offers.Delete(context.WithoutCancel(ctx), offer.ID); err != nil {
 		return domainmindmap.Summary{}, fmt.Errorf("mindmap: resolving offer: %w", err)
 	}
 	return mindMap, nil

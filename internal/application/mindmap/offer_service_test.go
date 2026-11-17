@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	mocks "github.com/santaniello/athena/internal/application/mindmap/mocks"
@@ -189,12 +190,35 @@ func TestOfferService_Accept_generatesTheMindMapLinksItAndDeletesTheOffer(t *tes
 	f.offers.EXPECT().Get(ctx, "offer-1").Return(pendingOffer(), nil).Twice()
 	f.mindMaps.EXPECT().FindByMessage(ctx, "message-1").Return(domainmindmap.Summary{}, domainmindmap.ErrMindMapNotFound).Once()
 	f.generator.EXPECT().GenerateForMessage(ctx, "session-1", "message-1").Return(offeredMindMap(), nil).Once()
-	f.offers.EXPECT().Delete(ctx, "offer-1").Return(nil).Once()
+	f.offers.EXPECT().Delete(mock.Anything, "offer-1").Return(nil).Once()
 
 	// When accepting it with the user's choice
 	got, err := f.service.Accept(ctx, "offer-1")
 
 	// Then the new mind map is returned as a card and the offer is gone
+	require.NoError(t, err)
+	assert.Equal(t, offeredSummary(), got)
+}
+
+func TestOfferService_Accept_aCancelAfterGenerationStillDeletesTheOffer(t *testing.T) {
+	// Given a generation that finishes just as the user cancels
+	f := newOfferFixture(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	f.offers.EXPECT().Get(ctx, "offer-1").Return(pendingOffer(), nil).Twice()
+	f.mindMaps.EXPECT().FindByMessage(ctx, "message-1").Return(domainmindmap.Summary{}, domainmindmap.ErrMindMapNotFound).Once()
+	f.generator.EXPECT().GenerateForMessage(ctx, "session-1", "message-1").
+		RunAndReturn(func(context.Context, string, string) (domainmindmap.MindMap, error) {
+			cancel()
+			return offeredMindMap(), nil
+		}).Once()
+	// And a delete that only succeeds on a context that is not cancelled
+	f.offers.EXPECT().Delete(mock.Anything, "offer-1").
+		RunAndReturn(func(deleteCtx context.Context, _ string) error { return deleteCtx.Err() }).Once()
+
+	// When accepting it
+	got, err := f.service.Accept(ctx, "offer-1")
+
+	// Then the map is returned and no error is reported
 	require.NoError(t, err)
 	assert.Equal(t, offeredSummary(), got)
 }
@@ -205,7 +229,7 @@ func TestOfferService_Accept_reusesTheMindMapAnEarlierAcceptLeftBehind(t *testin
 	ctx := context.Background()
 	f.offers.EXPECT().Get(ctx, "offer-1").Return(pendingOffer(), nil).Twice()
 	f.mindMaps.EXPECT().FindByMessage(ctx, "message-1").Return(offeredSummary(), nil).Once()
-	f.offers.EXPECT().Delete(ctx, "offer-1").Return(nil).Once()
+	f.offers.EXPECT().Delete(mock.Anything, "offer-1").Return(nil).Once()
 
 	// When accepting it; the generator has no expectation, so a call would fail the test
 	got, err := f.service.Accept(ctx, "offer-1")
@@ -317,7 +341,7 @@ func TestOfferService_Accept_otherFailures(t *testing.T) {
 		f := newOfferFixture(t)
 		f.offers.EXPECT().Get(ctx, "offer-1").Return(pendingOffer(), nil).Twice()
 		f.mindMaps.EXPECT().FindByMessage(ctx, "message-1").Return(offeredSummary(), nil).Once()
-		f.offers.EXPECT().Delete(ctx, "offer-1").Return(boom).Once()
+		f.offers.EXPECT().Delete(mock.Anything, "offer-1").Return(boom).Once()
 
 		_, err := f.service.Accept(ctx, "offer-1")
 
@@ -328,7 +352,7 @@ func TestOfferService_Accept_otherFailures(t *testing.T) {
 		f.offers.EXPECT().Get(ctx, "offer-1").Return(pendingOffer(), nil).Twice()
 		f.mindMaps.EXPECT().FindByMessage(ctx, "message-1").Return(domainmindmap.Summary{}, domainmindmap.ErrMindMapNotFound).Once()
 		f.generator.EXPECT().GenerateForMessage(ctx, "session-1", "message-1").Return(offeredMindMap(), nil).Once()
-		f.offers.EXPECT().Delete(ctx, "offer-1").Return(boom).Once()
+		f.offers.EXPECT().Delete(mock.Anything, "offer-1").Return(boom).Once()
 
 		_, err := f.service.Accept(ctx, "offer-1")
 
