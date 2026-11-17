@@ -28,6 +28,9 @@ func (r *MindMapRepository) Create(ctx context.Context, m mindmap.MindMap) error
 		m.ID, m.SessionID, m.SessionTitle, m.Title, m.Tree, m.DiagramXML, nullableText(m.MessageID),
 		formatChallengeTime(m.CreatedAt), formatChallengeTime(m.UpdatedAt),
 	)
+	if isForeignKeyViolation(err) {
+		return fmt.Errorf("sqlite: creating mind map %q: %w", m.ID, mindmap.ErrSessionNotFound)
+	}
 	if err != nil {
 		return fmt.Errorf("sqlite: creating mind map: %w", err)
 	}
@@ -53,10 +56,10 @@ func (r *MindMapRepository) Get(ctx context.Context, id string) (mindmap.MindMap
 	}
 	m.MessageID = messageID.String
 	if m.CreatedAt, err = parseChallengeTime(createdAt); err != nil {
-		return mindmap.MindMap{}, err
+		return mindmap.MindMap{}, fmt.Errorf("sqlite: reading mind map %q: %w", id, err)
 	}
 	if m.UpdatedAt, err = parseChallengeTime(updated); err != nil {
-		return mindmap.MindMap{}, err
+		return mindmap.MindMap{}, fmt.Errorf("sqlite: reading mind map %q: %w", id, err)
 	}
 	return m, nil
 }
@@ -94,7 +97,7 @@ func (r *MindMapRepository) querySummaries(ctx context.Context, tail string, arg
 		return nil, fmt.Errorf("sqlite: listing mind maps: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-	var summaries []mindmap.Summary
+	summaries := make([]mindmap.Summary, 0)
 	for rows.Next() {
 		var (
 			summary            mindmap.Summary
@@ -107,10 +110,10 @@ func (r *MindMapRepository) querySummaries(ctx context.Context, tail string, arg
 		}
 		summary.MessageID = messageID.String
 		if summary.CreatedAt, err = parseChallengeTime(createdAt); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("sqlite: reading mind map %q: %w", summary.ID, err)
 		}
 		if summary.UpdatedAt, err = parseChallengeTime(updated); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("sqlite: reading mind map %q: %w", summary.ID, err)
 		}
 		summaries = append(summaries, summary)
 	}

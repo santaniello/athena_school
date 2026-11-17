@@ -9,6 +9,10 @@ import (
 // ErrMindMapNotFound is returned when no mind map matches the given ID.
 var ErrMindMapNotFound = errors.New("mind map not found")
 
+// ErrSessionNotFound is returned when a mind map is stored for a session that
+// does not exist, for example one deleted while the map was being generated.
+var ErrSessionNotFound = errors.New("mind map session not found")
+
 // Summary is a mind map as the catalog lists it, without its tree and diagram.
 type Summary struct {
 	ID           string
@@ -22,7 +26,8 @@ type Summary struct {
 
 // Repository stores mind maps.
 type Repository interface {
-	// Create stores the mind map.
+	// Create stores the mind map, or returns ErrSessionNotFound when its
+	// session does not exist.
 	Create(ctx context.Context, mindMap MindMap) error
 	// Get returns the mind map with its tree and diagram, or ErrMindMapNotFound.
 	Get(ctx context.Context, id string) (MindMap, error)

@@ -67,8 +67,8 @@ func TestMindMapRepository_Create_needsAnExistingSession(t *testing.T) {
 	// When storing it
 	err := repo.Create(context.Background(), newTestMindMap("map-1", "session-gone", mindMapEpoch))
 
-	// Then it is refused: a map goes with its session
-	assert.Error(t, err)
+	// Then it is refused as a missing session: a map goes with its session
+	assert.ErrorIs(t, err, mindmap.ErrSessionNotFound)
 }
 
 func TestMindMapRepository_Create_refusesADuplicateID(t *testing.T) {
@@ -116,7 +116,8 @@ func TestMindMapRepository_Get_failsOnACorruptTime(t *testing.T) {
 			// Then both fail, and not as "not found"
 			require.Error(t, errGet)
 			assert.NotErrorIs(t, errGet, mindmap.ErrMindMapNotFound)
-			assert.Error(t, errList)
+			assert.ErrorContains(t, errGet, `reading mind map "map-1"`)
+			assert.ErrorContains(t, errList, `reading mind map "map-1"`)
 		})
 	}
 }
@@ -153,8 +154,9 @@ func TestMindMapRepository_List_isEmptyWithoutMaps(t *testing.T) {
 	// When listing
 	got, err := repo.List(context.Background())
 
-	// Then the list is empty
+	// Then the list is empty and not nil, so it serializes as [] and not null
 	require.NoError(t, err)
+	assert.NotNil(t, got)
 	assert.Empty(t, got)
 }
 

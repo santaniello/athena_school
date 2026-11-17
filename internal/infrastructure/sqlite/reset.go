@@ -44,9 +44,10 @@ func (r *Resetter) Reset(ctx context.Context) error {
 		args  []any
 	}{
 		// The Interactive Quiz goes first, then the Architecture Lab, each
-		// with children before parents: no Phase 3 table cascades (a challenge
-		// or a quiz is never deleted by anything else), so each level is
-		// cleared explicitly.
+		// with children before parents: no challenge or quiz table cascades (a
+		// challenge or a quiz is never deleted by anything else), so each level
+		// is cleared explicitly. The two mind map tables do cascade from
+		// sessions; they are cleared here too so the reset never relies on it.
 		{`DELETE FROM mind_map_offers`, nil},
 		{`DELETE FROM mind_maps`, nil},
 		{`DELETE FROM quiz_answers`, nil},

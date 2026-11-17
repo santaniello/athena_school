@@ -351,7 +351,8 @@ var migrations = []func(*sql.DB) error{
 		created_at    TEXT NOT NULL,
 		updated_at    TEXT NOT NULL
 	)`),
-	execSQL(`CREATE INDEX IF NOT EXISTS idx_mind_maps_session_message ON mind_maps (session_id, message_id)`),
+	// FindByMessage filters on message_id alone, so it leads the index.
+	execSQL(`CREATE INDEX IF NOT EXISTS idx_mind_maps_message_session ON mind_maps (message_id, session_id)`),
 	execSQL(`CREATE TABLE IF NOT EXISTS mind_map_offers (
 		id         TEXT PRIMARY KEY,
 		session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
