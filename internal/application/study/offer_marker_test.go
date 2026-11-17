@@ -36,6 +36,21 @@ func TestBuildSystemPrompt_instructsTheModelToEndWithTheQuizMarker_whenTheUserAs
 	assert.Contains(t, prompt, "Never propose a quiz on your own")
 }
 
+func TestBuildSystemPrompt_instructsTheModelToEndWithTheMindMapMarker_whenTheUserAsksForAMindMap(t *testing.T) {
+	// Given any profile
+	profile := domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}
+
+	// When building the system prompt
+	prompt := buildSystemPrompt(profile, "Caching", "Learn caching")
+
+	// Then it names the mind map marker, says it only follows an explicit request
+	// and says a quiz, test or exercise request is not one
+	assert.Contains(t, prompt, mindMapOfferMarker)
+	assert.Contains(t, prompt, "explicitly asks you for a mind map")
+	assert.Contains(t, prompt, "A request for an exercise, a quiz or a test is not a request for a mind map")
+	assert.Contains(t, prompt, "Never propose a mind map on your own")
+}
+
 func TestStripOfferMarkers(t *testing.T) {
 	tests := []struct {
 		name     string

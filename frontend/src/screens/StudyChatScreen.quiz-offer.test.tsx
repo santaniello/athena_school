@@ -145,6 +145,7 @@ async function renderResumed(props: Partial<ComponentProps<typeof StudyChatScree
       startingNewSession={false}
       onStartExam={vi.fn()}
       onStartQuiz={onStartQuiz}
+      onOpenMindMap={vi.fn()}
       {...props}
     />,
   )

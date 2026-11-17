@@ -191,6 +191,29 @@ const DOCUMENTATION: DocSection[] = [
     ],
   },
   {
+    id: 'mind-map',
+    title: 'Mind Map',
+    status: 'available',
+    summary: 'A visual summary of a study session that you can edit, update and delete.',
+    body: [
+      "The Mind Map makes a map of the ideas in a study session you already had. Use Generate mind map with AI, pick the session, and Athena draws the map from that session's summary and notes, in your assistant language, with the topic at the center and its main ideas around it.",
+      'Open shows the map in the draw.io editor, which needs an internet connection. You can move, rename, add and remove anything by hand and press Save; Athena asks before you leave with changes that are not saved. Update from session draws the map again from what the session contains now, which is useful after you studied more, and asks first because the changes you made by hand are lost. Delete removes the map.',
+      "You can also ask for a mind map from a study session: say, for example, make a mind map, and the tutor answers with an offer, Accept or Decline (Aceitar or Recusar when your assistant speaks Portuguese). The tutor never offers on its own, and asking for a quiz or an exercise never produces a mind map offer. Accepting draws the map and leaves a card under the tutor's message with Open mind map, and Back to study session in the editor brings you back to the conversation.",
+    ],
+    topics: [
+      {
+        term: 'Goes with its session',
+        description:
+          'A mind map belongs to the session it was drawn from: deleting the session deletes its mind maps.',
+      },
+      {
+        term: 'Needs the internet to edit',
+        description:
+          'The editor is the draw.io online embed, the same one the Architecture Lab uses. Without a connection Athena says so and the rest of the app keeps working.',
+      },
+    ],
+  },
+  {
     id: 'reference',
     title: 'Quick reference',
     status: 'available',

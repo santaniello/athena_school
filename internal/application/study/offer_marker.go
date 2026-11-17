@@ -45,6 +45,18 @@ var quizOfferInstruction = fmt.Sprintf(
 // specs/phases/phase-03-architecture-lab/24-mind-map.md.
 const mindMapOfferMarker = "[[ATHENA_MINDMAP_OFFER]]"
 
+// mindMapOfferInstruction is the study-prompt rule that makes the model emit
+// the mind map marker. A request for an exercise, a quiz or a test is not a
+// request for a mind map. It is a pure string so the prompt test pins it.
+var mindMapOfferInstruction = fmt.Sprintf(
+	"\n- If, and only if, the user explicitly asks you for a mind map of this topic or of what you studied "+
+		"(for example \"make a mind map\" or \"draw a mind map of this\"), answer in one or two short sentences "+
+		"and end the reply with the exact text %s on its own line. "+
+		"A request for an exercise, a quiz or a test is not a request for a mind map. "+
+		"Never propose a mind map on your own, and never write that text in any other case.",
+	mindMapOfferMarker,
+)
+
 // offerMarkers lists every marker, in the order of precedence when a reply
 // carries more than one: the exercise offer wins, then the quiz.
 var offerMarkers = []struct {
