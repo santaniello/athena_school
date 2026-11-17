@@ -60,17 +60,6 @@ func TestMindMapRepository_CreateThenGet_keepsAMenuMapWithoutAMessage(t *testing
 	assert.Empty(t, got.MessageID)
 }
 
-func TestMindMapRepository_Create_needsAnExistingSession(t *testing.T) {
-	// Given a mind map of a session that does not exist
-	repo, _ := newTestMindMapRepository(t)
-
-	// When storing it
-	err := repo.Create(context.Background(), newTestMindMap("map-1", "session-gone", mindMapEpoch))
-
-	// Then it is refused: a map goes with its session
-	assert.Error(t, err)
-}
-
 func TestMindMapRepository_Create_refusesADuplicateID(t *testing.T) {
 	// Given a stored map
 	repo, _ := newTestMindMapRepository(t)
@@ -116,7 +105,8 @@ func TestMindMapRepository_Get_failsOnACorruptTime(t *testing.T) {
 			// Then both fail, and not as "not found"
 			require.Error(t, errGet)
 			assert.NotErrorIs(t, errGet, mindmap.ErrMindMapNotFound)
-			assert.Error(t, errList)
+			assert.ErrorContains(t, errGet, `reading mind map "map-1"`)
+			assert.ErrorContains(t, errList, `reading mind map "map-1"`)
 		})
 	}
 }
@@ -153,8 +143,9 @@ func TestMindMapRepository_List_isEmptyWithoutMaps(t *testing.T) {
 	// When listing
 	got, err := repo.List(context.Background())
 
-	// Then the list is empty
+	// Then the list is empty and not nil, so it serializes as [] and not null
 	require.NoError(t, err)
+	assert.NotNil(t, got)
 	assert.Empty(t, got)
 }
 
@@ -282,7 +273,7 @@ func TestMindMapRepository_Delete_removesTheMap(t *testing.T) {
 	assert.ErrorIs(t, err, mindmap.ErrMindMapNotFound)
 }
 
-func TestMindMapRepository_goesWithItsSession(t *testing.T) {
+func TestMindMapRepository_outlivesItsSession(t *testing.T) {
 	// Given a map in each of two sessions
 	repo, db := newTestMindMapRepository(t)
 	ctx := context.Background()
@@ -293,11 +284,12 @@ func TestMindMapRepository_goesWithItsSession(t *testing.T) {
 	_, err := db.Exec(`DELETE FROM sessions WHERE id = 'session-1'`)
 	require.NoError(t, err)
 
-	// Then its map is gone and the other stays
-	_, errGone := repo.Get(ctx, "map-1")
-	_, errKept := repo.Get(ctx, "map-2")
-	assert.ErrorIs(t, errGone, mindmap.ErrMindMapNotFound)
-	assert.NoError(t, errKept)
+	// Then both maps stay, like a quiz: only an explicit delete removes one
+	got, errFirst := repo.Get(ctx, "map-1")
+	_, errSecond := repo.Get(ctx, "map-2")
+	require.NoError(t, errFirst)
+	assert.NoError(t, errSecond)
+	assert.Equal(t, "session-1", got.SessionID)
 }
 
 func TestMindMapRepository_failsOnAClosedDatabase(t *testing.T) {
