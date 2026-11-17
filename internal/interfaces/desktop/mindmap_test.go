@@ -380,12 +380,183 @@ func TestApp_mindMapBindings_reportUnavailableWhenTheirServiceIsNotWired(t *test
 		"SaveMindMapDiagram":  func() error { _, err := app.SaveMindMapDiagram("m", "x"); return err },
 		"DeleteMindMap":       func() error { return app.DeleteMindMap("m") },
 	}
+	calls["GetPendingMindMapOffer"] = func() error { _, err := app.GetPendingMindMapOffer("s"); return err }
+	calls["AcceptMindMapOffer"] = func() error { _, err := app.AcceptMindMapOffer("o"); return err }
+	calls["DeclineMindMapOffer"] = func() error { return app.DeclineMindMapOffer("o") }
 	for name, call := range calls {
 		t.Run(name, func(t *testing.T) {
 			// When calling the binding, Then it answers with the unavailable code instead of panicking
 			var mindMapErr *MindMapError
 			require.ErrorAs(t, call(), &mindMapErr)
 			assert.Equal(t, mindMapCodeUnavailable, mindMapErr.Code)
+		})
+	}
+}
+
+type fakeMindMapOffers struct {
+	offer     domainmindmap.Offer
+	found     bool
+	summary   domainmindmap.Summary
+	err       error
+	offerID   string
+	sessionID string
+}
+
+func (o *fakeMindMapOffers) GetPending(_ context.Context, sessionID string) (domainmindmap.Offer, bool, error) {
+	o.sessionID = sessionID
+	return o.offer, o.found, o.err
+}
+
+func (o *fakeMindMapOffers) Accept(_ context.Context, offerID string) (domainmindmap.Summary, error) {
+	o.offerID = offerID
+	return o.summary, o.err
+}
+
+func (o *fakeMindMapOffers) Decline(_ context.Context, offerID string) error {
+	o.offerID = offerID
+	return o.err
+}
+
+type blockingMindMapOffers struct {
+	fakeMindMapOffers
+	started chan struct{}
+}
+
+func (o *blockingMindMapOffers) Accept(ctx context.Context, _ string) (domainmindmap.Summary, error) {
+	close(o.started)
+	<-ctx.Done()
+	return domainmindmap.Summary{}, fmt.Errorf("generating: %w", ctx.Err())
+}
+
+func newMindMapOfferApp(offers mindMapOffers) *App {
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, WithMindMapOfferService(offers))
+	app.ctx = context.Background()
+	return app
+}
+
+func TestApp_GetPendingMindMapOffer_returnsTheOfferOrNull(t *testing.T) {
+	t.Run("a pending offer", func(t *testing.T) {
+		// Given a session with a pending offer
+		offers := &fakeMindMapOffers{found: true, offer: domainmindmap.Offer{ID: "offer-1", SessionID: "session-1", MessageID: "message-1"}}
+
+		// When asking for it
+		got, err := newMindMapOfferApp(offers).GetPendingMindMapOffer(" session-1 ")
+
+		// Then it is returned for that session
+		require.NoError(t, err)
+		assert.Equal(t, "session-1", offers.sessionID)
+		assert.Equal(t, &MindMapOfferDTO{ID: "offer-1", SessionID: "session-1", MessageID: "message-1"}, got)
+	})
+	t.Run("none", func(t *testing.T) {
+		got, err := newMindMapOfferApp(&fakeMindMapOffers{}).GetPendingMindMapOffer("session-1")
+
+		require.NoError(t, err)
+		assert.Nil(t, got)
+	})
+	t.Run("a blank session", func(t *testing.T) {
+		_, err := newMindMapOfferApp(&fakeMindMapOffers{}).GetPendingMindMapOffer(" ")
+
+		assert.Equal(t, mindMapCodeInvalidInput, mindMapCodeOf(t, err).Code)
+	})
+}
+
+func TestApp_AcceptMindMapOffer_returnsTheMindMapCard(t *testing.T) {
+	// Given an offer that generates a mind map
+	offers := &fakeMindMapOffers{summary: domainmindmap.Summary{
+		ID: "map-1", SessionID: "session-1", SessionTitle: "Caching", Title: "Caching basics",
+		CreatedAt: mindMapTime, UpdatedAt: mindMapTime, MessageID: "message-1",
+	}}
+
+	// When accepting it
+	got, err := newMindMapOfferApp(offers).AcceptMindMapOffer(" offer-1 ")
+
+	// Then the use case got the trimmed id and the card is returned
+	require.NoError(t, err)
+	assert.Equal(t, "offer-1", offers.offerID)
+	assert.Equal(t, MindMapSummaryDTO{
+		ID: "map-1", SessionID: "session-1", SessionTitle: "Caching", Title: "Caching basics",
+		CreatedAt: "2026-11-17T09:30:00Z", UpdatedAt: "2026-11-17T09:30:00Z", MessageID: "message-1",
+	}, got)
+}
+
+func TestApp_AcceptMindMapOffer_requiresAnOffer(t *testing.T) {
+	_, err := newMindMapOfferApp(&fakeMindMapOffers{}).AcceptMindMapOffer("  ")
+
+	assert.Equal(t, mindMapCodeInvalidInput, mindMapCodeOf(t, err).Code)
+}
+
+func TestApp_AcceptMindMapOffer_canBeCancelledLikeAGeneration(t *testing.T) {
+	// Given an accept whose generation is still running
+	offers := &blockingMindMapOffers{started: make(chan struct{})}
+	app := newMindMapOfferApp(offers)
+	result := make(chan error, 1)
+	go func() {
+		_, err := app.AcceptMindMapOffer("offer-1")
+		result <- err
+	}()
+	<-offers.started
+
+	// When the frontend cancels the mind map generation
+	require.NoError(t, app.CancelMindMapGeneration())
+
+	// Then the accept ends with the cancelled code
+	assert.Equal(t, mindMapCodeCancelled, mindMapCodeOf(t, <-result).Code)
+}
+
+func TestApp_AcceptMindMapOffer_refusesWhileAMindMapIsBeingGenerated(t *testing.T) {
+	// Given a generation from the menu that is still running
+	generator := &blockingMindMapGenerator{started: make(chan struct{})}
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		WithMindMapGenerationService(generator), WithMindMapOfferService(&fakeMindMapOffers{}))
+	app.ctx = context.Background()
+	go func() { _, _ = app.GenerateMindMap("session-1") }()
+	<-generator.started
+
+	// When an offer is accepted meanwhile
+	_, err := app.AcceptMindMapOffer("offer-1")
+
+	// Then it is refused
+	assert.Equal(t, mindMapCodeGenerationInProgress, mindMapCodeOf(t, err).Code)
+	require.NoError(t, app.CancelMindMapGeneration())
+}
+
+func TestApp_DeclineMindMapOffer_passesTheID(t *testing.T) {
+	offers := &fakeMindMapOffers{}
+
+	err := newMindMapOfferApp(offers).DeclineMindMapOffer(" offer-1 ")
+
+	require.NoError(t, err)
+	assert.Equal(t, "offer-1", offers.offerID)
+}
+
+func TestApp_DeclineMindMapOffer_requiresAnOffer(t *testing.T) {
+	err := newMindMapOfferApp(&fakeMindMapOffers{}).DeclineMindMapOffer(" ")
+
+	assert.Equal(t, mindMapCodeInvalidInput, mindMapCodeOf(t, err).Code)
+}
+
+func TestApp_mindMapOfferBindings_mapUseCaseErrorsToCodes(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		code string
+	}{
+		{"offer gone", fmt.Errorf("w: %w", domainmindmap.ErrOfferNotFound), mindMapCodeOfferNotFound},
+		{"offer pending", domainmindmap.ErrOfferPending, mindMapCodeOfferPending},
+		{"invalid generation", applicationmindmap.ErrInvalidTree, mindMapCodeInvalidGeneration},
+		{"anything else", errors.New("disk on fire"), mindMapCodeInternal},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := newMindMapOfferApp(&fakeMindMapOffers{err: tt.err})
+
+			_, pendingErr := app.GetPendingMindMapOffer("s")
+			_, acceptErr := app.AcceptMindMapOffer("o")
+			declineErr := app.DeclineMindMapOffer("o")
+
+			for _, err := range []error{pendingErr, acceptErr, declineErr} {
+				assert.Equal(t, tt.code, mindMapCodeOf(t, err).Code)
+			}
 		})
 	}
 }

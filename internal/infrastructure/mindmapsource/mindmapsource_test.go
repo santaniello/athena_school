@@ -135,3 +135,71 @@ func TestNotes_SearchNotes_returnsARetrievalFailure(t *testing.T) {
 
 	require.ErrorIs(t, err, domainknowledge.ErrVectorStoreUnavailable)
 }
+
+type fakeOfferService struct {
+	pending      bool
+	err          error
+	askedSession string
+	sessionID    string
+	messageID    string
+}
+
+func (f *fakeOfferService) GetPending(_ context.Context, sessionID string) (domainmindmap.Offer, bool, error) {
+	f.askedSession = sessionID
+	return domainmindmap.Offer{}, f.pending, f.err
+}
+
+func (f *fakeOfferService) CreateOffer(_ context.Context, sessionID, messageID string) (domainmindmap.Offer, error) {
+	f.sessionID, f.messageID = sessionID, messageID
+	return domainmindmap.Offer{}, f.err
+}
+
+func TestOfferGate_HasPending(t *testing.T) {
+	boom := errors.New("boom")
+	tests := []struct {
+		name    string
+		offers  *fakeOfferService
+		want    bool
+		wantErr error
+	}{
+		{"pending", &fakeOfferService{pending: true}, true, nil},
+		{"none", &fakeOfferService{}, false, nil},
+		{"failure", &fakeOfferService{err: boom}, false, boom},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given a mind map offer service
+			// When asking the gate
+			got, err := NewOfferGate(tt.offers).HasPending(context.Background(), "session-1")
+
+			// Then the answer is the service's
+			assert.Equal(t, tt.want, got)
+			assert.ErrorIs(t, err, tt.wantErr)
+			assert.Equal(t, "session-1", tt.offers.askedSession)
+		})
+	}
+}
+
+func TestOfferGate_CreateOffer_createsTheOfferUnderTheMessage(t *testing.T) {
+	// Given a mind map offer service
+	offers := &fakeOfferService{}
+
+	// When the chat creates an offer
+	err := NewOfferGate(offers).CreateOffer(context.Background(), "session-1", "message-1")
+
+	// Then the service got the session and message
+	require.NoError(t, err)
+	assert.Equal(t, "session-1", offers.sessionID)
+	assert.Equal(t, "message-1", offers.messageID)
+}
+
+func TestOfferGate_CreateOffer_passesFailuresThrough(t *testing.T) {
+	// Given a service that refuses a second offer
+	offers := &fakeOfferService{err: domainmindmap.ErrOfferPending}
+
+	// When the chat creates an offer
+	err := NewOfferGate(offers).CreateOffer(context.Background(), "session-1", "message-1")
+
+	// Then the error comes back
+	assert.ErrorIs(t, err, domainmindmap.ErrOfferPending)
+}

@@ -3,6 +3,8 @@
 import {desktop} from '../models';
 import {context} from '../models';
 
+export function AcceptMindMapOffer(arg1:string):Promise<desktop.MindMapSummaryDTO>;
+
 export function AcceptOffer(arg1:string,arg2:string,arg3:string,arg4:string):Promise<desktop.SessionExerciseDTO>;
 
 export function AcceptQuizOffer(arg1:string,arg2:number,arg3:string):Promise<desktop.QuizSummaryDTO>;
@@ -22,6 +24,8 @@ export function ConfirmImport(arg1:string,arg2:string,arg3:string):Promise<void>
 export function ConfirmLinkImport(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function CreateFolder(arg1:string):Promise<desktop.FolderResult>;
+
+export function DeclineMindMapOffer(arg1:string):Promise<void>;
 
 export function DeclineOffer(arg1:string):Promise<void>;
 
@@ -64,6 +68,8 @@ export function GetMindMap(arg1:string):Promise<desktop.MindMapDTO>;
 export function GetModelSettings():Promise<desktop.ModelSettingsResult>;
 
 export function GetPassScore():Promise<number>;
+
+export function GetPendingMindMapOffer(arg1:string):Promise<desktop.MindMapOfferDTO>;
 
 export function GetPendingOffer(arg1:string):Promise<desktop.ExerciseOfferDTO>;
 

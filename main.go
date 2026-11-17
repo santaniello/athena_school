@@ -163,6 +163,7 @@ func main() {
 		mindMapRepo,
 	)
 	mindMapService := applicationmindmap.NewService(mindMapRepo)
+	mindMapOfferService := applicationmindmap.NewOfferService(sqlite.NewMindMapOfferRepository(db), mindMapRepo, mindMapGenerationService)
 
 	studyService := study.NewService(
 		studySessions, studyMessages, llmClient, profiles, folders, knowledgeService, transactor, contextResolver,
@@ -171,7 +172,10 @@ func main() {
 		study.WithSummarizer(study.NewSummarizer(llmClient, profiles, study.WithSummaryModelWindow(summaryWindow))),
 		study.WithSummaryWindow(summaryWindow),
 		study.WithSummaries(sqlite.NewConversationSummaryRepository(db)),
-		study.WithOfferGate(studyoffers.NewGate(exercisesource.NewOfferGate(offerService), quizsource.NewOfferGate(quizOfferService))),
+		study.WithOfferGate(studyoffers.NewGate(
+			exercisesource.NewOfferGate(offerService), quizsource.NewOfferGate(quizOfferService),
+			studyoffers.WithMindMapOffers(mindmapsource.NewOfferGate(mindMapOfferService)),
+		)),
 		study.WithExerciseFeedback(exercisesource.NewFeedbackReader(feedbackService)),
 	)
 	folderService := folder.NewService(folders, studySessions, knowledgeService)
@@ -241,6 +245,7 @@ func main() {
 		desktop.WithQuizOfferService(quizOfferService),
 		desktop.WithMindMapGenerationService(mindMapGenerationService),
 		desktop.WithMindMapService(mindMapService),
+		desktop.WithMindMapOfferService(mindMapOfferService),
 	)
 
 	err = wails.Run(&options.App{

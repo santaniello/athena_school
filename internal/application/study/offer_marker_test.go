@@ -36,6 +36,21 @@ func TestBuildSystemPrompt_instructsTheModelToEndWithTheQuizMarker_whenTheUserAs
 	assert.Contains(t, prompt, "Never propose a quiz on your own")
 }
 
+func TestBuildSystemPrompt_instructsTheModelToEndWithTheMindMapMarker_whenTheUserAsksForAMindMap(t *testing.T) {
+	// Given any profile
+	profile := domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}
+
+	// When building the system prompt
+	prompt := buildSystemPrompt(profile, "Caching", "Learn caching")
+
+	// Then it names the mind map marker, says it only follows an explicit request
+	// and says a quiz, test or exercise request is not one
+	assert.Contains(t, prompt, mindMapOfferMarker)
+	assert.Contains(t, prompt, "explicitly asks you for a mind map")
+	assert.Contains(t, prompt, "A request for an exercise, a quiz or a test is not a request for a mind map")
+	assert.Contains(t, prompt, "Never propose a mind map on your own")
+}
+
 func TestStripOfferMarkers(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -46,6 +61,13 @@ func TestStripOfferMarkers(t *testing.T) {
 		{"no marker", "Just a normal answer.", "Just a normal answer.", domainstudy.OfferKindNone},
 		{"exercise marker at the end", "Sure, let's practice. " + exerciseOfferMarker, "Sure, let's practice.", domainstudy.OfferKindExercise},
 		{"quiz marker at the end", "Sure, a quiz. " + quizOfferMarker, "Sure, a quiz.", domainstudy.OfferKindQuiz},
+		{"mind map marker at the end", "Sure, a map. " + mindMapOfferMarker, "Sure, a map.", domainstudy.OfferKindMindMap},
+		{"mind map marker on its own line", "Sure.\n\n" + mindMapOfferMarker + "\n", "Sure.", domainstudy.OfferKindMindMap},
+		{"repeated mind map marker", mindMapOfferMarker + "Hi" + mindMapOfferMarker, "Hi", domainstudy.OfferKindMindMap},
+		{"quiz and mind map markers, quiz wins", "Hi " + mindMapOfferMarker + quizOfferMarker, "Hi", domainstudy.OfferKindQuiz},
+		{"exercise and mind map markers, exercise wins", "Hi " + mindMapOfferMarker + exerciseOfferMarker, "Hi", domainstudy.OfferKindExercise},
+		{"all three markers, exercise wins", "Hi " + mindMapOfferMarker + quizOfferMarker + exerciseOfferMarker, "Hi", domainstudy.OfferKindExercise},
+		{"partial mind map marker is kept", "Sure [[ATHENA_MINDMAP", "Sure [[ATHENA_MINDMAP", domainstudy.OfferKindNone},
 		{"marker on its own line", "Sure.\n\n" + exerciseOfferMarker + "\n", "Sure.", domainstudy.OfferKindExercise},
 		{"quiz marker on its own line", "Sure.\n\n" + quizOfferMarker + "\n", "Sure.", domainstudy.OfferKindQuiz},
 		{"marker in the middle", "Sure " + exerciseOfferMarker + " go", "Sure  go", domainstudy.OfferKindExercise},
@@ -87,6 +109,7 @@ func TestOfferMarkerFilter_neverEmitsAMarker_howeverTheStreamIsSplit(t *testing.
 	}{
 		{"exercise", exerciseOfferMarker, domainstudy.OfferKindExercise},
 		{"quiz", quizOfferMarker, domainstudy.OfferKindQuiz},
+		{"mind map", mindMapOfferMarker, domainstudy.OfferKindMindMap},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -134,6 +157,29 @@ func TestOfferMarkerFilter_emitsAHeldPartialQuizMarker_whenTheStreamEndsWithoutC
 
 	// Then the text is delivered intact and no offer is detected
 	assert.Equal(t, "Use arrays like [[ATHENA_QUIZ", emitted)
+	assert.Equal(t, domainstudy.OfferKindNone, kind)
+}
+
+func TestOfferMarkerFilter_neverEmitsAnyMarker_whenAllThreeAppear(t *testing.T) {
+	// Given a reply that carries every marker, split at every point
+	full := "Hi." + mindMapOfferMarker + quizOfferMarker + exerciseOfferMarker
+	for i := 0; i <= len(full); i++ {
+		// When the stream is filtered
+		emitted, kind := collectFiltered([]string{full[:i], full[i:]})
+
+		// Then no marker reaches the user and the exercise wins
+		assert.Equal(t, "Hi.", strings.TrimSpace(emitted), "split at %d", i)
+		assert.Equal(t, domainstudy.OfferKindExercise, kind, "split at %d", i)
+	}
+}
+
+func TestOfferMarkerFilter_emitsAHeldPartialMindMapMarker_whenTheStreamEndsWithoutCompletingIt(t *testing.T) {
+	// Given a stream that ends in what looked like the start of the mind map marker
+	// When it is filtered
+	emitted, kind := collectFiltered([]string{"Use arrays like [[ATHENA_", "MINDMAP"})
+
+	// Then the text is delivered intact and no offer is detected
+	assert.Equal(t, "Use arrays like [[ATHENA_MINDMAP", emitted)
 	assert.Equal(t, domainstudy.OfferKindNone, kind)
 }
 

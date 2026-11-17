@@ -97,6 +97,33 @@ func (r *Notes) SearchNotes(ctx context.Context, sessionID, query string) ([]dom
 	return excerpts, nil
 }
 
+// offerService is what OfferGate needs from the mind map offer service.
+type offerService interface {
+	GetPending(ctx context.Context, sessionID string) (domainmindmap.Offer, bool, error)
+	CreateOffer(ctx context.Context, sessionID, messageID string) (domainmindmap.Offer, error)
+}
+
+// OfferGate adapts the mind map offer service to the shape the study chat's
+// composed offer gate (package studyoffers) expects, so the chat package
+// imports no mind map code. See
+// specs/phases/phase-03-architecture-lab/24-mind-map.md.
+type OfferGate struct{ offers offerService }
+
+// NewOfferGate creates an OfferGate backed by offers.
+func NewOfferGate(offers offerService) *OfferGate { return &OfferGate{offers: offers} }
+
+// HasPending reports whether the session has a pending mind map offer.
+func (g *OfferGate) HasPending(ctx context.Context, sessionID string) (bool, error) {
+	_, found, err := g.offers.GetPending(ctx, sessionID)
+	return found, err
+}
+
+// CreateOffer stores a pending mind map offer under the assistant message.
+func (g *OfferGate) CreateOffer(ctx context.Context, sessionID, messageID string) error {
+	_, err := g.offers.CreateOffer(ctx, sessionID, messageID)
+	return err
+}
+
 // The adapters implement the ports the application declares.
 var (
 	_ applicationmindmap.SessionReader = (*Sessions)(nil)

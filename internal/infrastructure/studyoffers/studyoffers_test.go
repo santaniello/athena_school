@@ -177,3 +177,84 @@ func TestGate_withoutQuizOffers_hasNoQuizSide(t *testing.T) {
 	require.ErrorIs(t, quizErr, ErrUnsupportedKind)
 	assert.Equal(t, []string{"session-1/message-1"}, exercise.created)
 }
+
+func TestGate_withMindMapOffers_countsAndRoutesTheThirdKind(t *testing.T) {
+	// Given a gate with the mind map side wired
+	exercise, quiz, mindMap := &fakeOffers{}, &fakeOffers{}, &fakeOffers{}
+	gate := NewGate(exercise, quiz, WithMindMapOffers(mindMap))
+
+	// When creating a mind map offer
+	err := gate.CreateOffer(context.Background(), "session-1", "message-1", domainstudy.OfferKindMindMap)
+
+	// Then only the mind map side received it, after every other side was asked
+	require.NoError(t, err)
+	assert.Equal(t, []string{"session-1/message-1"}, mindMap.created)
+	assert.Empty(t, exercise.created)
+	assert.Empty(t, quiz.created)
+	assert.Equal(t, "session-1", exercise.askedSession)
+	assert.Equal(t, "session-1", quiz.askedSession)
+}
+
+func TestGate_withMindMapOffers_aPendingMindMapBlocksTheOtherKinds(t *testing.T) {
+	for _, kind := range []domainstudy.OfferKind{domainstudy.OfferKindExercise, domainstudy.OfferKindQuiz} {
+		t.Run(string(kind), func(t *testing.T) {
+			// Given a pending mind map offer
+			exercise, quiz, mindMap := &fakeOffers{}, &fakeOffers{}, &fakeOffers{pending: true}
+			gate := NewGate(exercise, quiz, WithMindMapOffers(mindMap))
+
+			// When creating an offer of another kind, and asking about pending ones
+			err := gate.CreateOffer(context.Background(), "session-1", "message-1", kind)
+			pending, pendingErr := gate.HasPending(context.Background(), "session-1")
+
+			// Then it is refused, nothing is created and the session counts as pending
+			require.ErrorIs(t, err, ErrOfferPending)
+			require.NoError(t, pendingErr)
+			assert.True(t, pending)
+			assert.Empty(t, exercise.created)
+			assert.Empty(t, quiz.created)
+		})
+	}
+}
+
+func TestGate_withMindMapOffers_aPendingOtherKindBlocksTheMindMap(t *testing.T) {
+	// Given a pending quiz offer
+	exercise, quiz, mindMap := &fakeOffers{}, &fakeOffers{pending: true}, &fakeOffers{}
+	gate := NewGate(exercise, quiz, WithMindMapOffers(mindMap))
+
+	// When creating a mind map offer
+	err := gate.CreateOffer(context.Background(), "session-1", "message-1", domainstudy.OfferKindMindMap)
+
+	// Then it is refused and nothing is created
+	require.ErrorIs(t, err, ErrOfferPending)
+	assert.Empty(t, mindMap.created)
+}
+
+func TestGate_withMindMapOffers_failsWhenTheMindMapSideCannotBeChecked(t *testing.T) {
+	// Given a mind map side whose check fails
+	boom := errors.New("boom")
+	gate := NewGate(&fakeOffers{}, &fakeOffers{}, WithMindMapOffers(&fakeOffers{pendingErr: boom}))
+
+	// When asking about pending offers and creating a quiz offer
+	_, pendingErr := gate.HasPending(context.Background(), "session-1")
+	createErr := gate.CreateOffer(context.Background(), "session-1", "message-1", domainstudy.OfferKindQuiz)
+
+	// Then the failure is not hidden
+	require.ErrorIs(t, pendingErr, boom)
+	require.ErrorIs(t, createErr, boom)
+}
+
+func TestGate_withoutMindMapOffers_hasNoMindMapSide(t *testing.T) {
+	// Given a gate with no mind map offers wired, by default and by a nil option
+	for name, gate := range map[string]*Gate{
+		"default":    NewGate(&fakeOffers{}, &fakeOffers{}),
+		"nil option": NewGate(&fakeOffers{}, &fakeOffers{}, WithMindMapOffers(nil)),
+	} {
+		t.Run(name, func(t *testing.T) {
+			// When creating a mind map offer
+			err := gate.CreateOffer(context.Background(), "session-1", "message-1", domainstudy.OfferKindMindMap)
+
+			// Then it is refused as unsupported
+			require.ErrorIs(t, err, ErrUnsupportedKind)
+		})
+	}
+}
