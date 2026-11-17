@@ -20,7 +20,7 @@ The map is drawn and edited with the draw.io embed that the Architecture Lab alr
    JSON tree: a root title and nested children, each with a short label. A deterministic renderer
    turns the tree into mxGraphModel XML, like `architecture/starter_diagram.go`. Ids, coordinates
    and styles are ours; labels are XML-escaped. Limits: depth, total nodes and label length are
-   capped, and a tree over a limit is `ErrInvalidMindMapTree`. Nothing is stored when generation
+   capped, and a tree over a limit is `ErrInvalidTree`. Nothing is stored when generation
    or rendering fails.
 3. **Content fed to the model** is the same as the quiz's: session topic and goal, the conversation
    summary, the profile (area, level, assistant language) and note excerpts from the knowledge

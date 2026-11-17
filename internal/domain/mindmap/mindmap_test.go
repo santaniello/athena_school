@@ -34,6 +34,7 @@ func TestMindMapValidate(t *testing.T) {
 		{"title required", func(m *MindMap) { m.Title = "\t" }, ErrTitleRequired},
 		{"tree required", func(m *MindMap) { m.Tree = " " }, ErrTreeRequired},
 		{"diagram required", func(m *MindMap) { m.DiagramXML = "" }, ErrDiagramRequired},
+		{"diagram only whitespace", func(m *MindMap) { m.DiagramXML = "  \n\t" }, ErrDiagramRequired},
 		{"diagram at the limit", func(m *MindMap) { m.DiagramXML = strings.Repeat("x", MaxDiagramBytes) }, nil},
 		{"diagram over the limit", func(m *MindMap) { m.DiagramXML = strings.Repeat("x", MaxDiagramBytes+1) }, ErrDiagramTooLarge},
 	}

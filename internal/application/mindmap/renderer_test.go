@@ -168,17 +168,18 @@ func TestRenderEscapesAndCleansLabels(t *testing.T) {
 	assert.Equal(t, "ab", vertices["n1"].Value)
 }
 
-func TestRenderBoundsLongLabels(t *testing.T) {
-	// Given a label longer than the bound
-	raw := []byte(`{"label":"` + strings.Repeat("x", MaxLabelLength+50) + `","children":[{"label":"a"}]}`)
+func TestRenderTurnsLineBreaksIntoSpaces(t *testing.T) {
+	// Given a label with a line break and a tab
+	raw := []byte(`{"label":"Write-through\nvs\twrite-back","children":[{"label":"a"}]}`)
 
 	// When it is rendered
 	doc, err := Renderer{}.Render(raw)
 
-	// Then it is cut at the bound
+	// Then the label reads on one line, as the editor would show it anyway
 	require.NoError(t, err)
+	assert.NotContains(t, doc, "\n")
 	vertices, _ := parseDrawn(t, doc)
-	assert.Len(t, vertices["n0"].Value, MaxLabelLength)
+	assert.Equal(t, "Write-through vs write-back", vertices["n0"].Value)
 }
 
 func TestRenderWrapsInvalidTrees(t *testing.T) {

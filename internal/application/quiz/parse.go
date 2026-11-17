@@ -1,11 +1,11 @@
 package quiz
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
 
+	"github.com/santaniello/athena/internal/application/llmprompt"
 	domainquiz "github.com/santaniello/athena/internal/domain/quiz"
 )
 
@@ -27,7 +27,7 @@ type generationQuestion struct {
 // Every failure wraps ErrInvalidGeneration.
 func parseQuestions(content string, count int) ([]domainquiz.Question, error) {
 	var output generationOutput
-	if err := json.Unmarshal(stripCodeFence(content), &output); err != nil {
+	if err := json.Unmarshal([]byte(llmprompt.StripCodeFence(content)), &output); err != nil {
 		return nil, fmt.Errorf("%w: reading the JSON: %w", ErrInvalidGeneration, err)
 	}
 	if len(output.Questions) != count {
@@ -51,17 +51,4 @@ func parseQuestions(content string, count int) ([]domainquiz.Question, error) {
 		}
 	}
 	return questions, nil
-}
-
-// stripCodeFence removes a Markdown code fence some models wrap around JSON.
-func stripCodeFence(content string) []byte {
-	trimmed := strings.TrimSpace(content)
-	if !strings.HasPrefix(trimmed, "```") {
-		return []byte(trimmed)
-	}
-	trimmed = strings.TrimPrefix(trimmed, "```")
-	if _, afterInfo, found := strings.Cut(trimmed, "\n"); found {
-		trimmed = afterInfo
-	}
-	return bytes.TrimSpace([]byte(strings.TrimSuffix(strings.TrimSpace(trimmed), "```")))
 }

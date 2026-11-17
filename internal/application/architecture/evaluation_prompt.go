@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/santaniello/athena/internal/application/llmprompt"
 	domainexercise "github.com/santaniello/athena/internal/domain/exercise"
 )
 
@@ -41,10 +42,10 @@ func BuildEvaluationPrompt(
 	if baseline != nil {
 		rules = baselineInstructions
 	}
-	fmt.Fprintf(&b, evaluationInstructions, rules, languageName(language))
+	fmt.Fprintf(&b, evaluationInstructions, rules, llmprompt.LanguageName(language))
 	b.WriteString("\n\n<challenge>\n")
-	writeTag(&b, "title", challenge.Title, false)
-	writeTag(&b, "scenario", challenge.Scenario, true)
+	llmprompt.WriteTag(&b, "title", challenge.Title, false)
+	llmprompt.WriteTag(&b, "scenario", challenge.Scenario, true)
 	writeTags(&b, "requirement", challenge.FunctionalRequirements)
 	writeTags(&b, "requirement", challenge.NonFunctionalRequirements)
 	writeTags(&b, "constraint", challenge.Constraints)
@@ -67,10 +68,10 @@ func BuildEvaluationPrompt(
 
 func writeCriterion(b *strings.Builder, criterion domainexercise.RubricCriterion) {
 	fmt.Fprintf(b, "<criterion key=%q>\n", criterion.Key)
-	writeTag(b, "name", criterion.Name, false)
-	writeTag(b, "description", criterion.Description, false)
+	llmprompt.WriteTag(b, "name", criterion.Name, false)
+	llmprompt.WriteTag(b, "description", criterion.Description, false)
 	for level, descriptor := range criterion.Levels {
-		fmt.Fprintf(b, "%d: %s\n", level, tagEscaper.Replace(descriptor))
+		fmt.Fprintf(b, "%d: %s\n", level, llmprompt.EscapeTag(descriptor))
 	}
 	b.WriteString("</criterion>\n")
 }
@@ -78,7 +79,7 @@ func writeCriterion(b *strings.Builder, criterion domainexercise.RubricCriterion
 func writeSummary(b *strings.Builder, summary DiagramSummary) {
 	b.WriteString("Components:\n")
 	for _, component := range summary.Components {
-		fmt.Fprintf(b, "%d. %s", component.Number, tagEscaper.Replace(component.Label))
+		fmt.Fprintf(b, "%d. %s", component.Number, llmprompt.EscapeTag(component.Label))
 		if component.Container != 0 {
 			fmt.Fprintf(b, " (inside %d)", component.Container)
 		}
@@ -88,7 +89,7 @@ func writeSummary(b *strings.Builder, summary DiagramSummary) {
 	for _, connection := range summary.Connections {
 		fmt.Fprintf(b, "%d -> %d", connection.Source, connection.Target)
 		if connection.Label != "" {
-			fmt.Fprintf(b, ": %s", tagEscaper.Replace(connection.Label))
+			fmt.Fprintf(b, ": %s", llmprompt.EscapeTag(connection.Label))
 		}
 		b.WriteString("\n")
 	}

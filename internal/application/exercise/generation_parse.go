@@ -1,13 +1,13 @@
 package exercise
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 	"unicode"
 
+	"github.com/santaniello/athena/internal/application/llmprompt"
 	domainexercise "github.com/santaniello/athena/internal/domain/exercise"
 )
 
@@ -56,7 +56,7 @@ type generationCriterion struct {
 // interview ignores the diagram and starts blank.
 func parseGeneration(content, topic string, spec domainexercise.ChallengeSpec, renderer StarterDiagramRenderer) (generatedChallenge, error) {
 	var output generationOutput
-	if err := json.Unmarshal(stripCodeFence(content), &output); err != nil {
+	if err := json.Unmarshal([]byte(llmprompt.StripCodeFence(content)), &output); err != nil {
 		return generatedChallenge{}, fmt.Errorf("%w: reading the JSON: %w", ErrInvalidGeneration, err)
 	}
 	criteria, err := toCriterionInputs(output.Criteria)
@@ -102,19 +102,6 @@ func renderStarter(diagram json.RawMessage, spec domainexercise.ChallengeSpec, r
 		return "", fmt.Errorf("%w: %w", ErrInvalidGeneration, err)
 	}
 	return starter, nil
-}
-
-// stripCodeFence removes a Markdown code fence some models wrap around JSON.
-func stripCodeFence(content string) []byte {
-	trimmed := strings.TrimSpace(content)
-	if !strings.HasPrefix(trimmed, "```") {
-		return []byte(trimmed)
-	}
-	trimmed = strings.TrimPrefix(trimmed, "```")
-	if _, afterInfo, found := strings.Cut(trimmed, "\n"); found {
-		trimmed = afterInfo
-	}
-	return bytes.TrimSpace([]byte(strings.TrimSuffix(strings.TrimSpace(trimmed), "```")))
 }
 
 func toCriterionInputs(criteria []generationCriterion) ([]ChallengeCriterionInput, error) {

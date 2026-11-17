@@ -110,27 +110,3 @@ func TestBuildUserPrompt_escapesUntrustedText(t *testing.T) {
 func TestGenerationTask_routesToTheMindMapModel(t *testing.T) {
 	assert.Equal(t, domainllm.TaskMindMap, generationTask)
 }
-
-func TestStripCodeFence(t *testing.T) {
-	tests := []struct {
-		name string
-		in   string
-		want string
-	}{
-		{"plain JSON", ` {"a":1} `, `{"a":1}`},
-		{"fence with language", "```json\n{\"a\":1}\n```", `{"a":1}`},
-		{"fence without language", "```\n{\"a\":1}\n```", `{"a":1}`},
-		{"fence with no newline", "```{\"a\":1}```", `{"a":1}`},
-		{"fence never closed", "```json\n{\"a\":1}", `{"a":1}`},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Given a reply, fenced or not
-			// When the fence is stripped
-			got := stripCodeFence(tt.in)
-
-			// Then only the JSON is left
-			assert.Equal(t, tt.want, string(got))
-		})
-	}
-}

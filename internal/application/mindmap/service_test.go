@@ -115,6 +115,39 @@ func TestService_SaveDiagram_acceptsADrawioFile(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestService_SaveDiagram_acceptsADeclarationAndTrailingWhitespace(t *testing.T) {
+	// Given a stored map and a draw.io document with an XML declaration, a
+	// comment and a trailing line break
+	service, repo := newService(t)
+	ctx := context.Background()
+	stored := storedMindMap(t)
+	doc := "<?xml version=\"1.0\"?>\n<mxGraphModel><root><mxCell id=\"0\"/></root></mxGraphModel><!-- saved -->\n"
+	repo.EXPECT().Get(ctx, "map-1").Return(stored, nil).Once()
+	repo.EXPECT().Update(ctx, withDiagram(stored, doc)).Return(nil).Once()
+
+	// When the diagram is saved
+	_, err := service.SaveDiagram(ctx, "map-1", doc)
+
+	// Then it is stored
+	require.NoError(t, err)
+}
+
+func TestService_SaveDiagram_acceptsACompressedDrawioFile(t *testing.T) {
+	// Given a stored map and an mxfile whose diagram is compressed text
+	service, repo := newService(t)
+	ctx := context.Background()
+	stored := storedMindMap(t)
+	doc := `<mxfile host="app.diagrams.net"><diagram id="d1">7VhNb9swDP01Ph</diagram></mxfile>`
+	repo.EXPECT().Get(ctx, "map-1").Return(stored, nil).Once()
+	repo.EXPECT().Update(ctx, withDiagram(stored, doc)).Return(nil).Once()
+
+	// When the diagram is saved
+	_, err := service.SaveDiagram(ctx, "map-1", doc)
+
+	// Then it is stored
+	require.NoError(t, err)
+}
+
 func TestService_SaveDiagram_rejectsWhatIsNotDrawio(t *testing.T) {
 	tests := []struct {
 		name string
@@ -123,6 +156,14 @@ func TestService_SaveDiagram_rejectsWhatIsNotDrawio(t *testing.T) {
 		{"not XML", "hello"},
 		{"another root element", "<html><body/></html>"},
 		{"broken XML", "<mxGraphModel>"},
+		{"garbage after the root", "<mxfile><diagram/></mxfile>garbage<unclosed"},
+		{"text after the root", "<mxGraphModel><root/></mxGraphModel>trailing"},
+		{"text before the root", "leading<mxGraphModel><root/></mxGraphModel>"},
+		{"a second root element", "<mxGraphModel><root/></mxGraphModel><mxfile/>"},
+		{"an empty model", "<mxGraphModel/>"},
+		{"an empty file", "<mxfile/>"},
+		{"a model without root", "<mxGraphModel><diagram/></mxGraphModel>"},
+		{"root nested too deep", "<mxGraphModel><x><root/></x></mxGraphModel>"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -172,7 +213,7 @@ func TestService_SaveDiagram_reportsNotFound(t *testing.T) {
 	repo.EXPECT().Get(ctx, "nope").Return(domainmindmap.MindMap{}, domainmindmap.ErrMindMapNotFound).Once()
 
 	// When the diagram is saved
-	_, err := service.SaveDiagram(ctx, "nope", "<mxGraphModel/>")
+	_, err := service.SaveDiagram(ctx, "nope", "<mxGraphModel><root/></mxGraphModel>")
 
 	// Then it is not found
 	assert.ErrorIs(t, err, domainmindmap.ErrMindMapNotFound)
@@ -185,10 +226,10 @@ func TestService_SaveDiagram_wrapsAnUpdateFailure(t *testing.T) {
 	boom := errors.New("boom")
 	stored := storedMindMap(t)
 	repo.EXPECT().Get(ctx, "map-1").Return(stored, nil).Once()
-	repo.EXPECT().Update(ctx, withDiagram(stored, "<mxGraphModel/>")).Return(boom).Once()
+	repo.EXPECT().Update(ctx, withDiagram(stored, "<mxGraphModel><root/></mxGraphModel>")).Return(boom).Once()
 
 	// When the diagram is saved
-	_, err := service.SaveDiagram(ctx, "map-1", "<mxGraphModel/>")
+	_, err := service.SaveDiagram(ctx, "map-1", "<mxGraphModel><root/></mxGraphModel>")
 
 	// Then the failure is returned
 	assert.ErrorIs(t, err, boom)
