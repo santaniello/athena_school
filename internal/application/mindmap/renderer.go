@@ -44,7 +44,12 @@ func (Renderer) Render(raw []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return draw(layout(root)), nil
+	return Renderer{}.RenderTree(root), nil
+}
+
+// RenderTree returns the mxGraphModel XML of a tree ParseTree already checked.
+func (Renderer) RenderTree(root Node) string {
+	return draw(layout(root))
 }
 
 // placed is a node with its position, its branch and the index of its parent

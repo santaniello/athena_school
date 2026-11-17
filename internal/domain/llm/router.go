@@ -36,6 +36,10 @@ const (
 	// specs/phases/phase-03-architecture-lab/21-interactive-quiz-core.md). Its
 	// output is read by the user, so it is routed medium.
 	TaskQuiz TaskType = "quiz"
+	// TaskMindMap generates a mind map from a study session (see
+	// specs/phases/phase-03-architecture-lab/24-mind-map.md). Its output is
+	// read by the user, so it is routed medium.
+	TaskMindMap TaskType = "mind_map"
 )
 
 // Tier is a cost/capability class of model.
@@ -69,7 +73,7 @@ func TierFor(task TaskType) Tier {
 	switch task {
 	case TaskOnboarding, TaskQueryEnrichment, TaskConversationSummary:
 		return TierCheap
-	case TaskStudy, TaskChallengeFeedback, TaskNoteFormatting, TaskArchitectureLab, TaskQuiz:
+	case TaskStudy, TaskChallengeFeedback, TaskNoteFormatting, TaskArchitectureLab, TaskQuiz, TaskMindMap:
 		return TierMedium
 	case TaskInterviewEvaluation, TaskComplexReasoning:
 		return TierPremium
