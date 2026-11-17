@@ -223,6 +223,24 @@ func TestOfferService_Accept_aCancelAfterGenerationStillDeletesTheOffer(t *testi
 	assert.Equal(t, offeredSummary(), got)
 }
 
+func TestOfferService_AcceptAndDecline_giveUpWaitingForTheSessionWhenCancelled(t *testing.T) {
+	// Given a session busy with another accept, and a caller whose context is cancelled
+	f := newOfferFixture(t)
+	release := must(f.service.locks.lock(context.Background(), "session-1"))
+	defer release()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	f.offers.EXPECT().Get(ctx, "offer-1").Return(pendingOffer(), nil).Twice()
+
+	// When it tries to accept or decline
+	_, acceptErr := f.service.Accept(ctx, "offer-1")
+	declineErr := f.service.Decline(ctx, "offer-1")
+
+	// Then both return the cancellation instead of waiting, and change nothing
+	require.ErrorIs(t, acceptErr, context.Canceled)
+	require.ErrorIs(t, declineErr, context.Canceled)
+}
+
 func TestOfferService_Accept_reusesTheMindMapAnEarlierAcceptLeftBehind(t *testing.T) {
 	// Given an offer whose message already has a mind map (the app closed before the offer was deleted)
 	f := newOfferFixture(t)

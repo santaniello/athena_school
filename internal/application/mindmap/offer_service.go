@@ -83,7 +83,10 @@ func (s *OfferService) Decline(ctx context.Context, offerID string) error {
 	if err != nil {
 		return fmt.Errorf("mindmap: reading offer: %w", err)
 	}
-	unlock := s.locks.lock(offer.SessionID)
+	unlock, err := s.locks.lock(ctx, offer.SessionID)
+	if err != nil {
+		return fmt.Errorf("mindmap: waiting to decline the offer: %w", err)
+	}
 	defer unlock()
 	if _, err := s.offers.Get(ctx, offerID); err != nil {
 		if errors.Is(err, domainmindmap.ErrOfferNotFound) {
@@ -112,7 +115,10 @@ func (s *OfferService) Accept(ctx context.Context, offerID string) (domainmindma
 	if err != nil {
 		return domainmindmap.Summary{}, fmt.Errorf("mindmap: reading offer: %w", err)
 	}
-	unlock := s.locks.lock(first.SessionID)
+	unlock, err := s.locks.lock(ctx, first.SessionID)
+	if err != nil {
+		return domainmindmap.Summary{}, fmt.Errorf("mindmap: waiting to accept the offer: %w", err)
+	}
 	defer unlock()
 
 	offer, err := s.offers.Get(ctx, offerID)
