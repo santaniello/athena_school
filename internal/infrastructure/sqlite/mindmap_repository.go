@@ -20,7 +20,8 @@ func NewMindMapRepository(db *sql.DB) *MindMapRepository {
 	return &MindMapRepository{db: db}
 }
 
-// Create stores the mind map. The session must exist: the map goes with it.
+// Create stores the mind map. It does not depend on the session staying: like
+// a quiz, the map outlives it.
 func (r *MindMapRepository) Create(ctx context.Context, m mindmap.MindMap) error {
 	_, err := execer(ctx, r.db).ExecContext(ctx,
 		`INSERT INTO mind_maps (id, session_id, session_title, title, tree, diagram_xml, message_id, created_at, updated_at)
@@ -53,10 +54,10 @@ func (r *MindMapRepository) Get(ctx context.Context, id string) (mindmap.MindMap
 	}
 	m.MessageID = messageID.String
 	if m.CreatedAt, err = parseChallengeTime(createdAt); err != nil {
-		return mindmap.MindMap{}, err
+		return mindmap.MindMap{}, fmt.Errorf("sqlite: reading mind map %q: %w", id, err)
 	}
 	if m.UpdatedAt, err = parseChallengeTime(updated); err != nil {
-		return mindmap.MindMap{}, err
+		return mindmap.MindMap{}, fmt.Errorf("sqlite: reading mind map %q: %w", id, err)
 	}
 	return m, nil
 }
@@ -94,7 +95,7 @@ func (r *MindMapRepository) querySummaries(ctx context.Context, tail string, arg
 		return nil, fmt.Errorf("sqlite: listing mind maps: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-	var summaries []mindmap.Summary
+	summaries := make([]mindmap.Summary, 0)
 	for rows.Next() {
 		var (
 			summary            mindmap.Summary
@@ -107,10 +108,10 @@ func (r *MindMapRepository) querySummaries(ctx context.Context, tail string, arg
 		}
 		summary.MessageID = messageID.String
 		if summary.CreatedAt, err = parseChallengeTime(createdAt); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("sqlite: reading mind map %q: %w", summary.ID, err)
 		}
 		if summary.UpdatedAt, err = parseChallengeTime(updated); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("sqlite: reading mind map %q: %w", summary.ID, err)
 		}
 		summaries = append(summaries, summary)
 	}
