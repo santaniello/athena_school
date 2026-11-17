@@ -1,0 +1,92 @@
+// As strings do Mind Map em português. Seguem o idioma do assistente no perfil
+// (veja ../index.ts); o nome do menu continua em inglês. Este arquivo deve ter
+// exatamente as mesmas chaves do inglês.
+import type { MindmapLocale } from './mindmap-en'
+
+export const mindmapPt: MindmapLocale = {
+  common: {
+    cancel: 'Cancelar',
+    close: 'Fechar',
+    retry: 'Tentar de novo',
+    tryAgain: 'Tentar novamente',
+  },
+  catalog: {
+    title: 'Mind Map',
+    description:
+      'Mapas mentais feitos a partir do que você estudou em uma sessão. Abra um para editá-lo.',
+    generate: 'Gerar mapa mental com IA',
+    loading: 'Carregando seus mapas mentais...',
+    loadFailed: 'Não foi possível carregar seus mapas mentais.',
+    empty: 'Nenhum mapa mental ainda. Gere um a partir de uma sessão de estudo que você já fez.',
+    open: 'Abrir',
+    updated: 'Atualizado em {{date}}',
+    delete: 'Excluir',
+    deleteTitle: 'Excluir este mapa mental?',
+    deleteDescription: 'O mapa mental será removido. Isso não pode ser desfeito.',
+    deleteFailed: 'Não foi possível excluir o mapa mental.',
+  },
+  generate: {
+    title: 'Gerar um mapa mental',
+    description:
+      'Escolha a sessão de estudo sobre a qual é o mapa mental. Ele é desenhado a partir do que você estudou nela.',
+    loadingSessions: 'Carregando suas sessões de estudo...',
+    sessionsFailed: 'Não foi possível carregar suas sessões de estudo.',
+    noSessions: 'Você ainda não tem sessões de estudo. Estude algo primeiro e volte aqui.',
+    searchLabel: 'Buscar sessões',
+    searchPlaceholder: 'Buscar por tópico ou pasta',
+    sessionsLabel: 'Sessões de estudo',
+    noSessionMatch: 'Nenhuma sessão corresponde à sua busca.',
+    submit: 'Gerar',
+    generating: 'Desenhando seu mapa mental... isso pode levar um instante.',
+  },
+  view: {
+    loading: 'Carregando o mapa mental...',
+    loadFailed: 'Não foi possível carregar o mapa mental.',
+    preparing: 'Preparando o editor...',
+    back: 'Voltar aos mapas mentais',
+    backToSession: 'Voltar à sessão de estudo',
+    save: 'Salvar',
+    saving: 'Salvando...',
+    saved: 'Salvo',
+    unsaved: 'Alterações não salvas',
+    saveFailed: 'Não foi possível salvar o mapa mental. Suas alterações continuam na tela.',
+    regenerate: 'Atualizar pela sessão',
+    regenerating: 'Redesenhando a partir da sessão... isso pode levar um instante.',
+    regenerateTitle: 'Atualizar este mapa mental pela sessão?',
+    regenerateDescription:
+      'O mapa mental é desenhado de novo a partir do que a sessão contém agora. As alterações que você fez à mão são perdidas.',
+    regenerateConfirm: 'Atualizar',
+    regenerateFailed: 'Não foi possível atualizar o mapa mental. Ele foi mantido como estava.',
+    delete: 'Excluir',
+    deleteTitle: 'Excluir este mapa mental?',
+    deleteDescription: 'O mapa mental será removido. Isso não pode ser desfeito.',
+    deleteFailed: 'Não foi possível excluir o mapa mental.',
+    leaveTitle: 'Sair sem salvar?',
+    leaveDescription: 'Você tem alterações que não foram salvas. Sair as descarta.',
+    leave: 'Sair',
+    keepEditing: 'Continuar editando',
+    editorNeedsInternet: 'O editor precisa de conexão com a internet.',
+  },
+  errors: {
+    generic: 'Algo deu errado. Tente novamente.',
+    invalid_input: 'O pedido do mapa mental não é válido.',
+    source_session_not_found: 'Essa sessão de estudo não existe mais.',
+    mind_map_not_found: 'Esse mapa mental não existe mais.',
+    invalid_generation: 'O mapa mental gerado não era válido. Tente novamente.',
+    invalid_diagram: 'O diagrama não pôde ser salvo porque não é válido.',
+    diagram_too_large: 'O diagrama é grande demais para salvar.',
+    generation_in_progress: 'Um mapa mental já está sendo gerado.',
+    offer_not_found: 'Esta oferta de mapa mental não está mais disponível.',
+    offer_pending: 'Uma oferta de mapa mental já espera uma resposta.',
+    cancelled: 'A geração do mapa mental foi cancelada.',
+  },
+  offer: {
+    title: 'Desenhar um mapa mental desta sessão',
+    accept: 'Aceitar',
+    decline: 'Recusar',
+    preparing: 'Desenhando seu mapa mental... isso pode levar um instante.',
+  },
+  sessionCard: {
+    open: 'Abrir mapa mental',
+  },
+}

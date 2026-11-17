@@ -75,7 +75,7 @@ This is the first time the user can take an exam. Evaluation does not exist yet
   `GetAttempt`, and the error mapping for `ErrAttemptInProgress`, `ErrSubmissionTooLate` and the
   size error.
 - `components/lab/start-exam-dialog.tsx` and `in-progress-dialog.tsx`.
-- `components/lab/diagram-editor.tsx`: the draw.io embed wrapper following ADR-006 (iframe,
+- `components/diagram/diagram-editor.tsx` (moved from `components/lab/` by [3.24](24-mind-map.md)): the draw.io embed wrapper following ADR-006 (iframe,
   `postMessage`, fixed configuration). It exposes `onReady`, `onChange(xml)`, `getXml()` (an
   `export` pull that falls back to the latest `autosave` XML), `onConnectionLost` and
   `onConnectionRestored`, and nothing else. The wrapper is the only code that knows draw.io. The

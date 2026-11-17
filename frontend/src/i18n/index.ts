@@ -2,6 +2,8 @@ import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import { en } from './locales/en'
 import { pt } from './locales/pt'
+import { mindmapEn } from './locales/mindmap-en'
+import { mindmapPt } from './locales/mindmap-pt'
 import { quizEn } from './locales/quiz-en'
 import { quizPt } from './locales/quiz-pt'
 
@@ -10,6 +12,8 @@ import { quizPt } from './locales/quiz-pt'
 export const LAB_NAMESPACE = 'lab'
 // The Interactive Quiz has its own namespace and the same language switch.
 export const QUIZ_NAMESPACE = 'quiz'
+// The Mind Map has its own namespace and the same language switch.
+export const MINDMAP_NAMESPACE = 'mindmap'
 export type LabLanguage = 'en' | 'pt'
 
 // The profile stores 'pt' or 'en'. Anything else, an unset value included,
@@ -20,12 +24,12 @@ export function toLabLanguage(language: string | undefined): LabLanguage {
 
 void i18n.use(initReactI18next).init({
   resources: {
-    en: { [LAB_NAMESPACE]: en, [QUIZ_NAMESPACE]: quizEn },
-    pt: { [LAB_NAMESPACE]: pt, [QUIZ_NAMESPACE]: quizPt },
+    en: { [LAB_NAMESPACE]: en, [QUIZ_NAMESPACE]: quizEn, [MINDMAP_NAMESPACE]: mindmapEn },
+    pt: { [LAB_NAMESPACE]: pt, [QUIZ_NAMESPACE]: quizPt, [MINDMAP_NAMESPACE]: mindmapPt },
   },
   lng: 'en',
   fallbackLng: 'en',
-  ns: [LAB_NAMESPACE, QUIZ_NAMESPACE],
+  ns: [LAB_NAMESPACE, QUIZ_NAMESPACE, MINDMAP_NAMESPACE],
   defaultNS: LAB_NAMESPACE,
   initAsync: false,
   interpolation: { escapeValue: false },

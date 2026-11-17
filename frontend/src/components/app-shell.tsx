@@ -22,8 +22,11 @@ import ArchitectureLabScreen from '@/screens/ArchitectureLabScreen'
 import LabExamScreen from '@/screens/LabExamScreen'
 import QuizScreen from '@/screens/QuizScreen'
 import QuizTakeScreen from '@/screens/QuizTakeScreen'
+import MindMapScreen from '@/screens/MindMapScreen'
+import MindMapViewScreen from '@/screens/MindMapViewScreen'
 import type { LabReturn } from '@/lib/lab'
 import type { QuizReturn } from '@/lib/quiz'
+import type { MindMapReturn } from '@/lib/mindmap'
 import type { ExamToStart } from '@/components/lab/start-exam-dialog'
 import { ToastViewport, type ToastItem } from '@/components/toast'
 import { NAVIGATION, type AppSection } from '@/lib/navigation'
@@ -98,6 +101,14 @@ function AppShell() {
   // Where the quiz goes back to when it ends: the menu it was started from or
   // the study session whose chat offered it. Not persisted.
   const [quizReturn, setQuizReturn] = useState<QuizReturn>({ kind: 'menu' })
+  // The mind map open in the editor, a full-screen state of the Mind Map
+  // section. While it is open, navigating elsewhere waits for the editor's own
+  // unsaved-changes question, through pendingSection like the exam and the quiz
+  // (the three never run together).
+  const [openMindMapId, setOpenMindMapId] = useState<string | null>(null)
+  // Where the mind map goes back to when it is closed: the menu it was opened
+  // from or the study session whose chat offered it. Not persisted.
+  const [mindMapReturn, setMindMapReturn] = useState<MindMapReturn>({ kind: 'menu' })
   const [notices, setNotices] = useState<ToastItem[]>([])
   const [profile, setProfile] = useState<ProfileDraft | null>(null)
   const [activeSession, setActiveSession] = useState<ActiveStudySession | null>(null)
@@ -247,6 +258,10 @@ function AppShell() {
       if (next !== 'quiz') setPendingSection(next)
       return
     }
+    if (openMindMapId) {
+      if (next !== 'mindmap') setPendingSection(next)
+      return
+    }
     setSection(next)
   }
 
@@ -266,6 +281,19 @@ function AppShell() {
     const destination = pendingSection ?? (quizReturn.kind === 'study' ? 'study' : null)
     if (destination) setSection(destination)
     setQuizReturn({ kind: 'menu' })
+    setPendingSection(null)
+  }
+
+  function openMenuMindMap(mindMapId: string) {
+    setMindMapReturn({ kind: 'menu' })
+    setOpenMindMapId(mindMapId)
+  }
+
+  function handleMindMapExit() {
+    setOpenMindMapId(null)
+    const destination = pendingSection ?? (mindMapReturn.kind === 'study' ? 'study' : null)
+    if (destination) setSection(destination)
+    setMindMapReturn({ kind: 'menu' })
     setPendingSection(null)
   }
 
@@ -583,6 +611,18 @@ function AppShell() {
             />
           ) : (
             <QuizScreen experienceLevel={profile?.experienceLevel} onTake={startMenuQuiz} />
+          )
+        ) : section === 'mindmap' ? (
+          openMindMapId ? (
+            <MindMapViewScreen
+              mindMapId={openMindMapId}
+              returnTo={mindMapReturn}
+              leaveRequested={pendingSection !== null}
+              onLeaveCancelled={() => setPendingSection(null)}
+              onExit={handleMindMapExit}
+            />
+          ) : (
+            <MindMapScreen onOpen={openMenuMindMap} />
           )
         ) : section === 'documentation' ? (
           <DocumentationScreen />

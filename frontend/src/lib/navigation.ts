@@ -6,6 +6,7 @@ import {
   Home,
   Layers,
   MessagesSquare,
+  Network,
   Settings,
   Target,
   TrendingUp,
@@ -21,6 +22,7 @@ export type AppSection =
   | 'study'
   | 'challenge'
   | 'quiz'
+  | 'mindmap'
   | 'progress'
   | 'flashcards'
   | 'interview'
@@ -79,6 +81,16 @@ export const NAVIGATION: NavItem[] = [
     group: 'primary',
     description:
       'Tests made from what you studied in a session, graded from 0 to 10, with every attempt kept.',
+  },
+  {
+    id: 'mindmap',
+    label: 'Mind Map',
+    icon: Network,
+    phase: 3,
+    status: 'unlocked',
+    group: 'primary',
+    description:
+      'Mind maps made from what you studied in a session, that you can edit, update and delete.',
   },
   {
     id: 'progress',

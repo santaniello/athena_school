@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import i18n, { setLabLanguage, toLabLanguage } from '@/i18n'
 import { en } from './locales/en'
 import { pt } from './locales/pt'
+import { mindmapEn } from './locales/mindmap-en'
+import { mindmapPt } from './locales/mindmap-pt'
 import { quizEn } from './locales/quiz-en'
 import { quizPt } from './locales/quiz-pt'
 
@@ -84,5 +86,26 @@ describe('setLabLanguage', () => {
     setLabLanguage(undefined)
 
     expect(i18n.language).toBe('en')
+  })
+})
+
+describe('mind map locales', () => {
+  it('have the same keys in English and Portuguese', () => {
+    expect(keysOf(mindmapPt).sort()).toEqual(keysOf(mindmapEn).sort())
+  })
+
+  it('use the same placeholders in both languages', () => {
+    const english = new Map(leaves(mindmapEn))
+    for (const [key, text] of leaves(mindmapPt)) {
+      expect(placeholdersOf(text), key).toEqual(placeholdersOf(english.get(key) ?? ''))
+    }
+  })
+
+  it('follow the profile language through the mind map namespace', () => {
+    setLabLanguage('en')
+    expect(i18n.t('catalog.generate', { ns: 'mindmap' })).toBe('Generate mind map with AI')
+    setLabLanguage('pt')
+    expect(i18n.t('catalog.generate', { ns: 'mindmap' })).toBe('Gerar mapa mental com IA')
+    setLabLanguage('en')
   })
 })

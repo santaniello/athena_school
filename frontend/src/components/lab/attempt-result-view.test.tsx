@@ -9,7 +9,7 @@ vi.mock('@/lib/exercise', async (importOriginal) => {
   return { ...original, getAttemptResult: vi.fn() }
 })
 
-vi.mock('@/components/lab/diagram-editor', () => ({
+vi.mock('@/components/diagram/diagram-editor', () => ({
   DiagramEditor: (props: { readOnly?: boolean; xml?: string }) => (
     <div data-testid="editor" data-read-only={String(props.readOnly)} data-xml={props.xml} />
   ),

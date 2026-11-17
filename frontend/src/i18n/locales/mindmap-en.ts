@@ -1,0 +1,92 @@
+// The Mind Map's strings in English. They follow the profile's assistant
+// language like the Architecture Lab's and the Interactive Quiz's (see
+// ../index.ts); the menu label stays English. The Portuguese file must hold
+// exactly the same keys.
+export const mindmapEn = {
+  common: {
+    cancel: 'Cancel',
+    close: 'Close',
+    retry: 'Retry',
+    tryAgain: 'Try again',
+  },
+  catalog: {
+    title: 'Mind Map',
+    description: 'Mind maps made from what you studied in a session. Open one to edit it.',
+    generate: 'Generate mind map with AI',
+    loading: 'Loading your mind maps...',
+    loadFailed: 'Could not load your mind maps.',
+    empty: 'No mind maps yet. Generate one from a study session you already had.',
+    open: 'Open',
+    updated: 'Updated {{date}}',
+    delete: 'Delete',
+    deleteTitle: 'Delete this mind map?',
+    deleteDescription: 'The mind map will be removed. This cannot be undone.',
+    deleteFailed: 'Could not delete the mind map.',
+  },
+  generate: {
+    title: 'Generate a mind map',
+    description:
+      'Pick the study session the mind map is about. It is drawn from what you studied there.',
+    loadingSessions: 'Loading your study sessions...',
+    sessionsFailed: 'Could not load your study sessions.',
+    noSessions: 'You have no study sessions yet. Study something first, then come back.',
+    searchLabel: 'Search sessions',
+    searchPlaceholder: 'Search by topic or folder',
+    sessionsLabel: 'Study sessions',
+    noSessionMatch: 'No session matches your search.',
+    submit: 'Generate',
+    generating: 'Drawing your mind map... this can take a moment.',
+  },
+  view: {
+    loading: 'Loading the mind map...',
+    loadFailed: 'Could not load the mind map.',
+    preparing: 'Preparing the editor...',
+    back: 'Back to mind maps',
+    backToSession: 'Back to study session',
+    save: 'Save',
+    saving: 'Saving...',
+    saved: 'Saved',
+    unsaved: 'Unsaved changes',
+    saveFailed: 'Could not save the mind map. Your changes are still on screen.',
+    regenerate: 'Update from session',
+    regenerating: 'Redrawing from the session... this can take a moment.',
+    regenerateTitle: 'Update this mind map from the session?',
+    regenerateDescription:
+      'The mind map is drawn again from what the session contains now. Changes you made by hand are lost.',
+    regenerateConfirm: 'Update',
+    regenerateFailed: 'Could not update the mind map. It was left as it was.',
+    delete: 'Delete',
+    deleteTitle: 'Delete this mind map?',
+    deleteDescription: 'The mind map will be removed. This cannot be undone.',
+    deleteFailed: 'Could not delete the mind map.',
+    leaveTitle: 'Leave without saving?',
+    leaveDescription: 'You have changes that are not saved. Leaving discards them.',
+    leave: 'Leave',
+    keepEditing: 'Keep editing',
+    editorNeedsInternet: 'The editor needs an internet connection.',
+  },
+  errors: {
+    generic: 'Something went wrong. Please try again.',
+    invalid_input: 'The mind map request is not valid.',
+    source_session_not_found: 'That study session no longer exists.',
+    mind_map_not_found: 'That mind map no longer exists.',
+    invalid_generation: 'The generated mind map was not valid. Try again.',
+    invalid_diagram: 'The diagram could not be saved because it is not valid.',
+    diagram_too_large: 'The diagram is too large to save.',
+    generation_in_progress: 'A mind map is already being generated.',
+    offer_not_found: 'This mind map offer is no longer available.',
+    offer_pending: 'A mind map offer is already waiting for an answer.',
+    cancelled: 'The mind map generation was cancelled.',
+  },
+  offer: {
+    title: 'Draw a mind map of this session',
+    accept: 'Accept',
+    decline: 'Decline',
+    preparing: 'Drawing your mind map... this can take a moment.',
+  },
+  sessionCard: {
+    open: 'Open mind map',
+  },
+}
+
+export type MindmapLocale = typeof mindmapEn
