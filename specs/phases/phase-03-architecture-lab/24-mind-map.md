@@ -33,8 +33,10 @@ The map is drawn and edited with the draw.io embed that the Architecture Lab alr
    both, keeping the id. Regenerate asks for confirmation because it discards manual edits. A failed
    regeneration leaves the map untouched.
 6. **Delete is explicit** from the catalog and from the map screen, with confirmation.
-7. **Lifetime follows the session.** `mind_maps.session_id` has `ON DELETE CASCADE`: deleting a
-   session deletes its mind maps. This differs from quizzes on purpose (user's decision).
+7. **A mind map outlives its session**, like a quiz and an Architecture Lab challenge.
+   `mind_maps.session_id` has no foreign key and `session_title` is a snapshot, so deleting a session
+   or a folder never deletes its mind maps; only the explicit delete does (user's decision, revised
+   from an earlier cascade). Pending offers (`mind_map_offers`) still cascade from the session.
 8. **Chat offer.** A third marker, `[[ATHENA_MINDMAP_OFFER]]`, with the same rule as the others: the
    tutor emits it only if the user explicitly asks for a mind map. `OfferKindMindMap` is added, and
    the precedence when a reply carries several markers is exercise, then quiz, then mind map. The
@@ -63,7 +65,7 @@ Export to image or PDF, merging two maps, collaborative editing, and offline ren
 TDD with GivenWhenThen and Mockery mocks. Mutation testing covers `domain/mindmap` and
 `application/mindmap`. Required cases: renderer output is well-formed and escaped, over-limit and
 malformed trees are rejected, a failed generation stores nothing, accept is idempotent, regenerate
-keeps the id and failure leaves the map untouched, deleting a session cascades, the marker is
+keeps the id and failure leaves the map untouched, a mind map survives the deletion of its session, the marker is
 filtered while streaming, and the precedence of markers holds.
 
 ## Documentation
