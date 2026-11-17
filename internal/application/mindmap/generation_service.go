@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/santaniello/athena/internal/application/llmprompt"
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
 	domainmindmap "github.com/santaniello/athena/internal/domain/mindmap"
 )
@@ -46,8 +47,9 @@ func NewGenerationService(
 // Generate asks the model for a mind map of the session, renders it and saves
 // it. It makes exactly one model call and never retries: on any failure nothing
 // is stored and the caller may call again. It returns ErrSourceSessionNotFound
-// for an unknown session and ErrInvalidTree when the model's answer breaks a
-// tree rule.
+// for an unknown session, domainmindmap.ErrSessionTitleRequired (before any
+// model call) for a session without a topic, and ErrInvalidTree only when the
+// model's answer breaks a tree rule.
 func (s *GenerationService) Generate(ctx context.Context, sessionID string) (domainmindmap.MindMap, error) {
 	return s.generate(ctx, sessionID, "")
 }
@@ -78,7 +80,7 @@ func (s *GenerationService) Regenerate(ctx context.Context, id string) (domainmi
 	current.DiagramXML = drawn.diagramXML
 	current.UpdatedAt = s.now()
 	if err := current.Validate(); err != nil {
-		return domainmindmap.MindMap{}, fmt.Errorf("%w: %w", ErrInvalidTree, err)
+		return domainmindmap.MindMap{}, fmt.Errorf("mindmap: regenerated mind map is invalid: %w", err)
 	}
 	if err := s.repo.Update(ctx, current); err != nil {
 		return domainmindmap.MindMap{}, fmt.Errorf("mindmap: saving regenerated mind map: %w", err)
@@ -104,7 +106,7 @@ func (s *GenerationService) generate(ctx context.Context, sessionID, messageID s
 		MessageID:    messageID,
 	}
 	if err := mindMap.Validate(); err != nil {
-		return domainmindmap.MindMap{}, fmt.Errorf("%w: %w", ErrInvalidTree, err)
+		return domainmindmap.MindMap{}, fmt.Errorf("mindmap: generated mind map is invalid: %w", err)
 	}
 	if err := s.repo.Create(ctx, mindMap); err != nil {
 		return domainmindmap.MindMap{}, fmt.Errorf("mindmap: saving generated mind map: %w", err)
@@ -131,6 +133,11 @@ func (s *GenerationService) draw(ctx context.Context, sessionID string) (drawing
 	if err != nil {
 		return drawing{}, fmt.Errorf("mindmap: reading source session: %w", err)
 	}
+	// The topic becomes the map's session title snapshot. Checking it before
+	// the model call keeps a retry from paying for a call bound to fail.
+	if strings.TrimSpace(session.Topic) == "" {
+		return drawing{}, fmt.Errorf("mindmap: source session has no topic: %w", domainmindmap.ErrSessionTitleRequired)
+	}
 	gc, err := s.contexts.build(ctx, sessionID, session)
 	if err != nil {
 		return drawing{}, err
@@ -143,7 +150,7 @@ func (s *GenerationService) draw(ctx context.Context, sessionID string) (drawing
 	if err != nil {
 		return drawing{}, fmt.Errorf("mindmap: generating mind map: %w", err)
 	}
-	raw := stripCodeFence(response.Content)
+	raw := []byte(llmprompt.StripCodeFence(response.Content))
 	root, err := ParseTree(raw)
 	if err != nil {
 		return drawing{}, err

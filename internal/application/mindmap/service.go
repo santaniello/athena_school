@@ -1,10 +1,13 @@
 package mindmap
 
 import (
+	"bytes"
 	"context"
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"io"
+	"strings"
 	"time"
 
 	domainmindmap "github.com/santaniello/athena/internal/domain/mindmap"
@@ -85,12 +88,46 @@ func (s *Service) ListSessionMindMaps(ctx context.Context, sessionID string) ([]
 	return summaries, nil
 }
 
-// isDrawioDocument reports whether the text is XML whose root is a draw.io
-// model (mxGraphModel) or file (mxfile).
+// isDrawioDocument reports whether the text is one well-formed XML document
+// whose root is a draw.io model (mxGraphModel, which must hold a <root>) or
+// file (mxfile, which must hold a <diagram>). Anything after the root element
+// other than whitespace, comments or processing instructions is refused.
 func isDrawioDocument(text string) bool {
-	var root struct{ XMLName xml.Name }
-	if err := xml.Unmarshal([]byte(text), &root); err != nil {
-		return false
+	dec := xml.NewDecoder(strings.NewReader(text))
+	rootName := ""
+	depth := 0
+	hasContent := false
+	for {
+		token, err := dec.Token()
+		if errors.Is(err, io.EOF) {
+			return hasContent // the decoder already refuses an unclosed element
+		}
+		if err != nil {
+			return false
+		}
+		switch t := token.(type) {
+		case xml.StartElement:
+			if depth == 0 {
+				if rootName != "" {
+					return false // a second root element
+				}
+				rootName = t.Name.Local
+				if _, known := requiredChild[rootName]; !known {
+					return false
+				}
+			} else if depth == 1 && t.Name.Local == requiredChild[rootName] {
+				hasContent = true
+			}
+			depth++
+		case xml.EndElement:
+			depth--
+		case xml.CharData:
+			if depth == 0 && len(bytes.TrimSpace(t)) > 0 {
+				return false // text outside the root element
+			}
+		}
 	}
-	return root.XMLName.Local == "mxGraphModel" || root.XMLName.Local == "mxfile"
 }
+
+// requiredChild is the element a draw.io root must hold to describe a diagram.
+var requiredChild = map[string]string{"mxGraphModel": "root", "mxfile": "diagram"}
