@@ -37,6 +37,8 @@ func TestParseTreeRejectsBrokenTrees(t *testing.T) {
 		{"label with only forbidden characters", `{"label":"Caching","children":[{"label":"\u0000\u0001"}]}`},
 		{"too deep", deepTree(MaxDepth + 1)},
 		{"too many nodes", wideTree(MaxNodes)},
+		{"root label too long", `{"label":"` + strings.Repeat("é", MaxLabelLength+1) + `","children":[{"label":"a"}]}`},
+		{"child label too long", `{"label":"r","children":[{"label":"` + strings.Repeat("x", MaxLabelLength+1) + `"}]}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -58,6 +60,8 @@ func TestParseTreeAcceptsTheLimits(t *testing.T) {
 		{"deepest allowed", deepTree(MaxDepth)},
 		{"most nodes allowed", wideTree(MaxNodes - 1)},
 		{"smallest tree", `{"label":"a","children":[{"label":"b"}]}`},
+		{"longest label allowed", `{"label":"` + strings.Repeat("é", MaxLabelLength) + `","children":[{"label":"b"}]}`},
+		{"long label once cleaned", `{"label":"  ` + strings.Repeat("x", MaxLabelLength) + `  \u0000","children":[{"label":"b"}]}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -71,51 +75,25 @@ func TestParseTreeAcceptsTheLimits(t *testing.T) {
 	}
 }
 
-func TestCleanLabelDropsForbiddenCharactersTrimsAndBounds(t *testing.T) {
-	// Given labels with control characters, spaces and an overlong text
-	long := strings.Repeat("é", MaxLabelLength+20)
+func TestParseTreeReturnsCleanedLabels(t *testing.T) {
+	// Given a reply whose labels have spaces, control characters and line breaks
+	raw := []byte(`{"label":"  Caching\u0001 ","children":[{"label":"Write-through\nvs write-back","children":[{"label":"\tLRU"}]}]}`)
 
-	// When they are cleaned
-	// Then forbidden runes go, spaces are trimmed and the length is bounded by runes
-	assert.Equal(t, "ab", CleanLabel(" a\x00b\x01 "))
-	assert.Equal(t, "a\tb", CleanLabel("a\tb"))
-	assert.Equal(t, strings.Repeat("é", MaxLabelLength), CleanLabel(long))
+	// When it is parsed
+	root, err := ParseTree(raw)
+
+	// Then every label in the returned tree is already clean
+	require.NoError(t, err)
+	assert.Equal(t, "Caching", root.Label)
+	assert.Equal(t, "Write-through vs write-back", root.Children[0].Label)
+	assert.Equal(t, "LRU", root.Children[0].Children[0].Label)
 }
 
-func TestCleanLabelKeepsExactlyTheRunesXMLAllows(t *testing.T) {
-	tests := []struct {
-		name string
-		in   rune
-		kept bool
-	}{
-		{"tab", '\t', true},
-		{"line feed", '\n', true},
-		{"carriage return", '\r', true},
-		{"last control character", 0x1F, false},
-		{"first printable", 0x20, true},
-		{"end of the first range", 0xD7FF, true},
-		{"start of the second range", 0xE000, true},
-		{"end of the second range", 0xFFFD, true},
-		{"first past the second range", 0xFFFE, false},
-		{"start of the third range", 0x10000, true},
-		{"end of the third range", 0x10FFFF, true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Given a label with the rune between two letters
-			label := "a" + string(tt.in) + "b"
-
-			// When it is cleaned
-			cleaned := CleanLabel(label)
-
-			// Then the rune is kept only if XML 1.0 allows it
-			if tt.kept {
-				assert.Equal(t, label, cleaned)
-			} else {
-				assert.Equal(t, "ab", cleaned)
-			}
-		})
-	}
+func TestCleanLabelDropsForbiddenCharactersAndTrims(t *testing.T) {
+	// Given a label with control characters, a line break and spaces
+	// When it is cleaned
+	// Then forbidden runes go, the line break is a space and the label is trimmed
+	assert.Equal(t, "a b", CleanLabel(" a\x00\nb\x01 "))
 }
 
 // deepTree builds a chain whose deepest node is at the given depth (the root is 0).

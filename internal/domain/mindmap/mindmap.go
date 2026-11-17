@@ -59,7 +59,7 @@ func (m MindMap) Validate() error {
 	if strings.TrimSpace(m.Tree) == "" {
 		return ErrTreeRequired
 	}
-	if m.DiagramXML == "" {
+	if strings.TrimSpace(m.DiagramXML) == "" {
 		return ErrDiagramRequired
 	}
 	if len(m.DiagramXML) > MaxDiagramBytes {

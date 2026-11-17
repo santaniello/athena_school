@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"html"
 	"strings"
+
+	"github.com/santaniello/athena/internal/application/drawio"
 )
 
 // ErrInvalidStarterDiagram is returned when the structure a model describes
@@ -145,23 +147,11 @@ func styleOf(kind string) string {
 	return kindStyles[kindOther]
 }
 
-// escapeLabel drops the characters XML 1.0 forbids, trims the label, bounds
-// its length and escapes it for an XML attribute.
+// escapeLabel cleans the label for draw.io, bounds its length and escapes it
+// for an XML attribute.
 func escapeLabel(label string) string {
-	runes := []rune(strings.TrimSpace(strings.Map(xmlRune, label)))
-	return html.EscapeString(string(runes[:min(len(runes), MaxLabelLength)]))
-}
-
-// xmlRune keeps a rune XML 1.0 allows and drops any other (-1).
-func xmlRune(r rune) rune {
-	switch {
-	case r == '\t', r == '\n', r == '\r',
-		r >= 0x20 && r <= 0xD7FF,
-		r >= 0xE000 && r <= 0xFFFD,
-		r >= 0x10000 && r <= 0x10FFFF:
-		return r
-	}
-	return -1
+	runes := []rune(drawio.CleanText(label))
+	return html.EscapeString(strings.TrimSpace(string(runes[:min(len(runes), MaxLabelLength)])))
 }
 
 // columnsOf returns each node's column: its distance from the entry node
