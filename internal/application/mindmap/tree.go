@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
+	"unicode/utf8"
+
+	"github.com/santaniello/athena/internal/application/drawio"
 )
 
 // ErrInvalidTree is returned when the tree a model describes breaks a rule, so
@@ -27,8 +29,8 @@ type Node struct {
 	Children []Node `json:"children"`
 }
 
-// ParseTree reads the JSON a model returned and checks it. Every failure wraps
-// ErrInvalidTree.
+// ParseTree reads the JSON a model returned, checks it and returns it with
+// every label cleaned (see CleanLabel). Every failure wraps ErrInvalidTree.
 func ParseTree(raw []byte) (Node, error) {
 	var root Node
 	if err := json.Unmarshal(raw, &root); err != nil {
@@ -38,51 +40,44 @@ func ParseTree(raw []byte) (Node, error) {
 		return Node{}, fmt.Errorf("%w: the root has no children", ErrInvalidTree)
 	}
 	count := 0
-	if err := checkNode(root, 0, &count); err != nil {
+	cleaned, err := cleanNode(root, 0, &count)
+	if err != nil {
 		return Node{}, fmt.Errorf("%w: %w", ErrInvalidTree, err)
 	}
-	return root, nil
+	return cleaned, nil
 }
 
-func checkNode(node Node, depth int, count *int) error {
+// cleanNode checks the node and its subtree against the limits and returns a
+// copy whose labels are cleaned.
+func cleanNode(node Node, depth int, count *int) (Node, error) {
 	*count++
 	if *count > MaxNodes {
-		return fmt.Errorf("more than %d nodes", MaxNodes)
+		return Node{}, fmt.Errorf("more than %d nodes", MaxNodes)
 	}
 	if depth > MaxDepth {
-		return fmt.Errorf("deeper than %d levels", MaxDepth)
+		return Node{}, fmt.Errorf("deeper than %d levels", MaxDepth)
 	}
-	if CleanLabel(node.Label) == "" {
-		return fmt.Errorf("a node at depth %d has no label", depth)
+	label := CleanLabel(node.Label)
+	if label == "" {
+		return Node{}, fmt.Errorf("a node at depth %d has no label", depth)
 	}
+	if utf8.RuneCountInString(label) > MaxLabelLength {
+		return Node{}, fmt.Errorf("a label at depth %d is longer than %d characters", depth, MaxLabelLength)
+	}
+	cleaned := Node{Label: label}
 	for _, child := range node.Children {
-		if err := checkNode(child, depth+1, count); err != nil {
-			return err
+		cleanedChild, err := cleanNode(child, depth+1, count)
+		if err != nil {
+			return Node{}, err
 		}
+		cleaned.Children = append(cleaned.Children, cleanedChild)
 	}
-	return nil
+	return cleaned, nil
 }
 
-// CleanLabel drops the characters XML 1.0 forbids, trims the label and bounds
-// its length in runes.
+// CleanLabel makes a label safe for draw.io: it drops the characters XML 1.0
+// forbids, turns tabs and line breaks into spaces and trims it. It does not
+// bound the length: ParseTree rejects a label over MaxLabelLength.
 func CleanLabel(label string) string {
-	runes := []rune(strings.TrimSpace(strings.Map(xmlRune, label)))
-	return string(runes[:min(len(runes), MaxLabelLength)])
-}
-
-// xmlRune keeps a rune XML 1.0 allows and drops any other (-1).
-func xmlRune(r rune) rune {
-	if r == '\t' || r == '\n' || r == '\r' {
-		return r
-	}
-	if r >= 0x20 && r <= 0xD7FF {
-		return r
-	}
-	if r >= 0xE000 && r <= 0xFFFD {
-		return r
-	}
-	if r >= 0x10000 && r <= 0x10FFFF {
-		return r
-	}
-	return -1
+	return drawio.CleanText(label)
 }
