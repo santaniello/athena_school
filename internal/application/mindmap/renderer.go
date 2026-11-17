@@ -37,14 +37,15 @@ var branchPalette = []branchColour{
 // and ids are ours.
 type Renderer struct{}
 
-// Render reads the JSON tree and returns the mxGraphModel XML. Every failure
-// wraps ErrInvalidTree.
-func (Renderer) Render(raw []byte) (string, error) {
+// Render reads the JSON tree and returns the mxGraphModel XML. Labels come
+// cleaned from ParseTree, so drawing only escapes them. Every failure wraps
+// ErrInvalidTree.
+func (r Renderer) Render(raw []byte) (string, error) {
 	root, err := ParseTree(raw)
 	if err != nil {
 		return "", err
 	}
-	return Renderer{}.RenderTree(root), nil
+	return r.RenderTree(root), nil
 }
 
 // RenderTree returns the mxGraphModel XML of a tree ParseTree already checked.
@@ -98,7 +99,7 @@ func draw(cells []placed) string {
 	for i, cell := range cells {
 		fmt.Fprintf(&b,
 			`<mxCell id="n%d" value="%s" style="%s" vertex="1" parent="1"><mxGeometry x="%d" y="%d" width="%d" height="%d" as="geometry"/></mxCell>`,
-			i, html.EscapeString(CleanLabel(cell.label)), styleOf(cell), cell.depth*columnSpread, cell.y, nodeWidth, nodeHeight)
+			i, html.EscapeString(cell.label), styleOf(cell), cell.depth*columnSpread, cell.y, nodeWidth, nodeHeight)
 	}
 	for i, cell := range cells {
 		if cell.parent < 0 {

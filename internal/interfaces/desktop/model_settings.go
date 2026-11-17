@@ -14,6 +14,7 @@ type ModelChoices struct {
 	NoteFormatting      string `json:"noteFormatting"`
 	ArchitectureLab     string `json:"architectureLab"`
 	Quiz                string `json:"quiz"`
+	MindMap             string `json:"mindMap"`
 	Embedding           string `json:"embedding"`
 }
 
@@ -43,6 +44,7 @@ func toModelChoices(models domainconfig.ModelSettings) ModelChoices {
 		NoteFormatting:      models.NoteFormatting,
 		ArchitectureLab:     models.ArchitectureLab,
 		Quiz:                models.Quiz,
+		MindMap:             models.MindMap,
 		Embedding:           models.Embedding,
 	}
 }
@@ -55,6 +57,7 @@ func (c ModelChoices) toSettings() domainconfig.ModelSettings {
 		NoteFormatting:      c.NoteFormatting,
 		ArchitectureLab:     c.ArchitectureLab,
 		Quiz:                c.Quiz,
+		MindMap:             c.MindMap,
 		Embedding:           c.Embedding,
 	}
 }

@@ -38,6 +38,7 @@ type modelsFile struct {
 	NoteFormatting      string `yaml:"note_formatting,omitempty"`
 	ArchitectureLab     string `yaml:"architecture_lab,omitempty"`
 	Quiz                string `yaml:"quiz,omitempty"`
+	MindMap             string `yaml:"mind_map,omitempty"`
 	Embedding           string `yaml:"embedding,omitempty"`
 }
 
@@ -53,6 +54,7 @@ func (s *Store) Save(cfg config.Config) error {
 			NoteFormatting:      cfg.Models.NoteFormatting,
 			ArchitectureLab:     cfg.Models.ArchitectureLab,
 			Quiz:                cfg.Models.Quiz,
+			MindMap:             cfg.Models.MindMap,
 			Embedding:           cfg.Models.Embedding,
 		},
 		PassScore: cfg.PassScore,
@@ -88,6 +90,7 @@ func (s *Store) Load() (config.Config, error) {
 			NoteFormatting:      file.Models.NoteFormatting,
 			ArchitectureLab:     file.Models.ArchitectureLab,
 			Quiz:                file.Models.Quiz,
+			MindMap:             file.Models.MindMap,
 			Embedding:           file.Models.Embedding,
 		},
 		PassScore: file.PassScore,

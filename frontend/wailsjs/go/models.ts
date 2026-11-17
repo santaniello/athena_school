@@ -776,6 +776,7 @@ export namespace desktop {
 	    noteFormatting: string;
 	    architectureLab: string;
 	    quiz: string;
+	    mindMap: string;
 	    embedding: string;
 	
 	    static createFrom(source: any = {}) {
@@ -790,6 +791,7 @@ export namespace desktop {
 	        this.noteFormatting = source["noteFormatting"];
 	        this.architectureLab = source["architectureLab"];
 	        this.quiz = source["quiz"];
+	        this.mindMap = source["mindMap"];
 	        this.embedding = source["embedding"];
 	    }
 	}

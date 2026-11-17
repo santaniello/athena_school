@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/santaniello/athena/internal/application/llmprompt"
 	domainexercise "github.com/santaniello/athena/internal/domain/exercise"
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
 )
@@ -91,16 +92,9 @@ func buildGenerationPrompt(gc generationContext, spec domainexercise.ChallengeSp
 		system = practiceSystemPrompt
 	}
 	return []domainllm.Message{
-		{Role: "system", Content: fmt.Sprintf(system, languageName(gc.Profile.Language), spec.Difficulty)},
+		{Role: "system", Content: fmt.Sprintf(system, llmprompt.LanguageName(gc.Profile.Language), spec.Difficulty)},
 		{Role: "user", Content: buildGenerationUserPrompt(gc, spec)},
 	}
-}
-
-func languageName(code string) string {
-	if code == "pt" {
-		return "Brazilian Portuguese"
-	}
-	return "English"
 }
 
 // buildGenerationUserPrompt lists the context in a fixed order, skipping what
@@ -110,46 +104,29 @@ func languageName(code string) string {
 // the tag or pass for an instruction.
 func buildGenerationUserPrompt(gc generationContext, spec domainexercise.ChallengeSpec) string {
 	var b strings.Builder
-	writeTag(&b, "topic", gc.Topic, false)
+	llmprompt.WriteTag(&b, "topic", gc.Topic, false)
 	if gc.Goal != "" {
-		writeTag(&b, "goal", gc.Goal, false)
+		llmprompt.WriteTag(&b, "goal", gc.Goal, false)
 	}
 	if spec.Kind == domainexercise.ChallengeKindPractice {
-		writeTag(&b, "practice_goal", spec.PracticeGoal, false)
+		llmprompt.WriteTag(&b, "practice_goal", spec.PracticeGoal, false)
 	}
 	if gc.Summary != "" {
-		writeTag(&b, "summary", gc.Summary, true)
+		llmprompt.WriteTag(&b, "summary", gc.Summary, true)
 	}
 	b.WriteString("<learner>\n")
-	writeTag(&b, "area", gc.Profile.Area, false)
-	writeTag(&b, "experience_level", gc.Profile.ExperienceLevel, false)
+	llmprompt.WriteTag(&b, "area", gc.Profile.Area, false)
+	llmprompt.WriteTag(&b, "experience_level", gc.Profile.ExperienceLevel, false)
 	b.WriteString("</learner>\n")
 	if len(gc.Notes) > 0 {
 		b.WriteString("<notes>\n")
 		for _, note := range gc.Notes {
 			b.WriteString("<note>\n")
-			writeTag(&b, "source", note.Source, false)
-			writeTag(&b, "content", note.Content, true)
+			llmprompt.WriteTag(&b, "source", note.Source, false)
+			llmprompt.WriteTag(&b, "content", note.Content, true)
 			b.WriteString("</note>\n")
 		}
 		b.WriteString("</notes>\n")
 	}
 	return b.String()
 }
-
-// writeTag writes <name>text</name>, with the text escaped. A multi-line
-// field puts the text on its own lines.
-func writeTag(b *strings.Builder, name, text string, block bool) {
-	separator := ""
-	if block {
-		separator = "\n"
-	}
-	fmt.Fprintf(b, "<%s>%s%s%s</%s>\n", name, separator, escapeTagText(text), separator, name)
-}
-
-// escapeTagText makes text safe to place between tags.
-func escapeTagText(text string) string {
-	return tagEscaper.Replace(text)
-}
-
-var tagEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")

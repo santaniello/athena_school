@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/santaniello/athena/internal/application/llmprompt"
 	domainexercise "github.com/santaniello/athena/internal/domain/exercise"
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
 )
@@ -30,16 +31,9 @@ Answer with only the hint.`
 // content is unit tested.
 func buildHintPrompt(input domainexercise.HintInput, language string) []domainllm.Message {
 	return []domainllm.Message{
-		{Role: "system", Content: fmt.Sprintf(hintSystemPrompt, languageName(language))},
+		{Role: "system", Content: fmt.Sprintf(hintSystemPrompt, llmprompt.LanguageName(language))},
 		{Role: "user", Content: buildHintUserPrompt(input)},
 	}
-}
-
-func languageName(code string) string {
-	if code == "pt" {
-		return "Brazilian Portuguese"
-	}
-	return "English"
 }
 
 // buildHintUserPrompt lists the exam in a fixed order: challenge, rubric,
@@ -50,26 +44,26 @@ func buildHintUserPrompt(input domainexercise.HintInput) string {
 	var b strings.Builder
 	challenge := input.Challenge
 	b.WriteString("<challenge>\n")
-	writeTag(&b, "title", challenge.Title, false)
-	writeTag(&b, "scenario", challenge.Scenario, true)
+	llmprompt.WriteTag(&b, "title", challenge.Title, false)
+	llmprompt.WriteTag(&b, "scenario", challenge.Scenario, true)
 	writeTags(&b, "requirement", challenge.FunctionalRequirements)
 	writeTags(&b, "requirement", challenge.NonFunctionalRequirements)
 	writeTags(&b, "constraint", challenge.Constraints)
 	writeTags(&b, "objective", challenge.Objectives)
 	b.WriteString("</challenge>\n<rubric>\n")
 	for _, criterion := range input.Rubric.Criteria {
-		writeTag(&b, "criterion", criterion.Name+": "+criterion.Description, false)
+		llmprompt.WriteTag(&b, "criterion", criterion.Name+": "+criterion.Description, false)
 	}
 	b.WriteString("</rubric>\n")
 	if strings.TrimSpace(input.BoardXML) == "" {
 		b.WriteString("<board>The board is empty. Point at how to start.</board>\n")
 	} else {
-		writeTag(&b, "board", input.BoardXML, true)
+		llmprompt.WriteTag(&b, "board", input.BoardXML, true)
 	}
 	if len(input.Previous) > 0 {
 		b.WriteString("<hints_given>\n")
 		for _, hint := range input.Previous {
-			writeTag(&b, "hint", hint.Content, false)
+			llmprompt.WriteTag(&b, "hint", hint.Content, false)
 		}
 		b.WriteString("</hints_given>\n")
 	}
@@ -78,18 +72,6 @@ func buildHintUserPrompt(input domainexercise.HintInput) string {
 
 func writeTags(b *strings.Builder, name string, texts []string) {
 	for _, text := range texts {
-		writeTag(b, name, text, false)
+		llmprompt.WriteTag(b, name, text, false)
 	}
 }
-
-// writeTag writes <name>text</name>, with the text escaped. A multi-line
-// field puts the text on its own lines.
-func writeTag(b *strings.Builder, name, text string, block bool) {
-	separator := ""
-	if block {
-		separator = "\n"
-	}
-	fmt.Fprintf(b, "<%s>%s%s%s</%s>\n", name, separator, tagEscaper.Replace(text), separator, name)
-}
-
-var tagEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")

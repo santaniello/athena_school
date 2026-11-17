@@ -32,7 +32,9 @@ type generationContextBuilder struct {
 
 // build collects the context of a session. A missing summary or missing notes
 // are skipped, and a notes search that fails (for instance, an index that is
-// not ready) never fails the build.
+// not ready) does not fail the build: the map is drawn from the topic and
+// summary alone. A cancelled or expired ctx does fail it, so the caller sees
+// the cancellation instead of a model call made without notes.
 func (b generationContextBuilder) build(ctx context.Context, sessionID string, session domainmindmap.SourceSession) (generationContext, error) {
 	summary, err := b.summaries.ReadSummary(ctx, sessionID)
 	if err != nil {
@@ -43,7 +45,11 @@ func (b generationContextBuilder) build(ctx context.Context, sessionID string, s
 		return generationContext{}, fmt.Errorf("mindmap: reading profile: %w", err)
 	}
 	var notes []domainmindmap.NoteExcerpt
-	if found, err := b.notes.SearchNotes(ctx, sessionID, session.Topic); err == nil {
+	found, err := b.notes.SearchNotes(ctx, sessionID, session.Topic)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return generationContext{}, fmt.Errorf("mindmap: searching notes: %w", ctxErr)
+	}
+	if err == nil {
 		notes = boundNotes(found)
 	}
 	return generationContext{Topic: session.Topic, Goal: session.Goal, Summary: summary, Profile: profile, Notes: notes}, nil
