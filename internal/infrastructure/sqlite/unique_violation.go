@@ -8,13 +8,6 @@ import (
 	sqlite3 "modernc.org/sqlite/lib"
 )
 
-// isForeignKeyViolation reports whether err is a FOREIGN KEY constraint
-// violation.
-func isForeignKeyViolation(err error) bool {
-	var sqliteErr *sqlite.Error
-	return errors.As(err, &sqliteErr) && sqliteErr.Code() == sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY
-}
-
 // isUniqueViolation reports whether err is a UNIQUE constraint violation on
 // the given "table.column". The driver names the violated column in its
 // message, which is the only way to tell one UNIQUE constraint from another

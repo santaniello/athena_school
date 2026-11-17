@@ -20,7 +20,8 @@ func NewMindMapRepository(db *sql.DB) *MindMapRepository {
 	return &MindMapRepository{db: db}
 }
 
-// Create stores the mind map. The session must exist: the map goes with it.
+// Create stores the mind map. It does not depend on the session staying: like
+// a quiz, the map outlives it.
 func (r *MindMapRepository) Create(ctx context.Context, m mindmap.MindMap) error {
 	_, err := execer(ctx, r.db).ExecContext(ctx,
 		`INSERT INTO mind_maps (id, session_id, session_title, title, tree, diagram_xml, message_id, created_at, updated_at)
@@ -28,9 +29,6 @@ func (r *MindMapRepository) Create(ctx context.Context, m mindmap.MindMap) error
 		m.ID, m.SessionID, m.SessionTitle, m.Title, m.Tree, m.DiagramXML, nullableText(m.MessageID),
 		formatChallengeTime(m.CreatedAt), formatChallengeTime(m.UpdatedAt),
 	)
-	if isForeignKeyViolation(err) {
-		return fmt.Errorf("sqlite: creating mind map %q: %w", m.ID, mindmap.ErrSessionNotFound)
-	}
 	if err != nil {
 		return fmt.Errorf("sqlite: creating mind map: %w", err)
 	}
