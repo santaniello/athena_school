@@ -333,6 +333,34 @@ var migrations = []func(*sql.DB) error{
 	)`),
 	addQuizzesMessageIDColumn,
 	execSQL(`CREATE INDEX IF NOT EXISTS idx_quizzes_session_message ON quizzes (session_id, message_id)`),
+	// Mind Map (spec 3.24). Like a quiz, a mind map outlives its session:
+	// session_id has no foreign key and session_title is a snapshot, so only an
+	// explicit delete removes a map. message_id is the chat message whose offer
+	// produced the map (NULL for one generated from the menu), also with no
+	// foreign key. tree is the model's JSON and diagram_xml
+	// the draw.io document the user edits. mind_map_offers is shaped like
+	// quiz_offers and kept apart from it. See
+	// specs/phases/phase-03-architecture-lab/24-mind-map.md.
+	execSQL(`CREATE TABLE IF NOT EXISTS mind_maps (
+		id            TEXT PRIMARY KEY,
+		session_id    TEXT NOT NULL,
+		session_title TEXT NOT NULL,
+		title         TEXT NOT NULL,
+		tree          TEXT NOT NULL,
+		diagram_xml   TEXT NOT NULL,
+		message_id    TEXT,
+		created_at    TEXT NOT NULL,
+		updated_at    TEXT NOT NULL
+	)`),
+	// FindByMessage filters on message_id alone, so it leads the index.
+	execSQL(`CREATE INDEX IF NOT EXISTS idx_mind_maps_message_session ON mind_maps (message_id, session_id)`),
+	execSQL(`CREATE TABLE IF NOT EXISTS mind_map_offers (
+		id         TEXT PRIMARY KEY,
+		session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+		message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+		created_at TEXT NOT NULL,
+		UNIQUE (session_id)
+	)`),
 }
 
 // addQuizzesMessageIDColumn adds quizzes.message_id if it does not already

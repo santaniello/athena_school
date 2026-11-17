@@ -46,6 +46,9 @@ func TestReset_clearsEveryArchitectureLabAndQuizTable(t *testing.T) {
 			VALUES ('qq-1', 'quiz-1', 1, 'TRUE_FALSE', 'p', '["True","False"]', 0, 'e');
 		INSERT INTO quiz_attempts (id, quiz_id, correct_count, total, score, finished_at) VALUES ('qa-1', 'quiz-1', 1, 1, 10, 'now');
 		INSERT INTO quiz_answers (attempt_id, question_id, position, selected_index, correct) VALUES ('qa-1', 'qq-1', 1, 0, 1);
+		INSERT INTO mind_map_offers (id, session_id, message_id, created_at) VALUES ('moffer-1', 'session-2', 'message-2', 'now');
+		INSERT INTO mind_maps (id, session_id, session_title, title, tree, diagram_xml, message_id, created_at, updated_at)
+			VALUES ('map-1', 'session-1', 'Go', 'Go', '{}', '<mxGraphModel/>', 'message-1', 'now', 'now');
 	`)
 	require.NoError(t, err)
 
@@ -56,7 +59,7 @@ func TestReset_clearsEveryArchitectureLabAndQuizTable(t *testing.T) {
 	for _, table := range []string{
 		"challenges", "rubric_versions", "rubric_criteria", "session_exercises", "challenge_attempts",
 		"submissions", "evaluations", "criterion_results", "attempt_hints", "defense_turns", "exercise_offers", "quiz_offers",
-		"quizzes", "quiz_questions", "quiz_attempts", "quiz_answers",
+		"quizzes", "quiz_questions", "quiz_attempts", "quiz_answers", "mind_maps", "mind_map_offers",
 	} {
 		var count int
 		require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM `+table).Scan(&count))

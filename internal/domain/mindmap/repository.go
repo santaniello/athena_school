@@ -34,8 +34,9 @@ type Repository interface {
 	// ListBySession returns the mind maps an offer produced in the session,
 	// oldest first.
 	ListBySession(ctx context.Context, sessionID string) ([]Summary, error)
-	// Update replaces the title, tree, diagram and update time of the mind map
-	// with that ID, or returns ErrMindMapNotFound. Its session and message stay.
+	// Update replaces the session title snapshot, title, tree, diagram and
+	// update time of the mind map with that ID, or returns ErrMindMapNotFound.
+	// Its session, message and creation time stay.
 	Update(ctx context.Context, mindMap MindMap) error
 	// Delete removes the mind map, or returns ErrMindMapNotFound.
 	Delete(ctx context.Context, id string) error
