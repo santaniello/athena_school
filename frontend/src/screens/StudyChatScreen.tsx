@@ -159,17 +159,27 @@ type PendingOffer =
 
 // The session's pending offer, or null when there is none or it could not be
 // read — the offer is an extra on top of the chat and must never break it. A
-// session has at most one pending offer across all kinds, so each next kind is
-// only looked for when the earlier ones have none.
+// session has at most one pending offer across all kinds, so the lookups run
+// together and the first kind with an offer wins.
 async function fetchPendingOffer(sessionId: string): Promise<PendingOffer | null> {
   try {
-    const exercise = await getPendingOffer(sessionId)
+    // One failing lookup must not hide the offer another kind found.
+    const settle = async <T,>(lookup: () => Promise<T | null>): Promise<T | null> => {
+      try {
+        return await lookup()
+      } catch {
+        return null
+      }
+    }
+    const [exercise, quiz, mindMap] = await Promise.all([
+      settle(() => getPendingOffer(sessionId)),
+      settle(() => getPendingQuizOffer(sessionId)),
+      settle(() => getPendingMindMapOffer(sessionId)),
+    ])
     if (exercise) {
       return { kind: 'exercise', offer: exercise, difficulty: (await getOfferProfile()).difficulty }
     }
-    const quiz = await getPendingQuizOffer(sessionId)
     if (quiz) return { kind: 'quiz', offer: quiz, difficulty: await getQuizOfferDifficulty() }
-    const mindMap = await getPendingMindMapOffer(sessionId)
     if (mindMap) return { kind: 'mindmap', offer: mindMap }
     return null
   } catch {
@@ -1055,6 +1065,10 @@ function StudyChatScreen({
                     ])
                   }}
                   onDeclined={() => setPendingOffer(null)}
+                  onGone={() => {
+                    setPendingOffer(null)
+                    refreshMindMapCards()
+                  }}
                 />
               ))}
             {index === summaryMarkerIndex && summaryMarker}

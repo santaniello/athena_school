@@ -4,7 +4,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
   acceptMindMapOffer,
+  cancelMindMapGeneration,
   declineMindMapOffer,
+  mindMapErrorCode,
   mindMapErrorMessage,
   type MindMapSummary,
 } from '@/lib/mindmap'
@@ -14,14 +16,18 @@ interface MindMapOfferCardProps {
   // The offer is accepted: the mind map was drawn and its card takes this one's place.
   onAccepted: (mindMap: MindMapSummary) => void
   onDeclined: () => void
+  // The offer no longer exists (resolved elsewhere or gone): the chat drops it
+  // and re-reads what it shows, so the composer is not left blocked.
+  onGone: () => void
 }
 
 // The tutor's mind map offer, under its reply. Accepting draws the map, so the
-// card shows progress and locks both buttons meanwhile; a failure leaves the
-// offer in place with the error. It speaks the profile's language, like the
+// card shows progress, locks both buttons and offers to cancel meanwhile; a
+// failure leaves the offer in place with the error, except when the offer is
+// gone, which hands it back to the chat. It speaks the profile's language, like the
 // rest of the mind map screens. See
 // specs/phases/phase-03-architecture-lab/24-mind-map.md.
-function MindMapOfferCard({ offerId, onAccepted, onDeclined }: MindMapOfferCardProps) {
+function MindMapOfferCard({ offerId, onAccepted, onDeclined, onGone }: MindMapOfferCardProps) {
   const { t } = useTranslation('mindmap')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -32,7 +38,13 @@ function MindMapOfferCard({ offerId, onAccepted, onDeclined }: MindMapOfferCardP
     try {
       onDone(await action())
     } catch (err) {
-      setError(mindMapErrorMessage(err))
+      const code = mindMapErrorCode(err)
+      if (code === 'offer_not_found') {
+        onGone()
+        return
+      }
+      // A cancel is the user's own doing: nothing to report.
+      if (code !== 'cancelled') setError(mindMapErrorMessage(err))
     } finally {
       setBusy(false)
     }
@@ -63,6 +75,11 @@ function MindMapOfferCard({ offerId, onAccepted, onDeclined }: MindMapOfferCardP
         >
           {t('offer.decline')}
         </Button>
+        {busy && (
+          <Button size="sm" variant="ghost" onClick={() => void cancelMindMapGeneration()}>
+            {t('offer.cancel')}
+          </Button>
+        )}
       </div>
     </div>
   )

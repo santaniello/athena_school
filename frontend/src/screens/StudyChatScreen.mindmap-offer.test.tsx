@@ -190,19 +190,19 @@ describe('StudyChatScreen — mind map offer', () => {
     expect(bubbles[1].compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it('does not look for a mind map offer when an exercise or a quiz offer is pending', async () => {
+  it('shows the quiz offer, not a mind map one, when both are pending', async () => {
     subscribe()
     vi.mocked(getPendingQuizOffer).mockResolvedValue({
       id: 'offer-9',
       sessionId: 'session-1',
       messageId: 'm2',
     })
+    vi.mocked(getPendingMindMapOffer).mockResolvedValue(OFFER)
 
     await renderResumed()
 
     expect(await screen.findByText('Take a test about this session')).toBeInTheDocument()
     expect(screen.queryByText('Draw a mind map of this session')).not.toBeInTheDocument()
-    expect(getPendingMindMapOffer).not.toHaveBeenCalled()
   })
 
   it('speaks the profile language', async () => {
