@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DOCUMENTATION, plannedSectionIds } from './documentation'
 
 describe('DOCUMENTATION', () => {
-  it('opens with the system purpose, then study, knowledge, the architecture lab, the interactive test, then the reference', () => {
+  it('opens with the system purpose, then study, knowledge, the architecture lab, the interactive test, the mind map, then the reference', () => {
     // Given the in-app manual
     // When reading its section order
     const ids = DOCUMENTATION.map((section) => section.id)
@@ -14,6 +14,7 @@ describe('DOCUMENTATION', () => {
       'knowledge-engine',
       'architecture-lab',
       'interactive-test',
+      'mind-map',
       'reference',
     ])
   })
@@ -135,5 +136,37 @@ describe('DOCUMENTATION interactive test', () => {
     expect(text).toContain('Take test')
     expect(text).toContain('Back to study session')
     expect(text).toContain('never offers on its own')
+  })
+})
+
+describe('DOCUMENTATION mind map', () => {
+  const mindMap = DOCUMENTATION.find((section) => section.id === 'mind-map')
+  const text = mindMap ? [mindMap.summary, ...mindMap.body].join(' ') : ''
+
+  it('explains how to generate, edit, update and delete a mind map', () => {
+    expect(mindMap?.status).toBe('available')
+    expect(text).toContain('Generate mind map with AI')
+    expect(text).toContain('draw.io editor')
+    expect(text).toContain('Save')
+    expect(text).toContain('Update from session')
+    expect(text).toContain('changes you made by hand are lost')
+    expect(text).toContain('Delete')
+  })
+
+  it('explains how to ask for a mind map from a study session', () => {
+    expect(text).toContain('make a mind map')
+    expect(text).toContain('Accept or Decline')
+    expect(text).toContain('Open mind map')
+    expect(text).toContain('Back to study session')
+    expect(text).toContain('never offers on its own')
+  })
+
+  it('says a mind map stays after its session is deleted and needs the internet to edit', () => {
+    const topics = (mindMap?.topics ?? [])
+      .map((topic) => `${topic.term} ${topic.description}`)
+      .join(' ')
+    expect(topics).toMatch(/does not delete it/i)
+    expect(topics).toContain('Delete')
+    expect(topics).toContain('internet')
   })
 })

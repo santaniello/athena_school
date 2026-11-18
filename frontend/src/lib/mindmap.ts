@@ -40,35 +40,35 @@ export interface MindMap extends MindMapSummary {
   diagramXml: string
 }
 
-export function listMindMaps(): Promise<MindMapSummary[]> {
+export async function listMindMaps(): Promise<MindMapSummary[]> {
   return ListMindMaps()
 }
 
-export function getMindMap(id: string): Promise<MindMap> {
+export async function getMindMap(id: string): Promise<MindMap> {
   return GetMindMap(id)
 }
 
 // Drawing takes as long as a model call. It rejects with a coded error; see
 // mindMapErrorCode.
-export function generateMindMap(sessionId: string): Promise<MindMapSummary> {
+export async function generateMindMap(sessionId: string): Promise<MindMapSummary> {
   return GenerateMindMap(sessionId)
 }
 
 // Draws the map again from its session, replacing what the user edited by
 // hand. A failure leaves the stored map as it was.
-export function regenerateMindMap(id: string): Promise<MindMap> {
+export async function regenerateMindMap(id: string): Promise<MindMap> {
   return RegenerateMindMap(id)
 }
 
-export function saveMindMapDiagram(id: string, diagramXml: string): Promise<MindMap> {
+export async function saveMindMapDiagram(id: string, diagramXml: string): Promise<MindMap> {
   return SaveMindMapDiagram(id, diagramXml)
 }
 
-export function deleteMindMap(id: string): Promise<void> {
+export async function deleteMindMap(id: string): Promise<void> {
   return DeleteMindMap(id)
 }
 
-export function cancelMindMapGeneration(): Promise<void> {
+export async function cancelMindMapGeneration(): Promise<void> {
   return CancelMindMapGeneration()
 }
 
@@ -88,16 +88,16 @@ export async function getPendingMindMapOffer(sessionId: string): Promise<MindMap
 
 // Accepting draws the map, so it takes as long as generateMindMap and rejects
 // with a coded error the same way. The offer stays pending on a failure.
-export function acceptMindMapOffer(offerId: string): Promise<MindMapSummary> {
+export async function acceptMindMapOffer(offerId: string): Promise<MindMapSummary> {
   return AcceptMindMapOffer(offerId)
 }
 
-export function declineMindMapOffer(offerId: string): Promise<void> {
+export async function declineMindMapOffer(offerId: string): Promise<void> {
   return DeclineMindMapOffer(offerId)
 }
 
 // The mind maps the session's offers produced: the cards under the chat messages.
-export function listSessionMindMaps(sessionId: string): Promise<MindMapSummary[]> {
+export async function listSessionMindMaps(sessionId: string): Promise<MindMapSummary[]> {
   return ListSessionMindMaps(sessionId)
 }
 

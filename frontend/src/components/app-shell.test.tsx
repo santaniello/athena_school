@@ -35,6 +35,7 @@ import {
   listChallengeTopics,
 } from '@/lib/exercise'
 import { listSessionQuizzes } from '@/lib/quiz'
+import { listSessionMindMaps } from '@/lib/mindmap'
 import { AppShell } from './app-shell'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
@@ -221,6 +222,8 @@ vi.mock('@/lib/mindmap', async (importOriginal) => ({
       messageId: '',
     },
   ]),
+  getPendingMindMapOffer: vi.fn().mockResolvedValue(null),
+  listSessionMindMaps: vi.fn().mockResolvedValue([]),
 }))
 
 // The mind map editor is covered by its own tests; this stand-in exposes what
@@ -2138,6 +2141,111 @@ describe('AppShell knowledge index lifecycle', () => {
       expect(screen.getByRole('region', { name: 'Mind map editor' })).toHaveTextContent(
         'no leave request',
       )
+    })
+
+    describe('opened from a study session', () => {
+      const session: StudySession = {
+        id: 'session-map',
+        topic: 'Caching',
+        folderId: 'default',
+        goal: 'Learn caching',
+        startedAt: '2026-11-09T10:00:00Z',
+        context: CONTEXT_NORMAL,
+      }
+
+      afterEach(() => {
+        vi.mocked(listSessionMindMaps).mockResolvedValue([])
+      })
+
+      async function openFromSession() {
+        const user = userEvent.setup()
+        renderShell()
+        await screen.findByText(/Felipe\./)
+        await user.click(screen.getByRole('button', { name: 'Study' }))
+        await screen.findByText('General')
+        vi.mocked(listStudySessionsByFolder).mockResolvedValueOnce([session])
+        vi.mocked(resumeStudySession).mockResolvedValue({
+          session,
+          messages: [
+            { id: 'm1', role: 'user', content: 'a mind map', createdAt: 't', sources: [] },
+            {
+              id: 'm2',
+              role: 'assistant',
+              content: 'Sure, a mind map.',
+              createdAt: 't',
+              sources: [],
+            },
+          ],
+          hasMore: false,
+          nextCursor: '',
+          summaryCoversUntilMessageId: '',
+        } as Awaited<ReturnType<typeof resumeStudySession>>)
+        vi.mocked(listSessionMindMaps).mockResolvedValue([
+          {
+            id: 'map-77',
+            sessionId: 'session-map',
+            sessionTitle: 'Caching',
+            title: 'Caching map',
+            createdAt: '2026-11-17T09:30:00Z',
+            updatedAt: '2026-11-17T10:30:00Z',
+            messageId: 'm2',
+          },
+        ])
+        await user.click(screen.getByText('General'))
+        await user.click(await screen.findByText('Caching'))
+        await user.click(await screen.findByRole('button', { name: 'Open mind map' }))
+        return user
+      }
+
+      it('opens the mind map in the same window, linked to the session', async () => {
+        await openFromSession()
+
+        const editor = screen.getByRole('region', { name: 'Mind map editor' })
+        expect(editor).toHaveTextContent('mind map map-77')
+        expect(editor).toHaveTextContent('return to study session-map')
+        expect(screen.queryByText('Sure, a mind map.')).not.toBeInTheDocument()
+      })
+
+      it('returns to the same resumed session, with its card, when the editor is closed', async () => {
+        const user = await openFromSession()
+
+        await user.click(screen.getByRole('button', { name: 'exit mind map' }))
+
+        expect(await screen.findByText('Sure, a mind map.')).toBeInTheDocument()
+        expect(await screen.findByRole('button', { name: 'Open mind map' })).toBeInTheDocument()
+        expect(screen.getByRole('heading', { name: 'Caching', level: 1 })).toBeInTheDocument()
+        expect(requestOpeningTurn).not.toHaveBeenCalled()
+        expect(screen.queryByRole('region', { name: 'Mind map editor' })).not.toBeInTheDocument()
+      })
+
+      it('goes where the user navigated, not to the session, when the editor is left then', async () => {
+        const user = await openFromSession()
+        await user.click(screen.getByRole('button', { name: 'Settings' }))
+
+        await user.click(screen.getByRole('button', { name: 'exit mind map' }))
+
+        expect(
+          await screen.findByRole('heading', { name: 'Settings', level: 1 }),
+        ).toBeInTheDocument()
+      })
+
+      it('goes back to the catalog for a mind map opened from the catalog afterwards', async () => {
+        const user = await openFromSession()
+        await user.click(screen.getByRole('button', { name: 'exit mind map' }))
+        await screen.findByText('Sure, a mind map.')
+
+        await user.click(screen.getByRole('button', { name: 'Mind Map' }))
+        await user.click(await screen.findByRole('button', { name: 'Open' }))
+
+        expect(screen.getByRole('region', { name: 'Mind map editor' })).toHaveTextContent(
+          'return to menu',
+        )
+
+        await user.click(screen.getByRole('button', { name: 'exit mind map' }))
+
+        expect(await screen.findByRole('button', { name: 'Open' })).toBeInTheDocument()
+        expect(screen.queryByRole('region', { name: 'Mind map editor' })).not.toBeInTheDocument()
+      })
     })
 
     it('forgets a leave request that was cancelled, so the next exit stays on the catalog', async () => {

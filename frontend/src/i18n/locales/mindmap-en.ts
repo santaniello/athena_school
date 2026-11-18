@@ -83,6 +83,7 @@ export const mindmapEn = {
     title: 'Draw a mind map of this session',
     accept: 'Accept',
     decline: 'Decline',
+    cancel: 'Cancel',
     preparing: 'Drawing your mind map... this can take a moment.',
   },
   sessionCard: {

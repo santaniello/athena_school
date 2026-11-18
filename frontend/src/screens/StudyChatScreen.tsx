@@ -19,6 +19,8 @@ import { AttemptHistoryDialog, type HistoryChallenge } from '@/components/attemp
 import { ExerciseOfferCard } from '@/components/exercise-offer-card'
 import { QuizHistoryDialog, type HistoryQuiz } from '@/components/quiz/quiz-history-dialog'
 import { QuizOfferCard } from '@/components/quiz/quiz-offer-card'
+import { MindMapOfferCard } from '@/components/mindmap/mindmap-offer-card'
+import { SessionMindMapCard } from '@/components/mindmap/session-mindmap-card'
 import { SessionQuizCard } from '@/components/quiz/session-quiz-card'
 import { SessionExerciseCard } from '@/components/session-exercise-card'
 import { MessageBubble } from '@/components/message-bubble'
@@ -53,6 +55,12 @@ import {
   type QuizOffer,
   type QuizSummary,
 } from '@/lib/quiz'
+import {
+  getPendingMindMapOffer,
+  listSessionMindMaps,
+  type MindMapOffer,
+  type MindMapSummary,
+} from '@/lib/mindmap'
 import {
   compactStudySession,
   getStudySessionSummary,
@@ -110,6 +118,8 @@ interface StudyChatScreenProps {
   onStartExam: (exam: ExamToStart, sessionId: string) => void
   // Starts a quiz from a card of this session; the shell brings the user back here.
   onStartQuiz: (quizId: string, sessionId: string) => void
+  // Opens a mind map from a card of this session; the shell brings the user back here.
+  onOpenMindMap: (mindMapId: string, sessionId: string) => void
 }
 
 // ContextState mirrors the persisted study.ContextState the backend tracks
@@ -138,25 +148,39 @@ async function fetchSummaryCursor(sessionId: string): Promise<string | null> {
   }
 }
 
-// What the tutor offered the user: an architecture exercise or a quiz, with the
-// difficulty the choice starts from. Both are shown under the message that
-// carried them and block the composer until resolved.
+// What the tutor offered the user: an architecture exercise, a quiz or a mind
+// map, with the difficulty the choice starts from (a mind map has no choice).
+// All are shown under the message that carried them and block the composer
+// until resolved.
 type PendingOffer =
   | { kind: 'exercise'; offer: ExerciseOffer; difficulty: ChallengeDifficulty }
   | { kind: 'quiz'; offer: QuizOffer; difficulty: QuizDifficulty }
+  | { kind: 'mindmap'; offer: MindMapOffer }
 
 // The session's pending offer, or null when there is none or it could not be
 // read — the offer is an extra on top of the chat and must never break it. A
-// session has at most one pending offer across both kinds, so the quiz one is
-// only looked for when there is no exercise one.
+// session has at most one pending offer across all kinds, so the lookups run
+// together and the first kind with an offer wins.
 async function fetchPendingOffer(sessionId: string): Promise<PendingOffer | null> {
   try {
-    const exercise = await getPendingOffer(sessionId)
+    // One failing lookup must not hide the offer another kind found.
+    const settle = async <T,>(lookup: () => Promise<T | null>): Promise<T | null> => {
+      try {
+        return await lookup()
+      } catch {
+        return null
+      }
+    }
+    const [exercise, quiz, mindMap] = await Promise.all([
+      settle(() => getPendingOffer(sessionId)),
+      settle(() => getPendingQuizOffer(sessionId)),
+      settle(() => getPendingMindMapOffer(sessionId)),
+    ])
     if (exercise) {
       return { kind: 'exercise', offer: exercise, difficulty: (await getOfferProfile()).difficulty }
     }
-    const quiz = await getPendingQuizOffer(sessionId)
     if (quiz) return { kind: 'quiz', offer: quiz, difficulty: await getQuizOfferDifficulty() }
+    if (mindMap) return { kind: 'mindmap', offer: mindMap }
     return null
   } catch {
     return null
@@ -316,6 +340,7 @@ function StudyChatScreen({
   onOpeningTurnRequested,
   onStartExam,
   onStartQuiz,
+  onOpenMindMap,
 }: StudyChatScreenProps) {
   const [sessionTopic, setSessionTopic] = useState(initialTopic)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -358,6 +383,8 @@ function StudyChatScreen({
   const [exerciseCards, setExerciseCards] = useState<ExerciseCard[]>([])
   // The quizzes accepted in this session, shown the same way (spec 3.23).
   const [quizCards, setQuizCards] = useState<QuizSummary[]>([])
+  // The mind maps accepted in this session, shown the same way (spec 3.24).
+  const [mindMapCards, setMindMapCards] = useState<MindMapSummary[]>([])
   const [historyFor, setHistoryFor] = useState<HistoryChallenge | null>(null)
   const [quizHistoryFor, setQuizHistoryFor] = useState<HistoryQuiz | null>(null)
   const [examRules, setExamRules] = useState<ExamToStart | null>(null)
@@ -410,6 +437,11 @@ function StudyChatScreen({
   // it already holds the new id when the commit that switched sessions ends —
   // before any response of the previous session can resolve.
   const currentSessionIdRef = useRef(sessionId)
+  // Each read of the pending offer or of the mind map cards takes a number, and
+  // a resolution (accept, decline, gone) takes one too: only the latest wins,
+  // so a slow answer that left before it cannot bring back what was resolved.
+  const offerVersionRef = useRef(0)
+  const mindMapCardsVersionRef = useRef(0)
   useLayoutEffect(() => {
     currentSessionIdRef.current = sessionId
   }, [sessionId])
@@ -495,9 +527,16 @@ function StudyChatScreen({
     })
   }, [])
 
+  const clearOffer = useCallback(() => {
+    offerVersionRef.current += 1
+    setPendingOffer(null)
+  }, [])
+
   const refreshPendingOffer = useCallback(() => {
+    const version = ++offerVersionRef.current
     void fetchPendingOffer(sessionId).then((pending) => {
       if (!pending || currentSessionIdRef.current !== sessionId) return
+      if (offerVersionRef.current !== version) return
       setPendingOffer(pending)
       adoptMessageId(pending.offer.messageId)
     })
@@ -527,6 +566,17 @@ function StudyChatScreen({
     void listSessionQuizzes(sessionId)
       .then((cards) => {
         if (currentSessionIdRef.current === sessionId) setQuizCards(cards)
+      })
+      .catch(() => {})
+  }, [sessionId])
+
+  // Same rule for the mind map cards: a failed read keeps them as they were.
+  const refreshMindMapCards = useCallback(() => {
+    const version = ++mindMapCardsVersionRef.current
+    void listSessionMindMaps(sessionId)
+      .then((cards) => {
+        if (currentSessionIdRef.current !== sessionId) return
+        if (mindMapCardsVersionRef.current === version) setMindMapCards(cards)
       })
       .catch(() => {})
   }, [sessionId])
@@ -633,6 +683,7 @@ function StudyChatScreen({
         refreshPendingOffer()
         refreshExerciseCards()
         refreshQuizCards()
+        refreshMindMapCards()
         startHistory(history.hasMore, history.nextCursor)
         // Rendering a long history (markdown of every message) is the slow
         // part of opening a session. As a transition it is rendered in
@@ -795,6 +846,7 @@ function StudyChatScreen({
     refreshPendingOffer,
     refreshExerciseCards,
     refreshQuizCards,
+    refreshMindMapCards,
     pushToast,
   ])
 
@@ -981,6 +1033,15 @@ function StudyChatScreen({
                   }
                 />
               ))}
+            {mindMapCards
+              .filter((card) => card.messageId === message.id)
+              .map((card) => (
+                <SessionMindMapCard
+                  key={card.id}
+                  mindMap={card}
+                  onOpen={(opened) => onOpenMindMap(opened.id, sessionId)}
+                />
+              ))}
             {pendingOffer?.offer.messageId === message.id &&
               !isStreaming &&
               (pendingOffer.kind === 'exercise' ? (
@@ -989,23 +1050,40 @@ function StudyChatScreen({
                   defaultDifficulty={pendingOffer.difficulty}
                   topic={sessionTopic}
                   onAccepted={() => {
-                    setPendingOffer(null)
+                    clearOffer()
                     refreshExerciseCards(true)
                   }}
-                  onDeclined={() => setPendingOffer(null)}
+                  onDeclined={() => clearOffer()}
                 />
-              ) : (
+              ) : pendingOffer.kind === 'quiz' ? (
                 <QuizOfferCard
                   offerId={pendingOffer.offer.id}
                   defaultDifficulty={pendingOffer.difficulty}
                   onAccepted={(quiz) => {
-                    setPendingOffer(null)
+                    clearOffer()
                     setQuizCards((current) => [
                       ...current.filter((card) => card.id !== quiz.id),
                       quiz,
                     ])
                   }}
-                  onDeclined={() => setPendingOffer(null)}
+                  onDeclined={() => clearOffer()}
+                />
+              ) : (
+                <MindMapOfferCard
+                  offerId={pendingOffer.offer.id}
+                  onAccepted={(mindMap) => {
+                    clearOffer()
+                    mindMapCardsVersionRef.current += 1
+                    setMindMapCards((current) => [
+                      ...current.filter((card) => card.id !== mindMap.id),
+                      mindMap,
+                    ])
+                  }}
+                  onDeclined={() => clearOffer()}
+                  onGone={() => {
+                    clearOffer()
+                    refreshMindMapCards()
+                  }}
                 />
               ))}
             {index === summaryMarkerIndex && summaryMarker}

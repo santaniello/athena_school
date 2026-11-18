@@ -289,6 +289,12 @@ function AppShell() {
     setOpenMindMapId(mindMapId)
   }
 
+  function openSessionMindMap(mindMapId: string, sessionId: string) {
+    setMindMapReturn({ kind: 'study', sessionId })
+    setOpenMindMapId(mindMapId)
+    setSection('mindmap')
+  }
+
   function handleMindMapExit() {
     setOpenMindMapId(null)
     const destination = pendingSection ?? (mindMapReturn.kind === 'study' ? 'study' : null)
@@ -560,6 +566,7 @@ function AppShell() {
               onOpeningTurnRequested={handleOpeningTurnRequested}
               onStartExam={startSessionExam}
               onStartQuiz={startSessionQuiz}
+              onOpenMindMap={openSessionMindMap}
               onStartNewSession={handleStartNewSession}
               startingNewSession={startingNewSession}
               sourceModeSlot={sourceModeSlot}

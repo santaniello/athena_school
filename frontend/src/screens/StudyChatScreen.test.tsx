@@ -159,6 +159,7 @@ function renderNewSession(props: Partial<React.ComponentProps<typeof StudyChatSc
       onStartNewSession={vi.fn()}
       onStartExam={vi.fn()}
       onStartQuiz={vi.fn()}
+      onOpenMindMap={vi.fn()}
       startingNewSession={false}
       {...props}
     />,
@@ -173,6 +174,7 @@ function newSessionActionProps() {
     startingNewSession: false,
     onStartExam: vi.fn(),
     onStartQuiz: vi.fn(),
+    onOpenMindMap: vi.fn(),
   }
 }
 
@@ -1474,6 +1476,7 @@ describe('StudyChatScreen — context limits', () => {
         startingNewSession
         onStartExam={vi.fn()}
         onStartQuiz={vi.fn()}
+        onOpenMindMap={vi.fn()}
       />,
     )
     await screen.findByRole('status', { name: /thinking/i })

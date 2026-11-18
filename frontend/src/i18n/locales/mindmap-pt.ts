@@ -85,6 +85,7 @@ export const mindmapPt: MindmapLocale = {
     title: 'Desenhar um mapa mental desta sessão',
     accept: 'Aceitar',
     decline: 'Recusar',
+    cancel: 'Cancelar',
     preparing: 'Desenhando seu mapa mental... isso pode levar um instante.',
   },
   sessionCard: {

@@ -145,6 +145,7 @@ async function renderResumed(props: Partial<ComponentProps<typeof StudyChatScree
       startingNewSession={false}
       onStartExam={vi.fn()}
       onStartQuiz={onStartQuiz}
+      onOpenMindMap={vi.fn()}
       {...props}
     />,
   )
@@ -185,19 +186,19 @@ describe('StudyChatScreen — quiz offer', () => {
     expect(bubbles[1].compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it('shows the exercise offer, and does not look for a quiz one, when an exercise offer is pending', async () => {
+  it('shows the exercise offer, not a quiz one, when both are pending', async () => {
     subscribe()
     vi.mocked(getPendingOffer).mockResolvedValue({
       id: 'offer-9',
       sessionId: 'session-1',
       messageId: 'm2',
     })
+    vi.mocked(getPendingQuizOffer).mockResolvedValue(OFFER)
 
     await renderResumed()
 
     expect(await screen.findByText('Practice with an architecture exercise')).toBeInTheDocument()
     expect(screen.queryByText('Take a test about this session')).not.toBeInTheDocument()
-    expect(getPendingQuizOffer).not.toHaveBeenCalled()
   })
 
   it('starts the offer from the difficulty of the profile', async () => {
