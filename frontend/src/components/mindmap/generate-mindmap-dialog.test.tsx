@@ -96,6 +96,18 @@ describe('GenerateMindMapDialog', () => {
     expect(screen.getByText('No session matches your search.')).toBeInTheDocument()
   })
 
+  it('disables Generate when the chosen session was filtered out by the search', async () => {
+    const user = userEvent.setup()
+    renderDialog()
+    await user.click(await screen.findByRole('radio', { name: /Go Concurrency/ }))
+    expect(screen.getByRole('button', { name: 'Generate' })).toBeEnabled()
+
+    await user.type(screen.getByRole('searchbox', { name: 'Search sessions' }), 'backend')
+
+    expect(screen.getByRole('button', { name: 'Generate' })).toBeDisabled()
+    expect(generateMindMap).not.toHaveBeenCalled()
+  })
+
   it('says there are no study sessions', async () => {
     vi.mocked(listSessionsForGeneration).mockResolvedValue([])
     renderDialog()
