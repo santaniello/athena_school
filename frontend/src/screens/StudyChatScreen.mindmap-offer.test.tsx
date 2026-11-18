@@ -119,7 +119,10 @@ function subscribe(): Handlers {
 
 const CONTEXT = { state: 'normal', model: '', usedTokens: 0, contextLength: 0, estimated: false }
 
-async function renderResumed(props: Partial<ComponentProps<typeof StudyChatScreen>> = {}) {
+async function renderResumed(
+  props: Partial<ComponentProps<typeof StudyChatScreen>> = {},
+  withLaterMessage = false,
+) {
   vi.mocked(resumeStudySession).mockResolvedValue({
     session: {
       id: 'session-1',
@@ -132,6 +135,9 @@ async function renderResumed(props: Partial<ComponentProps<typeof StudyChatScree
     messages: [
       { id: 'm1', role: 'user', content: 'draw me a mind map', createdAt: 't', sources: [] },
       { id: 'm2', role: 'assistant', content: 'Sure, a mind map.', createdAt: 't', sources: [] },
+      ...(withLaterMessage
+        ? [{ id: 'm3', role: 'user', content: 'thanks', createdAt: 't', sources: [] }]
+        : []),
     ],
     hasMore: false,
     nextCursor: '',
@@ -179,7 +185,7 @@ describe('StudyChatScreen — mind map offer', () => {
     subscribe()
     vi.mocked(getPendingMindMapOffer).mockResolvedValue(OFFER)
 
-    await renderResumed()
+    await renderResumed({}, true)
 
     expect(await screen.findByText('Draw a mind map of this session')).toBeInTheDocument()
     expect(getPendingMindMapOffer).toHaveBeenCalledWith('session-1')
@@ -188,6 +194,7 @@ describe('StudyChatScreen — mind map offer', () => {
     const bubbles = document.querySelectorAll('[data-slot="message-bubble"]')
     const card = screen.getByText('Draw a mind map of this session').closest('div.rounded-lg')!
     expect(bubbles[1].compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(bubbles[2].compareDocumentPosition(card) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy()
   })
 
   it('shows the quiz offer, not a mind map one, when both are pending', async () => {
@@ -235,7 +242,7 @@ describe('StudyChatScreen — mind map offer', () => {
     subscribe()
     vi.mocked(getPendingMindMapOffer).mockResolvedValue(OFFER)
     vi.mocked(acceptMindMapOffer).mockResolvedValue(CARD)
-    await renderResumed()
+    await renderResumed({}, true)
     const user = userEvent.setup()
 
     await user.click(await screen.findByRole('button', { name: 'Accept' }))
@@ -248,6 +255,7 @@ describe('StudyChatScreen — mind map offer', () => {
     const bubbles = document.querySelectorAll('[data-slot="message-bubble"]')
     const card = screen.getByRole('button', { name: 'Open mind map' }).closest('div.rounded-lg')!
     expect(bubbles[1].compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(bubbles[2].compareDocumentPosition(card) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy()
   })
 
   it('keeps the input disabled and the offer in place when accepting fails', async () => {
@@ -324,6 +332,63 @@ describe('StudyChatScreen — mind map offer', () => {
     await renderResumed()
 
     await waitFor(() => expect(listSessionMindMaps).toHaveBeenCalled())
+    await waitFor(() => expect(getPendingMindMapOffer).toHaveBeenCalled())
+    vi.mocked(sendStudyMessage).mockResolvedValue()
+    const user = userEvent.setup()
+
+    await user.type(screen.getByPlaceholderText('Type your answer...'), 'still here')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(sendStudyMessage).toHaveBeenCalledWith(
+      'session-1',
+      'Caching',
+      'still here',
+      expect.anything(),
+    )
+  })
+
+  it('does not bring back an offer that was declined while an older read was still pending', async () => {
+    const handlers = subscribe()
+    let answerOldRead: (offer: MindMapOffer) => void = () => {}
+    vi.mocked(getPendingMindMapOffer).mockReturnValueOnce(
+      new Promise((resolve) => {
+        answerOldRead = resolve
+      }),
+    )
+    await renderResumed()
+    vi.mocked(sendStudyMessage).mockResolvedValue()
+    vi.mocked(declineMindMapOffer).mockResolvedValue()
+    vi.mocked(getPendingMindMapOffer).mockResolvedValue(OFFER)
+    const user = userEvent.setup()
+    await user.type(screen.getByPlaceholderText('Type your answer...'), 'a mind map')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+    act(() => handlers.done?.({ sessionId: 'session-1' }))
+    await user.click(await screen.findByRole('button', { name: 'Decline' }))
+    expect(screen.queryByRole('button', { name: 'Decline' })).not.toBeInTheDocument()
+
+    await act(async () => answerOldRead(OFFER))
+
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument()
     expect(screen.getByPlaceholderText('Type your answer...')).toBeEnabled()
+  })
+
+  it('keeps the accepted card when a read that started before the accept answers late', async () => {
+    subscribe()
+    let answerOldRead: (cards: MindMapSummary[]) => void = () => {}
+    vi.mocked(listSessionMindMaps).mockReturnValueOnce(
+      new Promise((resolve) => {
+        answerOldRead = resolve
+      }),
+    )
+    vi.mocked(getPendingMindMapOffer).mockResolvedValue(OFFER)
+    vi.mocked(acceptMindMapOffer).mockResolvedValue(CARD)
+    await renderResumed()
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Accept' }))
+    expect(await screen.findByRole('button', { name: 'Open mind map' })).toBeInTheDocument()
+
+    await act(async () => answerOldRead([]))
+
+    expect(screen.getByRole('button', { name: 'Open mind map' })).toBeInTheDocument()
   })
 })

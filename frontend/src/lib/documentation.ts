@@ -202,14 +202,14 @@ const DOCUMENTATION: DocSection[] = [
     ],
     topics: [
       {
-        term: 'Goes with its session',
+        term: 'Stays after its session',
         description:
-          'A mind map belongs to the session it was drawn from: deleting the session deletes its mind maps.',
+          'A mind map is drawn from a session but is kept on its own: deleting the session or its folder does not delete it. Use Delete on the map to remove it.',
       },
       {
         term: 'Needs the internet to edit',
         description:
-          'The editor is the draw.io online embed, the same one the Architecture Lab uses. Without a connection Athena says so and the rest of the app keeps working.',
+          'The editor is the draw.io online embed, the same one the Architecture Lab uses. When the browser reports that it is offline, Athena says the editor needs an internet connection. If the browser reports a connection but the editor does not load, Athena only says that loading takes longer than usual. The rest of the app keeps working.',
       },
     ],
   },

@@ -437,6 +437,11 @@ function StudyChatScreen({
   // it already holds the new id when the commit that switched sessions ends —
   // before any response of the previous session can resolve.
   const currentSessionIdRef = useRef(sessionId)
+  // Each read of the pending offer or of the mind map cards takes a number, and
+  // a resolution (accept, decline, gone) takes one too: only the latest wins,
+  // so a slow answer that left before it cannot bring back what was resolved.
+  const offerVersionRef = useRef(0)
+  const mindMapCardsVersionRef = useRef(0)
   useLayoutEffect(() => {
     currentSessionIdRef.current = sessionId
   }, [sessionId])
@@ -522,9 +527,16 @@ function StudyChatScreen({
     })
   }, [])
 
+  const clearOffer = useCallback(() => {
+    offerVersionRef.current += 1
+    setPendingOffer(null)
+  }, [])
+
   const refreshPendingOffer = useCallback(() => {
+    const version = ++offerVersionRef.current
     void fetchPendingOffer(sessionId).then((pending) => {
       if (!pending || currentSessionIdRef.current !== sessionId) return
+      if (offerVersionRef.current !== version) return
       setPendingOffer(pending)
       adoptMessageId(pending.offer.messageId)
     })
@@ -560,9 +572,11 @@ function StudyChatScreen({
 
   // Same rule for the mind map cards: a failed read keeps them as they were.
   const refreshMindMapCards = useCallback(() => {
+    const version = ++mindMapCardsVersionRef.current
     void listSessionMindMaps(sessionId)
       .then((cards) => {
-        if (currentSessionIdRef.current === sessionId) setMindMapCards(cards)
+        if (currentSessionIdRef.current !== sessionId) return
+        if (mindMapCardsVersionRef.current === version) setMindMapCards(cards)
       })
       .catch(() => {})
   }, [sessionId])
@@ -1036,37 +1050,38 @@ function StudyChatScreen({
                   defaultDifficulty={pendingOffer.difficulty}
                   topic={sessionTopic}
                   onAccepted={() => {
-                    setPendingOffer(null)
+                    clearOffer()
                     refreshExerciseCards(true)
                   }}
-                  onDeclined={() => setPendingOffer(null)}
+                  onDeclined={() => clearOffer()}
                 />
               ) : pendingOffer.kind === 'quiz' ? (
                 <QuizOfferCard
                   offerId={pendingOffer.offer.id}
                   defaultDifficulty={pendingOffer.difficulty}
                   onAccepted={(quiz) => {
-                    setPendingOffer(null)
+                    clearOffer()
                     setQuizCards((current) => [
                       ...current.filter((card) => card.id !== quiz.id),
                       quiz,
                     ])
                   }}
-                  onDeclined={() => setPendingOffer(null)}
+                  onDeclined={() => clearOffer()}
                 />
               ) : (
                 <MindMapOfferCard
                   offerId={pendingOffer.offer.id}
                   onAccepted={(mindMap) => {
-                    setPendingOffer(null)
+                    clearOffer()
+                    mindMapCardsVersionRef.current += 1
                     setMindMapCards((current) => [
                       ...current.filter((card) => card.id !== mindMap.id),
                       mindMap,
                     ])
                   }}
-                  onDeclined={() => setPendingOffer(null)}
+                  onDeclined={() => clearOffer()}
                   onGone={() => {
-                    setPendingOffer(null)
+                    clearOffer()
                     refreshMindMapCards()
                   }}
                 />

@@ -161,11 +161,12 @@ describe('DOCUMENTATION mind map', () => {
     expect(text).toContain('never offers on its own')
   })
 
-  it('says a mind map goes with its session and needs the internet to edit', () => {
+  it('says a mind map stays after its session is deleted and needs the internet to edit', () => {
     const topics = (mindMap?.topics ?? [])
       .map((topic) => `${topic.term} ${topic.description}`)
       .join(' ')
-    expect(topics).toContain('deleting the session deletes its mind maps')
+    expect(topics).toMatch(/does not delete it/i)
+    expect(topics).toContain('Delete')
     expect(topics).toContain('internet')
   })
 })

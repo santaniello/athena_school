@@ -2153,6 +2153,10 @@ describe('AppShell knowledge index lifecycle', () => {
         context: CONTEXT_NORMAL,
       }
 
+      afterEach(() => {
+        vi.mocked(listSessionMindMaps).mockResolvedValue([])
+      })
+
       async function openFromSession() {
         const user = userEvent.setup()
         renderShell()
@@ -2208,7 +2212,7 @@ describe('AppShell knowledge index lifecycle', () => {
         await user.click(screen.getByRole('button', { name: 'exit mind map' }))
 
         expect(await screen.findByText('Sure, a mind map.')).toBeInTheDocument()
-        expect(screen.getByRole('button', { name: 'Open mind map' })).toBeInTheDocument()
+        expect(await screen.findByRole('button', { name: 'Open mind map' })).toBeInTheDocument()
         expect(screen.getByRole('heading', { name: 'Caching', level: 1 })).toBeInTheDocument()
         expect(requestOpeningTurn).not.toHaveBeenCalled()
         expect(screen.queryByRole('region', { name: 'Mind map editor' })).not.toBeInTheDocument()
@@ -2236,6 +2240,11 @@ describe('AppShell knowledge index lifecycle', () => {
         expect(screen.getByRole('region', { name: 'Mind map editor' })).toHaveTextContent(
           'return to menu',
         )
+
+        await user.click(screen.getByRole('button', { name: 'exit mind map' }))
+
+        expect(await screen.findByRole('button', { name: 'Open' })).toBeInTheDocument()
+        expect(screen.queryByRole('region', { name: 'Mind map editor' })).not.toBeInTheDocument()
       })
     })
 
