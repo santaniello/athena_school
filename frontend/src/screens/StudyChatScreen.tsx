@@ -446,6 +446,7 @@ function StudyChatScreen({
   const offerVersionRef = useRef(0)
   const mindMapCardsVersionRef = useRef(0)
   const exerciseCardsVersionRef = useRef(0)
+  const quizCardsVersionRef = useRef(0)
   useLayoutEffect(() => {
     currentSessionIdRef.current = sessionId
   }, [sessionId])
@@ -580,9 +581,11 @@ function StudyChatScreen({
 
   // Same rule for the quiz cards: a failed read keeps them as they were.
   const refreshQuizCards = useCallback(() => {
+    const version = ++quizCardsVersionRef.current
     void listSessionQuizzes(sessionId)
       .then((cards) => {
-        if (currentSessionIdRef.current === sessionId) setQuizCards(cards)
+        if (currentSessionIdRef.current !== sessionId) return
+        if (quizCardsVersionRef.current === version) setQuizCards(cards)
       })
       .catch(() => {})
   }, [sessionId])
@@ -1108,6 +1111,7 @@ function StudyChatScreen({
                   defaultDifficulty={pendingOffer.difficulty}
                   onAccepted={(quiz) => {
                     clearOffer()
+                    quizCardsVersionRef.current += 1
                     setQuizCards((current) => [
                       ...current.filter((card) => card.id !== quiz.id),
                       quiz,
