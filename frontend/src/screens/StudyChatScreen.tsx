@@ -444,6 +444,7 @@ function StudyChatScreen({
   // so a slow answer that left before it cannot bring back what was resolved.
   const offerVersionRef = useRef(0)
   const mindMapCardsVersionRef = useRef(0)
+  const exerciseCardsVersionRef = useRef(0)
   useLayoutEffect(() => {
     currentSessionIdRef.current = sessionId
   }, [sessionId])
@@ -557,9 +558,13 @@ function StudyChatScreen({
   // never break the chat.
   const refreshExerciseCards = useCallback(
     (reportFailure = false) => {
+      // Only the latest read counts: an older one answering late must not
+      // replace the cards a newer one brought.
+      const version = ++exerciseCardsVersionRef.current
       void listSessionExercises(sessionId)
         .then((cards) => {
-          if (currentSessionIdRef.current === sessionId) setExerciseCards(cards)
+          if (currentSessionIdRef.current !== sessionId) return
+          if (exerciseCardsVersionRef.current === version) setExerciseCards(cards)
         })
         .catch(() => {
           if (reportFailure && currentSessionIdRef.current === sessionId) {

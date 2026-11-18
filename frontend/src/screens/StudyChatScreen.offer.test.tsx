@@ -493,6 +493,30 @@ describe('StudyChatScreen — exercise offer', () => {
     expect(screen.getByPlaceholderText('Type your answer...')).toBeEnabled()
   })
 
+  it('keeps the card read after the offer was resolved when the first read of the cards answers late', async () => {
+    // Given a chat whose first read of the cards is still pending
+    const handlers = subscribe()
+    let answerFirstRead: (cards: SessionExerciseCard[]) => void = () => {}
+    vi.mocked(listSessionExercises).mockReturnValueOnce(
+      new Promise((resolve) => {
+        answerFirstRead = resolve
+      }),
+    )
+    vi.mocked(getPendingOffer).mockResolvedValue(OFFER)
+    await renderResumed()
+    await screen.findByRole('button', { name: 'Accept' })
+
+    // When the offer is resolved and its read answers before the first one
+    vi.mocked(getPendingOffer).mockResolvedValue(null)
+    vi.mocked(listSessionExercises).mockResolvedValue([CARD])
+    act(() => handlers.offerResolved?.({ sessionId: 'session-1', offerId: 'offer-1' }))
+    expect(await screen.findByText('Design a cache')).toBeInTheDocument()
+    await act(async () => answerFirstRead([]))
+
+    // Then the older answer does not hide the card
+    expect(screen.getByText('Design a cache')).toBeInTheDocument()
+  })
+
   it('ignores the resolution of an offer of another session', async () => {
     const handlers = subscribe()
     vi.mocked(getPendingOffer).mockResolvedValue(OFFER)
