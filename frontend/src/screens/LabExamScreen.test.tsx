@@ -2,7 +2,7 @@ import { useImperativeHandle, type Ref } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { DiagramEditorHandle } from '@/components/lab/diagram-editor'
+import type { DiagramEditorHandle } from '@/components/diagram/diagram-editor'
 import {
   answerDefenseQuestion,
   discardAttempt,
@@ -53,7 +53,7 @@ interface EditorProps {
 let editor: EditorProps
 let xmlOnBoard = ''
 
-vi.mock('@/components/lab/diagram-editor', () => ({
+vi.mock('@/components/diagram/diagram-editor', () => ({
   DiagramEditor: (props: EditorProps) => {
     editor = props
     useImperativeHandle(props.ref, () => ({ getXml: () => Promise.resolve(xmlOnBoard) }))

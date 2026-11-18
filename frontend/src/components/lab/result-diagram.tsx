@@ -1,4 +1,4 @@
-import { DiagramEditor } from '@/components/lab/diagram-editor'
+import { DiagramEditor } from '@/components/diagram/diagram-editor'
 import { useTranslation } from 'react-i18next'
 
 interface ResultDiagramProps {

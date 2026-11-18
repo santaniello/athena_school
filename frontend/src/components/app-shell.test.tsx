@@ -207,6 +207,42 @@ vi.mock('@/screens/QuizTakeScreen', () => ({
   ),
 }))
 
+// The Mind Map catalog loads its mind maps as soon as it mounts.
+vi.mock('@/lib/mindmap', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/mindmap')>()),
+  listMindMaps: vi.fn().mockResolvedValue([
+    {
+      id: 'map-1',
+      sessionId: 's1',
+      sessionTitle: 'Caching basics',
+      title: 'Caching map',
+      createdAt: '2026-11-17T09:30:00Z',
+      updatedAt: '2026-11-17T10:30:00Z',
+      messageId: '',
+    },
+  ]),
+}))
+
+// The mind map editor is covered by its own tests; this stand-in exposes what
+// the shell hands it and lets a test close it.
+vi.mock('@/screens/MindMapViewScreen', () => ({
+  default: (props: {
+    mindMapId: string
+    returnTo: { kind: string; sessionId?: string }
+    leaveRequested: boolean
+    onLeaveCancelled: () => void
+    onExit: () => void
+  }) => (
+    <div role="region" aria-label="Mind map editor">
+      <span>mind map {props.mindMapId}</span>
+      <span>{`return to ${props.returnTo.kind} ${props.returnTo.sessionId ?? ''}`.trim()}</span>
+      <span>{props.leaveRequested ? 'leave requested' : 'no leave request'}</span>
+      <button onClick={() => props.onLeaveCancelled()}>cancel mind map leave</button>
+      <button onClick={() => props.onExit()}>exit mind map</button>
+    </div>
+  ),
+}))
+
 vi.mock('@/lib/folder', () => ({
   listFolders: vi.fn().mockResolvedValue([{ id: 'default', name: 'General' }]),
   createFolder: vi.fn(),
@@ -303,6 +339,7 @@ describe('AppShell', () => {
       'Study',
       'Architecture Lab',
       'Interactive Test',
+      'Mind Map',
       'Progress',
       'Flashcards',
       'Interview',
@@ -2029,6 +2066,88 @@ describe('AppShell knowledge index lifecycle', () => {
       await user.click(screen.getByRole('button', { name: 'exit quiz' }))
 
       expect(await screen.findByRole('listitem', { name: 'Caching basics' })).toBeInTheDocument()
+    })
+  })
+
+  describe('Mind Map section', () => {
+    async function openMindMapSection() {
+      const user = userEvent.setup()
+      renderShell()
+      await screen.findByText(/Felipe\./)
+      await user.click(screen.getByRole('button', { name: 'Mind Map' }))
+      return user
+    }
+
+    async function openMindMap() {
+      const user = await openMindMapSection()
+      await user.click(await screen.findByRole('button', { name: 'Open' }))
+      return user
+    }
+
+    it('opens the catalog of mind maps, not the coming-soon panel', async () => {
+      await openMindMapSection()
+
+      expect(screen.getByRole('heading', { name: 'Mind Map', level: 1 })).toBeInTheDocument()
+      expect(await screen.findByRole('listitem', { name: 'Caching map' })).toBeInTheDocument()
+    })
+
+    it('opens the mind map full screen, returning to the menu, when Open is clicked', async () => {
+      await openMindMap()
+
+      const editor = screen.getByRole('region', { name: 'Mind map editor' })
+      expect(editor).toHaveTextContent('mind map map-1')
+      expect(editor).toHaveTextContent('return to menu')
+      expect(screen.queryByRole('listitem', { name: 'Caching map' })).not.toBeInTheDocument()
+    })
+
+    it('makes the editor ask before leaving for another section, and stays when cancelled', async () => {
+      const user = await openMindMap()
+
+      await user.click(screen.getByRole('button', { name: 'Settings' }))
+
+      const editor = screen.getByRole('region', { name: 'Mind map editor' })
+      expect(editor).toHaveTextContent('leave requested')
+      await user.click(screen.getByRole('button', { name: 'cancel mind map leave' }))
+      expect(editor).toHaveTextContent('no leave request')
+    })
+
+    it('goes where the user wanted once the editor is left', async () => {
+      const user = await openMindMap()
+      await user.click(screen.getByRole('button', { name: 'Settings' }))
+
+      await user.click(screen.getByRole('button', { name: 'exit mind map' }))
+
+      expect(await screen.findByRole('heading', { name: 'Settings', level: 1 })).toBeInTheDocument()
+      expect(screen.queryByRole('region', { name: 'Mind map editor' })).not.toBeInTheDocument()
+    })
+
+    it('goes back to the catalog when the editor is closed on its own', async () => {
+      const user = await openMindMap()
+
+      await user.click(screen.getByRole('button', { name: 'exit mind map' }))
+
+      expect(await screen.findByRole('listitem', { name: 'Caching map' })).toBeInTheDocument()
+      expect(screen.queryByRole('region', { name: 'Mind map editor' })).not.toBeInTheDocument()
+    })
+
+    it('keeps the mind map when the Mind Map entry is clicked again', async () => {
+      const user = await openMindMap()
+
+      await user.click(screen.getByRole('button', { name: 'Mind Map' }))
+
+      expect(screen.getByRole('region', { name: 'Mind map editor' })).toHaveTextContent(
+        'no leave request',
+      )
+    })
+
+    it('forgets a leave request that was cancelled, so the next exit stays on the catalog', async () => {
+      const user = await openMindMap()
+      await user.click(screen.getByRole('button', { name: 'Settings' }))
+      await user.click(screen.getByRole('button', { name: 'cancel mind map leave' }))
+
+      await user.click(screen.getByRole('button', { name: 'exit mind map' }))
+
+      expect(await screen.findByRole('listitem', { name: 'Caching map' })).toBeInTheDocument()
     })
   })
 })

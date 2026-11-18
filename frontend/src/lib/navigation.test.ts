@@ -8,6 +8,7 @@ const EXPECTED_IDS: AppSection[] = [
   'study',
   'challenge',
   'quiz',
+  'mindmap',
   'progress',
   'flashcards',
   'interview',
@@ -21,13 +22,14 @@ describe('NAVIGATION', () => {
     expect(NAVIGATION.map((item) => item.id)).toEqual(EXPECTED_IDS)
   })
 
-  it('unlocks home, study, the architecture lab, the interactive test, documentation, profile and settings', () => {
+  it('unlocks home, study, the architecture lab, the interactive test, the mind map, documentation, profile and settings', () => {
     const unlocked = NAVIGATION.filter((item) => item.status === 'unlocked').map((item) => item.id)
     expect(unlocked).toEqual([
       'home',
       'study',
       'challenge',
       'quiz',
+      'mindmap',
       'documentation',
       'profile',
       'settings',
@@ -63,5 +65,14 @@ describe('NAVIGATION', () => {
   it('gives every locked item a non-empty description for the coming-soon panel', () => {
     const locked = NAVIGATION.filter((item) => item.status === 'locked')
     expect(locked.every((item) => item.description.trim().length > 0)).toBe(true)
+  })
+
+  it('puts the mind map right after the interactive test', () => {
+    const ids = NAVIGATION.map((entry) => entry.id)
+    expect(ids.indexOf('mindmap') - ids.indexOf('quiz')).toBe(1)
+    const item = NAVIGATION.find((entry) => entry.id === 'mindmap')
+    expect(item?.label).toBe('Mind Map')
+    expect(item?.group).toBe('primary')
+    expect(item?.description.trim()).not.toBe('')
   })
 })

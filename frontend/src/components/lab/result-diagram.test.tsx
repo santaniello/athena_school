@@ -7,7 +7,7 @@ interface EditorProps {
   xml?: string
 }
 
-vi.mock('@/components/lab/diagram-editor', () => ({
+vi.mock('@/components/diagram/diagram-editor', () => ({
   DiagramEditor: (props: EditorProps) => (
     <div data-testid="editor" data-read-only={String(props.readOnly)} data-xml={props.xml} />
   ),
