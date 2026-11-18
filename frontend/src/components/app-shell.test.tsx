@@ -2157,7 +2157,14 @@ describe('AppShell knowledge index lifecycle', () => {
         vi.mocked(listSessionMindMaps).mockResolvedValue([])
       })
 
-      async function openFromSession() {
+      async function openFromSession(options: { blockedWithNewSessionPending?: boolean } = {}) {
+        let contextLimitHandler: ((event: StudyContextEvent) => void) | undefined
+        if (options.blockedWithNewSessionPending) {
+          vi.mocked(onStudyContextLimitReached).mockImplementationOnce((handler) => {
+            contextLimitHandler = handler
+            return vi.fn()
+          })
+        }
         const user = userEvent.setup()
         renderShell()
         await screen.findByText(/Felipe\./)
@@ -2193,8 +2200,31 @@ describe('AppShell knowledge index lifecycle', () => {
         ])
         await user.click(screen.getByText('General'))
         await user.click(await screen.findByText('Caching'))
+        await screen.findByRole('button', { name: 'Open mind map' })
+        let finishNewSession: (created: StudySession) => void = () => {}
+        if (options.blockedWithNewSessionPending) {
+          act(() => {
+            contextLimitHandler?.({
+              sessionId: 'session-map',
+              usedTokens: 9500,
+              contextLength: 10000,
+              estimated: false,
+            })
+          })
+          vi.mocked(startStudySession).mockReturnValueOnce(
+            new Promise<StudySession>((resolve) => {
+              finishNewSession = resolve
+            }),
+          )
+          const startCalls = vi.mocked(startStudySession).mock.calls.length
+          await user.click(await screen.findByRole('button', { name: 'Start new session' }))
+          // The creation must be pending before the editor opens
+          expect(startStudySession).toHaveBeenCalledTimes(startCalls + 1)
+        }
         await user.click(await screen.findByRole('button', { name: 'Open mind map' }))
-        return user
+        return Object.assign(user, {
+          finishNewSession: (created: StudySession) => finishNewSession(created),
+        })
       }
 
       it('opens the mind map in the same window, linked to the session', async () => {
@@ -2216,6 +2246,28 @@ describe('AppShell knowledge index lifecycle', () => {
         expect(screen.getByRole('heading', { name: 'Caching', level: 1 })).toBeInTheDocument()
         expect(requestOpeningTurn).not.toHaveBeenCalled()
         expect(screen.queryByRole('region', { name: 'Mind map editor' })).not.toBeInTheDocument()
+      })
+
+      it('returns to the session that opened the editor when a new session was created meanwhile', async () => {
+        const user = await openFromSession({ blockedWithNewSessionPending: true })
+        expect(screen.getByRole('region', { name: 'Mind map editor' })).toBeInTheDocument()
+
+        // When the creation finishes while the editor is open, then it closes
+        await act(async () => {
+          user.finishNewSession({
+            id: 'session-created',
+            topic: 'Caching',
+            folderId: 'default',
+            goal: 'Learn caching',
+            startedAt: '2026-11-18T09:00:00Z',
+            context: CONTEXT_NORMAL,
+          })
+        })
+        await user.click(screen.getByRole('button', { name: 'exit mind map' }))
+
+        // Then the chat shows the session the map came from, not the new one
+        expect(await screen.findByText('Sure, a mind map.')).toBeInTheDocument()
+        expect(resumeStudySession).toHaveBeenLastCalledWith('session-map')
       })
 
       it('goes where the user navigated, not to the session, when the editor is left then', async () => {

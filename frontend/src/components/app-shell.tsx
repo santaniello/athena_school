@@ -109,6 +109,10 @@ function AppShell() {
   // Where the mind map goes back to when it is closed: the menu it was opened
   // from or the study session whose chat offered it. Not persisted.
   const [mindMapReturn, setMindMapReturn] = useState<MindMapReturn>({ kind: 'menu' })
+  // The session that opened the mind map, as it was then. A "Start new session"
+  // finishing while the editor is open makes the new session the active one,
+  // so the default return restores this one instead. Not persisted.
+  const [mindMapReturnSession, setMindMapReturnSession] = useState<ActiveStudySession | null>(null)
   const [notices, setNotices] = useState<ToastItem[]>([])
   const [profile, setProfile] = useState<ProfileDraft | null>(null)
   const [activeSession, setActiveSession] = useState<ActiveStudySession | null>(null)
@@ -291,6 +295,9 @@ function AppShell() {
 
   function openSessionMindMap(mindMapId: string, sessionId: string) {
     setMindMapReturn({ kind: 'study', sessionId })
+    setMindMapReturnSession(
+      activeSession?.id === sessionId ? { ...activeSession, mode: 'resume' } : null,
+    )
     setOpenMindMapId(mindMapId)
     setSection('mindmap')
   }
@@ -299,7 +306,17 @@ function AppShell() {
     setOpenMindMapId(null)
     const destination = pendingSection ?? (mindMapReturn.kind === 'study' ? 'study' : null)
     if (destination) setSection(destination)
+    // Only the default return restores the opening session: an explicit
+    // destination in pendingSection keeps whatever is active.
+    if (
+      !pendingSection &&
+      mindMapReturn.kind === 'study' &&
+      mindMapReturnSession?.id === mindMapReturn.sessionId
+    ) {
+      setActiveSession(mindMapReturnSession)
+    }
     setMindMapReturn({ kind: 'menu' })
+    setMindMapReturnSession(null)
     setPendingSection(null)
   }
 
@@ -392,6 +409,9 @@ function AppShell() {
   // bubbling bug is fixed separately (out of scope for this change).
   function handleSessionDeleted(sessionId: string) {
     setActiveSession((current) => (current?.id === sessionId ? null : current))
+    // A deletion still in flight when the editor opened must not let the
+    // default return reinstall the deleted session.
+    setMindMapReturnSession((current) => (current?.id === sessionId ? null : current))
   }
   // Stryker restore ArrowFunction,ConditionalExpression,OptionalChaining
 
@@ -402,6 +422,11 @@ function AppShell() {
   // cache had already loaded.
   function handleFolderDeleted(folderId: string) {
     setActiveSession((current) => (current?.folderId === folderId ? null : current))
+    // Same as handleSessionDeleted, for a folder deleted while the editor is
+    // open. Stryker disable next-line ArrowFunction,ConditionalExpression,OptionalChaining:
+    // reaching this needs a deletion finishing after the editor opened, which
+    // the StudyFolderTree unmount makes unobservable through the DOM here.
+    setMindMapReturnSession((current) => (current?.folderId === folderId ? null : current))
   }
 
   function handleTopicResolved(topic: string) {
