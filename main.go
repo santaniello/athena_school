@@ -163,6 +163,7 @@ func main() {
 		mindMapRepo,
 	)
 	mindMapService := applicationmindmap.NewService(mindMapRepo)
+	mindMapOfferService := applicationmindmap.NewOfferService(sqlite.NewMindMapOfferRepository(db), mindMapRepo, mindMapGenerationService)
 
 	studyService := study.NewService(
 		studySessions, studyMessages, llmClient, profiles, folders, knowledgeService, transactor, contextResolver,
@@ -241,6 +242,7 @@ func main() {
 		desktop.WithQuizOfferService(quizOfferService),
 		desktop.WithMindMapGenerationService(mindMapGenerationService),
 		desktop.WithMindMapService(mindMapService),
+		desktop.WithMindMapOfferService(mindMapOfferService),
 	)
 
 	err = wails.Run(&options.App{

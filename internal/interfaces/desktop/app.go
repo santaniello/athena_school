@@ -53,6 +53,7 @@ type App struct {
 	// Mind maps (spec 3.24).
 	mindMapGenerator mindMapGenerator
 	mindMaps         mindMapUseCases
+	mindMapOffers    mindMapOffers
 	// mindMapGeneration lets one mind map generation run at a time, and be cancelled.
 	mindMapGeneration generationSlot
 	// cancelGeneration cancels the challenge generation in flight, if any.

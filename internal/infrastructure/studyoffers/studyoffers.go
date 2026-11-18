@@ -1,7 +1,7 @@
 // Package studyoffers composes the offers of the study chat: it puts the
-// exercise offers and the quiz offers behind the one gate the chat knows, so
-// the chat imports no lab or quiz code and the two contexts import each other
-// not at all. See
+// exercise, quiz and mind map offers behind the one gate the chat knows, so
+// the chat imports no lab, quiz or mind map code and the contexts import each
+// other not at all. See
 // specs/phases/phase-03-architecture-lab/23-interactive-quiz-chat-offer.md.
 package studyoffers
 
@@ -15,7 +15,7 @@ import (
 
 var (
 	// ErrOfferPending is returned when an offer of one kind is created while
-	// the session already has a pending offer of the other kind.
+	// the session already has a pending offer of another kind.
 	ErrOfferPending = errors.New("studyoffers: the session already has a pending offer")
 	// ErrUnsupportedKind is returned for an offer kind the gate has no side for.
 	ErrUnsupportedKind = errors.New("studyoffers: unsupported offer kind")
@@ -27,23 +27,48 @@ type Offers interface {
 	CreateOffer(ctx context.Context, sessionID, messageID string) error
 }
 
-// Gate implements the chat's offer gate over the exercise and the quiz offers.
-// A session has at most one pending offer across both kinds.
+// side is one wired kind of offer.
+type side struct {
+	kind   domainstudy.OfferKind
+	offers Offers
+}
+
+// Gate implements the chat's offer gate over the exercise, the quiz and the
+// mind map offers. A session has at most one pending offer across all kinds.
 type Gate struct {
-	exercise Offers
-	quiz     Offers
+	sides []side
 }
 
-// NewGate creates a Gate. A nil quiz leaves the quiz side unwired: its offers
-// are refused with ErrUnsupportedKind and it never counts as pending.
-func NewGate(exercise, quiz Offers) *Gate {
-	return &Gate{exercise: exercise, quiz: quiz}
+// Option configures a Gate.
+type Option func(*Gate)
+
+// WithMindMapOffers wires the mind map side. A nil offers leaves it unwired.
+func WithMindMapOffers(offers Offers) Option {
+	return func(g *Gate) {
+		if offers != nil {
+			g.sides = append(g.sides, side{kind: domainstudy.OfferKindMindMap, offers: offers})
+		}
+	}
 }
 
-// HasPending reports whether the session has a pending offer of either kind.
+// NewGate creates a Gate over the exercise offers, the quiz offers and any
+// optional side. A nil quiz leaves the quiz side unwired: its offers are
+// refused with ErrUnsupportedKind and it never counts as pending.
+func NewGate(exercise, quiz Offers, options ...Option) *Gate {
+	g := &Gate{sides: []side{{kind: domainstudy.OfferKindExercise, offers: exercise}}}
+	if quiz != nil {
+		g.sides = append(g.sides, side{kind: domainstudy.OfferKindQuiz, offers: quiz})
+	}
+	for _, option := range options {
+		option(g)
+	}
+	return g
+}
+
+// HasPending reports whether the session has a pending offer of any kind.
 func (g *Gate) HasPending(ctx context.Context, sessionID string) (bool, error) {
-	for _, side := range g.sides() {
-		pending, err := side.HasPending(ctx, sessionID)
+	for _, s := range g.sides {
+		pending, err := s.offers.HasPending(ctx, sessionID)
 		if err != nil {
 			return false, err
 		}
@@ -55,20 +80,23 @@ func (g *Gate) HasPending(ctx context.Context, sessionID string) (bool, error) {
 }
 
 // CreateOffer stores a pending offer of the given kind under the assistant
-// message. It refuses when the session already has a pending offer of the
-// other kind; a second offer of the same kind is refused by its own service.
+// message. It refuses when the session already has a pending offer of another
+// kind; a second offer of the same kind is refused by its own service.
 func (g *Gate) CreateOffer(ctx context.Context, sessionID, messageID string, kind domainstudy.OfferKind) error {
-	var target, other Offers
-	switch {
-	case kind == domainstudy.OfferKindExercise:
-		target, other = g.exercise, g.quiz
-	case kind == domainstudy.OfferKindQuiz && g.quiz != nil:
-		target, other = g.quiz, g.exercise
-	default:
+	var target Offers
+	for _, s := range g.sides {
+		if s.kind == kind {
+			target = s.offers
+		}
+	}
+	if target == nil {
 		return fmt.Errorf("%w: %q", ErrUnsupportedKind, kind)
 	}
-	if other != nil {
-		pending, err := other.HasPending(ctx, sessionID)
+	for _, s := range g.sides {
+		if s.kind == kind {
+			continue
+		}
+		pending, err := s.offers.HasPending(ctx, sessionID)
 		if err != nil {
 			return err
 		}
@@ -77,12 +105,4 @@ func (g *Gate) CreateOffer(ctx context.Context, sessionID, messageID string, kin
 		}
 	}
 	return target.CreateOffer(ctx, sessionID, messageID)
-}
-
-// sides lists the wired kinds.
-func (g *Gate) sides() []Offers {
-	if g.quiz == nil {
-		return []Offers{g.exercise}
-	}
-	return []Offers{g.exercise, g.quiz}
 }

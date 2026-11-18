@@ -39,11 +39,26 @@ func WithMindMapService(mindMaps mindMapUseCases) Option {
 	return func(a *App) { a.mindMaps = mindMaps }
 }
 
+// mindMapOffers is the use case behind the mind map offer bindings of the study
+// chat (spec 3.24).
+type mindMapOffers interface {
+	GetPending(ctx context.Context, sessionID string) (domainmindmap.Offer, bool, error)
+	Accept(ctx context.Context, offerID string) (domainmindmap.Summary, error)
+	Decline(ctx context.Context, offerID string) error
+}
+
+// WithMindMapOfferService wires the mind map offers of the study chat.
+func WithMindMapOfferService(offers mindMapOffers) Option {
+	return func(a *App) { a.mindMapOffers = offers }
+}
+
 // Stable MindMapError.Code values the frontend switches on.
 const (
 	mindMapCodeInvalidInput         = "invalid_input"
 	mindMapCodeSessionNotFound      = "source_session_not_found"
 	mindMapCodeNotFound             = "mind_map_not_found"
+	mindMapCodeOfferNotFound        = "offer_not_found"
+	mindMapCodeOfferPending         = "offer_pending"
 	mindMapCodeInvalidGeneration    = "invalid_generation"
 	mindMapCodeInvalidDiagram       = "invalid_diagram"
 	mindMapCodeDiagramTooLarge      = "diagram_too_large"
@@ -78,6 +93,10 @@ func toMindMapError(err error) *MindMapError {
 		return &MindMapError{Code: mindMapCodeSessionNotFound, Message: "study session not found"}
 	case errors.Is(err, domainmindmap.ErrMindMapNotFound):
 		return &MindMapError{Code: mindMapCodeNotFound, Message: "mind map not found"}
+	case errors.Is(err, domainmindmap.ErrOfferNotFound):
+		return &MindMapError{Code: mindMapCodeOfferNotFound, Message: "the mind map offer is no longer pending"}
+	case errors.Is(err, domainmindmap.ErrOfferPending):
+		return &MindMapError{Code: mindMapCodeOfferPending, Message: "a mind map offer is already pending"}
 	case errors.Is(err, applicationmindmap.ErrInvalidTree):
 		return &MindMapError{Code: mindMapCodeInvalidGeneration, Message: "the generated mind map was not valid, try again"}
 	case errors.Is(err, domainmindmap.ErrDiagramTooLarge):
@@ -97,6 +116,18 @@ func toMindMapError(err error) *MindMapError {
 // wired.
 func mindMapUnavailable() *MindMapError {
 	return &MindMapError{Code: mindMapCodeUnavailable, Message: "mind maps are not available"}
+}
+
+// MindMapOfferDTO is a pending mind map offer: it hangs under the assistant
+// message MessageID of the study chat.
+type MindMapOfferDTO struct {
+	ID        string `json:"id"`
+	SessionID string `json:"sessionId"`
+	MessageID string `json:"messageId"`
+}
+
+func mindMapInvalidInput(message string) *MindMapError {
+	return &MindMapError{Code: mindMapCodeInvalidInput, Message: message}
 }
 
 // MindMapSummaryDTO is a mind map as the catalog and the chat cards list it.
@@ -226,7 +257,7 @@ func (a *App) ListSessionMindMaps(sessionID string) ([]MindMapSummaryDTO, error)
 	}
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
-		return nil, &MindMapError{Code: mindMapCodeInvalidInput, Message: "session id is required"}
+		return nil, mindMapInvalidInput("session id is required")
 	}
 	summaries, err := a.mindMaps.ListSessionMindMaps(a.ctx, sessionID)
 	if err != nil {
@@ -277,6 +308,65 @@ func (a *App) DeleteMindMap(id string) error {
 		return invalid
 	}
 	if err := a.mindMaps.DeleteMindMap(a.ctx, id); err != nil {
+		return toMindMapError(err)
+	}
+	return nil
+}
+
+// GetPendingMindMapOffer returns the session's pending mind map offer, or null
+// when there is none.
+func (a *App) GetPendingMindMapOffer(sessionID string) (*MindMapOfferDTO, error) {
+	if a.mindMapOffers == nil {
+		return nil, mindMapUnavailable()
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, mindMapInvalidInput("session id is required")
+	}
+	offer, found, err := a.mindMapOffers.GetPending(a.ctx, sessionID)
+	if err != nil {
+		return nil, toMindMapError(err)
+	}
+	if !found {
+		return nil, nil
+	}
+	return &MindMapOfferDTO{ID: offer.ID, SessionID: offer.SessionID, MessageID: offer.MessageID}, nil
+}
+
+// AcceptMindMapOffer generates a mind map for the offer's session, links it to
+// the offer's message and returns its card. It shares the generation slot with
+// GenerateMindMap, so CancelMindMapGeneration cancels it. On failure the offer
+// stays pending.
+func (a *App) AcceptMindMapOffer(offerID string) (MindMapSummaryDTO, error) {
+	if a.mindMapOffers == nil {
+		return MindMapSummaryDTO{}, mindMapUnavailable()
+	}
+	offerID = strings.TrimSpace(offerID)
+	if offerID == "" {
+		return MindMapSummaryDTO{}, mindMapInvalidInput("offer id is required")
+	}
+	ctx, release, ok := a.mindMapGeneration.begin(a.ctx)
+	if !ok {
+		return MindMapSummaryDTO{}, &MindMapError{Code: mindMapCodeGenerationInProgress, Message: "a mind map is already being generated"}
+	}
+	defer release()
+	summary, err := a.mindMapOffers.Accept(ctx, offerID)
+	if err != nil {
+		return MindMapSummaryDTO{}, toMindMapError(err)
+	}
+	return toMindMapSummaryDTOs([]domainmindmap.Summary{summary})[0], nil
+}
+
+// DeclineMindMapOffer removes the offer. Nothing is created.
+func (a *App) DeclineMindMapOffer(offerID string) error {
+	if a.mindMapOffers == nil {
+		return mindMapUnavailable()
+	}
+	offerID = strings.TrimSpace(offerID)
+	if offerID == "" {
+		return mindMapInvalidInput("offer id is required")
+	}
+	if err := a.mindMapOffers.Decline(a.ctx, offerID); err != nil {
 		return toMindMapError(err)
 	}
 	return nil

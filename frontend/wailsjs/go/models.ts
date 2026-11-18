@@ -795,6 +795,22 @@ export namespace desktop {
 	        this.diagramXml = source["diagramXml"];
 	    }
 	}
+	export class MindMapOfferDTO {
+	    id: string;
+	    sessionId: string;
+	    messageId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MindMapOfferDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.sessionId = source["sessionId"];
+	        this.messageId = source["messageId"];
+	    }
+	}
 	export class MindMapSummaryDTO {
 	    id: string;
 	    sessionId: string;
