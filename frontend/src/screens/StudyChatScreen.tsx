@@ -52,6 +52,7 @@ import {
   getPendingQuizOffer,
   getQuizOfferDifficulty,
   listSessionQuizzes,
+  onQuizOfferResolved,
   type QuizDifficulty,
   type QuizOffer,
   type QuizSummary,
@@ -720,7 +721,7 @@ function StudyChatScreen({
   }, [sessionId])
 
   // An offer accepted in an earlier instance of this chat (the user left before
-  // the map or the challenge was ready) ends with nobody to hear the accept's
+  // the map, the challenge or the quiz was ready) ends with nobody to hear the accept's
   // answer: the backend says so, and what the chat shows is read again.
   useEffect(() => {
     const offMindMap = onMindMapOfferResolved((event) => {
@@ -733,11 +734,17 @@ function StudyChatScreen({
       refreshPendingOffer(true)
       refreshExerciseCards()
     })
+    const offQuiz = onQuizOfferResolved((event) => {
+      if (event.sessionId !== sessionId) return
+      refreshPendingOffer(true)
+      refreshQuizCards()
+    })
     return () => {
       offMindMap()
       offExercise()
+      offQuiz()
     }
-  }, [sessionId, refreshPendingOffer, refreshMindMapCards, refreshExerciseCards])
+  }, [sessionId, refreshPendingOffer, refreshMindMapCards, refreshExerciseCards, refreshQuizCards])
 
   // Subscribed on mount, not gated on any streaming flag: the
   // "study:chunk"/"study:done" events for a session's opening turn are
@@ -1107,6 +1114,10 @@ function StudyChatScreen({
                     ])
                   }}
                   onDeclined={() => clearOffer()}
+                  onGone={() => {
+                    clearOffer()
+                    refreshQuizCards()
+                  }}
                 />
               ) : (
                 <MindMapOfferCard

@@ -31,6 +31,11 @@ vi.mock('@/lib/exercise', async (importOriginal) => ({
   onExerciseOfferResolved: () => () => {},
 }))
 
+vi.mock('@/lib/quiz', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/quiz')>()),
+  onQuizOfferResolved: () => () => {},
+}))
+
 // Counts how many times each message's markdown is (re-)rendered, keyed by
 // content. jsdom has no layout, so render counts are the measurable proxy
 // for the work a streamed chunk causes (spec 2.23, decision 6).

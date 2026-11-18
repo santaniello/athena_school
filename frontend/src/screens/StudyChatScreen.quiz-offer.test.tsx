@@ -11,7 +11,9 @@ import {
   getQuizOfferDifficulty,
   listQuizAttempts,
   listSessionQuizzes,
+  onQuizOfferResolved,
   type QuizOffer,
+  type QuizOfferResolvedEvent,
   type QuizSummary,
 } from '@/lib/quiz'
 import {
@@ -60,6 +62,7 @@ vi.mock('@/lib/quiz', async (importOriginal) => ({
   declineQuizOffer: vi.fn(),
   listSessionQuizzes: vi.fn(),
   listQuizAttempts: vi.fn(),
+  onQuizOfferResolved: vi.fn(),
 }))
 
 vi.mock('@/lib/study', async (importOriginal) => ({
@@ -98,12 +101,17 @@ const CARD: QuizSummary = {
 
 interface Handlers {
   done?: (event: StudyDoneEvent) => void
+  offerResolved?: (event: QuizOfferResolvedEvent) => void
 }
 
 function subscribe(): Handlers {
   const handlers: Handlers = {}
   vi.mocked(onStudyDone).mockImplementation((handler) => {
     handlers.done = handler
+    return vi.fn()
+  })
+  vi.mocked(onQuizOfferResolved).mockImplementation((handler) => {
+    handlers.offerResolved = handler
     return vi.fn()
   })
   for (const subscription of [
@@ -363,6 +371,57 @@ describe('StudyChatScreen — quiz offer', () => {
     await renderResumed()
 
     await waitFor(() => expect(listSessionQuizzes).toHaveBeenCalled())
+    expect(screen.getByPlaceholderText('Type your answer...')).toBeEnabled()
+  })
+
+  it('shows the quiz card without a click when the offer was accepted while the chat was unmounted', async () => {
+    // Given a chat remounted while the quiz was still being written
+    const handlers = subscribe()
+    vi.mocked(getPendingQuizOffer).mockResolvedValue(OFFER)
+    await renderResumed()
+    await screen.findByText('Take a test about this session')
+
+    // When the backend saves the quiz and announces the offer as resolved
+    vi.mocked(getPendingQuizOffer).mockResolvedValue(null)
+    vi.mocked(listSessionQuizzes).mockResolvedValue([CARD])
+    act(() => handlers.offerResolved?.({ sessionId: 'session-1', offerId: 'offer-1' }))
+
+    // Then the offer is gone, the card shows and the composer is enabled again
+    expect(await screen.findByRole('button', { name: 'Take test' })).toBeInTheDocument()
+    expect(screen.queryByText('Take a test about this session')).not.toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Type your answer...')).toBeEnabled()
+  })
+
+  it('ignores the resolution of an offer of another session', async () => {
+    const handlers = subscribe()
+    vi.mocked(getPendingQuizOffer).mockResolvedValue(OFFER)
+    await renderResumed()
+    await screen.findByText('Take a test about this session')
+    vi.mocked(getPendingQuizOffer).mockClear()
+
+    act(() => handlers.offerResolved?.({ sessionId: 'session-2', offerId: 'offer-9' }))
+
+    expect(getPendingQuizOffer).not.toHaveBeenCalled()
+    expect(screen.getByText('Take a test about this session')).toBeInTheDocument()
+  })
+
+  it('clears an offer that no longer exists instead of showing an error forever', async () => {
+    // Given an offer the backend already resolved
+    subscribe()
+    vi.mocked(getPendingQuizOffer).mockResolvedValue(OFFER)
+    vi.mocked(acceptQuizOffer).mockRejectedValue(
+      new Error(JSON.stringify({ code: 'offer_not_found', message: 'x' })),
+    )
+    await renderResumed()
+    const user = userEvent.setup()
+    vi.mocked(listSessionQuizzes).mockResolvedValue([CARD])
+
+    // When accepting it again
+    await user.click(await screen.findByRole('button', { name: 'Accept' }))
+
+    // Then the chat drops the offer, re-reads the cards and frees the composer
+    expect(await screen.findByRole('button', { name: 'Take test' })).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.getByPlaceholderText('Type your answer...')).toBeEnabled()
   })
 })

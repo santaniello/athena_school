@@ -170,6 +170,7 @@ vi.mock('@/screens/LabExamScreen', () => ({
 // The Interactive Test catalog loads its quizzes as soon as it mounts.
 vi.mock('@/lib/quiz', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/quiz')>()),
+  onQuizOfferResolved: () => () => {},
   listQuizzes: vi.fn().mockResolvedValue([
     {
       id: 'quiz-1',

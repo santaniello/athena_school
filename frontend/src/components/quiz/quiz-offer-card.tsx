@@ -18,6 +18,7 @@ import {
   acceptQuizOffer,
   declineQuizOffer,
   parseQuestionCount,
+  quizErrorCode,
   quizDifficultyLabel,
   quizErrorMessage,
   type QuizDifficulty,
@@ -31,14 +32,24 @@ interface QuizOfferCardProps {
   // The offer is accepted: the quiz was written and its card takes this one's place.
   onAccepted: (quiz: QuizSummary) => void
   onDeclined: () => void
+  // The offer no longer exists (resolved elsewhere or gone): the chat drops it
+  // and re-reads what it shows, so the composer is not left blocked.
+  onGone: () => void
 }
 
 // The tutor's quiz offer, under its reply. Accepting writes the quiz, so the
 // card shows progress and locks everything meanwhile; a failure leaves the
-// offer in place with the error. It speaks the profile's language, like the
+// offer in place with the error, except when the offer is gone, which hands it
+// back to the chat. It speaks the profile's language, like the
 // rest of the quiz screens. See
 // specs/phases/phase-03-architecture-lab/23-interactive-quiz-chat-offer.md.
-function QuizOfferCard({ offerId, defaultDifficulty, onAccepted, onDeclined }: QuizOfferCardProps) {
+function QuizOfferCard({
+  offerId,
+  defaultDifficulty,
+  onAccepted,
+  onDeclined,
+  onGone,
+}: QuizOfferCardProps) {
   const { t } = useTranslation('quiz')
   const [countText, setCountText] = useState(String(DEFAULT_QUESTIONS))
   const [difficulty, setDifficulty] = useState(defaultDifficulty)
@@ -52,6 +63,10 @@ function QuizOfferCard({ offerId, defaultDifficulty, onAccepted, onDeclined }: Q
     try {
       onDone(await action())
     } catch (err) {
+      if (quizErrorCode(err) === 'offer_not_found') {
+        onGone()
+        return
+      }
       setError(quizErrorMessage(err))
     } finally {
       setBusy(false)

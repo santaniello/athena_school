@@ -26,6 +26,7 @@ const QUIZ: QuizSummary = {
 function setup(props: { language?: string; defaultDifficulty?: 'EASY' | 'MEDIUM' | 'HARD' } = {}) {
   const onAccepted = vi.fn()
   const onDeclined = vi.fn()
+  const onGone = vi.fn()
   // The card speaks the quiz language, which follows the profile.
   setLabLanguage(props.language)
   render(
@@ -34,9 +35,10 @@ function setup(props: { language?: string; defaultDifficulty?: 'EASY' | 'MEDIUM'
       defaultDifficulty={props.defaultDifficulty ?? 'MEDIUM'}
       onAccepted={onAccepted}
       onDeclined={onDeclined}
+      onGone={onGone}
     />,
   )
-  return { onAccepted, onDeclined, user: userEvent.setup() }
+  return { onAccepted, onDeclined, onGone, user: userEvent.setup() }
 }
 
 describe('QuizOfferCard', () => {
@@ -153,15 +155,33 @@ describe('QuizOfferCard', () => {
     await waitFor(() => expect(onDeclined).toHaveBeenCalledOnce())
   })
 
+  it.each(['accept', 'decline'] as const)(
+    'hands a vanished offer back to the chat when %s finds it gone',
+    async (action) => {
+      const gone = JSON.stringify({ code: 'offer_not_found', message: 'x' })
+      vi.mocked(acceptQuizOffer).mockRejectedValue(gone)
+      vi.mocked(declineQuizOffer).mockRejectedValue(gone)
+      const { onGone, user } = setup()
+
+      await user.click(
+        screen.getByRole('button', { name: action === 'accept' ? 'Accept' : 'Decline' }),
+      )
+
+      await waitFor(() => expect(onGone).toHaveBeenCalledOnce())
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    },
+  )
+
   it('keeps the offer with an error when declining fails', async () => {
     vi.mocked(declineQuizOffer).mockRejectedValueOnce(
-      JSON.stringify({ code: 'offer_not_found', message: 'x' }),
+      JSON.stringify({ code: 'internal', message: 'x' }),
     )
-    const { user, onDeclined } = setup()
+    const { user, onDeclined, onGone } = setup()
 
     await user.click(screen.getByRole('button', { name: 'Decline' }))
 
-    expect(await screen.findByText('This test offer is no longer available.')).toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
     expect(onDeclined).not.toHaveBeenCalled()
+    expect(onGone).not.toHaveBeenCalled()
   })
 })
