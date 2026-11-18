@@ -1089,10 +1089,24 @@ func (a *App) AcceptOffer(offerID, difficulty, kind, practiceGoal string) (Sessi
 	if err != nil {
 		return SessionExerciseDTO{}, toExerciseError(err)
 	}
+	// The call outlives the chat that made it, so the session is told apart from
+	// the returned challenge, which only the original chat instance receives.
+	a.emit(a.ctx, eventExerciseOfferResolved, ExerciseOfferResolvedEvent{SessionID: view.SessionID, OfferID: offerID})
 	return SessionExerciseDTO{
 		ChallengeID: view.ChallengeID, Kind: string(view.Kind), Title: view.Title, Topic: view.Topic, Difficulty: string(view.Difficulty),
 		TimeLimitMinutes: view.TimeLimitMinutes,
 	}, nil
+}
+
+// eventExerciseOfferResolved is emitted when an accepted offer finished: the
+// challenge is linked to the session and the offer is gone. A chat of that
+// session that was mounted again meanwhile re-reads its offer and exercise cards.
+const eventExerciseOfferResolved = "exercise:offer-resolved"
+
+// ExerciseOfferResolvedEvent is the payload of eventExerciseOfferResolved.
+type ExerciseOfferResolvedEvent struct {
+	SessionID string `json:"sessionId"`
+	OfferID   string `json:"offerId"`
 }
 
 // parseChallengeSpec reads what the user chose when creating a challenge. The

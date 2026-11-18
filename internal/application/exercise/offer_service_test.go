@@ -60,7 +60,7 @@ func (f *offerFixture) expectOffer(ctx context.Context) {
 }
 
 func offerView() SessionExerciseView {
-	return SessionExerciseView{ChallengeID: "challenge-1", Kind: domainexercise.ChallengeKindInterview, Title: "Design a cache", Topic: "caching", Difficulty: domainexercise.DifficultyAdvanced, TimeLimitMinutes: 45}
+	return SessionExerciseView{SessionID: "session-1", ChallengeID: "challenge-1", Kind: domainexercise.ChallengeKindInterview, Title: "Design a cache", Topic: "caching", Difficulty: domainexercise.DifficultyAdvanced, TimeLimitMinutes: 45}
 }
 
 func TestOfferService_CreateOffer_storesAPendingOfferForTheMessage(t *testing.T) {

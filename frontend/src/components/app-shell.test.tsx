@@ -115,6 +115,7 @@ vi.mock('@/lib/exercise', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/exercise')>()
   return {
     ...original,
+    onExerciseOfferResolved: () => () => {},
     listChallengeCatalog: vi.fn().mockResolvedValue({
       total: 1,
       completed: 0,

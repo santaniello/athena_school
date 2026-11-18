@@ -15,6 +15,7 @@ import {
   acceptOffer,
   declineOffer,
   difficultyLabel,
+  exerciseErrorCode,
   exerciseErrorMessage,
   kindLabel,
   practiceSuggestions,
@@ -32,11 +33,15 @@ interface ExerciseOfferCardProps {
   // The offer is accepted: the session's exercise card takes its place.
   onAccepted: () => void
   onDeclined: () => void
+  // The offer no longer exists (resolved elsewhere or gone): the chat drops it
+  // and re-reads what it shows, so the composer is not left blocked.
+  onGone: () => void
 }
 
 // The tutor's exercise offer, under its reply. Accepting may generate a
 // challenge, so the card shows progress and locks both buttons meanwhile; a
-// failure leaves the offer in place with the error. The user picks the
+// failure leaves the offer in place with the error, except when the offer is
+// gone, which hands it back to the chat. The user picks the
 // difficulty, starting from the profile's level, and the kind: an interview, or
 // a practice that needs the concept to train. See
 // specs/phases/phase-03-architecture-lab/14-ai-challenge-generation.md and
@@ -47,6 +52,7 @@ function ExerciseOfferCard({
   topic,
   onAccepted,
   onDeclined,
+  onGone,
 }: ExerciseOfferCardProps) {
   const [difficulty, setDifficulty] = useState(defaultDifficulty)
   const [kind, setKind] = useState<ChallengeKind>('INTERVIEW')
@@ -63,6 +69,10 @@ function ExerciseOfferCard({
     try {
       onDone(await action())
     } catch (err) {
+      if (exerciseErrorCode(err) === 'offer_not_found') {
+        onGone()
+        return
+      }
       setError(exerciseErrorMessage(err))
     } finally {
       setBusy(false)

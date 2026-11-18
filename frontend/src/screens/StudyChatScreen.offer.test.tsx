@@ -10,7 +10,9 @@ import {
   listAttemptHistory,
   getPendingOffer,
   listSessionExercises,
+  onExerciseOfferResolved,
   type ExerciseOffer,
+  type ExerciseOfferResolvedEvent,
   type SessionExerciseCard,
 } from '@/lib/exercise'
 import {
@@ -52,6 +54,7 @@ vi.mock('@/lib/exercise', async (importOriginal) => ({
   getOfferProfile: vi.fn(),
   acceptOffer: vi.fn(),
   declineOffer: vi.fn(),
+  onExerciseOfferResolved: vi.fn(),
 }))
 
 vi.mock('@/lib/study', async (importOriginal) => ({
@@ -79,6 +82,7 @@ const PENDING_TEXT = 'Accept or decline the offer to keep chatting.'
 interface Handlers {
   done?: (event: StudyDoneEvent) => void
   error?: (event: StudyErrorEvent) => void
+  offerResolved?: (event: ExerciseOfferResolvedEvent) => void
 }
 
 function subscribe(): Handlers {
@@ -89,6 +93,10 @@ function subscribe(): Handlers {
   })
   vi.mocked(onStudyError).mockImplementation((handler) => {
     handlers.error = handler
+    return vi.fn()
+  })
+  vi.mocked(onExerciseOfferResolved).mockImplementation((handler) => {
+    handlers.offerResolved = handler
     return vi.fn()
   })
   for (const subscription of [
@@ -148,7 +156,7 @@ async function renderResumed(props: Partial<ComponentProps<typeof StudyChatScree
     nextCursor: '',
     summaryCoversUntilMessageId: '',
   } as Awaited<ReturnType<typeof resumeStudySession>>)
-  render(
+  const { unmount } = render(
     <StudyChatScreen
       sessionId="session-1"
       initialTopic=""
@@ -162,6 +170,7 @@ async function renderResumed(props: Partial<ComponentProps<typeof StudyChatScree
     />,
   )
   await screen.findByText('Sure, let us practice.')
+  return { unmount }
 }
 
 describe('StudyChatScreen — exercise offer', () => {
@@ -461,5 +470,63 @@ describe('StudyChatScreen — exercise offer', () => {
     expect(
       await screen.findByText('Accept or decline the offer before sending another message.'),
     ).toBeInTheDocument()
+  })
+
+  it('shows the card and frees the input, without a click, when the offer was accepted while the chat was unmounted', async () => {
+    // Given an offer accepted in a chat that was left before the challenge was ready
+    const handlers = subscribe()
+    vi.mocked(getPendingOffer).mockResolvedValue(OFFER)
+    const first = await renderResumed()
+    first.unmount()
+    // and the same session opened again while the offer is still pending
+    await renderResumed()
+    expect(await screen.findByRole('button', { name: 'Accept' })).toBeInTheDocument()
+
+    // When the backend finishes: the challenge is linked and the offer is gone
+    vi.mocked(getPendingOffer).mockResolvedValue(null)
+    vi.mocked(listSessionExercises).mockResolvedValue([CARD])
+    act(() => handlers.offerResolved?.({ sessionId: 'session-1', offerId: 'offer-1' }))
+
+    // Then the mounted chat shows the card and the input again
+    expect(await screen.findByText('Design a cache')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Type your answer...')).toBeEnabled()
+  })
+
+  it('keeps the card read after the offer was resolved when the first read of the cards answers late', async () => {
+    // Given a chat whose first read of the cards is still pending
+    const handlers = subscribe()
+    let answerFirstRead: (cards: SessionExerciseCard[]) => void = () => {}
+    vi.mocked(listSessionExercises).mockReturnValueOnce(
+      new Promise((resolve) => {
+        answerFirstRead = resolve
+      }),
+    )
+    vi.mocked(getPendingOffer).mockResolvedValue(OFFER)
+    await renderResumed()
+    await screen.findByRole('button', { name: 'Accept' })
+
+    // When the offer is resolved and its read answers before the first one
+    vi.mocked(getPendingOffer).mockResolvedValue(null)
+    vi.mocked(listSessionExercises).mockResolvedValue([CARD])
+    act(() => handlers.offerResolved?.({ sessionId: 'session-1', offerId: 'offer-1' }))
+    expect(await screen.findByText('Design a cache')).toBeInTheDocument()
+    await act(async () => answerFirstRead([]))
+
+    // Then the older answer does not hide the card
+    expect(screen.getByText('Design a cache')).toBeInTheDocument()
+  })
+
+  it('ignores the resolution of an offer of another session', async () => {
+    const handlers = subscribe()
+    vi.mocked(getPendingOffer).mockResolvedValue(OFFER)
+    await renderResumed()
+    await screen.findByRole('button', { name: 'Accept' })
+    vi.mocked(getPendingOffer).mockClear()
+
+    act(() => handlers.offerResolved?.({ sessionId: 'session-2', offerId: 'offer-9' }))
+
+    expect(getPendingOffer).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeInTheDocument()
   })
 })

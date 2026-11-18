@@ -15,6 +15,9 @@ import (
 // SessionExerciseView is a challenge linked to a study session: what the chat
 // card shows.
 type SessionExerciseView struct {
+	// SessionID is the session of the offer, not of the challenge: a challenge
+	// can come from the Lab and not belong to any session.
+	SessionID   string
 	ChallengeID string
 	Kind        domainexercise.ChallengeKind
 	Title       string
@@ -136,7 +139,7 @@ func (s *OfferService) Accept(ctx context.Context, offerID string, spec domainex
 	if err := s.link(ctx, offer, challenge); err != nil {
 		return SessionExerciseView{}, err
 	}
-	return sessionExerciseViewOf(challenge), nil
+	return sessionExerciseViewOf(offer.SessionID, challenge), nil
 }
 
 // existingLink answers an accept that lost the race: the offer is gone, so it
@@ -155,7 +158,7 @@ func (s *OfferService) existingLink(ctx context.Context, offer domainexercise.Of
 		if err != nil {
 			return SessionExerciseView{}, fmt.Errorf("exercise: finding challenge: %w", err)
 		}
-		return sessionExerciseViewOf(challenge), nil
+		return sessionExerciseViewOf(offer.SessionID, challenge), nil
 	}
 	return SessionExerciseView{}, domainexercise.ErrOfferNotFound
 }
@@ -223,9 +226,9 @@ func (s *OfferService) link(ctx context.Context, offer domainexercise.Offer, cha
 	return nil
 }
 
-func sessionExerciseViewOf(challenge domainexercise.Challenge) SessionExerciseView {
+func sessionExerciseViewOf(sessionID string, challenge domainexercise.Challenge) SessionExerciseView {
 	return SessionExerciseView{
-		ChallengeID: challenge.ID, Kind: challenge.Kind, Title: challenge.Title, Topic: challenge.Topic, Difficulty: challenge.Difficulty,
+		SessionID: sessionID, ChallengeID: challenge.ID, Kind: challenge.Kind, Title: challenge.Title, Topic: challenge.Topic, Difficulty: challenge.Difficulty,
 		TimeLimitMinutes: challenge.TimeLimitMinutes,
 	}
 }

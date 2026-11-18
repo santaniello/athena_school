@@ -40,6 +40,7 @@ vi.mock('@/lib/passScore', () => ({ getPassScore: vi.fn() }))
 
 vi.mock('@/lib/exercise', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/exercise')>()),
+  onExerciseOfferResolved: () => () => {},
   getPendingOffer: vi.fn(),
   listSessionExercises: vi.fn(),
   getOfferProfile: vi.fn(),
