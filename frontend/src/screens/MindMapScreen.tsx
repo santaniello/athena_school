@@ -13,10 +13,11 @@ import {
 import { Button } from '@/components/ui/button'
 import { GenerateMindMapDialog } from '@/components/mindmap/generate-mindmap-dialog'
 import { MindMapRow } from '@/components/mindmap/mindmap-row'
-import { deleteMindMap, listMindMaps, type MindMapSummary } from '@/lib/mindmap'
+import { deleteMindMap, listMindMaps, mindMapErrorCode, type MindMapSummary } from '@/lib/mindmap'
 
 interface MindMapScreenProps {
-  // Open was clicked, or a map was just generated; the shell opens the editor.
+  // Open was clicked on a map in the list; the shell opens the editor. A map that
+  // was just generated is only highlighted in the list.
   onOpen: (mindMapId: string) => void
 }
 
@@ -35,6 +36,8 @@ function MindMapScreen({ onOpen }: MindMapScreenProps) {
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const [toDelete, setToDelete] = useState<MindMapSummary | null>(null)
   const [deleteFailed, setDeleteFailed] = useState(false)
+  // A second click while the deletion is in flight must not delete again.
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     let stale = false
@@ -64,14 +67,19 @@ function MindMapScreen({ onOpen }: MindMapScreenProps) {
   }
 
   async function confirmDelete() {
-    if (!toDelete) return
+    if (!toDelete || deleting) return
+    setDeleting(true)
     try {
       await deleteMindMap(toDelete.id)
       setToDelete(null)
       reload()
-    } catch {
+    } catch (err) {
       setToDelete(null)
-      setDeleteFailed(true)
+      // A map that is already gone is what the user wanted.
+      if (mindMapErrorCode(err) === 'mind_map_not_found') reload()
+      else setDeleteFailed(true)
+    } finally {
+      setDeleting(false)
     }
   }
 

@@ -160,6 +160,40 @@ describe('MindMapScreen', () => {
     expect(screen.queryByText('Could not delete the mind map.')).not.toBeInTheDocument()
   })
 
+  it('deletes only once when Delete is clicked twice', async () => {
+    const user = userEvent.setup()
+    vi.mocked(deleteMindMap).mockReturnValue(new Promise(() => {}))
+    render(<MindMapScreen onOpen={vi.fn()} />)
+    await screen.findByRole('listitem', { name: 'Go map' })
+
+    await user.click(within(row('Go map')).getByRole('button', { name: 'Delete' }))
+    const confirm = within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Delete' })
+    await user.click(confirm)
+    await user.click(confirm)
+
+    expect(deleteMindMap).toHaveBeenCalledOnce()
+  })
+
+  it('treats a mind map that is already gone as deleted', async () => {
+    const user = userEvent.setup()
+    vi.mocked(deleteMindMap).mockRejectedValue(
+      new Error(JSON.stringify({ code: 'mind_map_not_found' })),
+    )
+    render(<MindMapScreen onOpen={vi.fn()} />)
+    await screen.findByRole('listitem', { name: 'Go map' })
+
+    await user.click(within(row('Go map')).getByRole('button', { name: 'Delete' }))
+    vi.mocked(listMindMaps).mockResolvedValue([SECOND])
+    await user.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Delete' }),
+    )
+
+    await waitFor(() =>
+      expect(screen.queryByRole('listitem', { name: 'Go map' })).not.toBeInTheDocument(),
+    )
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it('generates a mind map, then reloads the list and highlights the new one', async () => {
     const user = userEvent.setup()
     vi.mocked(listSessionsForGeneration).mockResolvedValue([
