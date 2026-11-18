@@ -11,6 +11,7 @@ import {
   RegenerateMindMap,
   SaveMindMapDiagram,
 } from '../../wailsjs/go/desktop/App'
+import { EventsOn } from '../../wailsjs/runtime/runtime'
 import i18n, { MINDMAP_NAMESPACE } from '@/i18n'
 
 // The Mind Map. The backend draws, stores and validates everything; this module
@@ -84,6 +85,21 @@ export async function getPendingMindMapOffer(sessionId: string): Promise<MindMap
   const offer = await GetPendingMindMapOffer(sessionId)
   if (!offer) return null
   return { id: offer.id, sessionId: offer.sessionId, messageId: offer.messageId }
+}
+
+// Emitted when an accepted offer finished: the map is saved and the offer is
+// gone. Accepting is a call that outlives the chat that made it, so a chat
+// opened again meanwhile learns about the end here.
+export interface MindMapOfferResolvedEvent {
+  sessionId: string
+  offerId: string
+}
+
+// The caller must run the returned unsubscribe on unmount, and filter by session.
+export function onMindMapOfferResolved(
+  handler: (event: MindMapOfferResolvedEvent) => void,
+): () => void {
+  return EventsOn('mindmap:offer-resolved', (event: MindMapOfferResolvedEvent) => handler(event))
 }
 
 // Accepting draws the map, so it takes as long as generateMindMap and rejects

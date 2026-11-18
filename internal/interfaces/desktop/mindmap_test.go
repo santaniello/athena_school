@@ -438,6 +438,8 @@ func (o *blockingMindMapOffers) Accept(ctx context.Context, _ string) (domainmin
 func newMindMapOfferApp(offers mindMapOffers) *App {
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, WithMindMapOfferService(offers))
 	app.ctx = context.Background()
+	// The real emitter needs the Wails runtime context; tests observe or ignore events.
+	app.emit = func(context.Context, string, ...interface{}) {}
 	return app
 }
 
@@ -484,6 +486,47 @@ func TestApp_AcceptMindMapOffer_returnsTheMindMapCard(t *testing.T) {
 		ID: "map-1", SessionID: "session-1", SessionTitle: "Caching", Title: "Caching basics",
 		CreatedAt: "2026-11-17T09:30:00Z", UpdatedAt: "2026-11-17T09:30:00Z", MessageID: "message-1",
 	}, got)
+}
+
+type emittedEvent struct {
+	name string
+	data []interface{}
+}
+
+func TestApp_AcceptMindMapOffer_announcesTheResolvedOfferToTheSession(t *testing.T) {
+	t.Run("a generated mind map", func(t *testing.T) {
+		// Given an offer that generates a mind map and an observed emitter
+		offers := &fakeMindMapOffers{summary: domainmindmap.Summary{ID: "map-1", SessionID: "session-1", MessageID: "message-1"}}
+		app := newMindMapOfferApp(offers)
+		var emitted []emittedEvent
+		app.emit = func(_ context.Context, name string, data ...interface{}) {
+			emitted = append(emitted, emittedEvent{name: name, data: data})
+		}
+
+		// When accepting it
+		_, err := app.AcceptMindMapOffer("offer-1")
+
+		// Then the session is told, so a chat remounted meanwhile re-reads the offer and the cards
+		require.NoError(t, err)
+		require.Len(t, emitted, 1)
+		assert.Equal(t, eventMindMapOfferResolved, emitted[0].name)
+		assert.Equal(t, []interface{}{MindMapOfferResolvedEvent{SessionID: "session-1", OfferID: "offer-1"}}, emitted[0].data)
+	})
+	t.Run("a failed accept", func(t *testing.T) {
+		// Given an offer whose generation fails
+		app := newMindMapOfferApp(&fakeMindMapOffers{err: errors.New("boom")})
+		var emitted []emittedEvent
+		app.emit = func(_ context.Context, name string, data ...interface{}) {
+			emitted = append(emitted, emittedEvent{name: name, data: data})
+		}
+
+		// When accepting it
+		_, err := app.AcceptMindMapOffer("offer-1")
+
+		// Then nothing is announced: the offer stays pending
+		require.Error(t, err)
+		assert.Empty(t, emitted)
+	})
 }
 
 func TestApp_AcceptMindMapOffer_requiresAnOffer(t *testing.T) {

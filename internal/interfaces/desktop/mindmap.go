@@ -333,6 +333,17 @@ func (a *App) GetPendingMindMapOffer(sessionID string) (*MindMapOfferDTO, error)
 	return &MindMapOfferDTO{ID: offer.ID, SessionID: offer.SessionID, MessageID: offer.MessageID}, nil
 }
 
+// eventMindMapOfferResolved is emitted when an accepted offer finished: the
+// mind map is saved and the offer is gone. A chat of that session that was
+// mounted again meanwhile re-reads its offer and mind map cards.
+const eventMindMapOfferResolved = "mindmap:offer-resolved"
+
+// MindMapOfferResolvedEvent is the payload of eventMindMapOfferResolved.
+type MindMapOfferResolvedEvent struct {
+	SessionID string `json:"sessionId"`
+	OfferID   string `json:"offerId"`
+}
+
 // AcceptMindMapOffer generates a mind map for the offer's session, links it to
 // the offer's message and returns its card. It shares the generation slot with
 // GenerateMindMap, so CancelMindMapGeneration cancels it. On failure the offer
@@ -354,6 +365,9 @@ func (a *App) AcceptMindMapOffer(offerID string) (MindMapSummaryDTO, error) {
 	if err != nil {
 		return MindMapSummaryDTO{}, toMindMapError(err)
 	}
+	// The call outlives the chat that made it, so the session is told apart from
+	// the returned card, which only the original chat instance receives.
+	a.emit(a.ctx, eventMindMapOfferResolved, MindMapOfferResolvedEvent{SessionID: summary.SessionID, OfferID: offerID})
 	return toMindMapSummaryDTOs([]domainmindmap.Summary{summary})[0], nil
 }
 

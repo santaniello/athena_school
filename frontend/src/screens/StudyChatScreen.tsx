@@ -57,6 +57,7 @@ import {
 } from '@/lib/quiz'
 import {
   getPendingMindMapOffer,
+  onMindMapOfferResolved,
   listSessionMindMaps,
   type MindMapOffer,
   type MindMapSummary,
@@ -532,15 +533,24 @@ function StudyChatScreen({
     setPendingOffer(null)
   }, [])
 
-  const refreshPendingOffer = useCallback(() => {
-    const version = ++offerVersionRef.current
-    void fetchPendingOffer(sessionId).then((pending) => {
-      if (!pending || currentSessionIdRef.current !== sessionId) return
-      if (offerVersionRef.current !== version) return
-      setPendingOffer(pending)
-      adoptMessageId(pending.offer.messageId)
-    })
-  }, [sessionId, adoptMessageId])
+  // No offer found keeps what is shown, unless the caller knows the one shown
+  // was resolved (dropWhenGone): then it goes.
+  const refreshPendingOffer = useCallback(
+    (dropWhenGone = false) => {
+      const version = ++offerVersionRef.current
+      void fetchPendingOffer(sessionId).then((pending) => {
+        if (currentSessionIdRef.current !== sessionId) return
+        if (offerVersionRef.current !== version) return
+        if (!pending) {
+          if (dropWhenGone) setPendingOffer(null)
+          return
+        }
+        setPendingOffer(pending)
+        adoptMessageId(pending.offer.messageId)
+      })
+    },
+    [sessionId, adoptMessageId],
+  )
 
   // A failed read keeps the cards as they were: they are an extra and must
   // never break the chat.
@@ -702,6 +712,17 @@ function StudyChatScreen({
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId])
+
+  // An offer accepted in an earlier instance of this chat (the user left before
+  // the map was drawn) ends with nobody to hear the accept's answer: the backend
+  // says so, and what the chat shows is read again.
+  useEffect(() => {
+    return onMindMapOfferResolved((event) => {
+      if (event.sessionId !== sessionId) return
+      refreshPendingOffer(true)
+      refreshMindMapCards()
+    })
+  }, [sessionId, refreshPendingOffer, refreshMindMapCards])
 
   // Subscribed on mount, not gated on any streaming flag: the
   // "study:chunk"/"study:done" events for a session's opening turn are

@@ -35,6 +35,13 @@ import {
 import { getPassScore } from '@/lib/passScore'
 import StudyChatScreen from './StudyChatScreen'
 
+// The chat listens for an accepted offer that ended while it was unmounted; the
+// Wails runtime is not there in tests.
+vi.mock('@/lib/mindmap', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/mindmap')>()),
+  onMindMapOfferResolved: () => () => {},
+}))
+
 vi.mock('@/lib/passScore', () => ({ getPassScore: vi.fn() }))
 
 vi.mock('@/lib/exercise', async (importOriginal) => ({

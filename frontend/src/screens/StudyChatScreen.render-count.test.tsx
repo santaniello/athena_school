@@ -19,6 +19,13 @@ import {
 } from '@/lib/study'
 import StudyChatScreen from './StudyChatScreen'
 
+// The chat listens for an accepted offer that ended while it was unmounted; the
+// Wails runtime is not there in tests.
+vi.mock('@/lib/mindmap', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/mindmap')>()),
+  onMindMapOfferResolved: () => () => {},
+}))
+
 // Counts how many times each message's markdown is (re-)rendered, keyed by
 // content. jsdom has no layout, so render counts are the measurable proxy
 // for the work a streamed chunk causes (spec 2.23, decision 6).

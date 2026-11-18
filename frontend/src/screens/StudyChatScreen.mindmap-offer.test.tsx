@@ -10,7 +10,9 @@ import {
   declineMindMapOffer,
   getPendingMindMapOffer,
   listSessionMindMaps,
+  onMindMapOfferResolved,
   type MindMapOffer,
+  type MindMapOfferResolvedEvent,
   type MindMapSummary,
 } from '@/lib/mindmap'
 import {
@@ -56,6 +58,7 @@ vi.mock('@/lib/mindmap', async (importOriginal) => ({
   acceptMindMapOffer: vi.fn(),
   declineMindMapOffer: vi.fn(),
   listSessionMindMaps: vi.fn(),
+  onMindMapOfferResolved: vi.fn(),
 }))
 
 vi.mock('@/lib/study', async (importOriginal) => ({
@@ -92,12 +95,17 @@ const CARD: MindMapSummary = {
 
 interface Handlers {
   done?: (event: StudyDoneEvent) => void
+  offerResolved?: (event: MindMapOfferResolvedEvent) => void
 }
 
 function subscribe(): Handlers {
   const handlers: Handlers = {}
   vi.mocked(onStudyDone).mockImplementation((handler) => {
     handlers.done = handler
+    return vi.fn()
+  })
+  vi.mocked(onMindMapOfferResolved).mockImplementation((handler) => {
+    handlers.offerResolved = handler
     return vi.fn()
   })
   for (const subscription of [
@@ -144,7 +152,7 @@ async function renderResumed(
     summaryCoversUntilMessageId: '',
   } as Awaited<ReturnType<typeof resumeStudySession>>)
   const onOpenMindMap = vi.fn()
-  render(
+  const { unmount } = render(
     <StudyChatScreen
       sessionId="session-1"
       initialTopic=""
@@ -158,7 +166,7 @@ async function renderResumed(
     />,
   )
   await screen.findByText('Sure, a mind map.')
-  return { onOpenMindMap }
+  return { onOpenMindMap, unmount }
 }
 
 describe('StudyChatScreen — mind map offer', () => {
@@ -390,5 +398,39 @@ describe('StudyChatScreen — mind map offer', () => {
     await act(async () => answerOldRead([]))
 
     expect(screen.getByRole('button', { name: 'Open mind map' })).toBeInTheDocument()
+  })
+
+  it('shows the card and frees the input, without a click, when the offer was accepted while the chat was unmounted', async () => {
+    // Given an offer accepted in a chat that was left before the map was drawn
+    const handlers = subscribe()
+    vi.mocked(getPendingMindMapOffer).mockResolvedValue(OFFER)
+    const first = await renderResumed({}, true)
+    first.unmount()
+    // and the same session opened again while the offer is still pending
+    await renderResumed({}, true)
+    expect(await screen.findByRole('button', { name: 'Accept' })).toBeInTheDocument()
+
+    // When the backend finishes: the map is saved and the offer is gone
+    vi.mocked(getPendingMindMapOffer).mockResolvedValue(null)
+    vi.mocked(listSessionMindMaps).mockResolvedValue([CARD])
+    act(() => handlers.offerResolved?.({ sessionId: 'session-1', offerId: 'offer-1' }))
+
+    // Then the mounted chat shows the card and the input again
+    expect(await screen.findByRole('button', { name: 'Open mind map' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Type your answer...')).toBeEnabled()
+  })
+
+  it('ignores the resolution of an offer of another session', async () => {
+    const handlers = subscribe()
+    vi.mocked(getPendingMindMapOffer).mockResolvedValue(OFFER)
+    await renderResumed()
+    await screen.findByRole('button', { name: 'Accept' })
+    vi.mocked(getPendingMindMapOffer).mockClear()
+
+    act(() => handlers.offerResolved?.({ sessionId: 'session-2', offerId: 'offer-9' }))
+
+    expect(getPendingMindMapOffer).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeInTheDocument()
   })
 })

@@ -211,6 +211,7 @@ vi.mock('@/screens/QuizTakeScreen', () => ({
 // The Mind Map catalog loads its mind maps as soon as it mounts.
 vi.mock('@/lib/mindmap', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/mindmap')>()),
+  onMindMapOfferResolved: () => () => {},
   listMindMaps: vi.fn().mockResolvedValue([
     {
       id: 'map-1',
