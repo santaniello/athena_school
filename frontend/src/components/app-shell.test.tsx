@@ -2216,7 +2216,10 @@ describe('AppShell knowledge index lifecycle', () => {
               finishNewSession = resolve
             }),
           )
+          const startCalls = vi.mocked(startStudySession).mock.calls.length
           await user.click(await screen.findByRole('button', { name: 'Start new session' }))
+          // The creation must be pending before the editor opens
+          expect(startStudySession).toHaveBeenCalledTimes(startCalls + 1)
         }
         await user.click(await screen.findByRole('button', { name: 'Open mind map' }))
         return Object.assign(user, {

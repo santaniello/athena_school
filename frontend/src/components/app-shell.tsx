@@ -409,6 +409,9 @@ function AppShell() {
   // bubbling bug is fixed separately (out of scope for this change).
   function handleSessionDeleted(sessionId: string) {
     setActiveSession((current) => (current?.id === sessionId ? null : current))
+    // A deletion still in flight when the editor opened must not let the
+    // default return reinstall the deleted session.
+    setMindMapReturnSession((current) => (current?.id === sessionId ? null : current))
   }
   // Stryker restore ArrowFunction,ConditionalExpression,OptionalChaining
 
@@ -419,6 +422,11 @@ function AppShell() {
   // cache had already loaded.
   function handleFolderDeleted(folderId: string) {
     setActiveSession((current) => (current?.folderId === folderId ? null : current))
+    // Same as handleSessionDeleted, for a folder deleted while the editor is
+    // open. Stryker disable next-line ArrowFunction,ConditionalExpression,OptionalChaining:
+    // reaching this needs a deletion finishing after the editor opened, which
+    // the StudyFolderTree unmount makes unobservable through the DOM here.
+    setMindMapReturnSession((current) => (current?.folderId === folderId ? null : current))
   }
 
   function handleTopicResolved(topic: string) {
