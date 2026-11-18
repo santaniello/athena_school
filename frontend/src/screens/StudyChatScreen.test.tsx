@@ -43,6 +43,11 @@ vi.mock('@/lib/mindmap', async (importOriginal) => ({
   onMindMapOfferResolved: () => () => {},
 }))
 
+vi.mock('@/lib/exercise', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/exercise')>()),
+  onExerciseOfferResolved: () => () => {},
+}))
+
 // importOriginal keeps pure helpers (e.g. sourceLabel, used by
 // LocalSourcesStrip) real.
 vi.mock('@/lib/study', async (importOriginal) => {

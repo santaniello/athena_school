@@ -23,6 +23,7 @@ import {
   StartAttempt,
   SubmitAttempt,
 } from '../../wailsjs/go/desktop/App'
+import { EventsOn } from '../../wailsjs/runtime/runtime'
 import type { desktop } from '../../wailsjs/go/models'
 import i18n from '@/i18n'
 import type { LabCriterion, LabHint, LabStatement } from './lab'
@@ -618,6 +619,21 @@ export async function getPendingOffer(sessionId: string): Promise<ExerciseOffer 
   const offer = await GetPendingOffer(sessionId)
   if (!offer) return null
   return { id: offer.id, sessionId: offer.sessionId, messageId: offer.messageId }
+}
+
+// Emitted when an accepted offer finished: the challenge is linked to the
+// session and the offer is gone. Accepting is a call that outlives the chat
+// that made it, so a chat opened again meanwhile learns about the end here.
+export interface ExerciseOfferResolvedEvent {
+  sessionId: string
+  offerId: string
+}
+
+// The caller must run the returned unsubscribe on unmount, and filter by session.
+export function onExerciseOfferResolved(
+  handler: (event: ExerciseOfferResolvedEvent) => void,
+): () => void {
+  return EventsOn('exercise:offer-resolved', (event: ExerciseOfferResolvedEvent) => handler(event))
 }
 
 // The kind defaults to an interview. A practice carries the goal the user wrote.

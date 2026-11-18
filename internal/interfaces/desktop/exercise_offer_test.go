@@ -44,6 +44,8 @@ func (f *fakeOffers) Decline(_ context.Context, offerID string) error {
 func newOfferApp(offers exerciseOffers) *App {
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, WithOfferService(offers))
 	app.ctx = context.Background()
+	// The real emitter needs the Wails runtime context; tests observe or ignore events.
+	app.emit = func(context.Context, string, ...interface{}) {}
 	return app
 }
 
@@ -106,6 +108,42 @@ func TestApp_AcceptOffer_returnsTheLinkedChallenge(t *testing.T) {
 	assert.Equal(t, "offer-1", offers.accept)
 	assert.Equal(t, domainexercise.ChallengeSpec{Difficulty: domainexercise.DifficultyBeginner, Kind: domainexercise.ChallengeKindInterview}, offers.acceptSpec)
 	assert.Equal(t, SessionExerciseDTO{ChallengeID: "challenge-1", Kind: "INTERVIEW", Title: "Design a cache", Topic: "caching", Difficulty: "ADVANCED", TimeLimitMinutes: 45}, got)
+}
+
+func TestApp_AcceptOffer_announcesTheResolvedOfferToTheSession(t *testing.T) {
+	t.Run("a linked challenge", func(t *testing.T) {
+		// Given an offer that links a challenge and an observed emitter
+		offers := &fakeOffers{view: applicationexercise.SessionExerciseView{SessionID: "session-1", ChallengeID: "challenge-1"}}
+		app := newOfferApp(offers)
+		var emitted []emittedEvent
+		app.emit = func(_ context.Context, name string, data ...interface{}) {
+			emitted = append(emitted, emittedEvent{name: name, data: data})
+		}
+
+		// When accepting it
+		_, err := app.AcceptOffer("offer-1", "BEGINNER", "", "")
+
+		// Then the session is told, so a chat remounted meanwhile re-reads the offer and the cards
+		require.NoError(t, err)
+		require.Len(t, emitted, 1)
+		assert.Equal(t, eventExerciseOfferResolved, emitted[0].name)
+		assert.Equal(t, []interface{}{ExerciseOfferResolvedEvent{SessionID: "session-1", OfferID: "offer-1"}}, emitted[0].data)
+	})
+	t.Run("a failed accept", func(t *testing.T) {
+		// Given an offer whose generation fails
+		app := newOfferApp(&fakeOffers{err: errors.New("boom")})
+		var emitted []emittedEvent
+		app.emit = func(_ context.Context, name string, data ...interface{}) {
+			emitted = append(emitted, emittedEvent{name: name, data: data})
+		}
+
+		// When accepting it
+		_, err := app.AcceptOffer("offer-1", "BEGINNER", "", "")
+
+		// Then nothing is announced: the offer stays pending
+		require.Error(t, err)
+		assert.Empty(t, emitted)
+	})
 }
 
 func TestApp_AcceptOffer_mapsErrors(t *testing.T) {

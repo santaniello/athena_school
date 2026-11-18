@@ -16,6 +16,7 @@ function setup(
 ) {
   const onAccepted = vi.fn()
   const onDeclined = vi.fn()
+  const onGone = vi.fn()
   // The card speaks the Lab's language, which follows the profile.
   setLabLanguage(props.language)
   render(
@@ -25,9 +26,10 @@ function setup(
       topic={props.topic}
       onAccepted={onAccepted}
       onDeclined={onDeclined}
+      onGone={onGone}
     />,
   )
-  return { onAccepted, onDeclined, user: userEvent.setup() }
+  return { onAccepted, onDeclined, onGone, user: userEvent.setup() }
 }
 
 describe('ExerciseOfferCard', () => {
@@ -232,4 +234,21 @@ describe('ExerciseOfferCard', () => {
     expect(onDeclined).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Decline' })).toBeEnabled()
   })
+
+  it.each(['accept', 'decline'] as const)(
+    'hands a vanished offer back to the chat when %s finds it gone',
+    async (action) => {
+      const gone = new Error(JSON.stringify({ code: 'offer_not_found' }))
+      vi.mocked(acceptOffer).mockRejectedValue(gone)
+      vi.mocked(declineOffer).mockRejectedValue(gone)
+      const { onGone, user } = setup()
+
+      await user.click(
+        screen.getByRole('button', { name: action === 'accept' ? 'Accept' : 'Decline' }),
+      )
+
+      expect(onGone).toHaveBeenCalledOnce()
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    },
+  )
 })
