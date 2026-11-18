@@ -43,6 +43,7 @@ export const mindmapPt: MindmapLocale = {
     loading: 'Carregando o mapa mental...',
     loadFailed: 'Não foi possível carregar o mapa mental.',
     preparing: 'Preparando o editor...',
+    preparingSlow: 'Ainda preparando o editor... está demorando mais que o normal.',
     back: 'Voltar aos mapas mentais',
     backToSession: 'Voltar à sessão de estudo',
     save: 'Salvar',

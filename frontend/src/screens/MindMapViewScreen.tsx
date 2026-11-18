@@ -25,9 +25,11 @@ import {
   type MindMapReturn,
 } from '@/lib/mindmap'
 
-// How long the editor has to report it is loaded before the screen says it
-// most likely needs the internet.
+// How long the editor has to report it is loaded before the screen says it is
+// taking longer than usual. Only a known-offline browser gets the hard error.
 const EDITOR_LOAD_TIMEOUT_MS = 15000
+// How long the "Saved" confirmation stays after a save.
+const SAVED_NOTICE_MS = 2000
 
 interface MindMapViewScreenProps {
   mindMapId: string
@@ -123,6 +125,8 @@ function Editing({ initial, returnTo, leaveRequested, onLeaveCancelled, onExit }
   // is shown.
   const [editorKey, setEditorKey] = useState(0)
   const [editorReady, setEditorReady] = useState(false)
+  const [slowLoad, setSlowLoad] = useState(false)
+  const [justSaved, setJustSaved] = useState(false)
   const [editorUnavailable, setEditorUnavailable] = useState(!navigator.onLine)
   const [connectionLost, setConnectionLost] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -136,21 +140,37 @@ function Editing({ initial, returnTo, leaveRequested, onLeaveCancelled, onExit }
   // A navigation request from the sidebar asks the leave question as well.
   const confirming: Confirming = asked ?? (leaveRequested && dirty ? 'leave' : null)
 
-  // Without the editor reporting in time, the screen says it needs the internet.
+  // Without the editor reporting in time, an offline browser gets the "needs the
+  // internet" error; an online one keeps loading and is told it is slow, because
+  // unmounting would throw away a load that is still progressing.
   useEffect(() => {
     if (editorReady || editorUnavailable) return
-    const timer = setTimeout(() => setEditorUnavailable(true), EDITOR_LOAD_TIMEOUT_MS)
+    const timer = setTimeout(() => {
+      if (navigator.onLine) setSlowLoad(true)
+      else setEditorUnavailable(true)
+    }, EDITOR_LOAD_TIMEOUT_MS)
     return () => clearTimeout(timer)
   }, [editorReady, editorUnavailable, editorKey])
 
-  // A navigation request from the sidebar is granted at once when nothing is
-  // unsaved; otherwise the leave question above is asked.
+  // "Saved" is a short confirmation, not a state.
   useEffect(() => {
-    if (leaveRequested && !dirty) onExit()
-  }, [leaveRequested, dirty, onExit])
+    if (!justSaved) return
+    const timer = setTimeout(() => setJustSaved(false), SAVED_NOTICE_MS)
+    return () => clearTimeout(timer)
+  }, [justSaved])
+
+  // A navigation request from the sidebar is granted when nothing is unsaved and
+  // nothing is in flight; otherwise the leave question above is asked, or the
+  // work finishes first. A regeneration is cancelled: nobody would be waiting for it.
+  useEffect(() => {
+    if (!leaveRequested || dirty) return
+    if (busy === null) onExit()
+    else if (busy === 'regenerating') void cancelMindMapGeneration()
+  }, [leaveRequested, dirty, busy, onExit])
 
   const reloadEditor = useCallback(() => {
     setEditorReady(false)
+    setSlowLoad(false)
     setEditorUnavailable(!navigator.onLine)
     setEditorKey((key) => key + 1)
   }, [])
@@ -170,11 +190,15 @@ function Editing({ initial, returnTo, leaveRequested, onLeaveCancelled, onExit }
     if (!editor || busy) return
     setMessage(null)
     setBusy('saving')
-    const editsBeforeSave = editsRef.current
     try {
-      const saved = await saveMindMapDiagram(mindMap.id, await editor.getXml())
+      const xml = await editor.getXml()
+      // Counted after the export: an edit that arrived while it ran is in the XML.
+      const editsBeforeSave = editsRef.current
+      const saved = await saveMindMapDiagram(mindMap.id, xml)
       setMindMap(saved)
-      setDirty(editsRef.current !== editsBeforeSave)
+      const editedMeanwhile = editsRef.current !== editsBeforeSave
+      setDirty(editedMeanwhile)
+      setJustSaved(!editedMeanwhile)
     } catch (err) {
       setMessage(`${t('view.saveFailed')} ${mindMapErrorMessage(err)}`)
     } finally {
@@ -208,7 +232,12 @@ function Editing({ initial, returnTo, leaveRequested, onLeaveCancelled, onExit }
     try {
       await deleteMindMap(mindMap.id)
       onExit()
-    } catch {
+    } catch (err) {
+      // A map that is already gone is what the user wanted.
+      if (mindMapErrorCode(err) === 'mind_map_not_found') {
+        onExit()
+        return
+      }
       setMessage(t('view.deleteFailed'))
       setBusy(null)
     }
@@ -225,7 +254,13 @@ function Editing({ initial, returnTo, leaveRequested, onLeaveCancelled, onExit }
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span role="status" className="text-sm text-muted-foreground">
-            {busy === 'saving' ? t('view.saving') : dirty ? t('view.unsaved') : ''}
+            {busy === 'saving'
+              ? t('view.saving')
+              : dirty
+                ? t('view.unsaved')
+                : justSaved
+                  ? t('view.saved')
+                  : ''}
           </span>
           <Button type="button" variant="outline" size="sm" disabled={working} onClick={handleBack}>
             {backLabel(t, returnTo)}
@@ -285,6 +320,7 @@ function Editing({ initial, returnTo, leaveRequested, onLeaveCancelled, onExit }
               }}
               onChange={() => {
                 editsRef.current += 1
+                setJustSaved(false)
                 setDirty(true)
               }}
               onConnectionLost={() => setConnectionLost(true)}
@@ -296,7 +332,7 @@ function Editing({ initial, returnTo, leaveRequested, onLeaveCancelled, onExit }
                 className="absolute inset-0 z-10 flex items-center justify-center gap-2 bg-background text-sm text-muted-foreground"
               >
                 <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                {t('view.preparing')}
+                {slowLoad ? t('view.preparingSlow') : t('view.preparing')}
               </p>
             )}
             {connectionLost && (

@@ -37,11 +37,18 @@ interface EditorProps {
 // callbacks the screen hands it and answers getXml with xmlOnBoard.
 let editor: EditorProps
 let xmlOnBoard = ''
+// Runs inside getXml, to simulate an edit landing while the diagram is exported.
+let onExportEdit: (() => void) | null = null
 
 vi.mock('@/components/diagram/diagram-editor', () => ({
   DiagramEditor: (props: EditorProps) => {
     editor = props
-    useImperativeHandle(props.ref, () => ({ getXml: () => Promise.resolve(xmlOnBoard) }))
+    useImperativeHandle(props.ref, () => ({
+      getXml: () => {
+        onExportEdit?.()
+        return Promise.resolve(xmlOnBoard)
+      },
+    }))
     return <div data-testid="editor" data-xml={props.xml ?? ''} />
   },
 }))
@@ -391,6 +398,80 @@ describe('MindMapViewScreen', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeDefined()
   })
 
+  it('leaves when the map is already gone on delete', async () => {
+    const { user, onExit } = await openEditor()
+    vi.mocked(deleteMindMap).mockRejectedValue(
+      new Error(JSON.stringify({ code: 'mind_map_not_found' })),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+    await user.click(screen.getAllByRole('button', { name: 'Delete' }).pop()!)
+
+    await waitFor(() => expect(onExit).toHaveBeenCalledOnce())
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('clears the unsaved mark when an edit arrived while the diagram was being exported', async () => {
+    const { user } = await openEditor()
+    vi.mocked(saveMindMapDiagram).mockResolvedValue({ ...MAP, diagramXml: xmlOnBoard })
+    edit()
+    // An edit event lands during the export, so it is already in the exported XML.
+    const board = editor
+    onExportEdit = () => act(() => board.onChange('<mxGraphModel>late</mxGraphModel>'))
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument())
+    onExportEdit = null
+  })
+
+  it('shows Saved briefly after a save', async () => {
+    const { user } = await openEditor()
+    vi.mocked(saveMindMapDiagram).mockResolvedValue({ ...MAP, diagramXml: xmlOnBoard })
+    edit()
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByText('Saved')).toBeInTheDocument()
+  })
+
+  it('waits for a save in flight before granting a navigation request', async () => {
+    const { user, onExit, rerender } = await openEditor()
+    let finishSave: (saved: MindMap) => void = () => {}
+    vi.mocked(saveMindMapDiagram).mockReturnValue(
+      new Promise((resolve) => {
+        finishSave = resolve
+      }),
+    )
+    edit()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    rerender(true)
+    expect(onExit).not.toHaveBeenCalled()
+    await act(async () => finishSave({ ...MAP, diagramXml: xmlOnBoard }))
+
+    await waitFor(() => expect(onExit).toHaveBeenCalledOnce())
+  })
+
+  it('cancels a redraw in flight when a navigation request arrives, then leaves', async () => {
+    const { user, onExit, rerender } = await openEditor()
+    let reject: (reason: unknown) => void = () => {}
+    vi.mocked(regenerateMindMap).mockReturnValue(
+      new Promise((_, rejectFn) => {
+        reject = rejectFn
+      }),
+    )
+    await user.click(screen.getByRole('button', { name: 'Update from session' }))
+    await user.click(screen.getByRole('button', { name: 'Update' }))
+
+    rerender(true)
+    expect(cancelMindMapGeneration).toHaveBeenCalledOnce()
+    expect(onExit).not.toHaveBeenCalled()
+    await act(async () => reject(new Error(JSON.stringify({ code: 'cancelled' }))))
+
+    await waitFor(() => expect(onExit).toHaveBeenCalledOnce())
+  })
+
   it('warns while the connection to the editor is lost and clears it when restored', async () => {
     await openEditor()
 
@@ -414,7 +495,7 @@ describe('MindMapViewScreen', () => {
     expect(await screen.findByTestId('editor')).toBeInTheDocument()
   })
 
-  it('says the editor needs the internet when it does not load in time', async () => {
+  it('keeps loading and says it is slow when the editor is late but the browser is online', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
       renderScreen()
@@ -422,7 +503,9 @@ describe('MindMapViewScreen', () => {
 
       await act(() => vi.advanceTimersByTimeAsync(15000))
 
-      expect(screen.getByText('The editor needs an internet connection.')).toBeInTheDocument()
+      expect(screen.getByText(/taking longer than usual/)).toBeInTheDocument()
+      expect(screen.getByTestId('editor')).toBeInTheDocument()
+      expect(screen.queryByText('The editor needs an internet connection.')).not.toBeInTheDocument()
     } finally {
       vi.useRealTimers()
     }
