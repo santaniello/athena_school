@@ -82,7 +82,7 @@ function GenerateMindMapContent({
   }
 
   async function handleGenerate() {
-    if (!selectedId) return
+    if (!selectedId || !visible.some((session) => session.id === selectedId)) return
     setError(null)
     setGenerating(true)
     try {
@@ -110,6 +110,11 @@ function GenerateMindMapContent({
       session.topic.toLowerCase().includes(needle) ||
       session.folderName.toLowerCase().includes(needle),
   )
+
+  // A selection the search filtered out is not shown as selected, so it must not
+  // be generated either.
+  const selectionVisible =
+    selectedId !== null && visible.some((session) => session.id === selectedId)
 
   return (
     <Dialog open onOpenChange={(nextOpen) => !nextOpen && handleDismiss()}>
@@ -199,7 +204,11 @@ function GenerateMindMapContent({
             {t('common.cancel')}
           </Button>
           {sessions.state === 'ready' && list.length > 0 && !generating && (
-            <Button type="button" disabled={!selectedId} onClick={() => void handleGenerate()}>
+            <Button
+              type="button"
+              disabled={!selectionVisible}
+              onClick={() => void handleGenerate()}
+            >
               {error ? t('common.tryAgain') : t('generate.submit')}
             </Button>
           )}

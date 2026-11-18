@@ -41,6 +41,7 @@ export const mindmapEn = {
     loading: 'Loading the mind map...',
     loadFailed: 'Could not load the mind map.',
     preparing: 'Preparing the editor...',
+    preparingSlow: 'Still preparing the editor... this is taking longer than usual.',
     back: 'Back to mind maps',
     backToSession: 'Back to study session',
     save: 'Save',
