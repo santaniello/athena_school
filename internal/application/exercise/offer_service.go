@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/santaniello/athena/internal/application/sessionlock"
 	domainexercise "github.com/santaniello/athena/internal/domain/exercise"
 )
 
@@ -40,7 +40,7 @@ type OfferService struct {
 	generator  ChallengeGenerator
 	profiles   ProfileReader
 	tx         Transactor
-	locks      sessionLocks
+	locks      sessionlock.Locks
 	now        func() time.Time
 	newID      func() string
 }
@@ -61,7 +61,6 @@ func NewOfferService(
 		generator:  generator,
 		profiles:   profiles,
 		tx:         tx,
-		locks:      sessionLocks{held: map[string]*sessionLock{}},
 		now:        func() time.Time { return time.Now().UTC() },
 		newID:      uuid.NewString,
 	}
@@ -99,7 +98,10 @@ func (s *OfferService) Decline(ctx context.Context, offerID string) error {
 	if err != nil {
 		return fmt.Errorf("exercise: reading offer: %w", err)
 	}
-	unlock := s.locks.lock(offer.SessionID)
+	unlock, err := s.locks.Lock(ctx, offer.SessionID)
+	if err != nil {
+		return fmt.Errorf("exercise: waiting to decline the offer: %w", err)
+	}
 	defer unlock()
 	if err := s.offers.Delete(ctx, offerID); err != nil {
 		return fmt.Errorf("exercise: declining offer: %w", err)
@@ -121,7 +123,10 @@ func (s *OfferService) Accept(ctx context.Context, offerID string, spec domainex
 	if err != nil {
 		return SessionExerciseView{}, fmt.Errorf("exercise: reading offer: %w", err)
 	}
-	unlock := s.locks.lock(first.SessionID)
+	unlock, err := s.locks.Lock(ctx, first.SessionID)
+	if err != nil {
+		return SessionExerciseView{}, fmt.Errorf("exercise: waiting to accept the offer: %w", err)
+	}
 	defer unlock()
 
 	offer, err := s.offers.Get(ctx, offerID)
@@ -243,40 +248,5 @@ func difficultyFor(experienceLevel string) domainexercise.Difficulty {
 		return domainexercise.DifficultyAdvanced
 	default:
 		return domainexercise.DifficultyIntermediate
-	}
-}
-
-// sessionLocks hands out one mutex per session, in process: the desktop app
-// is a single process. An entry lives only while someone holds or waits for
-// it, so the map does not grow with the sessions ever seen.
-type sessionLocks struct {
-	mu   sync.Mutex
-	held map[string]*sessionLock
-}
-
-type sessionLock struct {
-	mu   sync.Mutex
-	refs int
-}
-
-// lock takes the session's mutex and returns the function that releases it.
-func (l *sessionLocks) lock(sessionID string) func() {
-	l.mu.Lock()
-	entry, ok := l.held[sessionID]
-	if !ok {
-		entry = &sessionLock{}
-		l.held[sessionID] = entry
-	}
-	entry.refs++
-	l.mu.Unlock()
-	entry.mu.Lock()
-	return func() {
-		entry.mu.Unlock()
-		l.mu.Lock()
-		entry.refs--
-		if entry.refs == 0 {
-			delete(l.held, sessionID)
-		}
-		l.mu.Unlock()
 	}
 }

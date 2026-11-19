@@ -226,7 +226,8 @@ func TestOfferService_Accept_aCancelAfterGenerationStillDeletesTheOffer(t *testi
 func TestOfferService_AcceptAndDecline_giveUpWaitingForTheSessionWhenCancelled(t *testing.T) {
 	// Given a session busy with another accept, and a caller whose context is cancelled
 	f := newOfferFixture(t)
-	release := must(f.service.locks.lock(context.Background(), "session-1"))
+	release, err := f.service.locks.Lock(context.Background(), "session-1")
+	require.NoError(t, err)
 	defer release()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
