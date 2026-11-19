@@ -33,6 +33,7 @@ import { SummaryDialog } from '@/components/summary-dialog'
 import { SummaryMarker } from '@/components/summary-marker'
 import { FindBar } from '@/components/find-bar'
 import { ToastViewport, type ToastItem } from '@/components/toast'
+import { getDraft, setDraft as setStoredDraft } from '@/lib/study-drafts'
 import { useFindInPage } from '@/hooks/use-find-in-page'
 import { useMessageHistory } from '@/hooks/use-message-history'
 import {
@@ -352,7 +353,16 @@ function StudyChatScreen({
   // fails. The screen is keyed by session, so the initial value is enough.
   const [loadingHistory, setLoadingHistory] = useState(mode === 'resume')
   const [sourceMode, setSourceMode] = useState<SourceMode>('notes')
-  const [draft, setDraft] = useState('')
+  const [draft, setDraftState] = useState(() => getDraft(sessionId))
+  // Mirrors every change into the per-session store so the text survives the
+  // screen unmounting (see lib/study-drafts.ts).
+  const setDraft = useCallback(
+    (text: string) => {
+      setDraftState(text)
+      setStoredDraft(sessionId, text)
+    },
+    [sessionId],
+  )
   const [error, setError] = useState<string | null>(null)
   // Persistent context-limit state, restored on resume and updated live by
   // the study:context-* events below — unlike `error`, never cleared by the
@@ -423,6 +433,11 @@ function StudyChatScreen({
   // newer event must not overwrite that event's state with older context.
   const contextVersionRef = useRef(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  // A restored draft may span several lines: grow the textarea to fit it.
+  useEffect(() => {
+    const el = textareaRef.current
+    if (el && el.value) el.style.height = `${el.scrollHeight}px`
+  }, [])
   const transcriptRef = useRef<HTMLDivElement>(null)
   // Starts pinned so a resumed session opens on its most recent message.
   const followTranscriptRef = useRef(true)
@@ -888,6 +903,7 @@ function StudyChatScreen({
     }
   }, [
     sessionId,
+    setDraft,
     refreshSessionUsage,
     refreshPendingOffer,
     refreshExerciseCards,

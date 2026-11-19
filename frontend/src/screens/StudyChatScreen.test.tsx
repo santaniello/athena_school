@@ -1,6 +1,6 @@
 import React from 'react'
-import { describe, expect, it, vi } from 'vitest'
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
   compactStudySession,
@@ -38,6 +38,7 @@ import StudyChatScreen from './StudyChatScreen'
 
 // The chat listens for an accepted offer that ended while it was unmounted; the
 // Wails runtime is not there in tests.
+import { clearDraft } from '@/lib/study-drafts'
 vi.mock('@/lib/mindmap', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/mindmap')>()),
   onMindMapOfferResolved: () => () => {},
@@ -166,6 +167,12 @@ function setupSubscriptions() {
   })
   return handlers
 }
+
+// The draft store is module state: keep one test's unsent text out of the next.
+afterEach(() => {
+  clearDraft('session-1')
+  clearDraft('session-2')
+})
 
 function renderNewSession(props: Partial<React.ComponentProps<typeof StudyChatScreen>> = {}) {
   return render(
@@ -2941,5 +2948,50 @@ describe('StudyChatScreen — find in conversation', () => {
 
     expect(await screen.findByText('Could not load the full history')).toBeInTheDocument()
     expect(screen.getByText('1 of 3')).toBeInTheDocument()
+  })
+})
+
+describe('StudyChatScreen — message draft across remounts', () => {
+  function remountPending(props: Partial<React.ComponentProps<typeof StudyChatScreen>> = {}) {
+    vi.mocked(requestOpeningTurn).mockReturnValueOnce(new Promise(() => {}))
+    renderNewSession(props)
+  }
+  const composer = () => screen.getByPlaceholderText(/type your answer/i)
+
+  it('restores the draft of a session after leaving and returning, and keeps it out of other sessions', async () => {
+    // Given a draft typed in session-1
+    const user = userEvent.setup()
+    const first = await renderSettledSession()
+    expect(first).toBeDefined()
+    await user.type(composer(), 'unsent question')
+    cleanup()
+
+    // When the chat of session-1 is mounted again
+    setupSubscriptions()
+    remountPending()
+    // Then the draft is back
+    await waitFor(() => expect(composer()).toHaveValue('unsent question'))
+    cleanup()
+
+    // And another session starts empty
+    setupSubscriptions()
+    remountPending({ sessionId: 'session-2' })
+    await waitFor(() => expect(composer()).toHaveValue(''))
+  })
+
+  it('clears the stored draft when the message is sent', async () => {
+    // Given a draft that is sent
+    const user = userEvent.setup()
+    vi.mocked(sendStudyMessage).mockResolvedValueOnce()
+    await renderSettledSession()
+    await user.type(composer(), 'to be sent')
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(sendStudyMessage).toHaveBeenCalled())
+    cleanup()
+
+    // When the chat is mounted again, the composer is empty
+    setupSubscriptions()
+    remountPending()
+    await waitFor(() => expect(composer()).toHaveValue(''))
   })
 })
