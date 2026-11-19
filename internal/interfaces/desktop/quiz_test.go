@@ -474,6 +474,8 @@ func (o *blockingQuizOffers) Accept(ctx context.Context, _ string, _ domainquiz.
 func newQuizOfferApp(offers quizOffers) *App {
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, WithQuizOfferService(offers))
 	app.ctx = context.Background()
+	// The real emitter needs the Wails runtime context; tests observe or ignore events.
+	app.emit = func(context.Context, string, ...interface{}) {}
 	return app
 }
 
@@ -521,6 +523,42 @@ func TestApp_AcceptQuizOffer_returnsTheQuizCard(t *testing.T) {
 		ID: "quiz-1", SessionID: "session-1", SessionTitle: "Caching", Difficulty: "HARD", QuestionCount: 8,
 		CreatedAt: quizTime.Format(time.RFC3339), MessageID: "message-1",
 	}, got)
+}
+
+func TestApp_AcceptQuizOffer_announcesTheResolvedOfferToTheSession(t *testing.T) {
+	observe := func(app *App) *[]emittedEvent {
+		var emitted []emittedEvent
+		app.emit = func(_ context.Context, name string, data ...interface{}) {
+			emitted = append(emitted, emittedEvent{name: name, data: data})
+		}
+		return &emitted
+	}
+	t.Run("a saved quiz", func(t *testing.T) {
+		// Given an offer that produces a quiz and an observed emitter
+		app := newQuizOfferApp(&fakeQuizOffers{summary: domainquiz.Summary{ID: "quiz-1", SessionID: "session-1"}})
+		emitted := observe(app)
+
+		// When accepting it
+		_, err := app.AcceptQuizOffer("offer-1", 5, "EASY")
+
+		// Then the session is told, so a chat remounted meanwhile re-reads the offer and the cards
+		require.NoError(t, err)
+		require.Len(t, *emitted, 1)
+		assert.Equal(t, eventQuizOfferResolved, (*emitted)[0].name)
+		assert.Equal(t, []interface{}{QuizOfferResolvedEvent{SessionID: "session-1", OfferID: "offer-1"}}, (*emitted)[0].data)
+	})
+	t.Run("a failed accept", func(t *testing.T) {
+		// Given an offer whose generation fails
+		app := newQuizOfferApp(&fakeQuizOffers{err: errors.New("boom")})
+		emitted := observe(app)
+
+		// When accepting it
+		_, err := app.AcceptQuizOffer("offer-1", 5, "EASY")
+
+		// Then nothing is announced: the offer stays pending
+		require.Error(t, err)
+		assert.Empty(t, *emitted)
+	})
 }
 
 func TestApp_AcceptQuizOffer_requiresAnOffer(t *testing.T) {

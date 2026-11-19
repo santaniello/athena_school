@@ -13,6 +13,7 @@ import {
   ListSessionQuizzes,
   SubmitQuizAttempt,
 } from '../../wailsjs/go/desktop/App'
+import { EventsOn } from '../../wailsjs/runtime/runtime'
 import i18n, { QUIZ_NAMESPACE } from '@/i18n'
 
 // The Interactive Quiz. The backend grades and stores everything; this module
@@ -137,6 +138,19 @@ export async function getPendingQuizOffer(sessionId: string): Promise<QuizOffer 
   const offer = await GetPendingQuizOffer(sessionId)
   if (!offer) return null
   return { id: offer.id, sessionId: offer.sessionId, messageId: offer.messageId }
+}
+
+// Emitted when an accepted offer finished: the quiz is saved and the offer is
+// gone. Accepting is a call that outlives the chat that made it, so a chat
+// opened again meanwhile learns about the end here.
+export interface QuizOfferResolvedEvent {
+  sessionId: string
+  offerId: string
+}
+
+// The caller must run the returned unsubscribe on unmount, and filter by session.
+export function onQuizOfferResolved(handler: (event: QuizOfferResolvedEvent) => void): () => void {
+  return EventsOn('quiz:offer-resolved', (event: QuizOfferResolvedEvent) => handler(event))
 }
 
 // Accepting generates the quiz, so it takes as long as generateQuiz and rejects

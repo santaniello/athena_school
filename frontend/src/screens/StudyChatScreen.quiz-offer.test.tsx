@@ -1,6 +1,6 @@
 import { setLabLanguage } from '@/i18n'
 import type { ComponentProps } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { getOfferProfile, getPendingOffer, listSessionExercises } from '@/lib/exercise'
@@ -11,7 +11,9 @@ import {
   getQuizOfferDifficulty,
   listQuizAttempts,
   listSessionQuizzes,
+  onQuizOfferResolved,
   type QuizOffer,
+  type QuizOfferResolvedEvent,
   type QuizSummary,
 } from '@/lib/quiz'
 import {
@@ -60,6 +62,7 @@ vi.mock('@/lib/quiz', async (importOriginal) => ({
   declineQuizOffer: vi.fn(),
   listSessionQuizzes: vi.fn(),
   listQuizAttempts: vi.fn(),
+  onQuizOfferResolved: vi.fn(),
 }))
 
 vi.mock('@/lib/study', async (importOriginal) => ({
@@ -98,12 +101,17 @@ const CARD: QuizSummary = {
 
 interface Handlers {
   done?: (event: StudyDoneEvent) => void
+  offerResolved?: (event: QuizOfferResolvedEvent) => void
 }
 
 function subscribe(): Handlers {
   const handlers: Handlers = {}
   vi.mocked(onStudyDone).mockImplementation((handler) => {
     handlers.done = handler
+    return vi.fn()
+  })
+  vi.mocked(onQuizOfferResolved).mockImplementation((handler) => {
+    handlers.offerResolved = handler
     return vi.fn()
   })
   for (const subscription of [
@@ -144,7 +152,7 @@ async function renderResumed(props: Partial<ComponentProps<typeof StudyChatScree
     summaryCoversUntilMessageId: '',
   } as Awaited<ReturnType<typeof resumeStudySession>>)
   const onStartQuiz = vi.fn()
-  render(
+  const { unmount } = render(
     <StudyChatScreen
       sessionId="session-1"
       initialTopic=""
@@ -158,7 +166,7 @@ async function renderResumed(props: Partial<ComponentProps<typeof StudyChatScree
     />,
   )
   await screen.findByText('Sure, a quiz.')
-  return { onStartQuiz }
+  return { onStartQuiz, unmount }
 }
 
 describe('StudyChatScreen — quiz offer', () => {
@@ -363,6 +371,95 @@ describe('StudyChatScreen — quiz offer', () => {
     await renderResumed()
 
     await waitFor(() => expect(listSessionQuizzes).toHaveBeenCalled())
+    expect(screen.getByPlaceholderText('Type your answer...')).toBeEnabled()
+  })
+
+  it('shows the quiz card without a click when the offer was accepted while the chat was unmounted', async () => {
+    // Given an accept still pending in a chat the user then leaves
+    subscribe()
+    const subscriptions: { handler: (event: QuizOfferResolvedEvent) => void; off: Mock }[] = []
+    vi.mocked(onQuizOfferResolved).mockImplementation((handler) => {
+      const off = vi.fn()
+      subscriptions.push({ handler, off })
+      return off
+    })
+    vi.mocked(getPendingQuizOffer).mockResolvedValue(OFFER)
+    vi.mocked(acceptQuizOffer).mockReturnValue(new Promise(() => {}))
+    const first = await renderResumed()
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'Accept' }))
+    first.unmount()
+
+    // When the same session is opened again, still showing the pending offer
+    await renderResumed()
+    await screen.findByText('Take a test about this session')
+
+    // And the backend saves the quiz and announces it
+    vi.mocked(getPendingQuizOffer).mockResolvedValue(null)
+    vi.mocked(listSessionQuizzes).mockResolvedValue([CARD])
+    expect(subscriptions).toHaveLength(2)
+    act(() => subscriptions[1].handler({ sessionId: 'session-1', offerId: 'offer-1' }))
+
+    // Then the old subscription was released, the card shows and the composer is free
+    expect(subscriptions[0].off).toHaveBeenCalled()
+    expect(await screen.findByRole('button', { name: 'Take test' })).toBeInTheDocument()
+    expect(screen.queryByText('Take a test about this session')).not.toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Type your answer...')).toBeEnabled()
+  })
+
+  it('keeps the card read after the offer was resolved when the first read of the cards answers late', async () => {
+    // Given a chat whose first read of the cards is still pending
+    const handlers = subscribe()
+    let answerFirstRead: (cards: QuizSummary[]) => void = () => {}
+    vi.mocked(listSessionQuizzes).mockReturnValueOnce(
+      new Promise((resolve) => {
+        answerFirstRead = resolve
+      }),
+    )
+    vi.mocked(getPendingQuizOffer).mockResolvedValue(OFFER)
+    await renderResumed()
+    await screen.findByText('Take a test about this session')
+
+    // When the offer is resolved and its read answers before the first one
+    vi.mocked(getPendingQuizOffer).mockResolvedValue(null)
+    vi.mocked(listSessionQuizzes).mockResolvedValue([CARD])
+    act(() => handlers.offerResolved?.({ sessionId: 'session-1', offerId: 'offer-1' }))
+    expect(await screen.findByRole('button', { name: 'Take test' })).toBeInTheDocument()
+    await act(async () => answerFirstRead([]))
+
+    // Then the older answer does not hide the card
+    expect(screen.getByRole('button', { name: 'Take test' })).toBeInTheDocument()
+  })
+
+  it('ignores the resolution of an offer of another session', async () => {
+    const handlers = subscribe()
+    vi.mocked(getPendingQuizOffer).mockResolvedValue(OFFER)
+    await renderResumed()
+    await screen.findByText('Take a test about this session')
+    vi.mocked(getPendingQuizOffer).mockClear()
+
+    act(() => handlers.offerResolved?.({ sessionId: 'session-2', offerId: 'offer-9' }))
+
+    expect(getPendingQuizOffer).not.toHaveBeenCalled()
+    expect(screen.getByText('Take a test about this session')).toBeInTheDocument()
+  })
+
+  it('clears an offer that no longer exists instead of showing an error forever', async () => {
+    // Given an offer the backend already resolved
+    subscribe()
+    vi.mocked(getPendingQuizOffer).mockResolvedValue(OFFER)
+    vi.mocked(acceptQuizOffer).mockRejectedValue(
+      new Error(JSON.stringify({ code: 'offer_not_found', message: 'x' })),
+    )
+    await renderResumed()
+    const user = userEvent.setup()
+    vi.mocked(listSessionQuizzes).mockResolvedValue([CARD])
+
+    // When accepting it again
+    await user.click(await screen.findByRole('button', { name: 'Accept' }))
+
+    // Then the chat drops the offer, re-reads the cards and frees the composer
+    expect(await screen.findByRole('button', { name: 'Take test' })).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.getByPlaceholderText('Type your answer...')).toBeEnabled()
   })
 })

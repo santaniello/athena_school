@@ -57,6 +57,11 @@ vi.mock('@/lib/exercise', async (importOriginal) => ({
   onExerciseOfferResolved: vi.fn(),
 }))
 
+vi.mock('@/lib/quiz', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/quiz')>()),
+  onQuizOfferResolved: () => () => {},
+}))
+
 vi.mock('@/lib/study', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/study')>()),
   getStudySessionSummary: vi.fn(),
