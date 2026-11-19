@@ -466,7 +466,7 @@ func (a *App) GenerateChallenge(sessionID, difficulty, kind, practiceGoal string
 	if err != nil {
 		return ChallengeSummaryDTO{}, err
 	}
-	ctx, release, ok := a.beginGeneration()
+	ctx, release, ok := a.challengeGeneration.begin(a.ctx)
 	if !ok {
 		return ChallengeSummaryDTO{}, &ExerciseError{Code: exerciseCodeGenerationInProgress, Message: "a challenge is already being generated"}
 	}
@@ -592,34 +592,11 @@ func (a *App) ListSessionsForGeneration() ([]SessionOptionDTO, error) {
 	return dtos, nil
 }
 
-// beginGeneration reserves the single generation slot. It returns the context
-// the generation runs under and the function that frees the slot, or false
-// when a generation is already running.
-func (a *App) beginGeneration() (context.Context, func(), bool) {
-	a.generationMu.Lock()
-	defer a.generationMu.Unlock()
-	if a.cancelGeneration != nil {
-		return nil, nil, false
-	}
-	ctx, cancel := context.WithCancel(a.ctx)
-	a.cancelGeneration = cancel
-	return ctx, func() {
-		cancel()
-		a.generationMu.Lock()
-		a.cancelGeneration = nil
-		a.generationMu.Unlock()
-	}, true
-}
-
 // CancelChallengeGeneration cancels the challenge generation in flight, which
 // then fails with the cancelled code and stores nothing. With none running it
 // does nothing.
 func (a *App) CancelChallengeGeneration() error {
-	a.generationMu.Lock()
-	defer a.generationMu.Unlock()
-	if a.cancelGeneration != nil {
-		a.cancelGeneration()
-	}
+	a.challengeGeneration.cancel()
 	return nil
 }
 
@@ -1080,7 +1057,7 @@ func (a *App) AcceptOffer(offerID, difficulty, kind, practiceGoal string) (Sessi
 	if err != nil {
 		return SessionExerciseDTO{}, err
 	}
-	ctx, release, ok := a.beginGeneration()
+	ctx, release, ok := a.challengeGeneration.begin(a.ctx)
 	if !ok {
 		return SessionExerciseDTO{}, &ExerciseError{Code: exerciseCodeGenerationInProgress, Message: "a challenge is already being generated"}
 	}
