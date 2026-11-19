@@ -28,6 +28,11 @@ type entry struct {
 // Lock takes the session's lock and returns the function that releases it. It
 // returns the context's error, holding nothing, when ctx is done first.
 func (l *Locks) Lock(ctx context.Context, sessionID string) (func(), error) {
+	// A free slot and a done context would both be ready in the select below,
+	// and Go picks one at random; a cancelled caller must never get the lock.
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	l.mu.Lock()
 	if l.held == nil {
 		l.held = map[string]*entry{}

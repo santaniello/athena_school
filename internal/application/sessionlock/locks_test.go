@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func newTestLocks() *Locks { return &Locks{} }
@@ -76,4 +77,21 @@ func TestLocks_aWaiterGivesUpWhenItsContextIsCancelled(t *testing.T) {
 	assert.Equal(t, 1, locks.held["session-1"].refs)
 	unlock()
 	assert.Empty(t, locks.held)
+}
+
+func TestLocks_aCancelledContextNeverTakesAFreeLock(t *testing.T) {
+	// Given a free session and a context that is already cancelled
+	locks := newTestLocks()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// When it asks for the lock many times, since a ready slot and a done context used to be picked at random
+	for range 200 {
+		unlock, err := locks.Lock(ctx, "session-1")
+
+		// Then it always gets the context's error and holds nothing
+		require.ErrorIs(t, err, context.Canceled)
+		assert.Nil(t, unlock)
+		assert.Empty(t, locks.held)
+	}
 }
