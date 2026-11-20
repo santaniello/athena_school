@@ -107,12 +107,14 @@ type fixedSummaryWindow int
 func (w fixedSummaryWindow) Tokens() int { return int(w) }
 
 func TestCompactSession_withASmallSummaryModel_foldsFewerMessagesBecauseItsSummaryIsSmaller(t *testing.T) {
-	// Given 54,000 tokens of history in a 100,000 window, where the default
+	// Given 51,000 tokens of history in a 100,000 window, where the default
 	// summary projection (5,000) needs two messages folded to reach the
-	// 50,000 target but a small summary model (1,250) only needs one
+	// 50,000 target but a small summary model (1,250) only needs one. The
+	// 8,500-token messages leave about 1,700 tokens of margin either way, so
+	// the system prompt's size can change without moving the boundary
 	f := newCompactionFixture(t)
 	f.service.summaryWindow = fixedSummaryWindow(8_000)
-	history := heavyHistory(6, 9000)
+	history := heavyHistory(6, 8500)
 	summary := newSummaryOf("m1")
 	f.sessions.EXPECT().GetByID(context.Background(), "session-1").Return(compactionSession(domainstudy.ContextStateNormal, 57_000), nil).Once()
 	f.summaries.EXPECT().Get(context.Background(), "session-1").Return(domainstudy.ConversationSummary{}, domainstudy.ErrConversationSummaryNotFound).Once()
