@@ -36,24 +36,31 @@ const unavailableContextMessage = "Unable to determine this session's context li
 //
 // The model may end a reply with the exercise offer marker (see
 // offer_marker.go): the user never sees it, not while streaming and not
-// after, and the stored text is clean. When detectOffer is set (a reply to
+// after, and the stored text is clean. When repliesToUser is set (a reply to
 // the user's own message) and the marker was there, an offer is created under
 // the stored message once the reply is safely persisted; failing to create it
 // never fails the reply.
+//
+// The model may also end a reply with the tutor state block (see
+// tutor_state_marker.go), hidden the same way. Once the reply is persisted its
+// report is applied to the session's concepts (see recordTutorState); a bad
+// block, a failing repository, a failed or cancelled stream never fail the reply
+// or write any state. The two hiding filters run in series, state first.
 func (s *Service) streamAndPersist(
 	ctx context.Context, sessionID string, priorContext domainstudy.ContextUsage,
-	messages []domainllm.Message, sources []domainknowledge.Source, detectOffer bool, onChunk func(chunk string) error,
+	messages []domainllm.Message, sources []domainknowledge.Source, repliesToUser bool, onChunk func(chunk string) error,
 	onContext ContextCallback, onContextUnavailable ContextUnavailableCallback,
 ) (string, error) {
 	var buf strings.Builder
-	var filter offerMarkerFilter
+	var stateFilter tutorStateFilter
+	var offerFilter offerMarkerFilter
 	streamResp, err := s.llm.ChatStream(ctx, domainllm.ChatRequest{
 		SessionID: sessionID,
 		Task:      domainllm.TaskStudy,
 		Messages:  messages,
 	}, func(chunk string) error {
 		buf.WriteString(chunk)
-		if safe := filter.write(chunk); safe != "" {
+		if safe := offerFilter.write(stateFilter.write(chunk)); safe != "" {
 			return onChunk(safe)
 		}
 		return nil
@@ -61,12 +68,15 @@ func (s *Service) streamAndPersist(
 	if err != nil {
 		return "", err
 	}
-	if held := filter.flush(); held != "" {
+	// The state filter's held text still has to pass the offer filter before
+	// the offer filter's own held text is released.
+	if held := offerFilter.write(stateFilter.flush()) + offerFilter.flush(); held != "" {
 		if err := onChunk(held); err != nil {
 			return "", err
 		}
 	}
-	content, offered := stripOfferMarkers(buf.String())
+	cleaned, report, markerErr := parseTutorState(buf.String())
+	content, offered := stripOfferMarkers(cleaned)
 
 	assistantMessage := domainstudy.Message{
 		ID:        uuid.NewString(),
@@ -107,13 +117,15 @@ func (s *Service) streamAndPersist(
 
 	emitContextTransition(priorContext, newUsage, onContext)
 
-	if detectOffer && offered != domainstudy.OfferKindNone && s.offers != nil {
+	if repliesToUser && offered != domainstudy.OfferKindNone && s.offers != nil {
 		// Best effort: a missed offer is a normal reply and the user can ask
 		// again, but the failure is logged so it can be diagnosed.
 		if err := s.offers.CreateOffer(ctx, sessionID, assistantMessage.ID, offered); err != nil {
 			log.Printf("study: creating %s offer for session %s: %v", offered, sessionID, err)
 		}
 	}
+
+	s.recordTutorState(ctx, sessionID, report, markerErr, repliesToUser)
 
 	switch {
 	case streamResp.Model == "":

@@ -110,10 +110,11 @@ type StateReport struct { // what the marker carries
     Assisted     bool
 }
 
-func ApplyReport(current *ConceptState, report StateReport, now time.Time) ConceptState
+func ApplyReport(current *ConceptState, report StateReport, now time.Time) (ConceptState, bool)
 ```
 
-`ApplyReport` implements decision 6. `ConceptStateRepository` (`Upsert`, `ListBySession`,
+`ApplyReport` implements decision 6; the bool is false when the report changes nothing (a
+reported `NOT_ASSESSED`), so the caller stores nothing. `ConceptStateRepository` (`Upsert`, `ListBySession`,
 `DeleteOldest(ctx, sessionID, keep string)`, where `keep` is the concept written in the current
 turn and is excluded from the candidates), plus the cap of decision 9.
 
@@ -157,23 +158,23 @@ reset ([`reset.go`](../../../internal/infrastructure/sqlite/reset.go)) include t
 
 ## Tasks
 
-- [ ] Domain: statuses, strategies, `ApplyReport` (no status change without evidence, cap at
+- [x] Domain: statuses, strategies, `ApplyReport` (no status change without evidence, cap at
       `INTRODUCED` for new rows, ignored `NOT_ASSESSED`, `NEEDS_REVIEW` step, assistance and
       evidence counts, `LastStrategy`), name normalization (runes), cap of 30 concepts with `keep`
-- [ ] SQLite: migration, `ConceptStateRepository`, delete with the session and on reset
-- [ ] Application: `parseTutorState` (valid, malformed JSON, unknown status, blank concept,
+- [x] SQLite: migration, `ConceptStateRepository`, delete with the session and on reset
+- [x] Application: `parseTutorState` (valid, malformed JSON, unknown status, blank concept,
       two blocks, block not at the end, unterminated block; strategy in lower case, omitted and
       unknown keeps the report valid)
-- [ ] Application: `tutorStateFilter` (whole block in one chunk, split across chunks, split inside
+- [x] Application: `tutorStateFilter` (whole block in one chunk, split across chunks, split inside
       the tags, never terminated, text after the block)
-- [ ] Application: `streamAndPersist` stores the cleaned content, applies the report, ignores a
+- [x] Application: `streamAndPersist` stores the cleaned content, applies the report, ignores a
       bad marker, writes nothing on a failed or cancelled stream, survives a repository error,
       forces `userEvidence = false` on the opening turn, and never leaks an offer marker split
       across chunks in the same reply as a state block
-- [ ] Prompt test for `tutorStateInstruction` pinned by key phrases (format, evidence rule,
+- [x] Prompt test for `tutorStateInstruction` pinned by key phrases (format, evidence rule,
       "never for a concept you only explained")
-- [ ] Mocks regenerated (`make mock`)
-- [ ] Docs: CHANGELOG (`Added`)
+- [x] Mocks regenerated (`make mock`)
+- [x] Docs: CHANGELOG (`Added`)
 
 ## Acceptance Criteria
 

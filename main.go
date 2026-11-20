@@ -172,6 +172,7 @@ func main() {
 		study.WithSummarizer(study.NewSummarizer(llmClient, profiles, study.WithSummaryModelWindow(summaryWindow))),
 		study.WithSummaryWindow(summaryWindow),
 		study.WithSummaries(sqlite.NewConversationSummaryRepository(db)),
+		study.WithConceptStates(sqlite.NewConceptStateRepository(db)),
 		study.WithOfferGate(studyoffers.NewGate(
 			exercisesource.NewOfferGate(offerService), quizsource.NewOfferGate(quizOfferService),
 			studyoffers.WithMindMapOffers(mindmapsource.NewOfferGate(mindMapOfferService)),

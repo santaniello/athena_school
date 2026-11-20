@@ -2,6 +2,7 @@ package study
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -215,4 +216,47 @@ func TestBuildSystemPrompt_instructsToNeverTranslateTheUserName(t *testing.T) {
 			assert.Contains(t, prompt, "never translate")
 		})
 	}
+}
+
+func TestBuildSystemPrompt_asksForTheTutorStateBlock(t *testing.T) {
+	prompt := adaptivePrompt()
+
+	for _, rule := range []string{
+		tutorStateOpenTag,
+		tutorStateCloseTag,
+		`{"concept":"Race Condition","status":"PARTIALLY_UNDERSTOOD","strategy":"CORRECTIVE_FEEDBACK","userEvidence":true,"assisted":true}`,
+		"on its own last lines, after all the text, with nothing after it",
+		"at most once per reply",
+		"only when you actually worked on a concept in this reply",
+		"NOT_ASSESSED, INTRODUCED, PARTIALLY_UNDERSTOOD, DEMONSTRATED or NEEDS_REVIEW",
+		"one of the six strategy names above",
+		"The user never sees this block",
+	} {
+		assert.Contains(t, prompt, rule)
+	}
+}
+
+func TestBuildSystemPrompt_tutorStateEvidenceRule(t *testing.T) {
+	prompt := adaptivePrompt()
+
+	for _, rule := range []string{
+		"Set userEvidence to true only when the user's own latest message shows the behavior behind the status",
+		"Use DEMONSTRATED only when userEvidence is true, never for a concept you only explained",
+		"A concept you explain is at most INTRODUCED",
+		"Set assisted to true when you had to give a hint or explain to get there",
+	} {
+		assert.Contains(t, prompt, rule)
+	}
+}
+
+func TestBuildSystemPrompt_tutorStateBlockIsTheOnlyPlaceForStrategyNames(t *testing.T) {
+	prompt := adaptivePrompt()
+
+	assert.Contains(t, prompt, "The strategy field of this block is the only place you may write a strategy name")
+}
+
+func TestBuildSystemPrompt_tutorStateInstructionComesAfterTheOfferRules(t *testing.T) {
+	prompt := adaptivePrompt()
+
+	assert.Greater(t, strings.Index(prompt, tutorStateOpenTag), strings.Index(prompt, mindMapOfferMarker))
 }
