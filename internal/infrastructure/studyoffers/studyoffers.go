@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/santaniello/athena/internal/application/sessionlock"
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 )
 
@@ -37,6 +38,10 @@ type side struct {
 // mind map offers. A session has at most one pending offer across all kinds.
 type Gate struct {
 	sides []side
+	// locks makes the check of the other kinds and the create one step per
+	// session; the kinds store their offers in separate tables, so nothing
+	// else ties them together.
+	locks sessionlock.Locks
 }
 
 // Option configures a Gate.
@@ -81,7 +86,9 @@ func (g *Gate) HasPending(ctx context.Context, sessionID string) (bool, error) {
 
 // CreateOffer stores a pending offer of the given kind under the assistant
 // message. It refuses when the session already has a pending offer of another
-// kind; a second offer of the same kind is refused by its own service.
+// kind; a second offer of the same kind is refused by its own service. The
+// check and the create run under the session lock, so two offers of different
+// kinds created together cannot both pass.
 func (g *Gate) CreateOffer(ctx context.Context, sessionID, messageID string, kind domainstudy.OfferKind) error {
 	var target Offers
 	for _, s := range g.sides {
@@ -92,6 +99,11 @@ func (g *Gate) CreateOffer(ctx context.Context, sessionID, messageID string, kin
 	if target == nil {
 		return fmt.Errorf("%w: %q", ErrUnsupportedKind, kind)
 	}
+	unlock, err := g.locks.Lock(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	for _, s := range g.sides {
 		if s.kind == kind {
 			continue

@@ -3,7 +3,9 @@ package studyoffers
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -257,4 +259,75 @@ func TestGate_withoutMindMapOffers_hasNoMindMapSide(t *testing.T) {
 			require.ErrorIs(t, err, ErrUnsupportedKind)
 		})
 	}
+}
+
+// slowOffers is a kind of offer backed by a store shared with the other kinds
+// only through the gate: it reports what was created so far, and pauses
+// between the check and the create to widen the race window.
+type slowOffers struct {
+	mu      sync.Mutex
+	pending bool
+}
+
+func (o *slowOffers) HasPending(context.Context, string) (bool, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	time.Sleep(10 * time.Millisecond)
+	return o.pending, nil
+}
+
+func (o *slowOffers) CreateOffer(context.Context, string, string) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.pending = true
+	return nil
+}
+
+func TestGate_CreateOffer_concurrentKindsCreateExactlyOne(t *testing.T) {
+	// Given the three kinds wired and a reply of each kind finishing together
+	exercise, quiz, mindMap := &slowOffers{}, &slowOffers{}, &slowOffers{}
+	gate := NewGate(exercise, quiz, WithMindMapOffers(mindMap))
+	kinds := []domainstudy.OfferKind{domainstudy.OfferKindExercise, domainstudy.OfferKindQuiz, domainstudy.OfferKindMindMap}
+	errs := make([]error, len(kinds))
+
+	// When all of them create an offer for the same session
+	var wg sync.WaitGroup
+	for i, kind := range kinds {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs[i] = gate.CreateOffer(context.Background(), "session-1", "message", kind)
+		}()
+	}
+	wg.Wait()
+
+	// Then exactly one offer exists and the others were refused
+	created := 0
+	for _, o := range []*slowOffers{exercise, quiz, mindMap} {
+		if o.pending {
+			created++
+		}
+	}
+	assert.Equal(t, 1, created)
+	refused := 0
+	for _, err := range errs {
+		if errors.Is(err, ErrOfferPending) {
+			refused++
+		}
+	}
+	assert.Equal(t, len(kinds)-1, refused)
+}
+
+func TestGate_CreateOffer_givesUpWhenTheSessionLockIsNotFree(t *testing.T) {
+	// Given a caller whose context is already done
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	exercise := &fakeOffers{}
+
+	// When it creates an offer
+	err := NewGate(exercise, &fakeOffers{}).CreateOffer(ctx, "session-1", "message-1", domainstudy.OfferKindExercise)
+
+	// Then it gives up and nothing was created
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Empty(t, exercise.created)
 }
