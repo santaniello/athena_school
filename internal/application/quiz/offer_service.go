@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/santaniello/athena/internal/application/sessionlock"
 	domainquiz "github.com/santaniello/athena/internal/domain/quiz"
 )
 
@@ -20,7 +21,7 @@ type OfferService struct {
 	offers    domainquiz.OfferRepository
 	quizzes   domainquiz.Repository
 	generator Generator
-	locks     sessionLocks
+	locks     sessionlock.Locks
 	now       func() time.Time
 	newID     func() string
 }
@@ -31,7 +32,6 @@ func NewOfferService(offers domainquiz.OfferRepository, quizzes domainquiz.Repos
 		offers:    offers,
 		quizzes:   quizzes,
 		generator: generator,
-		locks:     sessionLocks{held: map[string]*sessionLock{}},
 		now:       func() time.Time { return time.Now().UTC() },
 		newID:     uuid.NewString,
 	}
@@ -72,7 +72,10 @@ func (s *OfferService) Decline(ctx context.Context, offerID string) error {
 	if err != nil {
 		return fmt.Errorf("quiz: reading offer: %w", err)
 	}
-	unlock := s.locks.lock(offer.SessionID)
+	unlock, err := s.locks.Lock(ctx, offer.SessionID)
+	if err != nil {
+		return fmt.Errorf("quiz: waiting to decline the offer: %w", err)
+	}
 	defer unlock()
 	if _, err := s.offers.Get(ctx, offerID); err != nil {
 		if errors.Is(err, domainquiz.ErrOfferNotFound) {
@@ -101,7 +104,10 @@ func (s *OfferService) Accept(ctx context.Context, offerID string, spec domainqu
 	if err != nil {
 		return domainquiz.Summary{}, fmt.Errorf("quiz: reading offer: %w", err)
 	}
-	unlock := s.locks.lock(first.SessionID)
+	unlock, err := s.locks.Lock(ctx, first.SessionID)
+	if err != nil {
+		return domainquiz.Summary{}, fmt.Errorf("quiz: waiting to accept the offer: %w", err)
+	}
 	defer unlock()
 
 	offer, err := s.offers.Get(ctx, offerID)

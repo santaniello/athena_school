@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/santaniello/athena/internal/application/sessionlock"
 	domainmindmap "github.com/santaniello/athena/internal/domain/mindmap"
 )
 
@@ -31,7 +32,7 @@ type OfferService struct {
 	offers    domainmindmap.OfferRepository
 	mindMaps  domainmindmap.Repository
 	generator Generator
-	locks     sessionLocks
+	locks     sessionlock.Locks
 	now       func() time.Time
 	newID     func() string
 }
@@ -42,7 +43,6 @@ func NewOfferService(offers domainmindmap.OfferRepository, mindMaps domainmindma
 		offers:    offers,
 		mindMaps:  mindMaps,
 		generator: generator,
-		locks:     sessionLocks{held: map[string]*sessionLock{}},
 		now:       func() time.Time { return time.Now().UTC() },
 		newID:     uuid.NewString,
 	}
@@ -83,7 +83,7 @@ func (s *OfferService) Decline(ctx context.Context, offerID string) error {
 	if err != nil {
 		return fmt.Errorf("mindmap: reading offer: %w", err)
 	}
-	unlock, err := s.locks.lock(ctx, offer.SessionID)
+	unlock, err := s.locks.Lock(ctx, offer.SessionID)
 	if err != nil {
 		return fmt.Errorf("mindmap: waiting to decline the offer: %w", err)
 	}
@@ -115,7 +115,7 @@ func (s *OfferService) Accept(ctx context.Context, offerID string) (domainmindma
 	if err != nil {
 		return domainmindmap.Summary{}, fmt.Errorf("mindmap: reading offer: %w", err)
 	}
-	unlock, err := s.locks.lock(ctx, first.SessionID)
+	unlock, err := s.locks.Lock(ctx, first.SessionID)
 	if err != nil {
 		return domainmindmap.Summary{}, fmt.Errorf("mindmap: waiting to accept the offer: %w", err)
 	}

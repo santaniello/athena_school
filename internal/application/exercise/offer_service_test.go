@@ -136,6 +136,25 @@ func TestOfferService_GetPending(t *testing.T) {
 	})
 }
 
+func TestOfferService_AcceptAndDecline_giveUpWaitingForTheSessionWhenCancelled(t *testing.T) {
+	// Given a session busy with another caller, and a caller whose context is cancelled
+	f := newOfferFixture(t)
+	release, err := f.service.locks.Lock(context.Background(), "session-1")
+	require.NoError(t, err)
+	defer release()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	f.offers.EXPECT().Get(ctx, "offer-1").Return(testOffer, nil).Twice()
+
+	// When it tries to accept or decline
+	_, acceptErr := f.service.Accept(ctx, "offer-1", domainexercise.ChallengeSpec{})
+	declineErr := f.service.Decline(ctx, "offer-1")
+
+	// Then both return the cancellation instead of waiting, and change nothing
+	require.ErrorIs(t, acceptErr, context.Canceled)
+	require.ErrorIs(t, declineErr, context.Canceled)
+}
+
 func TestOfferService_Decline_deletesTheOffer(t *testing.T) {
 	// Given a pending offer
 	f := newOfferFixture(t)
@@ -633,21 +652,6 @@ func TestOfferService_Accept_serializesConcurrentAcceptsOfTheSameSession(t *test
 	require.NoError(t, errs[1])
 	assert.Equal(t, offerView(), views[0])
 	assert.Equal(t, offerView(), views[1])
-}
-
-func TestSessionLocks_dropsAnEntryOnceNobodyHoldsIt(t *testing.T) {
-	// Given locks used for two sessions
-	locks := sessionLocks{held: map[string]*sessionLock{}}
-
-	// When both are taken and released
-	unlockA := locks.lock("a")
-	unlockB := locks.lock("b")
-	assert.Len(t, locks.held, 2)
-	unlockA()
-	unlockB()
-
-	// Then the map is empty again
-	assert.Empty(t, locks.held)
 }
 
 func TestOfferService_Accept_practiceNeverReusesAnExistingChallenge(t *testing.T) {

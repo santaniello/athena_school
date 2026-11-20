@@ -16,6 +16,9 @@ linters:
     - bodyclose
     - sqlclosecheck
     - misspell
+  exclusions:
+    paths:
+      - frontend/node_modules
   settings:
     gocritic:
       disabled-tags:
@@ -25,6 +28,9 @@ formatters:
   enable:
     - gofmt
     - goimports
+  exclusions:
+    paths:
+      - frontend/node_modules
   settings:
     goimports:
       local-prefixes:

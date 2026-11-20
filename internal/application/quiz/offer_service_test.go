@@ -112,6 +112,25 @@ func TestOfferService_GetPending(t *testing.T) {
 	}
 }
 
+func TestOfferService_AcceptAndDecline_giveUpWaitingForTheSessionWhenCancelled(t *testing.T) {
+	// Given a session busy with another caller, and a caller whose context is cancelled
+	f := newOfferFixture(t)
+	release, err := f.service.locks.Lock(context.Background(), "session-1")
+	require.NoError(t, err)
+	defer release()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	f.offers.EXPECT().Get(ctx, "offer-1").Return(pendingOffer(), nil).Twice()
+
+	// When it tries to accept or decline
+	_, acceptErr := f.service.Accept(ctx, "offer-1", domainquiz.Spec{})
+	declineErr := f.service.Decline(ctx, "offer-1")
+
+	// Then both return the cancellation instead of waiting, and change nothing
+	require.ErrorIs(t, acceptErr, context.Canceled)
+	require.ErrorIs(t, declineErr, context.Canceled)
+}
+
 func TestOfferService_Decline_deletesTheOffer(t *testing.T) {
 	// Given a pending offer
 	f := newOfferFixture(t)
