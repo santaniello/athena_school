@@ -40,6 +40,7 @@ Payments         Paddle
 | [1](phase-01-desktop-mvp/) | Desktop MVP | OpenRouter key gate, onboarding, study | Phase 0 |
 | [2](phase-02-knowledge-engine/) | Knowledge Engine | Knowledge Base + RAG + notes | Phase 1 |
 | [3](phase-03-architecture-lab/) | Architecture Lab | Challenges, diagram whiteboard, rubric evaluation, oral defense | Phase 2 |
+| [4](phase-04-tutor/) | Adaptive Tutor | One adaptive study tutor with a persisted pedagogical state | Phase 2 |
 
 ---
 
@@ -140,6 +141,21 @@ Design reference: [ADR-005](../decisions/ADR-005-exercise-engine.md). The lab sc
 
 ---
 
+## Phase 4 — Adaptive Tutor
+
+The study tutor adapts its approach (explain, question, hint, check, correct, review) on every
+reply, with no mode for the user to pick. Origin: `tutor_spec.md`, reduced to what fits the app.
+The Learn Intelligent Engine of that proposal does not exist and is not specified here.
+
+| Spec | Description |
+|---|---|
+| [01-adaptive-tutor-prompt.md](phase-04-tutor/01-adaptive-tutor-prompt.md) | Replaces the rigid question-first prompt with six internal strategies and selection rules; prompt only |
+| [02-pedagogical-state.md](phase-04-tutor/02-pedagogical-state.md) | Per-session concept state reported by the model in a hidden marker, validated in code, no extra LLM call |
+| [03-state-driven-adaptation.md](phase-04-tutor/03-state-driven-adaptation.md) | The state returns to the tutor each turn, bounded, and survives compaction |
+| [04-evidence-and-session-summary.md](phase-04-tutor/04-evidence-and-session-summary.md) | Draft: evidence with message references and an end-of-session summary |
+
+---
+
 ## Dependency Graph
 
 ```text
@@ -150,4 +166,6 @@ Phase 1 (Desktop MVP)
 Phase 2 (Knowledge Engine)
     ↓
 Phase 3 (Architecture Lab)
+    ↓
+Phase 4 (Adaptive Tutor)
 ```
