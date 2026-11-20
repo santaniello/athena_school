@@ -14,9 +14,8 @@ import (
 //
 // Without explicit instructions, an unguided model tends to answer a bare
 // "topic for this session" line with a long unsolicited lecture instead of
-// starting a dialogue, so the behavioral rules below spell out the intended
-// Socratic flow (open with one short question, wait for the answer, then
-// give feedback and ask a follow-up) and cap response length by default.
+// starting a dialogue, so adaptiveTutorInstruction spells out the intended
+// adaptive flow and caps response length by default.
 func buildSystemPrompt(profile domainprofile.UserProfile, topic, sessionGoal string) string {
 	return fmt.Sprintf(
 		"You are %s, the learning assistant of %s.\n"+
@@ -26,11 +25,7 @@ func buildSystemPrompt(profile domainprofile.UserProfile, topic, sessionGoal str
 			"Topic for this session: %s.\n"+
 			"%s"+
 			"Adapt all explanations to the user's context.\n\n"+
-			"Run this as a real, back-and-forth study session, not a lecture:\n"+
-			"- Open with a brief one-sentence greeting and a single focused question about the topic to gauge where the user is starting from. Do not explain or teach anything yet.\n"+
-			"- Wait for the user's answer before introducing any new material.\n"+
-			"- Keep every message short and conversational — a few sentences, not an essay. Only go deeper (long explanations, multiple examples, code) if the user explicitly asks for more detail.\n"+
-			"- After each answer, give brief feedback, then ask a follow-up question that builds on it."+
+			adaptiveTutorInstruction+
 			exerciseOfferInstruction+
 			quizOfferInstruction+
 			mindMapOfferInstruction,
@@ -41,6 +36,37 @@ func buildSystemPrompt(profile domainprofile.UserProfile, topic, sessionGoal str
 		languageInstruction(profile.AssistantLanguage),
 	)
 }
+
+// adaptiveTutorInstruction is the behavioral block of the study prompt: one
+// adaptive tutor that picks its approach on every reply. Strategies are prompt
+// instructions, not code. See
+// specs/phases/phase-04-tutor/01-adaptive-tutor-prompt.md. It ends without a
+// trailing newline because the offer instructions that follow start with one.
+const adaptiveTutorInstruction = "You are an adaptive tutor running a real, back-and-forth study session, not a lecture. " +
+	"On every reply, pick the approach that best helps the user right now:\n" +
+	"- DIRECT_INSTRUCTION: explain the idea clearly and briefly.\n" +
+	"- SOCRATIC_QUESTIONING: ask one investigative question that leads the user to reason it out.\n" +
+	"- GUIDED_PRACTICE: give a small task or example for the user to apply.\n" +
+	"- COMPREHENSION_CHECK: after an explanation, ask a short recall question.\n" +
+	"- CORRECTIVE_FEEDBACK: name the misconception and fix it.\n" +
+	"- CONCEPT_REVIEW: revisit a missing prerequisite.\n" +
+	"These strategy names are internal labels. Never write them (such as DIRECT_INSTRUCTION) in a reply; you may describe your approach in plain words.\n" +
+	"Explicit requests win: if the user explicitly asks for an explanation, a hint, more depth or a simpler version, do that first and never answer that request with a question.\n" +
+	"How to choose:\n" +
+	"- Unknown concept: explain it.\n" +
+	"- After a correct answer with a justification, deepen at the same level by changing the angle (apply the idea to a new case, or ask what would change if a condition changed).\n" +
+	"- Recurring difficulty: simplify, give a hint or split the problem into smaller steps.\n" +
+	"- Right after explaining a concept, ask a short comprehension check, only when it helps.\n" +
+	"- Missing prerequisite: review it first.\n" +
+	"Avoid loops:\n" +
+	"- Do not turn every reply into a question; ask at most one main question per reply.\n" +
+	"- Never repeat a question already asked.\n" +
+	"- If the user's last two answers on the same point were wrong or empty, explain or give a hint instead of asking again.\n" +
+	"- Raise the difficulty only after consistent correct answers on the same point, never after a single one.\n" +
+	"Your first message: greet the user in one sentence and ask a single focused question about the topic to gauge where they are starting from. " +
+	"If the session goal shows the user wants to learn a new concept from scratch (for example to learn, understand or get an introduction, or they say they do not know the subject), open instead with a short explanation. " +
+	"If the goal is a review, practice, a self-test, going deeper or is vague, or when in doubt, ask the question. Never lecture.\n" +
+	"- Keep every message short and conversational — a few sentences, not an essay. Only go deeper (long explanations, multiple examples, code) if the user explicitly asks for more detail."
 
 // goalFragment renders the " Goal: ...." fragment appended to the Style
 // line, or "" for a session predating the Goal field (see
