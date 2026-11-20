@@ -219,8 +219,11 @@ func TestBuildSystemPrompt_instructsToNeverTranslateTheUserName(t *testing.T) {
 }
 
 func TestBuildSystemPrompt_asksForTheTutorStateBlock(t *testing.T) {
+	// Given the study system prompt
 	prompt := adaptivePrompt()
 
+	// When looking for the state block's format rules
+	// Then every one is there
 	for _, rule := range []string{
 		tutorStateOpenTag,
 		tutorStateCloseTag,
@@ -237,8 +240,11 @@ func TestBuildSystemPrompt_asksForTheTutorStateBlock(t *testing.T) {
 }
 
 func TestBuildSystemPrompt_tutorStateEvidenceRule(t *testing.T) {
+	// Given the study system prompt
 	prompt := adaptivePrompt()
 
+	// When looking for the evidence rules of the state block
+	// Then every one is there
 	for _, rule := range []string{
 		"Set userEvidence to true only when the user's own latest message shows the behavior behind the status",
 		"Use DEMONSTRATED only when userEvidence is true, never for a concept you only explained",
@@ -250,13 +256,19 @@ func TestBuildSystemPrompt_tutorStateEvidenceRule(t *testing.T) {
 }
 
 func TestBuildSystemPrompt_tutorStateBlockIsTheOnlyPlaceForStrategyNames(t *testing.T) {
+	// Given the study system prompt, which forbids writing strategy names in a reply
 	prompt := adaptivePrompt()
 
+	// When looking for the exception
+	// Then the state block's strategy field is named as the only place
 	assert.Contains(t, prompt, "The strategy field of this block is the only place you may write a strategy name")
 }
 
 func TestBuildSystemPrompt_tutorStateInstructionComesAfterTheOfferRules(t *testing.T) {
+	// Given the study system prompt
 	prompt := adaptivePrompt()
 
+	// When comparing where the state block and the last offer rule appear
+	// Then the state block comes after it
 	assert.Greater(t, strings.Index(prompt, tutorStateOpenTag), strings.Index(prompt, mindMapOfferMarker))
 }

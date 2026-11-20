@@ -202,7 +202,10 @@ func TestSendMessage_doesNotEvict_whenTheSessionStaysWithinTheLimit(t *testing.T
 		t.Run(tt.name, func(t *testing.T) {
 			concepts := studymocks.NewMockConceptStateRepository(t)
 			concepts.EXPECT().ListBySession(context.Background(), "session-1").Return(existingConceptStates(tt.stored), nil).Once()
-			concepts.EXPECT().Upsert(context.Background(), mock.AnythingOfType("study.ConceptState")).Return(nil).Once()
+			concepts.EXPECT().Upsert(context.Background(), conceptLike(domainstudy.ConceptState{
+				SessionID: "session-1", Name: tt.report, Status: domainstudy.StatusIntroduced,
+				LastStrategy: domainstudy.StrategyGuidedPractice,
+			})).Return(nil).Once()
 
 			// When the reply streams (DeleteOldest has no expectation)
 			_, err := streamReplyWith(t, stateReplyChunks(
@@ -217,17 +220,21 @@ func TestSendMessage_doesNotEvict_whenTheSessionStaysWithinTheLimit(t *testing.T
 
 func TestSendMessage_doesNotFailTheReply_whenTheStateRepositoryFails(t *testing.T) {
 	storeErr := errors.New("disk full")
+	fresh := conceptLike(domainstudy.ConceptState{
+		SessionID: "session-1", Name: "fresh", Status: domainstudy.StatusIntroduced,
+		LastStrategy: domainstudy.StrategyGuidedPractice,
+	})
 	for name, setup := range map[string]func(*studymocks.MockConceptStateRepository){
 		"list fails": func(c *studymocks.MockConceptStateRepository) {
 			c.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, storeErr).Once()
 		},
 		"upsert fails": func(c *studymocks.MockConceptStateRepository) {
 			c.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil).Once()
-			c.EXPECT().Upsert(context.Background(), mock.AnythingOfType("study.ConceptState")).Return(storeErr).Once()
+			c.EXPECT().Upsert(context.Background(), fresh).Return(storeErr).Once()
 		},
 		"evict fails": func(c *studymocks.MockConceptStateRepository) {
 			c.EXPECT().ListBySession(context.Background(), "session-1").Return(existingConceptStates(30), nil).Once()
-			c.EXPECT().Upsert(context.Background(), mock.AnythingOfType("study.ConceptState")).Return(nil).Once()
+			c.EXPECT().Upsert(context.Background(), fresh).Return(nil).Once()
 			c.EXPECT().DeleteOldest(context.Background(), "session-1", "fresh").Return(storeErr).Once()
 		},
 	} {
@@ -266,10 +273,12 @@ func TestSendMessage_neverLeaksAnOfferMarkerSplitNextToTheStateBlock(t *testing.
 	// followed by a state block
 	gate := applicationstudymocks.NewMockOfferGate(t)
 	gate.EXPECT().HasPending(context.Background(), "session-1").Return(false, nil).Once()
-	gate.EXPECT().CreateOffer(context.Background(), "session-1", mock.AnythingOfType("string"), domainstudy.OfferKindExercise).Return(nil).Once()
+	gate.EXPECT().CreateOffer(context.Background(), "session-1", mock.MatchedBy(func(messageID string) bool { return messageID != "" }), domainstudy.OfferKindExercise).Return(nil).Once()
 	concepts := studymocks.NewMockConceptStateRepository(t)
 	concepts.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil).Once()
-	concepts.EXPECT().Upsert(context.Background(), mock.AnythingOfType("study.ConceptState")).Return(nil).Once()
+	concepts.EXPECT().Upsert(context.Background(), conceptLike(domainstudy.ConceptState{
+		SessionID: "session-1", Name: "a", Status: domainstudy.StatusIntroduced,
+	})).Return(nil).Once()
 	chunks := []string{
 		"Sure.\n[[ATHENA_", "EXERCISE_OFFER]]\n" + tutorStateOpenTag,
 		`{"concept":"A","status":"INTRODUCED"}`, tutorStateCloseTag,
