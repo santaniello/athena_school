@@ -100,10 +100,16 @@ func (f *compactionFixture) expectTurnCompletes(request *domainllm.ChatRequest) 
 // message, sent) plus the empty reply, with an unresolved window. prior is the
 // context the session holds when the turn starts persisting.
 func (f *compactionFixture) expectReplyContexts(prior domainstudy.ContextUsage, summary *domainstudy.ConversationSummary, sent []domainstudy.Message) {
+	f.expectReplyContextsWithBlocks(prior, summary, sent, 0)
+}
+
+// expectReplyContextsWithBlocks is expectReplyContexts for a prompt that also
+// carries system blocks of blockTokens estimated tokens in total.
+func (f *compactionFixture) expectReplyContextsWithBlocks(prior domainstudy.ContextUsage, summary *domainstudy.ConversationSummary, sent []domainstudy.Message, blockTokens int) {
 	provisional := domainstudy.NextContextUsage(
 		prior, prior.Model, prior.UsedTokens+domainstudy.EstimateTokens(compactionPrompt), prior.ContextLength, true)
 	replyTokens := domainstudy.EstimateTokens(buildSystemPrompt(compactionProfile, compactionTopic, "")) +
-		tokensOf(sent) + domainstudy.EstimateTokens("")
+		tokensOf(sent) + domainstudy.EstimateTokens("") + blockTokens
 	if summary != nil {
 		replyTokens += domainstudy.EstimateTokens(buildSummaryContext(summary.Content, domainknowledge.SourceModeNotes).Content)
 	}

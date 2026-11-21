@@ -10,7 +10,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
@@ -205,22 +204,23 @@ func TestFixedPromptTokens_countsTheTutorStateAllowanceOnlyWhenThereIsState(t *t
 	assert.Equal(t, tutorStateAllowanceTokens, s.fixedPromptTokens("p", true)-s.fixedPromptTokens("p", false))
 }
 
-func TestHasTutorState(t *testing.T) {
+func TestLoadTutorState(t *testing.T) {
 	ctx := context.Background()
-	assert.False(t, (&Service{}).hasTutorState(ctx, "session-1"), "not wired")
+	assert.Nil(t, (&Service{}).loadTutorState(ctx, "session-1"), "not wired")
+	stored := []domainstudy.ConceptState{stateConcept("a", 1)}
 	for name, c := range map[string]struct {
 		list []domainstudy.ConceptState
 		err  error
-		want bool
+		want []domainstudy.ConceptState
 	}{
-		"with concepts": {list: []domainstudy.ConceptState{stateConcept("a", 1)}, want: true},
+		"with concepts": {list: stored, want: stored},
 		"empty":         {},
-		"read fails":    {list: []domainstudy.ConceptState{stateConcept("a", 1)}, err: errors.New("x")},
+		"read fails":    {list: stored, err: errors.New("x")},
 	} {
 		t.Run(name, func(t *testing.T) {
 			repo := studymocks.NewMockConceptStateRepository(t)
 			repo.EXPECT().ListBySession(ctx, "session-1").Return(c.list, c.err).Once()
-			assert.Equal(t, c.want, (&Service{concepts: repo}).hasTutorState(ctx, "session-1"))
+			assert.Equal(t, c.want, (&Service{concepts: repo}).loadTutorState(ctx, "session-1"))
 		})
 	}
 }
@@ -241,13 +241,16 @@ func TestSendMessage_withState_blockSitsBetweenTheSummaryAndTheExamResults(t *te
 	// Given a session with a summary, a short tail, one concept and a finished exam
 	stored := []domainstudy.ConceptState{stateConcept("a", 1)}
 	concepts := studymocks.NewMockConceptStateRepository(t)
-	concepts.EXPECT().ListBySession(context.Background(), "session-1").Return(stored, nil).Twice() // compaction budget, then the prompt
+	concepts.EXPECT().ListBySession(context.Background(), "session-1").Return(stored, nil).Once() // read once: budget and prompt
 	f := newCompactionFixture(t, WithConceptStates(concepts),
 		WithExerciseFeedback(&fakeFeedbackReader{feedback: []ExerciseFeedback{sampleFeedback()}}))
 	summary := newSummaryOf("m3")
 	tail := heavyHistory(2, 1000)
 	f.sessions.EXPECT().GetByID(context.Background(), "session-1").Return(compactionSession(domainstudy.ContextStateNormal, 6_000), nil).Twice()
-	f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", mock.AnythingOfType("study.ContextUsage")).Return(nil).Twice()
+	stateBlock, _ := buildTutorStateContext(stored, domainknowledge.SourceModeNotes)
+	examBlock, _ := buildExerciseFeedbackContext([]ExerciseFeedback{sampleFeedback()}, domainknowledge.SourceModeNotes)
+	f.expectReplyContextsWithBlocks(compactionSession(domainstudy.ContextStateNormal, 6_000).Context, &summary, tail,
+		domainstudy.EstimateTokens(stateBlock.Content)+domainstudy.EstimateTokens(examBlock.Content))
 	f.summaries.EXPECT().Get(context.Background(), "session-1").Return(summary, nil).Once()
 	f.messages.EXPECT().ListAfter(context.Background(), "session-1", "m3").Return(tail, nil).Twice()
 	var request domainllm.ChatRequest
@@ -275,8 +278,9 @@ func TestSendMessage_withState_theBlockCountsTowardTheCompactionThreshold(t *tes
 		{"one token below does not", atThreshold - 1, false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			stored := []domainstudy.ConceptState{stateConcept("a", 1)}
 			concepts := studymocks.NewMockConceptStateRepository(t)
-			concepts.EXPECT().ListBySession(context.Background(), "session-1").Return([]domainstudy.ConceptState{stateConcept("a", 1)}, nil).Twice()
+			concepts.EXPECT().ListBySession(context.Background(), "session-1").Return(stored, nil).Once()
 			f := newCompactionFixture(t, WithConceptStates(concepts))
 			history := []domainstudy.Message{
 				tokenMessage("m1", domainstudy.RoleUser, c.history-3*50),
@@ -292,14 +296,48 @@ func TestSendMessage_withState_theBlockCountsTowardTheCompactionThreshold(t *tes
 					Return(domainstudy.ConversationSummary{}, errors.New("stop here")).Once()
 			}
 			// The state block also counts in the reply's context usage, so only the compaction decision is pinned here
-			f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", mock.AnythingOfType("study.ContextUsage")).Return(nil).Twice()
+			block, _ := buildTutorStateContext(stored, domainknowledge.SourceModeNotes)
+			f.expectReplyContextsWithBlocks(compactionSession(domainstudy.ContextStateNormal, 1).Context, nil, history, domainstudy.EstimateTokens(block.Content))
 			f.messages.EXPECT().ListBySession(context.Background(), "session-1").Return(history, nil).Once()
 			f.expectTurnCompletes(nil)
 			started := 0
 
-			_ = f.send(CompactionHooks{OnStarted: func() { started++ }}, compactionPrompt)
+			// A failed summary never fails the turn
+			require.NoError(t, f.send(CompactionHooks{OnStarted: func() { started++ }}, compactionPrompt))
 
 			assert.Equal(t, map[bool]int{true: 1, false: 0}[c.compacts], started)
 		})
 	}
+}
+
+func TestSendMessage_whenTheStateReadFails_noRoomIsReservedAndNoBlockIsSent(t *testing.T) {
+	// Given a prompt that would compact if the block were sent, and a failing read
+	logged := captureLog(t)
+	pending := domainstudy.EstimateTokens(compactionPrompt)
+	atThreshold := compactionWindow*80/100 - fixedCompactionTokens() - tutorStateAllowanceTokens - pending
+	concepts := studymocks.NewMockConceptStateRepository(t)
+	concepts.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, errors.New("db down")).Once()
+	f := newCompactionFixture(t, WithConceptStates(concepts))
+	history := []domainstudy.Message{
+		tokenMessage("m1", domainstudy.RoleUser, atThreshold-3*50),
+		tokenMessage("m2", domainstudy.RoleAssistant, 50),
+		tokenMessage("m3", domainstudy.RoleUser, 50),
+		tokenMessage("m4", domainstudy.RoleAssistant, 50),
+	}
+	f.sessions.EXPECT().GetByID(context.Background(), "session-1").Return(compactionSession(domainstudy.ContextStateNormal, 1), nil).Twice()
+	f.summaries.EXPECT().Get(context.Background(), "session-1").Return(domainstudy.ConversationSummary{}, domainstudy.ErrConversationSummaryNotFound).Once()
+	f.messages.EXPECT().ListAfter(context.Background(), "session-1", "").Return(history, nil).Once()
+	f.expectReplyContexts(compactionSession(domainstudy.ContextStateNormal, 1).Context, nil, history)
+	f.messages.EXPECT().ListBySession(context.Background(), "session-1").Return(history, nil).Once()
+	var request domainllm.ChatRequest
+	f.expectTurnCompletes(&request)
+	started := 0
+
+	// When sending a message
+	require.NoError(t, f.send(CompactionHooks{OnStarted: func() { started++ }}, compactionPrompt))
+
+	// Then the budget did not count the block, the prompt has none, and the failure was logged once
+	assert.Equal(t, 0, started)
+	assert.Len(t, request.Messages, 1+len(history))
+	assert.Equal(t, 1, strings.Count(logged.String(), "reading tutor state of session session-1"))
 }

@@ -121,7 +121,7 @@ type compactionOutcome struct {
 // (unknown session, repository failure, or a pending message that cannot fit
 // the window); a compaction that merely fails is reported through
 // outcome.cause and the hooks, with nothing persisted.
-func (s *Service) compact(ctx context.Context, sessionID, pendingContent string, force bool, hooks CompactionHooks) (compactionOutcome, error) {
+func (s *Service) compact(ctx context.Context, sessionID, pendingContent string, force bool, tutorState []domainstudy.ConceptState, hooks CompactionHooks) (compactionOutcome, error) {
 	session, err := s.sessions.GetByID(ctx, sessionID)
 	if err != nil {
 		return compactionOutcome{}, err
@@ -157,7 +157,7 @@ func (s *Service) compact(ctx context.Context, sessionID, pendingContent string,
 		Messages:            history,
 		ContextLength:       window,
 		SummaryWindowTokens: s.summaryWindowTokens(),
-		FixedTokens:         s.fixedPromptTokens(buildSystemPrompt(profile, session.Topic, session.Goal), s.hasTutorState(ctx, sessionID)),
+		FixedTokens:         s.fixedPromptTokens(buildSystemPrompt(profile, session.Topic, session.Goal), len(tutorState) > 0),
 	}
 	if pendingContent != "" {
 		input.PendingTokens = domainstudy.EstimateTokens(pendingContent)
@@ -262,7 +262,7 @@ func (s *Service) CompactSession(ctx context.Context, sessionID string, hooks Co
 	}
 	defer s.inFlight.end(sessionID)
 
-	outcome, err := s.compact(ctx, sessionID, "", true, hooks)
+	outcome, err := s.compact(ctx, sessionID, "", true, s.loadTutorState(ctx, sessionID), hooks)
 	if err != nil {
 		return err
 	}

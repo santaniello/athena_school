@@ -91,28 +91,18 @@ func renderTutorStateLine(concept domainstudy.ConceptState) string {
 		escapePromptData(string(concept.Status)), concept.AssistanceCount, escapePromptData(strategy))
 }
 
-// tutorStateContext reads the session's concepts and builds the block. A
-// failing read is logged and the turn goes without the block: state never
-// blocks the chat.
-func (s *Service) tutorStateContext(ctx context.Context, sessionID, sourceMode string) (domainllm.Message, bool) {
+// loadTutorState reads the session's concepts once per turn, for both the
+// compaction budget and the prompt block, so the reserved room always matches
+// what is sent. A failing read is logged and the turn goes without the block:
+// state never blocks the chat.
+func (s *Service) loadTutorState(ctx context.Context, sessionID string) []domainstudy.ConceptState {
 	if s.concepts == nil {
-		return domainllm.Message{}, false
+		return nil
 	}
 	concepts, err := s.concepts.ListBySession(ctx, sessionID)
 	if err != nil {
 		log.Printf("study: reading tutor state of session %s: %v", sessionID, err)
-		return domainllm.Message{}, false
+		return nil
 	}
-	return buildTutorStateContext(concepts, sourceMode)
-}
-
-// hasTutorState reports whether the session has concepts to send, for the
-// compaction budget. A failing read counts as none; it is logged by
-// tutorStateContext when the turn itself reads the state.
-func (s *Service) hasTutorState(ctx context.Context, sessionID string) bool {
-	if s.concepts == nil {
-		return false
-	}
-	concepts, err := s.concepts.ListBySession(ctx, sessionID)
-	return err == nil && len(concepts) > 0
+	return concepts
 }
