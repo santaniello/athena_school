@@ -490,3 +490,72 @@ func (a *App) CompactStudySession(sessionID string) error {
 func (a *App) DeleteStudySession(sessionID string) error {
 	return a.study.DeleteSession(a.ctx, sessionID)
 }
+
+// StudyProgressEvidenceResult is one proof behind a concept of
+// StudyProgressResult. Description is untrusted LLM output: show it as data.
+type StudyProgressEvidenceResult struct {
+	Assessment  string `json:"assessment"`
+	Description string `json:"description"`
+	Assisted    bool   `json:"assisted"`
+	CreatedAt   string `json:"createdAt"`
+}
+
+// StudyProgressConceptResult is one concept of StudyProgressResult. Name is
+// untrusted LLM output: show it as data.
+type StudyProgressConceptResult struct {
+	Name            string                        `json:"name"`
+	Status          string                        `json:"status"`
+	AssistanceCount int                           `json:"assistanceCount"`
+	EvidenceCount   int                           `json:"evidenceCount"`
+	UpdatedAt       string                        `json:"updatedAt"`
+	Evidence        []StudyProgressEvidenceResult `json:"evidence"`
+}
+
+// StudyProgressResult is returned by GetStudySessionProgress: what the tutor
+// has observed in the session, grouped for the user. It is the tutor's
+// estimate; every group is a list, never null.
+type StudyProgressResult struct {
+	Demonstrated  []StudyProgressConceptResult `json:"demonstrated"`
+	ExplainedOnly []StudyProgressConceptResult `json:"explainedOnly"`
+	Difficulties  []StudyProgressConceptResult `json:"difficulties"`
+	NeedsReview   []StudyProgressConceptResult `json:"needsReview"`
+}
+
+// GetStudySessionProgress returns the session's progress: the concepts the
+// tutor observed, grouped, each with the proofs behind its status.
+func (a *App) GetStudySessionProgress(sessionID string) (StudyProgressResult, error) {
+	progress, err := a.study.GetSessionProgress(a.ctx, sessionID)
+	if err != nil {
+		return StudyProgressResult{}, err
+	}
+	return StudyProgressResult{
+		Demonstrated:  toStudyProgressConceptResults(progress.Demonstrated),
+		ExplainedOnly: toStudyProgressConceptResults(progress.ExplainedOnly),
+		Difficulties:  toStudyProgressConceptResults(progress.Difficulties),
+		NeedsReview:   toStudyProgressConceptResults(progress.NeedsReview),
+	}, nil
+}
+
+func toStudyProgressConceptResults(concepts []domainstudy.ProgressConcept) []StudyProgressConceptResult {
+	results := make([]StudyProgressConceptResult, len(concepts))
+	for i, concept := range concepts {
+		proofs := make([]StudyProgressEvidenceResult, len(concept.Evidence))
+		for j, proof := range concept.Evidence {
+			proofs[j] = StudyProgressEvidenceResult{
+				Assessment:  string(proof.Assessment),
+				Description: proof.Description,
+				Assisted:    proof.Assisted,
+				CreatedAt:   proof.CreatedAt.Format(time.RFC3339),
+			}
+		}
+		results[i] = StudyProgressConceptResult{
+			Name:            concept.Name,
+			Status:          string(concept.Status),
+			AssistanceCount: concept.AssistanceCount,
+			EvidenceCount:   concept.EvidenceCount,
+			UpdatedAt:       concept.UpdatedAt.Format(time.RFC3339),
+			Evidence:        proofs,
+		}
+	}
+	return results
+}

@@ -1405,6 +1405,101 @@ export namespace desktop {
 		}
 	}
 	
+	export class StudyProgressEvidenceResult {
+	    assessment: string;
+	    description: string;
+	    assisted: boolean;
+	    createdAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new StudyProgressEvidenceResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.assessment = source["assessment"];
+	        this.description = source["description"];
+	        this.assisted = source["assisted"];
+	        this.createdAt = source["createdAt"];
+	    }
+	}
+	export class StudyProgressConceptResult {
+	    name: string;
+	    status: string;
+	    assistanceCount: number;
+	    evidenceCount: number;
+	    updatedAt: string;
+	    evidence: StudyProgressEvidenceResult[];
+	
+	    static createFrom(source: any = {}) {
+	        return new StudyProgressConceptResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.status = source["status"];
+	        this.assistanceCount = source["assistanceCount"];
+	        this.evidenceCount = source["evidenceCount"];
+	        this.updatedAt = source["updatedAt"];
+	        this.evidence = this.convertValues(source["evidence"], StudyProgressEvidenceResult);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class StudyProgressResult {
+	    demonstrated: StudyProgressConceptResult[];
+	    explainedOnly: StudyProgressConceptResult[];
+	    difficulties: StudyProgressConceptResult[];
+	    needsReview: StudyProgressConceptResult[];
+	
+	    static createFrom(source: any = {}) {
+	        return new StudyProgressResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.demonstrated = this.convertValues(source["demonstrated"], StudyProgressConceptResult);
+	        this.explainedOnly = this.convertValues(source["explainedOnly"], StudyProgressConceptResult);
+	        this.difficulties = this.convertValues(source["difficulties"], StudyProgressConceptResult);
+	        this.needsReview = this.convertValues(source["needsReview"], StudyProgressConceptResult);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class StudySessionResult {
 	    id: string;
 	    topic: string;

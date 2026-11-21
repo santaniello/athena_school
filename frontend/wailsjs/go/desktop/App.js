@@ -162,6 +162,10 @@ export function GetSessionSourceDocument(arg1, arg2) {
   return window['go']['desktop']['App']['GetSessionSourceDocument'](arg1, arg2);
 }
 
+export function GetStudySessionProgress(arg1) {
+  return window['go']['desktop']['App']['GetStudySessionProgress'](arg1);
+}
+
 export function GetStudySessionSummary(arg1) {
   return window['go']['desktop']['App']['GetStudySessionSummary'](arg1);
 }
