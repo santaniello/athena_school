@@ -152,7 +152,7 @@ The Learn Intelligent Engine of that proposal does not exist and is not specifie
 | [01-adaptive-tutor-prompt.md](phase-04-tutor/01-adaptive-tutor-prompt.md) | Replaces the rigid question-first prompt with six internal strategies and selection rules; prompt only |
 | [02-pedagogical-state.md](phase-04-tutor/02-pedagogical-state.md) | Per-session concept state reported by the model in a hidden marker, validated in code, no extra LLM call |
 | [03-state-driven-adaptation.md](phase-04-tutor/03-state-driven-adaptation.md) | The state returns to the tutor each turn, bounded, and survives compaction |
-| [04-evidence-and-session-summary.md](phase-04-tutor/04-evidence-and-session-summary.md) | Draft: evidence with message references and an end-of-session summary |
+| [04-evidence-and-session-summary.md](phase-04-tutor/04-evidence-and-session-summary.md) | Evidence with message references and an on-demand Session progress view |
 
 ---
 
