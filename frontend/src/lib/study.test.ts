@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   CompactStudySession,
   DeleteStudySession,
+  GetStudySessionProgress,
   GetStudySessionSummary,
   GetStudySessionUsage,
   ListStudyMessagesBefore,
@@ -16,6 +17,7 @@ import { EventsOn } from '../../wailsjs/runtime/runtime'
 import {
   compactStudySession,
   deleteStudySession,
+  getStudySessionProgress,
   getStudySessionSummary,
   getStudySessionUsage,
   listMessagesBefore,
@@ -54,6 +56,7 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   RequestOpeningTurn: vi.fn(),
   SendStudyMessage: vi.fn(),
   DeleteStudySession: vi.fn(),
+  GetStudySessionProgress: vi.fn(),
   GetStudySessionSummary: vi.fn(),
   GetStudySessionUsage: vi.fn(),
   ResumeStudySession: vi.fn(),
@@ -218,6 +221,45 @@ describe('getStudySessionSummary', () => {
       content: '## Progress',
       coversUntilMessageId: 'm3',
       updatedAt: '2026-10-21T12:00:00Z',
+    })
+  })
+})
+
+describe('getStudySessionProgress', () => {
+  it('returns the grouped concepts with their proofs', async () => {
+    // Given a GetStudySessionProgress call that finds one demonstrated concept
+    const concept = {
+      name: 'mutex',
+      status: 'DEMONSTRATED',
+      assistanceCount: 1,
+      evidenceCount: 2,
+      updatedAt: '2026-11-21T12:00:00Z',
+      evidence: [
+        {
+          assessment: 'CORRECT',
+          description: 'explained the lock',
+          assisted: true,
+          createdAt: '2026-11-21T11:00:00Z',
+        },
+      ],
+    }
+    vi.mocked(GetStudySessionProgress).mockResolvedValueOnce({
+      demonstrated: [concept],
+      explainedOnly: [],
+      difficulties: [],
+      needsReview: [],
+    } as never)
+
+    // When reading it
+    const result = await getStudySessionProgress('session-1')
+
+    // Then it forwarded the sessionId and returned every group and field
+    expect(GetStudySessionProgress).toHaveBeenCalledWith('session-1')
+    expect(result).toStrictEqual({
+      demonstrated: [concept],
+      explainedOnly: [],
+      difficulties: [],
+      needsReview: [],
     })
   })
 })

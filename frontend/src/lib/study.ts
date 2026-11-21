@@ -1,6 +1,7 @@
 import {
   CompactStudySession,
   DeleteStudySession,
+  GetStudySessionProgress,
   GetStudySessionSummary,
   GetStudySessionUsage,
   ListStudyMessagesBefore,
@@ -320,6 +321,63 @@ export async function getStudySessionSummary(sessionId: string): Promise<StudySu
     content: result.content,
     coversUntilMessageId: result.coversUntilMessageId,
     updatedAt: result.updatedAt,
+  }
+}
+
+// StudyProgressEvidence is one proof behind a concept's status. description is
+// untrusted LLM output: show it as data.
+export interface StudyProgressEvidence {
+  assessment: string
+  description: string
+  assisted: boolean
+  createdAt: string
+}
+
+// StudyProgressConcept is one concept the tutor observed. name is untrusted
+// LLM output: show it as data.
+export interface StudyProgressConcept {
+  name: string
+  status: string
+  assistanceCount: number
+  evidenceCount: number
+  updatedAt: string
+  evidence: StudyProgressEvidence[]
+}
+
+// StudyProgress is what the tutor observed in a session, grouped for the
+// user. It is the tutor's estimate, not a verdict.
+export interface StudyProgress {
+  demonstrated: StudyProgressConcept[]
+  explainedOnly: StudyProgressConcept[]
+  difficulties: StudyProgressConcept[]
+  needsReview: StudyProgressConcept[]
+}
+
+function toStudyProgressConcept(concept: StudyProgressConcept): StudyProgressConcept {
+  return {
+    name: concept.name,
+    status: concept.status,
+    assistanceCount: concept.assistanceCount,
+    evidenceCount: concept.evidenceCount,
+    updatedAt: concept.updatedAt,
+    evidence: concept.evidence.map((proof) => ({
+      assessment: proof.assessment,
+      description: proof.description,
+      assisted: proof.assisted,
+      createdAt: proof.createdAt,
+    })),
+  }
+}
+
+// getStudySessionProgress returns the session's concepts grouped by what the
+// tutor observed, each with the proofs behind it.
+export async function getStudySessionProgress(sessionId: string): Promise<StudyProgress> {
+  const result = await GetStudySessionProgress(sessionId)
+  return {
+    demonstrated: result.demonstrated.map(toStudyProgressConcept),
+    explainedOnly: result.explainedOnly.map(toStudyProgressConcept),
+    difficulties: result.difficulties.map(toStudyProgressConcept),
+    needsReview: result.needsReview.map(toStudyProgressConcept),
   }
 }
 

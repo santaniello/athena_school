@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import userEvent from '@testing-library/user-event'
 import {
   compactStudySession,
+  getStudySessionProgress,
   getStudySessionSummary,
   getStudySessionUsage,
   listMessagesBefore,
@@ -61,6 +62,7 @@ vi.mock('@/lib/study', async (importOriginal) => {
   return {
     ...original,
     compactStudySession: vi.fn(),
+    getStudySessionProgress: vi.fn(),
     getStudySessionSummary: vi.fn(),
     getStudySessionUsage: vi.fn(),
     listMessagesBefore: vi.fn(),
@@ -2603,6 +2605,42 @@ describe('StudyChatScreen — summary marker', () => {
     // Then nothing is read and no marker appears
     expect(getStudySessionSummary).not.toHaveBeenCalled()
     expect(screen.queryByText(MARKER_TEXT)).not.toBeInTheDocument()
+  })
+
+  it('offers Session progress even for a session without a summary, and reads nothing until it is opened', async () => {
+    // Given a resumed session that was never compacted
+    await renderResumed(['m1', 'm2'], '')
+
+    // Then the progress button is usable and no progress was requested yet
+    expect(screen.getByRole('button', { name: 'Session progress' })).toBeEnabled()
+    expect(getStudySessionProgress).not.toHaveBeenCalled()
+  })
+
+  it('opens the session progress of the current session', async () => {
+    // Given a resumed session whose tutor observed one concept
+    await renderResumed(['m1', 'm2'], '')
+    vi.mocked(getStudySessionProgress).mockResolvedValueOnce({
+      demonstrated: [
+        {
+          name: 'mutex',
+          status: 'DEMONSTRATED',
+          assistanceCount: 0,
+          evidenceCount: 1,
+          updatedAt: '',
+          evidence: [],
+        },
+      ],
+      explainedOnly: [],
+      difficulties: [],
+      needsReview: [],
+    })
+
+    // When opening the progress
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Session progress' }))
+
+    // Then the dialog shows the concept and read this session's progress
+    expect(await screen.findByText('mutex')).toBeInTheDocument()
+    expect(getStudySessionProgress).toHaveBeenCalledWith('session-1')
   })
 
   it('keeps View summary disabled for a session without a summary', async () => {
