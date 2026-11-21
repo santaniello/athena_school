@@ -207,6 +207,9 @@ func (s *Service) SendMessage(
 	if summary != nil {
 		llmMessages = append(llmMessages, buildSummaryContext(summary.Content, sourceMode))
 	}
+	if stateMessage, ok := s.tutorStateContext(ctx, sessionID, sourceMode); ok {
+		llmMessages = append(llmMessages, stateMessage)
+	}
 	if feedbackMessage, ok := s.exerciseFeedbackContext(ctx, sessionID, sourceMode); ok {
 		llmMessages = append(llmMessages, feedbackMessage)
 	}

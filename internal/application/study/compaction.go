@@ -16,11 +16,15 @@ const knowledgeContextAllowanceTokens = 3000
 
 // fixedPromptTokens is the part of the prompt that does not depend on the
 // history: the system prompt, the room for the knowledge message and, when the
-// exam results are wired, the room for their block.
-func (s *Service) fixedPromptTokens(systemPrompt string) int {
+// exam results are wired, the room for their block and, when the session has
+// concepts, the room for the tutor state block.
+func (s *Service) fixedPromptTokens(systemPrompt string, hasTutorState bool) int {
 	fixed := domainstudy.EstimateTokens(systemPrompt) + knowledgeContextAllowanceTokens
 	if s.feedback != nil {
 		fixed += exerciseFeedbackAllowanceTokens
+	}
+	if hasTutorState {
+		fixed += tutorStateAllowanceTokens
 	}
 	return fixed
 }
@@ -153,7 +157,7 @@ func (s *Service) compact(ctx context.Context, sessionID, pendingContent string,
 		Messages:            history,
 		ContextLength:       window,
 		SummaryWindowTokens: s.summaryWindowTokens(),
-		FixedTokens:         s.fixedPromptTokens(buildSystemPrompt(profile, session.Topic, session.Goal)),
+		FixedTokens:         s.fixedPromptTokens(buildSystemPrompt(profile, session.Topic, session.Goal), s.hasTutorState(ctx, sessionID)),
 	}
 	if pendingContent != "" {
 		input.PendingTokens = domainstudy.EstimateTokens(pendingContent)
