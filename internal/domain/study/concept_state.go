@@ -78,6 +78,10 @@ type StateReport struct {
 	Strategy     TutorStrategy
 	UserEvidence bool // the user's latest message shows the behavior behind Status
 	Assisted     bool // the tutor had to hint or explain to get there
+	// Assessment and Description are optional: they only matter to the
+	// evidence row (see NewEvidence), never to the status.
+	Assessment  Assessment
+	Description string
 }
 
 // ConceptStateRepository persists the ConceptStates of a session.

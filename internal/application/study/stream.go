@@ -36,8 +36,8 @@ const unavailableContextMessage = "Unable to determine this session's context li
 //
 // The model may end a reply with the exercise offer marker (see
 // offer_marker.go): the user never sees it, not while streaming and not
-// after, and the stored text is clean. When repliesToUser is set (a reply to
-// the user's own message) and the marker was there, an offer is created under
+// after, and the stored text is clean. When userMessageID is set (a reply to
+// the user's own message, whose id it is) and the marker was there, an offer is created under
 // the stored message once the reply is safely persisted; failing to create it
 // never fails the reply.
 //
@@ -48,7 +48,7 @@ const unavailableContextMessage = "Unable to determine this session's context li
 // or write any state. The two hiding filters run in series, state first.
 func (s *Service) streamAndPersist(
 	ctx context.Context, sessionID string, priorContext domainstudy.ContextUsage,
-	messages []domainllm.Message, sources []domainknowledge.Source, repliesToUser bool, onChunk func(chunk string) error,
+	messages []domainllm.Message, sources []domainknowledge.Source, userMessageID string, onChunk func(chunk string) error,
 	onContext ContextCallback, onContextUnavailable ContextUnavailableCallback,
 ) (string, error) {
 	var buf strings.Builder
@@ -117,6 +117,7 @@ func (s *Service) streamAndPersist(
 
 	emitContextTransition(priorContext, newUsage, onContext)
 
+	repliesToUser := userMessageID != ""
 	if repliesToUser && offered != domainstudy.OfferKindNone && s.offers != nil {
 		// Best effort: a missed offer is a normal reply and the user can ask
 		// again, but the failure is logged so it can be diagnosed.
@@ -125,7 +126,7 @@ func (s *Service) streamAndPersist(
 		}
 	}
 
-	s.recordTutorState(ctx, sessionID, report, markerErr, repliesToUser)
+	s.recordTutorState(ctx, sessionID, report, markerErr, userMessageID, assistantMessage.ID)
 
 	switch {
 	case streamResp.Model == "":

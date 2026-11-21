@@ -238,7 +238,9 @@ func TestOpen_createsSessionConceptsTable_onADatabaseThatPredatesIt(t *testing.T
 	path := filepath.Join(t.TempDir(), "athena.db")
 	first, err := Open(path)
 	require.NoError(t, err)
-	_, err = first.Exec(`DROP TABLE session_concepts`)
+	// concept_evidence depends on session_concepts, so a database that
+	// predates the latter predates the former too.
+	_, err = first.Exec(`DROP TABLE concept_evidence; DROP TABLE session_concepts`)
 	require.NoError(t, err)
 	require.NoError(t, first.Close())
 

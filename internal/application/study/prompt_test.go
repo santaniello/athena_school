@@ -227,7 +227,7 @@ func TestBuildSystemPrompt_asksForTheTutorStateBlock(t *testing.T) {
 	for _, rule := range []string{
 		tutorStateOpenTag,
 		tutorStateCloseTag,
-		`{"concept":"Race Condition","status":"PARTIALLY_UNDERSTOOD","strategy":"CORRECTIVE_FEEDBACK","userEvidence":true,"assisted":true}`,
+		`{"concept":"Race Condition","status":"PARTIALLY_UNDERSTOOD","strategy":"CORRECTIVE_FEEDBACK","userEvidence":true,"assisted":true,"assessment":"PARTIALLY_CORRECT","description":"Named the shared state but missed the missing lock"}`,
 		"on its own last lines, after all the text, with nothing after it",
 		"at most once per reply",
 		"only when you actually worked on a concept in this reply",
@@ -250,6 +250,22 @@ func TestBuildSystemPrompt_tutorStateEvidenceRule(t *testing.T) {
 		"Use DEMONSTRATED only when userEvidence is true, never for a concept you only explained",
 		"A concept you explain is at most INTRODUCED",
 		"Set assisted to true when you had to give a hint or explain to get there",
+	} {
+		assert.Contains(t, prompt, rule)
+	}
+}
+
+func TestBuildSystemPrompt_tutorStateAssessmentRule(t *testing.T) {
+	// Given the study system prompt
+	prompt := adaptivePrompt()
+
+	// When looking for the assessment and description rules of the state block
+	// Then every one is there
+	for _, rule := range []string{
+		`"assessment":"PARTIALLY_CORRECT"`,
+		"assessment is CORRECT, PARTIALLY_CORRECT or INCORRECT",
+		"Include assessment and description only when userEvidence is true",
+		"description is one short sentence",
 	} {
 		assert.Contains(t, prompt, rule)
 	}

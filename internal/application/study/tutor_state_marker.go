@@ -27,13 +27,15 @@ var tutorStateInstruction = strings.Join([]string{
 	"\n- Pedagogical state: end a reply with one state block, only when you actually worked on a concept in this reply (never on a greeting or small talk).",
 	"The user never sees this block. Write it exactly like this, on its own last lines, after all the text, with nothing after it, at most once per reply:",
 	tutorStateOpenTag,
-	`{"concept":"Race Condition","status":"PARTIALLY_UNDERSTOOD","strategy":"CORRECTIVE_FEEDBACK","userEvidence":true,"assisted":true}`,
+	`{"concept":"Race Condition","status":"PARTIALLY_UNDERSTOOD","strategy":"CORRECTIVE_FEEDBACK","userEvidence":true,"assisted":true,"assessment":"PARTIALLY_CORRECT","description":"Named the shared state but missed the missing lock"}`,
 	tutorStateCloseTag,
 	"concept is a short name for what the turn was about. status is NOT_ASSESSED, INTRODUCED, PARTIALLY_UNDERSTOOD, DEMONSTRATED or NEEDS_REVIEW.",
 	"strategy is one of the six strategy names above, for the approach you used in this reply.",
 	"Set userEvidence to true only when the user's own latest message shows the behavior behind the status.",
 	"Use DEMONSTRATED only when userEvidence is true, never for a concept you only explained. A concept you explain is at most INTRODUCED.",
 	"Set assisted to true when you had to give a hint or explain to get there.",
+	"Include assessment and description only when userEvidence is true. assessment is CORRECT, PARTIALLY_CORRECT or INCORRECT, for the user's latest message about the concept.",
+	"description is one short sentence, in the user's language, saying what the user showed.",
 	"The strategy field of this block is the only place you may write a strategy name; everywhere else keep describing your approach in plain words.",
 }, "\n")
 
@@ -55,6 +57,8 @@ type tutorStatePayload struct {
 	Strategy     string `json:"strategy"`
 	UserEvidence bool   `json:"userEvidence"`
 	Assisted     bool   `json:"assisted"`
+	Assessment   string `json:"assessment"`
+	Description  string `json:"description"`
 }
 
 // parseTutorState removes the state block from content and reads its report.
@@ -123,6 +127,12 @@ func readTutorStateReport(body string) (*domainstudy.StateReport, error) {
 		Status:       status,
 		UserEvidence: payload.UserEvidence,
 		Assisted:     payload.Assisted,
+		Description:  payload.Description,
+	}
+	// An omitted or unknown assessment only means no evidence row is written;
+	// it never invalidates the report.
+	if assessment := domainstudy.Assessment(strings.ToUpper(strings.TrimSpace(payload.Assessment))); assessment.IsValid() {
+		report.Assessment = assessment
 	}
 	strategy := domainstudy.TutorStrategy(strings.ToUpper(strings.TrimSpace(payload.Strategy)))
 	if !strategy.IsValid() {

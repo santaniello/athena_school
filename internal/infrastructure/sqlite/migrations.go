@@ -376,6 +376,24 @@ var migrations = []func(*sql.DB) error{
 		updated_at       TEXT NOT NULL,
 		PRIMARY KEY (session_id, name)
 	)`),
+	// concept_evidence is one proof per turn in which the user's own message
+	// showed something about a concept, tied to the two messages behind it.
+	// The composite key makes a proof follow its concept (eviction, session
+	// delete); both message ids are NOT NULL, so a proof never exists without
+	// them. See specs/phases/phase-04-tutor/04-evidence-and-session-summary.md.
+	execSQL(`CREATE TABLE IF NOT EXISTS concept_evidence (
+		id               INTEGER PRIMARY KEY AUTOINCREMENT,
+		session_id       TEXT NOT NULL,
+		concept          TEXT NOT NULL,
+		assessment       TEXT NOT NULL CHECK (assessment IN ('CORRECT','PARTIALLY_CORRECT','INCORRECT')),
+		description      TEXT NOT NULL DEFAULT '',
+		assisted         INTEGER NOT NULL DEFAULT 0,
+		user_message_id  TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+		reply_message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+		created_at       TEXT NOT NULL,
+		FOREIGN KEY (session_id, concept) REFERENCES session_concepts(session_id, name) ON DELETE CASCADE
+	)`),
+	execSQL(`CREATE INDEX IF NOT EXISTS idx_concept_evidence_session_concept ON concept_evidence (session_id, concept, created_at)`),
 }
 
 // addQuizzesMessageIDColumn adds quizzes.message_id if it does not already

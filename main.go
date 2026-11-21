@@ -173,6 +173,7 @@ func main() {
 		study.WithSummaryWindow(summaryWindow),
 		study.WithSummaries(sqlite.NewConversationSummaryRepository(db)),
 		study.WithConceptStates(sqlite.NewConceptStateRepository(db)),
+		study.WithConceptEvidence(sqlite.NewEvidenceRepository(db)),
 		study.WithOfferGate(studyoffers.NewGate(
 			exercisesource.NewOfferGate(offerService), quizsource.NewOfferGate(quizOfferService),
 			studyoffers.WithMindMapOffers(mindmapsource.NewOfferGate(mindMapOfferService)),
