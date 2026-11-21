@@ -21,7 +21,8 @@ func NewResetter(db *sql.DB) *Resetter {
 // folder, every knowledge-domain row, every Architecture Lab row
 // (challenges, rubrics, attempts, submissions, evaluations, hints, defense
 // turns, session links and pending offers) and every Interactive Quiz row
-// (quizzes, questions, attempts and answers), atomically. usage survives
+// (quizzes, questions, attempts and answers) and the tutor's per-session
+// concepts, atomically. usage survives
 // detached (session_id set NULL by its own foreign key),
 // matching how deleting one session already behaves — see
 // TestOpen_migratesLegacyForeignKeysAndDetachesUsageWithoutRemovingIt.
@@ -47,6 +48,7 @@ func (r *Resetter) Reset(ctx context.Context) error {
 		// with children before parents: no Phase 3 table cascades (a
 		// challenge, a quiz or a mind map is never deleted by anything else),
 		// so each level is cleared explicitly.
+		{`DELETE FROM session_concepts`, nil},
 		{`DELETE FROM mind_map_offers`, nil},
 		{`DELETE FROM mind_maps`, nil},
 		{`DELETE FROM quiz_answers`, nil},

@@ -58,6 +58,7 @@ type Service struct {
 	summaryWindow  SummaryWindowSource
 	offers         OfferGate
 	feedback       ExerciseFeedbackReader
+	concepts       domainstudy.ConceptStateRepository
 	inFlight       *inFlightCoordinator
 }
 

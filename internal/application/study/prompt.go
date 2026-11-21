@@ -29,7 +29,8 @@ func buildSystemPrompt(profile domainprofile.UserProfile, topic, sessionGoal str
 			adaptiveTutorInstruction+
 			exerciseOfferInstruction+
 			quizOfferInstruction+
-			mindMapOfferInstruction,
+			mindMapOfferInstruction+
+			tutorStateInstruction,
 		profile.AssistantName, profile.Name, profile.Name,
 		profile.Area, profile.ExperienceLevel,
 		profile.StudyStyle, goalFragment(sessionGoal),

@@ -361,6 +361,21 @@ var migrations = []func(*sql.DB) error{
 		created_at TEXT NOT NULL,
 		UNIQUE (session_id)
 	)`),
+	// session_concepts is the tutor's pedagogical state: one row per concept
+	// per session, outside the message history. updated_at is fixed-width UTC
+	// text (see conceptTimeLayout), so ordering by it is lexicographic. See
+	// specs/phases/phase-04-tutor/02-pedagogical-state.md.
+	execSQL(`CREATE TABLE IF NOT EXISTS session_concepts (
+		session_id       TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+		name             TEXT NOT NULL,
+		status           TEXT NOT NULL CHECK (status IN
+		                   ('NOT_ASSESSED','INTRODUCED','PARTIALLY_UNDERSTOOD','DEMONSTRATED','NEEDS_REVIEW')),
+		last_strategy    TEXT NOT NULL DEFAULT '',
+		assistance_count INTEGER NOT NULL DEFAULT 0,
+		evidence_count   INTEGER NOT NULL DEFAULT 0,
+		updated_at       TEXT NOT NULL,
+		PRIMARY KEY (session_id, name)
+	)`),
 }
 
 // addQuizzesMessageIDColumn adds quizzes.message_id if it does not already
