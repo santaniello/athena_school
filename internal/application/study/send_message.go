@@ -71,9 +71,12 @@ func (s *Service) SendMessage(
 		option(&config)
 	}
 
+	// Read once: the same concepts size the compaction budget and fill the block.
+	tutorState := s.loadTutorState(ctx, sessionID)
+
 	var summary *domainstudy.ConversationSummary
 	if s.compactionEnabled() {
-		outcome, err := s.compact(ctx, sessionID, content, false, config.compaction)
+		outcome, err := s.compact(ctx, sessionID, content, false, tutorState, config.compaction)
 		if err != nil {
 			return err
 		}
@@ -206,6 +209,9 @@ func (s *Service) SendMessage(
 	}
 	if summary != nil {
 		llmMessages = append(llmMessages, buildSummaryContext(summary.Content, sourceMode))
+	}
+	if stateMessage, ok := buildTutorStateContext(tutorState, sourceMode); ok {
+		llmMessages = append(llmMessages, stateMessage)
 	}
 	if feedbackMessage, ok := s.exerciseFeedbackContext(ctx, sessionID, sourceMode); ok {
 		llmMessages = append(llmMessages, feedbackMessage)

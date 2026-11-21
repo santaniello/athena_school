@@ -322,7 +322,7 @@ func TestFixedPromptTokens_countsTheFeedbackAllowanceOnlyWhenWired(t *testing.T)
 
 	// When measuring the fixed part of the prompt
 	// Then the wired one reserves exactly the allowance more
-	assert.Equal(t, exerciseFeedbackAllowanceTokens, wired.fixedPromptTokens("p")-plain.fixedPromptTokens("p"))
+	assert.Equal(t, exerciseFeedbackAllowanceTokens, wired.fixedPromptTokens("p", false)-plain.fixedPromptTokens("p", false))
 }
 
 func TestExerciseFeedbackAllowance_coversTheLargestBlock(t *testing.T) {

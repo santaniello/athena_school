@@ -16,11 +16,15 @@ const knowledgeContextAllowanceTokens = 3000
 
 // fixedPromptTokens is the part of the prompt that does not depend on the
 // history: the system prompt, the room for the knowledge message and, when the
-// exam results are wired, the room for their block.
-func (s *Service) fixedPromptTokens(systemPrompt string) int {
+// exam results are wired, the room for their block and, when the session has
+// concepts, the room for the tutor state block.
+func (s *Service) fixedPromptTokens(systemPrompt string, hasTutorState bool) int {
 	fixed := domainstudy.EstimateTokens(systemPrompt) + knowledgeContextAllowanceTokens
 	if s.feedback != nil {
 		fixed += exerciseFeedbackAllowanceTokens
+	}
+	if hasTutorState {
+		fixed += tutorStateAllowanceTokens
 	}
 	return fixed
 }
@@ -117,7 +121,7 @@ type compactionOutcome struct {
 // (unknown session, repository failure, or a pending message that cannot fit
 // the window); a compaction that merely fails is reported through
 // outcome.cause and the hooks, with nothing persisted.
-func (s *Service) compact(ctx context.Context, sessionID, pendingContent string, force bool, hooks CompactionHooks) (compactionOutcome, error) {
+func (s *Service) compact(ctx context.Context, sessionID, pendingContent string, force bool, tutorState []domainstudy.ConceptState, hooks CompactionHooks) (compactionOutcome, error) {
 	session, err := s.sessions.GetByID(ctx, sessionID)
 	if err != nil {
 		return compactionOutcome{}, err
@@ -153,7 +157,7 @@ func (s *Service) compact(ctx context.Context, sessionID, pendingContent string,
 		Messages:            history,
 		ContextLength:       window,
 		SummaryWindowTokens: s.summaryWindowTokens(),
-		FixedTokens:         s.fixedPromptTokens(buildSystemPrompt(profile, session.Topic, session.Goal)),
+		FixedTokens:         s.fixedPromptTokens(buildSystemPrompt(profile, session.Topic, session.Goal), len(tutorState) > 0),
 	}
 	if pendingContent != "" {
 		input.PendingTokens = domainstudy.EstimateTokens(pendingContent)
@@ -258,7 +262,7 @@ func (s *Service) CompactSession(ctx context.Context, sessionID string, hooks Co
 	}
 	defer s.inFlight.end(sessionID)
 
-	outcome, err := s.compact(ctx, sessionID, "", true, hooks)
+	outcome, err := s.compact(ctx, sessionID, "", true, s.loadTutorState(ctx, sessionID), hooks)
 	if err != nil {
 		return err
 	}
