@@ -36,9 +36,20 @@ and UI so it is never confused with the conversation summary of compaction
 7. **Evidence is best effort and apart from the state.** The row is written in its own
    transaction, after the concept's, so a failure (logged without message content) never undoes
    the concept's update and never fails the turn. No row is written for a concept that was not
-   stored (a `NOT_ASSESSED` report, or a failed concept write).
-8. **The status rule of 4.2 is unchanged:** the last report with evidence wins; there is no ratio
-   (for example "70% correct") in code. Evidence is stored so such a rule can be added later.
+   stored (a `NOT_ASSESSED` report, or a failed concept write). The cost is accepted: a concept
+   can change without its proof (a failed write, or the app closing between the two
+   transactions) and nothing retries it. A proof supports a status; it is not a complete record
+   of every change, and the state that feeds the tutor matters more than the proof behind it.
+8. **The status rule of 4.2 is unchanged, with one guard:** the last report with evidence wins;
+   there is no ratio (for example "70% correct") in code. Evidence is stored so such a rule can be
+   added later. The guard: a report that says `DEMONSTRATED` while its own `assessment` is
+   `INCORRECT` contradicts itself, so it counts as `PARTIALLY_UNDERSTOOD` (and the prompt asks
+   for `DEMONSTRATED` only with `CORRECT` or `PARTIALLY_CORRECT`). Other pairs are left to the
+   model: a correct answer that is not yet enough to demonstrate is legitimately
+   `PARTIALLY_UNDERSTOOD` with `CORRECT`.
+   `EvidenceCount` (4.2) counts every turn with evidence, while at most 10 proofs per concept and
+   only those with a valid assessment are stored, so a concept can show a higher count than it
+   has proofs; the dialog then says it lists only the latest ones.
 9. **Session progress is derived, with no LLM call.** `BuildSessionProgress` (domain, pure)
    groups the session's concepts by status: `DEMONSTRATED` (demonstrated), `INTRODUCED` (explained
    only), `PARTIALLY_UNDERSTOOD` (difficulties), `NEEDS_REVIEW` (to review), most recently updated
@@ -46,9 +57,13 @@ and UI so it is never confused with the conversation summary of compaction
    assistant language.
 10. **On demand, no "end of session".** The domain has no ended session, so a **Session
     progress** button in the chat opens a read-only dialog at any time. It states that it is an
-    estimate by the AI tutor, and renders concept names and descriptions as plain text only.
+    estimate by the AI tutor, and renders concept names and descriptions as plain text only. The
+    state of a reply is stored once the reply ends, so a dialog opened while one is streaming
+    reads the progress again when the stream finishes.
 11. **Language.** The dialog has its own i18next namespace (`progress`, `en` and `pt`) that
-    follows the profile's assistant language, like the quiz and the mind map.
+    follows the profile's assistant language, like the quiz and the mind map, its close button
+    included. The **Session progress** button is outside the dialog and stays English, like the
+    rest of the chat controls.
 12. **Local only.** The Learn Intelligent Engine does not exist; no event, bus or schema version
     is built, and evidence is not exportable. An idempotent event (`LearningEvidenceRecorded`) is
     specified when that engine is.

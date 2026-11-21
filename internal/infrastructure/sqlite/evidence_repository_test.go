@@ -247,7 +247,7 @@ func TestOpen_createsConceptEvidenceTable_onADatabaseThatPredatesIt(t *testing.T
 	// When opening it through the current migration path
 	db, err := Open(path)
 	require.NoError(t, err)
-	defer func() { _ = db.Close() }()
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
 
 	// Then the table exists again
 	var tableName string

@@ -122,6 +122,8 @@ func ApplyReport(current *ConceptState, report StateReport, now time.Time) (Conc
 		return *current, false
 	}
 
+	report.Status = coherentStatus(report)
+
 	var next ConceptState
 	if current != nil {
 		next = *current
@@ -147,6 +149,16 @@ func ApplyReport(current *ConceptState, report StateReport, now time.Time) (Conc
 	}
 	next.UpdatedAt = now
 	return next, true
+}
+
+// coherentStatus is the status a report can stand behind. A report that says
+// the concept was DEMONSTRATED while its own assessment says the user's message
+// was INCORRECT contradicts itself, so it only counts as PARTIALLY_UNDERSTOOD.
+func coherentStatus(report StateReport) ConceptStatus {
+	if report.Status == StatusDemonstrated && report.Assessment == AssessmentIncorrect {
+		return StatusPartiallyUnderstood
+	}
+	return report.Status
 }
 
 // reportedStatus is the status an existing concept takes when the user's

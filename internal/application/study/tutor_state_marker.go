@@ -36,6 +36,7 @@ var tutorStateInstruction = strings.Join([]string{
 	"Set assisted to true when you had to give a hint or explain to get there.",
 	"Include assessment and description only when userEvidence is true. assessment is CORRECT, PARTIALLY_CORRECT or INCORRECT, for the user's latest message about the concept.",
 	"description is one short sentence, in the user's language, saying what the user showed.",
+	"Use DEMONSTRATED only with assessment CORRECT or PARTIALLY_CORRECT, never with INCORRECT.",
 	"The strategy field of this block is the only place you may write a strategy name; everywhere else keep describing your approach in plain words.",
 }, "\n")
 

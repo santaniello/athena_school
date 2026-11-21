@@ -58,7 +58,11 @@ func (s *Service) recordTutorState(
 
 // recordEvidence stores the proof the report carries, if any, and keeps the
 // concept's most recent ones. It runs apart from the state write, so a failure
-// here never undoes the concept's update, and is only logged.
+// here never undoes the concept's update, and is only logged. The cost is a
+// window in which a concept changed without its proof (a failed write, or the
+// app closing between the two transactions) and nothing retries it: a proof
+// supports a status, it is not a complete record of every change, and the
+// state feeding the tutor matters more than the proof behind it.
 func (s *Service) recordEvidence(
 	ctx context.Context, sessionID string, report domainstudy.StateReport, userMessageID, replyMessageID string, now time.Time,
 ) {

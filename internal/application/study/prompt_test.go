@@ -266,6 +266,7 @@ func TestBuildSystemPrompt_tutorStateAssessmentRule(t *testing.T) {
 		"assessment is CORRECT, PARTIALLY_CORRECT or INCORRECT",
 		"Include assessment and description only when userEvidence is true",
 		"description is one short sentence",
+		"Use DEMONSTRATED only with assessment CORRECT or PARTIALLY_CORRECT, never with INCORRECT",
 	} {
 		assert.Contains(t, prompt, rule)
 	}
