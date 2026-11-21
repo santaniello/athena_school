@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import { getStudySessionProgress, type StudyProgress, type StudyProgressConcept } from '@/lib/study'
 import { setLabLanguage } from '@/i18n'
 import { ProgressDialog } from './progress-dialog'
@@ -225,6 +225,75 @@ describe('ProgressDialog', () => {
     expect(await screen.findByText('<img src=x alt="tracker">')).toBeInTheDocument()
     expect(screen.getByText('<b>bold</b>')).toBeInTheDocument()
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
+  })
+
+  it('translates the close button, so a screen reader hears it in the assistant language', async () => {
+    // Given the assistant language is Portuguese
+    setLabLanguage('pt')
+    vi.mocked(getStudySessionProgress).mockResolvedValueOnce(progress())
+
+    // When the dialog opens
+    render(<ProgressDialog open sessionId="session-1" onClose={vi.fn()} />)
+
+    // Then the close button is named in Portuguese
+    expect(await screen.findByRole('button', { name: 'Fechar' })).toBeInTheDocument()
+  })
+
+  it('says only the latest proofs are listed when the count is higher', async () => {
+    // Given a concept shown 12 times with 2 proofs stored
+    const proof = { assessment: 'CORRECT', description: 'ok', assisted: false, createdAt: 'x' }
+    vi.mocked(getStudySessionProgress).mockResolvedValueOnce(
+      progress({
+        demonstrated: [
+          concept({
+            name: 'mutex',
+            evidenceCount: 12,
+            evidence: [proof, { ...proof, createdAt: 'y' }],
+          }),
+          concept({ name: 'channel', evidenceCount: 1, evidence: [proof] }),
+        ],
+      }),
+    )
+
+    // When the dialog opens
+    render(<ProgressDialog open sessionId="session-1" onClose={vi.fn()} />)
+
+    // Then only the concept with fewer proofs than its count carries the hint
+    await screen.findByText('mutex')
+    expect(screen.getAllByText('Latest 2 proofs')).toHaveLength(1)
+    expect(screen.queryByText('Latest 1 proofs')).not.toBeInTheDocument()
+  })
+
+  it('reads the progress again when the tutor finishes a reply while it is open', async () => {
+    // Given a dialog opened while a reply is streaming
+    vi.mocked(getStudySessionProgress)
+      .mockResolvedValueOnce(progress({ demonstrated: [concept({ name: 'old concept' })] }))
+      .mockResolvedValueOnce(progress({ demonstrated: [concept({ name: 'new concept' })] }))
+    const { rerender } = render(
+      <ProgressDialog open sessionId="session-1" isStreaming onClose={vi.fn()} />,
+    )
+    expect(await screen.findByText('old concept')).toBeInTheDocument()
+
+    // When the reply ends
+    rerender(<ProgressDialog open sessionId="session-1" isStreaming={false} onClose={vi.fn()} />)
+
+    // Then the new state replaces the old one, with no loading flash in between
+    await waitFor(() => expect(screen.getByText('new concept')).toBeInTheDocument())
+    expect(screen.queryByText('old concept')).not.toBeInTheDocument()
+    expect(getStudySessionProgress).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not read again when nothing changes between renders', async () => {
+    // Given an open dialog that already read the progress
+    vi.mocked(getStudySessionProgress).mockResolvedValue(progress({ demonstrated: [concept()] }))
+    const { rerender } = render(<ProgressDialog open sessionId="session-1" onClose={vi.fn()} />)
+    await screen.findByText('mutex')
+
+    // When it renders again with the same inputs
+    rerender(<ProgressDialog open sessionId="session-1" onClose={vi.fn()} />)
+
+    // Then no second read happens
+    expect(getStudySessionProgress).toHaveBeenCalledTimes(1)
   })
 
   it('follows the profile language', async () => {

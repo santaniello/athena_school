@@ -2,6 +2,7 @@ import React from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { setLabLanguage } from '@/i18n'
 import {
   compactStudySession,
   getStudySessionProgress,
@@ -2614,6 +2615,17 @@ describe('StudyChatScreen — summary marker', () => {
     // Then the progress button is usable and no progress was requested yet
     expect(screen.getByRole('button', { name: 'Session progress' })).toBeEnabled()
     expect(getStudySessionProgress).not.toHaveBeenCalled()
+  })
+
+  it('keeps the Session progress button in English whatever the assistant language', async () => {
+    // Given the assistant language is Portuguese
+    setLabLanguage('pt')
+
+    // When the chat renders
+    await renderResumed(['m1', 'm2'], '')
+
+    // Then the button next to View summary is English, like the other controls
+    expect(screen.getByRole('button', { name: 'Session progress' })).toBeInTheDocument()
   })
 
   it('opens the session progress of the current session', async () => {

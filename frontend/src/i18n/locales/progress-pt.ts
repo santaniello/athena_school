@@ -1,7 +1,7 @@
 // As strings do diálogo Progresso da sessão em português. O arquivo em inglês
 // (progress-en.ts) deve ter exatamente as mesmas chaves.
 export const progressPt = {
-  open: 'Progresso da sessão',
+  close: 'Fechar',
   title: 'Progresso da sessão',
   description:
     'O que o tutor observou nesta sessão. É uma estimativa do tutor de IA e pode estar errada.',
@@ -16,6 +16,7 @@ export const progressPt = {
     needsReview: 'Para revisar',
   },
   evidenceCount: 'Demonstrado {{count}} vezes',
+  latestProofs: 'Últimas {{count}} provas',
   assessment: {
     correct: 'Correto',
     partiallyCorrect: 'Parcialmente correto',

@@ -14,6 +14,9 @@ import { getStudySessionProgress, type StudyProgress, type StudyProgressConcept 
 interface ProgressDialogProps {
   open: boolean
   sessionId: string
+  // True while a tutor reply is streaming. The state of a reply is stored once
+  // it ends, so the progress is read again when this goes back to false.
+  isStreaming?: boolean
   onClose: () => void
 }
 
@@ -55,6 +58,11 @@ function ConceptEntry({ concept }: { concept: StudyProgressConcept }) {
       </div>
       {concept.evidence.length > 0 && (
         <ul className="space-y-1.5 border-t pt-2">
+          {concept.evidence.length < concept.evidenceCount && (
+            <li className="text-xs text-muted-foreground">
+              {t('latestProofs', { count: concept.evidence.length })}
+            </li>
+          )}
           {concept.evidence.map((proof, index) => {
             const assessment = ASSESSMENTS[proof.assessment]
             return (
@@ -101,7 +109,7 @@ function Overview({ progress }: { progress: StudyProgress }) {
 
 // Mounted only while the dialog is open, so every opening reads the current
 // progress and a closed dialog holds none.
-function ProgressBody({ sessionId }: { sessionId: string }) {
+function ProgressBody({ sessionId, isStreaming }: { sessionId: string; isStreaming: boolean }) {
   const { t } = useTranslation(PROGRESS_NAMESPACE)
   const [state, setState] = useState<ProgressState>({ status: 'loading' })
 
@@ -117,7 +125,7 @@ function ProgressBody({ sessionId }: { sessionId: string }) {
     return () => {
       cancelled = true
     }
-  }, [sessionId])
+  }, [sessionId, isStreaming])
 
   if (state.status === 'loading') {
     return <p className="text-sm text-muted-foreground">{t('loading')}</p>
@@ -152,16 +160,16 @@ function ProgressBody({ sessionId }: { sessionId: string }) {
 
 // Read-only view of what the tutor observed in the session. It is derived from
 // the stored state and proofs, with no model call, and says it is an estimate.
-function ProgressDialog({ open, sessionId, onClose }: ProgressDialogProps) {
+function ProgressDialog({ open, sessionId, isStreaming = false, onClose }: ProgressDialogProps) {
   const { t } = useTranslation(PROGRESS_NAMESPACE)
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="sm:max-w-3xl" closeLabel={t('close')}>
         <DialogHeader>
           <DialogTitle>{t('title')}</DialogTitle>
           <DialogDescription>{t('description')}</DialogDescription>
         </DialogHeader>
-        <ProgressBody sessionId={sessionId} />
+        <ProgressBody sessionId={sessionId} isStreaming={isStreaming} />
       </DialogContent>
     </Dialog>
   )

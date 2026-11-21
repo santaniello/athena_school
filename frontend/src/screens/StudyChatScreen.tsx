@@ -11,7 +11,6 @@ import {
 import { createPortal } from 'react-dom'
 import type { ChangeEvent, KeyboardEvent, UIEvent } from 'react'
 import { ArrowUp } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -31,7 +30,6 @@ import { LocalSourcesStrip } from '@/components/local-sources-strip'
 import { SessionUsageBar } from '@/components/session-usage-bar'
 import { StartExamDialog } from '@/components/lab/start-exam-dialog'
 import { ProgressDialog } from '@/components/progress-dialog'
-import { PROGRESS_NAMESPACE } from '@/i18n'
 import { SummaryDialog } from '@/components/summary-dialog'
 import { SummaryMarker } from '@/components/summary-marker'
 import { FindBar } from '@/components/find-bar'
@@ -349,7 +347,6 @@ function StudyChatScreen({
   onStartQuiz,
   onOpenMindMap,
 }: StudyChatScreenProps) {
-  const { t: tProgress } = useTranslation(PROGRESS_NAMESPACE)
   const [sessionTopic, setSessionTopic] = useState(initialTopic)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(mode === 'new')
@@ -1007,7 +1004,7 @@ function StudyChatScreen({
         View summary
       </Button>
       <Button variant="outline" size="sm" onClick={() => setProgressOpen(true)}>
-        {tProgress('open')}
+        Session progress
       </Button>
       <SourceModeSelect value={sourceMode} onValueChange={setSourceMode} disabled={isStreaming} />
     </div>
@@ -1024,6 +1021,7 @@ function StudyChatScreen({
       <ProgressDialog
         open={progressOpen}
         sessionId={sessionId}
+        isStreaming={isStreaming}
         onClose={() => setProgressOpen(false)}
       />
       <StartExamDialog
