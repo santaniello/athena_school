@@ -213,3 +213,58 @@ func TestTutorStrategy_IsValid(t *testing.T) {
 	assert.False(t, TutorStrategy("").IsValid())
 	assert.False(t, TutorStrategy("HINT").IsValid())
 }
+
+func reportWithAssessment(status ConceptStatus, assessment Assessment) StateReport {
+	r := report(status, true)
+	r.Assessment = assessment
+	return r
+}
+
+func TestApplyReport_demonstratedWithAnIncorrectAssessment_isStoredAsPartiallyUnderstood(t *testing.T) {
+	// Given a DEMONSTRATED report whose own assessment says the user's message was incorrect
+	for name, current := range map[string]*ConceptState{
+		"new concept":      nil,
+		"existing concept": existingConcept(StatusIntroduced),
+	} {
+		t.Run(name, func(t *testing.T) {
+			// When applying it
+			next, changed := ApplyReport(current, reportWithAssessment(StatusDemonstrated, AssessmentIncorrect), stateNow)
+
+			// Then the contradiction never reaches the state: the concept is only partially understood
+			assert.True(t, changed)
+			assert.Equal(t, StatusPartiallyUnderstood, next.Status)
+		})
+	}
+}
+
+func TestApplyReport_coherentAssessments_leaveTheReportedStatusAlone(t *testing.T) {
+	cases := map[string]struct {
+		status     ConceptStatus
+		assessment Assessment
+	}{
+		"demonstrated and correct":           {StatusDemonstrated, AssessmentCorrect},
+		"demonstrated and partially correct": {StatusDemonstrated, AssessmentPartiallyCorrect},
+		"demonstrated without assessment":    {StatusDemonstrated, ""},
+		"needs review and incorrect":         {StatusNeedsReview, AssessmentIncorrect},
+		"partially understood and incorrect": {StatusPartiallyUnderstood, AssessmentIncorrect},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			// Given a report whose assessment does not contradict its status
+			// When applying it to a new concept
+			next, _ := ApplyReport(nil, reportWithAssessment(tc.status, tc.assessment), stateNow)
+
+			// Then the reported status is kept
+			assert.Equal(t, tc.status, next.Status)
+		})
+	}
+}
+
+func TestApplyReport_demonstratedWithAnIncorrectAssessment_onANeedsReviewConcept_staysNeedsReview(t *testing.T) {
+	// Given a concept to review and a DEMONSTRATED report that is contradicted by its own assessment
+	// When applying it
+	next, _ := ApplyReport(existingConcept(StatusNeedsReview), reportWithAssessment(StatusDemonstrated, AssessmentIncorrect), stateNow)
+
+	// Then it is treated as PARTIALLY_UNDERSTOOD, which is what the user showed: no step up from NEEDS_REVIEW is lost or invented
+	assert.Equal(t, StatusPartiallyUnderstood, next.Status)
+}

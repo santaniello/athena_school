@@ -59,6 +59,7 @@ type Service struct {
 	offers         OfferGate
 	feedback       ExerciseFeedbackReader
 	concepts       domainstudy.ConceptStateRepository
+	evidence       domainstudy.EvidenceRepository
 	inFlight       *inFlightCoordinator
 }
 

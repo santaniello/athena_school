@@ -322,3 +322,52 @@ func TestPartialTagSuffixLength(t *testing.T) {
 		})
 	}
 }
+
+func TestParseTutorState_assessmentAndDescription_areReadWhenPresent(t *testing.T) {
+	// Given a block that carries an assessment and a description
+	body := `{"concept":"Mutex","status":"DEMONSTRATED","strategy":"COMPREHENSION_CHECK","userEvidence":true,"assessment":"CORRECT","description":"Explained why the lock is needed"}`
+
+	// When parsing it
+	_, report, err := parseTutorState("Good.\n" + stateBlock(body))
+
+	// Then both reach the report
+	require.NoError(t, err)
+	require.NotNil(t, report)
+	assert.Equal(t, domainstudy.AssessmentCorrect, report.Assessment)
+	assert.Equal(t, "Explained why the lock is needed", report.Description)
+}
+
+func TestParseTutorState_assessmentIsCaseInsensitive(t *testing.T) {
+	// Given an assessment in lower case
+	body := `{"concept":"Mutex","status":"DEMONSTRATED","strategy":"COMPREHENSION_CHECK","userEvidence":true,"assessment":" partially_correct "}`
+
+	// When parsing it
+	_, report, err := parseTutorState(stateBlock(body))
+
+	// Then it is read as the upper-case value
+	require.NoError(t, err)
+	require.NotNil(t, report)
+	assert.Equal(t, domainstudy.AssessmentPartiallyCorrect, report.Assessment)
+}
+
+func TestParseTutorState_missingOrUnknownAssessment_keepsTheReportValidWithoutOne(t *testing.T) {
+	for name, field := range map[string]string{
+		"missing": ``,
+		"unknown": `,"assessment":"GREAT"`,
+		"blank":   `,"assessment":""`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			// Given a block whose assessment is not usable
+			body := `{"concept":"Mutex","status":"DEMONSTRATED","strategy":"COMPREHENSION_CHECK","userEvidence":true` + field + `}`
+
+			// When parsing it
+			_, report, err := parseTutorState(stateBlock(body))
+
+			// Then the report still applies (the status is unaffected), with no assessment
+			require.NoError(t, err)
+			require.NotNil(t, report)
+			assert.Equal(t, domainstudy.StatusDemonstrated, report.Status)
+			assert.Empty(t, report.Assessment)
+		})
+	}
+}

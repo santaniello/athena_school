@@ -24,6 +24,7 @@ import (
 type replyOutcome struct {
 	received []string
 	stored   domainstudy.Message
+	user     domainstudy.Message // the user's message of the turn
 	prompt   []domainllm.Message // what the model was sent
 }
 
@@ -52,10 +53,11 @@ func streamReplyWith(t *testing.T, chunks []string, options ...Option) (replyOut
 	tx := mockNormalSession(t, sessions, "session-1")
 	retriever.EXPECT().Retrieve(context.Background(), "session-1", mock.AnythingOfType("[]string")).
 		Return(domainknowledge.RetrievalResult{}, nil).Once()
-	messages.EXPECT().Append(context.Background(), mock.MatchedBy(func(m domainstudy.Message) bool { return m.Role == domainstudy.RoleUser })).Return(nil).Once()
+	var outcome replyOutcome
+	messages.EXPECT().Append(context.Background(), mock.MatchedBy(func(m domainstudy.Message) bool { return m.Role == domainstudy.RoleUser })).
+		Run(func(_ context.Context, m domainstudy.Message) { outcome.user = m }).Return(nil).Once()
 	messages.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil).Once()
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}, nil)
-	var outcome replyOutcome
 	llm.EXPECT().
 		ChatStream(context.Background(), mock.AnythingOfType("llm.ChatRequest"), mock.AnythingOfType("func(string) error")).
 		Run(func(_ context.Context, request domainllm.ChatRequest, handler func(string) error) {

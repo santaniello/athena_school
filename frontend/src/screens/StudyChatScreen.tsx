@@ -29,6 +29,7 @@ import { SourceModeSelect } from '@/components/source-mode-select'
 import { LocalSourcesStrip } from '@/components/local-sources-strip'
 import { SessionUsageBar } from '@/components/session-usage-bar'
 import { StartExamDialog } from '@/components/lab/start-exam-dialog'
+import { ProgressDialog } from '@/components/progress-dialog'
 import { SummaryDialog } from '@/components/summary-dialog'
 import { SummaryMarker } from '@/components/summary-marker'
 import { FindBar } from '@/components/find-bar'
@@ -405,6 +406,7 @@ function StudyChatScreen({
   // transcript shows a marker right after it.
   const [summaryCoversUntilId, setSummaryCoversUntilId] = useState('')
   const [summaryOpen, setSummaryOpen] = useState(false)
+  const [progressOpen, setProgressOpen] = useState(false)
   // Mirrors contextState for event handlers subscribed once per session.
   const contextStateRef = useRef<ContextState>('normal')
   // Set when a study:compaction-failed arrives during a manual retry, so the
@@ -1001,6 +1003,9 @@ function StudyChatScreen({
       >
         View summary
       </Button>
+      <Button variant="outline" size="sm" onClick={() => setProgressOpen(true)}>
+        Session progress
+      </Button>
       <SourceModeSelect value={sourceMode} onValueChange={setSourceMode} disabled={isStreaming} />
     </div>
   )
@@ -1012,6 +1017,12 @@ function StudyChatScreen({
         open={summaryOpen}
         sessionId={sessionId}
         onClose={() => setSummaryOpen(false)}
+      />
+      <ProgressDialog
+        open={progressOpen}
+        sessionId={sessionId}
+        isStreaming={isStreaming}
+        onClose={() => setProgressOpen(false)}
       />
       <StartExamDialog
         challenge={examRules}

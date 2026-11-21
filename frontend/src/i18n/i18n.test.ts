@@ -6,6 +6,8 @@ import { mindmapEn } from './locales/mindmap-en'
 import { mindmapPt } from './locales/mindmap-pt'
 import { quizEn } from './locales/quiz-en'
 import { quizPt } from './locales/quiz-pt'
+import { progressEn } from './locales/progress-en'
+import { progressPt } from './locales/progress-pt'
 
 // The dotted path of every string of a locale.
 function keysOf(tree: object, prefix = ''): string[] {
@@ -107,5 +109,24 @@ describe('mind map locales', () => {
     setLabLanguage('pt')
     expect(i18n.t('catalog.generate', { ns: 'mindmap' })).toBe('Gerar mapa mental com IA')
     setLabLanguage('en')
+  })
+})
+
+describe('progress locales', () => {
+  it('have the same keys in English and Portuguese', () => {
+    expect(keysOf(progressPt).sort()).toEqual(keysOf(progressEn).sort())
+  })
+
+  it('use the same placeholders in both languages', () => {
+    const english = new Map(leaves(progressEn))
+    for (const [key, text] of leaves(progressPt)) {
+      expect(placeholdersOf(text), key).toEqual(placeholdersOf(english.get(key) ?? ''))
+    }
+  })
+
+  it('follow the profile language through the progress namespace', () => {
+    expect(i18n.t('title', { ns: 'progress' })).toBe('Session progress')
+    setLabLanguage('pt')
+    expect(i18n.t('title', { ns: 'progress' })).toBe('Progresso da sessão')
   })
 })

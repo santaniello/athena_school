@@ -224,7 +224,7 @@ func (s *Service) SendMessage(
 		llmMessages = append(llmMessages, domainllm.Message{Role: message.Role, Content: content})
 	}
 
-	if _, err := s.streamAndPersist(ctx, sessionID, newContext, llmMessages, sources, true, onChunk, onContext, onContextUnavailable); err != nil {
+	if _, err := s.streamAndPersist(ctx, sessionID, newContext, llmMessages, sources, userMessage.ID, onChunk, onContext, onContextUnavailable); err != nil {
 		return fmt.Errorf("study: sending message: %w", err)
 	}
 	return nil

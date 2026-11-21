@@ -83,6 +83,8 @@ export function GetQuizAttemptResult(arg1:string):Promise<desktop.QuizAttemptRes
 
 export function GetSessionSourceDocument(arg1:string,arg2:string):Promise<desktop.SourceDocumentResult>;
 
+export function GetStudySessionProgress(arg1:string):Promise<desktop.StudyProgressResult>;
+
 export function GetStudySessionSummary(arg1:string):Promise<desktop.StudySummaryResult>;
 
 export function GetStudySessionUsage(arg1:string):Promise<desktop.StudySessionUsageResult>;
