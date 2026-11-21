@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Badge } from '@/components/ui/badge'
 import { PROGRESS_NAMESPACE } from '@/i18n'
 import { getStudySessionProgress, type StudyProgress, type StudyProgressConcept } from '@/lib/study'
 
@@ -19,17 +20,21 @@ interface ProgressDialogProps {
 type ProgressState =
   { status: 'loading' } | { status: 'error' } | { status: 'ready'; progress: StudyProgress }
 
-const GROUPS = [
-  { key: 'demonstrated', label: 'groups.demonstrated' },
-  { key: 'explainedOnly', label: 'groups.explainedOnly' },
-  { key: 'difficulties', label: 'groups.difficulties' },
-  { key: 'needsReview', label: 'groups.needsReview' },
-] as const
+type BadgeVariant = 'beginner' | 'intermediate' | 'advanced' | 'muted'
 
-const ASSESSMENT_LABELS: Record<string, string> = {
-  CORRECT: 'assessment.correct',
-  PARTIALLY_CORRECT: 'assessment.partiallyCorrect',
-  INCORRECT: 'assessment.incorrect',
+// One color per group, like the difficulty badge: green is what the user
+// showed, grey is only explained, amber is a gap and red is to review.
+const GROUPS: readonly { key: keyof StudyProgress; label: string; variant: BadgeVariant }[] = [
+  { key: 'demonstrated', label: 'groups.demonstrated', variant: 'beginner' },
+  { key: 'explainedOnly', label: 'groups.explainedOnly', variant: 'muted' },
+  { key: 'difficulties', label: 'groups.difficulties', variant: 'intermediate' },
+  { key: 'needsReview', label: 'groups.needsReview', variant: 'advanced' },
+]
+
+const ASSESSMENTS: Record<string, { label: string; variant: BadgeVariant }> = {
+  CORRECT: { label: 'assessment.correct', variant: 'beginner' },
+  PARTIALLY_CORRECT: { label: 'assessment.partiallyCorrect', variant: 'intermediate' },
+  INCORRECT: { label: 'assessment.incorrect', variant: 'advanced' },
 }
 
 function isEmpty(progress: StudyProgress): boolean {
@@ -41,29 +46,56 @@ function isEmpty(progress: StudyProgress): boolean {
 function ConceptEntry({ concept }: { concept: StudyProgressConcept }) {
   const { t } = useTranslation(PROGRESS_NAMESPACE)
   return (
-    <li className="space-y-1">
-      <div className="flex flex-wrap items-baseline gap-x-2">
-        <span className="font-medium">{concept.name}</span>
+    <li className="space-y-2 rounded-lg border bg-card p-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <span className="font-medium break-words">{concept.name}</span>
         <span className="text-xs text-muted-foreground">
           {t('evidenceCount', { count: concept.evidenceCount })}
         </span>
       </div>
       {concept.evidence.length > 0 && (
-        <ul className="space-y-0.5 pl-4 text-xs text-muted-foreground">
-          {concept.evidence.map((proof, index) => (
-            <li key={`${proof.createdAt}-${index}`} className="flex flex-wrap gap-x-2">
-              <span className="font-medium">
-                {ASSESSMENT_LABELS[proof.assessment]
-                  ? t(ASSESSMENT_LABELS[proof.assessment])
-                  : proof.assessment}
-              </span>
-              {proof.assisted && <span>{t('assisted')}</span>}
-              {proof.description && <span>{proof.description}</span>}
-            </li>
-          ))}
+        <ul className="space-y-1.5 border-t pt-2">
+          {concept.evidence.map((proof, index) => {
+            const assessment = ASSESSMENTS[proof.assessment]
+            return (
+              <li key={`${proof.createdAt}-${index}`} className="space-y-0.5 text-xs">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <Badge variant={assessment?.variant ?? 'muted'} className="px-2">
+                    {assessment ? t(assessment.label) : proof.assessment}
+                  </Badge>
+                  {proof.assisted && (
+                    <Badge variant="muted" className="px-2">
+                      {t('assisted')}
+                    </Badge>
+                  )}
+                </div>
+                {proof.description && (
+                  <p className="text-muted-foreground break-words">{proof.description}</p>
+                )}
+              </li>
+            )
+          })}
         </ul>
       )}
     </li>
+  )
+}
+
+// One tile per group with its count, empty groups included, so the shape of
+// the session reads at a glance before the details.
+function Overview({ progress }: { progress: StudyProgress }) {
+  const { t } = useTranslation(PROGRESS_NAMESPACE)
+  return (
+    <ul aria-label={t('overview')} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {GROUPS.map((group) => (
+        <li key={group.key} className="flex flex-col gap-1 rounded-lg border bg-card p-3">
+          <Badge variant={group.variant} className="h-6 min-w-6 self-start px-2 text-xs">
+            {progress[group.key].length}
+          </Badge>
+          <span className="text-xs text-muted-foreground">{t(group.label)}</span>
+        </li>
+      ))}
+    </ul>
   )
 }
 
@@ -97,10 +129,16 @@ function ProgressBody({ sessionId }: { sessionId: string }) {
     return <p className="text-sm text-muted-foreground">{t('empty')}</p>
   }
   return (
-    <div className="thin-scroll max-h-[60vh] space-y-4 overflow-y-auto pr-2 text-sm">
+    <div className="thin-scroll max-h-[70vh] space-y-5 overflow-y-auto pr-2 text-sm">
+      <Overview progress={state.progress} />
       {GROUPS.filter((group) => state.progress[group.key].length > 0).map((group) => (
         <section key={group.key} aria-label={t(group.label)} className="space-y-2">
-          <h3 className="font-semibold">{t(group.label)}</h3>
+          <h3 className="flex items-center gap-2 font-semibold">
+            {t(group.label)}
+            <Badge variant={group.variant} className="px-2">
+              {state.progress[group.key].length}
+            </Badge>
+          </h3>
           <ul className="space-y-2">
             {state.progress[group.key].map((concept) => (
               <ConceptEntry key={concept.name} concept={concept} />
@@ -118,7 +156,7 @@ function ProgressDialog({ open, sessionId, onClose }: ProgressDialogProps) {
   const { t } = useTranslation(PROGRESS_NAMESPACE)
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{t('title')}</DialogTitle>
           <DialogDescription>{t('description')}</DialogDescription>

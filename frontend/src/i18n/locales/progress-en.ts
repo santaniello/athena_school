@@ -7,6 +7,7 @@ export const progressEn = {
   title: 'Session progress',
   description:
     'What the tutor observed in this session. This is an estimate by the AI tutor and may be wrong.',
+  overview: 'Overview',
   loading: 'Loading the session progress...',
   loadFailed: 'Could not load the session progress.',
   empty: 'Nothing observed yet. Concepts appear here as you work through them with the tutor.',

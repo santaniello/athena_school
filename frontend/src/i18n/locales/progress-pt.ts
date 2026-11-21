@@ -5,6 +5,7 @@ export const progressPt = {
   title: 'Progresso da sessão',
   description:
     'O que o tutor observou nesta sessão. É uma estimativa do tutor de IA e pode estar errada.',
+  overview: 'Visão geral',
   loading: 'Carregando o progresso da sessão...',
   loadFailed: 'Não foi possível carregar o progresso da sessão.',
   empty: 'Nada observado ainda. Os conceitos aparecem aqui conforme você os trabalha com o tutor.',

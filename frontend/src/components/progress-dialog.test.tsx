@@ -62,6 +62,42 @@ describe('ProgressDialog', () => {
     expect(getStudySessionProgress).toHaveBeenCalledWith('session-1')
   })
 
+  it('summarizes how many concepts each group holds, including the empty ones', async () => {
+    // Given two demonstrated concepts, one to review and nothing else
+    vi.mocked(getStudySessionProgress).mockResolvedValueOnce(
+      progress({
+        demonstrated: [concept({ name: 'mutex' }), concept({ name: 'channel' })],
+        needsReview: [concept({ name: 'deadlock', status: 'NEEDS_REVIEW' })],
+      }),
+    )
+
+    // When the dialog opens
+    render(<ProgressDialog open sessionId="session-1" onClose={vi.fn()} />)
+
+    // Then an overview lists the four groups with their counts, in order
+    const overview = await screen.findByRole('list', { name: 'Overview' })
+    const items = within(overview).getAllByRole('listitem')
+    expect(items).toHaveLength(4)
+    expect(items[0]).toHaveTextContent(/2\s*You demonstrated/)
+    expect(items[1]).toHaveTextContent(/0\s*Explained, not yet shown by you/)
+    expect(items[2]).toHaveTextContent(/0\s*Difficulties/)
+    expect(items[3]).toHaveTextContent(/1\s*To review/)
+  })
+
+  it('shows the number of concepts next to each group title', async () => {
+    // Given two demonstrated concepts
+    vi.mocked(getStudySessionProgress).mockResolvedValueOnce(
+      progress({ demonstrated: [concept({ name: 'mutex' }), concept({ name: 'channel' })] }),
+    )
+
+    // When the dialog opens
+    render(<ProgressDialog open sessionId="session-1" onClose={vi.fn()} />)
+
+    // Then the group heading carries its count
+    const group = await screen.findByRole('region', { name: 'You demonstrated' })
+    expect(within(group).getByRole('heading')).toHaveTextContent(/You demonstrated\s*2/)
+  })
+
   it('omits the groups that have no concept', async () => {
     // Given a session with only a demonstrated concept
     vi.mocked(getStudySessionProgress).mockResolvedValueOnce(
