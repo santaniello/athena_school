@@ -5,8 +5,7 @@
 Add a **Progress** tab that shows, per Folder, every study session as a **topic** with its latest
 quiz and Arch Lab results and a qualitative status (Improving, Stable, Needs reinforcement,
 Insufficient evidence). Everything is derived on read from data that already exists: no LLM call,
-no new table. Origin: [`progress.md`](../../../progress.md). Visual reference: the approved
-[mockup](mockup/).
+no new table. Visual reference: the approved [mockup](mockup/).
 
 ## Decisions
 
