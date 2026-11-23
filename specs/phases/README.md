@@ -41,6 +41,7 @@ Payments         Paddle
 | [2](phase-02-knowledge-engine/) | Knowledge Engine | Knowledge Base + RAG + notes | Phase 1 |
 | [3](phase-03-architecture-lab/) | Architecture Lab | Challenges, diagram whiteboard, rubric evaluation, oral defense | Phase 2 |
 | [4](phase-04-tutor/) | Adaptive Tutor | One adaptive study tutor with a persisted pedagogical state | Phase 2 |
+| [5](phase-05-progress/) | Progress | Per-folder learning progress: each session is a topic, with quiz and lab results, evidence and insights | Phases 3, 4 |
 
 ---
 
@@ -156,6 +157,24 @@ The Learn Intelligent Engine of that proposal does not exist and is not specifie
 
 ---
 
+## Phase 5 — Progress
+
+A **Progress** tab: each Folder lists its study sessions as topics (one topic = one session), with
+the latest quiz and Arch Lab results, a qualitative status, the learning evidence of the tutor and
+on-demand insights. Origin: `progress.md`. The "Learning Intelligence Engine" of that proposal is
+reduced to a pure `progress` domain package and a read adapter; no event bus, no topic
+classification.
+
+| Spec | Description |
+|---|---|
+| [01-progress-dashboard.md](phase-05-progress/01-progress-dashboard.md) | Folders, topics with latest quiz/lab scores and a status rule derived on read; no LLM |
+| [02-topic-detail.md](phase-05-progress/02-topic-detail.md) | Activities, per-item results, concepts understood, difficulties (tutor + rubric criteria), concept display names |
+| [03-evolution-chart.md](phase-05-progress/03-evolution-chart.md) | Quiz and Arch Lab attempts over time, shown from 2 points |
+| [04-topic-insights.md](phase-05-progress/04-topic-insights.md) | On-demand, stored LLM analysis per topic with citations and stale detection |
+| [05-folder-insights.md](phase-05-progress/05-folder-insights.md) | The same insights consolidated per Folder |
+
+---
+
 ## Dependency Graph
 
 ```text
@@ -168,4 +187,6 @@ Phase 2 (Knowledge Engine)
 Phase 3 (Architecture Lab)
     ↓
 Phase 4 (Adaptive Tutor)
+    ↓
+Phase 5 (Progress)
 ```
