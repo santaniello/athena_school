@@ -3,7 +3,7 @@
 
 **Status:** Refinada (2026-11-23). Detalhamento técnico em [`specs/phases/phase-05-progress/`](specs/phases/phase-05-progress/).
 **Módulos envolvidos:** Folders, Study Sessions (estado pedagógico e evidências do tutor), Quiz, Architecture Lab.
-**Referência visual:** `dash.png` (gerado sem contexto da app; vale o layout, não o modelo de dados).
+**Referência visual:** [mockup aprovado](specs/phases/phase-05-progress/mockup/) ([versão interativa](https://claude.ai/artifact/8ADzEMmFVyFDVbUozFNmtZ)).
 
 ---
 
