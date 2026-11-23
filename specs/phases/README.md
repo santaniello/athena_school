@@ -161,9 +161,8 @@ The Learn Intelligent Engine of that proposal does not exist and is not specifie
 
 A **Progress** tab: each Folder lists its study sessions as topics (one topic = one session), with
 the latest quiz and Arch Lab results, a qualitative status, the learning evidence of the tutor and
-on-demand insights. Origin: `progress.md`. The "Learning Intelligence Engine" of that proposal is
-reduced to a pure `progress` domain package and a read adapter; no event bus, no topic
-classification.
+on-demand insights. The "Learning Intelligence Engine" of the original proposal is reduced to a
+pure `progress` domain package and a read adapter; no event bus, no topic classification. Visual reference: [approved mockup](phase-05-progress/mockup/).
 
 | Spec | Description |
 |---|---|

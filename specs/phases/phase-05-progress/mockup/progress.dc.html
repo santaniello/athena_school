@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Athena Progress</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&amp;family=Nunito:wght@400;600;700;800&amp;display=swap">
+<style>
+body{margin:0;background:#15110e}
+a{color:#e0b64a}a:hover{color:#f0cd72}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #15110e; color: #f5f2ea; font-family: 'Nunito', sans-serif; display: flex; flex-wrap: wrap; align-items: stretch">
+
+  <!-- Side menu -->
+  <nav aria-label="Menu principal" style="flex: 1 1 220px; max-width: 240px; min-width: 200px; box-sizing: border-box; padding: 28px 16px; background: #1a1511; border-right: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; gap: 4px">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 0 10px 24px">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#e0b64a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"></path><path d="M5 21V10"></path><path d="M9.5 21V10"></path><path d="M14.5 21V10"></path><path d="M19 21V10"></path><path d="M2 10l10-6 10 6z"></path></svg>
+      <span style="font-family: 'Cinzel', serif; font-weight: 700; font-size: 24px; color: #e0b64a; letter-spacing: 0.04em">Athena</span>
+    </div>
+    <sc-for list="{{nav}}" as="item" hint-placeholder-count="11">
+      <a href="#" style="{{item.style}}">{{item.label}}</a>
+    </sc-for>
+  </nav>
+
+  <!-- Content -->
+  <main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 32px 32px 48px; display: flex; flex-direction: column; gap: 24px">
+
+    <!-- Header -->
+    <header style="display: flex; align-items: center; gap: 16px; padding-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1)">
+      <div style="width: 52px; height: 52px; border-radius: 14px; background: #2a241f; display: flex; align-items: center; justify-content: center">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#e0b64a" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 20V14"></path><path d="M10 20V9"></path><path d="M15 20V12"></path><path d="M20 20V5"></path></svg>
+      </div>
+      <div>
+        <h1 style="margin: 0; font-family: 'Cinzel', serif; font-size: 32px; font-weight: 700; color: #f5f2ea">Progress</h1>
+        <p style="margin: 2px 0 0; color: #a8a094; font-size: 15px">Acompanhe como você está em cada assunto que estuda.</p>
+      </div>
+    </header>
+
+    <!-- Counters -->
+    <section aria-label="Indicadores" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+      <div style="background: #211b16; border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; padding: 18px 22px; display: flex; align-items: center; gap: 16px">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#e0b64a" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+        <div><div style="font-size: 28px; font-weight: 800; line-height: 1">2</div><div style="color: #a8a094; font-size: 14px; margin-top: 4px">Folders</div></div>
+      </div>
+      <div style="background: #211b16; border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; padding: 18px 22px; display: flex; align-items: center; gap: 16px">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#e0b64a" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5z"></path><path d="M3 13l9 5 9-5"></path></svg>
+        <div><div style="font-size: 28px; font-weight: 800; line-height: 1">6</div><div style="color: #a8a094; font-size: 14px; margin-top: 4px">Assuntos</div></div>
+      </div>
+      <div style="background: #211b16; border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; padding: 18px 22px; display: flex; align-items: center; gap: 16px">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#e8875a" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6"></path><path d="M12 16.5v.5"></path></svg>
+        <div><div style="font-size: 28px; font-weight: 800; line-height: 1">2</div><div style="color: #a8a094; font-size: 14px; margin-top: 4px">Assuntos para revisar</div></div>
+      </div>
+    </section>
+
+    <!-- Two columns -->
+    <div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start">
+
+      <!-- LEFT -->
+      <section aria-label="Folders e assuntos" style="flex: 1 1 380px; max-width: 480px; min-width: 0; background: #211b16; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 18px">
+        <h2 style="margin: 0; font-size: 18px; font-weight: 800">Minhas Folders</h2>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px">
+          <sc-for list="{{folders}}" as="f" hint-placeholder-count="2">
+            <button type="button" onClick="{{f.pick}}" style="{{f.style}}">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+              <span style="display: flex; flex-direction: column; align-items: flex-start"><span style="font-weight: 800; font-size: 15px; color: #f5f2ea">{{f.name}}</span><span style="font-size: 13px; color: #a8a094">{{f.countLabel}}</span></span>
+            </button>
+          </sc-for>
+        </div>
+
+        <!-- Folder insight -->
+        <div style="background: #2a2117; border: 1px solid rgba(224,182,74,0.35); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+          <div style="display: flex; align-items: center; gap: 8px">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e0b64a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"></path><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"></path></svg>
+            <span style="font-weight: 800; font-size: 14px; color: #e0b64a">Athena Insights da Folder</span>
+          </div>
+          <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #e9e3d6">{{folderInsightText}}</p>
+          <sc-if value="{{folderInsightOpen}}" hint-placeholder-val="{{ false }}">
+            <div style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: #e9e3d6">
+              <span style="font-weight: 800">Recomendações</span>
+              <sc-for list="{{folderRecs}}" as="r" hint-placeholder-count="2">
+                <button type="button" onClick="{{r.open}}" style="text-align: left; background: none; border: none; padding: 0; color: #e9e3d6; font-size: 14px; line-height: 1.5; cursor: pointer">• {{r.text}} <span style="color: #e0b64a; text-decoration: underline">{{r.topic}}</span></button>
+              </sc-for>
+              <span style="font-size: 12px; color: #a8a094">Gerado em 20/11 · baseado em 4 assuntos</span>
+            </div>
+          </sc-if>
+          <button type="button" onClick="{{toggleFolderInsight}}" style="align-self: flex-start; background: none; border: none; padding: 0; color: #e0b64a; font-size: 13px; font-weight: 700; cursor: pointer">{{folderInsightToggleLabel}}</button>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 12px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.08)">
+          <div style="padding-top: 12px">
+            <h3 style="margin: 0; font-family: 'Cinzel', serif; font-size: 20px; font-weight: 700">{{folderName}}</h3>
+            <p style="margin: 2px 0 0; color: #a8a094; font-size: 13px">Cada assunto é uma sessão de estudo. Selecione um para ver o detalhe.</p>
+          </div>
+        </div>
+
+        <div role="list" style="display: flex; flex-direction: column; gap: 10px">
+          <sc-for list="{{topics}}" as="t" hint-placeholder-count="4">
+            <button type="button" role="listitem" onClick="{{t.pick}}" style="{{t.style}}">
+              <span style="display: flex; flex-direction: column; gap: 4px; min-width: 0; text-align: left">
+                <span style="font-weight: 800; font-size: 16px; color: #f5f2ea">{{t.name}}</span>
+                <span style="font-size: 13px; color: #a8a094">Quiz: <b style="color: #e9e3d6">{{t.quizLabel}}</b> · Arch Lab: <b style="color: #e9e3d6">{{t.labLabel}}</b></span>
+              </span>
+              <span style="{{t.pillStyle}}">{{t.statusIcon}} {{t.statusLabel}}</span>
+            </button>
+          </sc-for>
+        </div>
+        <p style="margin: 0; font-size: 12px; color: #a8a094">Notas da última tentativa. Arch Lab = média de diagrama e defesa.</p>
+      </section>
+
+      <!-- RIGHT -->
+      <section aria-label="Detalhe do assunto" style="flex: 999 1 520px; min-width: 0; background: #211b16; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 22px">
+
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+          <div style="display: flex; align-items: center; gap: 14px">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#e0b64a" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5z"></path><path d="M3 13l9 5 9-5"></path></svg>
+            <div>
+              <h2 style="margin: 0; font-family: 'Cinzel', serif; font-size: 28px; font-weight: 700">{{sel.name}}</h2>
+              <span style="font-size: 13px; color: #a8a094">{{folderName}} · sessão de estudo</span>
+            </div>
+          </div>
+          <span style="{{sel.pillStyle}}">{{sel.statusIcon}} {{sel.statusLabel}}</span>
+        </div>
+
+        <!-- Activities -->
+        <div>
+          <h3 style="margin: 0 0 10px; font-size: 16px; font-weight: 800">Atividades relacionadas</h3>
+          <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px">
+            <div style="background: #2a241f; border-radius: 12px; padding: 14px 16px"><div style="font-size: 24px; font-weight: 800">{{sel.quizCount}}</div><div style="font-size: 13px; color: #a8a094">Quizzes</div></div>
+            <div style="background: #2a241f; border-radius: 12px; padding: 14px 16px"><div style="font-size: 24px; font-weight: 800">{{sel.labCount}}</div><div style="font-size: 13px; color: #a8a094">Arch Labs</div></div>
+            <div style="background: #2a241f; border-radius: 12px; padding: 14px 16px"><div style="font-size: 24px; font-weight: 800">{{sel.conceptCount}}</div><div style="font-size: 13px; color: #a8a094">Conceitos trabalhados</div></div>
+          </div>
+        </div>
+
+        <!-- Results -->
+        <div>
+          <h3 style="margin: 0 0 10px; font-size: 16px; font-weight: 800">Resultados</h3>
+          <sc-if value="{{sel.noResults}}" hint-placeholder-val="{{ false }}">
+            <p style="margin: 0; font-size: 14px; color: #a8a094; background: #2a241f; border-radius: 12px; padding: 14px 16px">Nenhuma avaliação ainda. Faça um quiz ou um Arch Lab a partir desta sessão.</p>
+          </sc-if>
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <sc-for list="{{sel.quizzes}}" as="q" hint-placeholder-count="2">
+              <a href="#" style="display: flex; align-items: center; gap: 12px; background: #2a241f; border-radius: 12px; padding: 12px 16px; text-decoration: none; color: #f5f2ea">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a8a094" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6"></path><path d="M12 17v.2"></path></svg>
+                <span style="flex: 1; min-width: 0"><span style="font-weight: 700; font-size: 14px">{{q.name}}</span><br><span style="font-size: 12px; color: #a8a094">{{q.meta}}</span></span>
+                <span style="font-weight: 800; font-size: 16px">{{q.score}}</span>
+              </a>
+            </sc-for>
+            <sc-for list="{{sel.labs}}" as="l" hint-placeholder-count="1">
+              <a href="#" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: #2a241f; border-radius: 12px; padding: 12px 16px; text-decoration: none; color: #f5f2ea">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a8a094" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 8l-5 4 5 4"></path><path d="M16 8l5 4-5 4"></path><path d="M14 4l-4 16"></path></svg>
+                <span style="flex: 1 1 200px; min-width: 0"><span style="font-weight: 700; font-size: 14px">{{l.title}}</span><br><span style="font-size: 12px; color: #a8a094">Diagrama {{l.diagram}} · Defesa {{l.defense}} · {{l.attempts}}</span></span>
+                <span style="{{l.resultStyle}}">{{l.result}}</span>
+                <span style="font-weight: 800; font-size: 16px">{{l.score}}</span>
+              </a>
+            </sc-for>
+          </div>
+        </div>
+
+        <!-- Learning -->
+        <div>
+          <h3 style="margin: 0 0 12px; font-size: 16px; font-weight: 800">Aprendizado identificado</h3>
+          <div style="display: flex; flex-direction: column; gap: 14px">
+            <div style="display: flex; gap: 12px">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#5fbf8f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M8 12.5l2.5 2.5L16 9.5"></path></svg>
+              <div><div style="font-weight: 800; font-size: 14px">Conceitos compreendidos</div><div style="font-size: 14px; color: #c9c1b3">{{sel.understood}}</div></div>
+            </div>
+            <div style="display: flex; gap: 12px">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#e8875a" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6"></path><path d="M12 16.5v.5"></path></svg>
+              <div style="flex: 1; min-width: 0">
+                <div style="font-weight: 800; font-size: 14px">Dificuldades identificadas</div>
+                <sc-if value="{{sel.noDifficulties}}" hint-placeholder-val="{{ false }}"><div style="font-size: 14px; color: #a8a094">Nenhuma dificuldade identificada.</div></sc-if>
+                <sc-for list="{{sel.difficulties}}" as="d" hint-placeholder-count="2">
+                  <div style="font-size: 14px; color: #c9c1b3; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap">
+                    <span>{{d.name}}</span>
+                    <span style="font-size: 11px; font-weight: 700; color: #f5f2ea; background: #3a332d; border-radius: 6px; padding: 1px 7px">{{d.src}}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display: flex; gap: 12px">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#a8a094" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M8 12h8"></path></svg>
+              <div><div style="font-weight: 800; font-size: 14px">Explicados, ainda não avaliados</div><div style="font-size: 14px; color: #a8a094">{{sel.introduced}}</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Topic insight -->
+        <div style="background: #2a2117; border: 1px solid rgba(224,182,74,0.35); border-radius: 14px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap">
+            <div style="display: flex; align-items: center; gap: 8px">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e0b64a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"></path><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"></path></svg>
+              <span style="font-weight: 800; font-size: 16px; color: #e0b64a">Athena Insights</span>
+            </div>
+            <sc-if value="{{ins.canGenerate}}" hint-placeholder-val="{{ true }}">
+              <button type="button" onClick="{{generate}}" style="background: #e0b64a; color: #1f1914; border: none; border-radius: 10px; padding: 10px 16px; min-height: 44px; font-weight: 800; font-size: 14px; cursor: pointer">{{ins.buttonLabel}}</button>
+            </sc-if>
+          </div>
+          <sc-if value="{{ins.stale}}" hint-placeholder-val="{{ false }}">
+            <div style="font-size: 13px; color: #f0cd72; background: rgba(224,182,74,0.12); border-radius: 8px; padding: 8px 12px">Há atividades novas desde esta análise (quiz refeito em 22/11). Atualize para considerá-las.</div>
+          </sc-if>
+          <sc-if value="{{ins.blocked}}" hint-placeholder-val="{{ false }}">
+            <p style="margin: 0; font-size: 14px; color: #c9c1b3">Ainda não há evidências para analisar. Converse com o tutor, faça um quiz ou um Arch Lab desta sessão primeiro.</p>
+          </sc-if>
+          <sc-if value="{{ins.empty}}" hint-placeholder-val="{{ false }}">
+            <p style="margin: 0; font-size: 14px; color: #c9c1b3">Nenhuma análise gerada ainda. A análise usa só as avaliações e evidências salvas, nunca a conversa inteira.</p>
+          </sc-if>
+          <sc-if value="{{ins.has}}" hint-placeholder-val="{{ true }}">
+            <div style="display: flex; flex-direction: column; gap: 8px">
+              <p style="margin: 0; font-size: 14px; line-height: 1.55; color: #e9e3d6">{{ins.analysis}}</p>
+              <div style="font-size: 14px; font-weight: 800; color: #e9e3d6">Recomendações</div>
+              <sc-for list="{{ins.recs}}" as="r" hint-placeholder-count="2">
+                <div style="font-size: 14px; line-height: 1.5; color: #e9e3d6">• {{r.text}} <span style="font-size: 12px; color: #a8a094">— baseado em: <a href="#">{{r.cites}}</a></span></div>
+              </sc-for>
+              <span style="font-size: 12px; color: #a8a094">{{ins.meta}}</span>
+            </div>
+          </sc-if>
+        </div>
+
+        <!-- Evolution -->
+        <div style="border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; padding: 16px 18px">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 8px">
+            <h3 style="margin: 0; font-size: 16px; font-weight: 800">Evolução no assunto</h3>
+            <div style="display: flex; gap: 16px; font-size: 13px; color: #c9c1b3">
+              <span style="display: flex; align-items: center; gap: 6px"><span style="width: 10px; height: 10px; border-radius: 50%; background: #e0b64a"></span>Quiz</span>
+              <span style="display: flex; align-items: center; gap: 6px"><span style="width: 10px; height: 10px; border-radius: 50%; background: #6aa9e0"></span>Arch Lab</span>
+              <span style="display: flex; align-items: center; gap: 6px"><span style="width: 14px; border-top: 2px dashed #8a8276"></span>Nota mínima</span>
+            </div>
+          </div>
+          <sc-if value="{{chart.hidden}}" hint-placeholder-val="{{ false }}">
+            <p style="margin: 0; font-size: 14px; color: #a8a094; padding: 24px 0">Ainda não há avaliações suficientes para mostrar a evolução.</p>
+          </sc-if>
+          <sc-if value="{{chart.shown}}" hint-placeholder-val="{{ true }}">
+            <svg viewBox="0 0 640 240" role="img" aria-label="{{chart.aria}}" style="width: 100%; height: auto; display: block">
+              <g font-size="12" fill="#a8a094" font-family="Nunito, sans-serif">
+                <text x="34" y="24" text-anchor="end">100%</text>
+                <text x="34" y="84" text-anchor="end">80%</text>
+                <text x="34" y="144" text-anchor="end">60%</text>
+                <text x="34" y="204" text-anchor="end">40%</text>
+              </g>
+              <line x1="44" y1="20" x2="620" y2="20" stroke="rgba(255,255,255,0.08)"></line>
+              <line x1="44" y1="140" x2="620" y2="140" stroke="rgba(255,255,255,0.08)"></line>
+              <line x1="44" y1="200" x2="620" y2="200" stroke="rgba(255,255,255,0.08)"></line>
+              <line x1="44" y1="80" x2="620" y2="80" stroke="#8a8276" stroke-width="1.5" stroke-dasharray="6 5"></line>
+              <polyline points="{{chart.quizLine}}" fill="none" stroke="#e0b64a" stroke-width="2.5"></polyline>
+              <polyline points="{{chart.labLine}}" fill="none" stroke="#6aa9e0" stroke-width="2.5"></polyline>
+              <sc-for list="{{chart.quizPts}}" as="p" hint-placeholder-count="3">
+                <circle cx="{{p.x}}" cy="{{p.y}}" r="6" fill="#e0b64a" stroke="#211b16" stroke-width="2"><title>{{p.tip}}</title></circle>
+              </sc-for>
+              <sc-for list="{{chart.labPts}}" as="p" hint-placeholder-count="2">
+                <circle cx="{{p.x}}" cy="{{p.y}}" r="6" fill="#6aa9e0" stroke="#211b16" stroke-width="2"><title>{{p.tip}}</title></circle>
+              </sc-for>
+              <g font-size="12" fill="#a8a094" font-family="Nunito, sans-serif">
+                <sc-for list="{{chart.xLabels}}" as="xl" hint-placeholder-count="3">
+                  <text x="{{xl.x}}" y="228" text-anchor="middle">{{xl.label}}</text>
+                </sc-for>
+              </g>
+            </svg>
+          </sc-if>
+        </div>
+
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1240}}'>
+var STATUS = {
+  reinforce: { label: 'Precisa reforço', icon: '!', fg: '#f3a57f', bg: 'rgba(232,135,90,0.16)' },
+  improving: { label: 'Melhorando', icon: '↗', fg: '#7fd3a8', bg: 'rgba(95,191,143,0.16)' },
+  stable: { label: 'Estável', icon: '→', fg: '#a9c1e0', bg: 'rgba(106,169,224,0.16)' },
+  insufficient: { label: 'Evidências insuficientes', icon: '?', fg: '#bdb5a8', bg: 'rgba(255,255,255,0.08)' }
+};
+
+var DATA = {
+  sd: {
+    name: 'System Design',
+    insight: 'Cache e Paralelismo precisam de reforço; Mensageria está evoluindo bem e serve de base para os dois.',
+    insightMore: [
+      { text: 'Refaça o Arch Lab de cache focando na defesa sobre invalidação:', topic: 'Cache', id: 'cache' },
+      { text: 'Faça um novo quiz de pools e contenção de threads:', topic: 'Paralelismo', id: 'par' }
+    ],
+    topics: [
+      {
+        id: 'cache', name: 'Cache', quiz: 85, lab: 63, status: 'reinforce',
+        quizCount: 2, labCount: 1, conceptCount: 7,
+        quizzes: [
+          { name: 'Quiz 1 · Médio', meta: '10 questões · 2 tentativas · última 18/11', score: '90%' },
+          { name: 'Quiz 2 · Difícil', meta: '8 questões · 1 tentativa · 22/11', score: '80%' }
+        ],
+        labs: [
+          { title: 'Cache distribuído para catálogo de produtos', diagram: '85', defense: '40', attempts: '2 tentativas', result: 'Reprovado', ok: false, score: '63%' }
+        ],
+        understood: 'Cache-aside, TTL, Cache hit/miss, Write-through.',
+        difficulties: [
+          { name: 'Invalidação distribuída', src: 'Tutor · revisar' },
+          { name: 'Cache stampede', src: 'Tutor' },
+          { name: 'Critério: estratégia de invalidação (nível 1 na defesa)', src: 'Arch Lab: Cache distribuído' }
+        ],
+        introduced: 'Consistent hashing.',
+        insight: 'stale',
+        analysis: 'Você domina os fundamentos de cache (cache-aside, TTL) e acerta bem os quizzes, mas no Arch Lab a defesa mostrou que a estratégia de invalidação ainda não está clara: o diagrama estava correto, a justificativa não.',
+        recs: [
+          { text: 'Peça ao tutor para revisar invalidação em cache distribuído com exemplos de falha.', cites: 'Arch Lab · defesa, conceito “invalidação distribuída”' },
+          { text: 'Refaça o desafio “Cache distribuído” e foque em explicar quando invalidar.', cites: 'Arch Lab · tentativa 2' }
+        ],
+        meta: 'Gerado em 19/11 · modelo do assistente',
+        quizSeries: [{ v: 60, tip: 'Quiz 1 · 60% · 12/11' }, { v: 90, tip: 'Quiz 1 · 90% · 18/11' }, { v: 80, tip: 'Quiz 2 · 80% · 22/11' }],
+        labSeries: [{ v: 55, tip: 'Cache distribuído · 55% · 14/11' }, { v: 63, tip: 'Cache distribuído · 63% (85/40) · 19/11' }]
+      },
+      {
+        id: 'par', name: 'Paralelismo', quiz: 61, lab: null, status: 'reinforce',
+        quizCount: 1, labCount: 0, conceptCount: 4,
+        quizzes: [{ name: 'Quiz 1 · Médio', meta: '10 questões · 1 tentativa · 16/11', score: '61%' }],
+        labs: [],
+        understood: 'Race condition.',
+        difficulties: [{ name: 'ThreadPoolTaskExecutor', src: 'Tutor' }, { name: 'Deadlock', src: 'Tutor · revisar' }],
+        introduced: 'Fork/Join, Work stealing.',
+        insight: 'none',
+        quizSeries: [{ v: 61, tip: 'Quiz 1 · 61% · 16/11' }],
+        labSeries: []
+      },
+      {
+        id: 'msg', name: 'Mensageria', quiz: 88, lab: 82, status: 'improving',
+        quizCount: 1, labCount: 1, conceptCount: 5,
+        quizzes: [{ name: 'Quiz 1 · Médio', meta: '10 questões · 2 tentativas · última 20/11', score: '88%' }],
+        labs: [{ title: 'Processamento de pedidos com fila', diagram: '84', defense: '80', attempts: '1 tentativa', result: 'Aprovado', ok: true, score: '82%' }],
+        understood: 'Filas, Pub/Sub, At-least-once, Idempotência.',
+        difficulties: [],
+        introduced: 'Exactly-once.',
+        insight: 'fresh',
+        analysis: 'Boa evolução: o quiz subiu de 70% para 88% e o Arch Lab foi aprovado com diagrama e defesa equilibrados. Idempotência apareceu bem justificada na defesa.',
+        recs: [{ text: 'Explore exactly-once com o tutor; ainda foi só explicado, não avaliado.', cites: 'conceito “exactly-once”' }],
+        meta: 'Gerado em 21/11 · atualizado',
+        quizSeries: [{ v: 70, tip: 'Quiz 1 · 70% · 10/11' }, { v: 88, tip: 'Quiz 1 · 88% · 20/11' }],
+        labSeries: [{ v: 82, tip: 'Pedidos com fila · 82% (84/80) · 21/11' }]
+      },
+      {
+        id: 'obs', name: 'Observabilidade', quiz: null, lab: null, status: 'insufficient',
+        quizCount: 0, labCount: 0, conceptCount: 2,
+        quizzes: [], labs: [],
+        understood: '—',
+        difficulties: [],
+        introduced: 'Logs estruturados, Tracing.',
+        insight: 'blocked',
+        quizSeries: [], labSeries: []
+      }
+    ]
+  },
+  java: {
+    name: 'Java',
+    insight: 'Collections está consolidado; Concorrência evoluiu, mas ainda depende de poucas avaliações.',
+    insightMore: [{ text: 'Faça um Arch Lab de concorrência para validar na prática:', topic: 'Concorrência', id: 'conc' }],
+    topics: [
+      {
+        id: 'conc', name: 'Concorrência', quiz: 82, lab: null, status: 'improving',
+        quizCount: 1, labCount: 0, conceptCount: 4,
+        quizzes: [{ name: 'Quiz 1 · Médio', meta: '10 questões · 2 tentativas · última 21/11', score: '82%' }],
+        labs: [],
+        understood: 'synchronized, volatile.',
+        difficulties: [{ name: 'CompletableFuture', src: 'Tutor' }],
+        introduced: 'Virtual threads.',
+        insight: 'none',
+        quizSeries: [{ v: 64, tip: 'Quiz 1 · 64% · 15/11' }, { v: 82, tip: 'Quiz 1 · 82% · 21/11' }],
+        labSeries: []
+      },
+      {
+        id: 'coll', name: 'Collections', quiz: 90, lab: null, status: 'stable',
+        quizCount: 1, labCount: 0, conceptCount: 6,
+        quizzes: [{ name: 'Quiz 1 · Fácil', meta: '10 questões · 1 tentativa · 08/11', score: '90%' }],
+        labs: [],
+        understood: 'HashMap, ArrayList vs LinkedList, equals/hashCode.',
+        difficulties: [],
+        introduced: '—',
+        insight: 'none',
+        quizSeries: [{ v: 90, tip: 'Quiz 1 · 90% · 08/11' }],
+        labSeries: []
+      }
+    ]
+  }
+};
+
+var NAV = ['Home', 'Study', 'Architecture Lab', 'Interactive Test', 'Mind Map', 'Progress', 'Flashcards', 'Interview', 'Documentation', 'Profile', 'Settings'];
+
+function pill(key) {
+  var s = STATUS[key];
+  return 'display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 13px; font-weight: 800; color: ' + s.fg + '; background: ' + s.bg + '; border-radius: 999px; padding: 5px 12px';
+}
+
+function plot(series, n) {
+  var left = 70, right = 590;
+  var step = n > 1 ? (right - left) / (n - 1) : 0;
+  return series.map(function (p, i) {
+    var y = 20 + (100 - p.v) * 3;
+    if (y > 200) y = 200;
+    return { x: Math.round(left + i * step), y: Math.round(y), tip: p.tip };
+  });
+}
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { folder: 'sd', topic: 'cache', folderOpen: false, generated: {} };
+  }
+
+  renderVals() {
+    var self = this;
+    var st = this.state;
+    var folder = DATA[st.folder];
+    var nav = NAV.map(function (label) {
+      var active = label === 'Progress';
+      return {
+        label: label,
+        style: 'display: block; text-decoration: none; padding: 11px 14px; border-radius: 10px; font-size: 15px; font-weight: ' + (active ? '800' : '600') + '; color: ' + (active ? '#1f1914' : '#c9c1b3') + '; background: ' + (active ? '#e0b64a' : 'transparent')
+      };
+    });
+
+    var folders = Object.keys(DATA).map(function (id) {
+      var f = DATA[id];
+      var on = id === st.folder;
+      return {
+        name: f.name,
+        countLabel: f.topics.length + ' assuntos',
+        pick: function () { self.setState({ folder: id, topic: f.topics[0].id, folderOpen: false }); },
+        style: 'flex: 1 1 150px; display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 12px 14px; border-radius: 12px; cursor: pointer; text-align: left; color: ' + (on ? '#e0b64a' : '#a8a094') + '; background: ' + (on ? 'rgba(224,182,74,0.12)' : '#2a241f') + '; border: 1.5px solid ' + (on ? '#e0b64a' : 'rgba(255,255,255,0.1)')
+      };
+    });
+
+    var topics = folder.topics.map(function (t) {
+      var on = t.id === st.topic;
+      var s = STATUS[t.status];
+      return {
+        name: t.name,
+        quizLabel: t.quiz == null ? '—' : t.quiz + '%',
+        labLabel: t.lab == null ? '—' : t.lab + '%',
+        statusLabel: s.label,
+        statusIcon: s.icon,
+        pillStyle: pill(t.status),
+        pick: function () { self.setState({ topic: t.id }); },
+        style: 'display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 14px 16px; border-radius: 12px; cursor: pointer; background: ' + (on ? 'rgba(224,182,74,0.10)' : '#2a241f') + '; border: 1.5px solid ' + (on ? '#e0b64a' : 'transparent')
+      };
+    });
+
+    var t = folder.topics.filter(function (x) { return x.id === st.topic; })[0] || folder.topics[0];
+    var s = STATUS[t.status];
+    var sel = {
+      name: t.name,
+      statusLabel: s.label,
+      statusIcon: s.icon,
+      pillStyle: pill(t.status),
+      quizCount: t.quizCount,
+      labCount: t.labCount,
+      conceptCount: t.conceptCount,
+      quizzes: t.quizzes,
+      labs: t.labs.map(function (l) {
+        return Object.assign({}, l, {
+          resultStyle: 'font-size: 12px; font-weight: 800; border-radius: 999px; padding: 3px 10px; color: ' + (l.ok ? '#7fd3a8' : '#f3a57f') + '; background: ' + (l.ok ? 'rgba(95,191,143,0.16)' : 'rgba(232,135,90,0.16)')
+        });
+      }),
+      noResults: t.quizzes.length === 0 && t.labs.length === 0,
+      understood: t.understood,
+      difficulties: t.difficulties,
+      noDifficulties: t.difficulties.length === 0,
+      introduced: t.introduced
+    };
+
+    var state = st.generated[t.id] ? 'fresh' : t.insight;
+    var analysis = t.analysis;
+    var recs = t.recs || [];
+    var meta = t.meta;
+    if (st.generated[t.id] && !t.analysis) {
+      analysis = 'Você reconhece race conditions, mas o quiz (61%) e as conversas com o tutor mostram que configurar pools de threads e evitar deadlocks ainda não está firme.';
+      recs = [
+        { text: 'Peça ao tutor exercícios guiados sobre deadlock e ordem de locks.', cites: 'conceito “deadlock” (revisar)' },
+        { text: 'Gere um Arch Lab de paralelismo para aplicar ThreadPoolTaskExecutor.', cites: 'Quiz 1 · questões 3, 7' }
+      ];
+      meta = 'Gerado agora';
+    }
+    var ins = {
+      has: state === 'fresh' || state === 'stale',
+      stale: state === 'stale',
+      empty: state === 'none',
+      blocked: state === 'blocked',
+      canGenerate: state !== 'blocked',
+      buttonLabel: state === 'none' ? 'Gerar insights' : 'Atualizar insights',
+      analysis: analysis,
+      recs: recs,
+      meta: meta
+    };
+    if (state === 'fresh' && st.generated[t.id] && t.analysis) { ins.meta = 'Gerado agora'; }
+
+    var n = Math.max(t.quizSeries.length, t.labSeries.length);
+    var total = t.quizSeries.length + t.labSeries.length;
+    var qp = plot(t.quizSeries, n);
+    var lp = plot(t.labSeries, n);
+    var ord = ['1ª', '2ª', '3ª', '4ª', '5ª'];
+    var xLabels = [];
+    for (var i = 0; i < n; i++) {
+      xLabels.push({ x: n > 1 ? Math.round(70 + i * (520 / (n - 1))) : 70, label: ord[i] + ' avaliação' });
+    }
+    var chart = {
+      shown: total >= 2,
+      hidden: total < 2,
+      quizPts: qp,
+      labPts: lp,
+      quizLine: qp.map(function (p) { return p.x + ',' + p.y; }).join(' '),
+      labLine: lp.map(function (p) { return p.x + ',' + p.y; }).join(' '),
+      xLabels: xLabels,
+      aria: 'Evolução de ' + t.name + ': quiz ' + t.quizSeries.map(function (p) { return p.v + '%'; }).join(', ') + '; Arch Lab ' + t.labSeries.map(function (p) { return p.v + '%'; }).join(', ')
+    };
+
+    return {
+      nav: nav,
+      folders: folders,
+      folderName: folder.name,
+      folderInsightText: folder.insight,
+      folderInsightOpen: st.folderOpen,
+      folderInsightToggleLabel: st.folderOpen ? 'Mostrar menos' : 'Ver recomendações',
+      toggleFolderInsight: function () { self.setState({ folderOpen: !st.folderOpen }); },
+      folderRecs: folder.insightMore.map(function (r) {
+        return { text: r.text, topic: r.topic, open: function () { self.setState({ topic: r.id }); } };
+      }),
+      topics: topics,
+      sel: sel,
+      ins: ins,
+      generate: function () {
+        var g = Object.assign({}, st.generated);
+        g[t.id] = true;
+        self.setState({ generated: g });
+      },
+      chart: chart
+    };
+  }
+}
+</script>
+</body>
+</html>
