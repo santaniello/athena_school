@@ -126,6 +126,9 @@ function AppShell() {
   // panel itself (useSessionSources), keyed on sessionId; see
   // specs/phases/phase-02-knowledge-engine/17-session-sources-panel.md.
   const [sourcesOpen, setSourcesOpen] = useState(true)
+  // Bumped by the study chat when its mind map, quiz or lab cards change, so
+  // the Session materials panel reads its lists again.
+  const [materialsRevision, setMaterialsRevision] = useState(0)
   // Drives the header toggle button — collapse()/expand() are the source of
   // truth (also reachable by dragging the handle past minSize), sourcesOpen
   // just mirrors the panel's own reported size via onResize below.
@@ -592,6 +595,7 @@ function AppShell() {
               onStartExam={startSessionExam}
               onStartQuiz={startSessionQuiz}
               onOpenMindMap={openSessionMindMap}
+              onMaterialsChanged={() => setMaterialsRevision((revision) => revision + 1)}
               onStartNewSession={handleStartNewSession}
               startingNewSession={startingNewSession}
               sourceModeSlot={sourceModeSlot}
@@ -771,6 +775,10 @@ function AppShell() {
                   sessionId={activeSession.id}
                   mutationsDisabled={retryingIndex}
                   openRequest={openCitationRequest}
+                  onOpenMindMap={openSessionMindMap}
+                  onStartQuiz={startSessionQuiz}
+                  onStartExam={startSessionExam}
+                  materialsRevision={materialsRevision}
                 />
               </ResizablePanel>
             </ResizablePanelGroup>

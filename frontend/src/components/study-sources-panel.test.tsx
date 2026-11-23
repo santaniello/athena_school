@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ComponentProps } from 'react'
 import { StudySourcesPanel } from './study-sources-panel'
+import { listSessionMindMaps } from '@/lib/mindmap'
+import { listSessionQuizzes } from '@/lib/quiz'
+import { listSessionExercises } from '@/lib/exercise'
 import { getSessionSourceDocument, listSessionSources, removeSessionSource } from '@/lib/sources'
 import {
   confirmImport,
@@ -16,6 +20,23 @@ import {
   type ImportPreview,
   type IngestSummary,
 } from '@/lib/ingest'
+
+// The mind map, quiz and lab lists the panel also loads: empty unless a test
+// says otherwise.
+vi.mock('@/lib/mindmap', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/mindmap')>()),
+  listSessionMindMaps: vi.fn(() => Promise.resolve([])),
+}))
+vi.mock('@/lib/quiz', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/quiz')>()),
+  listSessionQuizzes: vi.fn(() => Promise.resolve([])),
+}))
+vi.mock('@/lib/exercise', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/exercise')>()),
+  listSessionExercises: vi.fn(() => Promise.resolve([])),
+}))
+// The Start Exam dialog reads the pass score.
+vi.mock('@/lib/passScore', () => ({ getPassScore: vi.fn(() => Promise.resolve(7)) }))
 
 vi.mock('@/lib/sources', () => ({
   listSessionSources: vi.fn(),
@@ -131,13 +152,28 @@ const CAP_THEOREM = {
   ingestedAt: '2024-01-02T00:00:00Z',
 }
 
+type PanelProps = Partial<ComponentProps<typeof StudySourcesPanel>> & { sessionId: string }
+
+// Every test that is not about opening a mind map, quiz or lab gets inert
+// handlers, so each render only names what it is about.
+function Panel(props: PanelProps) {
+  return (
+    <StudySourcesPanel
+      onOpenMindMap={vi.fn()}
+      onStartQuiz={vi.fn()}
+      onStartExam={vi.fn()}
+      {...props}
+    />
+  )
+}
+
 describe('StudySourcesPanel', () => {
   it('shows a loading state before the sources arrive', () => {
     // Given a load that never resolves during this test
     vi.mocked(listSessionSources).mockImplementationOnce(() => new Promise(() => {}))
 
     // When the panel mounts
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
 
     // Then a loading message shows, not the empty state
     expect(screen.getByText('Loading sources…')).toBeInTheDocument()
@@ -149,7 +185,7 @@ describe('StudySourcesPanel', () => {
     vi.mocked(listSessionSources).mockResolvedValueOnce([])
 
     // When the panel loads
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
 
     // Then the empty state shows, with its own explanation and Add action
     expect(await screen.findByText('No sources imported yet.')).toBeInTheDocument()
@@ -164,7 +200,7 @@ describe('StudySourcesPanel', () => {
     vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS, CAP_THEOREM])
 
     // When the panel loads
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
 
     // Then both render with their title, path and chunk count, singular for one chunk
     expect(await screen.findByText('Distributed Systems')).toBeInTheDocument()
@@ -178,70 +214,10 @@ describe('StudySourcesPanel', () => {
     vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS, CAP_THEOREM])
 
     // When the panel loads
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
 
-    // Then the header shows the total count
-    expect(await screen.findByText('Sources (2)')).toBeInTheDocument()
-  })
-
-  it('filters the list by title or path as the user types', async () => {
-    // Given two imported documents, loaded
-    vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS, CAP_THEOREM])
-    const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
-    await screen.findByText('Distributed Systems')
-
-    // When searching for the other document's title
-    await user.type(screen.getByPlaceholderText('Search sources'), 'cap theorem')
-
-    // Then only the matching document remains
-    expect(screen.getByText('CAP theorem')).toBeInTheDocument()
-    expect(screen.queryByText('Distributed Systems')).not.toBeInTheDocument()
-  })
-
-  it('matches the search against the path too', async () => {
-    // Given two imported documents, loaded
-    vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS, CAP_THEOREM])
-    const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
-    await screen.findByText('Distributed Systems')
-
-    // When searching for a path fragment
-    await user.type(screen.getByPlaceholderText('Search sources'), 'notes/ds')
-
-    // Then only the matching document remains
-    expect(screen.getByText('Distributed Systems')).toBeInTheDocument()
-    expect(screen.queryByText('CAP theorem')).not.toBeInTheDocument()
-  })
-
-  it('trims leading and trailing whitespace from the search query', async () => {
-    // Given two imported documents, loaded
-    vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS, CAP_THEOREM])
-    const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
-    await screen.findByText('Distributed Systems')
-
-    // When searching with surrounding whitespace around an otherwise
-    // matching term
-    await user.type(screen.getByPlaceholderText('Search sources'), '  CAP theorem  ')
-
-    // Then it still matches, trimmed
-    expect(screen.getByText('CAP theorem')).toBeInTheDocument()
-    expect(screen.queryByText('Distributed Systems')).not.toBeInTheDocument()
-  })
-
-  it('shows a no-match message when the search matches nothing', async () => {
-    // Given one imported document, loaded
-    vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
-    const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
-    await screen.findByText('Distributed Systems')
-
-    // When searching for something that matches nothing
-    await user.type(screen.getByPlaceholderText('Search sources'), 'nonexistent')
-
-    // Then a no-match message shows, distinct from the empty-session message
-    expect(screen.getByText('No sources match your search.')).toBeInTheDocument()
+    // Then the Sources section header shows the total count
+    expect(await screen.findByRole('button', { name: /Sources\s*2/ })).toBeInTheDocument()
   })
 
   it('shows an error with a retry action when loading fails', async () => {
@@ -249,7 +225,7 @@ describe('StudySourcesPanel', () => {
     vi.mocked(listSessionSources).mockRejectedValueOnce(new Error('database unavailable'))
 
     // When the panel loads
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
 
     // Then the error shows with a Retry action, instead of the list/empty state
     expect(await screen.findByText('database unavailable')).toBeInTheDocument()
@@ -260,7 +236,7 @@ describe('StudySourcesPanel', () => {
     // Given a load that failed once
     vi.mocked(listSessionSources).mockRejectedValueOnce(new Error('database unavailable'))
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByRole('button', { name: 'Retry' })
 
     // When retrying, and the second attempt succeeds
@@ -274,12 +250,12 @@ describe('StudySourcesPanel', () => {
   it('reloads when sessionId changes', async () => {
     // Given session-1's document loaded
     vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
-    const { rerender } = render(<StudySourcesPanel sessionId="session-1" />)
+    const { rerender } = render(<Panel sessionId="session-1" />)
     await screen.findByText('Distributed Systems')
 
     // When the panel is handed a different session
     vi.mocked(listSessionSources).mockResolvedValueOnce([CAP_THEOREM])
-    rerender(<StudySourcesPanel sessionId="session-2" />)
+    rerender(<Panel sessionId="session-2" />)
 
     // Then it loads and shows that session's documents instead
     expect(await screen.findByText('CAP theorem')).toBeInTheDocument()
@@ -291,7 +267,7 @@ describe('StudySourcesPanel', () => {
     // Given one document loaded
     vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('Distributed Systems')
 
     // When opening its ⋮ menu and picking Remove
@@ -313,7 +289,7 @@ describe('StudySourcesPanel', () => {
     // Given the confirmation open for one document
     vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('Distributed Systems')
     await user.click(screen.getByRole('button', { name: 'Distributed Systems options' }))
     await user.click(await screen.findByRole('menuitem', { name: 'Remove' }))
@@ -332,7 +308,7 @@ describe('StudySourcesPanel', () => {
     vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
     vi.mocked(removeSessionSource).mockResolvedValueOnce()
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('Distributed Systems')
     await user.click(screen.getByRole('button', { name: 'Distributed Systems options' }))
     await user.click(await screen.findByRole('menuitem', { name: 'Remove' }))
@@ -354,7 +330,7 @@ describe('StudySourcesPanel', () => {
     vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
     vi.mocked(removeSessionSource).mockRejectedValueOnce(new Error('ingest: source not found'))
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('Distributed Systems')
     await user.click(screen.getByRole('button', { name: 'Distributed Systems options' }))
     await user.click(await screen.findByRole('menuitem', { name: 'Remove' }))
@@ -375,7 +351,7 @@ describe('StudySourcesPanel', () => {
     vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS, CAP_THEOREM])
     vi.mocked(removeSessionSource).mockRejectedValueOnce(new Error('ingest: source not found'))
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('Distributed Systems')
     await user.click(screen.getByRole('button', { name: 'Distributed Systems options' }))
     await user.click(await screen.findByRole('menuitem', { name: 'Remove' }))
@@ -403,7 +379,7 @@ describe('StudySourcesPanel', () => {
       }),
     )
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('Distributed Systems')
     await user.click(screen.getByRole('button', { name: 'Distributed Systems options' }))
     await user.click(await screen.findByRole('menuitem', { name: 'Remove' }))
@@ -430,7 +406,7 @@ describe('StudySourcesPanel', () => {
     vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
     vi.mocked(removeSessionSource).mockRejectedValueOnce(new Error('ingest: source not found'))
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('Distributed Systems')
     await user.click(screen.getByRole('button', { name: 'Distributed Systems options' }))
     await user.click(await screen.findByRole('menuitem', { name: 'Remove' }))
@@ -462,7 +438,7 @@ describe('StudySourcesPanel', () => {
     // Given the index is retrying
     vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" mutationsDisabled />)
+    render(<Panel sessionId="session-1" mutationsDisabled />)
     await screen.findByText('Distributed Systems')
 
     // Then the row's menu trigger is disabled, with the reason as a tooltip
@@ -479,7 +455,7 @@ describe('StudySourcesPanel', () => {
     vi.mocked(pickNotesFile).mockResolvedValueOnce('/home/user/notes/go.md')
     setupPreviewSuccess()
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
 
     // When clicking Add
@@ -499,7 +475,7 @@ describe('StudySourcesPanel', () => {
     setupPreviewSuccess({ formattedContent: '# Go\n\nApproved during review.' })
     setupIngestDialogSubscriptions()
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
     await addMarkdownFrom(user, 'Add source')
     await screen.findByText('Review import')
@@ -523,7 +499,7 @@ describe('StudySourcesPanel', () => {
     vi.mocked(pickNotesFile).mockResolvedValueOnce('/home/user/notes/go.md')
     setupPreviewSuccess()
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
     await addMarkdownFrom(user, 'Add source')
     await screen.findByText('Review import')
@@ -545,7 +521,7 @@ describe('StudySourcesPanel', () => {
     vi.mocked(pickNotesFile).mockResolvedValueOnce('/home/user/notes/go.md')
     setupPreviewSuccess()
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
     await addMarkdownFrom(user, 'Add source')
     await screen.findByText('Review import')
@@ -574,7 +550,7 @@ describe('StudySourcesPanel', () => {
     setupPreviewSuccess({ skipped: true, skippedReason: 'unchanged since last import', chunks: [] })
     vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
 
     // When clicking Add
@@ -592,7 +568,7 @@ describe('StudySourcesPanel', () => {
     vi.mocked(pickNotesFile).mockResolvedValueOnce('/home/user/notes/go.md')
     vi.mocked(previewImport).mockRejectedValueOnce(new Error('index is loading'))
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
 
     // When clicking Add
@@ -613,7 +589,7 @@ describe('StudySourcesPanel', () => {
     vi.mocked(pickNotesFile).mockResolvedValueOnce('/home/user/notes/go.md')
     vi.mocked(previewImport).mockImplementationOnce(() => new Promise(() => {}))
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
 
     // When clicking Add
@@ -632,7 +608,7 @@ describe('StudySourcesPanel', () => {
     vi.mocked(listSessionSources).mockResolvedValueOnce([])
 
     // When the panel loads
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
 
     // Then the header's Add button is styled as primary, distinct from the
@@ -651,7 +627,7 @@ describe('StudySourcesPanel', () => {
     // Given Add is enabled (mutationsDisabled defaults to false)
     vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('Distributed Systems')
 
     // When hovering it
@@ -666,7 +642,7 @@ describe('StudySourcesPanel', () => {
     vi.mocked(listSessionSources).mockImplementationOnce(() => new Promise(() => {}))
 
     // When it mounts
-    const { container } = render(<StudySourcesPanel sessionId="session-1" />)
+    const { container } = render(<Panel sessionId="session-1" />)
 
     // Then no destructive-styled message renders at all — not even an empty one
     expect(container.querySelector('.text-destructive')).toBeNull()
@@ -677,7 +653,7 @@ describe('StudySourcesPanel', () => {
     vi.mocked(listSessionSources).mockResolvedValueOnce([])
     vi.mocked(pickNotesFile).mockRejectedValueOnce(new Error('dialog unavailable'))
     const user = userEvent.setup()
-    const { container } = render(<StudySourcesPanel sessionId="session-1" />)
+    const { container } = render(<Panel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
     await addMarkdownFrom(user, 'Add source')
     await screen.findByText('Failed to open the notes picker. Please try again.')
@@ -697,7 +673,7 @@ describe('StudySourcesPanel', () => {
     vi.mocked(listSessionSources).mockResolvedValueOnce([])
     vi.mocked(pickNotesFile).mockResolvedValueOnce('')
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
 
     // When clicking Add
@@ -715,7 +691,7 @@ describe('StudySourcesPanel', () => {
     vi.mocked(listSessionSources).mockResolvedValueOnce([])
     vi.mocked(pickNotesFile).mockRejectedValueOnce(new Error('dialog unavailable'))
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
 
     // When clicking Add
@@ -733,7 +709,7 @@ describe('StudySourcesPanel', () => {
     vi.mocked(listSessionSources).mockResolvedValueOnce([])
     vi.mocked(downloadExampleNote).mockResolvedValueOnce('/home/user/notes/example-note.md')
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
 
     // When clicking Example
@@ -748,7 +724,7 @@ describe('StudySourcesPanel', () => {
     vi.mocked(listSessionSources).mockResolvedValueOnce([])
     vi.mocked(downloadExampleNote).mockRejectedValueOnce(new Error('dialog unavailable'))
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
 
     // When clicking Example
@@ -765,7 +741,7 @@ describe('StudySourcesPanel', () => {
     vi.mocked(listSessionSources).mockResolvedValueOnce([])
     vi.mocked(downloadExampleNote).mockRejectedValueOnce(new Error('dialog unavailable'))
     const user = userEvent.setup()
-    const { container } = render(<StudySourcesPanel sessionId="session-1" />)
+    const { container } = render(<Panel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
     await user.click(screen.getByRole('button', { name: 'Download example note' }))
     await screen.findByText('Failed to save the example note. Please try again.')
@@ -788,7 +764,7 @@ describe('StudySourcesPanel', () => {
     setupPreviewSuccess()
     const { emitDone } = setupIngestDialogSubscriptions()
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
     await addMarkdownFrom(user, 'Add source')
     await screen.findByText('Review import')
@@ -812,7 +788,7 @@ describe('StudySourcesPanel', () => {
     vi.mocked(listSessionSources).mockResolvedValueOnce([])
     vi.mocked(pickNotesFile).mockResolvedValueOnce('')
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
 
     // When clicking the empty state's own Add action
@@ -826,7 +802,7 @@ describe('StudySourcesPanel', () => {
     // Given the index is retrying
     vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" mutationsDisabled />)
+    render(<Panel sessionId="session-1" mutationsDisabled />)
     await screen.findByText('Distributed Systems')
 
     // Then Add is disabled, with the reason available as a tooltip
@@ -846,7 +822,7 @@ describe('StudySourcesPanel', () => {
       segments: [{ text: 'The scheduler multiplexes M:N goroutines.', chunkId: 'chunk-1' }],
     })
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('Distributed Systems')
 
     // When clicking the row
@@ -860,7 +836,7 @@ describe('StudySourcesPanel', () => {
       ).toBeInTheDocument(),
     )
     // And the list itself is no longer rendered
-    expect(screen.queryByPlaceholderText('Search sources')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Session materials' })).not.toBeInTheDocument()
   })
 
   it('returns to the list when the viewer\'s "Sources" back button is clicked', async () => {
@@ -873,7 +849,7 @@ describe('StudySourcesPanel', () => {
       segments: [{ text: 'Body text.', chunkId: 'chunk-1' }],
     })
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('Distributed Systems')
     await user.click(screen.getByText('Distributed Systems'))
     await waitFor(() => expect(screen.getByText('Body text.')).toBeInTheDocument())
@@ -882,7 +858,7 @@ describe('StudySourcesPanel', () => {
     await user.click(screen.getByRole('button', { name: /sources/i }))
 
     // Then the list is shown again
-    expect(screen.getByPlaceholderText('Search sources')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Session materials' })).toBeInTheDocument()
     expect(screen.queryByText('Body text.')).not.toBeInTheDocument()
   })
 
@@ -895,16 +871,11 @@ describe('StudySourcesPanel', () => {
       path: 'notes/ds.md',
       segments: [{ text: 'The scheduler multiplexes M:N goroutines.', chunkId: 'chunk-1' }],
     })
-    const { rerender } = render(<StudySourcesPanel sessionId="session-1" openRequest={null} />)
+    const { rerender } = render(<Panel sessionId="session-1" openRequest={null} />)
     await screen.findByText('Distributed Systems')
 
     // When an external open request arrives (a citation click in the chat)
-    rerender(
-      <StudySourcesPanel
-        sessionId="session-1"
-        openRequest={{ itemId: 'item-1', chunkId: 'chunk-1' }}
-      />,
-    )
+    rerender(<Panel sessionId="session-1" openRequest={{ itemId: 'item-1', chunkId: 'chunk-1' }} />)
 
     // Then the viewer opens for that document, not the list
     await waitFor(() =>
@@ -912,7 +883,7 @@ describe('StudySourcesPanel', () => {
         screen.getByText('The scheduler multiplexes M:N goroutines.', { exact: false }),
       ).toBeInTheDocument(),
     )
-    expect(screen.queryByPlaceholderText('Search sources')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Session materials' })).not.toBeInTheDocument()
   })
 
   it('re-scrolls to the same passage when the exact same citation is requested again', async () => {
@@ -927,14 +898,9 @@ describe('StudySourcesPanel', () => {
     const scrollIntoView = vi
       .spyOn(Element.prototype, 'scrollIntoView')
       .mockImplementation(() => {})
-    const { rerender } = render(<StudySourcesPanel sessionId="session-1" openRequest={null} />)
+    const { rerender } = render(<Panel sessionId="session-1" openRequest={null} />)
     await screen.findByText('Distributed Systems')
-    rerender(
-      <StudySourcesPanel
-        sessionId="session-1"
-        openRequest={{ itemId: 'item-1', chunkId: 'chunk-1' }}
-      />,
-    )
+    rerender(<Panel sessionId="session-1" openRequest={{ itemId: 'item-1', chunkId: 'chunk-1' }} />)
     await waitFor(() =>
       expect(
         screen.getByText('The scheduler multiplexes M:N goroutines.', { exact: false }),
@@ -945,12 +911,7 @@ describe('StudySourcesPanel', () => {
     // When the exact same citation is clicked again — a fresh request object
     // with the identical itemId/chunkId (the document is already loaded, so
     // it never refetches)
-    rerender(
-      <StudySourcesPanel
-        sessionId="session-1"
-        openRequest={{ itemId: 'item-1', chunkId: 'chunk-1' }}
-      />,
-    )
+    rerender(<Panel sessionId="session-1" openRequest={{ itemId: 'item-1', chunkId: 'chunk-1' }} />)
 
     // Then it scrolls to the passage again, instead of silently doing
     // nothing because sessionId/itemId/chunkId all stayed the same
@@ -966,9 +927,9 @@ describe('StudySourcesPanel', () => {
       path: 'notes/ds.md',
       segments: [{ text: 'The scheduler multiplexes M:N goroutines.', chunkId: 'chunk-1' }],
     })
-    const { rerender } = render(<StudySourcesPanel sessionId="session-1" openRequest={null} />)
+    const { rerender } = render(<Panel sessionId="session-1" openRequest={null} />)
     await screen.findByText('Distributed Systems')
-    rerender(<StudySourcesPanel sessionId="session-1" openRequest={{ itemId: 'item-1' }} />)
+    rerender(<Panel sessionId="session-1" openRequest={{ itemId: 'item-1' }} />)
     await waitFor(() =>
       expect(
         screen.getByText('The scheduler multiplexes M:N goroutines.', { exact: false }),
@@ -977,19 +938,17 @@ describe('StudySourcesPanel', () => {
 
     // When openRequest is cleared back to null (e.g. AppShell clearing it on
     // a session change)
-    expect(() =>
-      rerender(<StudySourcesPanel sessionId="session-1" openRequest={null} />),
-    ).not.toThrow()
+    expect(() => rerender(<Panel sessionId="session-1" openRequest={null} />)).not.toThrow()
   })
 
   it('does nothing when openRequest is null', async () => {
     // Given a panel showing the list
     vi.mocked(listSessionSources).mockResolvedValueOnce([DISTRIBUTED_SYSTEMS])
-    render(<StudySourcesPanel sessionId="session-1" openRequest={null} />)
+    render(<Panel sessionId="session-1" openRequest={null} />)
 
     // Then the list stays shown, not the viewer
     await screen.findByText('Distributed Systems')
-    expect(screen.getByPlaceholderText('Search sources')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Session materials' })).toBeInTheDocument()
   })
 })
 
@@ -1019,7 +978,7 @@ describe('StudySourcesPanel — Add → Link (spec 2.21)', () => {
     // Given an empty panel
     vi.mocked(listSessionSources).mockResolvedValueOnce([])
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
 
     // When opening the Add menu
@@ -1034,7 +993,7 @@ describe('StudySourcesPanel — Add → Link (spec 2.21)', () => {
     // Given an empty panel
     vi.mocked(listSessionSources).mockResolvedValueOnce([])
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
 
     // When choosing Link
@@ -1050,7 +1009,7 @@ describe('StudySourcesPanel — Add → Link (spec 2.21)', () => {
     vi.mocked(listSessionSources).mockResolvedValueOnce([])
     vi.mocked(previewLinkImport).mockResolvedValueOnce(linkPreview())
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
 
     // When submitting the URL
@@ -1070,7 +1029,7 @@ describe('StudySourcesPanel — Add → Link (spec 2.21)', () => {
     vi.mocked(confirmLinkImport).mockReturnValue(new Promise(() => {}))
     setupIngestDialogSubscriptions()
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
     await openLinkDialog(user)
     await submitLink(user)
@@ -1097,7 +1056,7 @@ describe('StudySourcesPanel — Add → Link (spec 2.21)', () => {
       'ingest: fetching x: web: host is not allowed',
     )
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
 
     // When submitting it
@@ -1118,7 +1077,7 @@ describe('StudySourcesPanel — Add → Link (spec 2.21)', () => {
     vi.mocked(confirmLinkImport).mockClear()
     setupIngestDialogSubscriptions()
     const user = userEvent.setup()
-    render(<StudySourcesPanel sessionId="session-1" />)
+    render(<Panel sessionId="session-1" />)
     await screen.findByText('No sources imported yet.')
     await openLinkDialog(user)
     await submitLink(user)
@@ -1139,5 +1098,203 @@ describe('StudySourcesPanel — Add → Link (spec 2.21)', () => {
       ),
     )
     expect(confirmLinkImport).not.toHaveBeenCalled()
+  })
+})
+
+describe('StudySourcesPanel — Session materials (spec 4.5)', () => {
+  const MIND_MAP = {
+    id: 'mm-1',
+    sessionId: 'session-1',
+    sessionTitle: 'Caching',
+    title: 'Eviction overview',
+    createdAt: '2026-03-03T10:00:00Z',
+    updatedAt: '2026-03-05T10:00:00Z',
+    messageId: '',
+  }
+  const QUIZ = {
+    id: 'quiz-1',
+    sessionId: 'session-1',
+    sessionTitle: 'Caching',
+    difficulty: 'MEDIUM',
+    questionCount: 10,
+    createdAt: '2026-03-03T10:00:00Z',
+    attemptCount: 0,
+    latestScore: null,
+    messageId: '',
+  }
+  const LAB = {
+    sessionExerciseId: 'se-1',
+    messageId: 'msg-1',
+    challengeId: 'ch-1',
+    kind: 'EXAM',
+    title: 'Design a distributed LRU cache',
+    difficulty: 'INTERMEDIATE',
+    timeLimitMinutes: 45,
+    status: 'NOT_STARTED',
+    attempts: 0,
+    latest: null,
+  }
+
+  function loadAll() {
+    vi.mocked(listSessionSources).mockResolvedValue([DISTRIBUTED_SYSTEMS])
+    vi.mocked(listSessionMindMaps).mockResolvedValue([MIND_MAP])
+    vi.mocked(listSessionQuizzes).mockResolvedValue([QUIZ])
+    vi.mocked(listSessionExercises).mockResolvedValue([LAB])
+  }
+
+  it('titles the panel Session materials and lists the four sections in order', async () => {
+    loadAll()
+    render(<Panel sessionId="session-1" />)
+
+    expect(screen.getByRole('heading', { name: 'Session materials' })).toBeInTheDocument()
+    const headers = screen.getAllByRole('button', {
+      name: /^(Sources|Mind maps|Arch Labs|Quizzes)/,
+    })
+    expect(headers.map((header) => header.textContent?.replace(/\d+$/, ''))).toEqual([
+      'Sources',
+      'Mind maps',
+      'Arch Labs',
+      'Quizzes',
+    ])
+  })
+
+  it('opens only Sources by default', async () => {
+    loadAll()
+    render(<Panel sessionId="session-1" />)
+
+    expect(await screen.findByText('Distributed Systems')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Sources/ })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    for (const name of [/^Mind maps/, /^Arch Labs/, /^Quizzes/]) {
+      expect(screen.getByRole('button', { name })).toHaveAttribute('aria-expanded', 'false')
+    }
+    expect(screen.queryByText('Eviction overview')).not.toBeInTheDocument()
+  })
+
+  it('shows each count in its header even while the section is closed', async () => {
+    loadAll()
+    render(<Panel sessionId="session-1" />)
+
+    expect(await screen.findByRole('button', { name: /^Mind maps\s*1$/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Arch Labs\s*1$/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Quizzes\s*1$/ })).toBeInTheDocument()
+  })
+
+  it('opens and closes a section from its header, independent of the others', async () => {
+    loadAll()
+    const user = userEvent.setup()
+    render(<Panel sessionId="session-1" />)
+    await screen.findByText('Distributed Systems')
+
+    await user.click(screen.getByRole('button', { name: /^Mind maps/ }))
+    expect(await screen.findByText('Eviction overview')).toBeInTheDocument()
+    expect(screen.getByText('Distributed Systems')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^Sources/ }))
+    expect(screen.queryByText('Distributed Systems')).not.toBeInTheDocument()
+    expect(screen.getByText('Eviction overview')).toBeInTheDocument()
+  })
+
+  it('goes back to only Sources open when the session changes', async () => {
+    loadAll()
+    const user = userEvent.setup()
+    const { rerender } = render(<Panel sessionId="session-1" />)
+    await user.click(screen.getByRole('button', { name: /^Quizzes/ }))
+    await user.click(screen.getByRole('button', { name: /^Sources/ }))
+
+    rerender(<Panel sessionId="session-2" />)
+
+    expect(screen.getByRole('button', { name: /^Sources/ })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    expect(screen.getByRole('button', { name: /^Quizzes/ })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+  })
+
+  it('opens a mind map in the session when its row is clicked', async () => {
+    loadAll()
+    const onOpenMindMap = vi.fn()
+    const user = userEvent.setup()
+    render(<Panel sessionId="session-1" onOpenMindMap={onOpenMindMap} />)
+
+    await user.click(screen.getByRole('button', { name: /^Mind maps/ }))
+    await user.click(await screen.findByRole('button', { name: /Eviction overview/ }))
+
+    expect(onOpenMindMap).toHaveBeenCalledWith('mm-1', 'session-1')
+  })
+
+  it('starts a quiz in the session when its row is clicked', async () => {
+    loadAll()
+    const onStartQuiz = vi.fn()
+    const user = userEvent.setup()
+    render(<Panel sessionId="session-1" onStartQuiz={onStartQuiz} />)
+
+    await user.click(screen.getByRole('button', { name: /^Quizzes/ }))
+    await user.click(await screen.findByRole('button', { name: /Quiz 1/ }))
+
+    expect(onStartQuiz).toHaveBeenCalledWith('quiz-1', 'session-1')
+  })
+
+  it('shows the exam rules for an Arch Lab and starts it only after confirming', async () => {
+    loadAll()
+    const onStartExam = vi.fn()
+    const user = userEvent.setup()
+    render(<Panel sessionId="session-1" onStartExam={onStartExam} />)
+
+    await user.click(screen.getByRole('button', { name: /^Arch Labs/ }))
+    await user.click(await screen.findByRole('button', { name: /Design a distributed LRU cache/ }))
+    expect(onStartExam).not.toHaveBeenCalled()
+
+    await user.click(await screen.findByRole('button', { name: 'Start exam' }))
+
+    expect(onStartExam).toHaveBeenCalledWith(
+      {
+        id: 'ch-1',
+        title: 'Design a distributed LRU cache',
+        difficulty: 'INTERMEDIATE',
+        timeLimitMinutes: 45,
+      },
+      'session-1',
+    )
+  })
+
+  it('cancelling the exam rules starts nothing', async () => {
+    loadAll()
+    const onStartExam = vi.fn()
+    const user = userEvent.setup()
+    render(<Panel sessionId="session-1" onStartExam={onStartExam} />)
+    await user.click(screen.getByRole('button', { name: /^Arch Labs/ }))
+    await user.click(await screen.findByRole('button', { name: /Design a distributed LRU cache/ }))
+
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
+
+    expect(onStartExam).not.toHaveBeenCalled()
+  })
+
+  it('reloads the mind maps, quizzes and labs when the materials revision changes', async () => {
+    loadAll()
+    const { rerender } = render(<Panel sessionId="session-1" materialsRevision={0} />)
+    await waitFor(() => expect(listSessionQuizzes).toHaveBeenCalledTimes(1))
+
+    rerender(<Panel sessionId="session-1" materialsRevision={1} />)
+
+    await waitFor(() => expect(listSessionQuizzes).toHaveBeenCalledTimes(2))
+  })
+
+  it('offers no way to add or remove anything but sources, and no search field', async () => {
+    loadAll()
+    const user = userEvent.setup()
+    render(<Panel sessionId="session-1" />)
+    await user.click(screen.getByRole('button', { name: /^Mind maps/ }))
+    await user.click(screen.getByRole('button', { name: /^Quizzes/ }))
+    await screen.findByText('Eviction overview')
+
+    expect(screen.getAllByRole('button', { name: /^Add/ })).toHaveLength(1)
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
   })
 })

@@ -49,6 +49,10 @@ vi.mock('../../wailsjs/go/desktop/App', () => ({
   // The Sources panel (useSessionSources) fetches this itself as soon as a
   // session is open — resolved empty so it settles past its loading state.
   ListSessionSources: vi.fn().mockResolvedValue([]),
+  // The same panel's mind map, quiz and Arch Lab lists, read on mount too.
+  ListSessionMindMaps: vi.fn().mockResolvedValue([]),
+  ListSessionQuizzes: vi.fn().mockResolvedValue([]),
+  ListSessionExercises: vi.fn().mockResolvedValue([]),
   // The Settings screen's Minimum passing score section loads this on mount.
   GetPassScore: vi.fn().mockResolvedValue(80),
   SetPassScore: vi.fn(),
@@ -553,7 +557,7 @@ describe('AppShell', () => {
     // never compute a real collapsed/expanded size here — the toggle
     // round trip itself can only be verified by hand in a real window, not
     // by this suite.
-    expect(await screen.findByText('Imported into this session')).toBeInTheDocument()
+    expect(await screen.findByText('Everything tied to this session')).toBeInTheDocument()
     const toggle = screen.getByRole('button', { name: 'Hide sources panel' })
 
     // When clicking the header toggle
@@ -608,7 +612,7 @@ describe('AppShell', () => {
       'Ace the SQL interview{Enter}',
     )
     await screen.findByText('Study / General')
-    expect(await screen.findByText('Imported into this session')).toBeInTheDocument()
+    expect(await screen.findByText('Everything tied to this session')).toBeInTheDocument()
 
     vi.mocked(GetSessionSourceDocument).mockResolvedValueOnce({
       itemId: 'item-1',
@@ -647,7 +651,7 @@ describe('AppShell', () => {
         screen.getByText('The scheduler multiplexes M:N goroutines.', { exact: false }),
       ).toBeInTheDocument(),
     )
-    expect(screen.queryByPlaceholderText('Search sources')).not.toBeInTheDocument()
+    expect(screen.queryByText('Everything tied to this session')).not.toBeInTheDocument()
   })
 
   it("shows the account's name in the sidebar footer", async () => {
@@ -1501,7 +1505,7 @@ describe('AppShell knowledge index lifecycle', () => {
       screen.getByPlaceholderText('e.g. Pass the SQL interview'),
       'Ace the SQL interview{Enter}',
     )
-    await screen.findByText('Imported into this session')
+    await screen.findByText('Everything tied to this session')
 
     // When retrying, held pending
     let resolveRetry: (status: IndexStatus) => void = () => {}

@@ -8,6 +8,8 @@ import { quizEn } from './locales/quiz-en'
 import { quizPt } from './locales/quiz-pt'
 import { progressEn } from './locales/progress-en'
 import { progressPt } from './locales/progress-pt'
+import { materialsEn } from './locales/materials-en'
+import { materialsPt } from './locales/materials-pt'
 
 // The Architecture Lab speaks the profile's assistant language. The rest of
 // the interface is English and does not go through i18next.
@@ -18,6 +20,8 @@ export const QUIZ_NAMESPACE = 'quiz'
 export const MINDMAP_NAMESPACE = 'mindmap'
 // The Session progress dialog has its own namespace and the same language switch.
 export const PROGRESS_NAMESPACE = 'progress'
+// The Session materials panel has its own namespace and the same language switch.
+export const MATERIALS_NAMESPACE = 'materials'
 export type LabLanguage = 'en' | 'pt'
 
 // The profile stores 'pt' or 'en'. Anything else, an unset value included,
@@ -33,17 +37,19 @@ void i18n.use(initReactI18next).init({
       [QUIZ_NAMESPACE]: quizEn,
       [MINDMAP_NAMESPACE]: mindmapEn,
       [PROGRESS_NAMESPACE]: progressEn,
+      [MATERIALS_NAMESPACE]: materialsEn,
     },
     pt: {
       [LAB_NAMESPACE]: pt,
       [QUIZ_NAMESPACE]: quizPt,
       [MINDMAP_NAMESPACE]: mindmapPt,
       [PROGRESS_NAMESPACE]: progressPt,
+      [MATERIALS_NAMESPACE]: materialsPt,
     },
   },
   lng: 'en',
   fallbackLng: 'en',
-  ns: [LAB_NAMESPACE, QUIZ_NAMESPACE, MINDMAP_NAMESPACE, PROGRESS_NAMESPACE],
+  ns: [LAB_NAMESPACE, QUIZ_NAMESPACE, MINDMAP_NAMESPACE, PROGRESS_NAMESPACE, MATERIALS_NAMESPACE],
   defaultNS: LAB_NAMESPACE,
   initAsync: false,
   interpolation: { escapeValue: false },

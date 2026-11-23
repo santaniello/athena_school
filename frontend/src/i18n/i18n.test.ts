@@ -8,6 +8,8 @@ import { quizEn } from './locales/quiz-en'
 import { quizPt } from './locales/quiz-pt'
 import { progressEn } from './locales/progress-en'
 import { progressPt } from './locales/progress-pt'
+import { materialsEn } from './locales/materials-en'
+import { materialsPt } from './locales/materials-pt'
 
 // The dotted path of every string of a locale.
 function keysOf(tree: object, prefix = ''): string[] {
@@ -128,5 +130,26 @@ describe('progress locales', () => {
     expect(i18n.t('title', { ns: 'progress' })).toBe('Session progress')
     setLabLanguage('pt')
     expect(i18n.t('title', { ns: 'progress' })).toBe('Progresso da sessão')
+  })
+})
+
+describe('materials locales', () => {
+  it('have the same keys in English and Portuguese', () => {
+    expect(keysOf(materialsPt).sort()).toEqual(keysOf(materialsEn).sort())
+  })
+
+  it('use the same placeholders in both languages', () => {
+    const english = new Map(leaves(materialsEn))
+    for (const [key, text] of leaves(materialsPt)) {
+      expect(placeholdersOf(text), key).toEqual(placeholdersOf(english.get(key) ?? ''))
+    }
+  })
+
+  it('follow the profile language through the materials namespace', () => {
+    setLabLanguage('en')
+    expect(i18n.t('title', { ns: 'materials' })).toBe('Session materials')
+    setLabLanguage('pt')
+    expect(i18n.t('title', { ns: 'materials' })).toBe('Materiais da sessão')
+    setLabLanguage('en')
   })
 })
