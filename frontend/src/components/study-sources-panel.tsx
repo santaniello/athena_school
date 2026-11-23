@@ -1,14 +1,7 @@
-import { useMemo, useState } from 'react'
-import type { ChangeEvent, ReactNode } from 'react'
-import {
-  FileText,
-  Link as LinkIcon,
-  Download,
-  MoreVertical,
-  Plus,
-  Search,
-  Trash2,
-} from 'lucide-react'
+import { useState } from 'react'
+import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
+import { FileText, Link as LinkIcon, Download, MoreVertical, Plus, Trash2 } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,14 +19,18 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { AddLinkDialog } from '@/components/add-link-dialog'
+import { LabList, MindMapList, QuizList } from '@/components/material-lists'
+import { MaterialsSection } from '@/components/materials-section'
+import { StartExamDialog } from '@/components/lab/start-exam-dialog'
 import { FormattingNoteDialog } from '@/components/formatting-note-dialog'
 import { ImportReviewDialog } from '@/components/import-review-dialog'
 import { IngestProgressDialog } from '@/components/ingest-progress-dialog'
 import { SourceViewer } from '@/components/source-viewer'
+import { useSessionMaterials } from '@/hooks/use-session-materials'
 import { useSessionSources } from '@/hooks/use-session-sources'
+import { toExamToStart, type ExamToStart } from '@/lib/exercise'
 import {
   downloadExampleNote,
   linkErrorMessage,
@@ -57,6 +54,24 @@ interface StudySourcesPanelProps {
   // object (even for the same itemId/chunkId) re-opens/re-highlights; null/
   // undefined is a no-op. Owned by AppShell (see spec 2.18 decision 11).
   openRequest?: { itemId: string; chunkId?: string } | null
+  // Opening a row of the other sections, the same way the chat cards do.
+  // See specs/phases/phase-04-tutor/05-session-materials-panel.md.
+  onOpenMindMap: (mindMapId: string, sessionId: string) => void
+  onStartQuiz: (quizId: string, sessionId: string) => void
+  onStartExam: (exam: ExamToStart, sessionId: string) => void
+  // Moves whenever the study chat's own mind map, quiz or lab cards change,
+  // so the lists here are read again.
+  materialsRevision?: number
+}
+
+type SectionKey = 'sources' | 'mindMaps' | 'labs' | 'quizzes'
+
+// Only Sources is open when a session is opened.
+const DEFAULT_OPEN_SECTIONS: Record<SectionKey, boolean> = {
+  sources: true,
+  mindMaps: false,
+  labs: false,
+  quizzes: false,
 }
 
 // The existing inline error copy for a picker that failed to open, carried
@@ -167,9 +182,30 @@ function StudySourcesPanel({
   sessionId,
   mutationsDisabled = false,
   openRequest,
+  onOpenMindMap,
+  onStartQuiz,
+  onStartExam,
+  materialsRevision = 0,
 }: StudySourcesPanelProps) {
+  const { t } = useTranslation('materials')
   const { sources, loading, error, reload } = useSessionSources(sessionId)
-  const [query, setQuery] = useState('')
+  const materials = useSessionMaterials(sessionId, materialsRevision)
+  const [openSections, setOpenSections] = useState(DEFAULT_OPEN_SECTIONS)
+  // The Start Exam rules of the Arch Lab row that was clicked; null keeps the
+  // dialog closed.
+  const [examRules, setExamRules] = useState<ExamToStart | null>(null)
+  // Back to only Sources open whenever another session is opened — adjusting
+  // state during render, like the open request below.
+  const [sectionsSessionId, setSectionsSessionId] = useState(sessionId)
+  if (sectionsSessionId !== sessionId) {
+    setSectionsSessionId(sessionId)
+    setOpenSections(DEFAULT_OPEN_SECTIONS)
+    setExamRules(null)
+  }
+
+  function toggleSection(key: SectionKey) {
+    setOpenSections((current) => ({ ...current, [key]: !current[key] }))
+  }
   const [importPath, setImportPath] = useState<string | null>(null)
   const [pickerError, setPickerError] = useState('')
   // True only while previewImport is in flight, between the picker
@@ -237,22 +273,6 @@ function StudySourcesPanel({
   if (openRequest !== lastOpenRequest) {
     setLastOpenRequest(openRequest)
     if (openRequest) openViewing(openRequest.itemId, openRequest.chunkId)
-  }
-
-  const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase()
-    // Stryker disable next-line ConditionalExpression: an empty needle
-    // matches every source via .includes('') below anyway, so skipping the
-    // early return produces the exact same result — a genuine equivalent
-    // mutant, not a gap in test coverage.
-    if (!needle) return sources
-    return sources.filter((source) =>
-      `${source.title} ${source.path}`.toLowerCase().includes(needle),
-    )
-  }, [sources, query])
-
-  function handleQueryChange(event: ChangeEvent<HTMLInputElement>) {
-    setQuery(event.target.value)
   }
 
   async function handleAddClick() {
@@ -400,149 +420,174 @@ function StudySourcesPanel({
           step darker than --card, so this panel reads as chrome alongside
           the sidebar rather than a card floating in the chat's canvas. */}
       <div className="flex h-full w-full flex-col overflow-hidden bg-[oklch(0.115_0.014_50)]">
-        <div className="flex flex-col gap-3 border-b border-border p-3">
-          <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-2">
-            <div>
-              <h2 className="font-heading text-lg font-semibold text-foreground">
-                Sources ({sources.length})
-              </h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">Imported into this session</p>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => void handleDownloadExampleClick()}
-                aria-label="Download example note"
-              >
-                <Download className="size-3.5" aria-hidden="true" />
-                Example
-              </Button>
-              <AddSourceButton
-                onAddMarkdown={() => void handleAddClick()}
-                onAddLink={handleAddLinkClick}
-                disabled={addDisabled}
-                disabledReason={addDisabledReason}
-                ariaLabel="Add source"
-              >
-                Add
-              </AddSourceButton>
-            </div>
-          </div>
-
-          <label className="relative block">
-            <span className="sr-only">Search sources</span>
-            <Search
-              className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <Input
-              type="text"
-              value={query}
-              onChange={handleQueryChange}
-              placeholder="Search sources"
-              className="pl-8"
-            />
-          </label>
-
+        <div className="flex flex-col gap-1 border-b border-border p-3">
+          <h2 className="font-heading text-lg font-semibold text-foreground">{t('title')}</h2>
+          <p className="text-xs text-muted-foreground">{t('subtitle')}</p>
           {pickerError && <p className="text-sm text-destructive">{pickerError}</p>}
         </div>
 
-        <div className="thin-scroll flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-2">
-          {loading ? (
-            <p className="p-4 text-center text-sm text-muted-foreground">Loading sources…</p>
-          ) : error ? (
-            <div className="flex flex-col items-center gap-2 p-4 text-center">
-              <p className="text-sm text-destructive">{error}</p>
-              <Button size="sm" variant="outline" onClick={reload}>
-                Retry
-              </Button>
-            </div>
-          ) : filtered.length === 0 ? (
-            sources.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 p-4 text-center">
-                <p className="text-sm font-semibold text-foreground">No sources imported yet.</p>
-                <p className="text-sm text-muted-foreground">
-                  The chat searches these documents when answering.
-                </p>
+        {/* Each open section scrolls on its own; if even their minimum
+            heights do not fit, the whole stack scrolls. */}
+        <div className="thin-scroll flex min-h-0 flex-1 flex-col overflow-y-auto">
+          <MaterialsSection
+            title={t('sections.sources')}
+            count={sources.length}
+            open={openSections.sources}
+            onToggle={() => toggleSection('sources')}
+            actions={
+              <div className="flex shrink-0 items-center gap-1.5">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void handleDownloadExampleClick()}
+                  aria-label="Download example note"
+                >
+                  <Download className="size-3.5" aria-hidden="true" />
+                  Example
+                </Button>
                 <AddSourceButton
                   onAddMarkdown={() => void handleAddClick()}
                   onAddLink={handleAddLinkClick}
                   disabled={addDisabled}
                   disabledReason={addDisabledReason}
-                  variant="outline"
+                  ariaLabel="Add source"
                 >
-                  Add a source
+                  Add
                 </AddSourceButton>
               </div>
-            ) : (
-              <p className="p-4 text-center text-sm text-muted-foreground">
-                No sources match your search.
-              </p>
-            )
-          ) : (
-            filtered.map((source) => (
-              <div
-                key={source.itemId}
-                data-slot="study-source-row"
-                className="group flex items-start gap-2 rounded-md px-2 py-2 hover:bg-accent/40"
-              >
-                <button
-                  type="button"
-                  onClick={() => openViewing(source.itemId)}
-                  className="min-w-0 flex-1 text-left"
-                >
-                  <p className="truncate text-sm font-semibold text-foreground">{source.title}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {source.path} · {chunkCountLabel(source.chunkCount)}
+            }
+          >
+            <div className="flex flex-col gap-0.5">
+              {loading ? (
+                <p className="p-4 text-center text-sm text-muted-foreground">Loading sources…</p>
+              ) : error ? (
+                <div className="flex flex-col items-center gap-2 p-4 text-center">
+                  <p className="text-sm text-destructive">{error}</p>
+                  <Button size="sm" variant="outline" onClick={reload}>
+                    Retry
+                  </Button>
+                </div>
+              ) : sources.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 p-4 text-center">
+                  <p className="text-sm font-semibold text-foreground">No sources imported yet.</p>
+                  <p className="text-sm text-muted-foreground">
+                    The chat searches these documents when answering.
                   </p>
-                </button>
-                {mutationsDisabled ? (
-                  <Tooltip>
-                    {/* Same disabled-button-can't-trigger-a-tooltip issue as
-                        AddSourceButton above — see its comment. */}
-                    <TooltipTrigger asChild>
-                      <span className="opacity-0 group-hover:opacity-100">
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          disabled
-                          aria-label={`${source.title} options`}
-                        >
-                          <MoreVertical className="size-3.5" aria-hidden="true" />
-                        </Button>
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>Rebuilding knowledge index…</TooltipContent>
-                  </Tooltip>
-                ) : (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-label={`${source.title} options`}
-                        className="opacity-0 group-hover:opacity-100"
-                      >
-                        <MoreVertical className="size-3.5" aria-hidden="true" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onClick={() => handleRemoveClick(source)}
-                      >
-                        <Trash2 className="size-3.5" aria-hidden="true" />
-                        Remove
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-              </div>
-            ))
-          )}
+                  <AddSourceButton
+                    onAddMarkdown={() => void handleAddClick()}
+                    onAddLink={handleAddLinkClick}
+                    disabled={addDisabled}
+                    disabledReason={addDisabledReason}
+                    variant="outline"
+                  >
+                    Add a source
+                  </AddSourceButton>
+                </div>
+              ) : (
+                sources.map((source) => (
+                  <div
+                    key={source.itemId}
+                    data-slot="study-source-row"
+                    className="group flex items-start gap-2 rounded-md px-2 py-2 hover:bg-accent/40"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => openViewing(source.itemId)}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <p className="truncate text-sm font-semibold text-foreground">
+                        {source.title}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {source.path} · {chunkCountLabel(source.chunkCount)}
+                      </p>
+                    </button>
+                    {mutationsDisabled ? (
+                      <Tooltip>
+                        {/* Same disabled-button-can't-trigger-a-tooltip issue as
+                            AddSourceButton above — see its comment. */}
+                        <TooltipTrigger asChild>
+                          <span className="opacity-0 group-hover:opacity-100">
+                            <Button
+                              size="icon-sm"
+                              variant="ghost"
+                              disabled
+                              aria-label={`${source.title} options`}
+                            >
+                              <MoreVertical className="size-3.5" aria-hidden="true" />
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>Rebuilding knowledge index…</TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            aria-label={`${source.title} options`}
+                            className="opacity-0 group-hover:opacity-100"
+                          >
+                            <MoreVertical className="size-3.5" aria-hidden="true" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onClick={() => handleRemoveClick(source)}
+                          >
+                            <Trash2 className="size-3.5" aria-hidden="true" />
+                            Remove
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </MaterialsSection>
+
+          <MaterialsSection
+            title={t('sections.mindMaps')}
+            count={materials.mindMaps.items.length}
+            open={openSections.mindMaps}
+            onToggle={() => toggleSection('mindMaps')}
+          >
+            <MindMapList
+              list={materials.mindMaps}
+              onOpen={(mindMap) => onOpenMindMap(mindMap.id, sessionId)}
+            />
+          </MaterialsSection>
+
+          <MaterialsSection
+            title={t('sections.labs')}
+            count={materials.labs.items.length}
+            open={openSections.labs}
+            onToggle={() => toggleSection('labs')}
+          >
+            <LabList list={materials.labs} onOpen={(card) => setExamRules(toExamToStart(card))} />
+          </MaterialsSection>
+
+          <MaterialsSection
+            title={t('sections.quizzes')}
+            count={materials.quizzes.items.length}
+            open={openSections.quizzes}
+            onToggle={() => toggleSection('quizzes')}
+          >
+            <QuizList list={materials.quizzes} onOpen={(quiz) => onStartQuiz(quiz.id, sessionId)} />
+          </MaterialsSection>
         </div>
       </div>
+      <StartExamDialog
+        challenge={examRules}
+        onCancel={() => setExamRules(null)}
+        onConfirm={(exam) => {
+          setExamRules(null)
+          onStartExam(exam, sessionId)
+        }}
+      />
       <AddLinkDialog
         open={linkDialogOpen}
         onCancel={() => setLinkDialogOpen(false)}

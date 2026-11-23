@@ -125,6 +125,9 @@ interface StudyChatScreenProps {
   onStartQuiz: (quizId: string, sessionId: string) => void
   // Opens a mind map from a card of this session; the shell brings the user back here.
   onOpenMindMap: (mindMapId: string, sessionId: string) => void
+  // Called whenever the session's exercise, quiz or mind map cards change, so
+  // the Session materials panel reads its lists again.
+  onMaterialsChanged?: () => void
 }
 
 // ContextState mirrors the persisted study.ContextState the backend tracks
@@ -346,6 +349,7 @@ function StudyChatScreen({
   onStartExam,
   onStartQuiz,
   onOpenMindMap,
+  onMaterialsChanged,
 }: StudyChatScreenProps) {
   const [sessionTopic, setSessionTopic] = useState(initialTopic)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -617,6 +621,19 @@ function StudyChatScreen({
       })
       .catch(() => {})
   }, [sessionId])
+
+  // The materials panel lists the same cards: tell it when they change. The
+  // first run (mount) is skipped, since the panel loads its own lists then.
+  const materialsMountedRef = useRef(false)
+  useEffect(() => {
+    if (!materialsMountedRef.current) {
+      materialsMountedRef.current = true
+      return
+    }
+    onMaterialsChanged?.()
+    // Only a change of the cards reports; a new callback identity must not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exerciseCards, quizCards, mindMapCards])
 
   const registerStreamPush = useCallback((push: ((text: string) => void) | null) => {
     streamPushRef.current = push

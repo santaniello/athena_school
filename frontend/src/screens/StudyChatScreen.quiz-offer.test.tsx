@@ -253,6 +253,21 @@ describe('StudyChatScreen — quiz offer', () => {
     expect(screen.getByPlaceholderText(PENDING_TEXT)).toBeDisabled()
   })
 
+  it('tells the shell when the session cards change, but not before the cards load or on mount alone', async () => {
+    subscribe()
+    vi.mocked(getPendingQuizOffer).mockResolvedValue(OFFER)
+    vi.mocked(acceptQuizOffer).mockResolvedValue(CARD)
+    const onMaterialsChanged = vi.fn()
+    await renderResumed({ onMaterialsChanged })
+    await screen.findByRole('button', { name: 'Accept' })
+    onMaterialsChanged.mockClear()
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Accept' }))
+    await screen.findByText(/8 questions/)
+
+    expect(onMaterialsChanged).toHaveBeenCalledTimes(1)
+  })
+
   it('accepting replaces the offer with the quiz card under the same message and re-enables the input', async () => {
     subscribe()
     vi.mocked(getPendingQuizOffer).mockResolvedValue(OFFER)
