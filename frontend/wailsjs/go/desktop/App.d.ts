@@ -77,6 +77,8 @@ export function GetPendingQuizOffer(arg1:string):Promise<desktop.QuizOfferDTO>;
 
 export function GetProfile():Promise<desktop.UserProfileInput>;
 
+export function GetProgressDashboard():Promise<desktop.ProgressDashboardResult>;
+
 export function GetQuiz(arg1:string):Promise<desktop.QuizDTO>;
 
 export function GetQuizAttemptResult(arg1:string):Promise<desktop.QuizAttemptResultDTO>;

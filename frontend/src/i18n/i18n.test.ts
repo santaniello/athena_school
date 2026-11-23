@@ -8,6 +8,8 @@ import { quizEn } from './locales/quiz-en'
 import { quizPt } from './locales/quiz-pt'
 import { progressEn } from './locales/progress-en'
 import { progressPt } from './locales/progress-pt'
+import { progressTabEn } from './locales/progress-tab-en'
+import { progressTabPt } from './locales/progress-tab-pt'
 import { materialsEn } from './locales/materials-en'
 import { materialsPt } from './locales/materials-pt'
 
@@ -62,6 +64,27 @@ describe('quiz locales', () => {
     expect(i18n.t('catalog.title', { ns: 'quiz' })).toBe('Interactive Test')
     setLabLanguage('pt')
     expect(i18n.t('catalog.title', { ns: 'quiz' })).toBe('Teste Interativo')
+  })
+})
+
+describe('progress tab locales', () => {
+  it('have the same keys in English and Portuguese', () => {
+    expect(keysOf(progressTabPt).sort()).toEqual(keysOf(progressTabEn).sort())
+  })
+
+  it('use the same placeholders in both languages', () => {
+    const english = new Map(leaves(progressTabEn))
+    for (const [key, text] of leaves(progressTabPt)) {
+      expect(placeholdersOf(text), key).toEqual(placeholdersOf(english.get(key) ?? ''))
+    }
+  })
+
+  it('follow the profile language through the progressTab namespace', () => {
+    setLabLanguage('en')
+    expect(i18n.t('status.STABLE', { ns: 'progressTab' })).toBe('Stable')
+    setLabLanguage('pt')
+    expect(i18n.t('status.STABLE', { ns: 'progressTab' })).toBe('Estável')
+    setLabLanguage('en')
   })
 })
 

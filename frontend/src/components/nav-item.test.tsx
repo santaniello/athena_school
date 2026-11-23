@@ -5,9 +5,9 @@ import { NavItem } from './nav-item'
 import { NAVIGATION } from '@/lib/navigation'
 
 const homeItem = NAVIGATION.find((item) => item.id === 'home')!
-// progress is a section whose own phase has not shipped — a stable fixture
+// flashcards is a section whose own phase has not shipped — a stable fixture
 // for "locked item" behavior regardless of which section unlocks next.
-const lockedItem = NAVIGATION.find((item) => item.id === 'progress')!
+const lockedItem = NAVIGATION.find((item) => item.id === 'flashcards')!
 
 describe('NavItem', () => {
   it('calls onSelect with the item id when an unlocked item is clicked', async () => {

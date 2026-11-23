@@ -8,6 +8,8 @@ import { quizEn } from './locales/quiz-en'
 import { quizPt } from './locales/quiz-pt'
 import { progressEn } from './locales/progress-en'
 import { progressPt } from './locales/progress-pt'
+import { progressTabEn } from './locales/progress-tab-en'
+import { progressTabPt } from './locales/progress-tab-pt'
 import { materialsEn } from './locales/materials-en'
 import { materialsPt } from './locales/materials-pt'
 
@@ -20,6 +22,8 @@ export const QUIZ_NAMESPACE = 'quiz'
 export const MINDMAP_NAMESPACE = 'mindmap'
 // The Session progress dialog has its own namespace and the same language switch.
 export const PROGRESS_NAMESPACE = 'progress'
+// The Progress screen has its own namespace and the same language switch.
+export const PROGRESS_TAB_NAMESPACE = 'progressTab'
 // The Session materials panel has its own namespace and the same language switch.
 export const MATERIALS_NAMESPACE = 'materials'
 export type LabLanguage = 'en' | 'pt'
@@ -37,6 +41,7 @@ void i18n.use(initReactI18next).init({
       [QUIZ_NAMESPACE]: quizEn,
       [MINDMAP_NAMESPACE]: mindmapEn,
       [PROGRESS_NAMESPACE]: progressEn,
+      [PROGRESS_TAB_NAMESPACE]: progressTabEn,
       [MATERIALS_NAMESPACE]: materialsEn,
     },
     pt: {
@@ -44,12 +49,20 @@ void i18n.use(initReactI18next).init({
       [QUIZ_NAMESPACE]: quizPt,
       [MINDMAP_NAMESPACE]: mindmapPt,
       [PROGRESS_NAMESPACE]: progressPt,
+      [PROGRESS_TAB_NAMESPACE]: progressTabPt,
       [MATERIALS_NAMESPACE]: materialsPt,
     },
   },
   lng: 'en',
   fallbackLng: 'en',
-  ns: [LAB_NAMESPACE, QUIZ_NAMESPACE, MINDMAP_NAMESPACE, PROGRESS_NAMESPACE, MATERIALS_NAMESPACE],
+  ns: [
+    LAB_NAMESPACE,
+    QUIZ_NAMESPACE,
+    MINDMAP_NAMESPACE,
+    PROGRESS_NAMESPACE,
+    PROGRESS_TAB_NAMESPACE,
+    MATERIALS_NAMESPACE,
+  ],
   defaultNS: LAB_NAMESPACE,
   initAsync: false,
   interpolation: { escapeValue: false },

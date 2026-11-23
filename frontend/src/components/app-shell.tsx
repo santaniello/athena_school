@@ -24,6 +24,7 @@ import QuizScreen from '@/screens/QuizScreen'
 import QuizTakeScreen from '@/screens/QuizTakeScreen'
 import MindMapScreen from '@/screens/MindMapScreen'
 import MindMapViewScreen from '@/screens/MindMapViewScreen'
+import ProgressScreen from '@/screens/ProgressScreen'
 import type { LabReturn } from '@/lib/lab'
 import type { QuizReturn } from '@/lib/quiz'
 import type { MindMapReturn } from '@/lib/mindmap'
@@ -660,6 +661,8 @@ function AppShell() {
           ) : (
             <MindMapScreen onOpen={openMenuMindMap} />
           )
+        ) : section === 'progress' ? (
+          <ProgressScreen />
         ) : section === 'documentation' ? (
           <DocumentationScreen />
         ) : section === 'profile' && profile ? (

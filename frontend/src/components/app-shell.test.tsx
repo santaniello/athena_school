@@ -36,6 +36,7 @@ import {
 } from '@/lib/exercise'
 import { listSessionQuizzes } from '@/lib/quiz'
 import { listSessionMindMaps } from '@/lib/mindmap'
+import { getProgressDashboard } from '@/lib/progress'
 import { AppShell } from './app-shell'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
@@ -169,6 +170,24 @@ vi.mock('@/screens/LabExamScreen', () => ({
       <button onClick={() => props.onExit('Time is up.')}>finish with notice</button>
     </div>
   ),
+}))
+
+// The Progress screen loads its dashboard as soon as it mounts.
+vi.mock('@/lib/progress', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/progress')>()),
+  getProgressDashboard: vi.fn().mockResolvedValue({
+    counters: { folders: 1, topics: 1, topicsToReview: 0 },
+    folders: [
+      {
+        id: 'f1',
+        name: 'System Design',
+        topicCount: 1,
+        topics: [
+          { sessionId: 's1', name: 'Cache', quizScore: 90, labScore: null, status: 'STABLE' },
+        ],
+      },
+    ],
+  }),
 }))
 
 // The Interactive Test catalog loads its quizzes as soon as it mounts.
@@ -382,12 +401,28 @@ describe('AppShell', () => {
     renderShell()
     await screen.findByText(/Felipe\./)
 
-    // When selecting a locked section (Progress stays locked until its own spec)
-    await user.click(screen.getByRole('button', { name: 'Progress' }))
+    // When selecting a locked section (Flashcards stays locked until its own spec)
+    await user.click(screen.getByRole('button', { name: 'Flashcards' }))
 
     // Then the topbar and content reflect that section, still locked
-    expect(screen.getByRole('heading', { name: 'Progress', level: 1 })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Flashcards', level: 1 })).toBeInTheDocument()
     expect(screen.getByText('Planned for Phase 3')).toBeInTheDocument()
+  })
+
+  it('opens the Progress dashboard, not the coming-soon panel', async () => {
+    // Given the app shell mounts
+    const user = userEvent.setup()
+    renderShell()
+    await screen.findByText(/Felipe\./)
+
+    // When selecting Progress
+    await user.click(screen.getByRole('button', { name: 'Progress' }))
+
+    // Then the topbar names the section and the dashboard lists the folders
+    expect(screen.getByRole('heading', { name: 'Progress', level: 1 })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /System Design/ })).toBeInTheDocument()
+    expect(screen.queryByText(/Planned for Phase/)).not.toBeInTheDocument()
+    expect(getProgressDashboard).toHaveBeenCalled()
   })
 
   it('opens the Architecture Lab catalog, not the coming-soon panel', async () => {

@@ -47,6 +47,8 @@ type App struct {
 	quizGenerator quizGenerator
 	quizzes       quizUseCases
 	quizOffers    quizOffers
+	// progress is the Progress dashboard (spec 5.1).
+	progress progressDashboard
 	// quizGeneration lets one quiz generation run at a time, and be cancelled.
 	quizGeneration generationSlot
 	// Mind maps (spec 3.24).
