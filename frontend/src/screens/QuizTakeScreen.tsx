@@ -118,90 +118,82 @@ function TakingStage({
   const last = index === quiz.questions.length - 1
 
   return (
-    <div className="flex min-h-0 mx-auto w-full max-w-3xl flex-col gap-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
+    <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col gap-6">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-5">
         <div className="space-y-1">
-          <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <p className="font-heading flex items-center gap-3 text-2xl font-bold text-foreground">
             <span>{quiz.sessionTitle}</span>
             <QuizDifficultyBadge difficulty={quiz.difficulty} />
           </p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             {t('take.progress', { current: index + 1, total: quiz.questions.length })}
           </p>
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={() => setLeaving(true)}>
+        <Button type="button" variant="outline" onClick={() => setLeaving(true)}>
           {t('common.leave')}
         </Button>
       </header>
 
-      <nav aria-label={t('take.stripLabel')} className="flex flex-wrap gap-1.5">
-        {selections.map((selection, position) => (
-          <Button
-            key={selection.questionId}
-            type="button"
-            size="sm"
-            variant={position === index ? 'default' : 'outline'}
-            aria-current={position === index ? 'step' : undefined}
-            aria-label={t(
-              selection.selectedIndex === null
-                ? 'take.questionButton'
-                : 'take.questionButtonAnswered',
-              { number: position + 1 },
-            )}
-            className={cn(
-              selection.selectedIndex !== null && position !== index && 'border-primary/60',
-            )}
-            onClick={() => session.goTo(position)}
-          >
-            {position + 1}
-          </Button>
-        ))}
-      </nav>
-
-      <section className="space-y-3">
-        <p className="text-base font-semibold text-foreground">{question.prompt}</p>
-        <div role="radiogroup" aria-label={t('take.optionsLabel')} className="space-y-2">
-          {question.options.map((option, optionIndex) => (
-            // A native radio gives one tab stop and the arrow keys for free.
-            <label
-              key={optionIndex}
-              className="flex cursor-pointer items-center gap-3 rounded-lg border border-border px-3 py-2 text-sm transition-colors hover:bg-accent has-[:checked]:border-primary has-[:checked]:bg-primary/10 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
+      <div className="thin-scroll flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto">
+        <nav aria-label={t('take.stripLabel')} className="flex flex-wrap gap-2">
+          {selections.map((selection, position) => (
+            <Button
+              key={selection.questionId}
+              type="button"
+              variant={position === index ? 'default' : 'outline'}
+              aria-current={position === index ? 'step' : undefined}
+              aria-label={t(
+                selection.selectedIndex === null
+                  ? 'take.questionButton'
+                  : 'take.questionButtonAnswered',
+                { number: position + 1 },
+              )}
+              className={cn(
+                selection.selectedIndex !== null && position !== index && 'border-primary/60',
+              )}
+              onClick={() => session.goTo(position)}
             >
-              <input
-                type="radio"
-                name={`question-${question.id}`}
-                checked={chosen === optionIndex}
-                disabled={session.submitting}
-                onChange={() => session.answer(optionIndex)}
-              />
-              <span>{option}</span>
-            </label>
+              {position + 1}
+            </Button>
           ))}
-        </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={chosen === null || session.submitting}
-          onClick={() => session.answer(null)}
-        >
-          {t('take.clear')}
-        </Button>
-      </section>
+        </nav>
 
-      {session.submitError && (
-        <p role="alert" className="text-sm text-destructive">
-          {session.submitError}
-        </p>
-      )}
-      {session.submitting && (
-        <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-          {t('take.submitting')}
-        </p>
-      )}
+        <section className="space-y-5 rounded-2xl border border-border bg-card p-6">
+          <p className="text-xl leading-snug font-semibold text-foreground">{question.prompt}</p>
+          <div role="radiogroup" aria-label={t('take.optionsLabel')} className="space-y-3">
+            {question.options.map((option, optionIndex) => (
+              // A native radio gives one tab stop and the arrow keys for free.
+              <label
+                key={optionIndex}
+                className="flex cursor-pointer items-center gap-4 rounded-xl border border-border px-5 py-4 text-base transition-colors hover:bg-accent has-[:checked]:border-primary has-[:checked]:bg-primary/10 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
+              >
+                <input
+                  type="radio"
+                  name={`question-${question.id}`}
+                  checked={chosen === optionIndex}
+                  disabled={session.submitting}
+                  onChange={() => session.answer(optionIndex)}
+                />
+                <span>{option}</span>
+              </label>
+            ))}
+          </div>
+        </section>
 
-      <footer className="flex items-center justify-between gap-3">
+        {session.submitError && (
+          <p role="alert" className="text-sm text-destructive">
+            {session.submitError}
+          </p>
+        )}
+        {session.submitting && (
+          <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            {t('take.submitting')}
+          </p>
+        )}
+      </div>
+
+      <footer className="flex shrink-0 items-center justify-between gap-3">
         <div className="flex gap-2">
           <Button
             type="button"
@@ -218,6 +210,14 @@ function TakingStage({
             onClick={session.next}
           >
             {t('take.next')}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={chosen === null || session.submitting}
+            onClick={() => session.answer(null)}
+          >
+            {t('take.clear')}
           </Button>
         </div>
         {session.blankCount === 0 && (
