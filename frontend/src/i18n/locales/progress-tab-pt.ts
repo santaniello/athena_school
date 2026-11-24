@@ -6,12 +6,12 @@ export const progressTabPt = {
   title: 'Progress',
   subtitle: 'Acompanhe como você está em cada assunto que estuda.',
   counters: {
-    folders: 'Folders',
+    folders: 'Pastas',
     topics: 'Assuntos',
     toReview: 'Assuntos para revisar',
   },
   folders: {
-    title: 'Minhas Folders',
+    title: 'Minhas pastas',
     topics_one: '{{count}} assunto',
     topics_other: '{{count}} assuntos',
   },
@@ -34,6 +34,6 @@ export const progressTabPt = {
   empty: {
     title: 'Nada para mostrar ainda',
     description:
-      'Seu progresso aparece quando você tem uma sessão de estudo. Vá até a aba Study, crie uma folder e comece uma sessão.',
+      'Seu progresso aparece quando você tem uma sessão de estudo. Vá até a aba Study, crie uma pasta e comece uma sessão.',
   },
 }
