@@ -414,6 +414,25 @@ func TestProgressReader_ReadFolders_failsOnAQuizAttemptWithAnUnreadableDate(t *t
 	require.Error(t, err)
 }
 
+func TestAttachSessionsToFolders_leavesOutASessionWhoseFolderWasNotRead(t *testing.T) {
+	folders := []applicationprogress.FolderData{{ID: "f1", Name: "One"}}
+	sessions := []*progressSession{
+		{folderID: "f1", data: applicationprogress.SessionData{ID: "s1"}},
+		{folderID: "created-in-between", data: applicationprogress.SessionData{ID: "s2"}},
+	}
+
+	attachSessionsToFolders(folders, sessions)
+
+	require.Len(t, folders[0].Sessions, 1)
+	assert.Equal(t, "s1", folders[0].Sessions[0].ID)
+}
+
+func TestAttachSessionsToFolders_doesNotPanicWithoutFolders(t *testing.T) {
+	sessions := []*progressSession{{folderID: "f1", data: applicationprogress.SessionData{ID: "s1"}}}
+
+	assert.NotPanics(t, func() { attachSessionsToFolders(nil, sessions) })
+}
+
 func TestProgressReader_ReadFolders_failsWhenTheDatabaseIsClosed(t *testing.T) {
 	// Given a closed database
 	reader, db := newProgressFixture(t)

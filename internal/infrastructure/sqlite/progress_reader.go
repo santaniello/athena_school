@@ -54,15 +54,26 @@ func (r *ProgressReader) ReadFolders(ctx context.Context) ([]applicationprogress
 	if err := attachConcepts(ctx, q, sessions, index); err != nil {
 		return nil, err
 	}
+	attachSessionsToFolders(folders, sessions)
+	return folders, nil
+}
+
+// attachSessionsToFolders puts each session in its folder. The folders and the
+// sessions are read by separate queries without a shared snapshot, so a
+// session can name a folder created in between; it is left out of this read
+// and shows up in the next one.
+func attachSessionsToFolders(folders []applicationprogress.FolderData, sessions []*progressSession) {
 	folderIndex := make(map[string]int, len(folders))
 	for i, folder := range folders {
 		folderIndex[folder.ID] = i
 	}
 	for _, session := range sessions {
-		i := folderIndex[session.folderID]
+		i, ok := folderIndex[session.folderID]
+		if !ok {
+			continue
+		}
 		folders[i].Sessions = append(folders[i].Sessions, session.data)
 	}
-	return folders, nil
 }
 
 // progressSession is a session being assembled, with the folder it is in.
