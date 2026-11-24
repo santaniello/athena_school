@@ -64,7 +64,7 @@ function ProgressScreen() {
       : undefined
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+    <div className="thin-scroll mx-auto flex w-full max-w-6xl flex-col gap-6 overflow-y-auto pr-2">
       <header className="flex items-center gap-4 border-b border-border pb-5">
         <div className="flex size-13 items-center justify-center rounded-xl bg-muted">
           <TrendingUp className="size-6 text-primary" aria-hidden="true" />
