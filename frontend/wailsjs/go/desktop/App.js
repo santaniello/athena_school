@@ -154,6 +154,10 @@ export function GetProgressDashboard() {
   return window['go']['desktop']['App']['GetProgressDashboard']();
 }
 
+export function GetProgressTopic(arg1) {
+  return window['go']['desktop']['App']['GetProgressTopic'](arg1);
+}
+
 export function GetQuiz(arg1) {
   return window['go']['desktop']['App']['GetQuiz'](arg1);
 }

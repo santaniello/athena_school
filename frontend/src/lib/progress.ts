@@ -1,4 +1,4 @@
-import { GetProgressDashboard } from '../../wailsjs/go/desktop/App'
+import { GetProgressDashboard, GetProgressTopic } from '../../wailsjs/go/desktop/App'
 
 // The Progress dashboard. The backend derives every score and status on read;
 // this module only wraps its binding. See
@@ -48,5 +48,108 @@ export async function getProgressDashboard(): Promise<ProgressDashboard> {
         status: topic.status as TopicStatus,
       })),
     })),
+  }
+}
+
+export type LabResult = 'PASSED' | 'FAILED' | 'PENDING'
+
+// One proof the tutor recorded for a concept.
+export interface ProgressProof {
+  assessment: string
+  description: string
+  assisted: boolean
+  createdAt: string
+}
+
+// A concept of the topic with its proofs, the newest first.
+export interface ProgressConcept {
+  name: string
+  evidenceCount: number
+  proofs: ProgressProof[]
+}
+
+// A difficulty comes from the tutor (a concept) or from an Arch Lab rubric
+// criterion; challengeTitle names the challenge for the latter.
+export interface ProgressDifficulty extends ProgressConcept {
+  source: 'TUTOR' | 'ARCH_LAB'
+  challengeTitle: string
+  toReview: boolean
+}
+
+// The latest result of a quiz; null percent means it was never taken.
+export interface ProgressQuizResult {
+  quizId: string
+  number: number
+  difficulty: string
+  percent: number | null
+  attempts: number
+}
+
+// The latest evaluated attempt of a challenge; a null score is still pending.
+export interface ProgressChallengeResult {
+  challengeId: string
+  title: string
+  difficulty: string
+  timeLimitMinutes: number
+  diagramScore: number | null
+  defenseScore: number | null
+  result: LabResult
+  attempts: number
+}
+
+export interface ProgressTopicDetail {
+  sessionId: string
+  name: string
+  folderName: string
+  quizCount: number
+  challengeCount: number
+  conceptCount: number
+  quizzes: ProgressQuizResult[]
+  challenges: ProgressChallengeResult[]
+  understood: ProgressConcept[]
+  difficulties: ProgressDifficulty[]
+  explainedOnly: ProgressConcept[]
+}
+
+export async function getProgressTopic(sessionId: string): Promise<ProgressTopicDetail> {
+  const result = await GetProgressTopic(sessionId)
+  const proofs = (list: ProgressProof[]) => list.map((proof) => ({ ...proof }))
+  const concept = (item: ProgressConcept): ProgressConcept => ({
+    name: item.name,
+    evidenceCount: item.evidenceCount,
+    proofs: proofs(item.proofs),
+  })
+  return {
+    sessionId: result.sessionId,
+    name: result.name,
+    folderName: result.folderName,
+    quizCount: result.quizCount,
+    challengeCount: result.challengeCount,
+    conceptCount: result.conceptCount,
+    quizzes: result.quizzes.map((quiz) => ({
+      quizId: quiz.quizId,
+      number: quiz.number,
+      difficulty: quiz.difficulty,
+      percent: quiz.percent ?? null,
+      attempts: quiz.attempts,
+    })),
+    challenges: result.challenges.map((challenge) => ({
+      challengeId: challenge.challengeId,
+      title: challenge.title,
+      difficulty: challenge.difficulty,
+      timeLimitMinutes: challenge.timeLimitMinutes,
+      diagramScore: challenge.diagramScore ?? null,
+      defenseScore: challenge.defenseScore ?? null,
+      result: challenge.result as LabResult,
+      attempts: challenge.attempts,
+    })),
+    understood: result.understood.map(concept),
+    difficulties: result.difficulties.map((difficulty) => ({
+      ...concept(difficulty),
+      source: difficulty.source as ProgressDifficulty['source'],
+      challengeTitle: difficulty.challengeTitle,
+      toReview: difficulty.toReview,
+    })),
+    explainedOnly: result.explainedOnly.map(concept),
   }
 }

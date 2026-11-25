@@ -41,6 +41,7 @@ export const en = {
   back: {
     catalog: 'Back to catalog',
     study: 'Back to study session',
+    progress: 'Back to Progress',
     history: 'Back to history',
   },
   errors: {

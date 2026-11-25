@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -154,17 +155,20 @@ func attachQuizzes(ctx context.Context, q sqlExecer, sessions []*progressSession
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("sqlite: iterating quizzes for progress: %w", err)
 	}
-	return attachQuizAttempts(ctx, q, func(quizID string, attempt applicationprogress.QuizAttemptData) {
-		if position, ok := positions[quizID]; ok {
-			quiz := &sessions[position.session].data.Quizzes[position.quiz]
-			quiz.Attempts = append(quiz.Attempts, attempt)
-		}
-	})
+	return readQuizAttempts(ctx, q,
+		`SELECT quiz_id, correct_count, total, finished_at FROM quiz_attempts ORDER BY finished_at, id`, nil,
+		func(quizID string, attempt applicationprogress.QuizAttemptData) {
+			if position, ok := positions[quizID]; ok {
+				quiz := &sessions[position.session].data.Quizzes[position.quiz]
+				quiz.Attempts = append(quiz.Attempts, attempt)
+			}
+		})
 }
 
-func attachQuizAttempts(ctx context.Context, q sqlExecer, add func(quizID string, attempt applicationprogress.QuizAttemptData)) error {
-	rows, err := q.QueryContext(ctx,
-		`SELECT quiz_id, correct_count, total, finished_at FROM quiz_attempts ORDER BY finished_at, id`)
+// readQuizAttempts runs a query that selects quiz_id, correct_count, total and
+// finished_at, oldest first, and hands each attempt to add.
+func readQuizAttempts(ctx context.Context, q sqlExecer, query string, args []any, add func(quizID string, attempt applicationprogress.QuizAttemptData)) error {
+	rows, err := q.QueryContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("sqlite: listing quiz attempts for progress: %w", err)
 	}
@@ -273,4 +277,126 @@ func parseConceptTime(raw string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("sqlite: decoding concept time: %w", err)
 	}
 	return t, nil
+}
+
+// ReadTopic returns one session that is in a folder with its quizzes (both
+// origins), its challenges (generated from it or linked to it, once each) and
+// its concepts with their proofs. Everything is oldest first. A session that
+// does not exist, or whose folder is gone, is ErrTopicNotFound.
+func (r *ProgressReader) ReadTopic(ctx context.Context, sessionID string) (applicationprogress.TopicData, error) {
+	q := execer(ctx, r.db)
+	topic := applicationprogress.TopicData{SessionID: sessionID}
+	err := q.QueryRowContext(ctx,
+		`SELECT s.topic, f.name FROM sessions s JOIN folders f ON f.id = s.folder_id WHERE s.id = ?`, sessionID,
+	).Scan(&topic.Topic, &topic.FolderName)
+	if errors.Is(err, sql.ErrNoRows) {
+		return applicationprogress.TopicData{}, applicationprogress.ErrTopicNotFound
+	}
+	if err != nil {
+		return applicationprogress.TopicData{}, fmt.Errorf("sqlite: reading progress topic: %w", err)
+	}
+	if topic.Quizzes, err = readTopicQuizzes(ctx, q, sessionID); err != nil {
+		return applicationprogress.TopicData{}, err
+	}
+	if topic.Challenges, err = r.readTopicChallenges(ctx, q, sessionID); err != nil {
+		return applicationprogress.TopicData{}, err
+	}
+	if topic.Concepts, err = r.readTopicConcepts(ctx, sessionID); err != nil {
+		return applicationprogress.TopicData{}, err
+	}
+	return topic, nil
+}
+
+func readTopicQuizzes(ctx context.Context, q sqlExecer, sessionID string) ([]applicationprogress.TopicQuizData, error) {
+	rows, err := q.QueryContext(ctx, `SELECT id, difficulty FROM quizzes WHERE session_id = ? ORDER BY created_at, id`, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: listing quizzes of a progress topic: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	quizzes := []applicationprogress.TopicQuizData{}
+	position := map[string]int{}
+	for rows.Next() {
+		var quiz applicationprogress.TopicQuizData
+		if err := rows.Scan(&quiz.ID, &quiz.Difficulty); err != nil {
+			return nil, fmt.Errorf("sqlite: scanning quiz of a progress topic: %w", err)
+		}
+		position[quiz.ID] = len(quizzes)
+		quizzes = append(quizzes, quiz)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sqlite: iterating quizzes of a progress topic: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("sqlite: closing quizzes of a progress topic: %w", err)
+	}
+	err = readQuizAttempts(ctx, q, `
+		SELECT a.quiz_id, a.correct_count, a.total, a.finished_at
+		FROM quiz_attempts a JOIN quizzes z ON z.id = a.quiz_id
+		WHERE z.session_id = ? ORDER BY a.finished_at, a.id`, []any{sessionID},
+		func(quizID string, attempt applicationprogress.QuizAttemptData) {
+			quizzes[position[quizID]].Attempts = append(quizzes[position[quizID]].Attempts, attempt)
+		})
+	return quizzes, err
+}
+
+func (r *ProgressReader) readTopicChallenges(ctx context.Context, q sqlExecer, sessionID string) ([]applicationprogress.TopicChallengeData, error) {
+	rows, err := q.QueryContext(ctx, `
+		SELECT id, title, difficulty, time_limit_minutes FROM challenges WHERE id IN (
+			SELECT id FROM challenges WHERE source_session_id = ?
+			UNION
+			SELECT challenge_id FROM session_exercises WHERE session_id = ?
+		) ORDER BY created_at, id`, sessionID, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: listing challenges of a progress topic: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	challenges := []applicationprogress.TopicChallengeData{}
+	ids := []string{}
+	for rows.Next() {
+		var challenge applicationprogress.TopicChallengeData
+		if err := rows.Scan(&challenge.ID, &challenge.Title, &challenge.Difficulty, &challenge.TimeLimitMinutes); err != nil {
+			return nil, fmt.Errorf("sqlite: scanning challenge of a progress topic: %w", err)
+		}
+		challenges = append(challenges, challenge)
+		ids = append(ids, challenge.ID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sqlite: iterating challenges of a progress topic: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("sqlite: closing challenges of a progress topic: %w", err)
+	}
+	records, err := NewAttemptRecordRepository(r.db).ListByChallenges(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	for i := range challenges {
+		challenges[i].Attempts = records[challenges[i].ID]
+	}
+	return challenges, nil
+}
+
+func (r *ProgressReader) readTopicConcepts(ctx context.Context, sessionID string) ([]applicationprogress.TopicConceptData, error) {
+	states, err := NewConceptStateRepository(r.db).ListBySession(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	proofs, err := NewEvidenceRepository(r.db).ListBySession(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	byConcept := map[string][]domainstudy.Evidence{}
+	for _, proof := range proofs {
+		byConcept[proof.Concept] = append(byConcept[proof.Concept], proof)
+	}
+	concepts := make([]applicationprogress.TopicConceptData, len(states))
+	for i, state := range states {
+		concepts[i] = applicationprogress.TopicConceptData{
+			Name: state.Name, DisplayName: state.DisplayName, Status: state.Status,
+			EvidenceCount: state.EvidenceCount, UpdatedAt: state.UpdatedAt, Proofs: byConcept[state.Name],
+		}
+	}
+	return concepts, nil
 }

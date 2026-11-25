@@ -84,6 +84,7 @@ export const quizEn = {
     questionNumber: 'Question {{number}}',
     takeAgain: 'Take again',
     back: 'Back to tests',
+    backToProgress: 'Back to Progress',
     backToSession: 'Back to study session',
   },
   history: {

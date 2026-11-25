@@ -107,8 +107,9 @@ export function diagramIsAnswer(xml: string, seed: string): boolean {
 
 // Where the exam goes back to when it ends: the catalog it was started from or
 // the study session whose chat offered it.
-export type LabReturn = { kind: 'catalog' } | { kind: 'study'; sessionId: string }
+export type LabReturn =
+  { kind: 'catalog' } | { kind: 'study'; sessionId: string } | { kind: 'progress' }
 
 export function labReturnLabel(returnTo: LabReturn): string {
-  return i18n.t(returnTo.kind === 'study' ? 'back.study' : 'back.catalog')
+  return i18n.t(`back.${returnTo.kind === 'catalog' ? 'catalog' : returnTo.kind}`)
 }

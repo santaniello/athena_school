@@ -29,8 +29,21 @@ export const MAX_QUESTIONS = 20
 export const DEFAULT_QUESTIONS = 10
 
 // Where a quiz being taken goes back to when it ends: the menu it was started
-// from or the study session whose chat offered it.
-export type QuizReturn = { kind: 'menu' } | { kind: 'study'; sessionId: string }
+// from, the study session whose chat offered it, or the Progress topic that
+// listed it.
+export type QuizReturn =
+  { kind: 'menu' } | { kind: 'study'; sessionId: string } | { kind: 'progress' }
+
+const QUIZ_BACK_KEYS: Record<QuizReturn['kind'], string> = {
+  menu: 'result.back',
+  study: 'result.backToSession',
+  progress: 'result.backToProgress',
+}
+
+// The key, in the quiz namespace, of the label of the way back.
+export function quizBackKey(kind: QuizReturn['kind']): string {
+  return QUIZ_BACK_KEYS[kind]
+}
 
 // A count field is text while it is typed; only a whole number inside the
 // backend's range is a valid count, and anything else is null.

@@ -376,6 +376,7 @@ var migrations = []func(*sql.DB) error{
 		updated_at       TEXT NOT NULL,
 		PRIMARY KEY (session_id, name)
 	)`),
+	addSessionConceptsDisplayNameColumn,
 	// concept_evidence is one proof per turn in which the user's own message
 	// showed something about a concept, tied to the two messages behind it.
 	// The composite key makes a proof follow its concept (eviction, session
@@ -394,6 +395,22 @@ var migrations = []func(*sql.DB) error{
 		FOREIGN KEY (session_id, concept) REFERENCES session_concepts(session_id, name) ON DELETE CASCADE
 	)`),
 	execSQL(`CREATE INDEX IF NOT EXISTS idx_concept_evidence_session_concept ON concept_evidence (session_id, concept, created_at)`),
+}
+
+// addSessionConceptsDisplayNameColumn adds session_concepts.display_name, the
+// spelling of the latest report, if it does not already exist. name stays the
+// normalized identity; rows written before the column show it. See
+// specs/phases/phase-05-progress/02-topic-detail.md.
+func addSessionConceptsDisplayNameColumn(db *sql.DB) error {
+	has, err := hasColumn(db, "session_concepts", "display_name")
+	if err != nil {
+		return err
+	}
+	if has {
+		return nil
+	}
+	_, err = db.Exec(`ALTER TABLE session_concepts ADD COLUMN display_name TEXT NOT NULL DEFAULT ''`)
+	return err
 }
 
 // addQuizzesMessageIDColumn adds quizzes.message_id if it does not already

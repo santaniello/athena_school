@@ -34,6 +34,7 @@ import {
   listSessionQuizzes,
   parseQuestionCount,
   quizDifficultyLabel,
+  quizBackKey,
   quizErrorCode,
   quizErrorMessage,
   scoreBand,
@@ -383,5 +384,13 @@ describe('parseQuestionCount', () => {
     expect(parseQuestionCount('7.5')).toBeNull()
     expect(parseQuestionCount('-5')).toBeNull()
     expect(parseQuestionCount(' 7')).toBeNull()
+  })
+})
+
+describe('quizBackKey', () => {
+  it('names the way back to the menu, the study session or Progress', () => {
+    expect(quizBackKey('menu')).toBe('result.back')
+    expect(quizBackKey('study')).toBe('result.backToSession')
+    expect(quizBackKey('progress')).toBe('result.backToProgress')
   })
 })

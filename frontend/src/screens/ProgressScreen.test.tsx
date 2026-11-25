@@ -1,14 +1,22 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getProgressDashboard, type ProgressDashboard } from '@/lib/progress'
+import {
+  getProgressDashboard,
+  getProgressTopic,
+  type ProgressDashboard,
+  type ProgressTopicDetail,
+} from '@/lib/progress'
 import { setLabLanguage } from '@/i18n'
 import ProgressScreen from './ProgressScreen'
 
 vi.mock('@/lib/progress', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/progress')>()),
   getProgressDashboard: vi.fn(),
+  getProgressTopic: vi.fn(),
 }))
+
+vi.mock('@/lib/passScore', () => ({ getPassScore: vi.fn().mockResolvedValue(80) }))
 
 const DASHBOARD: ProgressDashboard = {
   counters: { folders: 2, topics: 3, topicsToReview: 1 },
@@ -45,15 +53,48 @@ const DASHBOARD: ProgressDashboard = {
   ],
 }
 
+const DETAIL: ProgressTopicDetail = {
+  sessionId: 's1',
+  name: 'Cache',
+  folderName: 'System Design',
+  quizCount: 1,
+  challengeCount: 1,
+  conceptCount: 0,
+  quizzes: [{ quizId: 'q1', number: 1, difficulty: 'EASY', percent: 90, attempts: 1 }],
+  challenges: [
+    {
+      challengeId: 'c1',
+      title: 'Design a cache',
+      difficulty: 'ADVANCED',
+      timeLimitMinutes: 60,
+      diagramScore: 85,
+      defenseScore: null,
+      result: 'PENDING',
+      attempts: 1,
+    },
+  ],
+  understood: [],
+  difficulties: [],
+  explainedOnly: [],
+}
+
+function renderScreen() {
+  const onStartQuiz = vi.fn()
+  const onStartExam = vi.fn()
+  render(<ProgressScreen onStartQuiz={onStartQuiz} onStartExam={onStartExam} />)
+  return { onStartQuiz, onStartExam }
+}
+
 describe('ProgressScreen', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     setLabLanguage('en')
     vi.mocked(getProgressDashboard).mockResolvedValue(DASHBOARD)
+    vi.mocked(getProgressTopic).mockResolvedValue(DETAIL)
   })
 
   it('shows the title, the subtitle and the three counters', async () => {
-    render(<ProgressScreen />)
+    renderScreen()
 
     expect(screen.getByText('Loading your progress...')).toBeInTheDocument()
     expect(await screen.findByRole('heading', { name: 'Progress' })).toBeInTheDocument()
@@ -66,7 +107,7 @@ describe('ProgressScreen', () => {
   })
 
   it('lists the folders with their topic count and selects the first one', async () => {
-    render(<ProgressScreen />)
+    renderScreen()
 
     const first = await screen.findByRole('button', { name: /System Design/ })
     expect(first).toHaveAttribute('aria-pressed', 'true')
@@ -77,7 +118,7 @@ describe('ProgressScreen', () => {
   })
 
   it('lists the topics of the selected folder with their scores and status', async () => {
-    render(<ProgressScreen />)
+    renderScreen()
 
     const cache = await screen.findByRole('button', { name: /Cache/ })
     expect(within(cache).getByText('85%')).toBeInTheDocument()
@@ -91,7 +132,7 @@ describe('ProgressScreen', () => {
 
   it('shows the topics of the folder that is picked', async () => {
     const user = userEvent.setup()
-    render(<ProgressScreen />)
+    renderScreen()
 
     await user.click(await screen.findByRole('button', { name: /Java/ }))
 
@@ -105,9 +146,9 @@ describe('ProgressScreen', () => {
     expect(screen.queryByText('Cache')).not.toBeInTheDocument()
   })
 
-  it('only highlights a topic when it is selected', async () => {
+  it('highlights the selected topic', async () => {
     const user = userEvent.setup()
-    render(<ProgressScreen />)
+    renderScreen()
     const cache = await screen.findByRole('button', { name: /Cache/ })
     expect(cache).toHaveAttribute('aria-pressed', 'false')
 
@@ -119,7 +160,7 @@ describe('ProgressScreen', () => {
 
   it('clears the highlighted topic when another folder is picked', async () => {
     const user = userEvent.setup()
-    render(<ProgressScreen />)
+    renderScreen()
     await user.click(await screen.findByRole('button', { name: /Cache/ }))
 
     await user.click(screen.getByRole('button', { name: /Java/ }))
@@ -134,7 +175,7 @@ describe('ProgressScreen', () => {
       folders: [],
     })
 
-    render(<ProgressScreen />)
+    renderScreen()
 
     expect(await screen.findByText('Nothing to show yet')).toBeInTheDocument()
     expect(screen.getByText(/Go to the Study tab/)).toBeInTheDocument()
@@ -144,7 +185,7 @@ describe('ProgressScreen', () => {
   it('offers a retry when the dashboard cannot be loaded', async () => {
     const user = userEvent.setup()
     vi.mocked(getProgressDashboard).mockRejectedValueOnce(new Error('boom'))
-    render(<ProgressScreen />)
+    renderScreen()
 
     expect(await screen.findByText('Could not load your progress.')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Try again' }))
@@ -153,10 +194,85 @@ describe('ProgressScreen', () => {
     expect(getProgressDashboard).toHaveBeenCalledTimes(2)
   })
 
+  it('asks to select a topic until one is selected', async () => {
+    renderScreen()
+
+    expect(
+      await screen.findByText('Select a topic to see what supports its status.'),
+    ).toBeInTheDocument()
+    expect(getProgressTopic).not.toHaveBeenCalled()
+  })
+
+  it('shows the detail of the selected topic on the right', async () => {
+    const user = userEvent.setup()
+    renderScreen()
+
+    await user.click(await screen.findByRole('button', { name: /Cache/ }))
+
+    expect(getProgressTopic).toHaveBeenCalledWith('s1')
+    expect(await screen.findByRole('heading', { name: 'Cache', level: 3 })).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: 'Results' })).toBeInTheDocument()
+    expect(
+      screen.queryByText('Select a topic to see what supports its status.'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('hides the detail when another folder is picked', async () => {
+    const user = userEvent.setup()
+    renderScreen()
+    await user.click(await screen.findByRole('button', { name: /Cache/ }))
+    await screen.findByRole('region', { name: 'Results' })
+
+    await user.click(screen.getByRole('button', { name: /Java/ }))
+
+    expect(screen.queryByRole('region', { name: 'Results' })).not.toBeInTheDocument()
+  })
+
+  it('opens a quiz of the topic', async () => {
+    const user = userEvent.setup()
+    const { onStartQuiz } = renderScreen()
+    await user.click(await screen.findByRole('button', { name: /Cache/ }))
+
+    await user.click(await screen.findByRole('button', { name: /Quiz 1 · Easy/ }))
+
+    expect(onStartQuiz).toHaveBeenCalledWith('q1')
+  })
+
+  it('shows the exam rules of a challenge and starts it once confirmed', async () => {
+    const user = userEvent.setup()
+    const { onStartExam } = renderScreen()
+    await user.click(await screen.findByRole('button', { name: /Cache/ }))
+
+    await user.click(await screen.findByRole('button', { name: /Design a cache/ }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(onStartExam).not.toHaveBeenCalled()
+    await user.click(within(dialog).getByRole('button', { name: /Start/ }))
+    expect(onStartExam).toHaveBeenCalledWith({
+      id: 'c1',
+      title: 'Design a cache',
+      difficulty: 'ADVANCED',
+      timeLimitMinutes: 60,
+    })
+  })
+
+  it('closes the exam rules without starting the exam', async () => {
+    const user = userEvent.setup()
+    const { onStartExam } = renderScreen()
+    await user.click(await screen.findByRole('button', { name: /Cache/ }))
+    await user.click(await screen.findByRole('button', { name: /Design a cache/ }))
+    const dialog = await screen.findByRole('dialog')
+
+    await user.click(within(dialog).getByRole('button', { name: /Cancel/ }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(onStartExam).not.toHaveBeenCalled()
+  })
+
   it('follows the profile language', async () => {
     setLabLanguage('pt')
 
-    render(<ProgressScreen />)
+    renderScreen()
 
     expect(
       await screen.findByText('Acompanhe como você está em cada assunto que estuda.'),

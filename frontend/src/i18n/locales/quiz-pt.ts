@@ -85,6 +85,7 @@ export const quizPt: QuizLocale = {
     questionNumber: 'Questão {{number}}',
     takeAgain: 'Fazer de novo',
     back: 'Voltar aos testes',
+    backToProgress: 'Voltar ao Progress',
     backToSession: 'Voltar à sessão de estudo',
   },
   history: {

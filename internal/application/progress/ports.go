@@ -7,6 +7,7 @@ package progress
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	domainexercise "github.com/santaniello/athena/internal/domain/exercise"
@@ -21,7 +22,14 @@ type Reader interface {
 	// ReadFolders returns every folder, in the order of the Folders screen,
 	// with its sessions. A folder without sessions comes back empty.
 	ReadFolders(ctx context.Context) ([]FolderData, error)
+	// ReadTopic returns one session with the detail of everything attached to
+	// it, or ErrTopicNotFound when the session does not exist or is in no
+	// folder.
+	ReadTopic(ctx context.Context, sessionID string) (TopicData, error)
 }
+
+// ErrTopicNotFound is returned when the session of a topic does not exist.
+var ErrTopicNotFound = errors.New("progress topic not found")
 
 // PassScoreProvider supplies the minimum passing score in force.
 type PassScoreProvider interface {
@@ -70,4 +78,43 @@ type ConceptData struct {
 	Status        domainstudy.ConceptStatus
 	EvidenceCount int
 	UpdatedAt     time.Time
+}
+
+// TopicData is a topic (a study session) with what the detail panel needs:
+// the quizzes and challenges that belong to it, oldest first, and its
+// concepts with their proofs.
+type TopicData struct {
+	SessionID  string
+	Topic      string
+	FolderName string
+	Quizzes    []TopicQuizData
+	Challenges []TopicChallengeData
+	Concepts   []TopicConceptData
+}
+
+// TopicQuizData is a quiz of the topic with its attempts, oldest first.
+type TopicQuizData struct {
+	ID         string
+	Difficulty string
+	Attempts   []QuizAttemptData
+}
+
+// TopicChallengeData is a challenge of the topic, counted once, with its title
+// and all its attempts, oldest first, whatever they are linked to.
+type TopicChallengeData struct {
+	ID               string
+	Title            string
+	Difficulty       string
+	TimeLimitMinutes int
+	Attempts         []domainexercise.AttemptRecord
+}
+
+// TopicConceptData is a concept of the session with its proofs.
+type TopicConceptData struct {
+	Name          string
+	DisplayName   string
+	Status        domainstudy.ConceptStatus
+	EvidenceCount int
+	UpdatedAt     time.Time
+	Proofs        []domainstudy.Evidence
 }

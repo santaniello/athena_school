@@ -2,10 +2,13 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AlertCircle, BookOpen, FolderOpen, Layers, TrendingUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ProgressTopicDetail } from '@/components/progress-topic-detail'
+import { StartExamDialog, type ExamToStart } from '@/components/lab/start-exam-dialog'
 import { cn } from '@/lib/utils'
 import {
   getProgressDashboard,
   type ProgressDashboard,
+  type ProgressChallengeResult,
   type ProgressFolder,
   type ProgressTopic,
   type TopicStatus,
@@ -21,17 +24,26 @@ const STATUS_STYLE: Record<TopicStatus, string> = {
   STABLE: 'border-primary/40 bg-primary/10 text-primary',
 }
 
+interface ProgressScreenProps {
+  onStartQuiz: (quizId: string) => void
+  onStartExam: (exam: ExamToStart) => void
+}
+
 // The Progress section: every folder that has study sessions, and each session
 // as a topic with its latest quiz and Arch Lab scores and a status. All of it is
-// derived by the backend on read, with no LLM call; selecting a topic only
-// highlights it here. See specs/phases/phase-05-progress/01-progress-dashboard.md.
-function ProgressScreen() {
+// derived by the backend on read, with no LLM call; selecting a topic
+// shows its detail on the right (spec 5.2); a quiz opens the quiz and a challenge shows the exam
+// rules first, like the session materials panel. See
+// specs/phases/phase-05-progress/01-progress-dashboard.md.
+function ProgressScreen({ onStartQuiz, onStartExam }: ProgressScreenProps) {
   const { t } = useTranslation('progressTab')
   const [dashboard, setDashboard] = useState<Dashboard>({ state: 'loading' })
   // Bumping this reloads the dashboard.
   const [reloadToken, setReloadToken] = useState(0)
   const [folderId, setFolderId] = useState<string | null>(null)
   const [topicId, setTopicId] = useState<string | null>(null)
+  // The rules of the exam of the challenge that was clicked; null keeps them closed.
+  const [examRules, setExamRules] = useState<ExamToStart | null>(null)
 
   useEffect(() => {
     let stale = false
@@ -140,23 +152,60 @@ function ProgressScreen() {
               <p className="text-xs text-muted-foreground">{t('topics.hint')}</p>
             </div>
 
-            <ul className="grid grid-cols-1 gap-2.5 xl:grid-cols-2">
-              {selectedFolder.topics.map((topic) => (
-                <li key={topic.sessionId}>
-                  <TopicRow
-                    topic={topic}
-                    selected={topic.sessionId === topicId}
-                    onPick={() => setTopicId(topic.sessionId)}
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+              <div className="flex flex-col gap-3">
+                <ul className="flex flex-col gap-2.5">
+                  {selectedFolder.topics.map((topic) => (
+                    <li key={topic.sessionId}>
+                      <TopicRow
+                        topic={topic}
+                        selected={topic.sessionId === topicId}
+                        onPick={() => setTopicId(topic.sessionId)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-muted-foreground">{t('topics.note')}</p>
+              </div>
+              <aside
+                aria-label={t('detail.title')}
+                className="rounded-xl border border-border p-4 xl:self-start"
+              >
+                {topicId ? (
+                  <ProgressTopicDetail
+                    sessionId={topicId}
+                    onOpenQuiz={onStartQuiz}
+                    onOpenChallenge={(challenge) => setExamRules(toExam(challenge))}
                   />
-                </li>
-              ))}
-            </ul>
-            <p className="text-xs text-muted-foreground">{t('topics.note')}</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">{t('detail.placeholder')}</p>
+                )}
+              </aside>
+            </div>
           </section>
         </>
       )}
+
+      <StartExamDialog
+        challenge={examRules}
+        onCancel={() => setExamRules(null)}
+        onConfirm={(exam) => {
+          setExamRules(null)
+          onStartExam(exam)
+        }}
+      />
     </div>
   )
+}
+
+// What the exam rules dialog and the exam need of a challenge.
+function toExam(challenge: ProgressChallengeResult): ExamToStart {
+  return {
+    id: challenge.challengeId,
+    title: challenge.title,
+    difficulty: challenge.difficulty,
+    timeLimitMinutes: challenge.timeLimitMinutes,
+  }
 }
 
 function Counter({
