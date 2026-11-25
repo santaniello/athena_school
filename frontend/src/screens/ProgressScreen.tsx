@@ -18,10 +18,17 @@ type Dashboard =
   { state: 'loading' } | { state: 'failed' } | { state: 'ready'; data: ProgressDashboard }
 
 const STATUS_STYLE: Record<TopicStatus, string> = {
-  INSUFFICIENT_EVIDENCE: 'border-border bg-muted text-muted-foreground',
-  NEEDS_REINFORCEMENT: 'border-[#e8875a]/40 bg-[#e8875a]/10 text-[#e8875a]',
-  IMPROVING: 'border-[#5fbf8f]/40 bg-[#5fbf8f]/10 text-[#5fbf8f]',
-  STABLE: 'border-primary/40 bg-primary/10 text-primary',
+  INSUFFICIENT_EVIDENCE: 'bg-muted text-muted-foreground',
+  NEEDS_REINFORCEMENT: 'bg-[#e8875a]/15 text-[#f3a57f]',
+  IMPROVING: 'bg-[#5fbf8f]/15 text-[#7fd3a8]',
+  STABLE: 'bg-[#6aa9e0]/15 text-[#a9c1e0]',
+}
+
+const STATUS_ICON: Record<TopicStatus, string> = {
+  INSUFFICIENT_EVIDENCE: '?',
+  NEEDS_REINFORCEMENT: '!',
+  IMPROVING: '↗',
+  STABLE: '→',
 }
 
 interface ProgressScreenProps {
@@ -74,6 +81,8 @@ function ProgressScreen({ onStartQuiz, onStartExam }: ProgressScreenProps) {
       ? (dashboard.data.folders.find((folder) => folder.id === folderId) ??
         dashboard.data.folders[0])
       : undefined
+
+  const selectedTopic = selectedFolder?.topics.find((topic) => topic.sessionId === topicId)
 
   return (
     <div className="thin-scroll flex min-h-0 w-full flex-1 flex-col gap-6 overflow-y-auto pr-2">
@@ -179,6 +188,7 @@ function ProgressScreen({ onStartQuiz, onStartExam }: ProgressScreenProps) {
                   sessionId={topicId}
                   onOpenQuiz={onStartQuiz}
                   onOpenChallenge={(challenge) => setExamRules(toExam(challenge))}
+                  status={selectedTopic && <StatusPill status={selectedTopic.status} />}
                 />
               ) : (
                 <p className="text-sm text-muted-foreground">{t('detail.placeholder')}</p>
@@ -250,7 +260,7 @@ function FolderChip({
       aria-pressed={selected}
       onClick={onPick}
       className={cn(
-        'flex cursor-pointer items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-left transition-colors',
+        'flex min-w-36 flex-1 cursor-pointer items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors',
         selected
           ? 'border-primary bg-primary/10 text-primary'
           : 'border-border text-muted-foreground hover:bg-accent',
@@ -296,15 +306,23 @@ function TopicRow({
           {t('topics.lab')}: <b className="text-foreground">{score(topic.labScore)}</b>
         </span>
       </span>
-      <span
-        className={cn(
-          'shrink-0 rounded-full border px-2.5 py-1 text-xs font-bold',
-          STATUS_STYLE[topic.status],
-        )}
-      >
-        {t(`status.${topic.status}`)}
-      </span>
+      <StatusPill status={topic.status} />
     </button>
+  )
+}
+
+function StatusPill({ status }: { status: TopicStatus }) {
+  const { t } = useTranslation('progressTab')
+  return (
+    <span
+      className={cn(
+        'inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-extrabold whitespace-nowrap',
+        STATUS_STYLE[status],
+      )}
+    >
+      <span aria-hidden="true">{STATUS_ICON[status]}</span>
+      {t(`status.${status}`)}
+    </span>
   )
 }
 

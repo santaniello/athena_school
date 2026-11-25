@@ -92,9 +92,12 @@ describe('ProgressTopicDetail', () => {
 
     expect(await screen.findByRole('heading', { name: 'Cache' })).toBeInTheDocument()
     expect(screen.getByText('System Design')).toBeInTheDocument()
-    expect(screen.getByText('2 quizzes')).toBeInTheDocument()
-    expect(screen.getByText('1 Arch Lab')).toBeInTheDocument()
-    expect(screen.getByText('4 concepts worked on')).toBeInTheDocument()
+    const activities = screen.getByRole('region', { name: 'Related activities' })
+    expect(within(activities).getByText('Quizzes').previousElementSibling).toHaveTextContent('2')
+    expect(within(activities).getByText('Arch Lab').previousElementSibling).toHaveTextContent('1')
+    expect(
+      within(activities).getByText('Concepts worked on').previousElementSibling,
+    ).toHaveTextContent('4')
   })
 
   it('reads the topic of the session it was given', async () => {

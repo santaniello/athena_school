@@ -1,6 +1,14 @@
 import { useEffect, useId, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { AlertCircle, ChevronRight } from 'lucide-react'
+import {
+  AlertCircle,
+  CheckCircle2,
+  ChevronRight,
+  Code2,
+  HelpCircle,
+  Layers,
+  MinusCircle,
+} from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { PROGRESS_NAMESPACE } from '@/i18n'
@@ -20,6 +28,8 @@ interface ProgressTopicDetailProps {
   sessionId: string
   onOpenQuiz: (quizId: string) => void
   onOpenChallenge: (challenge: ProgressChallengeResult) => void
+  // The status pill of the topic, shown beside its name.
+  status?: ReactNode
 }
 
 type DetailState =
@@ -50,7 +60,7 @@ export function ProgressTopicDetail(props: ProgressTopicDetailProps) {
   return <TopicBody key={props.sessionId} {...props} />
 }
 
-function TopicBody({ sessionId, onOpenQuiz, onOpenChallenge }: ProgressTopicDetailProps) {
+function TopicBody({ sessionId, onOpenQuiz, onOpenChallenge, status }: ProgressTopicDetailProps) {
   const { t } = useTranslation('progressTab')
   const [state, setState] = useState<DetailState>({ state: 'loading' })
 
@@ -81,30 +91,48 @@ function TopicBody({ sessionId, onOpenQuiz, onOpenChallenge }: ProgressTopicDeta
   }
   const { detail } = state
   return (
-    <div className="flex flex-col gap-5">
-      <header className="flex flex-col gap-1">
-        <h3 className="font-heading text-xl font-bold break-words text-foreground">
-          {detail.name}
-        </h3>
-        <p className="text-xs text-muted-foreground">
-          {t('detail.folder')}: <b className="text-foreground">{detail.folderName}</b>
-        </p>
-        <ul aria-label={t('detail.activities.title')} className="mt-1 flex flex-wrap gap-2">
-          <Chip>{t('detail.activities.quizzes', { count: detail.quizCount })}</Chip>
-          <Chip>{t('detail.activities.labs', { count: detail.challengeCount })}</Chip>
-          <Chip>{t('detail.activities.concepts', { count: detail.conceptCount })}</Chip>
-        </ul>
+    <div className="flex flex-col gap-6">
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <Layers className="size-8 shrink-0 text-primary" aria-hidden="true" />
+          <div>
+            <h3 className="font-heading text-2xl font-bold break-words text-foreground">
+              {detail.name}
+            </h3>
+            <span className="text-xs text-muted-foreground">
+              <b className="font-normal">{detail.folderName}</b> · {t('detail.session')}
+            </span>
+          </div>
+        </div>
+        {status}
       </header>
+      <Section title={t('detail.activities.title')}>
+        <ul className="grid grid-cols-3 gap-3">
+          <Stat
+            value={detail.quizCount}
+            label={t('detail.activities.quizzes', { count: detail.quizCount })}
+          />
+          <Stat
+            value={detail.challengeCount}
+            label={t('detail.activities.labs', { count: detail.challengeCount })}
+          />
+          <Stat
+            value={detail.conceptCount}
+            label={t('detail.activities.concepts', { count: detail.conceptCount })}
+          />
+        </ul>
+      </Section>
       <Results detail={detail} onOpenQuiz={onOpenQuiz} onOpenChallenge={onOpenChallenge} />
       <Learning detail={detail} />
     </div>
   )
 }
 
-function Chip({ children }: { children: ReactNode }) {
+function Stat({ value, label }: { value: number; label: string }) {
   return (
-    <li className="rounded-full border border-border px-2.5 py-0.5 text-xs text-muted-foreground">
-      {children}
+    <li className="rounded-xl bg-muted px-4 py-3.5">
+      <div className="text-2xl font-extrabold text-foreground">{value}</div>
+      <div className="text-xs text-muted-foreground">{label}</div>
     </li>
   )
 }
@@ -112,8 +140,8 @@ function Chip({ children }: { children: ReactNode }) {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   const headingId = useId()
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-2">
-      <h4 id={headingId} className="text-sm font-extrabold text-foreground">
+    <section aria-labelledby={headingId} className="flex flex-col gap-2.5">
+      <h4 id={headingId} className="text-base font-extrabold text-foreground">
         {title}
       </h4>
       {children}
@@ -171,13 +199,14 @@ function Results({
 }
 
 const ROW_CLASS =
-  'flex w-full cursor-pointer items-center justify-between gap-3 rounded-xl border border-border px-3.5 py-2.5 text-left transition-colors hover:bg-accent'
+  'flex w-full cursor-pointer items-center gap-3 rounded-xl bg-muted px-4 py-3 text-left transition-colors hover:bg-accent'
 
 function QuizRow({ quiz, onOpen }: { quiz: ProgressQuizResult; onOpen: () => void }) {
   const { t } = useTranslation('progressTab')
   return (
     <button type="button" onClick={onOpen} className={ROW_CLASS}>
-      <span className="flex min-w-0 flex-col">
+      <HelpCircle className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-sm font-bold text-foreground">
           {t('detail.results.quizTitle', {
             number: quiz.number,
@@ -208,7 +237,8 @@ function ChallengeRow({
   const score = (value: number | null) => (value === null ? t('topics.noScore') : `${value}%`)
   return (
     <button type="button" onClick={onOpen} className={ROW_CLASS}>
-      <span className="flex min-w-0 flex-col gap-0.5">
+      <Code2 className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="truncate text-sm font-bold text-foreground">{challenge.title}</span>
         <span className="text-xs text-muted-foreground">
           {t('detail.results.diagram')} {score(challenge.diagramScore)}
@@ -231,12 +261,20 @@ function Learning({ detail }: { detail: TopicDetail }) {
   const { t } = useTranslation('progressTab')
   return (
     <Section title={t('detail.learning.title')}>
-      <Group title={t('detail.learning.understood')} empty={t('detail.learning.noUnderstood')}>
+      <Group
+        icon={<CheckCircle2 className="text-[#5fbf8f]" aria-hidden="true" />}
+        title={t('detail.learning.understood')}
+        empty={t('detail.learning.noUnderstood')}
+      >
         {detail.understood.map((concept) => (
           <ConceptEntry key={concept.name} concept={concept} />
         ))}
       </Group>
-      <Group title={t('detail.learning.difficulties')} empty={t('detail.learning.noDifficulty')}>
+      <Group
+        icon={<AlertCircle className="text-[#e8875a]" aria-hidden="true" />}
+        title={t('detail.learning.difficulties')}
+        empty={t('detail.learning.noDifficulty')}
+      >
         {detail.difficulties.map((difficulty) => (
           <ConceptEntry
             key={`${difficulty.source}-${difficulty.challengeTitle}-${difficulty.name}`}
@@ -245,7 +283,11 @@ function Learning({ detail }: { detail: TopicDetail }) {
           />
         ))}
       </Group>
-      <Group title={t('detail.learning.explained')} empty={t('detail.learning.noExplained')}>
+      <Group
+        icon={<MinusCircle className="text-muted-foreground" aria-hidden="true" />}
+        title={t('detail.learning.explained')}
+        empty={t('detail.learning.noExplained')}
+      >
         {detail.explainedOnly.map((concept) => (
           <ConceptEntry key={concept.name} concept={concept} />
         ))}
@@ -256,25 +298,30 @@ function Learning({ detail }: { detail: TopicDetail }) {
 
 // A group is a labelled region whose list is replaced by a sentence when empty.
 function Group({
+  icon,
   title,
   empty,
   children,
 }: {
+  icon: ReactNode
   title: string
   empty: string
   children: ReactNode[]
 }) {
   const headingId = useId()
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-1.5">
-      <h5 id={headingId} className="text-xs font-bold text-muted-foreground uppercase">
-        {title}
-      </h5>
-      {children.length === 0 ? (
-        <Empty>{empty}</Empty>
-      ) : (
-        <ul className="flex flex-col gap-2">{children}</ul>
-      )}
+    <section aria-labelledby={headingId} className="flex gap-3">
+      <span className="mt-0.5 shrink-0 [&>svg]:size-6">{icon}</span>
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <h5 id={headingId} className="text-base font-extrabold text-foreground">
+          {title}
+        </h5>
+        {children.length === 0 ? (
+          <Empty>{empty}</Empty>
+        ) : (
+          <ul className="flex flex-col gap-2">{children}</ul>
+        )}
+      </div>
     </section>
   )
 }
@@ -290,11 +337,11 @@ function ConceptEntry({
   const [open, setOpen] = useState(false)
   const proofsId = useId()
   return (
-    <li className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3">
+    <li className="flex flex-col gap-2 rounded-xl bg-muted px-4 py-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <span className="text-sm font-semibold break-words text-foreground">{concept.name}</span>
+        <span className="text-base font-bold break-words text-foreground">{concept.name}</span>
         {difficulty && (
-          <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             {difficulty.source === 'TUTOR'
               ? t('detail.learning.sourceTutor')
               : t('detail.learning.sourceLab', { title: difficulty.challengeTitle })}
@@ -313,7 +360,7 @@ function ConceptEntry({
             aria-expanded={open}
             aria-controls={proofsId}
             onClick={() => setOpen((current) => !current)}
-            className="flex w-fit cursor-pointer items-center gap-1 text-xs text-primary"
+            className="flex w-fit cursor-pointer items-center gap-1 text-sm text-primary"
           >
             <ChevronRight
               className={cn('size-3.5 transition-transform', open && 'rotate-90')}
@@ -339,7 +386,7 @@ function Proof({ proof }: { proof: ProgressProof }) {
   const { t } = useTranslation(PROGRESS_NAMESPACE)
   const assessment = ASSESSMENTS[proof.assessment]
   return (
-    <li className="flex flex-col gap-0.5 text-xs">
+    <li className="flex flex-col gap-1 text-sm">
       <div className="flex flex-wrap items-center gap-1.5">
         <Badge variant={assessment?.variant ?? 'muted'} className="px-2">
           {assessment ? t(assessment.label) : proof.assessment}
