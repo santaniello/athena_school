@@ -139,6 +139,24 @@ type ProgressDifficultyResult struct {
 	Proofs         []ProgressProofResult `json:"proofs"`
 }
 
+// ProgressEvolutionPointResult is one attempt in the evolution chart; At is RFC 3339.
+type ProgressEvolutionPointResult struct {
+	Order      int    `json:"order"`
+	ItemNumber int    `json:"itemNumber"`
+	Title      string `json:"title"`
+	Score      int    `json:"score"`
+	At         string `json:"at"`
+}
+
+// ProgressEvolutionResult is the two series of the evolution chart. Enough is
+// false when there are too few points to draw it.
+type ProgressEvolutionResult struct {
+	Quiz      []ProgressEvolutionPointResult `json:"quiz"`
+	Lab       []ProgressEvolutionPointResult `json:"lab"`
+	PassScore int                            `json:"passScore"`
+	Enough    bool                           `json:"enough"`
+}
+
 // ProgressTopicDetailResult is everything the right panel of Progress shows
 // for a topic.
 type ProgressTopicDetailResult struct {
@@ -153,6 +171,7 @@ type ProgressTopicDetailResult struct {
 	Understood     []ProgressConceptResult    `json:"understood"`
 	Difficulties   []ProgressDifficultyResult `json:"difficulties"`
 	ExplainedOnly  []ProgressConceptResult    `json:"explainedOnly"`
+	Evolution      ProgressEvolutionResult    `json:"evolution"`
 }
 
 // GetProgressTopic returns the detail of the topic that is the given session.
@@ -173,6 +192,10 @@ func (a *App) GetProgressTopic(sessionID string) (ProgressTopicDetailResult, err
 		Understood:    toProgressConceptResults(detail.Understood),
 		Difficulties:  make([]ProgressDifficultyResult, len(detail.Difficulties)),
 		ExplainedOnly: toProgressConceptResults(detail.ExplainedOnly),
+		Evolution: ProgressEvolutionResult{
+			Quiz: toEvolutionPoints(detail.Evolution.Quiz), Lab: toEvolutionPoints(detail.Evolution.Lab),
+			PassScore: detail.Evolution.PassScore, Enough: detail.Evolution.Enough,
+		},
 	}
 	for i, quiz := range detail.Quizzes {
 		result.Quizzes[i] = ProgressQuizResult{
@@ -192,6 +215,16 @@ func (a *App) GetProgressTopic(sessionID string) (ProgressTopicDetailResult, err
 		}
 	}
 	return result, nil
+}
+
+func toEvolutionPoints(points []domainprogress.EvolutionPoint) []ProgressEvolutionPointResult {
+	results := make([]ProgressEvolutionPointResult, len(points))
+	for i, point := range points {
+		results[i] = ProgressEvolutionPointResult{
+			Order: point.Order, ItemNumber: point.ItemNumber, Title: point.Title, Score: point.Score, At: point.At.Format(time.RFC3339),
+		}
+	}
+	return results
 }
 
 func toProgressConceptResults(concepts []domainprogress.ConceptDetail) []ProgressConceptResult {

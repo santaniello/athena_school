@@ -69,6 +69,7 @@ const DETAIL: ProgressTopicDetail = {
     },
   ],
   explainedOnly: [{ name: 'LRU', evidenceCount: 0, proofs: [] }],
+  evolution: { quiz: [], lab: [], passScore: 80, enough: false },
 }
 
 function renderPanel(detail: ProgressTopicDetail = DETAIL) {
@@ -98,6 +99,14 @@ describe('ProgressTopicDetail', () => {
     expect(
       within(activities).getByText('Concepts worked on').previousElementSibling,
     ).toHaveTextContent('4')
+  })
+
+  it('shows the evolution section with the not-enough message when there is little data', async () => {
+    renderPanel()
+
+    const evolution = await screen.findByRole('region', { name: 'Evolution' })
+
+    expect(within(evolution).getByText('Not enough assessments yet')).toBeInTheDocument()
   })
 
   it('reads the topic of the session it was given', async () => {

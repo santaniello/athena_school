@@ -97,6 +97,25 @@ export interface ProgressChallengeResult {
   attempts: number
 }
 
+// One attempt in the evolution chart. order is its position within its series;
+// itemNumber is the number of its quiz or challenge in the topic; title names a
+// challenge (empty for quizzes).
+export interface ProgressEvolutionPoint {
+  order: number
+  itemNumber: number
+  title: string
+  score: number
+  at: string
+}
+
+// The two series of the chart; enough is false when there is too little to draw.
+export interface ProgressEvolution {
+  quiz: ProgressEvolutionPoint[]
+  lab: ProgressEvolutionPoint[]
+  passScore: number
+  enough: boolean
+}
+
 export interface ProgressTopicDetail {
   sessionId: string
   name: string
@@ -109,6 +128,7 @@ export interface ProgressTopicDetail {
   understood: ProgressConcept[]
   difficulties: ProgressDifficulty[]
   explainedOnly: ProgressConcept[]
+  evolution: ProgressEvolution
 }
 
 export async function getProgressTopic(sessionId: string): Promise<ProgressTopicDetail> {
@@ -151,5 +171,11 @@ export async function getProgressTopic(sessionId: string): Promise<ProgressTopic
       toReview: difficulty.toReview,
     })),
     explainedOnly: result.explainedOnly.map(concept),
+    evolution: {
+      quiz: result.evolution.quiz.map((point) => ({ ...point })),
+      lab: result.evolution.lab.map((point) => ({ ...point })),
+      passScore: result.evolution.passScore,
+      enough: result.evolution.enough,
+    },
   }
 }

@@ -211,6 +211,7 @@ vi.mock('@/lib/progress', async (importOriginal) => ({
     understood: [],
     difficulties: [],
     explainedOnly: [],
+    evolution: { quiz: [], lab: [], passScore: 80, enough: false },
   }),
 }))
 

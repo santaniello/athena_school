@@ -222,3 +222,32 @@ func TestGetTopicDetail_aPassedAttemptIsPassed(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, domainprogress.LabResultPassed, detail.Challenges[0].Result)
 }
+
+func TestGetTopicDetail_buildsTheEvolutionFromEveryAttempt(t *testing.T) {
+	// Given a quiz taken twice, a challenge with one complete and one half-evaluated attempt
+	rv := twoCriteriaRubric()
+	diagram := twoCriteriaEvaluation(domainexercise.EvaluationKindDiagram, 90, level("k1", 3, false), level("k2", 3, false))
+	defense := twoCriteriaEvaluation(domainexercise.EvaluationKindUnderstanding, 70, level("k1", 3, false), level("k2", 3, false))
+	service := topicService(t, 80, TopicData{
+		Quizzes: []TopicQuizData{{ID: "q1", Attempts: []QuizAttemptData{
+			{CorrectCount: 1, Total: 2, FinishedAt: base},
+			{CorrectCount: 2, Total: 2, FinishedAt: base.AddDate(0, 0, 2)},
+		}}},
+		Challenges: []TopicChallengeData{{ID: "c1", Title: "Design a cache", Attempts: []domainexercise.AttemptRecord{
+			record(diagram, nil, rv, 1),
+			record(diagram, defense, rv, 3),
+		}}},
+	})
+
+	// When the detail is requested
+	detail, err := service.GetTopicDetail(context.Background(), "s1")
+
+	// Then both quiz attempts and only the complete lab attempt are points
+	require.NoError(t, err)
+	assert.Equal(t, []int{50, 100}, []int{detail.Evolution.Quiz[0].Score, detail.Evolution.Quiz[1].Score})
+	require.Len(t, detail.Evolution.Lab, 1)
+	assert.Equal(t, 80, detail.Evolution.Lab[0].Score)
+	assert.Equal(t, "Design a cache", detail.Evolution.Lab[0].Title)
+	assert.Equal(t, 80, detail.Evolution.PassScore)
+	assert.True(t, detail.Evolution.Enough)
+}
