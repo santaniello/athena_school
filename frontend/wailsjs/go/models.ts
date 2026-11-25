@@ -895,6 +895,84 @@ export namespace desktop {
 	}
 	
 	
+	export class ProgressChallengeResult {
+	    challengeId: string;
+	    title: string;
+	    difficulty: string;
+	    timeLimitMinutes: number;
+	    diagramScore?: number;
+	    defenseScore?: number;
+	    result: string;
+	    attempts: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProgressChallengeResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.challengeId = source["challengeId"];
+	        this.title = source["title"];
+	        this.difficulty = source["difficulty"];
+	        this.timeLimitMinutes = source["timeLimitMinutes"];
+	        this.diagramScore = source["diagramScore"];
+	        this.defenseScore = source["defenseScore"];
+	        this.result = source["result"];
+	        this.attempts = source["attempts"];
+	    }
+	}
+	export class ProgressProofResult {
+	    assessment: string;
+	    description: string;
+	    assisted: boolean;
+	    createdAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProgressProofResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.assessment = source["assessment"];
+	        this.description = source["description"];
+	        this.assisted = source["assisted"];
+	        this.createdAt = source["createdAt"];
+	    }
+	}
+	export class ProgressConceptResult {
+	    name: string;
+	    evidenceCount: number;
+	    proofs: ProgressProofResult[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ProgressConceptResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.evidenceCount = source["evidenceCount"];
+	        this.proofs = this.convertValues(source["proofs"], ProgressProofResult);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class ProgressCountersResult {
 	    folders: number;
 	    topics: number;
@@ -999,7 +1077,118 @@ export namespace desktop {
 		    return a;
 		}
 	}
+	export class ProgressDifficultyResult {
+	    name: string;
+	    source: string;
+	    challengeTitle: string;
+	    toReview: boolean;
+	    evidenceCount: number;
+	    proofs: ProgressProofResult[];
 	
+	    static createFrom(source: any = {}) {
+	        return new ProgressDifficultyResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.source = source["source"];
+	        this.challengeTitle = source["challengeTitle"];
+	        this.toReview = source["toReview"];
+	        this.evidenceCount = source["evidenceCount"];
+	        this.proofs = this.convertValues(source["proofs"], ProgressProofResult);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
+	export class ProgressQuizResult {
+	    quizId: string;
+	    number: number;
+	    difficulty: string;
+	    percent?: number;
+	    attempts: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProgressQuizResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.quizId = source["quizId"];
+	        this.number = source["number"];
+	        this.difficulty = source["difficulty"];
+	        this.percent = source["percent"];
+	        this.attempts = source["attempts"];
+	    }
+	}
+	export class ProgressTopicDetailResult {
+	    sessionId: string;
+	    name: string;
+	    folderName: string;
+	    quizCount: number;
+	    challengeCount: number;
+	    conceptCount: number;
+	    quizzes: ProgressQuizResult[];
+	    challenges: ProgressChallengeResult[];
+	    understood: ProgressConceptResult[];
+	    difficulties: ProgressDifficultyResult[];
+	    explainedOnly: ProgressConceptResult[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ProgressTopicDetailResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.name = source["name"];
+	        this.folderName = source["folderName"];
+	        this.quizCount = source["quizCount"];
+	        this.challengeCount = source["challengeCount"];
+	        this.conceptCount = source["conceptCount"];
+	        this.quizzes = this.convertValues(source["quizzes"], ProgressQuizResult);
+	        this.challenges = this.convertValues(source["challenges"], ProgressChallengeResult);
+	        this.understood = this.convertValues(source["understood"], ProgressConceptResult);
+	        this.difficulties = this.convertValues(source["difficulties"], ProgressDifficultyResult);
+	        this.explainedOnly = this.convertValues(source["explainedOnly"], ProgressConceptResult);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	
 	export class QuizResultQuestionDTO {
 	    id: string;

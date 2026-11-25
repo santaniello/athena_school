@@ -3,6 +3,7 @@ package desktop
 import (
 	"context"
 	"errors"
+	"time"
 
 	domainprogress "github.com/santaniello/athena/internal/domain/progress"
 )
@@ -10,6 +11,7 @@ import (
 // progressDashboard is the use case behind GetProgressDashboard (spec 5.1).
 type progressDashboard interface {
 	GetDashboard(ctx context.Context) (domainprogress.Dashboard, error)
+	GetTopicDetail(ctx context.Context, sessionID string) (domainprogress.TopicDetail, error)
 }
 
 // WithProgressService wires the Progress dashboard.
@@ -86,4 +88,129 @@ func toProgressFolderResult(folder domainprogress.FolderSummary) ProgressFolderR
 		}
 	}
 	return result
+}
+
+// ProgressQuizResult is the latest result of one quiz of a topic. A nil
+// percent means the quiz has no attempt.
+type ProgressQuizResult struct {
+	QuizID     string `json:"quizId"`
+	Number     int    `json:"number"`
+	Difficulty string `json:"difficulty"`
+	Percent    *int   `json:"percent"`
+	Attempts   int    `json:"attempts"`
+}
+
+// ProgressChallengeResult is the latest evaluated attempt of one challenge. A
+// nil score means that evaluation is pending.
+type ProgressChallengeResult struct {
+	ChallengeID      string `json:"challengeId"`
+	Title            string `json:"title"`
+	Difficulty       string `json:"difficulty"`
+	TimeLimitMinutes int    `json:"timeLimitMinutes"`
+	DiagramScore     *int   `json:"diagramScore"`
+	DefenseScore     *int   `json:"defenseScore"`
+	Result           string `json:"result"`
+	Attempts         int    `json:"attempts"`
+}
+
+// ProgressProofResult is one proof the tutor recorded for a concept.
+type ProgressProofResult struct {
+	Assessment  string `json:"assessment"`
+	Description string `json:"description"`
+	Assisted    bool   `json:"assisted"`
+	CreatedAt   string `json:"createdAt"`
+}
+
+// ProgressConceptResult is a concept of the topic with its proofs, newest first.
+type ProgressConceptResult struct {
+	Name          string                `json:"name"`
+	EvidenceCount int                   `json:"evidenceCount"`
+	Proofs        []ProgressProofResult `json:"proofs"`
+}
+
+// ProgressDifficultyResult is a difficulty of the topic. Source is TUTOR or
+// ARCH_LAB; ChallengeTitle names the challenge for the latter.
+type ProgressDifficultyResult struct {
+	Name           string                `json:"name"`
+	Source         string                `json:"source"`
+	ChallengeTitle string                `json:"challengeTitle"`
+	ToReview       bool                  `json:"toReview"`
+	EvidenceCount  int                   `json:"evidenceCount"`
+	Proofs         []ProgressProofResult `json:"proofs"`
+}
+
+// ProgressTopicDetailResult is everything the right panel of Progress shows
+// for a topic.
+type ProgressTopicDetailResult struct {
+	SessionID      string                     `json:"sessionId"`
+	Name           string                     `json:"name"`
+	FolderName     string                     `json:"folderName"`
+	QuizCount      int                        `json:"quizCount"`
+	ChallengeCount int                        `json:"challengeCount"`
+	ConceptCount   int                        `json:"conceptCount"`
+	Quizzes        []ProgressQuizResult       `json:"quizzes"`
+	Challenges     []ProgressChallengeResult  `json:"challenges"`
+	Understood     []ProgressConceptResult    `json:"understood"`
+	Difficulties   []ProgressDifficultyResult `json:"difficulties"`
+	ExplainedOnly  []ProgressConceptResult    `json:"explainedOnly"`
+}
+
+// GetProgressTopic returns the detail of the topic that is the given session.
+// It is derived on read: no LLM call.
+func (a *App) GetProgressTopic(sessionID string) (ProgressTopicDetailResult, error) {
+	if a.progress == nil {
+		return ProgressTopicDetailResult{}, errProgressUnavailable
+	}
+	detail, err := a.progress.GetTopicDetail(a.ctx, sessionID)
+	if err != nil {
+		return ProgressTopicDetailResult{}, err
+	}
+	result := ProgressTopicDetailResult{
+		SessionID: detail.SessionID, Name: detail.Name, FolderName: detail.FolderName,
+		QuizCount: detail.QuizCount, ChallengeCount: detail.ChallengeCount, ConceptCount: detail.ConceptCount,
+		Quizzes:       make([]ProgressQuizResult, len(detail.Quizzes)),
+		Challenges:    make([]ProgressChallengeResult, len(detail.Challenges)),
+		Understood:    toProgressConceptResults(detail.Understood),
+		Difficulties:  make([]ProgressDifficultyResult, len(detail.Difficulties)),
+		ExplainedOnly: toProgressConceptResults(detail.ExplainedOnly),
+	}
+	for i, quiz := range detail.Quizzes {
+		result.Quizzes[i] = ProgressQuizResult{
+			QuizID: quiz.QuizID, Number: quiz.Number, Difficulty: quiz.Difficulty, Percent: quiz.Percent, Attempts: quiz.Attempts,
+		}
+	}
+	for i, challenge := range detail.Challenges {
+		result.Challenges[i] = ProgressChallengeResult{
+			ChallengeID: challenge.ChallengeID, Title: challenge.Title, Difficulty: challenge.Difficulty,
+			TimeLimitMinutes: challenge.TimeLimitMinutes, DiagramScore: challenge.DiagramScore, DefenseScore: challenge.DefenseScore, Result: string(challenge.Result), Attempts: challenge.Attempts,
+		}
+	}
+	for i, difficulty := range detail.Difficulties {
+		result.Difficulties[i] = ProgressDifficultyResult{
+			Name: difficulty.Name, Source: string(difficulty.Source), ChallengeTitle: difficulty.ChallengeTitle,
+			ToReview: difficulty.ToReview, EvidenceCount: difficulty.EvidenceCount, Proofs: toProgressProofResults(difficulty.Proofs),
+		}
+	}
+	return result, nil
+}
+
+func toProgressConceptResults(concepts []domainprogress.ConceptDetail) []ProgressConceptResult {
+	results := make([]ProgressConceptResult, len(concepts))
+	for i, concept := range concepts {
+		results[i] = ProgressConceptResult{
+			Name: concept.Name, EvidenceCount: concept.EvidenceCount, Proofs: toProgressProofResults(concept.Proofs),
+		}
+	}
+	return results
+}
+
+func toProgressProofResults(proofs []domainprogress.DetailProof) []ProgressProofResult {
+	results := make([]ProgressProofResult, len(proofs))
+	for i, proof := range proofs {
+		results[i] = ProgressProofResult{
+			Assessment: proof.Assessment, Description: proof.Description, Assisted: proof.Assisted,
+			CreatedAt: proof.At.UTC().Format(time.RFC3339),
+		}
+	}
+	return results
 }

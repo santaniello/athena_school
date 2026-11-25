@@ -75,6 +75,14 @@ const LabPreview = import.meta.env.DEV
   : null
 const LAB_PREVIEW_HASH = '#lab-preview'
 
+// The section a finished exam or quiz goes back to, if it did not start from
+// the catalog or the menu of its own section.
+function returnSection(returnTo: { kind: string }): AppSection | null {
+  if (returnTo.kind === 'study') return 'study'
+  if (returnTo.kind === 'progress') return 'progress'
+  return null
+}
+
 // The persistent app chrome (sidebar + topbar) mounted once, after auth, the
 // key gate and onboarding are all done. Hosts every roadmap section from day
 // one — most locked — so later phases only flip a status flag in
@@ -284,9 +292,15 @@ function AppShell() {
     setSection('quiz')
   }
 
+  function startProgressQuiz(quizId: string) {
+    setQuizReturn({ kind: 'progress' })
+    setTakingQuizId(quizId)
+    setSection('quiz')
+  }
+
   function handleQuizExit() {
     setTakingQuizId(null)
-    const destination = pendingSection ?? (quizReturn.kind === 'study' ? 'study' : null)
+    const destination = pendingSection ?? returnSection(quizReturn)
     if (destination) setSection(destination)
     setQuizReturn({ kind: 'menu' })
     setPendingSection(null)
@@ -345,9 +359,15 @@ function AppShell() {
     setSection('challenge')
   }
 
+  function startProgressExam(exam: ExamToStart) {
+    setLabReturn({ kind: 'progress' })
+    setExam(exam)
+    setSection('challenge')
+  }
+
   function handleExamExit(notice?: string) {
     setExam(null)
-    const destination = pendingSection ?? (labReturn.kind === 'study' ? 'study' : null)
+    const destination = pendingSection ?? returnSection(labReturn)
     if (destination) setSection(destination)
     setLabReturn({ kind: 'catalog' })
     setPendingSection(null)
@@ -662,7 +682,7 @@ function AppShell() {
             <MindMapScreen onOpen={openMenuMindMap} />
           )
         ) : section === 'progress' ? (
-          <ProgressScreen />
+          <ProgressScreen onStartQuiz={startProgressQuiz} onStartExam={startProgressExam} />
         ) : section === 'documentation' ? (
           <DocumentationScreen />
         ) : section === 'profile' && profile ? (

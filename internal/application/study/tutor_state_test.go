@@ -66,7 +66,7 @@ func TestSendMessage_storesTheStateReport_andHidesTheBlock(t *testing.T) {
 	concepts := studymocks.NewMockConceptStateRepository(t)
 	concepts.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil).Twice()
 	concepts.EXPECT().Upsert(context.Background(), conceptLike(domainstudy.ConceptState{
-		SessionID: "session-1", Name: "race condition", Status: domainstudy.StatusDemonstrated,
+		SessionID: "session-1", Name: "race condition", DisplayName: "Race Condition", Status: domainstudy.StatusDemonstrated,
 		LastStrategy: domainstudy.StrategyCorrectiveFeedback, AssistanceCount: 1, EvidenceCount: 1,
 	})).Return(nil).Once()
 	chunks := []string{
@@ -93,7 +93,7 @@ func TestSendMessage_appliesTheDomainRules_toTheStoredConcept(t *testing.T) {
 		LastStrategy: domainstudy.StrategyConceptReview, AssistanceCount: 4, EvidenceCount: 1,
 	}}, nil).Twice()
 	concepts.EXPECT().Upsert(context.Background(), conceptLike(domainstudy.ConceptState{
-		SessionID: "session-1", Name: "race condition", Status: domainstudy.StatusPartiallyUnderstood,
+		SessionID: "session-1", Name: "race condition", DisplayName: "RACE condition", Status: domainstudy.StatusPartiallyUnderstood,
 		LastStrategy: domainstudy.StrategyCorrectiveFeedback, AssistanceCount: 4, EvidenceCount: 2,
 	})).Return(nil).Once()
 
@@ -111,7 +111,7 @@ func TestSendMessage_capsAReportWithoutEvidence_atIntroduced(t *testing.T) {
 	concepts := studymocks.NewMockConceptStateRepository(t)
 	concepts.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil).Twice()
 	concepts.EXPECT().Upsert(context.Background(), conceptLike(domainstudy.ConceptState{
-		SessionID: "session-1", Name: "mutex", Status: domainstudy.StatusIntroduced,
+		SessionID: "session-1", Name: "mutex", DisplayName: "Mutex", Status: domainstudy.StatusIntroduced,
 		LastStrategy: domainstudy.StrategyDirectInstruction,
 	})).Return(nil).Once()
 
@@ -177,7 +177,7 @@ func TestSendMessage_evictsOnTheThirtyFirstConcept_neverTheOneJustWritten(t *tes
 	concepts := studymocks.NewMockConceptStateRepository(t)
 	concepts.EXPECT().ListBySession(context.Background(), "session-1").Return(existingConceptStates(30), nil).Twice()
 	concepts.EXPECT().Upsert(context.Background(), conceptLike(domainstudy.ConceptState{
-		SessionID: "session-1", Name: "new concept", Status: domainstudy.StatusDemonstrated,
+		SessionID: "session-1", Name: "new concept", DisplayName: "New Concept", Status: domainstudy.StatusDemonstrated,
 		LastStrategy: domainstudy.StrategyGuidedPractice, EvidenceCount: 1,
 	})).Return(nil).Once()
 	concepts.EXPECT().DeleteOldest(context.Background(), "session-1", "new concept").Return(nil).Once()
@@ -205,7 +205,7 @@ func TestSendMessage_doesNotEvict_whenTheSessionStaysWithinTheLimit(t *testing.T
 			concepts := studymocks.NewMockConceptStateRepository(t)
 			concepts.EXPECT().ListBySession(context.Background(), "session-1").Return(existingConceptStates(tt.stored), nil).Twice()
 			concepts.EXPECT().Upsert(context.Background(), conceptLike(domainstudy.ConceptState{
-				SessionID: "session-1", Name: tt.report, Status: domainstudy.StatusIntroduced,
+				SessionID: "session-1", Name: tt.report, DisplayName: tt.report, Status: domainstudy.StatusIntroduced,
 				LastStrategy: domainstudy.StrategyGuidedPractice,
 			})).Return(nil).Once()
 
@@ -223,7 +223,7 @@ func TestSendMessage_doesNotEvict_whenTheSessionStaysWithinTheLimit(t *testing.T
 func TestSendMessage_doesNotFailTheReply_whenTheStateRepositoryFails(t *testing.T) {
 	storeErr := errors.New("disk full")
 	fresh := conceptLike(domainstudy.ConceptState{
-		SessionID: "session-1", Name: "fresh", Status: domainstudy.StatusIntroduced,
+		SessionID: "session-1", Name: "fresh", DisplayName: "fresh", Status: domainstudy.StatusIntroduced,
 		LastStrategy: domainstudy.StrategyGuidedPractice,
 	})
 	for name, setup := range map[string]func(*studymocks.MockConceptStateRepository){
@@ -279,7 +279,7 @@ func TestSendMessage_neverLeaksAnOfferMarkerSplitNextToTheStateBlock(t *testing.
 	concepts := studymocks.NewMockConceptStateRepository(t)
 	concepts.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil).Twice()
 	concepts.EXPECT().Upsert(context.Background(), conceptLike(domainstudy.ConceptState{
-		SessionID: "session-1", Name: "a", Status: domainstudy.StatusIntroduced,
+		SessionID: "session-1", Name: "a", DisplayName: "A", Status: domainstudy.StatusIntroduced,
 	})).Return(nil).Once()
 	chunks := []string{
 		"Sure.\n[[ATHENA_", "EXERCISE_OFFER]]\n" + tutorStateOpenTag,
@@ -351,7 +351,7 @@ func TestRequestOpeningTurn_forcesNoUserEvidence_onItsReport(t *testing.T) {
 	concepts := studymocks.NewMockConceptStateRepository(t)
 	concepts.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil).Once()
 	concepts.EXPECT().Upsert(context.Background(), conceptLike(domainstudy.ConceptState{
-		SessionID: "session-1", Name: "caching", Status: domainstudy.StatusIntroduced,
+		SessionID: "session-1", Name: "caching", DisplayName: "Caching", Status: domainstudy.StatusIntroduced,
 		LastStrategy: domainstudy.StrategyDirectInstruction, AssistanceCount: 1,
 	})).Return(nil).Once()
 

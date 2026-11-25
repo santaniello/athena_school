@@ -268,3 +268,55 @@ func TestApplyReport_demonstratedWithAnIncorrectAssessment_onANeedsReviewConcept
 	// Then it is treated as PARTIALLY_UNDERSTOOD, which is what the user showed: no step up from NEEDS_REVIEW is lost or invented
 	assert.Equal(t, StatusPartiallyUnderstood, next.Status)
 }
+
+func TestApplyReport_newConcept_keepsTheReportedSpellingAsDisplayName(t *testing.T) {
+	// Given a report that spells the concept "Cache-aside"
+	r := report(StatusIntroduced, false)
+	r.Concept = "  Cache-aside "
+
+	// When applying it to a concept with no row
+	next, _ := ApplyReport(nil, r, stateNow)
+
+	// Then the identity is lower case and the display name keeps the spelling
+	assert.Equal(t, "cache-aside", next.Name)
+	assert.Equal(t, "Cache-aside", next.DisplayName)
+}
+
+func TestApplyReport_existingConcept_takesTheLatestSpelling(t *testing.T) {
+	// Given a row displayed as "Race condition"
+	current := existingConcept(StatusIntroduced)
+	current.DisplayName = "Race condition"
+
+	// When a later report spells it "Race Condition"
+	next, _ := ApplyReport(current, report(StatusIntroduced, false), stateNow)
+
+	// Then the display name follows the latest report
+	assert.Equal(t, "Race Condition", next.DisplayName)
+}
+
+func TestApplyReport_blankReportedConcept_keepsTheDisplayName(t *testing.T) {
+	// Given a row with a display name and a report whose concept is blank
+	current := existingConcept(StatusIntroduced)
+	current.DisplayName = "Race condition"
+	r := report(StatusIntroduced, false)
+	r.Concept = "   "
+
+	// When applying it
+	next, _ := ApplyReport(current, r, stateNow)
+
+	// Then the display name is not erased
+	assert.Equal(t, "Race condition", next.DisplayName)
+}
+
+func TestApplyReport_displayName_collapsesSpacesAndIsCappedLikeTheName(t *testing.T) {
+	// Given a spelling with inner whitespace and more runes than the cap allows
+	r := report(StatusIntroduced, false)
+	r.Concept = "Big   " + strings.Repeat("Ä", MaxConceptNameRunes+10)
+
+	// When applying it to a new concept
+	next, _ := ApplyReport(nil, r, stateNow)
+
+	// Then the display name has single spaces and at most MaxConceptNameRunes runes
+	assert.True(t, strings.HasPrefix(next.DisplayName, "Big Ä"))
+	assert.Len(t, []rune(next.DisplayName), MaxConceptNameRunes)
+}

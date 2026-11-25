@@ -444,3 +444,152 @@ func TestProgressReader_ReadFolders_failsWhenTheDatabaseIsClosed(t *testing.T) {
 	// Then the error is returned
 	require.Error(t, err)
 }
+
+func TestProgressReader_ReadTopic_failsForAMissingSessionOrOneInNoFolder(t *testing.T) {
+	// Given a session in a folder and a session whose folder was removed
+	reader, db := newProgressFixture(t)
+	addFolder(t, db, "f1", "One")
+	addSession(t, db, "s1", "Cache", "f1", progressBase)
+	mustExec(t, db, `PRAGMA foreign_keys = OFF`)
+	mustExec(t, db, `INSERT INTO sessions (id, topic, mode, folder_id, started_at) VALUES ('orphan', 'X', 'socratic', 'missing', ?)`, progressBase)
+
+	for _, id := range []string{"nope", "orphan"} {
+		// When reading a session that is not a topic
+		_, err := reader.ReadTopic(context.Background(), id)
+
+		// Then it is not found
+		require.ErrorIs(t, err, applicationprogress.ErrTopicNotFound, id)
+	}
+}
+
+func TestProgressReader_ReadTopic_returnsTheNamesAndOnlyTheQuizzesOfTheSession(t *testing.T) {
+	// Given two sessions with quizzes, one quiz of each origin in the first
+	reader, db := newProgressFixture(t)
+	addFolder(t, db, "f1", "System Design")
+	addSession(t, db, "s1", "Cache", "f1", progressBase)
+	addSession(t, db, "s2", "Other", "f1", progressBase)
+	mustExec(t, db, `INSERT INTO messages (id, session_id, role, content, created_at) VALUES ('m1', 's1', 'assistant', 'x', CURRENT_TIMESTAMP)`)
+	addQuiz(t, db, "q-menu", "s1", nil)
+	addQuiz(t, db, "q-chat", "s1", "m1")
+	addQuiz(t, db, "q-other", "s2", nil)
+	addQuizAttempt(t, db, "a2", "q-menu", 3, 4, 2)
+	addQuizAttempt(t, db, "a1", "q-menu", 1, 4, 1)
+	addQuizAttempt(t, db, "a3", "q-other", 4, 4, 1)
+
+	// When reading the first topic
+	topic, err := reader.ReadTopic(context.Background(), "s1")
+
+	// Then it names the session and folder and has its two quizzes only, attempts oldest first
+	require.NoError(t, err)
+	assert.Equal(t, "s1", topic.SessionID)
+	assert.Equal(t, "Cache", topic.Topic)
+	assert.Equal(t, "System Design", topic.FolderName)
+	require.Len(t, topic.Quizzes, 2)
+	menu := topic.Quizzes[0]
+	if menu.ID != "q-menu" {
+		menu = topic.Quizzes[1]
+	}
+	assert.Equal(t, "INTERMEDIATE", menu.Difficulty)
+	require.Len(t, menu.Attempts, 2)
+	assert.Equal(t, 1, menu.Attempts[0].CorrectCount)
+	assert.Equal(t, 3, menu.Attempts[1].CorrectCount)
+}
+
+func TestProgressReader_ReadTopic_countsAChallengeOnceWithItsTitleAndAttempts(t *testing.T) {
+	// Given a challenge generated from the session and also linked to it, with an evaluated attempt
+	reader, db := newProgressFixture(t)
+	addFolder(t, db, "f1", "One")
+	addSession(t, db, "s1", "Cache", "f1", progressBase)
+	addChallenge(t, db, "c1", "s1")
+	linkChallenge(t, db, "l1", "s1", "c1")
+	mustExec(t, db, `UPDATE challenges SET title = 'Design a cache', difficulty = 'ADVANCED', time_limit_minutes = 60 WHERE id = 'c1'`)
+	addRubric(t, db, "rv1", "c1")
+	addLabAttempt(t, db, "at1", "c1", "rv1", 1, 70, 60)
+
+	// When reading the topic
+	topic, err := reader.ReadTopic(context.Background(), "s1")
+
+	// Then the challenge appears once with its title and both evaluations
+	require.NoError(t, err)
+	require.Len(t, topic.Challenges, 1)
+	assert.Equal(t, "Design a cache", topic.Challenges[0].Title)
+	assert.Equal(t, "ADVANCED", topic.Challenges[0].Difficulty)
+	assert.Equal(t, 60, topic.Challenges[0].TimeLimitMinutes)
+	require.Len(t, topic.Challenges[0].Attempts, 1)
+	assert.Equal(t, 70, topic.Challenges[0].Attempts[0].Diagram.Score)
+	assert.Equal(t, 60, topic.Challenges[0].Attempts[0].Understanding.Score)
+}
+
+func TestProgressReader_ReadTopic_returnsTheConceptsOfTheSessionWithDisplayNameAndProofs(t *testing.T) {
+	// Given a concept with a display name and a proof, and a concept of another session
+	reader, db := newProgressFixture(t)
+	addFolder(t, db, "f1", "One")
+	addSession(t, db, "s1", "Cache", "f1", progressBase)
+	addSession(t, db, "s2", "Other", "f1", progressBase)
+	ctx := context.Background()
+	concepts := NewConceptStateRepository(db)
+	require.NoError(t, concepts.Upsert(ctx, domainstudy.ConceptState{
+		SessionID: "s1", Name: "cache-aside", DisplayName: "Cache-aside", Status: domainstudy.StatusDemonstrated,
+		EvidenceCount: 1, UpdatedAt: progressBase,
+	}))
+	require.NoError(t, concepts.Upsert(ctx, domainstudy.ConceptState{
+		SessionID: "s2", Name: "lru", Status: domainstudy.StatusIntroduced, UpdatedAt: progressBase,
+	}))
+	mustExec(t, db, `INSERT INTO messages (id, session_id, role, content, created_at) VALUES
+		('u1', 's1', 'user', 'x', CURRENT_TIMESTAMP), ('r1', 's1', 'assistant', 'y', CURRENT_TIMESTAMP)`)
+	require.NoError(t, NewEvidenceRepository(db).Add(ctx, domainstudy.Evidence{
+		SessionID: "s1", Concept: "cache-aside", Assessment: domainstudy.AssessmentCorrect, Description: "explained it",
+		UserMessageID: "u1", ReplyMessageID: "r1", CreatedAt: progressBase,
+	}))
+
+	// When reading the first topic
+	topic, err := reader.ReadTopic(ctx, "s1")
+
+	// Then it has its own concept, spelled as reported, with the proof
+	require.NoError(t, err)
+	require.Len(t, topic.Concepts, 1)
+	assert.Equal(t, "cache-aside", topic.Concepts[0].Name)
+	assert.Equal(t, "Cache-aside", topic.Concepts[0].DisplayName)
+	require.Len(t, topic.Concepts[0].Proofs, 1)
+	assert.Equal(t, "explained it", topic.Concepts[0].Proofs[0].Description)
+}
+
+func TestProgressReader_ReadTopic_aTopicWithNothingAttachedHasEmptyLists(t *testing.T) {
+	// Given a session with no quiz, challenge or concept
+	reader, db := newProgressFixture(t)
+	addFolder(t, db, "f1", "One")
+	addSession(t, db, "s1", "Cache", "f1", progressBase)
+
+	// When reading it
+	topic, err := reader.ReadTopic(context.Background(), "s1")
+
+	// Then every list is empty
+	require.NoError(t, err)
+	assert.Empty(t, topic.Quizzes)
+	assert.Empty(t, topic.Challenges)
+	assert.Empty(t, topic.Concepts)
+}
+
+func TestProgressReader_ReadTopic_failsWhenTheDatabaseIsClosed(t *testing.T) {
+	// Given a closed database
+	reader, db := newProgressFixture(t)
+	require.NoError(t, db.Close())
+
+	// When reading a topic
+	_, err := reader.ReadTopic(context.Background(), "s1")
+
+	// Then the error is returned
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, applicationprogress.ErrTopicNotFound)
+}
+
+func TestAppendQuizAttempt_ignoresAnAttemptOfAQuizReadAfterTheList(t *testing.T) {
+	quizzes := []applicationprogress.TopicQuizData{{ID: "q1"}}
+	position := map[string]int{"q1": 0}
+
+	appendQuizAttempt(quizzes, position, "q-new", applicationprogress.QuizAttemptData{Total: 5})
+	appendQuizAttempt(nil, map[string]int{}, "q-new", applicationprogress.QuizAttemptData{Total: 5})
+	appendQuizAttempt(quizzes, position, "q1", applicationprogress.QuizAttemptData{Total: 3})
+
+	assert.Equal(t, []applicationprogress.QuizAttemptData{{Total: 3}}, quizzes[0].Attempts)
+}

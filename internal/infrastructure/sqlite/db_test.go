@@ -1030,3 +1030,30 @@ func TestOpen_refusesDefenseQuestionsOutsideThreeToFive(t *testing.T) {
 		require.NoError(t, db.Close())
 	}
 }
+
+func TestOpen_addsADisplayNameColumnToConceptsOfADatabaseFromBeforeSpec52(t *testing.T) {
+	// Given a database whose concepts have no display_name column and hold one row
+	path := filepath.Join(t.TempDir(), "athena.db")
+	first, err := Open(path)
+	require.NoError(t, err)
+	_, err = first.Exec(`
+		INSERT INTO folders (id, name, created_at) VALUES ('f1', 'General', CURRENT_TIMESTAMP);
+		INSERT INTO sessions (id, topic, mode, folder_id, started_at) VALUES ('s1', 'Go', 'socratic', 'f1', CURRENT_TIMESTAMP);
+		INSERT INTO session_concepts (session_id, name, status, updated_at) VALUES ('s1', 'cache', 'INTRODUCED', 'x');
+		ALTER TABLE session_concepts DROP COLUMN display_name;`)
+	require.NoError(t, err)
+	require.NoError(t, first.Close())
+
+	// When opening it again, twice
+	second, err := Open(path)
+	require.NoError(t, err)
+	require.NoError(t, second.Close())
+	third, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = third.Close() }()
+
+	// Then the old row has an empty display name
+	var display string
+	require.NoError(t, third.QueryRow(`SELECT display_name FROM session_concepts WHERE name = 'cache'`).Scan(&display))
+	assert.Equal(t, "", display)
+}

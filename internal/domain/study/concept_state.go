@@ -64,6 +64,7 @@ const (
 type ConceptState struct {
 	SessionID       string
 	Name            string // normalized, see NormalizeConceptName
+	DisplayName     string // spelling of the latest report; empty for rows written before it existed
 	Status          ConceptStatus
 	LastStrategy    TutorStrategy // may be empty: the tutor omitted it or used an unknown one
 	AssistanceCount int
@@ -104,6 +105,13 @@ func NormalizeConceptName(name string) string {
 	return strings.TrimSpace(string(runes[:min(len(runes), MaxConceptNameRunes)]))
 }
 
+// displayConceptName is the spelling shown to the user: like the identity
+// but keeping the case.
+func displayConceptName(name string) string {
+	runes := []rune(strings.Join(strings.Fields(name), " "))
+	return strings.TrimSpace(string(runes[:min(len(runes), MaxConceptNameRunes)]))
+}
+
 // ApplyReport folds a report into the concept's current row (nil when the
 // concept has none yet) and returns the row to store. The bool is false when
 // the report changes nothing (a NOT_ASSESSED report). current is not mutated;
@@ -138,6 +146,9 @@ func ApplyReport(current *ConceptState, report StateReport, now time.Time) (Conc
 		}
 	}
 
+	if display := displayConceptName(report.Concept); display != "" {
+		next.DisplayName = display
+	}
 	if report.Assisted {
 		next.AssistanceCount++
 	}

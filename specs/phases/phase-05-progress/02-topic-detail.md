@@ -13,7 +13,9 @@ understood, difficulties, and concepts only explained so far. Still no LLM call.
 2. **Results.** One row per quiz: its name ("Quiz N · difficulty", as the materials panel), latest
    percent, number of attempts. One row per challenge: title, latest diagram score, latest defense
    score (or "defense pending"), result (Passed / Failed / Pending), number of attempts. A row opens
-   the item the way the materials panel does.
+   the item the way the materials panel does: a quiz opens the quiz, a challenge shows the exam rules
+   first. When it ends, the user comes back to Progress (a `progress` return, next to `menu` and
+   `study`).
 3. **Concepts understood** = concepts in `DEMONSTRATED`.
 4. **Difficulties** = concepts in `PARTIALLY_UNDERSTOOD` or `NEEDS_REVIEW` (the latter marked "to
    review"), plus the rubric criteria of the latest evaluated attempt of each challenge whose level
@@ -32,7 +34,11 @@ understood, difficulties, and concepts only explained so far. Still no LLM call.
 
 ## Domain
 
-`internal/domain/progress`: `TopicDetail`, `BuildTopicDetail(in TopicDetailInput, passScore int)`.
+`internal/domain/progress`: `TopicDetail`, `BuildTopicDetail(in TopicDetailInput)`. The pass outcome of
+each attempt reaches the domain already computed (5.1 decision 9), so the function needs no
+`passScore`. A quiz row carries its number and difficulty (the screen composes "Quiz N · difficulty"
+in the profile's language); a challenge row also carries its difficulty and time limit, which the exam
+rules dialog shows.
 `internal/domain/study`: `ConceptState.DisplayName`; `ApplyReport` keeps the latest non-blank
 spelling.
 

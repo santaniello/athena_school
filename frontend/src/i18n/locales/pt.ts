@@ -42,6 +42,7 @@ export const pt: LabResources = {
   back: {
     catalog: 'Voltar ao catálogo',
     study: 'Voltar à sessão de estudo',
+    progress: 'Voltar ao Progress',
     history: 'Voltar ao histórico',
   },
   errors: {

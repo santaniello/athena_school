@@ -255,3 +255,22 @@ func TestOpen_createsSessionConceptsTable_onADatabaseThatPredatesIt(t *testing.T
 		`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'session_concepts'`,
 	).Scan(&tableName))
 }
+
+func TestConceptStateRepository_Upsert_storesAndUpdatesTheDisplayName(t *testing.T) {
+	// Given a concept stored with a display name
+	_, repo := setupConceptFixture(t)
+	ctx := context.Background()
+	state := concept("session-1", "cache-aside", domainstudy.StatusIntroduced, 0)
+	state.DisplayName = "Cache-aside"
+	require.NoError(t, repo.Upsert(ctx, state))
+
+	// When the same concept is stored again with another spelling
+	state.DisplayName = "Cache-Aside"
+	require.NoError(t, repo.Upsert(ctx, state))
+
+	// Then the list returns the latest spelling
+	states, err := repo.ListBySession(ctx, "session-1")
+	require.NoError(t, err)
+	require.Len(t, states, 1)
+	assert.Equal(t, "Cache-Aside", states[0].DisplayName)
+}

@@ -164,5 +164,6 @@ describe('labReturnLabel', () => {
   it('names the catalog or the study session the exam returns to', () => {
     expect(labReturnLabel({ kind: 'catalog' })).toBe('Back to catalog')
     expect(labReturnLabel({ kind: 'study', sessionId: 's1' })).toBe('Back to study session')
+    expect(labReturnLabel({ kind: 'progress' })).toBe('Back to Progress')
   })
 })

@@ -188,6 +188,30 @@ vi.mock('@/lib/progress', async (importOriginal) => ({
       },
     ],
   }),
+  getProgressTopic: vi.fn().mockResolvedValue({
+    sessionId: 's1',
+    name: 'Cache',
+    folderName: 'System Design',
+    quizCount: 1,
+    challengeCount: 1,
+    conceptCount: 0,
+    quizzes: [{ quizId: 'quiz-9', number: 1, difficulty: 'EASY', percent: 90, attempts: 1 }],
+    challenges: [
+      {
+        challengeId: 'c9',
+        title: 'Design a cache',
+        difficulty: 'ADVANCED',
+        timeLimitMinutes: 60,
+        diagramScore: 85,
+        defenseScore: 70,
+        result: 'PASSED',
+        attempts: 1,
+      },
+    ],
+    understood: [],
+    difficulties: [],
+    explainedOnly: [],
+  }),
 }))
 
 // The Interactive Test catalog loads its quizzes as soon as it mounts.
@@ -423,6 +447,52 @@ describe('AppShell', () => {
     expect(await screen.findByRole('button', { name: /System Design/ })).toBeInTheDocument()
     expect(screen.queryByText(/Planned for Phase/)).not.toBeInTheDocument()
     expect(getProgressDashboard).toHaveBeenCalled()
+  })
+
+  describe('items opened from a Progress topic', () => {
+    async function selectTopic() {
+      const user = userEvent.setup()
+      renderShell()
+      await screen.findByText(/Felipe\./)
+      await user.click(screen.getByRole('button', { name: 'Progress' }))
+      await user.click(await screen.findByRole('button', { name: /Cache/ }))
+      return user
+    }
+
+    it('takes a quiz and goes back to Progress when it ends', async () => {
+      // Given a selected topic
+      const user = await selectTopic()
+
+      // When opening its quiz
+      await user.click(await screen.findByRole('button', { name: /Quiz 1 · Easy/ }))
+
+      // Then the quiz runs full screen with Progress as its way back
+      expect(screen.getByRole('region', { name: 'Quiz' })).toHaveTextContent('quiz quiz-9')
+      expect(screen.getByRole('region', { name: 'Quiz' })).toHaveTextContent('return to progress')
+
+      // And leaving it shows Progress again
+      await user.click(screen.getByRole('button', { name: 'exit quiz' }))
+      expect(await screen.findByRole('button', { name: /System Design/ })).toBeInTheDocument()
+      expect(screen.queryByRole('region', { name: 'Quiz' })).not.toBeInTheDocument()
+    })
+
+    it('starts the exam of a challenge after its rules and goes back to Progress when it ends', async () => {
+      // Given a selected topic
+      const user = await selectTopic()
+
+      // When opening its challenge and confirming the rules
+      await user.click(await screen.findByRole('button', { name: /Design a cache/ }))
+      await user.click(await screen.findByRole('button', { name: /Start/ }))
+
+      // Then the exam runs with Progress as its way back
+      expect(screen.getByRole('region', { name: 'Exam' })).toHaveTextContent('exam c9')
+      expect(screen.getByRole('region', { name: 'Exam' })).toHaveTextContent('return to progress')
+
+      // And finishing it shows Progress again
+      await user.click(screen.getByRole('button', { name: 'finish with notice' }))
+      expect(await screen.findByRole('button', { name: /System Design/ })).toBeInTheDocument()
+      expect(screen.queryByRole('region', { name: 'Exam' })).not.toBeInTheDocument()
+    })
   })
 
   it('opens the Architecture Lab catalog, not the coming-soon panel', async () => {

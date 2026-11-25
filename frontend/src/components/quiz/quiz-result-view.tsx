@@ -4,7 +4,14 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { QuizDifficultyBadge } from '@/components/quiz/quiz-difficulty-badge'
 import { cn } from '@/lib/utils'
-import { formatScore, scoreBand, type QuizAttemptResult, type QuizResultQuestion } from '@/lib/quiz'
+import {
+  formatScore,
+  quizBackKey,
+  scoreBand,
+  type QuizAttemptResult,
+  type QuizResultQuestion,
+  type QuizReturn,
+} from '@/lib/quiz'
 
 const BAND_CLASSES = {
   low: 'text-red-700 dark:text-red-400',
@@ -20,7 +27,7 @@ interface QuizResultViewProps {
   onBack?: () => void
   // What Back goes to: the tests menu (the default) or the study session that
   // offered the quiz.
-  backTo?: 'menu' | 'study'
+  backTo?: QuizReturn['kind']
 }
 
 // The graded result of one attempt: the grade out of 10, then every question
@@ -54,7 +61,7 @@ function QuizResultView({ result, onTakeAgain, onBack, backTo = 'menu' }: QuizRe
         <div className="flex items-center gap-2">
           {onBack && (
             <Button type="button" variant="outline" onClick={onBack}>
-              {t(backTo === 'study' ? 'result.backToSession' : 'result.back')}
+              {t(quizBackKey(backTo))}
             </Button>
           )}
           {onTakeAgain && (

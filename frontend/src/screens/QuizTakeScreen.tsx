@@ -7,7 +7,7 @@ import { QuizLeaveDialog } from '@/components/quiz/quiz-leave-dialog'
 import { QuizResultView } from '@/components/quiz/quiz-result-view'
 import { useQuizResult } from '@/hooks/use-quiz-result'
 import { useQuizSession } from '@/hooks/use-quiz-session'
-import { type QuizAttemptSummary, type QuizReturn } from '@/lib/quiz'
+import { quizBackKey, type QuizAttemptSummary, type QuizReturn } from '@/lib/quiz'
 import { cn } from '@/lib/utils'
 
 interface QuizTakeScreenProps {
@@ -106,7 +106,7 @@ function TakingStage({
           {t('common.retry')}
         </Button>
         <Button type="button" variant="outline" size="sm" onClick={onExit}>
-          {t(returnTo.kind === 'study' ? 'result.backToSession' : 'result.back')}
+          {t(quizBackKey(returnTo.kind))}
         </Button>
       </div>
     )
@@ -264,7 +264,7 @@ function ResultStage({
             {t('common.retry')}
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={onBack}>
-            {t(backTo === 'study' ? 'result.backToSession' : 'result.back')}
+            {t(quizBackKey(backTo))}
           </Button>
         </div>
       )}

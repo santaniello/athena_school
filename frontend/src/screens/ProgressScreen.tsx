@@ -2,10 +2,13 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AlertCircle, BookOpen, FolderOpen, Layers, TrendingUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ProgressTopicDetail } from '@/components/progress-topic-detail'
+import { StartExamDialog, type ExamToStart } from '@/components/lab/start-exam-dialog'
 import { cn } from '@/lib/utils'
 import {
   getProgressDashboard,
   type ProgressDashboard,
+  type ProgressChallengeResult,
   type ProgressFolder,
   type ProgressTopic,
   type TopicStatus,
@@ -15,23 +18,39 @@ type Dashboard =
   { state: 'loading' } | { state: 'failed' } | { state: 'ready'; data: ProgressDashboard }
 
 const STATUS_STYLE: Record<TopicStatus, string> = {
-  INSUFFICIENT_EVIDENCE: 'border-border bg-muted text-muted-foreground',
-  NEEDS_REINFORCEMENT: 'border-[#e8875a]/40 bg-[#e8875a]/10 text-[#e8875a]',
-  IMPROVING: 'border-[#5fbf8f]/40 bg-[#5fbf8f]/10 text-[#5fbf8f]',
-  STABLE: 'border-primary/40 bg-primary/10 text-primary',
+  INSUFFICIENT_EVIDENCE: 'bg-muted text-muted-foreground',
+  NEEDS_REINFORCEMENT: 'bg-[#e8875a]/15 text-[#f3a57f]',
+  IMPROVING: 'bg-[#5fbf8f]/15 text-[#7fd3a8]',
+  STABLE: 'bg-[#6aa9e0]/15 text-[#a9c1e0]',
+}
+
+const STATUS_ICON: Record<TopicStatus, string> = {
+  INSUFFICIENT_EVIDENCE: '?',
+  NEEDS_REINFORCEMENT: '!',
+  IMPROVING: '↗',
+  STABLE: '→',
+}
+
+interface ProgressScreenProps {
+  onStartQuiz: (quizId: string) => void
+  onStartExam: (exam: ExamToStart) => void
 }
 
 // The Progress section: every folder that has study sessions, and each session
 // as a topic with its latest quiz and Arch Lab scores and a status. All of it is
-// derived by the backend on read, with no LLM call; selecting a topic only
-// highlights it here. See specs/phases/phase-05-progress/01-progress-dashboard.md.
-function ProgressScreen() {
+// derived by the backend on read, with no LLM call; selecting a topic
+// shows its detail on the right (spec 5.2); a quiz opens the quiz and a challenge shows the exam
+// rules first, like the session materials panel. See
+// specs/phases/phase-05-progress/01-progress-dashboard.md.
+function ProgressScreen({ onStartQuiz, onStartExam }: ProgressScreenProps) {
   const { t } = useTranslation('progressTab')
   const [dashboard, setDashboard] = useState<Dashboard>({ state: 'loading' })
   // Bumping this reloads the dashboard.
   const [reloadToken, setReloadToken] = useState(0)
   const [folderId, setFolderId] = useState<string | null>(null)
   const [topicId, setTopicId] = useState<string | null>(null)
+  // The rules of the exam of the challenge that was clicked; null keeps them closed.
+  const [examRules, setExamRules] = useState<ExamToStart | null>(null)
 
   useEffect(() => {
     let stale = false
@@ -63,8 +82,10 @@ function ProgressScreen() {
         dashboard.data.folders[0])
       : undefined
 
+  const selectedTopic = selectedFolder?.topics.find((topic) => topic.sessionId === topicId)
+
   return (
-    <div className="thin-scroll mx-auto flex w-full max-w-6xl flex-col gap-6 overflow-y-auto pr-2">
+    <div className="thin-scroll flex min-h-0 w-full flex-1 flex-col gap-6 overflow-y-auto pr-2">
       <header className="flex items-center gap-4 border-b border-border pb-5">
         <div className="flex size-13 items-center justify-center rounded-xl bg-muted">
           <TrendingUp className="size-6 text-primary" aria-hidden="true" />
@@ -120,43 +141,83 @@ function ProgressScreen() {
             />
           </section>
 
-          <section className="flex flex-col gap-5 rounded-2xl border border-border bg-card p-5">
-            <h2 className="text-lg font-extrabold text-foreground">{t('folders.title')}</h2>
-            <div className="flex flex-wrap gap-2.5">
-              {dashboard.data.folders.map((folder) => (
-                <FolderChip
-                  key={folder.id}
-                  folder={folder}
-                  selected={folder.id === selectedFolder.id}
-                  onPick={() => pickFolder(folder.id)}
-                />
-              ))}
-            </div>
-
-            <div className="border-t border-border pt-4">
-              <h3 className="font-heading text-xl font-bold text-foreground">
-                {selectedFolder.name}
-              </h3>
-              <p className="text-xs text-muted-foreground">{t('topics.hint')}</p>
-            </div>
-
-            <ul className="grid grid-cols-1 gap-2.5 xl:grid-cols-2">
-              {selectedFolder.topics.map((topic) => (
-                <li key={topic.sessionId}>
-                  <TopicRow
-                    topic={topic}
-                    selected={topic.sessionId === topicId}
-                    onPick={() => setTopicId(topic.sessionId)}
+          <div className="flex flex-wrap items-start gap-6">
+            <section
+              aria-label={t('folders.title')}
+              className="flex min-w-0 flex-[1_1_380px] flex-col gap-5 rounded-2xl border border-border bg-card p-5 lg:max-w-[480px]"
+            >
+              <h2 className="text-lg font-extrabold text-foreground">{t('folders.title')}</h2>
+              <div className="flex flex-wrap gap-2.5">
+                {dashboard.data.folders.map((folder) => (
+                  <FolderChip
+                    key={folder.id}
+                    folder={folder}
+                    selected={folder.id === selectedFolder.id}
+                    onPick={() => pickFolder(folder.id)}
                   />
-                </li>
-              ))}
-            </ul>
-            <p className="text-xs text-muted-foreground">{t('topics.note')}</p>
-          </section>
+                ))}
+              </div>
+
+              <div className="border-t border-border pt-4">
+                <h3 className="font-heading text-xl font-bold text-foreground">
+                  {selectedFolder.name}
+                </h3>
+                <p className="text-xs text-muted-foreground">{t('topics.hint')}</p>
+              </div>
+
+              <ul className="flex flex-col gap-2.5">
+                {selectedFolder.topics.map((topic) => (
+                  <li key={topic.sessionId}>
+                    <TopicRow
+                      topic={topic}
+                      selected={topic.sessionId === topicId}
+                      onPick={() => setTopicId(topic.sessionId)}
+                    />
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-muted-foreground">{t('topics.note')}</p>
+            </section>
+
+            <aside
+              aria-label={t('detail.title')}
+              className="min-w-0 flex-[999_1_520px] rounded-2xl border border-border bg-card p-6"
+            >
+              {topicId ? (
+                <ProgressTopicDetail
+                  sessionId={topicId}
+                  onOpenQuiz={onStartQuiz}
+                  onOpenChallenge={(challenge) => setExamRules(toExam(challenge))}
+                  status={selectedTopic && <StatusPill status={selectedTopic.status} />}
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground">{t('detail.placeholder')}</p>
+              )}
+            </aside>
+          </div>
         </>
       )}
+
+      <StartExamDialog
+        challenge={examRules}
+        onCancel={() => setExamRules(null)}
+        onConfirm={(exam) => {
+          setExamRules(null)
+          onStartExam(exam)
+        }}
+      />
     </div>
   )
+}
+
+// What the exam rules dialog and the exam need of a challenge.
+function toExam(challenge: ProgressChallengeResult): ExamToStart {
+  return {
+    id: challenge.challengeId,
+    title: challenge.title,
+    difficulty: challenge.difficulty,
+    timeLimitMinutes: challenge.timeLimitMinutes,
+  }
 }
 
 function Counter({
@@ -199,7 +260,7 @@ function FolderChip({
       aria-pressed={selected}
       onClick={onPick}
       className={cn(
-        'flex cursor-pointer items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-left transition-colors',
+        'flex min-w-36 flex-1 cursor-pointer items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors',
         selected
           ? 'border-primary bg-primary/10 text-primary'
           : 'border-border text-muted-foreground hover:bg-accent',
@@ -245,15 +306,23 @@ function TopicRow({
           {t('topics.lab')}: <b className="text-foreground">{score(topic.labScore)}</b>
         </span>
       </span>
-      <span
-        className={cn(
-          'shrink-0 rounded-full border px-2.5 py-1 text-xs font-bold',
-          STATUS_STYLE[topic.status],
-        )}
-      >
-        {t(`status.${topic.status}`)}
-      </span>
+      <StatusPill status={topic.status} />
     </button>
+  )
+}
+
+function StatusPill({ status }: { status: TopicStatus }) {
+  const { t } = useTranslation('progressTab')
+  return (
+    <span
+      className={cn(
+        'inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-extrabold whitespace-nowrap',
+        STATUS_STYLE[status],
+      )}
+    >
+      <span aria-hidden="true">{STATUS_ICON[status]}</span>
+      {t(`status.${status}`)}
+    </span>
   )
 }
 
