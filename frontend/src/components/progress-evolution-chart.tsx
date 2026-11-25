@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ProgressEvolution, ProgressEvolutionPoint } from '@/lib/progress'
 
@@ -22,6 +23,7 @@ const LAB_STYLE: SeriesStyle = { color: '#5fbf8f' }
 
 export function ProgressEvolutionChart({ evolution }: { evolution: ProgressEvolution }) {
   const { t, i18n } = useTranslation('progressTab')
+  const gradientId = useId()
   if (!evolution.enough) {
     return <p className="text-sm text-muted-foreground">{t('detail.evolution.notEnough')}</p>
   }
@@ -40,13 +42,21 @@ export function ProgressEvolutionChart({ evolution }: { evolution: ProgressEvolu
     key === 'quiz' ? t('detail.evolution.quizItem', { number: point.itemNumber }) : point.title
 
   return (
-    <figure className="flex flex-col gap-2">
+    <figure className="flex flex-col gap-3 rounded-2xl border border-primary/25 bg-gradient-to-b from-card to-muted p-4 shadow-lg shadow-black/40 ring-1 ring-white/5">
       <svg
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         role="img"
         aria-label={t('detail.evolution.chartLabel')}
         className="w-full"
       >
+        <defs>
+          {series.map(({ key, style }) => (
+            <linearGradient key={key} id={`${gradientId}-${key}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={style.color} stopOpacity="0.35" />
+              <stop offset="100%" stopColor={style.color} stopOpacity="0" />
+            </linearGradient>
+          ))}
+        </defs>
         {TICKS.map((tick) => (
           <g key={tick}>
             <line
@@ -91,10 +101,19 @@ export function ProgressEvolutionChart({ evolution }: { evolution: ProgressEvolu
         />
         {series.map(({ key, points, style }) => (
           <g key={key} data-series={key}>
+            {points.length > 1 && (
+              <polygon
+                fill={`url(#${gradientId}-${key})`}
+                points={`${x(points[0].order)},${y(0)} ${points.map((p) => `${x(p.order)},${y(p.score)}`).join(' ')} ${x(points[points.length - 1].order)},${y(0)}`}
+              />
+            )}
             <polyline
               fill="none"
               stroke={style.color}
-              strokeWidth="2"
+              strokeWidth="2.5"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              style={{ filter: `drop-shadow(0 2px 4px ${style.color})` }}
               points={points.map((p) => `${x(p.order)},${y(p.score)}`).join(' ')}
             />
             {points.map((point) => (
@@ -102,8 +121,10 @@ export function ProgressEvolutionChart({ evolution }: { evolution: ProgressEvolu
                 key={point.order}
                 cx={x(point.order)}
                 cy={y(point.score)}
-                r="4"
+                r="5"
                 fill={style.color}
+                stroke="var(--card)"
+                strokeWidth="2"
                 tabIndex={0}
               >
                 <title>
