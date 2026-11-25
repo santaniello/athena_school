@@ -150,6 +150,10 @@ export function GetProfile() {
   return window['go']['desktop']['App']['GetProfile']();
 }
 
+export function GetProgressDashboard() {
+  return window['go']['desktop']['App']['GetProgressDashboard']();
+}
+
 export function GetQuiz(arg1) {
   return window['go']['desktop']['App']['GetQuiz'](arg1);
 }

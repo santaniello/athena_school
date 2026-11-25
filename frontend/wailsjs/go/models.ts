@@ -895,6 +895,112 @@ export namespace desktop {
 	}
 	
 	
+	export class ProgressCountersResult {
+	    folders: number;
+	    topics: number;
+	    topicsToReview: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProgressCountersResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.folders = source["folders"];
+	        this.topics = source["topics"];
+	        this.topicsToReview = source["topicsToReview"];
+	    }
+	}
+	export class ProgressTopicResult {
+	    sessionId: string;
+	    name: string;
+	    quizScore?: number;
+	    labScore?: number;
+	    status: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProgressTopicResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.name = source["name"];
+	        this.quizScore = source["quizScore"];
+	        this.labScore = source["labScore"];
+	        this.status = source["status"];
+	    }
+	}
+	export class ProgressFolderResult {
+	    id: string;
+	    name: string;
+	    topicCount: number;
+	    topics: ProgressTopicResult[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ProgressFolderResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.topicCount = source["topicCount"];
+	        this.topics = this.convertValues(source["topics"], ProgressTopicResult);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ProgressDashboardResult {
+	    counters: ProgressCountersResult;
+	    folders: ProgressFolderResult[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ProgressDashboardResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.counters = this.convertValues(source["counters"], ProgressCountersResult);
+	        this.folders = this.convertValues(source["folders"], ProgressFolderResult);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
 	export class QuizResultQuestionDTO {
 	    id: string;
 	    position: number;

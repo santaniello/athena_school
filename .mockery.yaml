@@ -30,6 +30,14 @@ packages:
       recursive: true
       all: false
       include-regex: "^(Transactor|IndexGuard)$"
+  # Reader returns FolderData, so its mock would import this package from its
+  # own internal test files' mocks package (an import cycle); its tests use a
+  # small in-package fake.
+  github.com/santaniello/athena/internal/application/progress:
+    config:
+      recursive: true
+      all: false
+      include-regex: "^PassScoreProvider$"
   github.com/santaniello/athena/internal/application/study:
     config:
       recursive: true

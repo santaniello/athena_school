@@ -96,10 +96,11 @@ export const NAVIGATION: NavItem[] = [
     id: 'progress',
     label: 'Progress',
     icon: TrendingUp,
-    phase: 3,
-    status: 'locked',
+    phase: 5,
+    status: 'unlocked',
     group: 'primary',
-    description: 'Per-topic score, session count and gap detection.',
+    description:
+      'Every study session as a topic, with its latest quiz and Arch Lab scores and a status.',
   },
   {
     id: 'flashcards',

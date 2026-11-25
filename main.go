@@ -22,6 +22,7 @@ import (
 	applicationmindmap "github.com/santaniello/athena/internal/application/mindmap"
 	"github.com/santaniello/athena/internal/application/modelcatalog"
 	"github.com/santaniello/athena/internal/application/onboarding"
+	applicationprogress "github.com/santaniello/athena/internal/application/progress"
 	applicationquiz "github.com/santaniello/athena/internal/application/quiz"
 	applicationreset "github.com/santaniello/athena/internal/application/reset"
 	"github.com/santaniello/athena/internal/application/settings"
@@ -225,6 +226,8 @@ func main() {
 	challengeCatalog := applicationexercise.NewCatalogService(challengeRepo, sqlite.NewAttemptRecordRepository(db))
 	sessionService := applicationexercise.NewSessionService(sqlite.NewSessionOptionRepository(db))
 
+	progressService := applicationprogress.NewService(sqlite.NewProgressReader(db), settingsService)
+
 	resetter := sqlite.NewResetter(db)
 	resetService := applicationreset.NewService(resetter, vectorStore)
 
@@ -248,6 +251,7 @@ func main() {
 		desktop.WithMindMapGenerationService(mindMapGenerationService),
 		desktop.WithMindMapService(mindMapService),
 		desktop.WithMindMapOfferService(mindMapOfferService),
+		desktop.WithProgressService(progressService),
 	)
 
 	err = wails.Run(&options.App{

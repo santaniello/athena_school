@@ -22,7 +22,7 @@ describe('NAVIGATION', () => {
     expect(NAVIGATION.map((item) => item.id)).toEqual(EXPECTED_IDS)
   })
 
-  it('unlocks home, study, the architecture lab, the interactive test, the mind map, documentation, profile and settings', () => {
+  it('unlocks home, study, the architecture lab, the interactive test, the mind map, progress, documentation, profile and settings', () => {
     const unlocked = NAVIGATION.filter((item) => item.status === 'unlocked').map((item) => item.id)
     expect(unlocked).toEqual([
       'home',
@@ -30,6 +30,7 @@ describe('NAVIGATION', () => {
       'challenge',
       'quiz',
       'mindmap',
+      'progress',
       'documentation',
       'profile',
       'settings',
