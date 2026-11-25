@@ -582,3 +582,14 @@ func TestProgressReader_ReadTopic_failsWhenTheDatabaseIsClosed(t *testing.T) {
 	require.Error(t, err)
 	assert.NotErrorIs(t, err, applicationprogress.ErrTopicNotFound)
 }
+
+func TestAppendQuizAttempt_ignoresAnAttemptOfAQuizReadAfterTheList(t *testing.T) {
+	quizzes := []applicationprogress.TopicQuizData{{ID: "q1"}}
+	position := map[string]int{"q1": 0}
+
+	appendQuizAttempt(quizzes, position, "q-new", applicationprogress.QuizAttemptData{Total: 5})
+	appendQuizAttempt(nil, map[string]int{}, "q-new", applicationprogress.QuizAttemptData{Total: 5})
+	appendQuizAttempt(quizzes, position, "q1", applicationprogress.QuizAttemptData{Total: 3})
+
+	assert.Equal(t, []applicationprogress.QuizAttemptData{{Total: 3}}, quizzes[0].Attempts)
+}

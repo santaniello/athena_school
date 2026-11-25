@@ -186,3 +186,28 @@ func progressStatus(passed, pending, failed bool) ProgressStatus {
 		return ProgressNotStarted
 	}
 }
+
+// WeakCriteria are the names, in rubric order and once each, of the criteria
+// judged below MandatoryMinLevel in any of the evaluations. A criterion flagged
+// as insufficient evidence in an evaluation is not judged there; nil
+// evaluations are skipped.
+func WeakCriteria(rubric RubricVersion, evaluations ...*Evaluation) []string {
+	weak := map[string]bool{}
+	for _, evaluation := range evaluations {
+		if evaluation == nil {
+			continue
+		}
+		for _, result := range evaluation.Results {
+			if !result.InsufficientEvidence && result.Level < MandatoryMinLevel {
+				weak[result.CriterionID] = true
+			}
+		}
+	}
+	var names []string
+	for _, criterion := range rubric.Criteria {
+		if weak[criterion.ID] {
+			names = append(names, criterion.Name)
+		}
+	}
+	return names
+}

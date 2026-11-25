@@ -335,9 +335,20 @@ func readTopicQuizzes(ctx context.Context, q sqlExecer, sessionID string) ([]app
 		FROM quiz_attempts a JOIN quizzes z ON z.id = a.quiz_id
 		WHERE z.session_id = ? ORDER BY a.finished_at, a.id`, []any{sessionID},
 		func(quizID string, attempt applicationprogress.QuizAttemptData) {
-			quizzes[position[quizID]].Attempts = append(quizzes[position[quizID]].Attempts, attempt)
+			appendQuizAttempt(quizzes, position, quizID, attempt)
 		})
 	return quizzes, err
+}
+
+// appendQuizAttempt adds the attempt to its quiz. The quizzes and their attempts
+// are read apart, so an attempt of a quiz created between the two reads has no
+// position; it is left out and shows on the next read.
+func appendQuizAttempt(quizzes []applicationprogress.TopicQuizData, position map[string]int, quizID string, attempt applicationprogress.QuizAttemptData) {
+	index, known := position[quizID]
+	if !known {
+		return
+	}
+	quizzes[index].Attempts = append(quizzes[index].Attempts, attempt)
 }
 
 func (r *ProgressReader) readTopicChallenges(ctx context.Context, q sqlExecer, sessionID string) ([]applicationprogress.TopicChallengeData, error) {

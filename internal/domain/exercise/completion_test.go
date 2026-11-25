@@ -274,3 +274,27 @@ func TestDeriveProgress_aPassedAttemptWithoutSubmissionTimeStillCompletes(t *tes
 
 	assert.Equal(t, ProgressCompleted, progress.Status)
 }
+
+func TestWeakCriteria_listsEachCriterionBelowTheMandatoryLevelOnceInRubricOrder(t *testing.T) {
+	rubric := mandatoryRubric(4)
+	for i := range rubric.Criteria {
+		rubric.Criteria[i].Name = "criterion " + criterionID(i)
+	}
+	diagram := evaluationAt(EvaluationKindDiagram, 50, 1, 4, 3, 0)
+	understanding := evaluationAt(EvaluationKindUnderstanding, 50, 1, 4, 1, 4)
+
+	weak := WeakCriteria(rubric, diagram, nil, understanding)
+
+	assert.Equal(t, []string{"criterion " + criterionID(0), "criterion " + criterionID(2), "criterion " + criterionID(3)}, weak)
+}
+
+func TestWeakCriteria_doesNotJudgeACriterionFlaggedAsInsufficientEvidence(t *testing.T) {
+	rubric := mandatoryRubric(2)
+	diagram := flagged(evaluationAt(EvaluationKindDiagram, 50, 1, 4), 0)
+
+	assert.Empty(t, WeakCriteria(rubric, diagram))
+}
+
+func TestWeakCriteria_isEmptyWithoutEvaluations(t *testing.T) {
+	assert.Empty(t, WeakCriteria(mandatoryRubric(2), nil, nil))
+}

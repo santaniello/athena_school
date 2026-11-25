@@ -86,30 +86,6 @@ func detailAttempt(record domainexercise.AttemptRecord, passScore int) (domainpr
 	}
 	outcome := domainexercise.EvaluateOutcome(passScore, *record.Rubric, record.Diagram, record.Understanding)
 	attempt.Result = domainprogress.LabResult(outcome.Result)
-	attempt.WeakCriteria = weakCriteria(*record.Rubric, record.Diagram, record.Understanding)
+	attempt.WeakCriteria = domainexercise.WeakCriteria(*record.Rubric, record.Diagram, record.Understanding)
 	return attempt, nil
-}
-
-// weakCriteria are the titles, in rubric order and once each, of the criteria
-// judged below MandatoryMinLevel in either evaluation. A criterion flagged as
-// insufficient evidence in an evaluation is not judged there.
-func weakCriteria(rubric domainexercise.RubricVersion, evaluations ...*domainexercise.Evaluation) []string {
-	weak := map[string]bool{}
-	for _, evaluation := range evaluations {
-		if evaluation == nil {
-			continue
-		}
-		for _, result := range evaluation.Results {
-			if !result.InsufficientEvidence && result.Level < domainexercise.MandatoryMinLevel {
-				weak[result.CriterionID] = true
-			}
-		}
-	}
-	var titles []string
-	for _, criterion := range rubric.Criteria {
-		if weak[criterion.ID] {
-			titles = append(titles, criterion.Name)
-		}
-	}
-	return titles
 }
