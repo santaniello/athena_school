@@ -1,4 +1,8 @@
-import { GetProgressDashboard, GetProgressTopic } from '../../wailsjs/go/desktop/App'
+import {
+  GenerateProgressInsight,
+  GetProgressDashboard,
+  GetProgressTopic,
+} from '../../wailsjs/go/desktop/App'
 
 // The Progress dashboard. The backend derives every score and status on read;
 // this module only wraps its binding. See
@@ -116,6 +120,37 @@ export interface ProgressEvolution {
   enough: boolean
 }
 
+// An activity that supports a sentence of an insight; label is what to show.
+export interface ProgressCitation {
+  kind: 'QUIZ' | 'CHALLENGE' | 'CONCEPT'
+  id: string
+  label: string
+}
+
+// One sentence of the analysis, or one recommendation, with its support.
+export interface ProgressStatement {
+  text: string
+  citations: ProgressCitation[]
+}
+
+// The Athena Insights the model wrote from the stored evidence of a topic.
+export interface ProgressInsight {
+  analysis: ProgressStatement[]
+  recommendations: ProgressStatement[]
+  model: string
+  language: string
+  createdAt: string
+}
+
+// The insight card of a topic. insight is null until one is generated; stale
+// means there is new activity (or a new language) since it was written;
+// canGenerate is false while the topic has no evidence to analyse.
+export interface ProgressInsightState {
+  insight: ProgressInsight | null
+  stale: boolean
+  canGenerate: boolean
+}
+
 export interface ProgressTopicDetail {
   sessionId: string
   name: string
@@ -129,6 +164,44 @@ export interface ProgressTopicDetail {
   difficulties: ProgressDifficulty[]
   explainedOnly: ProgressConcept[]
   evolution: ProgressEvolution
+  insight: ProgressInsightState
+}
+
+type InsightResult = Awaited<ReturnType<typeof GenerateProgressInsight>>
+type StatementResult = NonNullable<InsightResult['insight']>['analysis'][number]
+
+function toStatement(statement: StatementResult): ProgressStatement {
+  return {
+    text: statement.text,
+    citations: statement.citations.map((citation) => ({
+      kind: citation.kind as ProgressCitation['kind'],
+      id: citation.id,
+      label: citation.label,
+    })),
+  }
+}
+
+function toInsightState(result: InsightResult): ProgressInsightState {
+  const insight = result.insight
+  return {
+    insight: insight
+      ? {
+          analysis: insight.analysis.map(toStatement),
+          recommendations: insight.recommendations.map(toStatement),
+          model: insight.model,
+          language: insight.language,
+          createdAt: insight.createdAt,
+        }
+      : null,
+    stale: result.stale,
+    canGenerate: result.canGenerate,
+  }
+}
+
+// Asks the model for the insight of the topic. It is the only Progress call
+// that uses the LLM, and only when the user clicks Generate.
+export async function generateProgressInsight(sessionId: string): Promise<ProgressInsightState> {
+  return toInsightState(await GenerateProgressInsight(sessionId))
 }
 
 export async function getProgressTopic(sessionId: string): Promise<ProgressTopicDetail> {
@@ -177,5 +250,6 @@ export async function getProgressTopic(sessionId: string): Promise<ProgressTopic
       passScore: result.evolution.passScore,
       enough: result.evolution.enough,
     },
+    insight: toInsightState(result.insight),
   }
 }

@@ -12,6 +12,7 @@ import (
 type progressDashboard interface {
 	GetDashboard(ctx context.Context) (domainprogress.Dashboard, error)
 	GetTopicDetail(ctx context.Context, sessionID string) (domainprogress.TopicDetail, error)
+	GenerateTopicInsight(ctx context.Context, sessionID string) (domainprogress.Insight, error)
 }
 
 // WithProgressService wires the Progress dashboard.
@@ -172,6 +173,41 @@ type ProgressTopicDetailResult struct {
 	Difficulties   []ProgressDifficultyResult `json:"difficulties"`
 	ExplainedOnly  []ProgressConceptResult    `json:"explainedOnly"`
 	Evolution      ProgressEvolutionResult    `json:"evolution"`
+	Insight        ProgressInsightStateResult `json:"insight"`
+}
+
+// ProgressCitationResult is an activity that supports a statement of an
+// insight. Kind is QUIZ, CHALLENGE or CONCEPT; Label is what the user sees.
+type ProgressCitationResult struct {
+	Kind  string `json:"kind"`
+	ID    string `json:"id"`
+	Label string `json:"label"`
+}
+
+// ProgressStatementResult is one sentence of the analysis or one
+// recommendation, with the activities that support it.
+type ProgressStatementResult struct {
+	Text      string                   `json:"text"`
+	Citations []ProgressCitationResult `json:"citations"`
+}
+
+// ProgressInsightResult is the stored Athena Insights of a topic; CreatedAt is
+// RFC 3339.
+type ProgressInsightResult struct {
+	Analysis        []ProgressStatementResult `json:"analysis"`
+	Recommendations []ProgressStatementResult `json:"recommendations"`
+	Model           string                    `json:"model"`
+	Language        string                    `json:"language"`
+	CreatedAt       string                    `json:"createdAt"`
+}
+
+// ProgressInsightStateResult is the insight card of a topic. A nil Insight
+// means none was generated yet; Stale means new activity or a new language
+// since it was written; CanGenerate is false while the topic has no evidence.
+type ProgressInsightStateResult struct {
+	Insight     *ProgressInsightResult `json:"insight"`
+	Stale       bool                   `json:"stale"`
+	CanGenerate bool                   `json:"canGenerate"`
 }
 
 // GetProgressTopic returns the detail of the topic that is the given session.
@@ -196,6 +232,7 @@ func (a *App) GetProgressTopic(sessionID string) (ProgressTopicDetailResult, err
 			Quiz: toEvolutionPoints(detail.Evolution.Quiz), Lab: toEvolutionPoints(detail.Evolution.Lab),
 			PassScore: detail.Evolution.PassScore, Enough: detail.Evolution.Enough,
 		},
+		Insight: toProgressInsightState(detail.Insight),
 	}
 	for i, quiz := range detail.Quizzes {
 		result.Quizzes[i] = ProgressQuizResult{
@@ -244,6 +281,46 @@ func toProgressProofResults(proofs []domainprogress.DetailProof) []ProgressProof
 			Assessment: proof.Assessment, Description: proof.Description, Assisted: proof.Assisted,
 			CreatedAt: proof.At.UTC().Format(time.RFC3339),
 		}
+	}
+	return results
+}
+
+// GenerateProgressInsight asks the model for the Athena Insights of the topic
+// that is the given session, from its stored evidence, stores it and returns
+// the card, fresh. It is the only Progress call that uses the LLM, and only
+// when the user asks for it.
+func (a *App) GenerateProgressInsight(sessionID string) (ProgressInsightStateResult, error) {
+	if a.progress == nil {
+		return ProgressInsightStateResult{}, errProgressUnavailable
+	}
+	insight, err := a.progress.GenerateTopicInsight(a.ctx, sessionID)
+	if err != nil {
+		return ProgressInsightStateResult{}, err
+	}
+	return toProgressInsightState(domainprogress.InsightView{Current: &insight, CanGenerate: true}), nil
+}
+
+func toProgressInsightState(view domainprogress.InsightView) ProgressInsightStateResult {
+	state := ProgressInsightStateResult{Stale: view.Stale, CanGenerate: view.CanGenerate}
+	if view.Current != nil {
+		state.Insight = &ProgressInsightResult{
+			Analysis:        toProgressStatements(view.Current.Analysis),
+			Recommendations: toProgressStatements(view.Current.Recommendations),
+			Model:           view.Current.Model, Language: view.Current.Language,
+			CreatedAt: view.Current.CreatedAt.UTC().Format(time.RFC3339),
+		}
+	}
+	return state
+}
+
+func toProgressStatements(statements []domainprogress.Statement) []ProgressStatementResult {
+	results := make([]ProgressStatementResult, len(statements))
+	for i, statement := range statements {
+		citations := make([]ProgressCitationResult, len(statement.Citations))
+		for j, citation := range statement.Citations {
+			citations[j] = ProgressCitationResult{Kind: string(citation.Kind), ID: citation.ID, Label: citation.Label}
+		}
+		results[i] = ProgressStatementResult{Text: statement.Text, Citations: citations}
 	}
 	return results
 }

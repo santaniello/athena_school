@@ -37,7 +37,7 @@ packages:
     config:
       recursive: true
       all: false
-      include-regex: "^PassScoreProvider$"
+      include-regex: "^(PassScoreProvider|LanguageProvider|Clock)$"
   github.com/santaniello/athena/internal/application/study:
     config:
       recursive: true

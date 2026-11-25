@@ -30,9 +30,15 @@ when new evidence makes them stale.
 
 ## Domain
 
-`internal/domain/progress`: `Insight` (`Analysis`, `Recommendations`, `Citations`, `Model`,
-`Language`, `Fingerprint`, `CreatedAt`), `Fingerprint(in InsightInput, language string)`,
-`ParseInsight` (validation), `InsightRepository`, `InsightGenerator` port.
+`internal/domain/progress`: `Insight` (`Analysis` and `Recommendations`, each a list of `Statement`
+with its `Citations`, plus `Model`, `Language`, `Fingerprint`, `CreatedAt`), `Fingerprint(in
+InsightInput, language string)`, `ParseInsight` (validation), `InsightView` (the stored insight with
+its stale and can-generate flags), `InsightRepository` and `InsightGenerator` ports.
+
+The model's JSON is `{"analysis":[{"text","activities"}],"recommendations":[{"text","activities"}]}`.
+Every quiz, challenge and concept is given a ref in the prompt (`Q1`, `L1`, `K1`) that the model cites
+in `activities`; a citation is stored as `{kind, id, label}` (the label is what the user sees).
+`TaskProgressInsight` routes the call to the medium tier.
 
 ## Application
 
@@ -44,8 +50,8 @@ its `stale` flag. The prompt lives with the other prompts and is tested by key p
 ```sql
 CREATE TABLE IF NOT EXISTS topic_insights (
   session_id  TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
-  analysis    TEXT NOT NULL,
-  payload     TEXT NOT NULL, -- recommendations and citations, JSON
+  analysis    TEXT NOT NULL, -- the sentences as plain text
+  payload     TEXT NOT NULL, -- analysis and recommendations with their citations, JSON
   model       TEXT NOT NULL,
   language    TEXT NOT NULL,
   fingerprint TEXT NOT NULL,

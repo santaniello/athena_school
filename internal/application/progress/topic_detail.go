@@ -43,6 +43,9 @@ func (s *Service) GetTopicDetail(ctx context.Context, sessionID string) (domainp
 		return domainprogress.TopicDetail{}, err
 	}
 	detail.Evolution = domainprogress.BuildEvolution(evolution, passScore)
+	if detail.Insight, err = s.insightView(ctx, topic, passScore); err != nil {
+		return domainprogress.TopicDetail{}, err
+	}
 	return detail, nil
 }
 

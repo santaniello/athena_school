@@ -40,6 +40,10 @@ const (
 	// specs/phases/phase-03-architecture-lab/24-mind-map.md). Its output is
 	// read by the user, so it is routed medium.
 	TaskMindMap TaskType = "mind_map"
+	// TaskProgressInsight writes the Athena Insights of a Progress topic (see
+	// specs/phases/phase-05-progress/04-topic-insights.md). Its output is read
+	// by the user, so it is routed medium.
+	TaskProgressInsight TaskType = "progress_insight"
 )
 
 // Tier is a cost/capability class of model.
@@ -73,7 +77,7 @@ func TierFor(task TaskType) Tier {
 	switch task {
 	case TaskOnboarding, TaskQueryEnrichment, TaskConversationSummary:
 		return TierCheap
-	case TaskStudy, TaskChallengeFeedback, TaskNoteFormatting, TaskArchitectureLab, TaskQuiz, TaskMindMap:
+	case TaskStudy, TaskChallengeFeedback, TaskNoteFormatting, TaskArchitectureLab, TaskQuiz, TaskMindMap, TaskProgressInsight:
 		return TierMedium
 	case TaskInterviewEvaluation, TaskComplexReasoning:
 		return TierPremium

@@ -77,6 +77,7 @@ const DETAIL: ProgressTopicDetail = {
   difficulties: [],
   explainedOnly: [],
   evolution: { quiz: [], lab: [], passScore: 80, enough: false },
+  insight: { insight: null, stale: false, canGenerate: true },
 }
 
 function renderScreen() {

@@ -70,6 +70,22 @@ export const progressTabPt = {
       quizItem: 'Quiz {{number}}',
       chartLabel: 'Evolução dos resultados ao longo das avaliações',
     },
+    insight: {
+      title: 'Athena Insights',
+      generate: 'Gerar insights',
+      update: 'Atualizar insights',
+      generating: 'Gerando...',
+      retry: 'Tentar de novo',
+      empty:
+        'Nenhuma análise gerada ainda. A análise usa só as avaliações e evidências salvas, nunca a conversa inteira.',
+      blocked:
+        'Ainda não há evidências para analisar. Estude com o tutor, faça um quiz ou um Arch Lab deste assunto primeiro.',
+      stale: 'Há atividade nova desde esta análise. Atualize para considerá-la.',
+      failed: 'Não foi possível gerar os insights. Sua análise anterior foi mantida.',
+      recommendations: 'Recomendações',
+      basedOn: 'baseado em: {{sources}}',
+      meta: 'Gerado em {{date}} · {{model}}',
+    },
     learning: {
       title: 'Aprendizado identificado',
       understood: 'Conceitos compreendidos',

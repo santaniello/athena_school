@@ -35,6 +35,7 @@ import (
 	"github.com/santaniello/athena/internal/infrastructure/mindmapsource"
 	"github.com/santaniello/athena/internal/infrastructure/openrouter"
 	"github.com/santaniello/athena/internal/infrastructure/profilefile"
+	"github.com/santaniello/athena/internal/infrastructure/progresssource"
 	"github.com/santaniello/athena/internal/infrastructure/quizsource"
 	"github.com/santaniello/athena/internal/infrastructure/sqlite"
 	"github.com/santaniello/athena/internal/infrastructure/studyoffers"
@@ -226,7 +227,13 @@ func main() {
 	challengeCatalog := applicationexercise.NewCatalogService(challengeRepo, sqlite.NewAttemptRecordRepository(db))
 	sessionService := applicationexercise.NewSessionService(sqlite.NewSessionOptionRepository(db))
 
-	progressService := applicationprogress.NewService(sqlite.NewProgressReader(db), settingsService)
+	progressService := applicationprogress.NewService(
+		sqlite.NewProgressReader(db), settingsService,
+		applicationprogress.WithInsights(
+			sqlite.NewInsightRepository(db), applicationprogress.NewInsightGenerator(llmClient),
+			progresssource.NewProfiles(profiles), systemClock{},
+		),
+	)
 
 	resetter := sqlite.NewResetter(db)
 	resetService := applicationreset.NewService(resetter, vectorStore)

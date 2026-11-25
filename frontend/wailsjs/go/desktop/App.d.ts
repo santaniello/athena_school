@@ -51,6 +51,8 @@ export function GenerateChallenge(arg1:string,arg2:string,arg3:string,arg4:strin
 
 export function GenerateMindMap(arg1:string):Promise<desktop.MindMapSummaryDTO>;
 
+export function GenerateProgressInsight(arg1:string):Promise<desktop.ProgressInsightStateResult>;
+
 export function GenerateQuiz(arg1:string,arg2:number,arg3:string):Promise<desktop.QuizSummaryDTO>;
 
 export function GetAttempt(arg1:string):Promise<desktop.AttemptDTO>;
