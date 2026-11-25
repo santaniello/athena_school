@@ -76,7 +76,7 @@ function ProgressScreen({ onStartQuiz, onStartExam }: ProgressScreenProps) {
       : undefined
 
   return (
-    <div className="thin-scroll mx-auto flex w-full max-w-6xl flex-col gap-6 overflow-y-auto pr-2">
+    <div className="thin-scroll flex min-h-0 w-full flex-1 flex-col gap-6 overflow-y-auto pr-2">
       <header className="flex items-center gap-4 border-b border-border pb-5">
         <div className="flex size-13 items-center justify-center rounded-xl bg-muted">
           <TrendingUp className="size-6 text-primary" aria-hidden="true" />
@@ -132,57 +132,59 @@ function ProgressScreen({ onStartQuiz, onStartExam }: ProgressScreenProps) {
             />
           </section>
 
-          <section className="flex flex-col gap-5 rounded-2xl border border-border bg-card p-5">
-            <h2 className="text-lg font-extrabold text-foreground">{t('folders.title')}</h2>
-            <div className="flex flex-wrap gap-2.5">
-              {dashboard.data.folders.map((folder) => (
-                <FolderChip
-                  key={folder.id}
-                  folder={folder}
-                  selected={folder.id === selectedFolder.id}
-                  onPick={() => pickFolder(folder.id)}
-                />
-              ))}
-            </div>
-
-            <div className="border-t border-border pt-4">
-              <h3 className="font-heading text-xl font-bold text-foreground">
-                {selectedFolder.name}
-              </h3>
-              <p className="text-xs text-muted-foreground">{t('topics.hint')}</p>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-              <div className="flex flex-col gap-3">
-                <ul className="flex flex-col gap-2.5">
-                  {selectedFolder.topics.map((topic) => (
-                    <li key={topic.sessionId}>
-                      <TopicRow
-                        topic={topic}
-                        selected={topic.sessionId === topicId}
-                        onPick={() => setTopicId(topic.sessionId)}
-                      />
-                    </li>
-                  ))}
-                </ul>
-                <p className="text-xs text-muted-foreground">{t('topics.note')}</p>
-              </div>
-              <aside
-                aria-label={t('detail.title')}
-                className="rounded-xl border border-border p-4 xl:self-start"
-              >
-                {topicId ? (
-                  <ProgressTopicDetail
-                    sessionId={topicId}
-                    onOpenQuiz={onStartQuiz}
-                    onOpenChallenge={(challenge) => setExamRules(toExam(challenge))}
+          <div className="flex flex-wrap items-start gap-6">
+            <section
+              aria-label={t('folders.title')}
+              className="flex min-w-0 flex-[1_1_380px] flex-col gap-5 rounded-2xl border border-border bg-card p-5 lg:max-w-[480px]"
+            >
+              <h2 className="text-lg font-extrabold text-foreground">{t('folders.title')}</h2>
+              <div className="flex flex-wrap gap-2.5">
+                {dashboard.data.folders.map((folder) => (
+                  <FolderChip
+                    key={folder.id}
+                    folder={folder}
+                    selected={folder.id === selectedFolder.id}
+                    onPick={() => pickFolder(folder.id)}
                   />
-                ) : (
-                  <p className="text-sm text-muted-foreground">{t('detail.placeholder')}</p>
-                )}
-              </aside>
-            </div>
-          </section>
+                ))}
+              </div>
+
+              <div className="border-t border-border pt-4">
+                <h3 className="font-heading text-xl font-bold text-foreground">
+                  {selectedFolder.name}
+                </h3>
+                <p className="text-xs text-muted-foreground">{t('topics.hint')}</p>
+              </div>
+
+              <ul className="flex flex-col gap-2.5">
+                {selectedFolder.topics.map((topic) => (
+                  <li key={topic.sessionId}>
+                    <TopicRow
+                      topic={topic}
+                      selected={topic.sessionId === topicId}
+                      onPick={() => setTopicId(topic.sessionId)}
+                    />
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-muted-foreground">{t('topics.note')}</p>
+            </section>
+
+            <aside
+              aria-label={t('detail.title')}
+              className="min-w-0 flex-[999_1_520px] rounded-2xl border border-border bg-card p-6"
+            >
+              {topicId ? (
+                <ProgressTopicDetail
+                  sessionId={topicId}
+                  onOpenQuiz={onStartQuiz}
+                  onOpenChallenge={(challenge) => setExamRules(toExam(challenge))}
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground">{t('detail.placeholder')}</p>
+              )}
+            </aside>
+          </div>
         </>
       )}
 
