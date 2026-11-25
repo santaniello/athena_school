@@ -37,7 +37,31 @@ func (s *Service) GetTopicDetail(ctx context.Context, sessionID string) (domainp
 	for _, concept := range topic.Concepts {
 		input.Concepts = append(input.Concepts, detailConcept(concept))
 	}
-	return domainprogress.BuildTopicDetail(input), nil
+	detail := domainprogress.BuildTopicDetail(input)
+	evolution, err := evolutionInput(topic, passScore)
+	if err != nil {
+		return domainprogress.TopicDetail{}, err
+	}
+	detail.Evolution = domainprogress.BuildEvolution(evolution, passScore)
+	return detail, nil
+}
+
+// evolutionInput maps every attempt of the topic's quizzes and challenges, with
+// the challenge titles the chart tooltip names.
+func evolutionInput(topic TopicData, passScore int) (domainprogress.TopicInput, error) {
+	input := domainprogress.TopicInput{SessionID: topic.SessionID, Name: topic.Topic}
+	for _, quiz := range topic.Quizzes {
+		input.Quizzes = append(input.Quizzes, quizInput(QuizData{ID: quiz.ID, Attempts: quiz.Attempts}))
+	}
+	for _, challenge := range topic.Challenges {
+		item, err := challengeInput(ChallengeData{ID: challenge.ID, Attempts: challenge.Attempts}, passScore)
+		if err != nil {
+			return domainprogress.TopicInput{}, err
+		}
+		item.Title = challenge.Title
+		input.Challenges = append(input.Challenges, item)
+	}
+	return input, nil
 }
 
 func detailConcept(concept TopicConceptData) domainprogress.DetailConcept {

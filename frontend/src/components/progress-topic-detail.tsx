@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { PROGRESS_NAMESPACE } from '@/i18n'
 import { quizDifficultyLabel } from '@/lib/quiz'
+import { ProgressEvolutionChart } from '@/components/progress-evolution-chart'
 import {
   getProgressTopic,
   type LabResult,
@@ -123,6 +124,9 @@ function TopicBody({ sessionId, onOpenQuiz, onOpenChallenge, status }: ProgressT
         </ul>
       </Section>
       <Results detail={detail} onOpenQuiz={onOpenQuiz} onOpenChallenge={onOpenChallenge} />
+      <Section title={t('detail.evolution.title')}>
+        <ProgressEvolutionChart evolution={detail.evolution} />
+      </Section>
       <Learning detail={detail} />
     </div>
   )

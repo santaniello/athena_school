@@ -60,6 +60,16 @@ export const progressTabEn = {
       open: 'Open',
       note: 'Latest attempt of each item.',
     },
+    evolution: {
+      title: 'Evolution',
+      quiz: 'Quiz',
+      lab: 'Arch Lab',
+      notEnough: 'Not enough assessments yet',
+      passScore: 'Minimum {{score}}%',
+      assessment: 'Assessment {{order}}',
+      quizItem: 'Quiz {{number}}',
+      chartLabel: 'Evolution of the results over the assessments',
+    },
     learning: {
       title: 'Learning identified',
       understood: 'Concepts understood',

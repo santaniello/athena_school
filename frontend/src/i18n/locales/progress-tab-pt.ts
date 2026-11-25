@@ -60,6 +60,16 @@ export const progressTabPt = {
       open: 'Abrir',
       note: 'Última tentativa de cada item.',
     },
+    evolution: {
+      title: 'Evolução',
+      quiz: 'Quiz',
+      lab: 'Arch Lab',
+      notEnough: 'Ainda não há avaliações suficientes',
+      passScore: 'Mínimo {{score}}%',
+      assessment: 'Avaliação {{order}}',
+      quizItem: 'Quiz {{number}}',
+      chartLabel: 'Evolução dos resultados ao longo das avaliações',
+    },
     learning: {
       title: 'Aprendizado identificado',
       understood: 'Conceitos compreendidos',

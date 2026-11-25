@@ -163,6 +163,11 @@ func TestGetProgressTopic_mapsTheDetailAndAsksForTheSession(t *testing.T) {
 			{Name: "Consistency", Source: domainprogress.DifficultySourceArchLab, ChallengeTitle: "Design a cache"},
 		},
 		ExplainedOnly: []domainprogress.ConceptDetail{{Name: "lru"}},
+		Evolution: domainprogress.Evolution{
+			Quiz:      []domainprogress.EvolutionPoint{{Order: 1, ItemNumber: 2, Score: 60, At: proofAt}},
+			Lab:       []domainprogress.EvolutionPoint{{Order: 1, ItemNumber: 1, Title: "Design a cache", Score: 76, At: proofAt}},
+			PassScore: 80, Enough: true,
+		},
 	}
 	var asked string
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
@@ -186,7 +191,12 @@ func TestGetProgressTopic_mapsTheDetailAndAsksForTheSession(t *testing.T) {
 		"difficulties": [
 			{"name": "ttl", "source": "TUTOR", "challengeTitle": "", "toReview": true, "evidenceCount": 2, "proofs": []},
 			{"name": "Consistency", "source": "ARCH_LAB", "challengeTitle": "Design a cache", "toReview": false, "evidenceCount": 0, "proofs": []}],
-		"explainedOnly": [{"name": "lru", "evidenceCount": 0, "proofs": []}]
+		"explainedOnly": [{"name": "lru", "evidenceCount": 0, "proofs": []}],
+		"evolution": {
+			"quiz": [{"order": 1, "itemNumber": 2, "title": "", "score": 60, "at": "2026-11-02T10:00:00Z"}],
+			"lab": [{"order": 1, "itemNumber": 1, "title": "Design a cache", "score": 76, "at": "2026-11-02T10:00:00Z"}],
+			"passScore": 80, "enough": true
+		}
 	}`, string(raw))
 }
 
@@ -201,7 +211,7 @@ func TestGetProgressTopic_returnsEmptyListsNotNull(t *testing.T) {
 	require.NoError(t, err)
 
 	// Then every list is [], so the frontend can map over it
-	for _, key := range []string{"quizzes", "challenges", "understood", "difficulties", "explainedOnly"} {
+	for _, key := range []string{"quizzes", "challenges", "understood", "difficulties", "explainedOnly", "quiz", "lab"} {
 		assert.Contains(t, string(raw), `"`+key+`":[]`)
 	}
 }

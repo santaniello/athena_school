@@ -119,6 +119,12 @@ describe('getProgressTopic', () => {
         },
       ],
       explainedOnly: [{ name: 'lru', evidenceCount: 0, proofs: [] }],
+      evolution: {
+        quiz: [{ order: 1, itemNumber: 1, title: '', score: 60, at: '2026-11-02T10:00:00Z' }],
+        lab: [],
+        passScore: 80,
+        enough: false,
+      },
     } as never)
 
     const detail = await getProgressTopic('s1')
@@ -138,6 +144,12 @@ describe('getProgressTopic', () => {
     expect(detail.understood[0].proofs).toEqual([proof])
     expect(detail.difficulties[0]).toMatchObject({ source: 'TUTOR', toReview: true })
     expect(detail.explainedOnly[0].name).toBe('lru')
+    expect(detail.evolution).toEqual({
+      quiz: [{ order: 1, itemNumber: 1, title: '', score: 60, at: '2026-11-02T10:00:00Z' }],
+      lab: [],
+      passScore: 80,
+      enough: false,
+    })
     expect(detail.quizCount + detail.challengeCount + detail.conceptCount).toBe(4)
   })
 
@@ -157,6 +169,7 @@ describe('getProgressTopic', () => {
       understood: [],
       difficulties: [],
       explainedOnly: [],
+      evolution: { quiz: [], lab: [], passScore: 80, enough: false },
     } as never)
 
     const detail = await getProgressTopic('s1')

@@ -56,6 +56,7 @@ func (a LabAttempt) labScore() int {
 // that have both evaluations, oldest first.
 type ChallengeInput struct {
 	ChallengeID string
+	Title       string // names the challenge in the evolution chart
 	Attempts    []LabAttempt
 }
 
