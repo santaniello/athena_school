@@ -15,11 +15,14 @@ const TICKS = [0, 25, 50, 75, 100]
 
 interface SeriesStyle {
   color: string
+  // Dot radius: the later series is smaller, so a dot that coincides with an
+  // earlier one leaves it visible and hoverable around it.
+  radius: number
   dash?: string
 }
 
-const QUIZ_STYLE: SeriesStyle = { color: 'var(--primary)' }
-const LAB_STYLE: SeriesStyle = { color: '#5fbf8f' }
+const QUIZ_STYLE: SeriesStyle = { color: 'var(--primary)', radius: 5 }
+const LAB_STYLE: SeriesStyle = { color: '#5fbf8f', radius: 3 }
 
 export function ProgressEvolutionChart({ evolution }: { evolution: ProgressEvolution }) {
   const { t, i18n } = useTranslation('progressTab')
@@ -100,14 +103,16 @@ export function ProgressEvolutionChart({ evolution }: { evolution: ProgressEvolu
           strokeDasharray="5 4"
         />
         {series.map(({ key, points, style }) => (
-          <g key={key} data-series={key}>
+          <g key={`${key}-line`}>
             {points.length > 1 && (
               <polygon
+                pointerEvents="none"
                 fill={`url(#${gradientId}-${key})`}
                 points={`${x(points[0].order)},${y(0)} ${points.map((p) => `${x(p.order)},${y(p.score)}`).join(' ')} ${x(points[points.length - 1].order)},${y(0)}`}
               />
             )}
             <polyline
+              pointerEvents="none"
               fill="none"
               stroke={style.color}
               strokeWidth="2.5"
@@ -116,12 +121,17 @@ export function ProgressEvolutionChart({ evolution }: { evolution: ProgressEvolu
               style={{ filter: `drop-shadow(0 2px 4px ${style.color})` }}
               points={points.map((p) => `${x(p.order)},${y(p.score)}`).join(' ')}
             />
+          </g>
+        ))}
+        {/* The dots come last, so no fill or line covers one. */}
+        {series.map(({ key, points, style }) => (
+          <g key={`${key}-points`} data-series={key}>
             {points.map((point) => (
               <circle
                 key={point.order}
                 cx={x(point.order)}
                 cy={y(point.score)}
-                r="5"
+                r={style.radius}
                 fill={style.color}
                 stroke="var(--card)"
                 strokeWidth="2"

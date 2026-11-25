@@ -70,4 +70,40 @@ describe('ProgressEvolutionChart', () => {
     expect(screen.getByText('Not enough assessments yet')).toBeInTheDocument()
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
   })
+
+  it('keeps the decorative fills and lines from capturing the pointer', () => {
+    const { container } = render(<ProgressEvolutionChart evolution={EVOLUTION} />)
+
+    const decorations = container.querySelectorAll('polygon, polyline')
+    expect(decorations.length).toBeGreaterThan(0)
+    decorations.forEach((shape) => expect(shape).toHaveAttribute('pointer-events', 'none'))
+  })
+
+  it('draws every point after every fill and line, so none is covered', () => {
+    const { container } = render(<ProgressEvolutionChart evolution={EVOLUTION} />)
+
+    const shapes = Array.from(container.querySelectorAll('polygon, polyline, circle'))
+    const firstCircle = shapes.findIndex((shape) => shape.tagName === 'circle')
+    const lastDecoration = shapes.map((shape) => shape.tagName).lastIndexOf('polyline')
+    expect(firstCircle).toBeGreaterThan(lastDecoration)
+  })
+
+  it('keeps both points reachable when a quiz and a lab attempt coincide', () => {
+    const { container } = render(
+      <ProgressEvolutionChart
+        evolution={{
+          ...EVOLUTION,
+          quiz: [point(1, 80), point(2, 90)],
+          lab: [point(1, 80, 1, 'Lab')],
+        }}
+      />,
+    )
+
+    const quiz = container.querySelector('[data-series="quiz"] circle')!
+    const lab = container.querySelector('[data-series="lab"] circle')!
+    expect(quiz.getAttribute('cx')).toBe(lab.getAttribute('cx'))
+    expect(quiz.getAttribute('cy')).toBe(lab.getAttribute('cy'))
+    // the lab dot is smaller, so the quiz dot stays visible and hoverable around it
+    expect(Number(lab.getAttribute('r'))).toBeLessThan(Number(quiz.getAttribute('r')))
+  })
 })
