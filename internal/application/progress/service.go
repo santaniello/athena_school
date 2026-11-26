@@ -16,6 +16,8 @@ type Service struct {
 	reader     Reader
 	passScores PassScoreProvider
 	insights   *insightPorts // nil when the insights are not wired
+	// folderInsights is nil when the folder insights are not wired.
+	folderInsights *folderInsightPorts
 }
 
 // Option configures a Service.

@@ -22,21 +22,9 @@ func (s *Service) GetTopicDetail(ctx context.Context, sessionID string) (domainp
 	if err != nil {
 		return domainprogress.TopicDetail{}, fmt.Errorf("progress: reading topic: %w", err)
 	}
-	input := domainprogress.TopicDetailInput{SessionID: topic.SessionID, Name: topic.Topic, FolderName: topic.FolderName}
-	for _, quiz := range topic.Quizzes {
-		input.Quizzes = append(input.Quizzes, domainprogress.DetailQuiz{
-			QuizID: quiz.ID, Difficulty: quiz.Difficulty, Attempts: quizInput(QuizData{ID: quiz.ID, Attempts: quiz.Attempts}).Attempts,
-		})
-	}
-	for _, challenge := range topic.Challenges {
-		detail, err := detailChallenge(challenge, passScore)
-		if err != nil {
-			return domainprogress.TopicDetail{}, err
-		}
-		input.Challenges = append(input.Challenges, detail)
-	}
-	for _, concept := range topic.Concepts {
-		input.Concepts = append(input.Concepts, detailConcept(concept))
+	input, err := topicDetailInput(topic, passScore)
+	if err != nil {
+		return domainprogress.TopicDetail{}, err
 	}
 	detail := domainprogress.BuildTopicDetail(input)
 	evolution, err := evolutionInput(topic, passScore)
@@ -51,6 +39,27 @@ func (s *Service) GetTopicDetail(ctx context.Context, sessionID string) (domainp
 		log.Printf("progress: insight of topic %s unavailable: %v", topic.SessionID, err)
 	}
 	return detail, nil
+}
+
+// topicDetailInput maps the topic's evidence for BuildTopicDetail.
+func topicDetailInput(topic TopicData, passScore int) (domainprogress.TopicDetailInput, error) {
+	input := domainprogress.TopicDetailInput{SessionID: topic.SessionID, Name: topic.Topic, FolderName: topic.FolderName}
+	for _, quiz := range topic.Quizzes {
+		input.Quizzes = append(input.Quizzes, domainprogress.DetailQuiz{
+			QuizID: quiz.ID, Difficulty: quiz.Difficulty, Attempts: quizInput(QuizData{ID: quiz.ID, Attempts: quiz.Attempts}).Attempts,
+		})
+	}
+	for _, challenge := range topic.Challenges {
+		detail, err := detailChallenge(challenge, passScore)
+		if err != nil {
+			return domainprogress.TopicDetailInput{}, err
+		}
+		input.Challenges = append(input.Challenges, detail)
+	}
+	for _, concept := range topic.Concepts {
+		input.Concepts = append(input.Concepts, detailConcept(concept))
+	}
+	return input, nil
 }
 
 // evolutionInput maps every attempt of the topic's quizzes and challenges, with

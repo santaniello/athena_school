@@ -26,10 +26,16 @@ type Reader interface {
 	// it, or ErrTopicNotFound when the session does not exist or is in no
 	// folder.
 	ReadTopic(ctx context.Context, sessionID string) (TopicData, error)
+	// ReadFolderTopics returns a folder with the detail of every topic in it,
+	// or ErrFolderNotFound when the folder does not exist.
+	ReadFolderTopics(ctx context.Context, folderID string) (FolderTopicsData, error)
 }
 
 // ErrTopicNotFound is returned when the session of a topic does not exist.
 var ErrTopicNotFound = errors.New("progress topic not found")
+
+// ErrFolderNotFound is returned when a folder does not exist.
+var ErrFolderNotFound = errors.New("progress folder not found")
 
 // PassScoreProvider supplies the minimum passing score in force.
 type PassScoreProvider interface {
@@ -53,6 +59,14 @@ type FolderData struct {
 	ID       string
 	Name     string
 	Sessions []SessionData
+}
+
+// FolderTopicsData is a folder with the detail of each of its topics, the
+// oldest session first.
+type FolderTopicsData struct {
+	ID     string
+	Name   string
+	Topics []TopicData
 }
 
 // SessionData is a session with everything attached to it.

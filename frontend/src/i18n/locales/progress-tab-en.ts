@@ -84,6 +84,7 @@ export const progressTabEn = {
       failed: 'Could not generate the insights. Your previous analysis was kept.',
       failedFirst: 'Could not generate the insights.',
       recommendations: 'Recommendations',
+      basedOnPrefix: 'based on:',
       basedOn: 'based on: {{sources}}',
       meta: 'Generated on {{date}} · {{model}}',
     },
@@ -106,6 +107,16 @@ export const progressTabEn = {
   loading: 'Loading your progress...',
   loadFailed: 'Could not load your progress.',
   retry: 'Try again',
+  folderInsight: {
+    loading: 'Loading the insights...',
+    loadFailed: 'Could not load the insights.',
+    empty:
+      'No analysis generated yet. The analysis uses only the topic summaries and their difficulties, never the whole conversation.',
+    blocked:
+      'There is no topic with evidence in this folder yet. Study, take a quiz or a lab in one of its topics first.',
+    showMore: 'Show more',
+    showLess: 'Show less',
+  },
   empty: {
     title: 'Nothing to show yet',
     description:

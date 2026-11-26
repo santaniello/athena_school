@@ -51,6 +51,8 @@ export function GenerateChallenge(arg1:string,arg2:string,arg3:string,arg4:strin
 
 export function GenerateMindMap(arg1:string):Promise<desktop.MindMapSummaryDTO>;
 
+export function GenerateProgressFolderInsight(arg1:string):Promise<desktop.ProgressInsightStateResult>;
+
 export function GenerateProgressInsight(arg1:string):Promise<desktop.ProgressInsightStateResult>;
 
 export function GenerateQuiz(arg1:string,arg2:number,arg3:string):Promise<desktop.QuizSummaryDTO>;
@@ -80,6 +82,8 @@ export function GetPendingQuizOffer(arg1:string):Promise<desktop.QuizOfferDTO>;
 export function GetProfile():Promise<desktop.UserProfileInput>;
 
 export function GetProgressDashboard():Promise<desktop.ProgressDashboardResult>;
+
+export function GetProgressFolderInsight(arg1:string):Promise<desktop.ProgressInsightStateResult>;
 
 export function GetProgressTopic(arg1:string):Promise<desktop.ProgressTopicDetailResult>;
 

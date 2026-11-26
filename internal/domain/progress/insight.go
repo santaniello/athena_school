@@ -169,6 +169,9 @@ const (
 	CitationQuiz      CitationKind = "QUIZ"
 	CitationChallenge CitationKind = "CHALLENGE"
 	CitationConcept   CitationKind = "CONCEPT"
+	// CitationTopic is cited by a folder insight (spec 5.5): ID is the session
+	// id of the topic and Label its name.
+	CitationTopic CitationKind = "TOPIC"
 )
 
 // Citation points to the activity that supports a statement. ID is the id of
@@ -251,6 +254,12 @@ type statementAnswer struct {
 // input is dropped, and so is a repeated one. Anything else wrong is
 // ErrInvalidInsight.
 func ParseInsight(raw string, in InsightInput) (InsightContent, error) {
+	return parseContent(raw, citationsByRef(in))
+}
+
+// parseContent validates the model's JSON answer against the citations it may
+// make, by ref.
+func parseContent(raw string, known map[string]Citation) (InsightContent, error) {
 	var answer insightAnswer
 	if err := json.Unmarshal([]byte(raw), &answer); err != nil {
 		return InsightContent{}, fmt.Errorf("%w: %v", ErrInvalidInsight, err)
@@ -261,7 +270,6 @@ func ParseInsight(raw string, in InsightInput) (InsightContent, error) {
 	if len(answer.Recommendations) > MaxInsightRecommendations {
 		return InsightContent{}, fmt.Errorf("%w: %d recommendations, at most %d", ErrInvalidInsight, len(answer.Recommendations), MaxInsightRecommendations)
 	}
-	known := citationsByRef(in)
 	analysis, err := statements(answer.Analysis, known)
 	if err != nil {
 		return InsightContent{}, fmt.Errorf("%w: analysis: %v", ErrInvalidInsight, err)

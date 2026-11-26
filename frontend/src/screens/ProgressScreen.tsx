@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AlertCircle, BookOpen, FolderOpen, Layers, TrendingUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ProgressFolderInsightCard } from '@/components/progress-folder-insight-card'
 import { ProgressTopicDetail } from '@/components/progress-topic-detail'
 import { StartExamDialog, type ExamToStart } from '@/components/lab/start-exam-dialog'
 import { cn } from '@/lib/utils'
@@ -38,7 +39,8 @@ interface ProgressScreenProps {
 
 // The Progress section: every folder that has study sessions, and each session
 // as a topic with its latest quiz and Arch Lab scores and a status. All of it is
-// derived by the backend on read, with no LLM call; selecting a topic
+// derived by the backend on read, with no LLM call (the folder's insights card
+// only calls the model when asked, spec 5.5); selecting a topic
 // shows its detail on the right (spec 5.2); a quiz opens the quiz and a challenge shows the exam
 // rules first, like the session materials panel. See
 // specs/phases/phase-05-progress/01-progress-dashboard.md.
@@ -164,6 +166,13 @@ function ProgressScreen({ onStartQuiz, onStartExam }: ProgressScreenProps) {
                 </h3>
                 <p className="text-xs text-muted-foreground">{t('topics.hint')}</p>
               </div>
+
+              <ProgressFolderInsightCard
+                key={selectedFolder.id}
+                folderId={selectedFolder.id}
+                topicIds={selectedFolder.topics.map((topic) => topic.sessionId)}
+                onOpenTopic={setTopicId}
+              />
 
               <ul className="flex flex-col gap-2.5">
                 {selectedFolder.topics.map((topic) => (

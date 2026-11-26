@@ -49,6 +49,7 @@ func (r *Resetter) Reset(ctx context.Context) error {
 		// challenge, a quiz or a mind map is never deleted by anything else),
 		// so each level is cleared explicitly.
 		{`DELETE FROM topic_insights`, nil},
+		{`DELETE FROM folder_insights`, nil},
 		{`DELETE FROM concept_evidence`, nil},
 		{`DELETE FROM session_concepts`, nil},
 		{`DELETE FROM mind_map_offers`, nil},

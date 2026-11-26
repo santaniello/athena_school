@@ -84,6 +84,7 @@ export const progressTabPt = {
       failed: 'Não foi possível gerar os insights. Sua análise anterior foi mantida.',
       failedFirst: 'Não foi possível gerar os insights.',
       recommendations: 'Recomendações',
+      basedOnPrefix: 'baseado em:',
       basedOn: 'baseado em: {{sources}}',
       meta: 'Gerado em {{date}} · {{model}}',
     },
@@ -106,6 +107,16 @@ export const progressTabPt = {
   loading: 'Carregando seu progresso...',
   loadFailed: 'Não foi possível carregar seu progresso.',
   retry: 'Tentar de novo',
+  folderInsight: {
+    loading: 'Carregando os insights...',
+    loadFailed: 'Não foi possível carregar os insights.',
+    empty:
+      'Nenhuma análise gerada ainda. A análise usa só os resumos dos tópicos e suas dificuldades, nunca a conversa inteira.',
+    blocked:
+      'Ainda não há tópico com evidências nesta pasta. Estude, faça um quiz ou um Arch Lab em um dos tópicos primeiro.',
+    showMore: 'Ver mais',
+    showLess: 'Ver menos',
+  },
   empty: {
     title: 'Nada para mostrar ainda',
     description:

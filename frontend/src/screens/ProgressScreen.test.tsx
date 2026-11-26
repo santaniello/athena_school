@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   getProgressDashboard,
+  getProgressFolderInsight,
   getProgressTopic,
   type ProgressDashboard,
   type ProgressTopicDetail,
@@ -14,6 +15,7 @@ vi.mock('@/lib/progress', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/progress')>()),
   getProgressDashboard: vi.fn(),
   getProgressTopic: vi.fn(),
+  getProgressFolderInsight: vi.fn(),
 }))
 
 vi.mock('@/lib/passScore', () => ({ getPassScore: vi.fn().mockResolvedValue(80) }))
@@ -93,6 +95,11 @@ describe('ProgressScreen', () => {
     setLabLanguage('en')
     vi.mocked(getProgressDashboard).mockResolvedValue(DASHBOARD)
     vi.mocked(getProgressTopic).mockResolvedValue(DETAIL)
+    vi.mocked(getProgressFolderInsight).mockResolvedValue({
+      insight: null,
+      stale: false,
+      canGenerate: true,
+    })
   })
 
   it('shows the title, the subtitle and the three counters', async () => {
@@ -281,5 +288,40 @@ describe('ProgressScreen', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('Precisa reforçar')).toBeInTheDocument()
     expect(screen.getByText('2 assuntos')).toBeInTheDocument()
+  })
+  it('shows the insights of the selected folder above its topics', async () => {
+    renderScreen()
+
+    expect(await screen.findByRole('button', { name: 'Generate insights' })).toBeInTheDocument()
+    expect(getProgressFolderInsight).toHaveBeenCalledWith('f1')
+  })
+
+  it('reads the insight of another folder when it is picked', async () => {
+    renderScreen()
+    await userEvent.click(await screen.findByRole('button', { name: /Java/ }))
+
+    await vi.waitFor(() => expect(getProgressFolderInsight).toHaveBeenCalledWith('f2'))
+  })
+
+  it('opens the topic a folder recommendation cites', async () => {
+    vi.mocked(getProgressFolderInsight).mockResolvedValue({
+      insight: {
+        analysis: [{ text: 'Cache first.', citations: [] }],
+        recommendations: [
+          { text: 'Review it.', citations: [{ kind: 'TOPIC', id: 's1', label: 'Cache' }] },
+        ],
+        model: 'm',
+        language: 'en',
+        createdAt: '2026-12-01T09:00:00Z',
+      },
+      stale: false,
+      canGenerate: true,
+    })
+    renderScreen()
+    await userEvent.click(await screen.findByRole('button', { name: 'Show more' }))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cache' }))
+
+    expect(getProgressTopic).toHaveBeenCalledWith('s1')
   })
 })

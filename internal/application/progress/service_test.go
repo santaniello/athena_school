@@ -21,15 +21,21 @@ var base = time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC)
 // fakeReader is a Reader that returns what it was given. A generated mock would
 // import this package for FolderData, an import cycle (see .mockery.yaml).
 type fakeReader struct {
-	folders  []FolderData
-	err      error
-	topic    TopicData
-	topicErr error
+	folders   []FolderData
+	err       error
+	topic     TopicData
+	topicErr  error
+	folder    FolderTopicsData
+	folderErr error
 }
 
 func (f fakeReader) ReadFolders(context.Context) ([]FolderData, error) { return f.folders, f.err }
 
 func (f fakeReader) ReadTopic(context.Context, string) (TopicData, error) { return f.topic, f.topicErr }
+
+func (f fakeReader) ReadFolderTopics(context.Context, string) (FolderTopicsData, error) {
+	return f.folder, f.folderErr
+}
 
 func newService(t *testing.T, passScore int, folders ...FolderData) *Service {
 	t.Helper()

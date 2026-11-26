@@ -13,6 +13,8 @@ type progressDashboard interface {
 	GetDashboard(ctx context.Context) (domainprogress.Dashboard, error)
 	GetTopicDetail(ctx context.Context, sessionID string) (domainprogress.TopicDetail, error)
 	GenerateTopicInsight(ctx context.Context, sessionID string) (domainprogress.Insight, error)
+	GetFolderInsight(ctx context.Context, folderID string) (domainprogress.InsightView, error)
+	GenerateFolderInsight(ctx context.Context, folderID string) (domainprogress.Insight, error)
 }
 
 // WithProgressService wires the Progress dashboard.
@@ -294,7 +296,36 @@ func (a *App) GenerateProgressInsight(sessionID string) (ProgressInsightStateRes
 	if a.progress == nil {
 		return ProgressInsightStateResult{}, errProgressUnavailable
 	}
-	insight, err := a.progress.GenerateTopicInsight(a.ctx, sessionID)
+	return insightCard(a.progress.GenerateTopicInsight(a.ctx, sessionID))
+}
+
+// GetProgressFolderInsight returns the insight card of a folder (spec 5.5): the
+// stored insight, if any, and whether it is stale. It is derived on read: no
+// LLM call.
+func (a *App) GetProgressFolderInsight(folderID string) (ProgressInsightStateResult, error) {
+	if a.progress == nil {
+		return ProgressInsightStateResult{}, errProgressUnavailable
+	}
+	view, err := a.progress.GetFolderInsight(a.ctx, folderID)
+	if err != nil {
+		return ProgressInsightStateResult{}, err
+	}
+	return toProgressInsightState(view), nil
+}
+
+// GenerateProgressFolderInsight asks the model for the Athena Insights of the
+// folder from its topics, stores it and returns the card, fresh. A folder with
+// no evidence is not an error: the card comes back with canGenerate false. Like
+// the topic's, it uses the LLM only when the user asks for it.
+func (a *App) GenerateProgressFolderInsight(folderID string) (ProgressInsightStateResult, error) {
+	if a.progress == nil {
+		return ProgressInsightStateResult{}, errProgressUnavailable
+	}
+	return insightCard(a.progress.GenerateFolderInsight(a.ctx, folderID))
+}
+
+// insightCard turns the result of generating an insight into the card.
+func insightCard(insight domainprogress.Insight, err error) (ProgressInsightStateResult, error) {
 	if errors.Is(err, domainprogress.ErrInsufficientEvidence) {
 		// Not a failure to retry: the card shows the guidance to gather evidence.
 		return ProgressInsightStateResult{CanGenerate: false}, nil

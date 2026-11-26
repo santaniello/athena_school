@@ -119,6 +119,15 @@ func (s *Service) insightView(ctx context.Context, topic TopicData, passScore in
 // topicStatus is the status the dashboard gives the topic, which decides
 // whether there is evidence to write an insight from.
 func topicStatus(topic TopicData, passScore int) (domainprogress.Status, error) {
+	summary, err := topicSummary(topic, passScore)
+	if err != nil {
+		return "", err
+	}
+	return summary.Status, nil
+}
+
+// topicSummary is the summary the dashboard gives the topic.
+func topicSummary(topic TopicData, passScore int) (domainprogress.TopicSummary, error) {
 	session := SessionData{ID: topic.SessionID, Topic: topic.Topic}
 	for _, quiz := range topic.Quizzes {
 		session.Quizzes = append(session.Quizzes, QuizData{ID: quiz.ID, Attempts: quiz.Attempts})
@@ -131,9 +140,9 @@ func topicStatus(topic TopicData, passScore int) (domainprogress.Status, error) 
 	}
 	input, err := topicInput(session, passScore)
 	if err != nil {
-		return "", err
+		return domainprogress.TopicSummary{}, err
 	}
-	return domainprogress.SummarizeTopic(input, passScore).Status, nil
+	return domainprogress.SummarizeTopic(input, passScore), nil
 }
 
 // insightInput maps the persisted evidence of the topic: every quiz with its

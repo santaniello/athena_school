@@ -410,6 +410,19 @@ var migrations = []func(*sql.DB) error{
 		fingerprint TEXT NOT NULL,
 		created_at  TEXT NOT NULL
 	)`),
+	// folder_insights is the latest Athena Insights of a Progress folder, with
+	// the same columns as topic_insights; its fingerprint covers the folder's
+	// set of sessions and each one's own fingerprint. See
+	// specs/phases/phase-05-progress/05-folder-insights.md.
+	execSQL(`CREATE TABLE IF NOT EXISTS folder_insights (
+		folder_id   TEXT PRIMARY KEY REFERENCES folders(id) ON DELETE CASCADE,
+		analysis    TEXT NOT NULL,
+		payload     TEXT NOT NULL,
+		model       TEXT NOT NULL,
+		language    TEXT NOT NULL,
+		fingerprint TEXT NOT NULL,
+		created_at  TEXT NOT NULL
+	)`),
 }
 
 // addSessionConceptsDisplayNameColumn adds session_concepts.display_name, the

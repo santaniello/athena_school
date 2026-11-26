@@ -233,6 +233,7 @@ func main() {
 			sqlite.NewInsightRepository(db), applicationprogress.NewInsightGenerator(llmClient),
 			progresssource.NewProfiles(profiles), systemClock{},
 		),
+		applicationprogress.WithFolderInsights(sqlite.NewFolderInsightRepository(db), applicationprogress.NewFolderInsightGenerator(llmClient)),
 	)
 
 	resetter := sqlite.NewResetter(db)

@@ -593,3 +593,74 @@ func TestAppendQuizAttempt_ignoresAnAttemptOfAQuizReadAfterTheList(t *testing.T)
 
 	assert.Equal(t, []applicationprogress.QuizAttemptData{{Total: 3}}, quizzes[0].Attempts)
 }
+
+func TestProgressReader_ReadFolderTopics_returnsTheFolderWithTheDetailOfEachOfItsTopics(t *testing.T) {
+	// Given two folders, the first with two sessions that have a quiz attempt
+	reader, db := newProgressFixture(t)
+	addFolder(t, db, "f1", "System Design")
+	addFolder(t, db, "f2", "Other")
+	addSession(t, db, "s1", "Cache", "f1", progressBase)
+	addSession(t, db, "s2", "Queues", "f1", progressBase.AddDate(0, 0, 1))
+	addSession(t, db, "s3", "Elsewhere", "f2", progressBase)
+	addQuiz(t, db, "q1", "s1", nil)
+	addQuizAttempt(t, db, "a1", "q1", 3, 4, 1)
+
+	// When reading the first folder
+	folder, err := reader.ReadFolderTopics(context.Background(), "f1")
+
+	// Then it has its name and its topics only, oldest session first, each with its detail
+	require.NoError(t, err)
+	assert.Equal(t, "f1", folder.ID)
+	assert.Equal(t, "System Design", folder.Name)
+	require.Len(t, folder.Topics, 2)
+	assert.Equal(t, "s1", folder.Topics[0].SessionID)
+	assert.Equal(t, "Cache", folder.Topics[0].Topic)
+	assert.Equal(t, "System Design", folder.Topics[0].FolderName)
+	require.Len(t, folder.Topics[0].Quizzes, 1)
+	require.Len(t, folder.Topics[0].Quizzes[0].Attempts, 1)
+	assert.Equal(t, "s2", folder.Topics[1].SessionID)
+}
+
+func TestProgressReader_ReadFolderTopics_anEmptyFolderHasNoTopics(t *testing.T) {
+	reader, db := newProgressFixture(t)
+	addFolder(t, db, "f1", "Empty")
+
+	folder, err := reader.ReadFolderTopics(context.Background(), "f1")
+
+	require.NoError(t, err)
+	assert.Equal(t, "Empty", folder.Name)
+	assert.Empty(t, folder.Topics)
+}
+
+func TestProgressReader_ReadFolderTopics_failsForAMissingFolder(t *testing.T) {
+	reader, _ := newProgressFixture(t)
+
+	_, err := reader.ReadFolderTopics(context.Background(), "nope")
+
+	require.ErrorIs(t, err, applicationprogress.ErrFolderNotFound)
+}
+
+func TestProgressReader_ReadFolderTopics_failsWhenTheDatabaseIsClosed(t *testing.T) {
+	reader, db := newProgressFixture(t)
+	require.NoError(t, db.Close())
+
+	_, err := reader.ReadFolderTopics(context.Background(), "f1")
+
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, applicationprogress.ErrFolderNotFound)
+}
+
+func TestProgressReader_readTopics_leavesOutASessionThatVanishedSinceItWasListed(t *testing.T) {
+	// Given a listed session that exists and one that was deleted meanwhile
+	reader, db := newProgressFixture(t)
+	addFolder(t, db, "f1", "One")
+	addSession(t, db, "s1", "Cache", "f1", progressBase)
+
+	// When reading both
+	topics, err := reader.readTopics(context.Background(), []string{"gone", "s1"})
+
+	// Then the vanished one is skipped and the other is read
+	require.NoError(t, err)
+	require.Len(t, topics, 1)
+	assert.Equal(t, "s1", topics[0].SessionID)
+}
