@@ -43,12 +43,9 @@ type insightCitationJSON struct {
 // Save stores the insight of the session, replacing the previous one. The
 // session must exist.
 func (r *InsightRepository) Save(ctx context.Context, sessionID string, insight domainprogress.Insight) error {
-	payload, err := json.Marshal(insightPayload{
-		Analysis:        encodeStatements(insight.Analysis),
-		Recommendations: encodeStatements(insight.Recommendations),
-	})
+	payload, err := encodeInsightPayload(insight)
 	if err != nil {
-		return fmt.Errorf("sqlite: encoding insight: %w", err)
+		return err
 	}
 	_, err = execer(ctx, r.db).ExecContext(ctx,
 		`INSERT INTO topic_insights (session_id, analysis, payload, model, language, fingerprint, created_at)
@@ -56,7 +53,7 @@ func (r *InsightRepository) Save(ctx context.Context, sessionID string, insight 
 		 ON CONFLICT(session_id) DO UPDATE SET analysis = excluded.analysis, payload = excluded.payload,
 		   model = excluded.model, language = excluded.language, fingerprint = excluded.fingerprint,
 		   created_at = excluded.created_at`,
-		sessionID, analysisText(insight.Analysis), string(payload), insight.Model, insight.Language,
+		sessionID, analysisText(insight.Analysis), payload, insight.Model, insight.Language,
 		insight.Fingerprint, formatChallengeTime(insight.CreatedAt),
 	)
 	if err != nil {
@@ -80,16 +77,35 @@ func (r *InsightRepository) Get(ctx context.Context, sessionID string) (domainpr
 	if err != nil {
 		return domainprogress.Insight{}, fmt.Errorf("sqlite: reading insight: %w", err)
 	}
-	var decoded insightPayload
-	if err := json.Unmarshal([]byte(payload), &decoded); err != nil {
-		return domainprogress.Insight{}, fmt.Errorf("sqlite: decoding insight of %q: %w", sessionID, err)
-	}
-	insight.Analysis = decodeStatements(decoded.Analysis)
-	insight.Recommendations = decodeStatements(decoded.Recommendations)
-	if insight.CreatedAt, err = parseChallengeTime(created); err != nil {
+	if err := decodeInsightPayload(payload, created, &insight); err != nil {
 		return domainprogress.Insight{}, fmt.Errorf("sqlite: reading insight of %q: %w", sessionID, err)
 	}
 	return insight, nil
+}
+
+func encodeInsightPayload(insight domainprogress.Insight) (string, error) {
+	payload, err := json.Marshal(insightPayload{
+		Analysis:        encodeStatements(insight.Analysis),
+		Recommendations: encodeStatements(insight.Recommendations),
+	})
+	if err != nil {
+		return "", fmt.Errorf("sqlite: encoding insight: %w", err)
+	}
+	return string(payload), nil
+}
+
+// decodeInsightPayload fills the statements and the creation time of the
+// insight from the stored payload and timestamp.
+func decodeInsightPayload(payload, created string, insight *domainprogress.Insight) error {
+	var decoded insightPayload
+	if err := json.Unmarshal([]byte(payload), &decoded); err != nil {
+		return fmt.Errorf("decoding payload: %w", err)
+	}
+	insight.Analysis = decodeStatements(decoded.Analysis)
+	insight.Recommendations = decodeStatements(decoded.Recommendations)
+	var err error
+	insight.CreatedAt, err = parseChallengeTime(created)
+	return err
 }
 
 func analysisText(statements []domainprogress.Statement) string {

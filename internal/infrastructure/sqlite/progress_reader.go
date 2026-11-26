@@ -411,3 +411,51 @@ func (r *ProgressReader) readTopicConcepts(ctx context.Context, sessionID string
 	}
 	return concepts, nil
 }
+
+// ReadFolderTopics returns the folder with the detail of each of its sessions,
+// the oldest first, the same as ReadTopic gives. A folder that does not exist
+// is ErrFolderNotFound; one without sessions has no topics.
+func (r *ProgressReader) ReadFolderTopics(ctx context.Context, folderID string) (applicationprogress.FolderTopicsData, error) {
+	q := execer(ctx, r.db)
+	folder := applicationprogress.FolderTopicsData{ID: folderID}
+	err := q.QueryRowContext(ctx, `SELECT name FROM folders WHERE id = ?`, folderID).Scan(&folder.Name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return applicationprogress.FolderTopicsData{}, applicationprogress.ErrFolderNotFound
+	}
+	if err != nil {
+		return applicationprogress.FolderTopicsData{}, fmt.Errorf("sqlite: reading progress folder: %w", err)
+	}
+	ids, err := readFolderSessionIDs(ctx, q, folderID)
+	if err != nil {
+		return applicationprogress.FolderTopicsData{}, err
+	}
+	for _, id := range ids {
+		topic, err := r.ReadTopic(ctx, id)
+		if err != nil {
+			return applicationprogress.FolderTopicsData{}, err
+		}
+		folder.Topics = append(folder.Topics, topic)
+	}
+	return folder, nil
+}
+
+func readFolderSessionIDs(ctx context.Context, q sqlExecer, folderID string) ([]string, error) {
+	rows, err := q.QueryContext(ctx, `SELECT id FROM sessions WHERE folder_id = ? ORDER BY started_at, rowid`, folderID)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: listing sessions of a progress folder: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("sqlite: scanning session of a progress folder: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sqlite: iterating sessions of a progress folder: %w", err)
+	}
+	return ids, nil
+}

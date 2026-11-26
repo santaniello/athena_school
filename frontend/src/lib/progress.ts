@@ -1,6 +1,8 @@
 import {
+  GenerateProgressFolderInsight,
   GenerateProgressInsight,
   GetProgressDashboard,
+  GetProgressFolderInsight,
   GetProgressTopic,
 } from '../../wailsjs/go/desktop/App'
 
@@ -120,9 +122,10 @@ export interface ProgressEvolution {
   enough: boolean
 }
 
-// An activity that supports a sentence of an insight; label is what to show.
+// An activity that supports a sentence of an insight, or a topic for a folder
+// insight (id is then the session); label is what to show.
 export interface ProgressCitation {
-  kind: 'QUIZ' | 'CHALLENGE' | 'CONCEPT'
+  kind: 'QUIZ' | 'CHALLENGE' | 'CONCEPT' | 'TOPIC'
   id: string
   label: string
 }
@@ -202,6 +205,18 @@ function toInsightState(result: InsightResult): ProgressInsightState {
 // that uses the LLM, and only when the user clicks Generate.
 export async function generateProgressInsight(sessionId: string): Promise<ProgressInsightState> {
   return toInsightState(await GenerateProgressInsight(sessionId))
+}
+
+// The insight card of a folder: what is stored, with no LLM call (spec 5.5).
+export async function getProgressFolderInsight(folderId: string): Promise<ProgressInsightState> {
+  return toInsightState(await GetProgressFolderInsight(folderId))
+}
+
+// Asks the model for the insight of the folder, only when the user clicks Generate.
+export async function generateProgressFolderInsight(
+  folderId: string,
+): Promise<ProgressInsightState> {
+  return toInsightState(await GenerateProgressFolderInsight(folderId))
 }
 
 export async function getProgressTopic(sessionId: string): Promise<ProgressTopicDetail> {

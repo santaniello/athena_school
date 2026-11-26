@@ -98,6 +98,10 @@ export function GenerateMindMap(arg1) {
   return window['go']['desktop']['App']['GenerateMindMap'](arg1);
 }
 
+export function GenerateProgressFolderInsight(arg1) {
+  return window['go']['desktop']['App']['GenerateProgressFolderInsight'](arg1);
+}
+
 export function GenerateProgressInsight(arg1) {
   return window['go']['desktop']['App']['GenerateProgressInsight'](arg1);
 }
@@ -156,6 +160,10 @@ export function GetProfile() {
 
 export function GetProgressDashboard() {
   return window['go']['desktop']['App']['GetProgressDashboard']();
+}
+
+export function GetProgressFolderInsight(arg1) {
+  return window['go']['desktop']['App']['GetProgressFolderInsight'](arg1);
 }
 
 export function GetProgressTopic(arg1) {

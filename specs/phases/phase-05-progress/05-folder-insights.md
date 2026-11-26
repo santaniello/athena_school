@@ -17,6 +17,23 @@ topics (which are solid, which need reinforcement, what links them) and what to 
 5. **Shown above the topic list** of the selected folder, collapsed to the first sentence by default.
 6. **Needs at least one topic outside Insufficient evidence**; otherwise no button.
 
+## Implementation
+
+- Domain (`internal/domain/progress`): `FolderInsightInput` (the folder's topics as `FolderInsightTopic`: summary,
+  difficulties and the topic's own `Fingerprint`), `FolderFingerprint` (hash of the language and of each
+  `session id + topic fingerprint`, in any order), `ParseFolderInsight` (same validation as `ParseInsight`; the
+  refs the model cites are `T1`, `T2`..., stored as `Citation{Kind: TOPIC, ID: session id, Label: topic name}`),
+  `FolderInsightRepository` and `FolderInsightGenerator`. The stored value is the same `Insight`, and the card
+  state the same `InsightView`.
+- Application: `Service.GetFolderInsight(folderID)` (stored insight and stale flag, no LLM) and
+  `Service.GenerateFolderInsight(folderID)`, wired with `WithFolderInsights` on top of `WithInsights` (language and
+  clock). `Reader.ReadFolderTopics` reads the folder with the detail of each topic. The call uses
+  `TaskProgressInsight` and belongs to no session.
+- Bindings: `GetProgressFolderInsight` and `GenerateProgressFolderInsight`, both returning the topic card's
+  state. The dashboard is untouched: the card reads its own state when a folder is selected.
+- Frontend: `ProgressFolderInsightCard`; a citation is a button that selects the topic when it is still in the
+  folder, plain text otherwise.
+
 ## SQLite
 
 `folder_insights`, same columns as `topic_insights` with `folder_id` as the key referencing

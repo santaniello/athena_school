@@ -21,6 +21,22 @@ type fakeProgressDashboard struct {
 	asked      *string
 	insight    domainprogress.Insight
 	insightErr error
+	folderView domainprogress.InsightView
+	folderErr  error
+}
+
+func (f fakeProgressDashboard) GenerateFolderInsight(_ context.Context, folderID string) (domainprogress.Insight, error) {
+	if f.asked != nil {
+		*f.asked = folderID
+	}
+	return f.insight, f.insightErr
+}
+
+func (f fakeProgressDashboard) GetFolderInsight(_ context.Context, folderID string) (domainprogress.InsightView, error) {
+	if f.asked != nil {
+		*f.asked = folderID
+	}
+	return f.folderView, f.folderErr
 }
 
 func (f fakeProgressDashboard) GenerateTopicInsight(_ context.Context, sessionID string) (domainprogress.Insight, error) {
@@ -312,4 +328,104 @@ func TestGenerateProgressInsight_returnsTheFreshInsightForTheSession(t *testing.
 		"recommendations": [{"text": "Retake.", "citations": []}],
 		"model": "m", "language": "en", "createdAt": "2026-12-01T09:00:00Z"
 	}, "stale": false, "canGenerate": true}`, string(raw))
+}
+
+func TestGetProgressFolderInsight_failsWhenTheServiceIsNotWired(t *testing.T) {
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+
+	_, err := app.GetProgressFolderInsight("f1")
+
+	require.Error(t, err)
+}
+
+func TestGetProgressFolderInsight_returnsTheErrorOfTheService(t *testing.T) {
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		WithProgressService(fakeProgressDashboard{folderErr: errors.New("database locked")}))
+
+	_, err := app.GetProgressFolderInsight("f1")
+
+	require.ErrorContains(t, err, "database locked")
+}
+
+func TestGetProgressFolderInsight_mapsTheStoredInsightWithTopicCitations(t *testing.T) {
+	// Given a stored, stale insight that cites a topic
+	at := time.Date(2026, 12, 1, 9, 0, 0, 0, time.UTC)
+	var asked string
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, WithProgressService(fakeProgressDashboard{
+		asked: &asked,
+		folderView: domainprogress.InsightView{
+			Current: &domainprogress.Insight{
+				Analysis:        []domainprogress.Statement{{Text: "Cache is weak.", Citations: []domainprogress.Citation{{Kind: domainprogress.CitationTopic, ID: "s1", Label: "Cache"}}}},
+				Recommendations: []domainprogress.Statement{{Text: "Retake.", Citations: []domainprogress.Citation{}}},
+				Model:           "m", Language: "en", CreatedAt: at,
+			},
+			Stale: true, CanGenerate: true,
+		},
+	}))
+
+	// When the folder insight is read
+	result, err := app.GetProgressFolderInsight("f1")
+	require.NoError(t, err)
+	raw, err := json.Marshal(result)
+	require.NoError(t, err)
+
+	// Then the folder is passed on and the citation names the session to open
+	assert.Equal(t, "f1", asked)
+	assert.JSONEq(t, `{"insight": {
+		"analysis": [{"text": "Cache is weak.", "citations": [{"kind": "TOPIC", "id": "s1", "label": "Cache"}]}],
+		"recommendations": [{"text": "Retake.", "citations": []}],
+		"model": "m", "language": "en", "createdAt": "2026-12-01T09:00:00Z"
+	}, "stale": true, "canGenerate": true}`, string(raw))
+}
+
+func TestGenerateProgressFolderInsight_failsWhenTheServiceIsNotWired(t *testing.T) {
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+
+	_, err := app.GenerateProgressFolderInsight("f1")
+
+	require.Error(t, err)
+}
+
+func TestGenerateProgressFolderInsight_returnsTheErrorOfTheService(t *testing.T) {
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		WithProgressService(fakeProgressDashboard{insightErr: errors.New("provider down")}))
+
+	_, err := app.GenerateProgressFolderInsight("f1")
+
+	require.ErrorContains(t, err, "provider down")
+}
+
+func TestGenerateProgressFolderInsight_aFolderWithoutEvidenceIsABlockedCardNotAnError(t *testing.T) {
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		WithProgressService(fakeProgressDashboard{insightErr: domainprogress.ErrInsufficientEvidence}))
+
+	result, err := app.GenerateProgressFolderInsight("f1")
+
+	require.NoError(t, err)
+	assert.Nil(t, result.Insight)
+	assert.False(t, result.CanGenerate)
+}
+
+func TestGenerateProgressFolderInsight_returnsTheFreshInsightForTheFolder(t *testing.T) {
+	// Given a service that writes an insight
+	var asked string
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, WithProgressService(fakeProgressDashboard{
+		asked: &asked,
+		insight: domainprogress.Insight{
+			Analysis:        []domainprogress.Statement{{Text: "Solid.", Citations: []domainprogress.Citation{}}},
+			Recommendations: []domainprogress.Statement{{Text: "Retake.", Citations: []domainprogress.Citation{}}},
+			Model:           "m", Language: "en", CreatedAt: time.Date(2026, 12, 1, 9, 0, 0, 0, time.UTC),
+		},
+	}))
+
+	// When it is generated
+	result, err := app.GenerateProgressFolderInsight("f1")
+
+	// Then the folder is passed on and the card is fresh and can be regenerated
+	require.NoError(t, err)
+	assert.Equal(t, "f1", asked)
+	require.NotNil(t, result.Insight)
+	assert.Equal(t, "Solid.", result.Insight.Analysis[0].Text)
+	assert.False(t, result.Stale)
+	assert.True(t, result.CanGenerate)
 }

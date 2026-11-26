@@ -1,15 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  GenerateProgressFolderInsight,
   GenerateProgressInsight,
   GetProgressDashboard,
+  GetProgressFolderInsight,
   GetProgressTopic,
 } from '../../wailsjs/go/desktop/App'
-import { generateProgressInsight, getProgressDashboard, getProgressTopic } from './progress'
+import {
+  generateProgressFolderInsight,
+  generateProgressInsight,
+  getProgressDashboard,
+  getProgressFolderInsight,
+  getProgressTopic,
+} from './progress'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
   GetProgressDashboard: vi.fn(),
   GetProgressTopic: vi.fn(),
   GenerateProgressInsight: vi.fn(),
+  GetProgressFolderInsight: vi.fn(),
+  GenerateProgressFolderInsight: vi.fn(),
 }))
 
 describe('getProgressDashboard', () => {
@@ -239,5 +249,54 @@ describe('the insight of a topic', () => {
 
     expect(GenerateProgressInsight).toHaveBeenCalledWith('s1')
     expect(state).toEqual(INSIGHT_RESULT)
+  })
+})
+
+describe('the insight of a folder', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const FOLDER_RESULT = {
+    insight: {
+      analysis: [
+        { text: 'Cache is weak.', citations: [{ kind: 'TOPIC', id: 's1', label: 'Cache' }] },
+      ],
+      recommendations: [{ text: 'Review it.', citations: [] }],
+      model: 'anthropic/x',
+      language: 'en',
+      createdAt: '2026-12-01T09:00:00Z',
+    },
+    stale: true,
+    canGenerate: true,
+  }
+
+  it('is read for the given folder with its topic citations', async () => {
+    vi.mocked(GetProgressFolderInsight).mockResolvedValue(FOLDER_RESULT as never)
+
+    const state = await getProgressFolderInsight('f1')
+
+    expect(GetProgressFolderInsight).toHaveBeenCalledWith('f1')
+    expect(state).toEqual(FOLDER_RESULT)
+  })
+
+  it('is null when none was generated', async () => {
+    vi.mocked(GetProgressFolderInsight).mockResolvedValue({
+      stale: false,
+      canGenerate: false,
+    } as never)
+
+    expect(await getProgressFolderInsight('f1')).toEqual({
+      insight: null,
+      stale: false,
+      canGenerate: false,
+    })
+  })
+
+  it('is generated for the given folder', async () => {
+    vi.mocked(GenerateProgressFolderInsight).mockResolvedValue(FOLDER_RESULT as never)
+
+    const state = await generateProgressFolderInsight('f1')
+
+    expect(GenerateProgressFolderInsight).toHaveBeenCalledWith('f1')
+    expect(state).toEqual(FOLDER_RESULT)
   })
 })
