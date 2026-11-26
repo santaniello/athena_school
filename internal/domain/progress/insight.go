@@ -11,8 +11,12 @@ import (
 	"time"
 )
 
-// MaxInsightRecommendations is how many recommendations an insight may hold.
-const MaxInsightRecommendations = 3
+// Limits of an insight: how many recommendations and how many sentences of
+// analysis it may hold.
+const (
+	MaxInsightRecommendations = 3
+	MaxInsightAnalysis        = 6
+)
 
 var (
 	// ErrInvalidInsight is returned by ParseInsight when the model's answer is
@@ -79,6 +83,7 @@ type InsightProof struct {
 	Assessment  string
 	Description string
 	Assisted    bool
+	At          time.Time
 }
 
 // InsightConcept is a concept of the session with its proofs.
@@ -110,8 +115,9 @@ func (InsightInput) ChallengeRef(i int) string { return fmt.Sprintf("L%d", i+1) 
 func (InsightInput) ConceptRef(i int) string { return fmt.Sprintf("K%d", i+1) }
 
 // Fingerprint is a hash of the activities of the input with the time of their
-// latest attempt or update, plus the assistant language. Two equal
-// fingerprints mean an insight written for one is still current for the other.
+// latest attempt, update or proof, the result of each lab attempt (it moves
+// with the pass score) and the assistant language. Two equal fingerprints mean
+// an insight written for one is still current for the other.
 func Fingerprint(in InsightInput, language string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "language %q\n", language)
@@ -126,11 +132,16 @@ func Fingerprint(in InsightInput, language string) string {
 		var latest time.Time
 		for _, attempt := range challenge.Attempts {
 			latest = laterOf(latest, attempt.At)
+			fmt.Fprintf(&b, "result %q\n", attempt.Result)
 		}
 		fmt.Fprintf(&b, "challenge %q %d\n", challenge.ID, unixNano(latest))
 	}
 	for _, concept := range in.Concepts {
-		fmt.Fprintf(&b, "concept %q %d\n", concept.Name, unixNano(concept.UpdatedAt))
+		latest := concept.UpdatedAt
+		for _, proof := range concept.Proofs {
+			latest = laterOf(latest, proof.At)
+		}
+		fmt.Fprintf(&b, "concept %q %d\n", concept.Name, unixNano(latest))
 	}
 	sum := sha256.Sum256([]byte(b.String()))
 	return hex.EncodeToString(sum[:])
@@ -235,14 +246,17 @@ type statementAnswer struct {
 }
 
 // ParseInsight validates the model's JSON answer against the input: at least
-// one sentence of analysis and one to MaxInsightRecommendations
-// recommendations, none of them blank. A cited activity that is not in the
+// one to MaxInsightAnalysis sentences of analysis and one to
+// MaxInsightRecommendations recommendations, none of them blank. A cited activity that is not in the
 // input is dropped, and so is a repeated one. Anything else wrong is
 // ErrInvalidInsight.
 func ParseInsight(raw string, in InsightInput) (InsightContent, error) {
 	var answer insightAnswer
 	if err := json.Unmarshal([]byte(raw), &answer); err != nil {
 		return InsightContent{}, fmt.Errorf("%w: %v", ErrInvalidInsight, err)
+	}
+	if len(answer.Analysis) > MaxInsightAnalysis {
+		return InsightContent{}, fmt.Errorf("%w: %d analysis sentences, at most %d", ErrInvalidInsight, len(answer.Analysis), MaxInsightAnalysis)
 	}
 	if len(answer.Recommendations) > MaxInsightRecommendations {
 		return InsightContent{}, fmt.Errorf("%w: %d recommendations, at most %d", ErrInvalidInsight, len(answer.Recommendations), MaxInsightRecommendations)

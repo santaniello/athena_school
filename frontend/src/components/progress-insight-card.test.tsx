@@ -143,6 +143,18 @@ describe('ProgressInsightCard', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
+  it('does not claim a previous analysis was kept when there was none', async () => {
+    vi.mocked(generateProgressInsight).mockRejectedValueOnce(new Error('provider down'))
+    render(<ProgressInsightCard sessionId="s1" initial={{ ...NONE }} />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Generate insights' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Could not generate the insights.')
+    expect(alert).not.toHaveTextContent('previous analysis')
+    expect(screen.queryByText(/No analysis generated yet/)).not.toBeInTheDocument()
+  })
+
   it('follows the assistant language', () => {
     setLabLanguage('pt')
     render(<ProgressInsightCard sessionId="s1" initial={NONE} />)

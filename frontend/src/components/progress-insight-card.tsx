@@ -74,7 +74,7 @@ export function ProgressInsightCard({ sessionId, initial }: ProgressInsightCardP
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p role="alert" className="flex items-center gap-2 text-sm text-destructive">
             <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
-            {t('detail.insight.failed')}
+            {insight === null ? t('detail.insight.failedFirst') : t('detail.insight.failed')}
           </p>
           <Button type="button" variant="outline" onClick={generate} disabled={busy}>
             {busy ? t('detail.insight.generating') : t('detail.insight.retry')}
@@ -84,7 +84,7 @@ export function ProgressInsightCard({ sessionId, initial }: ProgressInsightCardP
       {!state.canGenerate && insight === null && (
         <p className="text-sm text-muted-foreground">{t('detail.insight.blocked')}</p>
       )}
-      {state.canGenerate && insight === null && (
+      {state.canGenerate && insight === null && !failed && (
         <p className="text-sm text-muted-foreground">{t('detail.insight.empty')}</p>
       )}
       {insight !== null && (

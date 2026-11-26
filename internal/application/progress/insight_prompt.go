@@ -81,7 +81,7 @@ func writeInsightEvaluation(b *strings.Builder, kind string, evaluation *domainp
 	fmt.Fprintf(b, "<%s score=\"%d\">\n", kind, evaluation.Score)
 	for _, criterion := range evaluation.Criteria {
 		if criterion.InsufficientEvidence {
-			llmprompt.WriteTag(b, "criterion", criterion.Name+": insufficient evidence to judge", false)
+			llmprompt.WriteTag(b, "criterion", criterion.Name+": insufficient evidence to judge. "+criterion.Justification, false)
 			continue
 		}
 		llmprompt.WriteTag(b, "criterion", fmt.Sprintf("%s: level %d of 4. %s", criterion.Name, criterion.Level, criterion.Justification), false)

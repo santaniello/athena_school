@@ -202,7 +202,7 @@ func labTopic() TopicData {
 		}},
 		Concepts: []TopicConceptData{
 			{Name: "ttl", DisplayName: "TTL", Status: domainstudy.StatusNeedsReview, EvidenceCount: 1, UpdatedAt: base.AddDate(0, 0, 5),
-				Proofs: []domainstudy.Evidence{{Assessment: domainstudy.AssessmentIncorrect, Description: "Vague on expiry", Assisted: true}}},
+				Proofs: []domainstudy.Evidence{{Assessment: domainstudy.AssessmentIncorrect, Description: "Vague on expiry", Assisted: true, CreatedAt: base.AddDate(0, 0, 6)}}},
 			{Name: "lru", Status: domainstudy.StatusNotAssessed, UpdatedAt: base},
 		},
 	}
@@ -236,7 +236,7 @@ func TestGenerateTopicInsight_mapsTheEvidenceOfLabsAndConceptsForTheModel(t *tes
 		}},
 		Concepts: []domainprogress.InsightConcept{{
 			Name: "TTL", Status: domainprogress.StatusNeedsReview, UpdatedAt: base.AddDate(0, 0, 5),
-			Proofs: []domainprogress.InsightProof{{Assessment: "INCORRECT", Description: "Vague on expiry", Assisted: true}},
+			Proofs: []domainprogress.InsightProof{{Assessment: "INCORRECT", Description: "Vague on expiry", Assisted: true, At: base.AddDate(0, 0, 6)}},
 		}},
 	}
 	f.generator.EXPECT().GenerateInsight(ctx, want, "en").Return(domainprogress.RawInsight{Content: validInsightAnswer}, nil)
@@ -253,17 +253,17 @@ func TestGenerateTopicInsight_mapsTheEvidenceOfLabsAndConceptsForTheModel(t *tes
 	require.NoError(t, err)
 }
 
-func TestGenerateTopicInsight_refusesAnEvaluatedAttemptWithoutItsRubric(t *testing.T) {
+func TestInsightInput_skipsAnEvaluatedAttemptWithoutItsRubric(t *testing.T) {
 	// Given an attempt with an evaluation but no frozen rubric
 	topic := labTopic()
 	topic.Challenges[0].Attempts[1].Rubric = nil
-	f := newInsightFixture(t, topic, nil)
 
-	// When the insight is requested
-	_, err := f.service.GenerateTopicInsight(context.Background(), "s1")
+	// When the evidence is mapped
+	input, err := insightInput(topic, 80)
 
-	// Then the inconsistency is an error
-	require.ErrorContains(t, err, "no rubric")
+	// Then the attempt is not evidence, and it is not an error
+	require.NoError(t, err)
+	assert.Empty(t, input.Challenges[0].Attempts)
 }
 
 func storedInsight(input domainprogress.InsightInput, language string) domainprogress.Insight {
@@ -358,19 +358,29 @@ func TestGetTopicDetail_cannotGenerateAnInsightWithoutEvidence(t *testing.T) {
 	assert.False(t, detail.Insight.CanGenerate)
 }
 
-func TestGetTopicDetail_returnsTheErrorsOfTheInsightStoreAndTheLanguage(t *testing.T) {
+func TestGetTopicDetail_anInsightFailureNeverBlocksTheRestOfTheDetail(t *testing.T) {
 	ctx := context.Background()
 	t.Run("store", func(t *testing.T) {
 		f := newInsightFixture(t, quizTopic(), nil)
 		f.repo.EXPECT().Get(ctx, "s1").Return(domainprogress.Insight{}, errors.New("db locked"))
-		_, err := f.service.GetTopicDetail(ctx, "s1")
-		require.ErrorContains(t, err, "db locked")
+
+		detail, err := f.service.GetTopicDetail(ctx, "s1")
+
+		// Then the detail is there, with no insight and a new one can be asked for
+		require.NoError(t, err)
+		assert.Len(t, detail.Quizzes, 1)
+		assert.Nil(t, detail.Insight.Current)
+		assert.True(t, detail.Insight.CanGenerate)
 	})
 	t.Run("language", func(t *testing.T) {
 		f := newInsightFixture(t, quizTopic(), nil)
 		f.repo.EXPECT().Get(ctx, "s1").Return(storedInsight(quizInsightInput(), "en"), nil)
 		f.language.EXPECT().AssistantLanguage(ctx).Return("", errors.New("no profile"))
-		_, err := f.service.GetTopicDetail(ctx, "s1")
-		require.ErrorContains(t, err, "no profile")
+
+		detail, err := f.service.GetTopicDetail(ctx, "s1")
+
+		require.NoError(t, err)
+		assert.Len(t, detail.Quizzes, 1)
+		assert.Nil(t, detail.Insight.Current)
 	})
 }

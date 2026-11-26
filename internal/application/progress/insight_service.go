@@ -83,7 +83,9 @@ func (s *Service) GenerateTopicInsight(ctx context.Context, sessionID string) (d
 }
 
 // insightView reads the stored insight of the topic and compares its
-// fingerprint with the one of the evidence now, with no LLM call. Without the
+// fingerprint with the one of the evidence now, with no LLM call. On an error
+// it still returns the view without the stored insight, so the caller can
+// degrade instead of failing. Without the
 // insight ports it is the zero view: nothing to show and nothing to generate.
 func (s *Service) insightView(ctx context.Context, topic TopicData, passScore int) (domainprogress.InsightView, error) {
 	if s.insights == nil {
@@ -99,15 +101,15 @@ func (s *Service) insightView(ctx context.Context, topic TopicData, passScore in
 		return view, nil
 	}
 	if err != nil {
-		return domainprogress.InsightView{}, fmt.Errorf("progress: reading insight: %w", err)
+		return view, fmt.Errorf("progress: reading insight: %w", err)
 	}
 	language, err := s.insights.language.AssistantLanguage(ctx)
 	if err != nil {
-		return domainprogress.InsightView{}, fmt.Errorf("progress: reading the assistant language: %w", err)
+		return view, fmt.Errorf("progress: reading the assistant language: %w", err)
 	}
 	input, err := insightInput(topic, passScore)
 	if err != nil {
-		return domainprogress.InsightView{}, err
+		return view, err
 	}
 	view.Current = &stored
 	view.Stale = stored.Fingerprint != domainprogress.Fingerprint(input, language)
@@ -135,7 +137,7 @@ func topicStatus(topic TopicData, passScore int) (domainprogress.Status, error) 
 }
 
 // insightInput maps the persisted evidence of the topic: every quiz with its
-// attempts, the challenges with the attempts that have an evaluation, and the
+// attempts, the challenges with the attempts that have an evaluation and a rubric, and the
 // concepts the tutor has assessed.
 func insightInput(topic TopicData, passScore int) (domainprogress.InsightInput, error) {
 	input := domainprogress.InsightInput{SessionID: topic.SessionID, Topic: topic.Topic}
@@ -177,7 +179,9 @@ func insightChallenge(challenge TopicChallengeData, passScore int) (domainprogre
 			continue
 		}
 		if record.Rubric == nil {
-			return domainprogress.InsightChallenge{}, fmt.Errorf("progress: attempt %s has evaluations but no rubric", record.Attempt.ID)
+			// Without its frozen rubric the criteria have no names and the
+			// outcome cannot be decided: the attempt is not evidence.
+			continue
 		}
 		outcome := domainexercise.EvaluateOutcome(passScore, *record.Rubric, record.Diagram, record.Understanding)
 		item.Attempts = append(item.Attempts, domainprogress.InsightLabAttempt{
@@ -236,7 +240,7 @@ func insightConcept(concept TopicConceptData) domainprogress.InsightConcept {
 	item := domainprogress.InsightConcept{Name: name, Status: domainprogress.ConceptStatus(concept.Status), UpdatedAt: concept.UpdatedAt}
 	for _, proof := range concept.Proofs {
 		item.Proofs = append(item.Proofs, domainprogress.InsightProof{
-			Assessment: string(proof.Assessment), Description: proof.Description, Assisted: proof.Assisted,
+			Assessment: string(proof.Assessment), Description: proof.Description, Assisted: proof.Assisted, At: proof.CreatedAt,
 		})
 	}
 	return item

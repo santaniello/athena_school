@@ -82,6 +82,7 @@ export const progressTabEn = {
         'There is no evidence to analyse yet. Study with the tutor, take a quiz or a lab on this topic first.',
       stale: 'New activity since this analysis. Update it to take that into account.',
       failed: 'Could not generate the insights. Your previous analysis was kept.',
+      failedFirst: 'Could not generate the insights.',
       recommendations: 'Recommendations',
       basedOn: 'based on: {{sources}}',
       meta: 'Generated on {{date}} · {{model}}',

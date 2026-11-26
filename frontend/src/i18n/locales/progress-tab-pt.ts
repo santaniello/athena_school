@@ -82,6 +82,7 @@ export const progressTabPt = {
         'Ainda não há evidências para analisar. Estude com o tutor, faça um quiz ou um Arch Lab deste assunto primeiro.',
       stale: 'Há atividade nova desde esta análise. Atualize para considerá-la.',
       failed: 'Não foi possível gerar os insights. Sua análise anterior foi mantida.',
+      failedFirst: 'Não foi possível gerar os insights.',
       recommendations: 'Recomendações',
       basedOn: 'baseado em: {{sources}}',
       meta: 'Gerado em {{date}} · {{model}}',

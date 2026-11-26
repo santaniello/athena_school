@@ -35,7 +35,7 @@ func testInsightInput() domainprogress.InsightInput {
 				},
 				Defense: &domainprogress.InsightEvaluation{
 					Score:    70,
-					Criteria: []domainprogress.InsightCriterion{{Name: "Trade-offs", InsufficientEvidence: true}},
+					Criteria: []domainprogress.InsightCriterion{{Name: "Trade-offs", InsufficientEvidence: true, Justification: "Never discussed partitions"}},
 				},
 			}},
 		}},
@@ -104,7 +104,7 @@ func TestBuildInsightPrompt_userPromptListsTheEvidence(t *testing.T) {
 		"50%", "80%", "EASY",
 		"Design a cache", "FAILED", "diagram", "defense",
 		"Scalability", "level 1", "No sharding",
-		"Trade-offs", "insufficient evidence",
+		"Trade-offs", "insufficient evidence", "Never discussed partitions",
 		"Clear boxes", "No eviction", "Add a TTL",
 		"TTL", "NEEDS_REVIEW", "Could not explain expiry", "assisted",
 		"2026-11-03",

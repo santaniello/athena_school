@@ -1,6 +1,7 @@
 package progress
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -71,6 +72,24 @@ func TestFingerprint_changesWhenAConceptIsUpdated(t *testing.T) {
 	updated.Concepts[0].UpdatedAt = day(10)
 
 	assert.NotEqual(t, Fingerprint(insightInput(), "en"), Fingerprint(updated, "en"))
+}
+
+func TestFingerprint_changesWhenAProofIsRecordedWithoutAStatusChange(t *testing.T) {
+	// Given a new proof of a concept whose own update time did not move
+	proved := insightInput()
+	proved.Concepts[0].Proofs = []InsightProof{{At: day(11)}}
+
+	// Then the fingerprint differs
+	assert.NotEqual(t, Fingerprint(insightInput(), "en"), Fingerprint(proved, "en"))
+}
+
+func TestFingerprint_changesWhenTheResultOfALabAttemptChanges(t *testing.T) {
+	// Given the same attempt that now passes instead of failing (a new pass score)
+	failed := insightInput()
+	failed.Challenges[0].Attempts[0].Result = LabResultFailed
+
+	// Then the fingerprint differs
+	assert.NotEqual(t, Fingerprint(insightInput(), "en"), Fingerprint(failed, "en"))
 }
 
 func TestFingerprint_changesWhenAnActivityIsAdded(t *testing.T) {
@@ -171,6 +190,21 @@ func TestParseInsight_rejectsInvalidAnswers(t *testing.T) {
 			require.ErrorIs(t, err, ErrInvalidInsight)
 		})
 	}
+}
+
+func TestParseInsight_boundsTheAnalysis(t *testing.T) {
+	sentences := func(n int) string {
+		return strings.TrimSuffix(strings.Repeat(`{"text":"A."},`, n), ",")
+	}
+	raw := func(n int) string {
+		return `{"analysis":[` + sentences(n) + `],"recommendations":[{"text":"B."}]}`
+	}
+
+	_, err := ParseInsight(raw(MaxInsightAnalysis), insightInput())
+	require.NoError(t, err)
+
+	_, err = ParseInsight(raw(MaxInsightAnalysis+1), insightInput())
+	require.ErrorIs(t, err, ErrInvalidInsight)
 }
 
 func TestParseInsight_acceptsExactlyThreeRecommendations(t *testing.T) {

@@ -287,13 +287,18 @@ func toProgressProofResults(proofs []domainprogress.DetailProof) []ProgressProof
 
 // GenerateProgressInsight asks the model for the Athena Insights of the topic
 // that is the given session, from its stored evidence, stores it and returns
-// the card, fresh. It is the only Progress call that uses the LLM, and only
+// the card, fresh. A topic without evidence is not an error: the card comes
+// back with canGenerate false. It is the only Progress call that uses the LLM, and only
 // when the user asks for it.
 func (a *App) GenerateProgressInsight(sessionID string) (ProgressInsightStateResult, error) {
 	if a.progress == nil {
 		return ProgressInsightStateResult{}, errProgressUnavailable
 	}
 	insight, err := a.progress.GenerateTopicInsight(a.ctx, sessionID)
+	if errors.Is(err, domainprogress.ErrInsufficientEvidence) {
+		// Not a failure to retry: the card shows the guidance to gather evidence.
+		return ProgressInsightStateResult{CanGenerate: false}, nil
+	}
 	if err != nil {
 		return ProgressInsightStateResult{}, err
 	}

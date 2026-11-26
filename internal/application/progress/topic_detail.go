@@ -3,6 +3,7 @@ package progress
 import (
 	"context"
 	"fmt"
+	"log"
 
 	domainexercise "github.com/santaniello/athena/internal/domain/exercise"
 	domainprogress "github.com/santaniello/athena/internal/domain/progress"
@@ -43,8 +44,11 @@ func (s *Service) GetTopicDetail(ctx context.Context, sessionID string) (domainp
 		return domainprogress.TopicDetail{}, err
 	}
 	detail.Evolution = domainprogress.BuildEvolution(evolution, passScore)
-	if detail.Insight, err = s.insightView(ctx, topic, passScore); err != nil {
-		return domainprogress.TopicDetail{}, err
+	// The insight is an extra: when it cannot be read the rest of the detail
+	// still shows, with the insight as if none were stored.
+	detail.Insight, err = s.insightView(ctx, topic, passScore)
+	if err != nil {
+		log.Printf("progress: insight of topic %s unavailable: %v", topic.SessionID, err)
 	}
 	return detail, nil
 }

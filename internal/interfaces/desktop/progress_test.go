@@ -272,6 +272,20 @@ func TestGenerateProgressInsight_returnsTheErrorOfTheService(t *testing.T) {
 	require.ErrorContains(t, err, "provider down")
 }
 
+func TestGenerateProgressInsight_aTopicWithoutEvidenceIsABlockedCardNotAnError(t *testing.T) {
+	// Given a service that refuses the topic for lack of evidence
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		WithProgressService(fakeProgressDashboard{insightErr: domainprogress.ErrInsufficientEvidence}))
+
+	// When an insight is requested
+	result, err := app.GenerateProgressInsight("s1")
+
+	// Then the card says it cannot be generated, so the frontend offers no retry
+	require.NoError(t, err)
+	assert.Nil(t, result.Insight)
+	assert.False(t, result.CanGenerate)
+}
+
 func TestGenerateProgressInsight_returnsTheFreshInsightForTheSession(t *testing.T) {
 	// Given a service that writes an insight
 	at := time.Date(2026, 12, 1, 9, 0, 0, 0, time.UTC)
