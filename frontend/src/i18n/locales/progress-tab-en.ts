@@ -70,6 +70,23 @@ export const progressTabEn = {
       quizItem: 'Quiz {{number}}',
       chartLabel: 'Evolution of the results over the assessments',
     },
+    insight: {
+      title: 'Athena Insights',
+      generate: 'Generate insights',
+      update: 'Update insights',
+      generating: 'Generating...',
+      retry: 'Try again',
+      empty:
+        'No analysis generated yet. The analysis uses only the saved assessments and evidence, never the whole conversation.',
+      blocked:
+        'There is no evidence to analyse yet. Study with the tutor, take a quiz or a lab on this topic first.',
+      stale: 'New activity since this analysis. Update it to take that into account.',
+      failed: 'Could not generate the insights. Your previous analysis was kept.',
+      failedFirst: 'Could not generate the insights.',
+      recommendations: 'Recommendations',
+      basedOn: 'based on: {{sources}}',
+      meta: 'Generated on {{date}} · {{model}}',
+    },
     learning: {
       title: 'Learning identified',
       understood: 'Concepts understood',

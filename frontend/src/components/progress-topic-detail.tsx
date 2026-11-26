@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 import { PROGRESS_NAMESPACE } from '@/i18n'
 import { quizDifficultyLabel } from '@/lib/quiz'
 import { ProgressEvolutionChart } from '@/components/progress-evolution-chart'
+import { ProgressInsightCard } from '@/components/progress-insight-card'
 import {
   getProgressTopic,
   type LabResult,
@@ -123,6 +124,7 @@ function TopicBody({ sessionId, onOpenQuiz, onOpenChallenge, status }: ProgressT
           />
         </ul>
       </Section>
+      <ProgressInsightCard sessionId={detail.sessionId} initial={detail.insight} />
       <Results detail={detail} onOpenQuiz={onOpenQuiz} onOpenChallenge={onOpenChallenge} />
       <Section title={t('detail.evolution.title')}>
         <ProgressEvolutionChart evolution={detail.evolution} />

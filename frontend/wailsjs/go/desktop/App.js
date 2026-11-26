@@ -98,6 +98,10 @@ export function GenerateMindMap(arg1) {
   return window['go']['desktop']['App']['GenerateMindMap'](arg1);
 }
 
+export function GenerateProgressInsight(arg1) {
+  return window['go']['desktop']['App']['GenerateProgressInsight'](arg1);
+}
+
 export function GenerateQuiz(arg1, arg2, arg3) {
   return window['go']['desktop']['App']['GenerateQuiz'](arg1, arg2, arg3);
 }

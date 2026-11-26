@@ -161,6 +161,7 @@ type TopicDetail struct {
 	Difficulties   []Difficulty
 	ExplainedOnly  []ConceptDetail // INTRODUCED: explained, never shown as understanding
 	Evolution      Evolution       // set by the application, from BuildEvolution
+	Insight        InsightView     // set by the application, from the stored insight
 }
 
 // BuildTopicDetail derives the detail of a topic. Every list is non-nil.

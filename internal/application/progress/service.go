@@ -10,15 +10,24 @@ import (
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 )
 
-// Service builds the Progress dashboard.
+// Service builds the Progress dashboard and the topic detail, and writes the
+// insights of a topic when asked.
 type Service struct {
 	reader     Reader
 	passScores PassScoreProvider
+	insights   *insightPorts // nil when the insights are not wired
 }
 
+// Option configures a Service.
+type Option func(*Service)
+
 // NewService creates a Service backed by the given ports.
-func NewService(reader Reader, passScores PassScoreProvider) *Service {
-	return &Service{reader: reader, passScores: passScores}
+func NewService(reader Reader, passScores PassScoreProvider, options ...Option) *Service {
+	s := &Service{reader: reader, passScores: passScores}
+	for _, option := range options {
+		option(s)
+	}
+	return s
 }
 
 // GetDashboard derives the dashboard on read from the stored data. The pass

@@ -14,11 +14,20 @@ import (
 )
 
 type fakeProgressDashboard struct {
-	dashboard domainprogress.Dashboard
-	err       error
-	detail    domainprogress.TopicDetail
-	detailErr error
-	asked     *string
+	dashboard  domainprogress.Dashboard
+	err        error
+	detail     domainprogress.TopicDetail
+	detailErr  error
+	asked      *string
+	insight    domainprogress.Insight
+	insightErr error
+}
+
+func (f fakeProgressDashboard) GenerateTopicInsight(_ context.Context, sessionID string) (domainprogress.Insight, error) {
+	if f.asked != nil {
+		*f.asked = sessionID
+	}
+	return f.insight, f.insightErr
 }
 
 func (f fakeProgressDashboard) GetTopicDetail(_ context.Context, sessionID string) (domainprogress.TopicDetail, error) {
@@ -168,6 +177,11 @@ func TestGetProgressTopic_mapsTheDetailAndAsksForTheSession(t *testing.T) {
 			Lab:       []domainprogress.EvolutionPoint{{Order: 1, ItemNumber: 1, Title: "Design a cache", Score: 76, At: proofAt}},
 			PassScore: 80, Enough: true,
 		},
+		Insight: domainprogress.InsightView{Stale: true, CanGenerate: true, Current: &domainprogress.Insight{
+			Analysis:        []domainprogress.Statement{{Text: "Solid.", Citations: []domainprogress.Citation{{Kind: domainprogress.CitationQuiz, ID: "q1", Label: "Quiz 2"}}}},
+			Recommendations: []domainprogress.Statement{{Text: "Retake.", Citations: []domainprogress.Citation{}}},
+			Model:           "anthropic/x", Language: "pt", CreatedAt: proofAt,
+		}},
 	}
 	var asked string
 	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
@@ -196,7 +210,12 @@ func TestGetProgressTopic_mapsTheDetailAndAsksForTheSession(t *testing.T) {
 			"quiz": [{"order": 1, "itemNumber": 2, "title": "", "score": 60, "at": "2026-11-02T10:00:00Z"}],
 			"lab": [{"order": 1, "itemNumber": 1, "title": "Design a cache", "score": 76, "at": "2026-11-02T10:00:00Z"}],
 			"passScore": 80, "enough": true
-		}
+		},
+		"insight": {"insight": {
+			"analysis": [{"text": "Solid.", "citations": [{"kind": "QUIZ", "id": "q1", "label": "Quiz 2"}]}],
+			"recommendations": [{"text": "Retake.", "citations": []}],
+			"model": "anthropic/x", "language": "pt", "createdAt": "2026-11-02T10:00:00Z"
+		}, "stale": true, "canGenerate": true}
 	}`, string(raw))
 }
 
@@ -214,4 +233,83 @@ func TestGetProgressTopic_returnsEmptyListsNotNull(t *testing.T) {
 	for _, key := range []string{"quizzes", "challenges", "understood", "difficulties", "explainedOnly", "quiz", "lab"} {
 		assert.Contains(t, string(raw), `"`+key+`":[]`)
 	}
+}
+
+func TestGetProgressTopic_hasNoInsightWhenNoneIsStored(t *testing.T) {
+	// Given a detail without a stored insight
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, WithProgressService(fakeProgressDashboard{}))
+
+	// When it is serialized
+	result, err := app.GetProgressTopic("s1")
+	require.NoError(t, err)
+	raw, err := json.Marshal(result)
+	require.NoError(t, err)
+
+	// Then the insight is null, not an empty object
+	assert.Contains(t, string(raw), `"insight":{"insight":null,"stale":false,"canGenerate":false}`)
+}
+
+func TestGenerateProgressInsight_failsWhenTheServiceIsNotWired(t *testing.T) {
+	// Given an app without the progress service
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+
+	// When an insight is requested
+	_, err := app.GenerateProgressInsight("s1")
+
+	// Then it fails clearly instead of panicking
+	require.Error(t, err)
+}
+
+func TestGenerateProgressInsight_returnsTheErrorOfTheService(t *testing.T) {
+	// Given a service that fails
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		WithProgressService(fakeProgressDashboard{insightErr: errors.New("provider down")}))
+
+	// When an insight is requested
+	_, err := app.GenerateProgressInsight("s1")
+
+	// Then the error reaches the frontend
+	require.ErrorContains(t, err, "provider down")
+}
+
+func TestGenerateProgressInsight_aTopicWithoutEvidenceIsABlockedCardNotAnError(t *testing.T) {
+	// Given a service that refuses the topic for lack of evidence
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		WithProgressService(fakeProgressDashboard{insightErr: domainprogress.ErrInsufficientEvidence}))
+
+	// When an insight is requested
+	result, err := app.GenerateProgressInsight("s1")
+
+	// Then the card says it cannot be generated, so the frontend offers no retry
+	require.NoError(t, err)
+	assert.Nil(t, result.Insight)
+	assert.False(t, result.CanGenerate)
+}
+
+func TestGenerateProgressInsight_returnsTheFreshInsightForTheSession(t *testing.T) {
+	// Given a service that writes an insight
+	at := time.Date(2026, 12, 1, 9, 0, 0, 0, time.UTC)
+	var asked string
+	app := NewApp(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, WithProgressService(fakeProgressDashboard{
+		asked: &asked,
+		insight: domainprogress.Insight{
+			Analysis:        []domainprogress.Statement{{Text: "Solid.", Citations: []domainprogress.Citation{}}},
+			Recommendations: []domainprogress.Statement{{Text: "Retake.", Citations: []domainprogress.Citation{}}},
+			Model:           "m", Language: "en", CreatedAt: at,
+		},
+	}))
+
+	// When an insight is generated
+	result, err := app.GenerateProgressInsight("s1")
+	require.NoError(t, err)
+	raw, err := json.Marshal(result)
+	require.NoError(t, err)
+
+	// Then the session is passed on and the state is fresh and can be regenerated
+	assert.Equal(t, "s1", asked)
+	assert.JSONEq(t, `{"insight": {
+		"analysis": [{"text": "Solid.", "citations": []}],
+		"recommendations": [{"text": "Retake.", "citations": []}],
+		"model": "m", "language": "en", "createdAt": "2026-12-01T09:00:00Z"
+	}, "stale": false, "canGenerate": true}`, string(raw))
 }

@@ -36,6 +36,18 @@ type PassScoreProvider interface {
 	Current(ctx context.Context) (int, error)
 }
 
+// LanguageProvider supplies the assistant language of the profile ("pt" or
+// "en"), the one the insights are written in (spec 5.4, decision 8).
+type LanguageProvider interface {
+	AssistantLanguage(ctx context.Context) (string, error)
+}
+
+// Clock tells the current time, so the time an insight is stored with is
+// testable.
+type Clock interface {
+	Now() time.Time
+}
+
 // FolderData is a folder with its sessions.
 type FolderData struct {
 	ID       string

@@ -49,6 +49,8 @@ func TestReset_clearsEveryArchitectureLabAndQuizTable(t *testing.T) {
 		INSERT INTO mind_map_offers (id, session_id, message_id, created_at) VALUES ('moffer-1', 'session-2', 'message-2', 'now');
 		INSERT INTO mind_maps (id, session_id, session_title, title, tree, diagram_xml, message_id, created_at, updated_at)
 			VALUES ('map-1', 'session-1', 'Go', 'Go', '{}', '<mxGraphModel/>', 'message-1', 'now', 'now');
+		INSERT INTO topic_insights (session_id, analysis, payload, model, language, fingerprint, created_at)
+			VALUES ('session-1', 'a', '{}', 'm', 'en', 'f', 'now');
 	`)
 	require.NoError(t, err)
 
@@ -60,6 +62,7 @@ func TestReset_clearsEveryArchitectureLabAndQuizTable(t *testing.T) {
 		"challenges", "rubric_versions", "rubric_criteria", "session_exercises", "challenge_attempts",
 		"submissions", "evaluations", "criterion_results", "attempt_hints", "defense_turns", "exercise_offers", "quiz_offers",
 		"quizzes", "quiz_questions", "quiz_attempts", "quiz_answers", "mind_maps", "mind_map_offers",
+		"topic_insights",
 	} {
 		var count int
 		require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM `+table).Scan(&count))

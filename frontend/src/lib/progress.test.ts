@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { GetProgressDashboard, GetProgressTopic } from '../../wailsjs/go/desktop/App'
-import { getProgressDashboard, getProgressTopic } from './progress'
+import {
+  GenerateProgressInsight,
+  GetProgressDashboard,
+  GetProgressTopic,
+} from '../../wailsjs/go/desktop/App'
+import { generateProgressInsight, getProgressDashboard, getProgressTopic } from './progress'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
   GetProgressDashboard: vi.fn(),
   GetProgressTopic: vi.fn(),
+  GenerateProgressInsight: vi.fn(),
 }))
 
 describe('getProgressDashboard', () => {
@@ -125,6 +130,7 @@ describe('getProgressTopic', () => {
         passScore: 80,
         enough: false,
       },
+      insight: { stale: false, canGenerate: true },
     } as never)
 
     const detail = await getProgressTopic('s1')
@@ -170,6 +176,7 @@ describe('getProgressTopic', () => {
       difficulties: [],
       explainedOnly: [],
       evolution: { quiz: [], lab: [], passScore: 80, enough: false },
+      insight: { stale: false, canGenerate: false },
     } as never)
 
     const detail = await getProgressTopic('s1')
@@ -177,5 +184,60 @@ describe('getProgressTopic', () => {
     expect(detail.quizzes[0].percent).toBeNull()
     expect(detail.challenges[0].diagramScore).toBeNull()
     expect(detail.challenges[0].defenseScore).toBeNull()
+  })
+})
+
+const INSIGHT_RESULT = {
+  insight: {
+    analysis: [
+      { text: 'Solid.', citations: [{ kind: 'QUIZ', id: 'q1', label: 'Quiz 1' }] },
+      { text: 'Weak on TTL.', citations: [] },
+    ],
+    recommendations: [{ text: 'Retake it.', citations: [] }],
+    model: 'anthropic/x',
+    language: 'pt',
+    createdAt: '2026-12-01T09:00:00Z',
+  },
+  stale: true,
+  canGenerate: true,
+}
+
+describe('the insight of a topic', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('is part of the topic detail, with its statements and citations', async () => {
+    vi.mocked(GetProgressTopic).mockResolvedValue({
+      quizzes: [],
+      challenges: [],
+      understood: [],
+      difficulties: [],
+      explainedOnly: [],
+      evolution: { quiz: [], lab: [], passScore: 80, enough: false },
+      insight: INSIGHT_RESULT,
+    } as never)
+
+    const detail = await getProgressTopic('s1')
+
+    expect(detail.insight).toEqual(INSIGHT_RESULT)
+  })
+
+  it('is null when none was generated', async () => {
+    vi.mocked(GenerateProgressInsight).mockResolvedValue({
+      stale: false,
+      canGenerate: true,
+    } as never)
+
+    const state = await generateProgressInsight('s1')
+
+    expect(state).toEqual({ insight: null, stale: false, canGenerate: true })
+  })
+
+  it('is generated for the given session and returned as a state', async () => {
+    vi.mocked(GenerateProgressInsight).mockResolvedValue(INSIGHT_RESULT as never)
+
+    const state = await generateProgressInsight('s1')
+
+    expect(GenerateProgressInsight).toHaveBeenCalledWith('s1')
+    expect(state).toEqual(INSIGHT_RESULT)
   })
 })

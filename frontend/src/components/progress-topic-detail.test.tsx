@@ -70,6 +70,7 @@ const DETAIL: ProgressTopicDetail = {
   ],
   explainedOnly: [{ name: 'LRU', evidenceCount: 0, proofs: [] }],
   evolution: { quiz: [], lab: [], passScore: 80, enough: false },
+  insight: { insight: null, stale: false, canGenerate: true },
 }
 
 function renderPanel(detail: ProgressTopicDetail = DETAIL) {
@@ -107,6 +108,13 @@ describe('ProgressTopicDetail', () => {
     const evolution = await screen.findByRole('region', { name: 'Evolution' })
 
     expect(within(evolution).getByText('Not enough assessments yet')).toBeInTheDocument()
+  })
+
+  it('shows the insight card of the topic', async () => {
+    renderPanel()
+
+    expect(await screen.findByRole('region', { name: 'Athena Insights' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Generate insights' })).toBeInTheDocument()
   })
 
   it('reads the topic of the session it was given', async () => {

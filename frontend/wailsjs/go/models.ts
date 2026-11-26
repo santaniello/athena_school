@@ -921,6 +921,22 @@ export namespace desktop {
 	        this.attempts = source["attempts"];
 	    }
 	}
+	export class ProgressCitationResult {
+	    kind: string;
+	    id: string;
+	    label: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProgressCitationResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.id = source["id"];
+	        this.label = source["label"];
+	    }
+	}
 	export class ProgressProofResult {
 	    assessment: string;
 	    description: string;
@@ -1174,6 +1190,110 @@ export namespace desktop {
 		}
 	}
 	
+	export class ProgressStatementResult {
+	    text: string;
+	    citations: ProgressCitationResult[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ProgressStatementResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.text = source["text"];
+	        this.citations = this.convertValues(source["citations"], ProgressCitationResult);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ProgressInsightResult {
+	    analysis: ProgressStatementResult[];
+	    recommendations: ProgressStatementResult[];
+	    model: string;
+	    language: string;
+	    createdAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProgressInsightResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.analysis = this.convertValues(source["analysis"], ProgressStatementResult);
+	        this.recommendations = this.convertValues(source["recommendations"], ProgressStatementResult);
+	        this.model = source["model"];
+	        this.language = source["language"];
+	        this.createdAt = source["createdAt"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ProgressInsightStateResult {
+	    insight?: ProgressInsightResult;
+	    stale: boolean;
+	    canGenerate: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProgressInsightStateResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.insight = this.convertValues(source["insight"], ProgressInsightResult);
+	        this.stale = source["stale"];
+	        this.canGenerate = source["canGenerate"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	
 	export class ProgressQuizResult {
 	    quizId: string;
@@ -1195,6 +1315,7 @@ export namespace desktop {
 	        this.attempts = source["attempts"];
 	    }
 	}
+	
 	export class ProgressTopicDetailResult {
 	    sessionId: string;
 	    name: string;
@@ -1208,6 +1329,7 @@ export namespace desktop {
 	    difficulties: ProgressDifficultyResult[];
 	    explainedOnly: ProgressConceptResult[];
 	    evolution: ProgressEvolutionResult;
+	    insight: ProgressInsightStateResult;
 	
 	    static createFrom(source: any = {}) {
 	        return new ProgressTopicDetailResult(source);
@@ -1227,6 +1349,7 @@ export namespace desktop {
 	        this.difficulties = this.convertValues(source["difficulties"], ProgressDifficultyResult);
 	        this.explainedOnly = this.convertValues(source["explainedOnly"], ProgressConceptResult);
 	        this.evolution = this.convertValues(source["evolution"], ProgressEvolutionResult);
+	        this.insight = this.convertValues(source["insight"], ProgressInsightStateResult);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

@@ -395,6 +395,21 @@ var migrations = []func(*sql.DB) error{
 		FOREIGN KEY (session_id, concept) REFERENCES session_concepts(session_id, name) ON DELETE CASCADE
 	)`),
 	execSQL(`CREATE INDEX IF NOT EXISTS idx_concept_evidence_session_concept ON concept_evidence (session_id, concept, created_at)`),
+	// topic_insights is the latest Athena Insights of a Progress topic, which
+	// is a session: one row per session, replaced when generated again and
+	// deleted with it. analysis is the plain text of the sentences; payload is
+	// the JSON of the analysis and the recommendations with their citations.
+	// fingerprint is the hash of the evidence it was written from, to tell when
+	// it is stale. See specs/phases/phase-05-progress/04-topic-insights.md.
+	execSQL(`CREATE TABLE IF NOT EXISTS topic_insights (
+		session_id  TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+		analysis    TEXT NOT NULL,
+		payload     TEXT NOT NULL,
+		model       TEXT NOT NULL,
+		language    TEXT NOT NULL,
+		fingerprint TEXT NOT NULL,
+		created_at  TEXT NOT NULL
+	)`),
 }
 
 // addSessionConceptsDisplayNameColumn adds session_concepts.display_name, the
