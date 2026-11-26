@@ -52,17 +52,37 @@ func (in FolderInsightInput) HasEvidence() bool {
 	return false
 }
 
-// FolderFingerprint is a hash of the language and of the set of sessions of the
-// folder with each one's own fingerprint, in any order. Moving a session in or
-// out of the folder, deleting it, or new activity in any topic moves it.
+// FolderFingerprint is a hash of the language, the folder's name and, for each
+// topic in any order, everything the prompt shows of it (name, status, scores,
+// difficulties) with its own fingerprint, which catches new activity. Moving a
+// session in or out of the folder, deleting it, renaming it, a new pass score
+// that moves a status, or new activity in any topic moves it.
 func FolderFingerprint(in FolderInsightInput, language string) string {
 	lines := make([]string, len(in.Topics))
 	for i, topic := range in.Topics {
-		lines[i] = fmt.Sprintf("topic %q %q", topic.SessionID, topic.Fingerprint)
+		lines[i] = fmt.Sprintf("topic %q %q %q %q %s %s %q", topic.SessionID, topic.Name, string(topic.Status),
+			topic.Fingerprint, scoreKey(topic.QuizScore), scoreKey(topic.LabScore), difficultiesKey(topic.Difficulties))
 	}
 	sort.Strings(lines)
-	sum := sha256.Sum256([]byte(fmt.Sprintf("language %q\n", language) + strings.Join(lines, "\n")))
+	header := fmt.Sprintf("language %q\nfolder %q\n", language, in.FolderName)
+	sum := sha256.Sum256([]byte(header + strings.Join(lines, "\n")))
 	return hex.EncodeToString(sum[:])
+}
+
+// scoreKey tells a missing score from a zero one.
+func scoreKey(score *int) string {
+	if score == nil {
+		return "none"
+	}
+	return fmt.Sprintf("%d", *score)
+}
+
+func difficultiesKey(difficulties []FolderInsightDifficulty) string {
+	parts := make([]string, len(difficulties))
+	for i, difficulty := range difficulties {
+		parts[i] = fmt.Sprintf("%q:%t", difficulty.Name, difficulty.ToReview)
+	}
+	return strings.Join(parts, ",")
 }
 
 // FolderInsightGenerator writes the insight of a folder from its topics, in the

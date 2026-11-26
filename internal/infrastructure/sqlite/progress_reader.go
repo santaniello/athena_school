@@ -429,14 +429,28 @@ func (r *ProgressReader) ReadFolderTopics(ctx context.Context, folderID string) 
 	if err != nil {
 		return applicationprogress.FolderTopicsData{}, err
 	}
-	for _, id := range ids {
-		topic, err := r.ReadTopic(ctx, id)
-		if err != nil {
-			return applicationprogress.FolderTopicsData{}, err
-		}
-		folder.Topics = append(folder.Topics, topic)
+	if folder.Topics, err = r.readTopics(ctx, ids); err != nil {
+		return applicationprogress.FolderTopicsData{}, err
 	}
 	return folder, nil
+}
+
+// readTopics reads each session as ReadTopic does. The sessions were listed
+// before, so one deleted or moved out of its folder since is left out instead
+// of failing the whole read.
+func (r *ProgressReader) readTopics(ctx context.Context, ids []string) ([]applicationprogress.TopicData, error) {
+	var topics []applicationprogress.TopicData
+	for _, id := range ids {
+		topic, err := r.ReadTopic(ctx, id)
+		if errors.Is(err, applicationprogress.ErrTopicNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		topics = append(topics, topic)
+	}
+	return topics, nil
 }
 
 func readFolderSessionIDs(ctx context.Context, q sqlExecer, folderID string) ([]string, error) {

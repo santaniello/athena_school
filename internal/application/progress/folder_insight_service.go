@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 
 	domainprogress "github.com/santaniello/athena/internal/domain/progress"
 )
@@ -68,9 +69,11 @@ func (s *Service) GenerateFolderInsight(ctx context.Context, folderID string) (d
 
 // GetFolderInsight reads the stored insight of the folder and compares its
 // fingerprint with the one of the topics now, with no LLM call. Without the
-// ports it is the zero view: nothing to show and nothing to generate. On a
-// store or language error it still returns the view without the stored
-// insight, so the caller can degrade.
+// ports it is the zero view: nothing to show and nothing to generate. The
+// insight is an extra: when the stored one or the language cannot be read, the
+// error is logged and the view comes back without it, so the card can still
+// generate a new one (which overwrites a bad row). Only a folder that cannot be
+// read fails.
 func (s *Service) GetFolderInsight(ctx context.Context, folderID string) (domainprogress.InsightView, error) {
 	if !s.folderInsightsWired() {
 		return domainprogress.InsightView{}, nil
@@ -85,11 +88,13 @@ func (s *Service) GetFolderInsight(ctx context.Context, folderID string) (domain
 		return view, nil
 	}
 	if err != nil {
-		return view, fmt.Errorf("progress: reading folder insight: %w", err)
+		log.Printf("progress: insight of folder %s unavailable: %v", folderID, err)
+		return view, nil
 	}
 	language, err := s.insights.language.AssistantLanguage(ctx)
 	if err != nil {
-		return view, fmt.Errorf("progress: reading the assistant language: %w", err)
+		log.Printf("progress: insight of folder %s unavailable: %v", folderID, err)
+		return view, nil
 	}
 	view.Current = &stored
 	view.Stale = stored.Fingerprint != domainprogress.FolderFingerprint(input, language)

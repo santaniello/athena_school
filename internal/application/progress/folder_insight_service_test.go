@@ -300,27 +300,55 @@ func TestGetFolderInsight_cannotGenerateWithoutEvidence(t *testing.T) {
 	assert.False(t, view.CanGenerate)
 }
 
-func TestGetFolderInsight_aStoreErrorIsReturned(t *testing.T) {
+func TestGetFolderInsight_isStaleWhenANewPassScoreMovesAStatus(t *testing.T) {
+	// Given an insight written when the quiz of the first topic was still solid
+	written := twoTopicFolderInput()
+	written.Topics[0].Status = domainprogress.StatusStable
 	f := newFolderInsightFixture(t, twoTopicFolder(), nil)
-	boom := errors.New("disk")
-	f.repo.EXPECT().Get(context.Background(), "f1").Return(domainprogress.Insight{}, boom)
+	ctx := context.Background()
+	f.repo.EXPECT().Get(ctx, "f1").Return(storedFolderInsight(written, "en"), nil)
+	f.language.EXPECT().AssistantLanguage(ctx).Return("en", nil)
 
-	_, err := f.service.GetFolderInsight(context.Background(), "f1")
+	// When the folder insight is read with the pass score now in force
+	view, err := f.service.GetFolderInsight(ctx, "f1")
 
-	require.ErrorIs(t, err, boom)
+	// Then it is stale
+	require.NoError(t, err)
+	assert.True(t, view.Stale)
 }
 
-func TestGetFolderInsight_returnsTheErrorOfTheFolderAndTheLanguage(t *testing.T) {
-	f := newFolderInsightFixture(t, FolderTopicsData{}, ErrFolderNotFound)
-	_, err := f.service.GetFolderInsight(context.Background(), "f1")
-	require.ErrorIs(t, err, ErrFolderNotFound)
+func TestGetFolderInsight_aStoreErrorDegradesToACardThatCanGenerate(t *testing.T) {
+	// Given a stored insight that cannot be read
+	f := newFolderInsightFixture(t, twoTopicFolder(), nil)
+	f.repo.EXPECT().Get(context.Background(), "f1").Return(domainprogress.Insight{}, errors.New("corrupt payload"))
 
-	f = newFolderInsightFixture(t, twoTopicFolder(), nil)
-	boom := errors.New("profile unreadable")
+	// When the folder insight is read
+	view, err := f.service.GetFolderInsight(context.Background(), "f1")
+
+	// Then the card still offers to generate, which overwrites the bad row
+	require.NoError(t, err)
+	assert.Nil(t, view.Current)
+	assert.True(t, view.CanGenerate)
+}
+
+func TestGetFolderInsight_aLanguageErrorDegradesToACardThatCanGenerate(t *testing.T) {
+	f := newFolderInsightFixture(t, twoTopicFolder(), nil)
 	f.repo.EXPECT().Get(context.Background(), "f1").Return(storedFolderInsight(twoTopicFolderInput(), "en"), nil)
-	f.language.EXPECT().AssistantLanguage(context.Background()).Return("", boom)
-	_, err = f.service.GetFolderInsight(context.Background(), "f1")
-	require.ErrorIs(t, err, boom)
+	f.language.EXPECT().AssistantLanguage(context.Background()).Return("", errors.New("profile unreadable"))
+
+	view, err := f.service.GetFolderInsight(context.Background(), "f1")
+
+	require.NoError(t, err)
+	assert.Nil(t, view.Current)
+	assert.True(t, view.CanGenerate)
+}
+
+func TestGetFolderInsight_returnsTheErrorOfTheFolder(t *testing.T) {
+	f := newFolderInsightFixture(t, FolderTopicsData{}, ErrFolderNotFound)
+
+	_, err := f.service.GetFolderInsight(context.Background(), "f1")
+
+	require.ErrorIs(t, err, ErrFolderNotFound)
 }
 
 func TestGetFolderInsight_withoutThePortsIsTheEmptyView(t *testing.T) {

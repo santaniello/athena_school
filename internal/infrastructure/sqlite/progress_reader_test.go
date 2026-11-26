@@ -649,3 +649,18 @@ func TestProgressReader_ReadFolderTopics_failsWhenTheDatabaseIsClosed(t *testing
 	require.Error(t, err)
 	assert.NotErrorIs(t, err, applicationprogress.ErrFolderNotFound)
 }
+
+func TestProgressReader_readTopics_leavesOutASessionThatVanishedSinceItWasListed(t *testing.T) {
+	// Given a listed session that exists and one that was deleted meanwhile
+	reader, db := newProgressFixture(t)
+	addFolder(t, db, "f1", "One")
+	addSession(t, db, "s1", "Cache", "f1", progressBase)
+
+	// When reading both
+	topics, err := reader.readTopics(context.Background(), []string{"gone", "s1"})
+
+	// Then the vanished one is skipped and the other is read
+	require.NoError(t, err)
+	require.Len(t, topics, 1)
+	assert.Equal(t, "s1", topics[0].SessionID)
+}

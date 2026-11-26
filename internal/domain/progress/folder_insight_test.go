@@ -127,3 +127,38 @@ func TestParseFolderInsight_rejectsAnInvalidAnswer(t *testing.T) {
 	_, err := ParseFolderInsight(`{"analysis":[],"recommendations":[]}`, folderInsightInput())
 	assert.ErrorIs(t, err, ErrInvalidInsight)
 }
+
+func TestFolderFingerprint_changesWithEverythingThePromptShows(t *testing.T) {
+	score := 90
+	mutations := map[string]func(*FolderInsightInput){
+		"folder name":     func(in *FolderInsightInput) { in.FolderName = "Renamed" },
+		"topic name":      func(in *FolderInsightInput) { in.Topics[0].Name = "Renamed" },
+		"status":          func(in *FolderInsightInput) { in.Topics[0].Status = StatusImproving },
+		"quiz score":      func(in *FolderInsightInput) { in.Topics[0].QuizScore = &score },
+		"quiz score gone": func(in *FolderInsightInput) { in.Topics[0].QuizScore = nil },
+		"lab score":       func(in *FolderInsightInput) { in.Topics[0].LabScore = &score },
+		"difficulty name": func(in *FolderInsightInput) { in.Topics[1].Difficulties[0].Name = "Delivery" },
+		"difficulty flag": func(in *FolderInsightInput) { in.Topics[1].Difficulties[0].ToReview = false },
+		"difficulty added": func(in *FolderInsightInput) {
+			in.Topics[0].Difficulties = []FolderInsightDifficulty{{Name: "TTL"}}
+		},
+	}
+	for name, mutate := range mutations {
+		t.Run(name, func(t *testing.T) {
+			// Given a folder where only that field changed (a new pass score moves the status, for one)
+			changed := folderInsightInput()
+			mutate(&changed)
+
+			// Then the fingerprint moves
+			assert.NotEqual(t, FolderFingerprint(folderInsightInput(), "pt"), FolderFingerprint(changed, "pt"))
+		})
+	}
+}
+
+func TestFolderFingerprint_doesNotConfuseAScoreWithNoScore(t *testing.T) {
+	zero := 0
+	a := FolderInsightInput{Topics: []FolderInsightTopic{{SessionID: "s1", QuizScore: &zero}}}
+	b := FolderInsightInput{Topics: []FolderInsightTopic{{SessionID: "s1"}}}
+
+	assert.NotEqual(t, FolderFingerprint(a, "pt"), FolderFingerprint(b, "pt"))
+}

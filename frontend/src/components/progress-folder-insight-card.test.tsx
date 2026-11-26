@@ -135,6 +135,21 @@ describe('ProgressFolderInsightCard', () => {
     expect(screen.getByRole('button', { name: 'Update insights' })).toBeInTheDocument()
   })
 
+  it('keeps the stored insight when the folder lost its evidence meanwhile', async () => {
+    vi.mocked(getProgressFolderInsight).mockResolvedValue({ ...FRESH, stale: true })
+    vi.mocked(generateProgressFolderInsight).mockResolvedValue({
+      insight: null,
+      stale: false,
+      canGenerate: false,
+    })
+    renderCard()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Update insights' }))
+
+    expect(await screen.findByText(/Cache is solid\./)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Update insights' })).not.toBeInTheDocument()
+  })
+
   it('disables the button while generating', async () => {
     vi.mocked(getProgressFolderInsight).mockResolvedValue(NONE)
     let resolve: (state: ProgressInsightState) => void = () => {}

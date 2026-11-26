@@ -58,7 +58,14 @@ export function ProgressFolderInsightCard({
     setBusy(true)
     setFailed(false)
     try {
-      setLoaded({ state: 'ready', data: await generateProgressFolderInsight(folderId) })
+      const fresh = await generateProgressFolderInsight(folderId)
+      // A folder that lost its evidence answers with no insight: the stored one
+      // is still there, so keep showing it and only drop the button.
+      setLoaded((current) =>
+        fresh.insight === null && current.state === 'ready' && current.data.insight !== null
+          ? { state: 'ready', data: { ...current.data, canGenerate: fresh.canGenerate } }
+          : { state: 'ready', data: fresh },
+      )
     } catch {
       setFailed(true)
     } finally {
