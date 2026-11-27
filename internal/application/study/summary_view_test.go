@@ -10,7 +10,6 @@ import (
 
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 
-	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 	profilemocks "github.com/santaniello/athena/internal/domain/profile/mocks"
@@ -24,7 +23,7 @@ func newSummaryViewService(t *testing.T, summaries domainstudy.ConversationSumma
 		options = append(options, WithSummaries(summaries))
 	}
 	return NewService(studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t),
-		profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t), knowledgemocks.NewMockRetriever(t),
+		profilemocks.NewMockStore(t), newFolderMock(t), knowledgemocks.NewMockRetriever(t),
 		nil, nil, nil, nil, nil, options...)
 }
 

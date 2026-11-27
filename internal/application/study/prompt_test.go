@@ -21,7 +21,7 @@ func TestBuildSystemPrompt_includesAllProfileFieldsTopicAndSessionGoal(t *testin
 	}
 
 	// When building the system prompt
-	prompt := buildSystemPrompt(profile, "Distributed systems", "Ace the SQL interview")
+	prompt := buildSystemPrompt(profile, "Distributed systems", "Ace the SQL interview", true)
 
 	// Then it includes every profile field, the topic, and the session goal
 	assert.Contains(t, prompt, "Atena")
@@ -40,7 +40,7 @@ func TestBuildSystemPrompt_omitsGoalLine_whenSessionGoalIsBlank(t *testing.T) {
 	profile := domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}
 
 	// When building the system prompt
-	prompt := buildSystemPrompt(profile, "Distributed systems", "")
+	prompt := buildSystemPrompt(profile, "Distributed systems", "", true)
 
 	// Then it never mentions "Goal:" at all
 	assert.NotContains(t, prompt, "Goal:")
@@ -51,7 +51,7 @@ func TestBuildSystemPrompt_neverMentionsSpecialty(t *testing.T) {
 	profile := domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}
 
 	// When building the system prompt
-	prompt := buildSystemPrompt(profile, "Distributed systems", "Ace the SQL interview")
+	prompt := buildSystemPrompt(profile, "Distributed systems", "Ace the SQL interview", true)
 
 	// Then it never references a {Specialty} placeholder
 	assert.NotContains(t, prompt, "Specialty")
@@ -59,7 +59,7 @@ func TestBuildSystemPrompt_neverMentionsSpecialty(t *testing.T) {
 
 func adaptivePrompt() string {
 	profile := domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}
-	return buildSystemPrompt(profile, "Distributed systems", "Ace the SQL interview")
+	return buildSystemPrompt(profile, "Distributed systems", "Ace the SQL interview", true)
 }
 
 func TestBuildSystemPrompt_namesAndDescribesTheSixStrategies(t *testing.T) {
@@ -144,7 +144,7 @@ func TestBuildSystemPrompt_instructsConciseFollowUps(t *testing.T) {
 	profile := domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}
 
 	// When building the system prompt
-	prompt := buildSystemPrompt(profile, "Distributed systems", "Ace the SQL interview")
+	prompt := buildSystemPrompt(profile, "Distributed systems", "Ace the SQL interview", true)
 
 	// Then it tells the model to keep every message short unless the user
 	// explicitly asks for more depth
@@ -162,7 +162,7 @@ func TestBuildSystemPrompt_instructsPortugueseWhenProfileWantsPortuguese(t *test
 	}
 
 	// When building the system prompt
-	prompt := buildSystemPrompt(profile, "Distributed systems", "Ace the SQL interview")
+	prompt := buildSystemPrompt(profile, "Distributed systems", "Ace the SQL interview", true)
 
 	// Then it explicitly instructs the model to reply in Portuguese,
 	// including the opening message
@@ -179,7 +179,7 @@ func TestBuildSystemPrompt_instructsEnglishWhenProfileWantsEnglish(t *testing.T)
 	}
 
 	// When building the system prompt
-	prompt := buildSystemPrompt(profile, "Distributed systems", "Ace the SQL interview")
+	prompt := buildSystemPrompt(profile, "Distributed systems", "Ace the SQL interview", true)
 
 	// Then it explicitly instructs the model to reply in English
 	assert.Contains(t, prompt, "Respond in English")
@@ -190,7 +190,7 @@ func TestBuildSystemPrompt_omitsLanguageInstructionWhenUnset(t *testing.T) {
 	profile := domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}
 
 	// When building the system prompt
-	prompt := buildSystemPrompt(profile, "Distributed systems", "Ace the SQL interview")
+	prompt := buildSystemPrompt(profile, "Distributed systems", "Ace the SQL interview", true)
 
 	// Then it adds no language instruction, preserving prior behavior
 	assert.NotContains(t, prompt, "Respond in")
@@ -208,7 +208,7 @@ func TestBuildSystemPrompt_instructsToNeverTranslateTheUserName(t *testing.T) {
 			}
 
 			// When building the system prompt
-			prompt := buildSystemPrompt(profile, "Cache", "")
+			prompt := buildSystemPrompt(profile, "Cache", "", true)
 
 			// Then it tells the model the name is a proper noun to be used
 			// verbatim, never translated

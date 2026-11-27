@@ -14,7 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	applicationstudymocks "github.com/santaniello/athena/internal/application/study/mocks"
-	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
@@ -339,7 +338,7 @@ func openingTurn(t *testing.T, chunks []string, llmErr, appendErr error, options
 	if llmErr == nil && appendErr == nil {
 		messageSources = mockMessageSourceSave(t, nil)
 	}
-	service := NewService(sessions, messages, llm, profiles, foldermocks.NewMockRepository(t), knowledgemocks.NewMockRetriever(t), tx, nil, messageSources, nil, nil, options...)
+	service := NewService(sessions, messages, llm, profiles, newFolderMock(t), knowledgemocks.NewMockRetriever(t), tx, nil, messageSources, nil, nil, options...)
 
 	err = service.RequestOpeningTurn(context.Background(), "session-1", "Caching",
 		func(chunk string) error { received = append(received, chunk); return nil }, nil, nil)

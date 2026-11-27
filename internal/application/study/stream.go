@@ -48,7 +48,7 @@ const unavailableContextMessage = "Unable to determine this session's context li
 // or write any state. The two hiding filters run in series, state first.
 func (s *Service) streamAndPersist(
 	ctx context.Context, sessionID string, priorContext domainstudy.ContextUsage,
-	messages []domainllm.Message, sources []domainknowledge.Source, userMessageID string, onChunk func(chunk string) error,
+	messages []domainllm.Message, sources []domainknowledge.Source, userMessageID string, archLabEnabled bool, onChunk func(chunk string) error,
 	onContext ContextCallback, onContextUnavailable ContextUnavailableCallback,
 ) (string, error) {
 	var buf strings.Builder
@@ -76,7 +76,7 @@ func (s *Service) streamAndPersist(
 		}
 	}
 	cleaned, report, markerErr := parseTutorState(buf.String())
-	content, offered := stripOfferMarkers(cleaned)
+	content, offered := stripOfferMarkers(cleaned, archLabEnabled)
 
 	assistantMessage := domainstudy.Message{
 		ID:        uuid.NewString(),

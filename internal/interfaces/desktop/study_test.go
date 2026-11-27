@@ -156,7 +156,7 @@ func TestApp_StartStudySession_propagatesTopicRequiredError(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
 	// When starting a session with a blank topic
@@ -176,7 +176,7 @@ func TestApp_StartStudySession_propagatesGoalRequiredError(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
 	// When starting a session with a blank goal
@@ -196,7 +196,7 @@ func TestApp_RequestOpeningTurn_streamsChunksAndSignalsDone(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	messages.EXPECT().ListBySession(mock.Anything, "session-1").Return(nil, nil).Once()
 	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(normalSession, nil).Once()
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}, nil)
@@ -235,7 +235,7 @@ func TestApp_RequestOpeningTurn_emitsErrorEvent_onFailure(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	messages.EXPECT().ListBySession(mock.Anything, "session-1").Return(nil, nil).Once()
 	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(normalSession, nil).Once()
 	profiles.EXPECT().Load().Return(domainprofile.UserProfile{}, errors.New("profile not found"))
@@ -261,7 +261,7 @@ func TestApp_RequestOpeningTurn_blockedSession_emitsContextLimitReachedCode(t *t
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	messages.EXPECT().ListBySession(mock.Anything, "session-1").Return(nil, nil).Once()
 	sessions.EXPECT().GetByID(context.Background(), "session-1").
 		Return(domainstudy.Session{ID: "session-1", Context: domainstudy.ContextUsage{State: domainstudy.ContextStateBlocked}}, nil).
@@ -285,7 +285,7 @@ func TestApp_SendStudyMessage_streamsReplyAndSignalsDone(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(normalSession, nil).Once()
 	sessions.EXPECT().UpdateContext(mock.Anything, "session-1", mock.Anything).Return(nil).Twice()
 	messages.EXPECT().Append(mock.Anything, mock.AnythingOfType("study.Message")).Return(nil).Twice()
@@ -322,7 +322,7 @@ func TestApp_SendStudyMessage_invalidSourceMode_emitsErrorEventWithoutPersisting
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
 	// When sending a message with an unrecognized source mode
@@ -348,7 +348,7 @@ func TestApp_SendStudyMessage_blockedSession_emitsContextLimitReachedCode_withou
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	sessions.EXPECT().GetByID(context.Background(), "session-1").
 		Return(domainstudy.Session{ID: "session-1", Context: domainstudy.ContextUsage{State: domainstudy.ContextStateBlocked}}, nil).
 		Once()
@@ -371,7 +371,7 @@ func TestApp_SendStudyMessage_emitsPostCapSourcesEvent_notes(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	catalog := llmmocks.NewMockModelContextResolver(t)
 
@@ -432,7 +432,7 @@ func TestApp_SendStudyMessage_emitsErrorEvent_onFailure(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(normalSession, nil).Once()
 	sessions.EXPECT().UpdateContext(mock.Anything, "session-1", mock.Anything).Return(nil).Once()
 	messages.EXPECT().Append(mock.Anything, mock.AnythingOfType("study.Message")).Return(nil).Once()
@@ -463,7 +463,7 @@ func TestApp_DeleteStudySession_deletesTheSession(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	sessions.EXPECT().Delete(mock.Anything, "session-1").Return(nil).Once()
 	app, _ := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
@@ -481,7 +481,7 @@ func TestApp_ResumeStudySession_returnsSessionAndHistory(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	session := domainstudy.Session{ID: "session-1", Topic: "Distributed systems", FolderID: "default", Context: domainstudy.ContextUsage{State: domainstudy.ContextStateNormal}}
 	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(session, nil).Once()
 	messages.EXPECT().
@@ -514,7 +514,7 @@ func TestApp_ResumeStudySession_attachesPersistedSourcesToTheirMessage(t *testin
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	catalog := llmmocks.NewMockModelContextResolver(t)
 	session := domainstudy.Session{ID: "session-1", Topic: "Go", FolderID: "default", Context: domainstudy.ContextUsage{State: domainstudy.ContextStateNormal}}
@@ -560,7 +560,7 @@ func TestApp_ResumeStudySession_withOlderHistory_returnsHasMoreAndACursor(t *tes
 		ListPage(context.Background(), "session-1", (*domainstudy.MessageCursor)(nil), study.DefaultMessagePageSize+1).
 		Return(newestFirst, nil).
 		Once()
-	app, _ := newTestStudyApp(t, sessions, messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t))
+	app, _ := newTestStudyApp(t, sessions, messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), newFolderMock(t))
 
 	// When resuming the session
 	result, err := app.ResumeStudySession("session-1")
@@ -585,7 +585,7 @@ func TestApp_ListStudyMessagesBefore_returnsTheOlderPage(t *testing.T) {
 			{ID: "message-1", Role: domainstudy.RoleUser, Content: "Hi"},
 		}, nil).
 		Once()
-	app, _ := newTestStudyApp(t, sessions, messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t))
+	app, _ := newTestStudyApp(t, sessions, messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), newFolderMock(t))
 
 	// When asking for ten messages before message-3
 	result, err := app.ListStudyMessagesBefore("session-1", "message-3", 10)
@@ -601,7 +601,7 @@ func TestApp_ListStudyMessagesBefore_returnsTheOlderPage(t *testing.T) {
 
 func TestApp_ListStudyMessagesBefore_rejectsAMalformedCursor(t *testing.T) {
 	// Given an App whose repositories must not be read
-	app, _ := newTestStudyApp(t, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t))
+	app, _ := newTestStudyApp(t, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), newFolderMock(t))
 
 	// When asking for a page with an empty cursor
 	_, err := app.ListStudyMessagesBefore("session-1", "", 10)
@@ -616,7 +616,7 @@ func TestApp_MoveStudySession_movesTheSession(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	sessions.EXPECT().MoveToFolder(mock.Anything, "session-1", "folder-b").Return(nil).Once()
 	app, _ := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
@@ -633,7 +633,7 @@ func TestApp_ListStudySessionsByFolder_returnsEverySessionInThatFolder(t *testin
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	sessions.EXPECT().ListByFolder(mock.Anything, "folder-a").Return([]domainstudy.Session{
 		{ID: "s-1", Topic: "Cache invalidation", FolderID: "folder-a"},
 		{ID: "s-2", Topic: "Concurrency patterns", FolderID: "folder-a"},

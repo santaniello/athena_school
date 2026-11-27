@@ -71,7 +71,10 @@ var offerMarkers = []struct {
 // stripOfferMarkers removes every marker from content and reports the offer
 // they ask for: the first of offerMarkers when several kinds are present,
 // domainstudy.OfferKindNone when there is no marker. Content without a marker is returned untouched.
-func stripOfferMarkers(content string) (string, domainstudy.OfferKind) {
+// When exercisesAllowed is false (the session's folder has the Architecture
+// Lab off) the exercise marker is still removed, but never asks for an offer:
+// the first of the other kinds present is reported instead.
+func stripOfferMarkers(content string, exercisesAllowed bool) (string, domainstudy.OfferKind) {
 	kind := domainstudy.OfferKindNone
 	stripped := content
 	for _, candidate := range offerMarkers {
@@ -79,11 +82,14 @@ func stripOfferMarkers(content string) (string, domainstudy.OfferKind) {
 			continue
 		}
 		stripped = strings.ReplaceAll(stripped, candidate.marker, "")
+		if candidate.kind == domainstudy.OfferKindExercise && !exercisesAllowed {
+			continue
+		}
 		if kind == domainstudy.OfferKindNone {
 			kind = candidate.kind
 		}
 	}
-	if kind == domainstudy.OfferKindNone {
+	if stripped == content {
 		return content, domainstudy.OfferKindNone
 	}
 	return strings.TrimSpace(stripped), kind

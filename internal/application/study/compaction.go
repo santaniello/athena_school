@@ -153,11 +153,15 @@ func (s *Service) compact(ctx context.Context, sessionID, pendingContent string,
 		return compactionOutcome{}, fmt.Errorf("study: loading profile: %w", err)
 	}
 
+	archLabEnabled, err := s.archLabEnabledOf(ctx, session.FolderID)
+	if err != nil {
+		return compactionOutcome{}, err
+	}
 	input := domainstudy.BuildInput{
 		Messages:            history,
 		ContextLength:       window,
 		SummaryWindowTokens: s.summaryWindowTokens(),
-		FixedTokens:         s.fixedPromptTokens(buildSystemPrompt(profile, session.Topic, session.Goal), len(tutorState) > 0),
+		FixedTokens:         s.fixedPromptTokens(buildSystemPrompt(profile, session.Topic, session.Goal, archLabEnabled), len(tutorState) > 0),
 	}
 	if pendingContent != "" {
 		input.PendingTokens = domainstudy.EstimateTokens(pendingContent)

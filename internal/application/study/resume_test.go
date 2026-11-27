@@ -13,7 +13,6 @@ import (
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 
 	applicationstudymocks "github.com/santaniello/athena/internal/application/study/mocks"
-	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 	profilemocks "github.com/santaniello/athena/internal/domain/profile/mocks"
@@ -52,7 +51,7 @@ func TestResume_returnsSessionAndItsLatestPage(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	session := domainstudy.Session{ID: "session-1", Topic: "Topic", FolderID: "default"}
 	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(session, nil).Once()
 	history := []domainstudy.Message{{ID: "message-1", Role: domainstudy.RoleUser, Content: "Hi"}}
@@ -80,7 +79,7 @@ func TestResume_attachesPersistedSourcesToTheMessagesThatHaveThem(t *testing.T) 
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	session := domainstudy.Session{ID: "session-1", Topic: "Topic", FolderID: "default"}
 	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(session, nil).Once()
 	history := []domainstudy.Message{
@@ -116,7 +115,7 @@ func TestResume_propagatesSessionNotFound(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	sessions.EXPECT().GetByID(context.Background(), "missing").Return(domainstudy.Session{}, domainstudy.ErrSessionNotFound).Once()
 	retriever := knowledgemocks.NewMockRetriever(t)
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil, nil, nil)
@@ -134,7 +133,7 @@ func TestResume_propagatesMessageSourcesListError(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	session := domainstudy.Session{ID: "session-1"}
 	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(session, nil).Once()
 	expectLatestPage(messages, nil)
@@ -157,7 +156,7 @@ func TestResume_unresolvedContextLength_emptyModel_callsOnContextUnavailable_wit
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	session := domainstudy.Session{ID: "session-1", Context: domainstudy.ContextUsage{State: domainstudy.ContextStateNormal, Model: ""}}
 	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(session, nil).Once()
 	expectLatestPage(messages, nil)
@@ -183,7 +182,7 @@ func TestResume_unresolvedContextLength_cacheHit_recomputesAndPersistsBeforeRetu
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	tx := applicationstudymocks.NewMockTransactor(t)
 	runWithinTx(tx)
 	catalog := llmmocks.NewMockModelContextResolver(t)
@@ -224,7 +223,7 @@ func TestResume_unresolvedContextLength_cacheMiss_startsBackgroundRefresh_withou
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	catalog := llmmocks.NewMockModelContextResolver(t)
 
 	session := domainstudy.Session{
@@ -270,7 +269,7 @@ func TestResume_returnsTheSummaryCursorWhenTheSessionHasASummary(t *testing.T) {
 	summaries.EXPECT().Get(context.Background(), "session-1").
 		Return(domainstudy.ConversationSummary{SessionID: "session-1", Content: "## Progress", CoversUntilMessageID: "message-3", UpdatedAt: time.Now()}, nil).
 		Once()
-	service := NewService(sessions, messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t),
+	service := NewService(sessions, messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), newFolderMock(t),
 		knowledgemocks.NewMockRetriever(t), nil, nil, mockNoMessageSources(t), nil, nil, WithSummaries(summaries))
 
 	// When resuming the session
@@ -290,7 +289,7 @@ func TestResume_hasNoSummaryCursorWhenTheSessionHasNoSummary(t *testing.T) {
 	summaries := studymocks.NewMockConversationSummaryRepository(t)
 	summaries.EXPECT().Get(context.Background(), "session-1").
 		Return(domainstudy.ConversationSummary{}, domainstudy.ErrConversationSummaryNotFound).Once()
-	service := NewService(sessions, messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t),
+	service := NewService(sessions, messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), newFolderMock(t),
 		knowledgemocks.NewMockRetriever(t), nil, nil, mockNoMessageSources(t), nil, nil, WithSummaries(summaries))
 
 	// When resuming the session
@@ -313,7 +312,7 @@ func TestResume_degradesToNoSummaryCursorWhenTheSummaryCannotBeRead(t *testing.T
 	summaries := studymocks.NewMockConversationSummaryRepository(t)
 	summaries.EXPECT().Get(context.Background(), "session-1").
 		Return(domainstudy.ConversationSummary{SessionID: "session-1", CoversUntilMessageID: "message-1"}, errors.New("database unavailable")).Once()
-	service := NewService(sessions, messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t),
+	service := NewService(sessions, messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), newFolderMock(t),
 		knowledgemocks.NewMockRetriever(t), nil, nil, mockNoMessageSources(t, "message-1"), nil, nil, WithSummaries(summaries))
 
 	// When resuming the session

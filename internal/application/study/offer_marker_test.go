@@ -15,7 +15,7 @@ func TestBuildSystemPrompt_instructsTheModelToEndWithTheOfferMarker_whenTheUserA
 	profile := domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}
 
 	// When building the system prompt
-	prompt := buildSystemPrompt(profile, "Caching", "Learn caching")
+	prompt := buildSystemPrompt(profile, "Caching", "Learn caching", true)
 
 	// Then it names the marker and says it only follows an explicit request
 	assert.Contains(t, prompt, exerciseOfferMarker)
@@ -28,7 +28,7 @@ func TestBuildSystemPrompt_instructsTheModelToEndWithTheQuizMarker_whenTheUserAs
 	profile := domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}
 
 	// When building the system prompt
-	prompt := buildSystemPrompt(profile, "Caching", "Learn caching")
+	prompt := buildSystemPrompt(profile, "Caching", "Learn caching", true)
 
 	// Then it names the quiz marker and says it only follows an explicit request
 	assert.Contains(t, prompt, quizOfferMarker)
@@ -41,7 +41,7 @@ func TestBuildSystemPrompt_instructsTheModelToEndWithTheMindMapMarker_whenTheUse
 	profile := domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}
 
 	// When building the system prompt
-	prompt := buildSystemPrompt(profile, "Caching", "Learn caching")
+	prompt := buildSystemPrompt(profile, "Caching", "Learn caching", true)
 
 	// Then it names the mind map marker, says it only follows an explicit request
 	// and says a quiz, test or exercise request is not one
@@ -82,7 +82,7 @@ func TestStripOfferMarkers(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// When stripping the markers
-			text, kind := stripOfferMarkers(tt.content)
+			text, kind := stripOfferMarkers(tt.content, true)
 
 			// Then the text is clean and the offer kind is reported
 			assert.Equal(t, tt.wantText, text)
@@ -98,7 +98,7 @@ func collectFiltered(chunks []string) (emitted string, kind domainstudy.OfferKin
 		out.WriteString(filter.write(chunk))
 	}
 	out.WriteString(filter.flush())
-	_, kind = stripOfferMarkers(strings.Join(chunks, ""))
+	_, kind = stripOfferMarkers(strings.Join(chunks, ""), true)
 	return out.String(), kind
 }
 
@@ -191,4 +191,43 @@ func TestOfferMarkerFilter_passesPlainTextThroughImmediately(t *testing.T) {
 	// When a chunk is written
 	// Then it is emitted at once, not held back
 	assert.Equal(t, "Hello world", filter.write("Hello world"))
+}
+
+func TestBuildSystemPrompt_omitsTheExerciseInstruction_whenTheLabIsDisabled(t *testing.T) {
+	// Given any profile
+	profile := domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}
+
+	// When building the prompt for a folder with the lab off
+	prompt := buildSystemPrompt(profile, "Caching", "Learn caching", false)
+
+	// Then the exercise marker and rule are gone, and the quiz and mind map ones stay
+	assert.NotContains(t, prompt, exerciseOfferMarker)
+	assert.NotContains(t, prompt, "Never propose an exercise on your own")
+	assert.Contains(t, prompt, quizOfferMarker)
+	assert.Contains(t, prompt, mindMapOfferMarker)
+}
+
+func TestStripOfferMarkers_dropsTheExerciseOffer_whenExercisesAreNotAllowed(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		wantText string
+		wantKind domainstudy.OfferKind
+	}{
+		{"exercise marker alone", "Sure. " + exerciseOfferMarker, "Sure.", domainstudy.OfferKindNone},
+		{"exercise then quiz, the quiz is kept", "Hi " + exerciseOfferMarker + quizOfferMarker, "Hi", domainstudy.OfferKindQuiz},
+		{"exercise and mind map, the mind map is kept", "Hi " + exerciseOfferMarker + mindMapOfferMarker, "Hi", domainstudy.OfferKindMindMap},
+		{"no marker is untouched", " Hi ", " Hi ", domainstudy.OfferKindNone},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given a reply and a folder that cannot offer exercises
+			// When stripping its markers
+			text, kind := stripOfferMarkers(tt.content, false)
+
+			// Then every marker is removed, but no exercise offer is reported
+			assert.Equal(t, tt.wantText, text)
+			assert.Equal(t, tt.wantKind, kind)
+		})
+	}
 }
