@@ -434,6 +434,7 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
                   </DropdownMenuTrigger>
                   <DropdownMenuContent
                     align="start"
+                    className="w-auto min-w-48"
                     onCloseAutoFocus={(event) => event.preventDefault()}
                   >
                     <DropdownMenuItem
