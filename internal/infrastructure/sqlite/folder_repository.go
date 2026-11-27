@@ -24,7 +24,7 @@ func NewFolderRepository(db *sql.DB) *FolderRepository {
 // Create inserts a new folder. The Architecture Lab flag always starts off:
 // the column default applies, whatever f.ArchLabEnabled says.
 func (r *FolderRepository) Create(ctx context.Context, f folder.Folder) error {
-	_, err := r.db.ExecContext(ctx,
+	_, err := execer(ctx, r.db).ExecContext(ctx,
 		`INSERT INTO folders (id, name, created_at) VALUES (?, ?, ?)`,
 		f.ID, f.Name, f.CreatedAt,
 	)
@@ -52,7 +52,7 @@ func (r *FolderRepository) GetByID(ctx context.Context, id string) (folder.Folde
 
 // List returns every folder.
 func (r *FolderRepository) List(ctx context.Context) ([]folder.Folder, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT id, name, arch_lab_enabled, created_at FROM folders`)
+	rows, err := execer(ctx, r.db).QueryContext(ctx, `SELECT id, name, arch_lab_enabled, created_at FROM folders`)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: listing folders: %w", err)
 	}
@@ -75,7 +75,7 @@ func (r *FolderRepository) List(ctx context.Context) ([]folder.Folder, error) {
 // SetArchLabEnabled switches the Architecture Lab on or off for the folder
 // with the given id, or returns folder.ErrFolderNotFound if it does not exist.
 func (r *FolderRepository) SetArchLabEnabled(ctx context.Context, id string, enabled bool) error {
-	result, err := r.db.ExecContext(ctx, `UPDATE folders SET arch_lab_enabled = ? WHERE id = ?`, enabled, id)
+	result, err := execer(ctx, r.db).ExecContext(ctx, `UPDATE folders SET arch_lab_enabled = ? WHERE id = ?`, enabled, id)
 	if err != nil {
 		return fmt.Errorf("sqlite: setting folder architecture lab flag: %w", err)
 	}
@@ -85,7 +85,7 @@ func (r *FolderRepository) SetArchLabEnabled(ctx context.Context, id string, ena
 // Rename updates the name of the folder with the given id, or returns
 // folder.ErrFolderNotFound if it does not exist.
 func (r *FolderRepository) Rename(ctx context.Context, id, name string) error {
-	result, err := r.db.ExecContext(ctx, `UPDATE folders SET name = ? WHERE id = ?`, name, id)
+	result, err := execer(ctx, r.db).ExecContext(ctx, `UPDATE folders SET name = ? WHERE id = ?`, name, id)
 	if err != nil {
 		return fmt.Errorf("sqlite: renaming folder: %w", err)
 	}
@@ -95,7 +95,7 @@ func (r *FolderRepository) Rename(ctx context.Context, id, name string) error {
 // Delete removes the folder with the given id, or returns
 // folder.ErrFolderNotFound if it does not exist.
 func (r *FolderRepository) Delete(ctx context.Context, id string) error {
-	result, err := r.db.ExecContext(ctx, `DELETE FROM folders WHERE id = ?`, id)
+	result, err := execer(ctx, r.db).ExecContext(ctx, `DELETE FROM folders WHERE id = ?`, id)
 	if err != nil {
 		return fmt.Errorf("sqlite: deleting folder: %w", err)
 	}

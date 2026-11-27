@@ -9,7 +9,7 @@ import (
 // its sessions together with the knowledge they own — nothing in the folder
 // survives. The sessions go inside the knowledge cascade so the search index
 // and orphaned evidence stay consistent; the folder row is deleted after,
-// outside it, because FolderRepository.Delete does not join a transaction.
+// outside it: the cascade only owns the sessions and their knowledge.
 func (s *Service) DeleteFolder(ctx context.Context, id string) error {
 	sessions, err := s.sessions.ListByFolder(ctx, id)
 	if err != nil {
