@@ -43,6 +43,7 @@ Payments         Paddle
 | [4](phase-04-tutor/) | Adaptive Tutor | One adaptive study tutor with a persisted pedagogical state | Phase 2 |
 | [5](phase-05-progress/) | Progress | Per-folder learning progress: each session is a topic, with quiz and lab results, evidence and insights | Phases 3, 4 |
 | [6](phase-06-logs/) | Logs | Centralized structured file logging (JSONL, rotation, retention, redaction) used by every module | Phase 5 |
+| [7](phase-07-improve-arch-lab/) | Improve Arch Lab | Architecture Lab per folder, higher-quality generated challenges, canonical session-free interviews | Phase 3 |
 
 ---
 
@@ -188,6 +189,23 @@ injected, module-scoped `*slog.Logger`.
 | [02-config-and-bootstrap.md](phase-06-logs/02-config-and-bootstrap.md) | `logging:` section in `config.yaml`, logger started in `main.go`, application lifecycle events, close on shutdown |
 | [03-module-migration.md](phase-06-logs/03-module-migration.md) | Inject module loggers, replace every `log.Printf`, add AI Engine and Storage events, forbid the standard `log` package |
 
+## Phase 7 — Improve Architecture Lab
+
+Three improvements to the Architecture Lab, found by comparing it with a market tool and by reading
+the challenges it actually generated. Practice challenges are generated only from folders the user
+enables, the generated rubrics and statements are fixed where they were weak, and interviews become
+classic system-design problems chosen from a fixed list, with no session involved.
+
+| Spec | Description |
+|---|---|
+| [01-arch-lab-per-folder.md](phase-07-improve-arch-lab/01-arch-lab-per-folder.md) | A per-folder **Enable Architecture Lab** switch gates generating challenges from a session, in the catalog and in the chat; enforced in the backend |
+| [02-generation-quality.md](phase-07-improve-arch-lab/02-generation-quality.md) | Fixed 50/50 rubric shares with a per-criterion floor, a criteria cap by difficulty, solution-free statements and no repeated practice topics in a session |
+| [03-canonical-interviews.md](phase-07-improve-arch-lab/03-canonical-interviews.md) | Interview = a fixed list of classic problems, generated on first use, one per problem and difficulty; practice stays session-based |
+
+Deliberately left for a later phase, because they are one design of their own: a guided mode with
+steps, a clarifying-questions channel with an interviewer and learner-written non-functional
+requirements.
+
 ---
 
 ## Dependency Graph
@@ -206,4 +224,5 @@ Phase 4 (Adaptive Tutor)
 Phase 5 (Progress)
     ↓
 Phase 6 (Logs)
+Phase 7 (Improve Architecture Lab, depends on Phase 3)
 ```
