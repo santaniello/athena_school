@@ -22,6 +22,7 @@ const problem: CanonicalProblem = {
   id: 'url-shortener',
   name: 'URL shortener',
   summary: 'Short links.',
+  level: 'BEGINNER',
   attempts: 1,
   hasHistory: false,
   difficulties: [

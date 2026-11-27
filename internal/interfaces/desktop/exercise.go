@@ -631,6 +631,7 @@ type CanonicalProblemDTO struct {
 	ID           string               `json:"id"`
 	Name         string               `json:"name"`
 	Summary      string               `json:"summary"`
+	Level        string               `json:"level"`
 	Difficulties []DifficultyStateDTO `json:"difficulties"`
 	Attempts     int                  `json:"attempts"`
 	HasHistory   bool                 `json:"hasHistory"`
@@ -646,7 +647,7 @@ func (a *App) ListCanonicalProblems() ([]CanonicalProblemDTO, error) {
 	dtos := make([]CanonicalProblemDTO, 0, len(items))
 	for _, item := range items {
 		dto := CanonicalProblemDTO{
-			ID: item.ID, Name: item.Name, Summary: item.Summary, Attempts: item.Attempts, HasHistory: item.HasHistory,
+			ID: item.ID, Name: item.Name, Summary: item.Summary, Level: string(item.Level), Attempts: item.Attempts, HasHistory: item.HasHistory,
 			Difficulties: make([]DifficultyStateDTO, 0, len(item.Difficulties)),
 		}
 		for _, state := range item.Difficulties {

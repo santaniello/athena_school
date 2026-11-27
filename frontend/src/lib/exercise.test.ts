@@ -214,6 +214,7 @@ describe('exercise bindings', () => {
         id: 'url-shortener',
         name: 'URL shortener',
         summary: 'Short links.',
+        level: 'BEGINNER',
         attempts: 2,
         hasHistory: true,
         difficulties: [
@@ -230,6 +231,7 @@ describe('exercise bindings', () => {
         id: 'url-shortener',
         name: 'URL shortener',
         summary: 'Short links.',
+        level: 'BEGINNER',
         attempts: 2,
         hasHistory: true,
         difficulties: [

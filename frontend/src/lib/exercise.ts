@@ -194,6 +194,8 @@ export interface CanonicalProblem {
   id: string
   name: string
   summary: string
+  // The problem's own classification, shown as its tag.
+  level: string
   difficulties: DifficultyState[]
   attempts: number
   hasHistory: boolean
@@ -205,6 +207,7 @@ export async function listCanonicalProblems(): Promise<CanonicalProblem[]> {
     id: problem.id,
     name: problem.name,
     summary: problem.summary,
+    level: problem.level,
     attempts: problem.attempts,
     hasHistory: problem.hasHistory,
     difficulties: problem.difficulties.map((state) => ({

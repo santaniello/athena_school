@@ -213,6 +213,7 @@ type CanonicalProblemItem struct {
 	ID           string
 	Name         string
 	Summary      string
+	Level        domainexercise.Difficulty // the problem's own classification
 	Difficulties []DifficultyState
 	Attempts     int
 	HasHistory   bool
@@ -242,7 +243,7 @@ func (s *CatalogService) ListCanonicalProblems(ctx context.Context) ([]Canonical
 	problems := domainexercise.CanonicalProblems()
 	items := make([]CanonicalProblemItem, len(problems))
 	for i, problem := range problems {
-		item := CanonicalProblemItem{ID: problem.ID, Name: problem.Name.For(profile.Language), Summary: problem.Summary.For(profile.Language)}
+		item := CanonicalProblemItem{ID: problem.ID, Name: problem.Name.For(profile.Language), Summary: problem.Summary.For(profile.Language), Level: problem.Level}
 		for _, difficulty := range canonicalDifficulties {
 			state, err := canonicalDifficultyState(&item, difficulty, challengeOf(challenges, problem.ID, difficulty), records)
 			if err != nil {

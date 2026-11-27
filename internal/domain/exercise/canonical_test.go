@@ -27,6 +27,7 @@ func TestCanonicalProblems_EveryProblemIsComplete(t *testing.T) {
 			assert.NotEmpty(t, problem.Name.PT)
 			assert.NotEmpty(t, problem.Summary.EN)
 			assert.NotEmpty(t, problem.Summary.PT)
+			assert.Contains(t, []Difficulty{DifficultyBeginner, DifficultyIntermediate, DifficultyAdvanced}, problem.Level)
 			assert.GreaterOrEqual(t, len(problem.Core), 2)
 			assert.LessOrEqual(t, len(problem.Core), 4)
 			for _, difficulty := range []Difficulty{DifficultyBeginner, DifficultyIntermediate, DifficultyAdvanced} {
@@ -71,4 +72,20 @@ func TestLocalizedName_For(t *testing.T) {
 	assert.Equal(t, "Limitador de taxa", name.For("pt"))
 	assert.Equal(t, "Rate limiter", name.For("en"))
 	assert.Equal(t, "Rate limiter", name.For(""))
+}
+
+func TestCanonicalProblems_ClassifyEachProblemByItsLevel(t *testing.T) {
+	levels := map[string]Difficulty{}
+	for _, problem := range CanonicalProblems() {
+		levels[problem.ID] = problem.Level
+	}
+
+	assert.Equal(t, map[string]Difficulty{
+		"url-shortener":        DifficultyBeginner,
+		"rate-limiter":         DifficultyIntermediate,
+		"news-feed":            DifficultyAdvanced,
+		"chat-application":     DifficultyAdvanced,
+		"notification-service": DifficultyIntermediate,
+		"ticket-booking":       DifficultyIntermediate,
+	}, levels)
 }

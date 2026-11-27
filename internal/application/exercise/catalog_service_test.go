@@ -369,6 +369,7 @@ func TestCatalogService_ListCanonicalProblems_listsEverySixProblemsInOrderWithNo
 	require.NoError(t, err)
 	require.Len(t, items, 6)
 	assert.Equal(t, "url-shortener", items[0].ID)
+	assert.Equal(t, domainexercise.DifficultyBeginner, items[0].Level)
 	assert.Equal(t, "Encurtador de URL", items[0].Name)
 	assert.Equal(t, "Encurte URLs longas e redirecione os links curtos.", items[0].Summary)
 	assert.Equal(t, 0, items[0].Attempts)

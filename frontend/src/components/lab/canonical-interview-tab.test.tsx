@@ -22,6 +22,7 @@ function problem(id: string, name: string, history = false): CanonicalProblem {
     id,
     name,
     summary: `${name} summary`,
+    level: 'BEGINNER',
     attempts: history ? 1 : 0,
     hasHistory: history,
     difficulties: [

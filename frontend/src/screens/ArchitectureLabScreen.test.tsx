@@ -88,6 +88,7 @@ function canonicalProblem(id: string, name: string): CanonicalProblem {
     id,
     name,
     summary: `${name} summary`,
+    level: 'BEGINNER',
     attempts: 0,
     hasHistory: false,
     difficulties: [

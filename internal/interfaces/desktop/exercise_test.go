@@ -816,7 +816,7 @@ func TestApp_ListChallengeCatalog_passesTheKindToTheUseCase(t *testing.T) {
 func TestApp_ListCanonicalProblems_mapsTheItems(t *testing.T) {
 	// Given one problem with a generated difficulty
 	catalog := &fakeCatalog{problems: []applicationexercise.CanonicalProblemItem{{
-		ID: "url-shortener", Name: "Encurtador de URL", Summary: "resumo", Attempts: 2, HasHistory: true,
+		ID: "url-shortener", Name: "Encurtador de URL", Summary: "resumo", Level: domainexercise.DifficultyBeginner, Attempts: 2, HasHistory: true,
 		Difficulties: []applicationexercise.DifficultyState{
 			{Difficulty: domainexercise.DifficultyBeginner, Generated: true, ChallengeID: "c1", Status: domainexercise.ProgressCompleted},
 			{Difficulty: domainexercise.DifficultyIntermediate},
@@ -829,7 +829,7 @@ func TestApp_ListCanonicalProblems_mapsTheItems(t *testing.T) {
 	// Then the DTO mirrors them
 	require.NoError(t, err)
 	assert.Equal(t, []CanonicalProblemDTO{{
-		ID: "url-shortener", Name: "Encurtador de URL", Summary: "resumo", Attempts: 2, HasHistory: true,
+		ID: "url-shortener", Name: "Encurtador de URL", Summary: "resumo", Level: "BEGINNER", Attempts: 2, HasHistory: true,
 		Difficulties: []DifficultyStateDTO{
 			{Difficulty: "BEGINNER", Generated: true, ChallengeID: "c1", Status: "COMPLETED"},
 			{Difficulty: "INTERMEDIATE"},

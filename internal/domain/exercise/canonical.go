@@ -32,6 +32,7 @@ type CanonicalProblem struct {
 	ID      string // stable slug
 	Name    LocalizedName
 	Summary LocalizedName // one line shown in the catalog row
+	Level   Difficulty    // how demanding the classic problem is, shown as its tag in the catalog
 	Core    []string      // what the system must do, 2 to 4 lines
 	Scale   map[Difficulty]string
 }
@@ -62,6 +63,7 @@ func canonicalProblems() []CanonicalProblem {
 	return []CanonicalProblem{
 		{
 			ID:      "url-shortener",
+			Level:   DifficultyBeginner,
 			Name:    LocalizedName{EN: "URL shortener", PT: "Encurtador de URL"},
 			Summary: LocalizedName{EN: "Turn long URLs into short links and redirect them.", PT: "Encurte URLs longas e redirecione os links curtos."},
 			Core: []string{
@@ -73,6 +75,7 @@ func canonicalProblems() []CanonicalProblem {
 		},
 		{
 			ID:      "rate-limiter",
+			Level:   DifficultyIntermediate,
 			Name:    LocalizedName{EN: "Rate limiter", PT: "Limitador de taxa"},
 			Summary: LocalizedName{EN: "Limit how many requests each client can make.", PT: "Limite quantas requisições cada cliente pode fazer."},
 			Core: []string{
@@ -84,6 +87,7 @@ func canonicalProblems() []CanonicalProblem {
 		},
 		{
 			ID:      "news-feed",
+			Level:   DifficultyAdvanced,
 			Name:    LocalizedName{EN: "News feed", PT: "Feed de notícias"},
 			Summary: LocalizedName{EN: "Show each user the latest posts from the people they follow.", PT: "Mostre a cada usuário os posts mais recentes de quem ele segue."},
 			Core: []string{
@@ -95,6 +99,7 @@ func canonicalProblems() []CanonicalProblem {
 		},
 		{
 			ID:      "chat-application",
+			Level:   DifficultyAdvanced,
 			Name:    LocalizedName{EN: "Chat application", PT: "Aplicativo de chat"},
 			Summary: LocalizedName{EN: "Send messages between users in real time, one to one and in groups.", PT: "Envie mensagens entre usuários em tempo real, em conversas privadas e em grupo."},
 			Core: []string{
@@ -106,6 +111,7 @@ func canonicalProblems() []CanonicalProblem {
 		},
 		{
 			ID:      "notification-service",
+			Level:   DifficultyIntermediate,
 			Name:    LocalizedName{EN: "Notification service", PT: "Serviço de notificações"},
 			Summary: LocalizedName{EN: "Deliver push, email and SMS notifications reliably.", PT: "Entregue notificações por push, e-mail e SMS com confiabilidade."},
 			Core: []string{
@@ -117,6 +123,7 @@ func canonicalProblems() []CanonicalProblem {
 		},
 		{
 			ID:      "ticket-booking",
+			Level:   DifficultyIntermediate,
 			Name:    LocalizedName{EN: "Ticket booking", PT: "Reserva de ingressos"},
 			Summary: LocalizedName{EN: "Sell tickets for events without selling the same seat twice.", PT: "Venda ingressos para eventos sem vender o mesmo assento duas vezes."},
 			Core: []string{

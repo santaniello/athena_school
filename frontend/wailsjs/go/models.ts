@@ -420,6 +420,7 @@ export namespace desktop {
 	    id: string;
 	    name: string;
 	    summary: string;
+	    level: string;
 	    difficulties: DifficultyStateDTO[];
 	    attempts: number;
 	    hasHistory: boolean;
@@ -433,6 +434,7 @@ export namespace desktop {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.summary = source["summary"];
+	        this.level = source["level"];
 	        this.difficulties = this.convertValues(source["difficulties"], DifficultyStateDTO);
 	        this.attempts = source["attempts"];
 	        this.hasHistory = source["hasHistory"];

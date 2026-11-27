@@ -8,6 +8,7 @@ const fresh: CanonicalProblem = {
   id: 'url-shortener',
   name: 'URL shortener',
   summary: 'Turn long URLs into short links.',
+  level: 'INTERMEDIATE',
   attempts: 0,
   hasHistory: false,
   difficulties: [
@@ -74,15 +75,11 @@ describe('CanonicalProblemRow', () => {
     expect(onHistory).toHaveBeenCalledWith(attempted)
   })
 
-  it('shows the three levels, each with its state, dimming the ones not generated', () => {
-    renderRow(attempted)
+  it('tags the problem with its own level', () => {
+    renderRow(fresh)
 
-    const beginner = screen.getByText('Beginner').parentElement
-    const advanced = screen.getByText('Advanced').parentElement
     expect(screen.getByText('Intermediate')).toBeInTheDocument()
-    expect(beginner).toHaveAttribute('title', 'Completed')
-    expect(beginner).not.toHaveClass('opacity-40')
-    expect(advanced).toHaveAttribute('title', 'Not generated')
-    expect(advanced).toHaveClass('opacity-40')
+    expect(screen.queryByText('Beginner')).not.toBeInTheDocument()
+    expect(screen.queryByText('Advanced')).not.toBeInTheDocument()
   })
 })
