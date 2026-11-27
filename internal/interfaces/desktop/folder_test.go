@@ -109,8 +109,8 @@ func TestApp_SetFolderArchLabEnabled_switchesTheLab(t *testing.T) {
 	// Given an App backed by a repository that accepts the change
 	folders := foldermocks.NewMockRepository(t)
 	sessions := studymocks.NewMockSessionRepository(t)
-	folders.EXPECT().SetArchLabEnabled(mock.Anything, "f-1", true).Return(nil).Once()
 	app := newTestFolderApp(t, folders, sessions)
+	folders.EXPECT().SetArchLabEnabled(app.ctx, "f-1", true).Return(nil).Once()
 
 	// When enabling the Architecture Lab for a folder
 	err := app.SetFolderArchLabEnabled("f-1", true)
@@ -123,8 +123,8 @@ func TestApp_SetFolderArchLabEnabled_propagatesFolderNotFound(t *testing.T) {
 	// Given a repository with no such folder
 	folders := foldermocks.NewMockRepository(t)
 	sessions := studymocks.NewMockSessionRepository(t)
-	folders.EXPECT().SetArchLabEnabled(mock.Anything, "missing", false).Return(domainfolder.ErrFolderNotFound).Once()
 	app := newTestFolderApp(t, folders, sessions)
+	folders.EXPECT().SetArchLabEnabled(app.ctx, "missing", false).Return(domainfolder.ErrFolderNotFound).Once()
 
 	// When disabling it
 	err := app.SetFolderArchLabEnabled("missing", false)

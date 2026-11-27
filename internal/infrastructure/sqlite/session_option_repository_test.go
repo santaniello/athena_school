@@ -88,7 +88,7 @@ func TestSessionOptionRepository_ListArchLabEnabled_skipsSessionsOfDisabledFolde
 	// Given a session in an enabled folder and one in a disabled folder
 	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	t.Cleanup(func() { assert.NoError(t, db.Close()) })
 	_, err = db.Exec(`INSERT INTO folders (id, name, created_at, arch_lab_enabled) VALUES
 		('folder-on', 'Architecture', CURRENT_TIMESTAMP, 1), ('folder-off', 'Java', CURRENT_TIMESTAMP, 0)`)
 	require.NoError(t, err)

@@ -28,7 +28,7 @@ func TestStart_returnsTopicRequired_whenTopicIsBlank(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := newFolderMock(t)
+	folders := foldermocks.NewMockRepository(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil, nil, nil)
 
@@ -47,7 +47,7 @@ func TestStart_returnsGoalRequired_whenGoalIsBlank(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := newFolderMock(t)
+	folders := foldermocks.NewMockRepository(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil, nil, nil)
 
@@ -102,7 +102,7 @@ func TestStart_returnsFolderRequired_whenFolderIDIsBlank(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := newFolderMock(t)
+	folders := foldermocks.NewMockRepository(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil, nil, nil)
 

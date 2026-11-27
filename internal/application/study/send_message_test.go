@@ -14,6 +14,7 @@ import (
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 
 	applicationstudymocks "github.com/santaniello/athena/internal/application/study/mocks"
+	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 	profilemocks "github.com/santaniello/athena/internal/domain/profile/mocks"
@@ -68,7 +69,7 @@ func TestSendMessage_returnsErrInvalidSourceMode_forUnknownMode(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := newFolderMock(t)
+	folders := foldermocks.NewMockRepository(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil, nil, nil)
 
@@ -86,7 +87,7 @@ func TestSendMessage_returnsErrInvalidSourceMode_beforeBlankContentCheck(t *test
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := newFolderMock(t)
+	folders := foldermocks.NewMockRepository(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil, nil, nil)
 
@@ -104,7 +105,7 @@ func TestSendMessage_returnsMessageRequired_whenContentIsBlank(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := newFolderMock(t)
+	folders := foldermocks.NewMockRepository(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil, nil, nil)
 
@@ -121,7 +122,7 @@ func TestSendMessage_blockedSession_returnsErrSessionContextLimitReached_without
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := newFolderMock(t)
+	folders := foldermocks.NewMockRepository(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	tx := applicationstudymocks.NewMockTransactor(t)
 	runWithinTx(tx)

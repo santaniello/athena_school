@@ -98,7 +98,7 @@ func TestSendMessage_returnsErrOfferPending_beforeStoringOrCallingAnything(t *te
 	gate := applicationstudymocks.NewMockOfferGate(t)
 	gate.EXPECT().HasPending(context.Background(), "session-1").Return(true, nil).Once()
 	service := NewService(studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t),
-		profilemocks.NewMockStore(t), newFolderMock(t), knowledgemocks.NewMockRetriever(t), nil, nil, nil, nil, nil,
+		profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t), knowledgemocks.NewMockRetriever(t), nil, nil, nil, nil, nil,
 		WithOfferGate(gate))
 
 	// When sending a message
@@ -114,7 +114,7 @@ func TestSendMessage_failsWhenThePendingOfferCannotBeChecked(t *testing.T) {
 	gate := applicationstudymocks.NewMockOfferGate(t)
 	gate.EXPECT().HasPending(context.Background(), "session-1").Return(false, boom).Once()
 	service := NewService(studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t),
-		profilemocks.NewMockStore(t), newFolderMock(t), knowledgemocks.NewMockRetriever(t), nil, nil, nil, nil, nil,
+		profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t), knowledgemocks.NewMockRetriever(t), nil, nil, nil, nil, nil,
 		WithOfferGate(gate))
 
 	// When sending a message
@@ -282,14 +282,18 @@ func TestSendMessage_createsTheQuizOffer_whenTheExerciseMarkerIsDroppedInAFolder
 	// Given a session whose folder has the lab off, and a reply carrying both markers
 	gate := applicationstudymocks.NewMockOfferGate(t)
 	gate.EXPECT().HasPending(context.Background(), "session-1").Return(false, nil).Once()
-	gate.EXPECT().CreateOffer(context.Background(), "session-1", mock.AnythingOfType("string"), domainstudy.OfferKindQuiz).Return(nil).Once()
+	var offerMessageID string
+	gate.EXPECT().CreateOffer(context.Background(), "session-1", mock.AnythingOfType("string"), domainstudy.OfferKindQuiz).
+		Run(func(_ context.Context, _, messageID string, _ domainstudy.OfferKind) { offerMessageID = messageID }).Return(nil).Once()
 
 	// When it streams
 	outcome, err := streamReplyInFolder(t, newFolderMockWithLab(t, false), []string{"Sure.\n[[ATHENA_EXERCISE_OFFER]][[ATHENA_QUIZ_OFFER]]"}, WithOfferGate(gate))
 
-	// Then only the quiz offer is created and both markers are gone
+	// Then only the quiz offer is created, under the stored reply, and both
+	// markers are gone
 	require.NoError(t, err)
 	require.Equal(t, "Sure.", outcome.stored.Content)
+	require.Equal(t, outcome.stored.ID, offerMessageID)
 }
 
 func TestSendMessage_omitsTheExerciseInstruction_inAFolderWithTheLabDisabled(t *testing.T) {

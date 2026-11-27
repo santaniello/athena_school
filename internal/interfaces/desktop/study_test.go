@@ -156,7 +156,7 @@ func TestApp_StartStudySession_propagatesTopicRequiredError(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := newFolderMock(t)
+	folders := foldermocks.NewMockRepository(t)
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
 	// When starting a session with a blank topic
@@ -176,7 +176,7 @@ func TestApp_StartStudySession_propagatesGoalRequiredError(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := newFolderMock(t)
+	folders := foldermocks.NewMockRepository(t)
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
 	// When starting a session with a blank goal
@@ -322,7 +322,7 @@ func TestApp_SendStudyMessage_invalidSourceMode_emitsErrorEventWithoutPersisting
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := newFolderMock(t)
+	folders := foldermocks.NewMockRepository(t)
 	app, captured := newTestStudyApp(t, sessions, messages, llm, profiles, folders)
 
 	// When sending a message with an unrecognized source mode
@@ -348,7 +348,7 @@ func TestApp_SendStudyMessage_blockedSession_emitsContextLimitReachedCode_withou
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := newFolderMock(t)
+	folders := foldermocks.NewMockRepository(t)
 	sessions.EXPECT().GetByID(context.Background(), "session-1").
 		Return(domainstudy.Session{ID: "session-1", Context: domainstudy.ContextUsage{State: domainstudy.ContextStateBlocked}}, nil).
 		Once()
@@ -601,7 +601,7 @@ func TestApp_ListStudyMessagesBefore_returnsTheOlderPage(t *testing.T) {
 
 func TestApp_ListStudyMessagesBefore_rejectsAMalformedCursor(t *testing.T) {
 	// Given an App whose repositories must not be read
-	app, _ := newTestStudyApp(t, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), newFolderMock(t))
+	app, _ := newTestStudyApp(t, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t))
 
 	// When asking for a page with an empty cursor
 	_, err := app.ListStudyMessagesBefore("session-1", "", 10)

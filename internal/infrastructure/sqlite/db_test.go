@@ -453,7 +453,7 @@ func TestOpen_addsFoldersArchLabEnabledColumn_disabledForExistingFolders(t *test
 	require.NoError(t, db.Close())
 	db, err = Open(path)
 	require.NoError(t, err)
-	defer func() { _ = db.Close() }()
+	defer func() { assert.NoError(t, db.Close()) }()
 
 	// Then the column exists and the existing folder comes out disabled
 	has, err := hasColumn(db, "folders", "arch_lab_enabled")
