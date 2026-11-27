@@ -31,7 +31,7 @@ func newContextFixture(t *testing.T) contextFixture {
 	return f
 }
 
-var testSession = domainexercise.SourceSession{Topic: "Distributed Caching", Goal: "Ace the interview"}
+var testSession = domainexercise.SourceSession{Topic: "Distributed Caching", Goal: "Ace the interview", ArchLabEnabled: true}
 
 var testProfile = domainexercise.GenerationProfile{Area: "backend", ExperienceLevel: "advanced", Language: "pt"}
 

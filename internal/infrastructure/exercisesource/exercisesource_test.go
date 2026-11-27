@@ -11,6 +11,8 @@ import (
 	applicationexercise "github.com/santaniello/athena/internal/application/exercise"
 	applicationstudy "github.com/santaniello/athena/internal/application/study"
 	domainexercise "github.com/santaniello/athena/internal/domain/exercise"
+	domainfolder "github.com/santaniello/athena/internal/domain/folder"
+	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 	domainprofile "github.com/santaniello/athena/internal/domain/profile"
@@ -19,18 +21,38 @@ import (
 	studymocks "github.com/santaniello/athena/internal/domain/study/mocks"
 )
 
-func TestSessionTopics_ReadSession_returnsTopicAndGoal(t *testing.T) {
-	// Given a stored study session
+func TestSessionTopics_ReadSession_returnsTopicGoalAndTheFoldersLabFlag(t *testing.T) {
+	for _, enabled := range []bool{true, false} {
+		// Given a stored study session in a folder with the lab on or off
+		sessions := studymocks.NewMockSessionRepository(t)
+		folders := foldermocks.NewMockRepository(t)
+		ctx := context.Background()
+		sessions.EXPECT().GetByID(ctx, "session-1").Return(domainstudy.Session{ID: "session-1", Topic: "Caching", Goal: "Interview", FolderID: "folder-1"}, nil)
+		folders.EXPECT().GetByID(ctx, "folder-1").Return(domainfolder.Folder{ID: "folder-1", ArchLabEnabled: enabled}, nil)
+
+		// When its topic is read
+		got, err := NewSessionTopics(sessions, folders).ReadSession(ctx, "session-1")
+
+		// Then topic, goal and the flag as it is now come back
+		require.NoError(t, err)
+		assert.Equal(t, domainexercise.SourceSession{Topic: "Caching", Goal: "Interview", ArchLabEnabled: enabled}, got)
+	}
+}
+
+func TestSessionTopics_ReadSession_failsWhenTheFolderCannotBeRead(t *testing.T) {
+	// Given a session whose folder lookup fails
 	sessions := studymocks.NewMockSessionRepository(t)
+	folders := foldermocks.NewMockRepository(t)
 	ctx := context.Background()
-	sessions.EXPECT().GetByID(ctx, "session-1").Return(domainstudy.Session{ID: "session-1", Topic: "Caching", Goal: "Interview"}, nil)
+	boom := errors.New("db down")
+	sessions.EXPECT().GetByID(ctx, "session-1").Return(domainstudy.Session{ID: "session-1", FolderID: "folder-1"}, nil)
+	folders.EXPECT().GetByID(ctx, "folder-1").Return(domainfolder.Folder{}, boom)
 
 	// When its topic is read
-	got, err := NewSessionTopics(sessions).ReadSession(ctx, "session-1")
+	_, err := NewSessionTopics(sessions, folders).ReadSession(ctx, "session-1")
 
-	// Then topic and goal come back
-	require.NoError(t, err)
-	assert.Equal(t, domainexercise.SourceSession{Topic: "Caching", Goal: "Interview"}, got)
+	// Then the failure surfaces
+	require.ErrorIs(t, err, boom)
 }
 
 func TestSessionTopics_ReadSession_translatesAnUnknownSession(t *testing.T) {
@@ -40,7 +62,7 @@ func TestSessionTopics_ReadSession_translatesAnUnknownSession(t *testing.T) {
 	sessions.EXPECT().GetByID(ctx, "nope").Return(domainstudy.Session{}, domainstudy.ErrSessionNotFound)
 
 	// When its topic is read
-	_, err := NewSessionTopics(sessions).ReadSession(ctx, "nope")
+	_, err := NewSessionTopics(sessions, foldermocks.NewMockRepository(t)).ReadSession(ctx, "nope")
 
 	// Then the exercise port's sentinel is returned
 	require.ErrorIs(t, err, applicationexercise.ErrSourceSessionNotFound)
@@ -54,7 +76,7 @@ func TestSessionTopics_ReadSession_passesOtherFailuresThrough(t *testing.T) {
 	sessions.EXPECT().GetByID(ctx, "session-1").Return(domainstudy.Session{}, failure)
 
 	// When the topic is read
-	_, err := NewSessionTopics(sessions).ReadSession(ctx, "session-1")
+	_, err := NewSessionTopics(sessions, foldermocks.NewMockRepository(t)).ReadSession(ctx, "session-1")
 
 	// Then that failure is returned, not mistaken for an unknown session
 	require.ErrorIs(t, err, failure)
