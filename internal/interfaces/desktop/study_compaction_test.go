@@ -19,7 +19,6 @@ import (
 	domainprofile "github.com/santaniello/athena/internal/domain/profile"
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 
-	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 	profilemocks "github.com/santaniello/athena/internal/domain/profile/mocks"
 	studymocks "github.com/santaniello/athena/internal/domain/study/mocks"
@@ -69,7 +68,7 @@ func captureLog(t *testing.T) *bytes.Buffer {
 func TestApp_compactionHooks_emitEventsAndLogTheFailureWithoutLeakingTheRawError(t *testing.T) {
 	// Given an app and a captured log
 	app, captured := newTestStudyApp(t, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t),
-		llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t))
+		llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), newFolderMock(t))
 	logs := captureLog(t)
 	hooks := app.compactionHooks("session-1")
 
@@ -109,7 +108,7 @@ func TestApp_CompactStudySession_failure_returnsTheErrorEmitsFailedEventAndLogsI
 	messages.EXPECT().ListAfter(context.Background(), "session-1", "").Return(history, nil)
 	summarizer.EXPECT().Summarize(context.Background(), "session-1", (*domainstudy.ConversationSummary)(nil), history[:6]).
 		Return(domainstudy.ConversationSummary{}, fmt.Errorf("raw detail: %w", study.ErrInvalidSummaryFormat))
-	app, captured := newTestStudyApp(t, sessions, messages, llmmocks.NewMockProvider(t), profiles, foldermocks.NewMockRepository(t),
+	app, captured := newTestStudyApp(t, sessions, messages, llmmocks.NewMockProvider(t), profiles, newFolderMock(t),
 		study.WithSummarizer(summarizer), study.WithSummaries(summaries))
 	logs := captureLog(t)
 
@@ -139,7 +138,7 @@ func TestApp_ResumeStudySession_withASummary_returnsItsCursor(t *testing.T) {
 		Return(nil, nil).Once()
 	summaries.EXPECT().Get(context.Background(), "session-1").
 		Return(domainstudy.ConversationSummary{SessionID: "session-1", Content: "## Progress", CoversUntilMessageID: "message-3"}, nil).Once()
-	app, _ := newTestStudyApp(t, sessions, messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t),
+	app, _ := newTestStudyApp(t, sessions, messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), newFolderMock(t),
 		study.WithSummaries(summaries))
 
 	// When resuming the session
@@ -157,7 +156,7 @@ func TestApp_GetStudySessionSummary_returnsTheSummary(t *testing.T) {
 	summaries.EXPECT().Get(context.Background(), "session-1").
 		Return(domainstudy.ConversationSummary{SessionID: "session-1", Content: "## Progress", CoversUntilMessageID: "message-3", UpdatedAt: updatedAt}, nil).Once()
 	app, _ := newTestStudyApp(t, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t),
-		profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t), study.WithSummaries(summaries))
+		profilemocks.NewMockStore(t), newFolderMock(t), study.WithSummaries(summaries))
 
 	// When reading it
 	result, err := app.GetStudySessionSummary("session-1")
@@ -173,7 +172,7 @@ func TestApp_GetStudySessionSummary_withoutSummary_returnsNotFound(t *testing.T)
 	summaries.EXPECT().Get(context.Background(), "session-1").
 		Return(domainstudy.ConversationSummary{}, domainstudy.ErrConversationSummaryNotFound).Once()
 	app, _ := newTestStudyApp(t, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t),
-		profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t), study.WithSummaries(summaries))
+		profilemocks.NewMockStore(t), newFolderMock(t), study.WithSummaries(summaries))
 
 	// When reading its summary
 	result, err := app.GetStudySessionSummary("session-1")
@@ -189,7 +188,7 @@ func TestApp_GetStudySessionSummary_propagatesReadError(t *testing.T) {
 	summaries := studymocks.NewMockConversationSummaryRepository(t)
 	summaries.EXPECT().Get(context.Background(), "session-1").Return(domainstudy.ConversationSummary{}, readErr).Once()
 	app, _ := newTestStudyApp(t, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t),
-		profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t), study.WithSummaries(summaries))
+		profilemocks.NewMockStore(t), newFolderMock(t), study.WithSummaries(summaries))
 
 	// When reading the summary
 	_, err := app.GetStudySessionSummary("session-1")

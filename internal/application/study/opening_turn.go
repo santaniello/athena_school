@@ -53,9 +53,13 @@ func (s *Service) RequestOpeningTurn(
 		return fmt.Errorf("study: loading profile: %w", err)
 	}
 
-	systemPrompt := buildSystemPrompt(profile, topic, session.Goal)
+	archLabEnabled, err := s.archLabEnabledOf(ctx, session.FolderID)
+	if err != nil {
+		return err
+	}
+	systemPrompt := buildSystemPrompt(profile, topic, session.Goal, archLabEnabled)
 	openingTurn := []domainllm.Message{{Role: "system", Content: systemPrompt}}
-	if _, err := s.streamAndPersist(ctx, sessionID, session.Context, openingTurn, nil, "", onChunk, onContext, onContextUnavailable); err != nil {
+	if _, err := s.streamAndPersist(ctx, sessionID, session.Context, openingTurn, nil, "", archLabEnabled, onChunk, onContext, onContextUnavailable); err != nil {
 		return fmt.Errorf("study: requesting opening turn: %w", err)
 	}
 	return nil

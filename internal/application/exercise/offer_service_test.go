@@ -23,10 +23,26 @@ type offerFixture struct {
 	links      *domainmocks.MockSessionExerciseRepository
 	generator  *exercisemocks.MockChallengeGenerator
 	profiles   *exercisemocks.MockProfileReader
+	sessions   *exercisemocks.MockSessionTopicReader
 	tx         *exercisemocks.MockTransactor
 }
 
+// newOfferFixture builds a fixture whose session sits in a folder with the
+// Architecture Lab enabled; the session read is optional, since a failure
+// before the check never reaches it.
 func newOfferFixture(t *testing.T) *offerFixture {
+	t.Helper()
+	f := newOfferFixtureWithoutSession(t)
+	f.sessions.EXPECT().ReadSession(anyContext(), "session-1").
+		Return(domainexercise.SourceSession{Topic: "caching", ArchLabEnabled: true}, nil).Maybe()
+	return f
+}
+
+func anyContext() any {
+	return mock.MatchedBy(func(context.Context) bool { return true })
+}
+
+func newOfferFixtureWithoutSession(t *testing.T) *offerFixture {
 	t.Helper()
 	f := &offerFixture{
 		offers:     domainmocks.NewMockOfferRepository(t),
@@ -34,9 +50,10 @@ func newOfferFixture(t *testing.T) *offerFixture {
 		links:      domainmocks.NewMockSessionExerciseRepository(t),
 		generator:  exercisemocks.NewMockChallengeGenerator(t),
 		profiles:   exercisemocks.NewMockProfileReader(t),
+		sessions:   exercisemocks.NewMockSessionTopicReader(t),
 		tx:         exercisemocks.NewMockTransactor(t),
 	}
-	f.service = NewOfferService(f.offers, f.challenges, f.links, f.generator, f.profiles, f.tx)
+	f.service = NewOfferService(f.offers, f.challenges, f.links, f.generator, f.profiles, f.sessions, f.tx)
 	f.service.now = func() time.Time { return fixedNow }
 	f.service.newID = func() string { return "generated-id" }
 	return f
@@ -231,6 +248,36 @@ func TestOfferService_Accept_reusesTheSessionsLatestChallengeWithoutGenerating(t
 	// Then the link is created under the offer's message and the offer is deleted
 	require.NoError(t, err)
 	assert.Equal(t, offerView(), view)
+}
+
+func TestOfferService_Accept_refusesAndKeepsTheOffer_whenTheSessionsFolderHasTheLabDisabled(t *testing.T) {
+	// Given a pending offer whose session's folder was switched off, and a
+	// latest challenge that would otherwise be reused without a model call
+	f := newOfferFixtureWithoutSession(t)
+	ctx := context.Background()
+	f.expectOffer(ctx)
+	f.sessions.EXPECT().ReadSession(ctx, "session-1").Return(domainexercise.SourceSession{Topic: "caching", ArchLabEnabled: false}, nil)
+
+	// When the offer is accepted
+	_, err := f.service.Accept(ctx, "offer-1", interviewSpec(domainexercise.DifficultyAdvanced))
+
+	// Then it fails with ErrArchLabNotEnabled; nothing is read, generated, linked or deleted
+	require.ErrorIs(t, err, domainexercise.ErrArchLabNotEnabled)
+}
+
+func TestOfferService_Accept_failsWhenTheSessionCannotBeRead(t *testing.T) {
+	// Given a pending offer and a failing session read
+	f := newOfferFixtureWithoutSession(t)
+	ctx := context.Background()
+	boom := errors.New("db down")
+	f.expectOffer(ctx)
+	f.sessions.EXPECT().ReadSession(ctx, "session-1").Return(domainexercise.SourceSession{}, boom)
+
+	// When the offer is accepted
+	_, err := f.service.Accept(ctx, "offer-1", interviewSpec(domainexercise.DifficultyAdvanced))
+
+	// Then the failure surfaces and nothing is created
+	require.ErrorIs(t, err, boom)
 }
 
 func TestOfferService_Accept_generatesWithTheProfilesDifficulty_whenTheSessionHasNoChallenge(t *testing.T) {

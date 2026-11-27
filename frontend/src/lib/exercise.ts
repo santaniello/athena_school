@@ -196,6 +196,7 @@ export const SUBMISSION_TOO_LARGE = 'submission_too_large'
 
 const ERROR_CODES = [
   'invalid_generation',
+  'arch_lab_not_enabled',
   'offer_not_found',
   'source_session_not_found',
   'generation_in_progress',

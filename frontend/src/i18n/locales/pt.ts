@@ -48,6 +48,8 @@ export const pt: LabResources = {
   errors: {
     generic: 'Algo deu errado. Tente novamente.',
     invalid_generation: 'O desafio gerado não era válido. Tente novamente.',
+    arch_lab_not_enabled:
+      'O Architecture Lab não está ativado na pasta desta sessão. Ative-o no menu da pasta.',
     offer_not_found: 'Esta oferta de exercício não está mais disponível.',
     source_session_not_found: 'Essa sessão de estudo não existe mais. Escolha outra.',
     generation_in_progress: 'Um desafio já está sendo gerado.',
@@ -101,6 +103,8 @@ export const pt: LabResources = {
     sessionsFailed: 'Não foi possível carregar suas sessões de estudo.',
     noSessions:
       'Estude um tópico primeiro. O desafio é gerado a partir de uma sessão que você já estudou.',
+    noLabFolder:
+      'Ative o Architecture Lab em uma pasta para gerar desafios a partir das sessões dela.',
     searchLabel: 'Buscar sessões de estudo',
     searchPlaceholder: 'Buscar por tópico ou pasta',
     sessionsLabel: 'Sessões de estudo',

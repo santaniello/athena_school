@@ -12,7 +12,6 @@ import (
 	"github.com/santaniello/athena/internal/application/study"
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 
-	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 	profilemocks "github.com/santaniello/athena/internal/domain/profile/mocks"
 	studymocks "github.com/santaniello/athena/internal/domain/study/mocks"
@@ -21,7 +20,7 @@ import (
 func newProgressApp(t *testing.T, options ...study.Option) *App {
 	t.Helper()
 	app, _ := newTestStudyApp(t, studymocks.NewMockSessionRepository(t), studymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t),
-		profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t), options...)
+		profilemocks.NewMockStore(t), newFolderMock(t), options...)
 	return app
 }
 

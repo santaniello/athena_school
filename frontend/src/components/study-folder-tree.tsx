@@ -12,6 +12,7 @@ import {
 } from '@dnd-kit/core'
 import {
   ChevronRight,
+  FlaskConical,
   Folder as FolderIcon,
   MoreVertical,
   Pencil,
@@ -48,7 +49,14 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { createFolder, deleteFolder, listFolders, renameFolder, type Folder } from '@/lib/folder'
+import {
+  createFolder,
+  deleteFolder,
+  listFolders,
+  renameFolder,
+  setFolderArchLabEnabled,
+  type Folder,
+} from '@/lib/folder'
 import {
   deleteStudySession,
   listStudySessionsByFolder,
@@ -78,6 +86,9 @@ interface StudyFolderTreeProps {
   // like AppShell can tell "no folders exist yet" apart from "folders
   // exist but none is selected" without owning this tree's own state.
   onFolderCountChange?: (count: number) => void
+  // Reports a folder action that failed (e.g. toggling the Architecture Lab),
+  // so a parent like AppShell can show it instead of it failing silently.
+  onActionError?: (message: string) => void
 }
 
 // StudyFolderTreeHandle lets a caller outside this tree (e.g. AppShell's
@@ -154,6 +165,7 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
       onSessionDeleted,
       onFolderDeleted,
       onFolderCountChange,
+      onActionError,
     },
     ref,
   ) {
@@ -232,6 +244,24 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
       await renameFolder(folderId, name)
       setFolders((previous) =>
         previous.map((folder) => (folder.id === folderId ? { ...folder, name } : folder)),
+      )
+    }
+
+    async function handleSetArchLabEnabled(folderId: string, enabled: boolean) {
+      try {
+        await setFolderArchLabEnabled(folderId, enabled)
+      } catch {
+        onActionError?.(
+          enabled
+            ? 'Could not enable the Architecture Lab for this folder.'
+            : 'Could not disable the Architecture Lab for this folder.',
+        )
+        return
+      }
+      setFolders((previous) =>
+        previous.map((folder) =>
+          folder.id === folderId ? { ...folder, archLabEnabled: enabled } : folder,
+        ),
       )
     }
 
@@ -397,6 +427,12 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
                 ) : (
                   <span className="flex-1 truncate font-medium text-foreground">{folder.name}</span>
                 )}
+                {folder.archLabEnabled && (
+                  <FlaskConical
+                    className="size-3 shrink-0 text-primary"
+                    aria-label="Architecture Lab enabled"
+                  />
+                )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -411,6 +447,7 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
                   </DropdownMenuTrigger>
                   <DropdownMenuContent
                     align="start"
+                    className="w-auto min-w-48"
                     onCloseAutoFocus={(event) => event.preventDefault()}
                   >
                     <DropdownMenuItem
@@ -427,6 +464,14 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
                     >
                       <Pencil aria-hidden="true" />
                       Rename
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        void handleSetArchLabEnabled(folder.id, !folder.archLabEnabled)
+                      }
+                    >
+                      <FlaskConical aria-hidden="true" />
+                      {folder.archLabEnabled ? 'Disable Arch Lab' : 'Enable Arch Lab'}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem

@@ -35,6 +35,7 @@ import {
   type GeneratedChallenge,
   type SessionOption,
 } from '@/lib/exercise'
+import { listFolders } from '@/lib/folder'
 import { useTranslation } from 'react-i18next'
 
 interface GenerateChallengeDialogProps {
@@ -58,8 +59,23 @@ export function GenerateChallengeDialog({ open, ...rest }: GenerateChallengeDial
   return open ? <GenerateChallengeContent {...rest} /> : null
 }
 
+// noLabFolder is true when the list is empty because no folder has the
+// Architecture Lab on, so the dialog can say how to turn it on instead of
+// asking for a study session.
 type Sessions =
-  { state: 'loading' } | { state: 'failed' } | { state: 'ready'; list: SessionOption[] }
+  | { state: 'loading' }
+  | { state: 'failed' }
+  | { state: 'ready'; list: SessionOption[]; noLabFolder: boolean }
+
+// A failure to list folders only costs the more specific message.
+async function noFolderHasTheLab(): Promise<boolean> {
+  try {
+    const folders = await listFolders()
+    return !folders.some((folder) => folder.archLabEnabled)
+  } catch {
+    return false
+  }
+}
 
 function GenerateChallengeContent({
   defaultDifficulty,
@@ -96,8 +112,9 @@ function GenerateChallengeContent({
   useEffect(() => {
     let stale = false
     listSessionsForGeneration()
-      .then((list) => {
-        if (!stale) setSessions({ state: 'ready', list })
+      .then(async (list) => {
+        const noLabFolder = list.length === 0 && (await noFolderHasTheLab())
+        if (!stale) setSessions({ state: 'ready', list, noLabFolder })
       })
       .catch(() => {
         if (!stale) setSessions({ state: 'failed' })
@@ -177,7 +194,9 @@ function GenerateChallengeContent({
           </div>
         )}
         {sessions.state === 'ready' && list.length === 0 && (
-          <p className="text-sm text-muted-foreground">{t('generate.noSessions')}</p>
+          <p className="text-sm text-muted-foreground">
+            {sessions.noLabFolder ? t('generate.noLabFolder') : t('generate.noSessions')}
+          </p>
         )}
         {sessions.state === 'ready' && list.length > 0 && (
           <div className="space-y-3">

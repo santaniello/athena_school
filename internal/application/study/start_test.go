@@ -8,10 +8,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	domainfolder "github.com/santaniello/athena/internal/domain/folder"
+	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 
-	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 	profilemocks "github.com/santaniello/athena/internal/domain/profile/mocks"

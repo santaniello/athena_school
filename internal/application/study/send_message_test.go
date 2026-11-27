@@ -148,7 +148,7 @@ func TestSendMessage_concurrentCallsForSameSession_secondReturnsErrStudyTurnInPr
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	tx := mockNormalSession(t, sessions, "session-1")
 
@@ -195,7 +195,7 @@ func TestSendMessage_persistsUserMessageBeforeCallingLLM(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	tx := mockNormalSession(t, sessions, "session-1")
 	retriever.EXPECT().Retrieve(context.Background(), "session-1", mock.AnythingOfType("[]string")).
@@ -251,7 +251,7 @@ func TestSendMessage_provisionalIncrement_reachingBlocked_emitsContextImmediatel
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	tx := applicationstudymocks.NewMockTransactor(t)
 	runWithinTx(tx)
@@ -305,7 +305,7 @@ func TestSendMessage_sendsHistoryAndFreshSystemPromptToLLM(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	tx := mockNormalSession(t, sessions, "session-1")
 	retriever.EXPECT().Retrieve(context.Background(), "session-1", mock.AnythingOfType("[]string")).
@@ -365,7 +365,7 @@ func TestSendMessage_stripsCitationMarkersFromPriorAssistantTurns_butNotUserTurn
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	tx := mockNormalSession(t, sessions, "session-1")
 	retriever.EXPECT().Retrieve(context.Background(), "session-1", mock.AnythingOfType("[]string")).
@@ -409,7 +409,7 @@ func TestSendMessage_propagatesStreamError_withoutPersistingAssistantMessage(t *
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	tx := mockNormalSession(t, sessions, "session-1")
 
@@ -443,7 +443,7 @@ func TestSendMessage_notes_returnsErrVectorStoreUnavailable_preservingUserMessag
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	tx := mockNormalSession(t, sessions, "session-1")
 
@@ -475,7 +475,7 @@ func TestSendMessage_strictNotes_returnsErrVectorStoreUnavailable_sameGuarantees
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	tx := mockNormalSession(t, sessions, "session-1")
 
@@ -504,7 +504,7 @@ func TestSendMessage_buildsQueryFromTopicAndTrimmedMessage_excludingHistory_carr
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	tx := mockNormalSession(t, sessions, "session-1")
 
@@ -538,7 +538,7 @@ func TestSendMessage_notes_fallsThroughToPlainChat_onValidEmptyOrMissRetrieval(t
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	tx := mockNormalSession(t, sessions, "session-1")
 
@@ -576,7 +576,7 @@ func TestSendMessage_strictNotes_persistsFixedMessage_onValidEmptyOrMissRetrieva
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	tx := mockNormalSession(t, sessions, "session-1")
 
@@ -629,7 +629,7 @@ func TestSendMessage_strictNotes_persistsFixedMessage_onInsufficientNonEmptyRetr
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	tx := mockNormalSession(t, sessions, "session-1")
 
@@ -697,7 +697,7 @@ func TestSendMessage_strictNotes_missResponse_localizedToProfileAssistantLanguag
 			messages := studymocks.NewMockMessageRepository(t)
 			llm := llmmocks.NewMockProvider(t)
 			profiles := profilemocks.NewMockStore(t)
-			folders := foldermocks.NewMockRepository(t)
+			folders := newFolderMock(t)
 			retriever := knowledgemocks.NewMockRetriever(t)
 			tx := mockNormalSession(t, sessions, "session-1")
 
@@ -738,7 +738,7 @@ func TestSendMessage_local_propagatesGenericRetrievalError_persistingOnlyUserMes
 			messages := studymocks.NewMockMessageRepository(t)
 			llm := llmmocks.NewMockProvider(t)
 			profiles := profilemocks.NewMockStore(t)
-			folders := foldermocks.NewMockRepository(t)
+			folders := newFolderMock(t)
 			retriever := knowledgemocks.NewMockRetriever(t)
 			tx := mockNormalSession(t, sessions, "session-1")
 
@@ -789,7 +789,7 @@ func TestSendMessage_localMode_withSurvivingChunks_sendsKnowledgeContextAsSecond
 			messages := studymocks.NewMockMessageRepository(t)
 			llm := llmmocks.NewMockProvider(t)
 			profiles := profilemocks.NewMockStore(t)
-			folders := foldermocks.NewMockRepository(t)
+			folders := newFolderMock(t)
 			retriever := knowledgemocks.NewMockRetriever(t)
 			tx := mockNormalSession(t, sessions, "session-1")
 
@@ -844,7 +844,7 @@ func TestSendMessage_strictNotes_combinesRawAndEnrichedQueriesForRetrieve(t *tes
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	tx := mockNormalSession(t, sessions, "session-1")
 
@@ -887,7 +887,7 @@ func TestSendMessage_strictNotes_hyDeStillReceivesTopic_evenThoughTheRawQueryDoe
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	enricher := knowledgemocks.NewMockQueryEnricher(t)
 	tx := mockNormalSession(t, sessions, "session-1")
@@ -924,7 +924,7 @@ func TestSendMessage_notes_neverCallsTheEnricher(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	enricher := knowledgemocks.NewMockQueryEnricher(t)
 	tx := mockNormalSession(t, sessions, "session-1")
@@ -957,7 +957,7 @@ func TestSendMessage_strictNotes_propagatesEnrichmentError_beforeCallingRetrieve
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	enricher := knowledgemocks.NewMockQueryEnricher(t)
 	tx := mockNormalSession(t, sessions, "session-1")

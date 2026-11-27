@@ -155,6 +155,7 @@ const (
 	exerciseCodeEmptyQuestion        = "empty_question"
 	exerciseCodeOfferNotFound        = "offer_not_found"
 	exerciseCodeOfferPending         = "offer_pending"
+	exerciseCodeArchLabNotEnabled    = "arch_lab_not_enabled"
 	exerciseCodeInternal             = "internal"
 )
 
@@ -229,6 +230,8 @@ func toExerciseError(err error) *ExerciseError {
 		return &ExerciseError{Code: exerciseCodeEmptyQuestion, Message: "the tutor wrote an empty question"}
 	case errors.Is(err, domainexercise.ErrOfferNotFound):
 		return &ExerciseError{Code: exerciseCodeOfferNotFound, Message: "the exercise offer is no longer pending"}
+	case errors.Is(err, domainexercise.ErrArchLabNotEnabled):
+		return &ExerciseError{Code: exerciseCodeArchLabNotEnabled, Message: "the architecture lab is not enabled for this session's folder"}
 	case errors.Is(err, domainexercise.ErrOfferPending):
 		return &ExerciseError{Code: exerciseCodeOfferPending, Message: "an exercise offer is already pending"}
 	case errors.Is(err, context.Canceled):

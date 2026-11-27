@@ -21,7 +21,8 @@ func NewFolderRepository(db *sql.DB) *FolderRepository {
 	return &FolderRepository{db: db}
 }
 
-// Create inserts a new folder.
+// Create inserts a new folder. The Architecture Lab flag always starts off:
+// the column default applies, whatever f.ArchLabEnabled says.
 func (r *FolderRepository) Create(ctx context.Context, f folder.Folder) error {
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO folders (id, name, created_at) VALUES (?, ?, ?)`,
@@ -38,8 +39,8 @@ func (r *FolderRepository) Create(ctx context.Context, f folder.Folder) error {
 func (r *FolderRepository) GetByID(ctx context.Context, id string) (folder.Folder, error) {
 	var f folder.Folder
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, name, created_at FROM folders WHERE id = ?`, id,
-	).Scan(&f.ID, &f.Name, &f.CreatedAt)
+		`SELECT id, name, arch_lab_enabled, created_at FROM folders WHERE id = ?`, id,
+	).Scan(&f.ID, &f.Name, &f.ArchLabEnabled, &f.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return folder.Folder{}, folder.ErrFolderNotFound
 	}
@@ -51,7 +52,7 @@ func (r *FolderRepository) GetByID(ctx context.Context, id string) (folder.Folde
 
 // List returns every folder.
 func (r *FolderRepository) List(ctx context.Context) ([]folder.Folder, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT id, name, created_at FROM folders`)
+	rows, err := r.db.QueryContext(ctx, `SELECT id, name, arch_lab_enabled, created_at FROM folders`)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: listing folders: %w", err)
 	}
@@ -60,7 +61,7 @@ func (r *FolderRepository) List(ctx context.Context) ([]folder.Folder, error) {
 	folders := []folder.Folder{}
 	for rows.Next() {
 		var f folder.Folder
-		if err := rows.Scan(&f.ID, &f.Name, &f.CreatedAt); err != nil {
+		if err := rows.Scan(&f.ID, &f.Name, &f.ArchLabEnabled, &f.CreatedAt); err != nil {
 			return nil, fmt.Errorf("sqlite: scanning folder: %w", err)
 		}
 		folders = append(folders, f)
@@ -69,6 +70,16 @@ func (r *FolderRepository) List(ctx context.Context) ([]folder.Folder, error) {
 		return nil, fmt.Errorf("sqlite: iterating folders: %w", err)
 	}
 	return folders, nil
+}
+
+// SetArchLabEnabled switches the Architecture Lab on or off for the folder
+// with the given id, or returns folder.ErrFolderNotFound if it does not exist.
+func (r *FolderRepository) SetArchLabEnabled(ctx context.Context, id string, enabled bool) error {
+	result, err := r.db.ExecContext(ctx, `UPDATE folders SET arch_lab_enabled = ? WHERE id = ?`, enabled, id)
+	if err != nil {
+		return fmt.Errorf("sqlite: setting folder architecture lab flag: %w", err)
+	}
+	return requireRowAffected(result, folder.ErrFolderNotFound)
 }
 
 // Rename updates the name of the folder with the given id, or returns

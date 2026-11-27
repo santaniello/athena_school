@@ -136,10 +136,12 @@ type Challenge struct {
 
 // SourceSession is what a challenge needs from the study session it comes
 // from: the topic copied into the challenge, and the session's goal, which
-// challenge generation reads.
+// challenge generation reads. ArchLabEnabled tells whether the session's
+// folder has the Architecture Lab on at the moment it is read.
 type SourceSession struct {
-	Topic string
-	Goal  string
+	Topic          string
+	Goal           string
+	ArchLabEnabled bool
 }
 
 // Validate reports the first rule the challenge breaks, each with its own error.

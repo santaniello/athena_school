@@ -4,7 +4,7 @@
 
 Only the folders the user marks can generate Architecture Lab challenges. Today any study session,
 in any folder, can: a session about "Java Streams" can be turned into a system-design exercise, and
-the model forces a scenario out of it. A per-folder switch, **Enable Architecture Lab**, makes the
+the model forces a scenario out of it. A per-folder switch, **Enable Arch Lab**, makes the
 user say which folders hold architecture study.
 
 The switch is an explicit setting, not a folder name. Matching a name such as "System Design" was
@@ -53,7 +53,7 @@ rules, and ties a feature to a free-text string.
    This also covers the reuse path of `Accept`, which does not call the model: the check comes
    first.
 10. **Where the user flips it.** The folder's actions menu in the study tree, next to rename and
-    delete, gets **Enable Architecture Lab** or **Disable Architecture Lab**, according to the
+    delete, gets **Enable Arch Lab** or **Disable Arch Lab**, according to the
     current value, and the folder row shows a small indicator when it is on. There is no checkbox
     in the new-folder dialog: one extra step after creating the folder keeps the create flow
     untouched.

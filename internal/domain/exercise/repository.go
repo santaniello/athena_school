@@ -210,9 +210,9 @@ type SessionOption struct {
 // SessionOptionRepository reads the study sessions a challenge can be
 // generated from.
 type SessionOptionRepository interface {
-	// ListAll returns every study session across all folders, most recently
-	// started first.
-	ListAll(ctx context.Context) ([]SessionOption, error)
+	// ListArchLabEnabled returns the study sessions of the folders that have
+	// the Architecture Lab enabled, most recently started first.
+	ListArchLabEnabled(ctx context.Context) ([]SessionOption, error)
 }
 
 // AttemptRecord is an attempt with what its outcome is computed from: its
@@ -241,6 +241,9 @@ var (
 	// ErrOfferPending is returned when a session already has a pending
 	// exercise offer.
 	ErrOfferPending = errors.New("an exercise offer is already pending for this session")
+	// ErrArchLabNotEnabled is returned when a challenge is generated from a
+	// session whose folder does not have the Architecture Lab enabled.
+	ErrArchLabNotEnabled = errors.New("the architecture lab is not enabled for this session's folder")
 )
 
 // Offer is a pending exercise offer: the tutor's reply to the user's request

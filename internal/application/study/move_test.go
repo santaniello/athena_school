@@ -8,7 +8,6 @@ import (
 
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 
-	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 	profilemocks "github.com/santaniello/athena/internal/domain/profile/mocks"
@@ -21,7 +20,7 @@ func TestMoveToFolder_movesTheSession(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	sessions.EXPECT().MoveToFolder(context.Background(), "session-1", "folder-b").Return(nil).Once()
 	retriever := knowledgemocks.NewMockRetriever(t)
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil, nil, nil)
@@ -39,7 +38,7 @@ func TestMoveToFolder_propagatesSessionNotFound(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	sessions.EXPECT().MoveToFolder(context.Background(), "missing", "folder-b").Return(domainstudy.ErrSessionNotFound).Once()
 	retriever := knowledgemocks.NewMockRetriever(t)
 	service := NewService(sessions, messages, llm, profiles, folders, retriever, nil, nil, nil, nil, nil)

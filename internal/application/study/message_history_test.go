@@ -11,7 +11,6 @@ import (
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 
-	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 	profilemocks "github.com/santaniello/athena/internal/domain/profile/mocks"
@@ -34,7 +33,7 @@ func newHistoryService(
 	t.Helper()
 	return NewService(
 		studymocks.NewMockSessionRepository(t), messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t),
-		foldermocks.NewMockRepository(t), knowledgemocks.NewMockRetriever(t), nil, nil, sources, nil, nil,
+		newFolderMock(t), knowledgemocks.NewMockRetriever(t), nil, nil, sources, nil, nil,
 	)
 }
 
@@ -169,7 +168,7 @@ func TestResume_withMoreThanOnePageOfHistory_returnsTheLatestPageAndACursor(t *t
 	sources.EXPECT().ListByMessageIDs(context.Background(), ids).Return(map[string][]domainknowledge.Source{}, nil).Once()
 	service := NewService(
 		sessions, messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t),
-		foldermocks.NewMockRepository(t), knowledgemocks.NewMockRetriever(t), nil, nil, sources, nil, nil,
+		newFolderMock(t), knowledgemocks.NewMockRetriever(t), nil, nil, sources, nil, nil,
 	)
 
 	// When resuming
@@ -196,7 +195,7 @@ func TestResume_propagatesALatestPageError(t *testing.T) {
 		Once()
 	service := NewService(
 		sessions, messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t),
-		foldermocks.NewMockRepository(t), knowledgemocks.NewMockRetriever(t), nil, nil,
+		newFolderMock(t), knowledgemocks.NewMockRetriever(t), nil, nil,
 		knowledgemocks.NewMockMessageSourceRepository(t), nil, nil,
 	)
 

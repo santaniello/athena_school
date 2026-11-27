@@ -12,20 +12,26 @@ import (
 	applicationexercise "github.com/santaniello/athena/internal/application/exercise"
 	applicationstudy "github.com/santaniello/athena/internal/application/study"
 	domainexercise "github.com/santaniello/athena/internal/domain/exercise"
+	domainfolder "github.com/santaniello/athena/internal/domain/folder"
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	domainprofile "github.com/santaniello/athena/internal/domain/profile"
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 )
 
 // SessionTopics implements applicationexercise.SessionTopicReader.
-type SessionTopics struct{ sessions domainstudy.SessionRepository }
-
-// NewSessionTopics creates a SessionTopics reading from sessions.
-func NewSessionTopics(sessions domainstudy.SessionRepository) *SessionTopics {
-	return &SessionTopics{sessions: sessions}
+type SessionTopics struct {
+	sessions domainstudy.SessionRepository
+	folders  domainfolder.Repository
 }
 
-// ReadSession returns the session's topic and goal, or
+// NewSessionTopics creates a SessionTopics reading from sessions and, for the
+// Architecture Lab flag, from folders.
+func NewSessionTopics(sessions domainstudy.SessionRepository, folders domainfolder.Repository) *SessionTopics {
+	return &SessionTopics{sessions: sessions, folders: folders}
+}
+
+// ReadSession returns the session's topic and goal and whether its folder has
+// the Architecture Lab on right now (read on every call, never remembered), or
 // applicationexercise.ErrSourceSessionNotFound.
 func (r *SessionTopics) ReadSession(ctx context.Context, sessionID string) (domainexercise.SourceSession, error) {
 	session, err := r.sessions.GetByID(ctx, sessionID)
@@ -35,7 +41,11 @@ func (r *SessionTopics) ReadSession(ctx context.Context, sessionID string) (doma
 	if err != nil {
 		return domainexercise.SourceSession{}, fmt.Errorf("exercisesource: reading session: %w", err)
 	}
-	return domainexercise.SourceSession{Topic: session.Topic, Goal: session.Goal}, nil
+	owner, err := r.folders.GetByID(ctx, session.FolderID)
+	if err != nil {
+		return domainexercise.SourceSession{}, fmt.Errorf("exercisesource: reading session folder: %w", err)
+	}
+	return domainexercise.SourceSession{Topic: session.Topic, Goal: session.Goal, ArchLabEnabled: owner.ArchLabEnabled}, nil
 }
 
 // Summaries implements applicationexercise.SummaryReader.

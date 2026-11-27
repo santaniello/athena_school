@@ -19,10 +19,11 @@ func NewSessionService(sessions domainexercise.SessionOptionRepository) *Session
 	return &SessionService{sessions: sessions}
 }
 
-// ListSessionsForGeneration returns every study session across all folders,
-// most recently started first. The list is never nil.
+// ListSessionsForGeneration returns the study sessions of the folders that
+// have the Architecture Lab enabled, most recently started first. The list is
+// never nil. See specs/phases/phase-07-improve-arch-lab/01-arch-lab-per-folder.md.
 func (s *SessionService) ListSessionsForGeneration(ctx context.Context) ([]domainexercise.SessionOption, error) {
-	options, err := s.sessions.ListAll(ctx)
+	options, err := s.sessions.ListArchLabEnabled(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("exercise: listing sessions for generation: %w", err)
 	}

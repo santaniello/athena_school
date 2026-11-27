@@ -17,7 +17,12 @@ import (
 // "topic for this session" line with a long unsolicited lecture instead of
 // starting a dialogue, so adaptiveTutorInstruction spells out the intended
 // adaptive flow and caps response length by default.
-func buildSystemPrompt(profile domainprofile.UserProfile, topic, sessionGoal string) string {
+//
+// archLabEnabled is the session's folder flag: the exercise-offer instruction
+// is part of the prompt only when it is on, so a folder that holds no
+// architecture study never has the model offer an exercise. See
+// specs/phases/phase-07-improve-arch-lab/01-arch-lab-per-folder.md.
+func buildSystemPrompt(profile domainprofile.UserProfile, topic, sessionGoal string, archLabEnabled bool) string {
 	return fmt.Sprintf(
 		"You are %s, the learning assistant of %s.\n"+
 			"The user's name is %q; it is a proper noun, so always use it exactly as written and never translate or localize it.\n"+
@@ -27,7 +32,7 @@ func buildSystemPrompt(profile domainprofile.UserProfile, topic, sessionGoal str
 			"%s"+
 			"Adapt all explanations to the user's context.\n\n"+
 			adaptiveTutorInstruction+
-			exerciseOfferInstruction+
+			"%s"+
 			quizOfferInstruction+
 			mindMapOfferInstruction+
 			tutorStateInstruction,
@@ -36,7 +41,18 @@ func buildSystemPrompt(profile domainprofile.UserProfile, topic, sessionGoal str
 		profile.StudyStyle, goalFragment(sessionGoal),
 		topic,
 		languageInstruction(profile.AssistantLanguage),
+		exerciseInstructionFor(archLabEnabled),
 	)
+}
+
+// exerciseInstructionFor returns the exercise-offer rule, or the rule that
+// tells the model exercises are unavailable when the session's folder has the
+// Architecture Lab off.
+func exerciseInstructionFor(archLabEnabled bool) string {
+	if !archLabEnabled {
+		return exerciseUnavailableInstruction
+	}
+	return exerciseOfferInstruction
 }
 
 // adaptiveTutorInstruction is the behavioral block of the study prompt: one

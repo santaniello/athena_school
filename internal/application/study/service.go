@@ -5,6 +5,7 @@ package study
 
 import (
 	"context"
+	"fmt"
 
 	domainfolder "github.com/santaniello/athena/internal/domain/folder"
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
@@ -89,4 +90,16 @@ func NewService(
 		option(service)
 	}
 	return service
+}
+
+// archLabEnabledOf reports whether the Architecture Lab is on for the folder
+// of a session, read at the moment of the call and never remembered: a session
+// can be moved to another folder and a folder switched off at any time. See
+// specs/phases/phase-07-improve-arch-lab/01-arch-lab-per-folder.md.
+func (s *Service) archLabEnabledOf(ctx context.Context, folderID string) (bool, error) {
+	folder, err := s.folders.GetByID(ctx, folderID)
+	if err != nil {
+		return false, fmt.Errorf("study: reading session folder: %w", err)
+	}
+	return folder.ArchLabEnabled, nil
 }

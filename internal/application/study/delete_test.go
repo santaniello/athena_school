@@ -11,7 +11,6 @@ import (
 	studymocks "github.com/santaniello/athena/internal/application/study/mocks"
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 
-	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 	profilemocks "github.com/santaniello/athena/internal/domain/profile/mocks"
@@ -34,7 +33,7 @@ func newDeleteTestService(
 ) *Service {
 	return NewService(
 		sessions, domainstudymocks.NewMockMessageRepository(t), llmmocks.NewMockProvider(t),
-		profilemocks.NewMockStore(t), foldermocks.NewMockRepository(t), knowledgemocks.NewMockRetriever(t),
+		profilemocks.NewMockStore(t), newFolderMock(t), knowledgemocks.NewMockRetriever(t),
 		nil, nil, nil, cascade, nil,
 	)
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	applicationstudymocks "github.com/santaniello/athena/internal/application/study/mocks"
+	domainfolder "github.com/santaniello/athena/internal/domain/folder"
 	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
@@ -44,11 +45,17 @@ func streamReply(t *testing.T, chunks []string, gate OfferGate) (replyOutcome, e
 // also holds the prompt the model received.
 func streamReplyWith(t *testing.T, chunks []string, options ...Option) (replyOutcome, error) {
 	t.Helper()
+	return streamReplyInFolder(t, newFolderMock(t), chunks, options...)
+}
+
+// streamReplyInFolder is streamReplyWith for a session whose folder is read
+// from folders.
+func streamReplyInFolder(t *testing.T, folders domainfolder.Repository, chunks []string, options ...Option) (replyOutcome, error) {
+	t.Helper()
 	sessions := studymocks.NewMockSessionRepository(t)
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
 	retriever := knowledgemocks.NewMockRetriever(t)
 	tx := mockNormalSession(t, sessions, "session-1")
 	retriever.EXPECT().Retrieve(context.Background(), "session-1", mock.AnythingOfType("[]string")).
@@ -243,7 +250,7 @@ func TestRequestOpeningTurn_stripsTheMarkerAndCreatesNoOffer(t *testing.T) {
 		Run(func(_ context.Context, m domainstudy.Message) { stored = m }).Return(nil).Once()
 	sessions.EXPECT().UpdateContext(context.Background(), "session-1", mock.Anything).Return(nil).Once()
 	messageSources := mockMessageSourceSave(t, nil)
-	service := NewService(sessions, messages, llm, profiles, foldermocks.NewMockRepository(t), knowledgemocks.NewMockRetriever(t), tx, nil, messageSources, nil, nil,
+	service := NewService(sessions, messages, llm, profiles, newFolderMock(t), knowledgemocks.NewMockRetriever(t), tx, nil, messageSources, nil, nil,
 		WithOfferGate(gate))
 	var received []string
 
@@ -255,4 +262,82 @@ func TestRequestOpeningTurn_stripsTheMarkerAndCreatesNoOffer(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "Hi! ", joined(received))
 	require.Equal(t, "Hi!", stored.Content)
+}
+
+func TestSendMessage_stripsTheExerciseMarkerButCreatesNoOffer_inAFolderWithTheLabDisabled(t *testing.T) {
+	// Given a session whose folder has the lab off, and a gate that accepts no CreateOffer
+	gate := applicationstudymocks.NewMockOfferGate(t)
+	gate.EXPECT().HasPending(context.Background(), "session-1").Return(false, nil).Once()
+
+	// When a reply with the exercise marker streams, split mid-marker
+	outcome, err := streamReplyInFolder(t, newFolderMockWithLab(t, false), []string{"Sure.\n", "[[ATHENA_EXER", "CISE_OFFER]]"}, WithOfferGate(gate))
+
+	// Then the marker is hidden and stored clean, and no offer exists
+	require.NoError(t, err)
+	require.Equal(t, "Sure.\n", joined(outcome.received))
+	require.Equal(t, "Sure.", outcome.stored.Content)
+}
+
+func TestSendMessage_createsTheQuizOffer_whenTheExerciseMarkerIsDroppedInAFolderWithTheLabDisabled(t *testing.T) {
+	// Given a session whose folder has the lab off, and a reply carrying both markers
+	gate := applicationstudymocks.NewMockOfferGate(t)
+	gate.EXPECT().HasPending(context.Background(), "session-1").Return(false, nil).Once()
+	var offerMessageID string
+	gate.EXPECT().CreateOffer(context.Background(), "session-1", mock.AnythingOfType("string"), domainstudy.OfferKindQuiz).
+		Run(func(_ context.Context, _, messageID string, _ domainstudy.OfferKind) { offerMessageID = messageID }).Return(nil).Once()
+
+	// When it streams
+	outcome, err := streamReplyInFolder(t, newFolderMockWithLab(t, false), []string{"Sure.\n[[ATHENA_EXERCISE_OFFER]][[ATHENA_QUIZ_OFFER]]"}, WithOfferGate(gate))
+
+	// Then only the quiz offer is created, under the stored reply, and both
+	// markers are gone
+	require.NoError(t, err)
+	require.Equal(t, "Sure.", outcome.stored.Content)
+	require.Equal(t, outcome.stored.ID, offerMessageID)
+}
+
+func TestSendMessage_omitsTheExerciseInstruction_inAFolderWithTheLabDisabled(t *testing.T) {
+	// Given a session whose folder has the lab off
+	// When a message is sent
+	outcome, err := streamReplyInFolder(t, newFolderMockWithLab(t, false), []string{"Hello."})
+
+	// Then the system prompt no longer teaches the exercise marker, but still teaches the quiz and mind map ones
+	require.NoError(t, err)
+	require.NotEmpty(t, outcome.prompt)
+	system := outcome.prompt[0].Content
+	require.NotContains(t, system, exerciseOfferMarker)
+	require.Contains(t, system, quizOfferMarker)
+	require.Contains(t, system, mindMapOfferMarker)
+}
+
+func TestSendMessage_includesTheExerciseInstruction_inAFolderWithTheLabEnabled(t *testing.T) {
+	// Given a session whose folder has the lab on
+	// When a message is sent
+	outcome, err := streamReplyInFolder(t, newFolderMockWithLab(t, true), []string{"Hello."})
+
+	// Then the system prompt teaches the exercise marker
+	require.NoError(t, err)
+	require.Contains(t, outcome.prompt[0].Content, exerciseOfferMarker)
+}
+
+func TestSendMessage_failsWhenTheSessionsFolderCannotBeRead(t *testing.T) {
+	// Given a folder lookup that fails
+	boom := errors.New("db down")
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	folders := foldermocks.NewMockRepository(t)
+	tx := applicationstudymocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(normalSession("session-1"), nil).Once()
+	folders.EXPECT().GetByID(context.Background(), "").Return(domainfolder.Folder{}, boom).Once()
+	service := NewService(sessions, messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), folders, knowledgemocks.NewMockRetriever(t), tx, nil, nil, nil, nil)
+
+	// When a message is sent
+	err := service.SendMessage(context.Background(), "session-1", "Caching", "hello", domainknowledge.SourceModeNotes,
+		noopSourcesHandler, noopChunkHandler, nil, nil)
+
+	// Then the failure surfaces before the user's message is stored or its
+	// tokens counted (no Append or UpdateContext expected), and nothing is
+	// sent to the model
+	require.ErrorIs(t, err, boom)
 }

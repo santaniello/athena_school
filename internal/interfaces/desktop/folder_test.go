@@ -89,7 +89,7 @@ func TestApp_ListFolders_returnsEveryFolder(t *testing.T) {
 	sessions := studymocks.NewMockSessionRepository(t)
 	folders.EXPECT().List(mock.Anything).Return([]domainfolder.Folder{
 		{ID: "f-0", Name: "General"},
-		{ID: "f-1", Name: "System Design"},
+		{ID: "f-1", Name: "System Design", ArchLabEnabled: true},
 	}, nil).Once()
 	app := newTestFolderApp(t, folders, sessions)
 
@@ -101,4 +101,34 @@ func TestApp_ListFolders_returnsEveryFolder(t *testing.T) {
 	require.Len(t, results, 2)
 	assert.Equal(t, "General", results[0].Name)
 	assert.Equal(t, "System Design", results[1].Name)
+	assert.False(t, results[0].ArchLabEnabled)
+	assert.True(t, results[1].ArchLabEnabled)
+}
+
+func TestApp_SetFolderArchLabEnabled_switchesTheLab(t *testing.T) {
+	// Given an App backed by a repository that accepts the change
+	folders := foldermocks.NewMockRepository(t)
+	sessions := studymocks.NewMockSessionRepository(t)
+	app := newTestFolderApp(t, folders, sessions)
+	folders.EXPECT().SetArchLabEnabled(app.ctx, "f-1", true).Return(nil).Once()
+
+	// When enabling the Architecture Lab for a folder
+	err := app.SetFolderArchLabEnabled("f-1", true)
+
+	// Then it succeeds
+	require.NoError(t, err)
+}
+
+func TestApp_SetFolderArchLabEnabled_propagatesFolderNotFound(t *testing.T) {
+	// Given a repository with no such folder
+	folders := foldermocks.NewMockRepository(t)
+	sessions := studymocks.NewMockSessionRepository(t)
+	app := newTestFolderApp(t, folders, sessions)
+	folders.EXPECT().SetArchLabEnabled(app.ctx, "missing", false).Return(domainfolder.ErrFolderNotFound).Once()
+
+	// When disabling it
+	err := app.SetFolderArchLabEnabled("missing", false)
+
+	// Then the error propagates
+	require.ErrorIs(t, err, domainfolder.ErrFolderNotFound)
 }

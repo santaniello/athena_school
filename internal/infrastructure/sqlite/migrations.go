@@ -74,6 +74,7 @@ var migrations = []func(*sql.DB) error{
 		PRIMARY KEY (message_id, position)
 	)`),
 	dropFoldersIsDefaultColumn,
+	addFoldersArchLabEnabledColumn,
 	addSessionsFolderIDCascade,
 	migrateKnowledgeToDocumentsOnly,
 	// knowledge_documents stores a document's full imported text, kept apart
@@ -658,6 +659,23 @@ func dropFoldersIsDefaultColumn(db *sql.DB) error {
 	}
 	committed = true
 	return nil
+}
+
+// addFoldersArchLabEnabledColumn adds folders.arch_lab_enabled if it does not
+// already exist (SQLite has no "ADD COLUMN IF NOT EXISTS"). Every existing
+// folder comes out disabled: the user enables the folders that hold
+// architecture study. See
+// specs/phases/phase-07-improve-arch-lab/01-arch-lab-per-folder.md.
+func addFoldersArchLabEnabledColumn(db *sql.DB) error {
+	has, err := hasColumn(db, "folders", "arch_lab_enabled")
+	if err != nil {
+		return err
+	}
+	if has {
+		return nil
+	}
+	_, err = db.Exec(`ALTER TABLE folders ADD COLUMN arch_lab_enabled INTEGER NOT NULL DEFAULT 0`)
+	return err
 }
 
 // addSessionsFolderIDCascade upgrades sessions.folder_id to

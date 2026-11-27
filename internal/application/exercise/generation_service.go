@@ -50,7 +50,9 @@ func NewGenerationService(
 // practice), and saves it, with its first rubric version, in one
 // transaction. It makes exactly one model call and never retries: on any
 // failure nothing is stored and the caller may call again. It returns
-// ErrSourceSessionNotFound for an unknown session and ErrInvalidGeneration
+// ErrSourceSessionNotFound for an unknown session, ErrArchLabNotEnabled (before
+// any other read, model call or write) when the session's folder has the
+// Architecture Lab off at this moment, and ErrInvalidGeneration
 // when the model's answer breaks a challenge or rubric rule. An invalid spec
 // is refused before anything else.
 func (s *GenerationService) GenerateChallenge(ctx context.Context, sessionID string, spec domainexercise.ChallengeSpec) (domainexercise.Challenge, error) {
@@ -65,6 +67,9 @@ func (s *GenerationService) GenerateChallenge(ctx context.Context, sessionID str
 	session, err := s.sessions.ReadSession(ctx, sessionID)
 	if err != nil {
 		return domainexercise.Challenge{}, fmt.Errorf("exercise: reading source session: %w", err)
+	}
+	if !session.ArchLabEnabled {
+		return domainexercise.Challenge{}, domainexercise.ErrArchLabNotEnabled
 	}
 	gc, err := s.contexts.build(ctx, sessionID, session)
 	if err != nil {

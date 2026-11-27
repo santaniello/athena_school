@@ -20,7 +20,7 @@ func TestSessionService_ListSessionsForGeneration_returnsTheRepositorySessionsIn
 		{SessionID: "s2", Topic: "Caching", FolderName: "Backend", StartedAt: time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC)},
 		{SessionID: "s1", Topic: "Queues", FolderName: "Infra", StartedAt: time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)},
 	}
-	repo.EXPECT().ListAll(context.Background()).Return(want, nil)
+	repo.EXPECT().ListArchLabEnabled(context.Background()).Return(want, nil)
 	service := NewSessionService(repo)
 
 	// When listing the sessions for generation
@@ -34,7 +34,7 @@ func TestSessionService_ListSessionsForGeneration_returnsTheRepositorySessionsIn
 func TestSessionService_ListSessionsForGeneration_returnsAnEmptyListWhenThereAreNoSessions(t *testing.T) {
 	// Given a repository with no sessions
 	repo := domainmocks.NewMockSessionOptionRepository(t)
-	repo.EXPECT().ListAll(context.Background()).Return(nil, nil)
+	repo.EXPECT().ListArchLabEnabled(context.Background()).Return(nil, nil)
 	service := NewSessionService(repo)
 
 	// When listing the sessions for generation
@@ -50,7 +50,7 @@ func TestSessionService_ListSessionsForGeneration_wrapsRepositoryErrors(t *testi
 	// Given a repository that fails
 	boom := errors.New("boom")
 	repo := domainmocks.NewMockSessionOptionRepository(t)
-	repo.EXPECT().ListAll(context.Background()).Return(nil, boom)
+	repo.EXPECT().ListArchLabEnabled(context.Background()).Return(nil, boom)
 	service := NewSessionService(repo)
 
 	// When listing the sessions for generation

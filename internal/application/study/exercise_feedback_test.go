@@ -344,7 +344,7 @@ func TestSendMessage_withFeedback_blockSitsAfterTheSummaryAndBeforeTheHistory(t 
 	prior := compactionSession(domainstudy.ContextStateNormal, 6_000).Context
 	provisional := domainstudy.NextContextUsage(
 		prior, prior.Model, prior.UsedTokens+domainstudy.EstimateTokens(compactionPrompt), prior.ContextLength, true)
-	replyTokens := domainstudy.EstimateTokens(buildSystemPrompt(compactionProfile, compactionTopic, "")) +
+	replyTokens := domainstudy.EstimateTokens(buildSystemPrompt(compactionProfile, compactionTopic, "", true)) +
 		domainstudy.EstimateTokens(buildSummaryContext(summary.Content, domainknowledge.SourceModeNotes).Content) +
 		domainstudy.EstimateTokens(block.Content) + tokensOf(tail) + domainstudy.EstimateTokens("")
 	f.sessions.EXPECT().GetByID(context.Background(), "session-1").Return(compactionSession(domainstudy.ContextStateNormal, 6_000), nil).Twice()

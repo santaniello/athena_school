@@ -22,13 +22,14 @@ func NewSessionOptionRepository(db *sql.DB) *SessionOptionRepository {
 	return &SessionOptionRepository{db: db}
 }
 
-// ListAll returns every study session with its folder name, newest first and
-// ties broken by id so the order is stable.
-func (r *SessionOptionRepository) ListAll(ctx context.Context) ([]exercise.SessionOption, error) {
+// ListArchLabEnabled returns the study sessions of the folders that have the
+// Architecture Lab enabled, with their folder name, newest first and ties
+// broken by id so the order is stable.
+func (r *SessionOptionRepository) ListArchLabEnabled(ctx context.Context) ([]exercise.SessionOption, error) {
 	rows, err := execer(ctx, r.db).QueryContext(ctx,
 		`SELECT s.id, s.topic, f.name, s.started_at
 		FROM sessions s JOIN folders f ON f.id = s.folder_id
-		WHERE s.mode = ?
+		WHERE s.mode = ? AND f.arch_lab_enabled = 1
 		ORDER BY s.started_at DESC, s.id`, study.ModeStudy)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: listing session options: %w", err)

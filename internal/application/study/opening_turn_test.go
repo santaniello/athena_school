@@ -13,7 +13,6 @@ import (
 	domainprofile "github.com/santaniello/athena/internal/domain/profile"
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 
-	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 	profilemocks "github.com/santaniello/athena/internal/domain/profile/mocks"
@@ -45,7 +44,7 @@ func TestRequestOpeningTurn_streamsAndPersistsAssistantReply(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	tx := applicationstudymocks.NewMockTransactor(t)
 	runWithinTx(tx)
 
@@ -96,7 +95,7 @@ func TestRequestOpeningTurn_propagatesProfileLoadError(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	loadErr := errors.New("profile not found")
 	messages.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil).Once()
 	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(normalSession("session-1"), nil).Once()
@@ -118,7 +117,7 @@ func TestRequestOpeningTurn_propagatesStreamError_withoutPersistingAssistantMess
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 
 	messages.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil).Once()
 	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(normalSession("session-1"), nil).Once()
@@ -148,7 +147,7 @@ func TestRequestOpeningTurn_replaysExistingMessageInsteadOfGeneratingASecondOne(
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 
 	messages.EXPECT().
 		ListBySession(context.Background(), "session-1").
@@ -178,7 +177,7 @@ func TestRequestOpeningTurn_blockedSession_returnsErrSessionContextLimitReached_
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 
 	messages.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil).Once()
 	sessions.EXPECT().
@@ -204,7 +203,7 @@ func TestRequestOpeningTurn_concurrentCallsForSameSession_secondReturnsErrStudyT
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 
 	messages.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil)
 	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(normalSession("session-1"), nil)
@@ -243,4 +242,37 @@ func TestRequestOpeningTurn_concurrentCallsForSameSession_secondReturnsErrStudyT
 
 	close(release)
 	require.Error(t, <-errCh)
+}
+
+func TestRequestOpeningTurn_omitsTheExerciseInstruction_inAFolderWithTheLabDisabled(t *testing.T) {
+	// Given a session whose folder has the lab off
+	sessions := studymocks.NewMockSessionRepository(t)
+	messages := studymocks.NewMockMessageRepository(t)
+	llm := llmmocks.NewMockProvider(t)
+	profiles := profilemocks.NewMockStore(t)
+	tx := applicationstudymocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	messages.EXPECT().ListBySession(context.Background(), "session-1").Return(nil, nil).Once()
+	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(normalSession("session-1"), nil).Once()
+	profiles.EXPECT().Load().Return(domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}, nil)
+	var system string
+	llm.EXPECT().ChatStream(context.Background(), mock.AnythingOfType("llm.ChatRequest"), mock.AnythingOfType("func(string) error")).
+		Run(func(_ context.Context, request domainllm.ChatRequest, _ func(string) error) {
+			system = request.Messages[0].Content
+		}).
+		Return(domainllm.StreamResponse{}, nil).Once()
+	messages.EXPECT().Append(context.Background(), mock.MatchedBy(func(m domainstudy.Message) bool { return m.Role == domainstudy.RoleAssistant })).Return(nil).Once()
+	sessions.EXPECT().UpdateContext(context.Background(), "session-1", mock.Anything).Return(nil).Once()
+	messageSources := mockMessageSourceSave(t, nil)
+	service := NewService(sessions, messages, llm, profiles, newFolderMockWithLab(t, false), knowledgemocks.NewMockRetriever(t), tx, nil, messageSources, nil, nil)
+
+	// When requesting the opening turn
+	err := service.RequestOpeningTurn(context.Background(), "session-1", "Caching", noopChunkHandler, nil, nil)
+
+	// Then the prompt does not teach the exercise marker, says exercises are
+	// off in this folder, and keeps the quiz one
+	require.NoError(t, err)
+	require.NotContains(t, system, exerciseOfferMarker)
+	require.Contains(t, system, exerciseUnavailableInstruction)
+	require.Contains(t, system, quizOfferMarker)
 }

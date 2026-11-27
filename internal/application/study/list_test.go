@@ -8,7 +8,6 @@ import (
 
 	domainstudy "github.com/santaniello/athena/internal/domain/study"
 
-	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 	llmmocks "github.com/santaniello/athena/internal/domain/llm/mocks"
 	profilemocks "github.com/santaniello/athena/internal/domain/profile/mocks"
@@ -21,7 +20,7 @@ func TestListSessionsByFolder_returnsEverySessionInThatFolder(t *testing.T) {
 	messages := studymocks.NewMockMessageRepository(t)
 	llm := llmmocks.NewMockProvider(t)
 	profiles := profilemocks.NewMockStore(t)
-	folders := foldermocks.NewMockRepository(t)
+	folders := newFolderMock(t)
 	want := []domainstudy.Session{
 		{ID: "s-1", Topic: "Cache invalidation", FolderID: "folder-a"},
 		{ID: "s-2", Topic: "Concurrency patterns", FolderID: "folder-a"},

@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	applicationstudymocks "github.com/santaniello/athena/internal/application/study/mocks"
-	foldermocks "github.com/santaniello/athena/internal/domain/folder/mocks"
 	domainknowledge "github.com/santaniello/athena/internal/domain/knowledge"
 	knowledgemocks "github.com/santaniello/athena/internal/domain/knowledge/mocks"
 	domainllm "github.com/santaniello/athena/internal/domain/llm"
@@ -62,7 +61,7 @@ func newCompactionFixture(t *testing.T, extra ...Option) *compactionFixture {
 		Maybe()
 	f.profiles.EXPECT().Load().Return(compactionProfile, nil).Maybe()
 	f.service = NewService(
-		f.sessions, f.messages, f.llm, f.profiles, foldermocks.NewMockRepository(t), f.retriever,
+		f.sessions, f.messages, f.llm, f.profiles, newFolderMock(t), f.retriever,
 		tx, nil, f.sources, nil, nil,
 		append([]Option{WithSummarizer(f.summarizer), WithSummaries(f.summaries)}, extra...)...,
 	)
@@ -108,7 +107,7 @@ func (f *compactionFixture) expectReplyContexts(prior domainstudy.ContextUsage, 
 func (f *compactionFixture) expectReplyContextsWithBlocks(prior domainstudy.ContextUsage, summary *domainstudy.ConversationSummary, sent []domainstudy.Message, blockTokens int) {
 	provisional := domainstudy.NextContextUsage(
 		prior, prior.Model, prior.UsedTokens+domainstudy.EstimateTokens(compactionPrompt), prior.ContextLength, true)
-	replyTokens := domainstudy.EstimateTokens(buildSystemPrompt(compactionProfile, compactionTopic, "")) +
+	replyTokens := domainstudy.EstimateTokens(buildSystemPrompt(compactionProfile, compactionTopic, "", true)) +
 		tokensOf(sent) + domainstudy.EstimateTokens("") + blockTokens
 	if summary != nil {
 		replyTokens += domainstudy.EstimateTokens(buildSummaryContext(summary.Content, domainknowledge.SourceModeNotes).Content)
@@ -146,7 +145,7 @@ func heavyHistory(count, tokens int) []domainstudy.Message {
 }
 
 func fixedCompactionTokens() int {
-	return domainstudy.EstimateTokens(buildSystemPrompt(compactionProfile, compactionTopic, "")) + knowledgeContextAllowanceTokens
+	return domainstudy.EstimateTokens(buildSystemPrompt(compactionProfile, compactionTopic, "", true)) + knowledgeContextAllowanceTokens
 }
 
 func newSummaryOf(coversUntil string) domainstudy.ConversationSummary {
@@ -697,7 +696,7 @@ func TestSendMessage_compaction_blockedSessionWithNothingToFold_isUnblockedByThe
 	f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", provisional).Return(nil).Once()
 	// The reply carries no usage or model, so its measurement is estimated
 	// from the stored history plus the empty reply, with an unresolved window.
-	replyTokens := domainstudy.EstimateTokens(buildSystemPrompt(compactionProfile, compactionTopic, "")) +
+	replyTokens := domainstudy.EstimateTokens(buildSystemPrompt(compactionProfile, compactionTopic, "", true)) +
 		tokensOf(history) + domainstudy.EstimateTokens("")
 	f.sessions.EXPECT().UpdateContext(context.Background(), "session-1", domainstudy.NextContextUsage(provisional, "", replyTokens, 0, true)).Return(nil).Once()
 	f.messages.EXPECT().ListBySession(context.Background(), "session-1").Return(history, nil).Once()

@@ -39,6 +39,7 @@ type OfferService struct {
 	links      domainexercise.SessionExerciseRepository
 	generator  ChallengeGenerator
 	profiles   ProfileReader
+	sessions   SessionTopicReader
 	tx         Transactor
 	locks      sessionlock.Locks
 	now        func() time.Time
@@ -52,6 +53,7 @@ func NewOfferService(
 	links domainexercise.SessionExerciseRepository,
 	generator ChallengeGenerator,
 	profiles ProfileReader,
+	sessions SessionTopicReader,
 	tx Transactor,
 ) *OfferService {
 	return &OfferService{
@@ -60,6 +62,7 @@ func NewOfferService(
 		links:      links,
 		generator:  generator,
 		profiles:   profiles,
+		sessions:   sessions,
 		tx:         tx,
 		now:        func() time.Time { return time.Now().UTC() },
 		newID:      uuid.NewString,
@@ -117,7 +120,9 @@ func (s *OfferService) Decline(ctx context.Context, offerID string) error {
 // chosen difficulty, else generates one. A practice is never reused: it
 // depends on the goal the user wrote. It serializes per session, so two concurrent accepts never both
 // generate: the second one finds the offer resolved and returns the existing
-// link. A failure leaves the offer pending.
+// link. A failure leaves the offer pending, and so does ErrArchLabNotEnabled,
+// returned first when the session's folder has the lab switched off: the user
+// can still decline.
 func (s *OfferService) Accept(ctx context.Context, offerID string, spec domainexercise.ChallengeSpec) (SessionExerciseView, error) {
 	first, err := s.offers.Get(ctx, offerID)
 	if err != nil {
@@ -137,6 +142,9 @@ func (s *OfferService) Accept(ctx context.Context, offerID string, spec domainex
 		return SessionExerciseView{}, fmt.Errorf("exercise: reading offer: %w", err)
 	}
 
+	if err := s.requireArchLab(ctx, offer.SessionID); err != nil {
+		return SessionExerciseView{}, err
+	}
 	challenge, err := s.challengeFor(ctx, offer.SessionID, spec)
 	if err != nil {
 		return SessionExerciseView{}, err
@@ -145,6 +153,20 @@ func (s *OfferService) Accept(ctx context.Context, offerID string, spec domainex
 		return SessionExerciseView{}, err
 	}
 	return sessionExerciseViewOf(offer.SessionID, challenge), nil
+}
+
+// requireArchLab fails with ErrArchLabNotEnabled when the session's folder has
+// the Architecture Lab off right now. It runs before the reuse path too, which
+// calls no model: a switched-off folder must not gain an exercise either way.
+func (s *OfferService) requireArchLab(ctx context.Context, sessionID string) error {
+	session, err := s.sessions.ReadSession(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("exercise: reading offer session: %w", err)
+	}
+	if !session.ArchLabEnabled {
+		return domainexercise.ErrArchLabNotEnabled
+	}
+	return nil
 }
 
 // existingLink answers an accept that lost the race: the offer is gone, so it

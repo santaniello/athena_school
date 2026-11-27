@@ -116,7 +116,7 @@ func main() {
 	summaryWindow := study.NewSummaryWindow(modelResolver, contextResolver)
 	challengeRepo := sqlite.NewChallengeRepository(db)
 	rubricRepo := sqlite.NewRubricRepository(db)
-	sessionTopics := exercisesource.NewSessionTopics(studySessions)
+	sessionTopics := exercisesource.NewSessionTopics(studySessions, folders)
 	generationService := applicationexercise.NewGenerationService(
 		sessionTopics,
 		exercisesource.NewSummaries(sqlite.NewConversationSummaryRepository(db)),
@@ -131,7 +131,7 @@ func main() {
 
 	offerService := applicationexercise.NewOfferService(
 		sqlite.NewOfferRepository(db), challengeRepo, sqlite.NewSessionExerciseRepository(db),
-		generationService, exercisesource.NewProfiles(profiles), transactor,
+		generationService, exercisesource.NewProfiles(profiles), sessionTopics, transactor,
 	)
 
 	feedbackService := applicationexercise.NewFeedbackService(

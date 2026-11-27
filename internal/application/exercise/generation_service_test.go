@@ -142,6 +142,19 @@ func TestGenerationService_GenerateChallenge_failsForAnUnknownSession(t *testing
 	require.ErrorIs(t, err, ErrSourceSessionNotFound)
 }
 
+func TestGenerationService_GenerateChallenge_refusesASessionOfAFolderWithTheLabDisabled(t *testing.T) {
+	// Given a session whose folder has the Architecture Lab off
+	f := newGenerationFixture(t)
+	ctx := context.Background()
+	f.sessions.EXPECT().ReadSession(ctx, "session-1").Return(domainexercise.SourceSession{Topic: "Streams", ArchLabEnabled: false}, nil)
+
+	// When a challenge is generated for it
+	_, err := f.service.GenerateChallenge(ctx, "session-1", interviewSpec(domainexercise.DifficultyIntermediate))
+
+	// Then it fails with ErrArchLabNotEnabled before any context read, model call or write
+	require.ErrorIs(t, err, domainexercise.ErrArchLabNotEnabled)
+}
+
 func TestGenerationService_GenerateChallenge_failsForABlankSessionID(t *testing.T) {
 	// Given no session id
 	f := newGenerationFixture(t)

@@ -96,6 +96,7 @@ func (s *Service) SendMessage(
 
 	var priorContext, newContext domainstudy.ContextUsage
 	var sessionGoal string
+	var archLabEnabled bool
 	err := s.tx.WithinTx(ctx, func(ctx context.Context) error {
 		session, err := s.sessions.GetByID(ctx, sessionID)
 		if err != nil {
@@ -106,6 +107,12 @@ func (s *Service) SendMessage(
 		}
 		priorContext = session.Context
 		sessionGoal = session.Goal
+		// Read before the user message is persisted: a failed folder lookup
+		// must not leave a user turn (and its context tokens) with no reply.
+		archLabEnabled, err = s.archLabEnabledOf(ctx, session.FolderID)
+		if err != nil {
+			return err
+		}
 
 		if err := s.messages.Append(ctx, userMessage); err != nil {
 			return err
@@ -203,7 +210,7 @@ func (s *Service) SendMessage(
 	}
 
 	llmMessages := make([]domainllm.Message, 0, len(history)+4)
-	llmMessages = append(llmMessages, domainllm.Message{Role: "system", Content: buildSystemPrompt(profile, topic, sessionGoal)})
+	llmMessages = append(llmMessages, domainllm.Message{Role: "system", Content: buildSystemPrompt(profile, topic, sessionGoal, archLabEnabled)})
 	if knowledgeMessage != nil {
 		llmMessages = append(llmMessages, *knowledgeMessage)
 	}
@@ -224,7 +231,7 @@ func (s *Service) SendMessage(
 		llmMessages = append(llmMessages, domainllm.Message{Role: message.Role, Content: content})
 	}
 
-	if _, err := s.streamAndPersist(ctx, sessionID, newContext, llmMessages, sources, userMessage.ID, onChunk, onContext, onContextUnavailable); err != nil {
+	if _, err := s.streamAndPersist(ctx, sessionID, newContext, llmMessages, sources, userMessage.ID, archLabEnabled, onChunk, onContext, onContextUnavailable); err != nil {
 		return fmt.Errorf("study: sending message: %w", err)
 	}
 	return nil
