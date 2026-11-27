@@ -8,6 +8,7 @@ import {
   type GeneratedChallenge,
   type SessionOption,
 } from '@/lib/exercise'
+import { listFolders, type Folder } from '@/lib/folder'
 import { GenerateChallengeDialog } from './generate-challenge-dialog'
 
 vi.mock('@/lib/exercise', async (importOriginal) => {
@@ -19,6 +20,8 @@ vi.mock('@/lib/exercise', async (importOriginal) => {
     cancelChallengeGeneration: vi.fn(),
   }
 })
+
+vi.mock('@/lib/folder', () => ({ listFolders: vi.fn() }))
 
 const caching: SessionOption = {
   id: 's-cache',
@@ -52,6 +55,10 @@ function renderDialog(overrides: Partial<Parameters<typeof GenerateChallengeDial
   }
   const view = render(<GenerateChallengeDialog {...props} />)
   return { ...props, unmount: view.unmount }
+}
+
+function lab(name: string, archLabEnabled: boolean): Folder {
+  return { id: name, name, archLabEnabled }
 }
 
 // A promise the test settles by hand, like a slow model call.
@@ -349,8 +356,57 @@ describe('GenerateChallengeDialog', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
+  it('asks the user to enable the Architecture Lab on a folder when no folder has it on, with no Generate button', async () => {
+    // Given no session is listed and every folder has the lab off
+    vi.mocked(listSessionsForGeneration).mockResolvedValue([])
+    vi.mocked(listFolders).mockResolvedValue([lab('Backend', false), lab('Java', false)])
+
+    // When the dialog opens
+    renderDialog()
+
+    // Then it explains how to enable the lab, not that a session is missing
+    expect(
+      await screen.findByText(
+        'Enable the Architecture Lab on a folder to generate challenges from its sessions.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Study a topic first/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Generate' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('searchbox')).not.toBeInTheDocument()
+  })
+
+  it('asks the user to enable the Architecture Lab when there is no folder at all', async () => {
+    vi.mocked(listSessionsForGeneration).mockResolvedValue([])
+    vi.mocked(listFolders).mockResolvedValue([])
+    renderDialog()
+
+    expect(
+      await screen.findByText(
+        'Enable the Architecture Lab on a folder to generate challenges from its sessions.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('falls back to the study-first message when the folders cannot be listed', async () => {
+    vi.mocked(listSessionsForGeneration).mockResolvedValue([])
+    vi.mocked(listFolders).mockRejectedValue(new Error('boom'))
+    renderDialog()
+
+    expect(await screen.findByText(/Study a topic first/)).toBeInTheDocument()
+    expect(screen.queryByText(/Enable the Architecture Lab/)).not.toBeInTheDocument()
+  })
+
+  it('does not ask for the folders when there are sessions to list', async () => {
+    renderDialog()
+    await screen.findAllByRole('radio')
+
+    expect(listFolders).not.toHaveBeenCalled()
+    expect(screen.queryByText(/Enable the Architecture Lab/)).not.toBeInTheDocument()
+  })
+
   it('explains that a study session is needed first, with no Generate button', async () => {
     vi.mocked(listSessionsForGeneration).mockResolvedValue([])
+    vi.mocked(listFolders).mockResolvedValue([lab('Backend', true)])
     renderDialog()
 
     expect(

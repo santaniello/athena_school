@@ -2,7 +2,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { Folder } from '@/lib/folder'
-import { createFolder, deleteFolder, listFolders, renameFolder } from '@/lib/folder'
+import {
+  createFolder,
+  deleteFolder,
+  listFolders,
+  renameFolder,
+  setFolderArchLabEnabled,
+} from '@/lib/folder'
 import type { StudyContextUsage, StudySession } from '@/lib/study'
 import {
   deleteStudySession,
@@ -17,6 +23,7 @@ vi.mock('@/lib/folder', () => ({
   createFolder: vi.fn(),
   renameFolder: vi.fn(),
   deleteFolder: vi.fn(),
+  setFolderArchLabEnabled: vi.fn(),
 }))
 
 vi.mock('@/lib/study', () => ({
@@ -38,8 +45,8 @@ afterEach(() => {
   vi.resetAllMocks()
 })
 
-const GENERAL: Folder = { id: 'default', name: 'General' }
-const SYSTEM_DESIGN: Folder = { id: 'folder-1', name: 'System Design' }
+const GENERAL: Folder = { id: 'default', name: 'General', archLabEnabled: false }
+const SYSTEM_DESIGN: Folder = { id: 'folder-1', name: 'System Design', archLabEnabled: false }
 
 const CONTEXT_NORMAL: StudyContextUsage = {
   state: 'normal',
@@ -396,7 +403,7 @@ describe('StudyFolderTree', () => {
   it('creates a new folder via the dialog, trimming the name and resetting afterwards', async () => {
     // Given the default folder and a folder creation that succeeds
     vi.mocked(listFolders).mockResolvedValueOnce([GENERAL])
-    const created: Folder = { id: 'folder-2', name: 'Java' }
+    const created: Folder = { id: 'folder-2', name: 'Java', archLabEnabled: false }
     vi.mocked(createFolder).mockResolvedValueOnce(created)
     const user = userEvent.setup()
     renderTree()
@@ -462,6 +469,50 @@ describe('StudyFolderTree', () => {
     expect(renameFolder).toHaveBeenCalledWith('folder-1', 'Distributed Systems')
     await waitFor(() => expect(screen.getByText('Distributed Systems')).toBeInTheDocument())
     expect(screen.getByText('General')).toBeInTheDocument()
+  })
+
+  it('enables the Architecture Lab from the folder menu and shows the indicator', async () => {
+    // Given a folder with the lab off, and a change that succeeds
+    vi.mocked(listFolders).mockResolvedValueOnce([GENERAL, SYSTEM_DESIGN])
+    vi.mocked(setFolderArchLabEnabled).mockResolvedValueOnce()
+    const user = userEvent.setup()
+    renderTree()
+    await screen.findByText('System Design')
+    expect(screen.queryByLabelText('Architecture Lab enabled')).not.toBeInTheDocument()
+
+    // When choosing Enable Architecture Lab in its menu
+    await user.click(screen.getByRole('button', { name: 'System Design options' }))
+    await user.click(await screen.findByText('Enable Architecture Lab'))
+
+    // Then the change was stored for that folder only and the indicator shows
+    expect(setFolderArchLabEnabled).toHaveBeenCalledWith('folder-1', true)
+    expect(setFolderArchLabEnabled).toHaveBeenCalledTimes(1)
+    expect(await screen.findAllByLabelText('Architecture Lab enabled')).toHaveLength(1)
+
+    // And the menu now offers to disable it
+    await user.click(screen.getByRole('button', { name: 'System Design options' }))
+    expect(await screen.findByText('Disable Architecture Lab')).toBeInTheDocument()
+    expect(screen.queryByText('Enable Architecture Lab')).not.toBeInTheDocument()
+  })
+
+  it('disables the Architecture Lab from the folder menu, without a confirmation, and hides the indicator', async () => {
+    // Given a folder with the lab on
+    vi.mocked(listFolders).mockResolvedValueOnce([{ ...SYSTEM_DESIGN, archLabEnabled: true }])
+    vi.mocked(setFolderArchLabEnabled).mockResolvedValueOnce()
+    const user = userEvent.setup()
+    renderTree()
+    expect(await screen.findByLabelText('Architecture Lab enabled')).toBeInTheDocument()
+
+    // When choosing Disable Architecture Lab in its menu
+    await user.click(screen.getByRole('button', { name: 'System Design options' }))
+    await user.click(await screen.findByText('Disable Architecture Lab'))
+
+    // Then it is stored as off right away and the indicator is gone
+    expect(setFolderArchLabEnabled).toHaveBeenCalledWith('folder-1', false)
+    await waitFor(() =>
+      expect(screen.queryByLabelText('Architecture Lab enabled')).not.toBeInTheDocument(),
+    )
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
   })
 
   it('does not submit a rename when the trimmed name is empty', async () => {

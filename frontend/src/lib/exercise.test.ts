@@ -302,6 +302,12 @@ describe('exerciseErrorMessage', () => {
     )
   })
 
+  it('explains that the folder no longer has the Architecture Lab enabled', () => {
+    expect(exerciseErrorMessage(JSON.stringify({ code: 'arch_lab_not_enabled' }))).toBe(
+      'The Architecture Lab is not enabled for this session’s folder. Enable it in the folder menu.',
+    )
+  })
+
   it('explains a generation that is already running', () => {
     expect(exerciseErrorMessage(JSON.stringify({ code: 'generation_in_progress' }))).toBe(
       'A challenge is already being generated.',

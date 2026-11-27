@@ -1,12 +1,25 @@
 import { describe, expect, it, vi } from 'vitest'
-import { CreateFolder, DeleteFolder, ListFolders, RenameFolder } from '../../wailsjs/go/desktop/App'
-import { createFolder, deleteFolder, listFolders, renameFolder } from './folder'
+import {
+  CreateFolder,
+  DeleteFolder,
+  ListFolders,
+  RenameFolder,
+  SetFolderArchLabEnabled,
+} from '../../wailsjs/go/desktop/App'
+import {
+  createFolder,
+  deleteFolder,
+  listFolders,
+  renameFolder,
+  setFolderArchLabEnabled,
+} from './folder'
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
   CreateFolder: vi.fn(),
   RenameFolder: vi.fn(),
   DeleteFolder: vi.fn(),
   ListFolders: vi.fn(),
+  SetFolderArchLabEnabled: vi.fn(),
 }))
 
 describe('createFolder', () => {
@@ -15,6 +28,7 @@ describe('createFolder', () => {
     vi.mocked(CreateFolder).mockResolvedValueOnce({
       id: 'folder-1',
       name: 'System Design',
+      archLabEnabled: false,
     } as never)
 
     // When creating a folder
@@ -22,7 +36,7 @@ describe('createFolder', () => {
 
     // Then it forwarded the name and returned the created folder
     expect(CreateFolder).toHaveBeenCalledWith('System Design')
-    expect(folder).toEqual({ id: 'folder-1', name: 'System Design' })
+    expect(folder).toEqual({ id: 'folder-1', name: 'System Design', archLabEnabled: false })
   })
 })
 
@@ -56,8 +70,8 @@ describe('listFolders', () => {
   it('returns every folder', async () => {
     // Given a ListFolders call that returns two folders
     vi.mocked(ListFolders).mockResolvedValueOnce([
-      { id: 'default', name: 'General' },
-      { id: 'folder-1', name: 'System Design' },
+      { id: 'default', name: 'General', archLabEnabled: false },
+      { id: 'folder-1', name: 'System Design', archLabEnabled: true },
     ] as never)
 
     // When listing folders
@@ -65,8 +79,21 @@ describe('listFolders', () => {
 
     // Then every folder is returned
     expect(folders).toEqual([
-      { id: 'default', name: 'General' },
-      { id: 'folder-1', name: 'System Design' },
+      { id: 'default', name: 'General', archLabEnabled: false },
+      { id: 'folder-1', name: 'System Design', archLabEnabled: true },
     ])
+  })
+})
+
+describe('setFolderArchLabEnabled', () => {
+  it('forwards the id and the new value', async () => {
+    // Given a SetFolderArchLabEnabled call that succeeds
+    vi.mocked(SetFolderArchLabEnabled).mockResolvedValueOnce()
+
+    // When enabling the Architecture Lab for a folder
+    await setFolderArchLabEnabled('folder-1', true)
+
+    // Then it forwarded both arguments
+    expect(SetFolderArchLabEnabled).toHaveBeenCalledWith('folder-1', true)
   })
 })

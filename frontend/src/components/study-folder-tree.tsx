@@ -12,6 +12,7 @@ import {
 } from '@dnd-kit/core'
 import {
   ChevronRight,
+  FlaskConical,
   Folder as FolderIcon,
   MoreVertical,
   Pencil,
@@ -48,7 +49,14 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { createFolder, deleteFolder, listFolders, renameFolder, type Folder } from '@/lib/folder'
+import {
+  createFolder,
+  deleteFolder,
+  listFolders,
+  renameFolder,
+  setFolderArchLabEnabled,
+  type Folder,
+} from '@/lib/folder'
 import {
   deleteStudySession,
   listStudySessionsByFolder,
@@ -235,6 +243,15 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
       )
     }
 
+    async function handleSetArchLabEnabled(folderId: string, enabled: boolean) {
+      await setFolderArchLabEnabled(folderId, enabled)
+      setFolders((previous) =>
+        previous.map((folder) =>
+          folder.id === folderId ? { ...folder, archLabEnabled: enabled } : folder,
+        ),
+      )
+    }
+
     async function handleDeleteFolder() {
       if (!deletingFolder) return
       const id = deletingFolder.id
@@ -397,6 +414,12 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
                 ) : (
                   <span className="flex-1 truncate font-medium text-foreground">{folder.name}</span>
                 )}
+                {folder.archLabEnabled && (
+                  <FlaskConical
+                    className="size-3 shrink-0 text-primary"
+                    aria-label="Architecture Lab enabled"
+                  />
+                )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -427,6 +450,16 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
                     >
                       <Pencil aria-hidden="true" />
                       Rename
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        void handleSetArchLabEnabled(folder.id, !folder.archLabEnabled)
+                      }
+                    >
+                      <FlaskConical aria-hidden="true" />
+                      {folder.archLabEnabled
+                        ? 'Disable Architecture Lab'
+                        : 'Enable Architecture Lab'}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem

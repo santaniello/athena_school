@@ -47,6 +47,8 @@ export const en = {
   errors: {
     generic: 'Something went wrong. Please try again.',
     invalid_generation: 'The generated challenge was not valid. Try again.',
+    arch_lab_not_enabled:
+      'The Architecture Lab is not enabled for this session’s folder. Enable it in the folder menu.',
     offer_not_found: 'This exercise offer is no longer available.',
     source_session_not_found: 'That study session no longer exists. Pick another one.',
     generation_in_progress: 'A challenge is already being generated.',
@@ -99,6 +101,8 @@ export const en = {
     sessionsFailed: 'Could not load your study sessions.',
     noSessions:
       'Study a topic first. A challenge is generated from a session you have already studied.',
+    noLabFolder:
+      'Enable the Architecture Lab on a folder to generate challenges from its sessions.',
     searchLabel: 'Search study sessions',
     searchPlaceholder: 'Search by topic or folder',
     sessionsLabel: 'Study sessions',
