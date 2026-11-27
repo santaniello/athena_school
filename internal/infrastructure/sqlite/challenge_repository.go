@@ -83,6 +83,34 @@ func (r *ChallengeRepository) FindLatestBySourceSession(ctx context.Context, ses
 	return challenge, nil
 }
 
+// ListTitlesBySourceSession returns the titles of at most limit challenges of
+// the given kind created from sessionID, newest first. An empty session id or
+// a non-positive limit returns none.
+func (r *ChallengeRepository) ListTitlesBySourceSession(ctx context.Context, sessionID string, kind exercise.ChallengeKind, limit int) ([]string, error) {
+	if sessionID == "" || limit <= 0 {
+		return nil, nil
+	}
+	rows, err := execer(ctx, r.db).QueryContext(ctx,
+		`SELECT title FROM challenges WHERE source_session_id = ? AND kind = ? ORDER BY created_at DESC, id DESC LIMIT ?`,
+		sessionID, string(kind), limit)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: listing challenge titles by source session: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var titles []string
+	for rows.Next() {
+		var title string
+		if err := rows.Scan(&title); err != nil {
+			return nil, fmt.Errorf("sqlite: scanning challenge title: %w", err)
+		}
+		titles = append(titles, title)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sqlite: listing challenge titles by source session: %w", err)
+	}
+	return titles, nil
+}
+
 // List returns one page of the challenges matching filter (all non-empty
 // fields combined with AND), newest update first, ties broken by id, plus the
 // total number of matches. Only fixed SQL fragments are concatenated; every

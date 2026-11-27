@@ -122,14 +122,14 @@ No migration. `ListTitlesBySourceSession` is a read-only query on `challenges`.
 Each slice is TDD (Go with testify and Mockery mocks), keeps the build green and is committed on
 its own.
 
-- [ ] Domain: `MergeRubric` fixed shares and floor
-- [ ] Domain: `MaxChallengeCriteriaFor`; generation rejects output above the cap
-- [ ] Application: interview prompt (weight scale, cap, short beginner statement, target not
+- [x] Domain: `MergeRubric` fixed shares and floor
+- [x] Domain: `MaxChallengeCriteriaFor`; generation rejects output above the cap
+- [x] Application: interview prompt (weight scale, cap, short beginner statement, target not
       mechanism) with tests that each instruction is present
-- [ ] Application: practice prompt weight-scale line
-- [ ] SQLite and application: `ListTitlesBySourceSession`, `<existing_challenges>` in the context
+- [x] Application: practice prompt weight-scale line
+- [x] SQLite and application: `ListTitlesBySourceSession`, `<existing_challenges>` in the context
       for both kinds, escaped and bounded
-- [ ] Mocks regenerated; docs: CHANGELOG (README unchanged: no new user-visible surface)
+- [x] Mocks regenerated; docs: CHANGELOG (README unchanged: no new user-visible surface)
 
 ## Acceptance Criteria
 

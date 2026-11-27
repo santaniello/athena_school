@@ -36,3 +36,12 @@ type ProfileReader interface {
 type NotesSearcher interface {
 	SearchNotes(ctx context.Context, sessionID, query string) ([]domainexercise.NoteExcerpt, error)
 }
+
+// ExistingTitleLister lists the titles of the challenges a session already
+// has, so a new generation can pick a different angle. The domain
+// ChallengeRepository satisfies it.
+type ExistingTitleLister interface {
+	// ListTitlesBySourceSession returns at most limit titles of the given
+	// kind, newest first.
+	ListTitlesBySourceSession(ctx context.Context, sessionID string, kind domainexercise.ChallengeKind, limit int) ([]string, error)
+}

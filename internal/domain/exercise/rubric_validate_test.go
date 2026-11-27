@@ -126,17 +126,14 @@ func TestRubricVersion_Validate_acceptsASingleChallengeCriterion(t *testing.T) {
 }
 
 func TestRubricVersion_Validate_acceptsAWeightOfExactlyOnePoint(t *testing.T) {
-	// Given a merged rubric where six challenge criteria get exactly 1 point each
-	challenge := make([]RubricCriterion, MaxChallengeCriteria)
-	for i := range challenge {
-		challenge[i] = challengeCriterion(string(rune('a'+i)), 1)
-	}
-	merged, err := MergeRubric(BaseRubric(), challenge)
+	// Given a stored rubric (written before the floor existed) where a challenge criterion has 1 point
+	merged, err := MergeRubric(BaseRubric(), []RubricCriterion{challengeCriterion("a", 10), challengeCriterion("b", 10)})
 	require.NoError(t, err)
-	require.Equal(t, 1, merged[len(merged)-1].Weight)
+	merged[len(merged)-2].Weight += merged[len(merged)-1].Weight - 1
+	merged[len(merged)-1].Weight = 1
 
 	// When validating it
-	// Then a weight of 1 is accepted
+	// Then a weight of 1 is still accepted
 	assert.NoError(t, RubricVersion{Criteria: merged}.Validate())
 }
 

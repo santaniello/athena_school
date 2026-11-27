@@ -185,6 +185,9 @@ func validateGenerated(generated generatedChallenge, topic string) error {
 		}
 	}
 	kind := generated.Challenge.Kind
+	if len(criteria) > domainexercise.MaxChallengeCriteriaFor(kind, generated.Challenge.Difficulty) {
+		return domainexercise.ErrChallengeCriteriaCount
+	}
 	merged, err := domainexercise.MergeRubric(domainexercise.BaseCriteriaFor(kind), criteria)
 	if err != nil {
 		return err

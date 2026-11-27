@@ -28,6 +28,7 @@ func NewGenerationService(
 	summaries SummaryReader,
 	profiles ProfileReader,
 	notes NotesSearcher,
+	titles ExistingTitleLister,
 	llm domainllm.Provider,
 	starters StarterDiagramRenderer,
 	challenges *ChallengeService,
@@ -36,7 +37,7 @@ func NewGenerationService(
 ) *GenerationService {
 	return &GenerationService{
 		sessions:   sessions,
-		contexts:   generationContextBuilder{summaries: summaries, profiles: profiles, notes: notes},
+		contexts:   generationContextBuilder{summaries: summaries, profiles: profiles, notes: notes, titles: titles},
 		llm:        llm,
 		challenges: challenges,
 		rubrics:    rubrics,
@@ -71,7 +72,7 @@ func (s *GenerationService) GenerateChallenge(ctx context.Context, sessionID str
 	if !session.ArchLabEnabled {
 		return domainexercise.Challenge{}, domainexercise.ErrArchLabNotEnabled
 	}
-	gc, err := s.contexts.build(ctx, sessionID, session)
+	gc, err := s.contexts.build(ctx, sessionID, session, spec.Kind)
 	if err != nil {
 		return domainexercise.Challenge{}, err
 	}
