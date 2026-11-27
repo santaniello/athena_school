@@ -21,10 +21,17 @@ Depends on [6.1](01-logging-core.md).
      retention_days: 7
      max_total_size_mb: 100
      max_file_size_mb: 20
+     slow_operation_seconds: 30
+     db_wait_warn_seconds: 5
+     db_wait_timeout_seconds: 30
    ```
 
+   The last three are used by the operation tracing and storage events of
+   [6.3](03-module-migration.md) (decisions 8 to 12). They are read here so that 6.3 needs no new
+   config work.
+
 2. **Defaults for everything missing:** an absent section, an absent key or a zero value takes the
-   default of 6.1. A negative number is invalid and takes the default. An invalid `level` takes
+   default of 6.1 (for the three keys added for 6.3, the defaults of that spec: 30, 5 and 30 seconds). A negative number is invalid and takes the default. An invalid `level` takes
    INFO and a WARN is recorded once at startup. The settings load once at startup; no runtime
    change.
 3. **The section is not written back** by `Save` when empty (`omitempty`), so existing config files
