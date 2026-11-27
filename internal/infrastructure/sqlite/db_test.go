@@ -435,6 +435,35 @@ func TestOpen_dropsFoldersIsDefaultColumn(t *testing.T) {
 	assert.Equal(t, "General", name)
 }
 
+func TestOpen_addsFoldersArchLabEnabledColumn_disabledForExistingFolders(t *testing.T) {
+	// Given a database from before the column existed, with a folder in it
+	path := filepath.Join(t.TempDir(), "athena.db")
+	legacy, err := sql.Open("sqlite", path)
+	require.NoError(t, err)
+	_, err = legacy.Exec(`
+		CREATE TABLE folders (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at DATETIME);
+		INSERT INTO folders (id, name, created_at) VALUES ('f-1', 'System Design', CURRENT_TIMESTAMP);
+	`)
+	require.NoError(t, err)
+	require.NoError(t, legacy.Close())
+
+	// When opening it through the current migration path, twice
+	db, err := Open(path)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+	db, err = Open(path)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Then the column exists and the existing folder comes out disabled
+	has, err := hasColumn(db, "folders", "arch_lab_enabled")
+	require.NoError(t, err)
+	assert.True(t, has)
+	var enabled int
+	require.NoError(t, db.QueryRow(`SELECT arch_lab_enabled FROM folders WHERE id = 'f-1'`).Scan(&enabled))
+	assert.Zero(t, enabled)
+}
+
 func TestOpen_configuresFolderDeletionToCascadeSessions(t *testing.T) {
 	// Given a folder with a session in it
 	path := filepath.Join(t.TempDir(), "athena.db")

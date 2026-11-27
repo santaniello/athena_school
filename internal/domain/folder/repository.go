@@ -19,4 +19,7 @@ type Repository interface {
 	Delete(ctx context.Context, id string) error
 	List(ctx context.Context) ([]Folder, error)
 	GetByID(ctx context.Context, id string) (Folder, error)
+	// SetArchLabEnabled switches the Architecture Lab on or off for the folder
+	// with the given id, or returns ErrFolderNotFound if it does not exist.
+	SetArchLabEnabled(ctx context.Context, id string, enabled bool) error
 }

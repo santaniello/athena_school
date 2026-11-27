@@ -117,3 +117,57 @@ func TestFolderRepository_Delete_returnsNotFound_whenFolderDoesNotExist(t *testi
 	// Then it fails with ErrFolderNotFound
 	assert.ErrorIs(t, err, folder.ErrFolderNotFound)
 }
+
+func TestFolderRepository_Create_storesTheFolderDisabled(t *testing.T) {
+	// Given a repository and a folder that asks for the lab to be on
+	repo := newTestFolderRepository(t)
+	ctx := context.Background()
+
+	// When creating it
+	require.NoError(t, repo.Create(ctx, folder.Folder{ID: "f-1", Name: "Java", ArchLabEnabled: true}))
+
+	// Then the stored folder has the Architecture Lab off
+	stored, err := repo.GetByID(ctx, "f-1")
+	require.NoError(t, err)
+	assert.False(t, stored.ArchLabEnabled)
+}
+
+func TestFolderRepository_SetArchLabEnabled_persistsTheFlagInGetAndList(t *testing.T) {
+	// Given two folders
+	repo := newTestFolderRepository(t)
+	ctx := context.Background()
+	require.NoError(t, repo.Create(ctx, folder.Folder{ID: "f-1", Name: "System Design"}))
+	require.NoError(t, repo.Create(ctx, folder.Folder{ID: "f-2", Name: "Java"}))
+
+	// When enabling the first one
+	require.NoError(t, repo.SetArchLabEnabled(ctx, "f-1", true))
+
+	// Then GetByID and List report it on, and the other still off
+	first, err := repo.GetByID(ctx, "f-1")
+	require.NoError(t, err)
+	assert.True(t, first.ArchLabEnabled)
+	listed, err := repo.List(ctx)
+	require.NoError(t, err)
+	flags := map[string]bool{}
+	for _, f := range listed {
+		flags[f.ID] = f.ArchLabEnabled
+	}
+	assert.Equal(t, map[string]bool{"f-1": true, "f-2": false}, flags)
+
+	// And disabling it again turns it off
+	require.NoError(t, repo.SetArchLabEnabled(ctx, "f-1", false))
+	first, err = repo.GetByID(ctx, "f-1")
+	require.NoError(t, err)
+	assert.False(t, first.ArchLabEnabled)
+}
+
+func TestFolderRepository_SetArchLabEnabled_returnsNotFound_whenFolderDoesNotExist(t *testing.T) {
+	// Given a repository with no folders
+	repo := newTestFolderRepository(t)
+
+	// When switching the lab on for an unknown folder
+	err := repo.SetArchLabEnabled(context.Background(), "missing", true)
+
+	// Then it fails with ErrFolderNotFound
+	assert.ErrorIs(t, err, folder.ErrFolderNotFound)
+}

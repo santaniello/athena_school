@@ -22,12 +22,12 @@ func (_m *MockSessionOptionRepository) EXPECT() *MockSessionOptionRepository_Exp
 	return &MockSessionOptionRepository_Expecter{mock: &_m.Mock}
 }
 
-// ListAll provides a mock function with given fields: ctx
-func (_m *MockSessionOptionRepository) ListAll(ctx context.Context) ([]exercise.SessionOption, error) {
+// ListArchLabEnabled provides a mock function with given fields: ctx
+func (_m *MockSessionOptionRepository) ListArchLabEnabled(ctx context.Context) ([]exercise.SessionOption, error) {
 	ret := _m.Called(ctx)
 
 	if len(ret) == 0 {
-		panic("no return value specified for ListAll")
+		panic("no return value specified for ListArchLabEnabled")
 	}
 
 	var r0 []exercise.SessionOption
@@ -52,30 +52,30 @@ func (_m *MockSessionOptionRepository) ListAll(ctx context.Context) ([]exercise.
 	return r0, r1
 }
 
-// MockSessionOptionRepository_ListAll_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListAll'
-type MockSessionOptionRepository_ListAll_Call struct {
+// MockSessionOptionRepository_ListArchLabEnabled_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListArchLabEnabled'
+type MockSessionOptionRepository_ListArchLabEnabled_Call struct {
 	*mock.Call
 }
 
-// ListAll is a helper method to define mock.On call
+// ListArchLabEnabled is a helper method to define mock.On call
 //   - ctx context.Context
-func (_e *MockSessionOptionRepository_Expecter) ListAll(ctx interface{}) *MockSessionOptionRepository_ListAll_Call {
-	return &MockSessionOptionRepository_ListAll_Call{Call: _e.mock.On("ListAll", ctx)}
+func (_e *MockSessionOptionRepository_Expecter) ListArchLabEnabled(ctx interface{}) *MockSessionOptionRepository_ListArchLabEnabled_Call {
+	return &MockSessionOptionRepository_ListArchLabEnabled_Call{Call: _e.mock.On("ListArchLabEnabled", ctx)}
 }
 
-func (_c *MockSessionOptionRepository_ListAll_Call) Run(run func(ctx context.Context)) *MockSessionOptionRepository_ListAll_Call {
+func (_c *MockSessionOptionRepository_ListArchLabEnabled_Call) Run(run func(ctx context.Context)) *MockSessionOptionRepository_ListArchLabEnabled_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		run(args[0].(context.Context))
 	})
 	return _c
 }
 
-func (_c *MockSessionOptionRepository_ListAll_Call) Return(_a0 []exercise.SessionOption, _a1 error) *MockSessionOptionRepository_ListAll_Call {
+func (_c *MockSessionOptionRepository_ListArchLabEnabled_Call) Return(_a0 []exercise.SessionOption, _a1 error) *MockSessionOptionRepository_ListArchLabEnabled_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockSessionOptionRepository_ListAll_Call) RunAndReturn(run func(context.Context) ([]exercise.SessionOption, error)) *MockSessionOptionRepository_ListAll_Call {
+func (_c *MockSessionOptionRepository_ListArchLabEnabled_Call) RunAndReturn(run func(context.Context) ([]exercise.SessionOption, error)) *MockSessionOptionRepository_ListArchLabEnabled_Call {
 	_c.Call.Return(run)
 	return _c
 }
