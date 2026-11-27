@@ -171,3 +171,26 @@ func TestFolderRepository_SetArchLabEnabled_returnsNotFound_whenFolderDoesNotExi
 	// Then it fails with ErrFolderNotFound
 	assert.ErrorIs(t, err, folder.ErrFolderNotFound)
 }
+
+func TestFolderRepository_GetByID_worksInsideATransactionWithoutDeadlock(t *testing.T) {
+	// Given a stored folder and a database limited to one connection, which a transaction holds
+	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	repo := NewFolderRepository(db)
+	require.NoError(t, repo.Create(context.Background(), folder.Folder{ID: "f-1", Name: "System Design", CreatedAt: time.Now().UTC()}))
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	// When reading the folder from inside a transaction
+	var stored folder.Folder
+	err = NewSQLTransactor(db).WithinTx(ctx, func(ctx context.Context) error {
+		var getErr error
+		stored, getErr = repo.GetByID(ctx, "f-1")
+		return getErr
+	})
+
+	// Then the read joins the transaction instead of waiting for a second connection
+	require.NoError(t, err)
+	assert.Equal(t, "System Design", stored.Name)
+}
