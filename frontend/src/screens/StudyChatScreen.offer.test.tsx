@@ -263,6 +263,7 @@ describe('StudyChatScreen — exercise offer', () => {
     const user = userEvent.setup()
     vi.mocked(listSessionExercises).mockResolvedValue([CARD])
 
+    await user.type(await screen.findByLabelText('What do you want to practice?'), 'cache aside')
     await user.click(await screen.findByRole('button', { name: 'Accept' }))
 
     expect(await screen.findByText('Design a cache')).toBeInTheDocument()
@@ -406,6 +407,7 @@ describe('StudyChatScreen — exercise offer', () => {
     vi.mocked(listSessionExercises).mockRejectedValue(new Error('boom'))
     const user = userEvent.setup()
 
+    await user.type(await screen.findByLabelText('What do you want to practice?'), 'cache aside')
     await user.click(await screen.findByRole('button', { name: 'Accept' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('could not be loaded')
@@ -423,6 +425,7 @@ describe('StudyChatScreen — exercise offer', () => {
     act(() => handlers.done?.({ sessionId: 'session-1' }))
     vi.mocked(listSessionExercises).mockResolvedValue([{ ...CARD, messageId: 'stored-id' }])
 
+    await user.type(await screen.findByLabelText('What do you want to practice?'), 'cache aside')
     await user.click(await screen.findByRole('button', { name: 'Accept' }))
 
     expect(await screen.findByText('Design a cache')).toBeInTheDocument()
@@ -435,6 +438,7 @@ describe('StudyChatScreen — exercise offer', () => {
     await renderResumed()
     const user = userEvent.setup()
 
+    await user.type(await screen.findByLabelText('What do you want to practice?'), 'cache aside')
     await user.click(await screen.findByRole('button', { name: 'Accept' }))
 
     expect(await screen.findByRole('alert')).toBeInTheDocument()

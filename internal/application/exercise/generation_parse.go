@@ -23,7 +23,7 @@ const (
 
 // generatedChallenge is the validated content of a model answer.
 type generatedChallenge struct {
-	Challenge CreateChallengeInput // SourceSessionID is left for the caller
+	Challenge CreateChallengeInput // SourceSessionID, Topic and CanonicalProblemID are left for the caller
 	Criteria  []ChallengeCriterionInput
 }
 
@@ -55,9 +55,19 @@ type generationCriterion struct {
 // diagram structure, which the renderer draws into its starter diagram; an
 // interview ignores the diagram and starts blank.
 func parseGeneration(content, topic string, spec domainexercise.ChallengeSpec, renderer StarterDiagramRenderer) (generatedChallenge, error) {
+	return parseGenerationWithTitle(content, topic, "", spec, renderer)
+}
+
+// parseGenerationWithTitle is parseGeneration with a title decided by code:
+// when title is not empty it replaces whatever the model wrote, which may be
+// nothing.
+func parseGenerationWithTitle(content, topic, title string, spec domainexercise.ChallengeSpec, renderer StarterDiagramRenderer) (generatedChallenge, error) {
 	var output generationOutput
 	if err := json.Unmarshal([]byte(llmprompt.StripCodeFence(content)), &output); err != nil {
 		return generatedChallenge{}, fmt.Errorf("%w: reading the JSON: %w", ErrInvalidGeneration, err)
+	}
+	if title != "" {
+		output.Title = title
 	}
 	criteria, err := toCriterionInputs(output.Criteria)
 	if err != nil {

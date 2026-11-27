@@ -112,13 +112,10 @@ func (s *OfferService) Decline(ctx context.Context, offerID string) error {
 	return nil
 }
 
-// Accept links a challenge to the offer's session and deletes the offer. The
-// spec is the user's choice on the offer: an empty difficulty means no choice
-// and the profile's difficulty is used, an empty kind means an interview, and
-// a practice carries what to practice. It reuses the session's latest
-// challenge when no message has taken it yet and it is an interview of the
-// chosen difficulty, else generates one. A practice is never reused: it
-// depends on the goal the user wrote. It serializes per session, so two concurrent accepts never both
+// Accept links a practice challenge to the offer's session and deletes the
+// offer. The spec is the user's choice on the offer: an empty difficulty means
+// no choice and the profile's difficulty is used, and the goal says what to
+// practice. It always generates a new challenge. It serializes per session, so two concurrent accepts never both
 // generate: the second one finds the offer resolved and returns the existing
 // link. A failure leaves the offer pending, and so does ErrArchLabNotEnabled,
 // returned first when the session's folder has the lab switched off: the user
@@ -190,12 +187,11 @@ func (s *OfferService) existingLink(ctx context.Context, offer domainexercise.Of
 	return SessionExerciseView{}, domainexercise.ErrOfferNotFound
 }
 
-// challengeFor reuses the session's latest challenge when no message of the
-// session has taken it yet (for example one generated in the Lab) and it has
-// the wanted difficulty and is an interview, else generates a new one with no
+// challengeFor generates the practice challenge the offer asks for, with no
 // transaction open. An empty difficulty means the profile's, resolved before
-// anything else so that reuse and generation follow the same rule. A practice
-// goes straight to generation.
+// anything else. A practice depends on the goal the user wrote, so it is never
+// reused. An interview is refused by the generator: those come from the
+// catalog's canonical problems.
 func (s *OfferService) challengeFor(ctx context.Context, sessionID string, spec domainexercise.ChallengeSpec) (domainexercise.Challenge, error) {
 	spec = spec.Normalized()
 	if spec.Difficulty == "" {
@@ -207,22 +203,6 @@ func (s *OfferService) challengeFor(ctx context.Context, sessionID string, spec 
 	}
 	if err := spec.Validate(); err != nil {
 		return domainexercise.Challenge{}, err
-	}
-	if spec.Kind == domainexercise.ChallengeKindPractice {
-		return s.generate(ctx, sessionID, spec)
-	}
-	challenge, err := s.challenges.FindLatestBySourceSession(ctx, sessionID)
-	switch {
-	case err == nil && challenge.Kind == domainexercise.ChallengeKindInterview && challenge.Difficulty == spec.Difficulty:
-		_, linkErr := s.links.GetBySessionAndChallenge(ctx, sessionID, challenge.ID)
-		if errors.Is(linkErr, domainexercise.ErrSessionExerciseNotFound) {
-			return challenge, nil
-		}
-		if linkErr != nil {
-			return domainexercise.Challenge{}, fmt.Errorf("exercise: finding link: %w", linkErr)
-		}
-	case err != nil && !errors.Is(err, domainexercise.ErrChallengeNotFound):
-		return domainexercise.Challenge{}, fmt.Errorf("exercise: finding challenge: %w", err)
 	}
 	return s.generate(ctx, sessionID, spec)
 }

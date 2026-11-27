@@ -10,12 +10,21 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { AttemptResultView } from '@/components/lab/attempt-result-view'
-import { formatSessionDate, listAttemptHistory, type AttemptHistoryItem } from '@/lib/exercise'
+import {
+  difficultyLabel,
+  formatSessionDate,
+  listAttemptHistory,
+  listCanonicalHistory,
+  type CanonicalHistoryItem,
+} from '@/lib/exercise'
 import { useTranslation } from 'react-i18next'
 
 export interface HistoryChallenge {
   id: string
   title: string
+  // The id is a canonical problem's, whose history spans its difficulties, each
+  // shown on its attempt; otherwise it is a challenge's.
+  canonical?: boolean
 }
 
 interface AttemptHistoryDialogProps {
@@ -31,6 +40,9 @@ export function AttemptHistoryDialog({ challenge, onClose }: AttemptHistoryDialo
   return challenge ? <HistoryContent challenge={challenge} onClose={onClose} /> : null
 }
 
+// A canonical problem's attempts also say their difficulty.
+type HistoryItem = Omit<CanonicalHistoryItem, 'difficulty'> & { difficulty?: string }
+
 function HistoryContent({
   challenge,
   onClose,
@@ -39,20 +51,21 @@ function HistoryContent({
   onClose: () => void
 }) {
   const { t } = useTranslation()
-  const [items, setItems] = useState<AttemptHistoryItem[] | null>(null)
+  const [items, setItems] = useState<HistoryItem[] | null>(null)
   const [failed, setFailed] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
 
   useEffect(() => {
     let stale = false
-    listAttemptHistory(challenge.id)
-      .then((loaded) => !stale && setItems(loaded))
-      .catch(() => !stale && setFailed(true))
+    const load: Promise<HistoryItem[]> = challenge.canonical
+      ? listCanonicalHistory(challenge.id)
+      : listAttemptHistory(challenge.id)
+    load.then((loaded) => !stale && setItems(loaded)).catch(() => !stale && setFailed(true))
     // Stryker disable BooleanLiteral,BlockStatement,ArrayDeclaration: the flag only keeps a late answer from updating an unmounted dialog, and the effect runs once per challenge.
     return () => {
       stale = true
     }
-  }, [challenge.id])
+  }, [challenge.id, challenge.canonical])
   // Stryker restore BooleanLiteral,BlockStatement,ArrayDeclaration
 
   return (
@@ -92,7 +105,7 @@ function HistoryList({
   failed,
   onSelect,
 }: {
-  items: AttemptHistoryItem[] | null
+  items: HistoryItem[] | null
   failed: boolean
   onSelect: (attemptId: string) => void
 }) {
@@ -112,6 +125,7 @@ function HistoryList({
           <div className="flex flex-col text-sm">
             <span className="font-medium text-foreground">
               {formatSessionDate(item.finishedAt)}
+              {item.difficulty && ` · ${difficultyLabel(item.difficulty)}`}
             </span>
             <span className="text-muted-foreground">
               {t('sessionCard.diagram', { score: item.diagramScore })} ·{' '}

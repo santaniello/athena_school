@@ -20,18 +20,15 @@ import {
 } from '@/components/ui/select'
 import {
   CHALLENGE_DIFFICULTIES,
-  CHALLENGE_KINDS,
   cancelChallengeGeneration,
   difficultyLabel,
   exerciseErrorCode,
   exerciseErrorMessage,
   formatSessionDate,
   generateChallenge,
-  kindLabel,
   listSessionsForGeneration,
   practiceSuggestions,
   type ChallengeDifficulty,
-  type ChallengeKind,
   type GeneratedChallenge,
   type SessionOption,
 } from '@/lib/exercise'
@@ -51,7 +48,7 @@ interface GenerateChallengeDialogProps {
   onGeneratedAfterClose: (challenge: GeneratedChallenge) => void
 }
 
-// Opened by "Generate challenge with AI". The content is its own component, so
+// Opened by "Generate practice". The content is its own component, so
 // the chosen session, the search text and any error are discarded each time
 // the dialog closes. See
 // specs/phases/phase-03-architecture-lab/07-challenge-catalog-ui.md.
@@ -89,7 +86,6 @@ function GenerateChallengeContent({
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [difficulty, setDifficulty] = useState(defaultDifficulty)
-  const [kind, setKind] = useState<ChallengeKind>('INTERVIEW')
   const [goal, setGoal] = useState('')
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -138,12 +134,7 @@ function GenerateChallengeContent({
     setError(null)
     setGenerating(true)
     try {
-      const challenge = await generateChallenge(
-        selectedId,
-        difficulty,
-        kind,
-        practice ? trimmedGoal : '',
-      )
+      const challenge = await generateChallenge(selectedId, difficulty, trimmedGoal)
       if (mountedRef.current) onGenerated(challenge)
       else onGeneratedAfterClose(challenge)
     } catch (err) {
@@ -160,7 +151,6 @@ function GenerateChallengeContent({
     onClose()
   }
 
-  const practice = kind === 'PRACTICE'
   const trimmedGoal = goal.trim()
   const list = sessions.state === 'ready' ? sessions.list : []
   const selectedTopic = list.find((session) => session.id === selectedId)?.topic
@@ -256,53 +246,32 @@ function GenerateChallengeContent({
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">{t('generate.type')}</span>
-              <Select
-                value={kind}
+            <div className="space-y-2">
+              <label htmlFor="practice-goal" className="text-sm text-muted-foreground">
+                {t('generate.goal')}
+              </label>
+              <Textarea
+                id="practice-goal"
+                value={goal}
                 disabled={generating}
-                onValueChange={(value) => setKind(value as ChallengeKind)}
-              >
-                <SelectTrigger aria-label={t('generate.type')}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CHALLENGE_KINDS.map((value) => (
-                    <SelectItem key={value} value={value}>
-                      {kindLabel(value)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {practice && (
-              <div className="space-y-2">
-                <label htmlFor="practice-goal" className="text-sm text-muted-foreground">
-                  {t('generate.goal')}
-                </label>
-                <Textarea
-                  id="practice-goal"
-                  value={goal}
-                  disabled={generating}
-                  placeholder={t('generate.goalPlaceholder')}
-                  onChange={(event) => setGoal(event.target.value)}
-                />
-                <div className="flex flex-wrap gap-2">
-                  {practiceSuggestions(selectedTopic).map((suggestion) => (
-                    <Button
-                      key={suggestion}
-                      type="button"
-                      size="xs"
-                      variant="outline"
-                      disabled={generating}
-                      onClick={() => setGoal(suggestion)}
-                    >
-                      {suggestion}
-                    </Button>
-                  ))}
-                </div>
+                placeholder={t('generate.goalPlaceholder')}
+                onChange={(event) => setGoal(event.target.value)}
+              />
+              <div className="flex flex-wrap gap-2">
+                {practiceSuggestions(selectedTopic).map((suggestion) => (
+                  <Button
+                    key={suggestion}
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    disabled={generating}
+                    onClick={() => setGoal(suggestion)}
+                  >
+                    {suggestion}
+                  </Button>
+                ))}
               </div>
-            )}
+            </div>
           </div>
         )}
 
@@ -329,7 +298,7 @@ function GenerateChallengeContent({
           {sessions.state === 'ready' && list.length > 0 && !generating && (
             <Button
               type="button"
-              disabled={!selectedId || (practice && trimmedGoal === '')}
+              disabled={!selectedId || trimmedGoal === ''}
               onClick={() => void handleGenerate()}
             >
               {error ? t('common.tryAgain') : t('generate.submit')}

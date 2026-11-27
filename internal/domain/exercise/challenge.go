@@ -122,10 +122,14 @@ type Challenge struct {
 	Objectives                []string
 	Difficulty                Difficulty
 	Topic                     string // snapshot of the source session's topic
-	SourceSessionID           string // "" once the session is deleted
-	Origin                    ChallengeOrigin
-	TimeLimitMinutes          int // exam length; copied into an attempt's Deadline. 0 means untimed (PRACTICE only)
-	DefenseQuestions          int // questions the tutor asks after the diagram evaluation, 3 to 5
+	SourceSessionID           string // "" once the session is deleted, and for a canonical interview
+	// CanonicalProblemID is the id of the CanonicalProblem an interview is
+	// about; empty for everything else. At most one challenge exists per
+	// problem and difficulty.
+	CanonicalProblemID string
+	Origin             ChallengeOrigin
+	TimeLimitMinutes   int // exam length; copied into an attempt's Deadline. 0 means untimed (PRACTICE only)
+	DefenseQuestions   int // questions the tutor asks after the diagram evaluation, 3 to 5
 	// StarterDiagram is the opaque diagram (mxGraphModel XML) a practice
 	// attempt starts from. Empty means a blank board, and an interview is
 	// always blank. See specs/phases/phase-03-architecture-lab/19-practice-starter-diagram.md.

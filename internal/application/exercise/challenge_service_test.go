@@ -286,3 +286,55 @@ func TestChallengeService_Create_practiceHasNoTimeLimit(t *testing.T) {
 	assert.Equal(t, 0, got.TimeLimitMinutes)
 	assert.True(t, got.Untimed())
 }
+
+func TestChallengeService_CreateCanonical_persistsAChallengeWithNoSession(t *testing.T) {
+	// Given a canonical input; the service reads no session (strict mock)
+	service, repo, _ := newTestService(t)
+	ctx := context.Background()
+	input := validInput()
+	input.SourceSessionID = "ignored"
+	input.Topic = "  URL Shortener "
+	input.CanonicalProblemID = "url-shortener"
+	input.Kind = domainexercise.ChallengeKindPractice
+	expected := domainexercise.Challenge{
+		ID: "challenge-1", Type: domainexercise.ChallengeTypeArchitecture, Kind: domainexercise.ChallengeKindInterview,
+		Title: "Design a URL shortener", Scenario: "A startup needs a service that shortens URLs.",
+		FunctionalRequirements: []string{"Create a short link"}, NonFunctionalRequirements: []string{}, Constraints: []string{},
+		Objectives: []string{"Justify the storage choice"}, Difficulty: domainexercise.DifficultyBeginner,
+		Topic: "url shortener", CanonicalProblemID: "url-shortener", Origin: domainexercise.OriginManual,
+		TimeLimitMinutes: 30, DefenseQuestions: 5, CreatedAt: fixedNow, UpdatedAt: fixedNow,
+	}
+	repo.EXPECT().Create(ctx, expected).Return(nil)
+
+	// When creating it
+	got, err := service.CreateCanonical(ctx, input)
+
+	// Then it is an interview with no source session, the normalized topic and the problem id
+	require.NoError(t, err)
+	assert.Equal(t, expected, got)
+}
+
+func TestChallengeService_CreateCanonical_failsForAnInvalidChallengeWithoutPersisting(t *testing.T) {
+	service, _, _ := newTestService(t)
+	input := validInput()
+	input.Topic = "   "
+
+	_, err := service.CreateCanonical(context.Background(), input)
+
+	assert.ErrorIs(t, err, domainexercise.ErrChallengeTopicRequired)
+}
+
+func TestChallengeService_FindCanonical_returnsTheChallengeOrNotFound(t *testing.T) {
+	service, repo, _ := newTestService(t)
+	ctx := context.Background()
+	stored := domainexercise.Challenge{ID: "c-1"}
+	repo.EXPECT().FindCanonical(ctx, "url-shortener", domainexercise.DifficultyBeginner).Return(stored, nil).Once()
+	repo.EXPECT().FindCanonical(ctx, "rate-limiter", domainexercise.DifficultyBeginner).Return(domainexercise.Challenge{}, domainexercise.ErrChallengeNotFound).Once()
+
+	got, err := service.FindCanonical(ctx, "url-shortener", domainexercise.DifficultyBeginner)
+	_, missing := service.FindCanonical(ctx, "rate-limiter", domainexercise.DifficultyBeginner)
+
+	require.NoError(t, err)
+	assert.Equal(t, stored, got)
+	assert.ErrorIs(t, missing, domainexercise.ErrChallengeNotFound)
+}

@@ -47,6 +47,10 @@ type CreateChallengeInput struct {
 	Origin domainexercise.ChallengeOrigin
 	// StarterDiagram is the diagram a practice starts from; empty for a blank board.
 	StarterDiagram string
+	// Topic and CanonicalProblemID are set only for a canonical interview,
+	// which has no source session to copy the topic from. See CreateCanonical.
+	Topic              string
+	CanonicalProblemID string
 }
 
 // Create validates and persists a challenge. Its topic is a snapshot of the
@@ -63,6 +67,20 @@ func (s *ChallengeService) Create(ctx context.Context, input CreateChallengeInpu
 		return domainexercise.Challenge{}, fmt.Errorf("exercise: reading source session: %w", err)
 	}
 
+	return s.store(ctx, input, domainexercise.NormalizeTopic(session.Topic), sessionID)
+}
+
+// CreateCanonical validates and persists a canonical interview: it has no
+// source session, so the topic and the canonical problem id come from the
+// input. It returns domainexercise.ErrCanonicalChallengeExists when the
+// problem already has a challenge of that difficulty, and persists nothing
+// when the input is invalid.
+func (s *ChallengeService) CreateCanonical(ctx context.Context, input CreateChallengeInput) (domainexercise.Challenge, error) {
+	input.Kind = domainexercise.ChallengeKindInterview
+	return s.store(ctx, input, domainexercise.NormalizeTopic(input.Topic), "")
+}
+
+func (s *ChallengeService) store(ctx context.Context, input CreateChallengeInput, topic, sessionID string) (domainexercise.Challenge, error) {
 	kind := input.Kind
 	if kind == "" {
 		kind = domainexercise.ChallengeKindInterview
@@ -79,8 +97,9 @@ func (s *ChallengeService) Create(ctx context.Context, input CreateChallengeInpu
 		Constraints:               trimItems(input.Constraints),
 		Objectives:                trimItems(input.Objectives),
 		Difficulty:                input.Difficulty,
-		Topic:                     domainexercise.NormalizeTopic(session.Topic),
+		Topic:                     topic,
 		SourceSessionID:           sessionID,
+		CanonicalProblemID:        input.CanonicalProblemID,
 		Origin:                    input.Origin,
 		TimeLimitMinutes:          domainexercise.TimeLimitFor(kind, input.Difficulty),
 		DefenseQuestions:          domainexercise.DefaultDefenseQuestions,
@@ -93,6 +112,16 @@ func (s *ChallengeService) Create(ctx context.Context, input CreateChallengeInpu
 	}
 	if err := s.challenges.Create(ctx, challenge); err != nil {
 		return domainexercise.Challenge{}, fmt.Errorf("exercise: creating challenge: %w", err)
+	}
+	return challenge, nil
+}
+
+// FindCanonical returns the challenge of the canonical problem and difficulty,
+// or domainexercise.ErrChallengeNotFound.
+func (s *ChallengeService) FindCanonical(ctx context.Context, problemID string, difficulty domainexercise.Difficulty) (domainexercise.Challenge, error) {
+	challenge, err := s.challenges.FindCanonical(ctx, problemID, difficulty)
+	if err != nil {
+		return domainexercise.Challenge{}, fmt.Errorf("exercise: finding canonical challenge: %w", err)
 	}
 	return challenge, nil
 }

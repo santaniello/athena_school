@@ -536,3 +536,110 @@ func TestChallengeRepository_ListTitlesBySourceSession_returnsNoneForAnEmptySess
 	assert.Empty(t, noSession)
 	assert.Empty(t, noLimit)
 }
+
+func newTestCanonicalChallenge(id, problemID string, difficulty exercise.Difficulty) exercise.Challenge {
+	challenge := newTestChallenge(id)
+	challenge.SourceSessionID = ""
+	challenge.CanonicalProblemID = problemID
+	challenge.Difficulty = difficulty
+	challenge.Topic = "URL shortener"
+	return challenge
+}
+
+func TestChallengeRepository_Canonical_roundTripsAndFinds(t *testing.T) {
+	// Given a canonical challenge with no source session
+	repo, _ := newTestChallengeRepository(t)
+	ctx := context.Background()
+	challenge := newTestCanonicalChallenge("c-1", "url-shortener", exercise.DifficultyAdvanced)
+	require.NoError(t, repo.Create(ctx, challenge))
+
+	// When finding it by problem and difficulty
+	got, err := repo.FindCanonical(ctx, "url-shortener", exercise.DifficultyAdvanced)
+
+	// Then it comes back whole
+	require.NoError(t, err)
+	assert.Equal(t, challenge, got)
+}
+
+func TestChallengeRepository_FindCanonical_notFound(t *testing.T) {
+	repo, _ := newTestChallengeRepository(t)
+	ctx := context.Background()
+	require.NoError(t, repo.Create(ctx, newTestCanonicalChallenge("c-1", "url-shortener", exercise.DifficultyAdvanced)))
+
+	_, otherDifficulty := repo.FindCanonical(ctx, "url-shortener", exercise.DifficultyBeginner)
+	_, otherProblem := repo.FindCanonical(ctx, "rate-limiter", exercise.DifficultyAdvanced)
+
+	assert.ErrorIs(t, otherDifficulty, exercise.ErrChallengeNotFound)
+	assert.ErrorIs(t, otherProblem, exercise.ErrChallengeNotFound)
+}
+
+func TestChallengeRepository_Create_refusesASecondCanonicalChallengeForTheSameProblemAndDifficulty(t *testing.T) {
+	// Given a stored canonical challenge
+	repo, _ := newTestChallengeRepository(t)
+	ctx := context.Background()
+	require.NoError(t, repo.Create(ctx, newTestCanonicalChallenge("c-1", "url-shortener", exercise.DifficultyBeginner)))
+
+	// When another one for the same problem and difficulty is stored
+	err := repo.Create(ctx, newTestCanonicalChallenge("c-2", "url-shortener", exercise.DifficultyBeginner))
+
+	// Then the index refuses it
+	assert.ErrorIs(t, err, exercise.ErrCanonicalChallengeExists)
+	// And another difficulty is still allowed
+	assert.NoError(t, repo.Create(ctx, newTestCanonicalChallenge("c-3", "url-shortener", exercise.DifficultyIntermediate)))
+}
+
+func TestChallengeRepository_Create_allowsManyChallengesWithoutACanonicalProblem(t *testing.T) {
+	repo, _ := newTestChallengeRepository(t)
+	ctx := context.Background()
+
+	require.NoError(t, repo.Create(ctx, newTestChallenge("a")))
+	require.NoError(t, repo.Create(ctx, newTestChallenge("b")))
+}
+
+func TestChallengeRepository_ListCanonical_returnsOnlyCanonicalOldestFirst(t *testing.T) {
+	// Given a session challenge and two canonical ones
+	repo, _ := newTestChallengeRepository(t)
+	ctx := context.Background()
+	older := newTestCanonicalChallenge("c-1", "rate-limiter", exercise.DifficultyBeginner)
+	newer := newTestCanonicalChallenge("c-2", "url-shortener", exercise.DifficultyBeginner)
+	newer.CreatedAt = older.CreatedAt.Add(time.Hour)
+	require.NoError(t, repo.Create(ctx, newer))
+	require.NoError(t, repo.Create(ctx, newTestChallenge("plain")))
+	require.NoError(t, repo.Create(ctx, older))
+
+	// When listing the canonical ones
+	got, err := repo.ListCanonical(ctx)
+
+	// Then only they come back, oldest first
+	require.NoError(t, err)
+	assert.Equal(t, []exercise.Challenge{older, newer}, got)
+}
+
+func TestChallengeRepository_List_filtersByKind(t *testing.T) {
+	repo, _ := newTestChallengeRepository(t)
+	ctx := context.Background()
+	practice := newTestChallenge("practice")
+	practice.Kind = exercise.ChallengeKindPractice
+	practice.TimeLimitMinutes = 0
+	require.NoError(t, repo.Create(ctx, practice))
+	require.NoError(t, repo.Create(ctx, newTestChallenge("interview")))
+
+	page, err := repo.List(ctx, exercise.ChallengeFilter{Kind: exercise.ChallengeKindPractice}, exercise.Page{})
+
+	require.NoError(t, err)
+	require.Len(t, page.Items, 1)
+	assert.Equal(t, "practice", page.Items[0].ID)
+	assert.Equal(t, 1, page.Total)
+}
+
+func TestChallengeRepository_ListTopics_leavesOutCanonicalInterviews(t *testing.T) {
+	repo, _ := newTestChallengeRepository(t)
+	ctx := context.Background()
+	require.NoError(t, repo.Create(ctx, newTestChallenge("plain")))
+	require.NoError(t, repo.Create(ctx, newTestCanonicalChallenge("canonical", "url-shortener", exercise.DifficultyBeginner)))
+
+	topics, err := repo.ListTopics(ctx)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"caching"}, topics)
+}

@@ -1,12 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { listAttemptHistory, type AttemptHistoryItem } from '@/lib/exercise'
+import {
+  listAttemptHistory,
+  listCanonicalHistory,
+  type AttemptHistoryItem,
+  type CanonicalHistoryItem,
+} from '@/lib/exercise'
 import { AttemptHistoryDialog } from './attempt-history-dialog'
 
 vi.mock('@/lib/exercise', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/exercise')>()
-  return { ...original, listAttemptHistory: vi.fn() }
+  return { ...original, listAttemptHistory: vi.fn(), listCanonicalHistory: vi.fn() }
 })
 
 // The real view is covered by its own tests.
@@ -132,5 +137,41 @@ describe('AttemptHistoryDialog', () => {
     await userEvent.keyboard('{Escape}')
 
     expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('lists the history of a canonical problem with the difficulty of each attempt', async () => {
+    const canonical: CanonicalHistoryItem[] = [
+      { ...items[0], difficulty: 'ADVANCED' },
+      { ...items[1], difficulty: 'BEGINNER' },
+    ]
+    vi.mocked(listCanonicalHistory).mockResolvedValue(canonical)
+
+    render(
+      <AttemptHistoryDialog
+        challenge={{ id: 'url-shortener', title: 'URL shortener', canonical: true }}
+        onClose={vi.fn()}
+      />,
+    )
+
+    const rows = await screen.findAllByRole('listitem')
+    expect(listCanonicalHistory).toHaveBeenCalledExactlyOnceWith('url-shortener')
+    expect(listAttemptHistory).not.toHaveBeenCalled()
+    expect(within(rows[0]).getByText('Nov 8, 2026 · Advanced')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('Nov 7, 2026 · Beginner')).toBeInTheDocument()
+  })
+
+  it('opens the usual result view from a canonical history', async () => {
+    const user = userEvent.setup()
+    vi.mocked(listCanonicalHistory).mockResolvedValue([{ ...items[0], difficulty: 'ADVANCED' }])
+
+    render(
+      <AttemptHistoryDialog
+        challenge={{ id: 'url-shortener', title: 'URL shortener', canonical: true }}
+        onClose={vi.fn()}
+      />,
+    )
+    await user.click(await screen.findByRole('button', { name: 'Open' }))
+
+    expect(screen.getByText('result of a2')).toBeInTheDocument()
   })
 })

@@ -20,6 +20,10 @@ var (
 	// ErrAttemptNotFinished is returned when the result of an attempt that is
 	// not FINISHED is asked for.
 	ErrAttemptNotFinished = errors.New("the attempt is not finished")
+	// ErrInterviewNotGeneratedFromSession is returned when a session is asked
+	// for an interview: interviews come from the canonical problems of the
+	// catalog, a session only produces practice challenges.
+	ErrInterviewNotGeneratedFromSession = errors.New("an interview is not generated from a session")
 )
 
 // AttemptInProgressError is the concrete ErrAttemptInProgress: it names the

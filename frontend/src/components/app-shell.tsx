@@ -2,6 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { BookOpen, PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { AthenaLogo } from '@/components/athena-logo'
 import { NavItem } from '@/components/nav-item'
+import { LabSubmenu } from '@/components/lab/lab-submenu'
 import { ComingSoonPanel } from '@/components/coming-soon-panel'
 import { StudyFolderTree, type StudyFolderTreeHandle } from '@/components/study-folder-tree'
 import { IndexLoadingScreen } from '@/components/index-loading-screen'
@@ -96,6 +97,8 @@ function returnSection(returnTo: { kind: string }): AppSection | null {
 // specs/phases/phase-01-desktop-mvp/10-study-folders.md.
 function AppShell() {
   const [section, setSection] = useState<AppSection>('home')
+  // Which Architecture Lab list is shown, chosen in the sidebar submenu.
+  const [labKind, setLabKind] = useState<'INTERVIEW' | 'PRACTICE'>('INTERVIEW')
   // The exam in progress, a full-screen state of the Architecture Lab. While
   // it runs, navigating elsewhere waits for the exam's own leave question.
   const [exam, setExam] = useState<ExamToStart | null>(null)
@@ -653,6 +656,7 @@ function AppShell() {
             />
           ) : (
             <ArchitectureLabScreen
+              kind={labKind}
               experienceLevel={profile?.experienceLevel}
               onStartExam={startCatalogExam}
             />
@@ -732,6 +736,9 @@ function AppShell() {
               {PRIMARY_ITEMS.map((item) => (
                 <div key={item.id}>
                   <NavItem item={item} active={item.id === section} onSelect={navigate} />
+                  {item.id === 'challenge' && section === 'challenge' && (
+                    <LabSubmenu kind={labKind} onSelect={setLabKind} />
+                  )}
                   {item.id === 'study' && section === 'study' && (
                     <StudyFolderTree
                       ref={studyFolderTreeRef}

@@ -6,6 +6,7 @@ import {
   DiscardAttempt,
   EvaluateAttempt,
   EvaluateDefense,
+  GenerateCanonicalChallenge,
   GenerateChallenge,
   GetAttempt,
   GetAttemptResult,
@@ -14,6 +15,8 @@ import {
   ListSessionExercises,
   GetProfile,
   ListAttemptHistory,
+  ListCanonicalHistory,
+  ListCanonicalProblems,
   ListChallengeCatalog,
   ListChallengeTopics,
   ListHints,
@@ -90,6 +93,8 @@ export interface CatalogFilter {
   status?: ChallengeStatus | ''
   difficulty?: ChallengeDifficulty | ''
   topic?: string
+  // Limits the list to one kind; the Practice tab asks for PRACTICE.
+  kind?: ChallengeKind | ''
 }
 
 // A row shows only what does not give the exam away.
@@ -134,6 +139,7 @@ export async function listChallengeCatalog(filter: CatalogFilter): Promise<Catal
     status: filter.status ?? '',
     difficulty: filter.difficulty ?? '',
     topic: filter.topic ?? '',
+    kind: filter.kind ?? '',
   })
   return {
     total: catalog.total,
@@ -152,14 +158,16 @@ export async function listSessionsForGeneration(): Promise<SessionOption[]> {
   return sessions.map((session) => ({ ...session }))
 }
 
-// The kind defaults to an interview. A practice carries the goal the user wrote.
+// Generates a practice challenge from a study session, on the goal the user wrote.
 export async function generateChallenge(
   sessionId: string,
   difficulty: ChallengeDifficulty,
-  kind: ChallengeKind = 'INTERVIEW',
-  practiceGoal = '',
+  practiceGoal: string,
 ): Promise<GeneratedChallenge> {
-  const created = await GenerateChallenge(sessionId, difficulty, kind, practiceGoal)
+  return toGeneratedChallenge(await GenerateChallenge(sessionId, difficulty, practiceGoal))
+}
+
+function toGeneratedChallenge(created: desktop.ChallengeSummaryDTO): GeneratedChallenge {
   return {
     id: created.id,
     kind: created.kind,
@@ -168,6 +176,66 @@ export async function generateChallenge(
     difficulty: created.difficulty,
     timeLimitMinutes: created.timeLimitMinutes,
   }
+}
+
+// The canonical interviews: a fixed list of classic problems, each with one
+// challenge per difficulty, generated the first time it is started. The backend
+// names the problems in the profile's language and derives every status. See
+// specs/phases/phase-07-improve-arch-lab/03-canonical-interviews.md.
+export interface DifficultyState {
+  difficulty: ChallengeDifficulty
+  generated: boolean
+  challengeId: string
+  // Empty while the challenge is not generated.
+  status: string
+}
+
+export interface CanonicalProblem {
+  id: string
+  name: string
+  summary: string
+  // The problem's own classification, shown as its tag.
+  level: string
+  difficulties: DifficultyState[]
+  attempts: number
+  hasHistory: boolean
+}
+
+export async function listCanonicalProblems(): Promise<CanonicalProblem[]> {
+  const problems = await ListCanonicalProblems()
+  return problems.map((problem) => ({
+    id: problem.id,
+    name: problem.name,
+    summary: problem.summary,
+    level: problem.level,
+    attempts: problem.attempts,
+    hasHistory: problem.hasHistory,
+    difficulties: problem.difficulties.map((state) => ({
+      difficulty: state.difficulty as ChallengeDifficulty,
+      generated: state.generated,
+      challengeId: state.challengeId,
+      status: state.status,
+    })),
+  }))
+}
+
+// How many difficulties of the problem already have a challenge.
+export function generatedCount(problem: CanonicalProblem): number {
+  return problem.difficulties.filter((state) => state.generated).length
+}
+
+// "Not generated" until the challenge exists, then its status.
+export function difficultyStateLabel(state: DifficultyState): string {
+  return state.generated ? statusLabel(state.status) : i18n.t('canonical.notGenerated')
+}
+
+// Returns the problem's challenge at the difficulty, generating it with one
+// model call when it does not exist yet. It never starts the exam.
+export async function generateCanonicalChallenge(
+  problemId: string,
+  difficulty: ChallengeDifficulty,
+): Promise<GeneratedChallenge> {
+  return toGeneratedChallenge(await GenerateCanonicalChallenge(problemId, difficulty))
 }
 
 export function cancelChallengeGeneration(): Promise<void> {
@@ -508,6 +576,24 @@ export async function listAttemptHistory(challengeId: string): Promise<AttemptHi
   }))
 }
 
+// A finished attempt in the history of a canonical problem, which spans its
+// difficulties.
+export interface CanonicalHistoryItem extends AttemptHistoryItem {
+  difficulty: string
+}
+
+export async function listCanonicalHistory(problemId: string): Promise<CanonicalHistoryItem[]> {
+  const items = await ListCanonicalHistory(problemId)
+  return items.map((item) => ({
+    attemptId: item.attemptId,
+    difficulty: item.difficulty,
+    finishedAt: item.finishedAt,
+    diagramScore: item.diagramScore,
+    understandingScore: item.understandingScore,
+    outcome: item.outcome as OutcomeResult,
+  }))
+}
+
 // The full result of a finished attempt; rejects with attempt_not_finished
 // for any other.
 export async function getAttemptResult(attemptId: string): Promise<AttemptResult> {
@@ -637,14 +723,13 @@ export function onExerciseOfferResolved(
   return EventsOn('exercise:offer-resolved', (event: ExerciseOfferResolvedEvent) => handler(event))
 }
 
-// The kind defaults to an interview. A practice carries the goal the user wrote.
+// The offer is always a practice: it carries the goal the user wrote.
 export async function acceptOffer(
   offerId: string,
   difficulty: ChallengeDifficulty,
-  kind: ChallengeKind = 'INTERVIEW',
-  practiceGoal = '',
+  practiceGoal: string,
 ): Promise<void> {
-  await AcceptOffer(offerId, difficulty, kind, practiceGoal)
+  await AcceptOffer(offerId, difficulty, practiceGoal)
 }
 
 export function declineOffer(offerId: string): Promise<void> {

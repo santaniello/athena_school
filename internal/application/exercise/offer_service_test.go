@@ -164,7 +164,7 @@ func TestOfferService_AcceptAndDecline_giveUpWaitingForTheSessionWhenCancelled(t
 	f.offers.EXPECT().Get(ctx, "offer-1").Return(testOffer, nil).Twice()
 
 	// When it tries to accept or decline
-	_, acceptErr := f.service.Accept(ctx, "offer-1", domainexercise.ChallengeSpec{})
+	_, acceptErr := f.service.Accept(ctx, "offer-1", practiceChoice())
 	declineErr := f.service.Decline(ctx, "offer-1")
 
 	// Then both return the cancellation instead of waiting, and change nothing
@@ -228,28 +228,6 @@ func TestOfferService_Decline_failsWhenTheStoreFails(t *testing.T) {
 	assert.ErrorIs(t, err, boom)
 }
 
-func TestOfferService_Accept_reusesTheSessionsLatestChallengeWithoutGenerating(t *testing.T) {
-	// Given a session that already has a challenge
-	f := newOfferFixture(t)
-	ctx := context.Background()
-	f.expectOffer(ctx)
-	f.challenges.EXPECT().FindLatestBySourceSession(ctx, "session-1").Return(testOfferChallenge, nil)
-	f.links.EXPECT().GetBySessionAndChallenge(ctx, "session-1", "challenge-1").
-		Return(domainexercise.SessionExercise{}, domainexercise.ErrSessionExerciseNotFound)
-	f.runTx(ctx)
-	f.links.EXPECT().Create(insideTx(), domainexercise.SessionExercise{
-		ID: "generated-id", SessionID: "session-1", ChallengeID: "challenge-1", MessageID: "message-1", CreatedAt: fixedNow,
-	}).Return(nil)
-	f.offers.EXPECT().Delete(insideTx(), "offer-1").Return(nil)
-
-	// When accepting (no generator or profile call is expected)
-	view, err := f.service.Accept(ctx, "offer-1", interviewSpec(domainexercise.DifficultyAdvanced))
-
-	// Then the link is created under the offer's message and the offer is deleted
-	require.NoError(t, err)
-	assert.Equal(t, offerView(), view)
-}
-
 func TestOfferService_Accept_refusesAndKeepsTheOffer_whenTheSessionsFolderHasTheLabDisabled(t *testing.T) {
 	// Given a pending offer whose session's folder was switched off, and a
 	// latest challenge that would otherwise be reused without a model call
@@ -259,7 +237,7 @@ func TestOfferService_Accept_refusesAndKeepsTheOffer_whenTheSessionsFolderHasThe
 	f.sessions.EXPECT().ReadSession(ctx, "session-1").Return(domainexercise.SourceSession{Topic: "caching", ArchLabEnabled: false}, nil)
 
 	// When the offer is accepted
-	_, err := f.service.Accept(ctx, "offer-1", interviewSpec(domainexercise.DifficultyAdvanced))
+	_, err := f.service.Accept(ctx, "offer-1", practiceAt(domainexercise.DifficultyAdvanced))
 
 	// Then it fails with ErrArchLabNotEnabled; nothing is read, generated, linked or deleted
 	require.ErrorIs(t, err, domainexercise.ErrArchLabNotEnabled)
@@ -274,13 +252,13 @@ func TestOfferService_Accept_failsWhenTheSessionCannotBeRead(t *testing.T) {
 	f.sessions.EXPECT().ReadSession(ctx, "session-1").Return(domainexercise.SourceSession{}, boom)
 
 	// When the offer is accepted
-	_, err := f.service.Accept(ctx, "offer-1", interviewSpec(domainexercise.DifficultyAdvanced))
+	_, err := f.service.Accept(ctx, "offer-1", practiceAt(domainexercise.DifficultyAdvanced))
 
 	// Then the failure surfaces and nothing is created
 	require.ErrorIs(t, err, boom)
 }
 
-func TestOfferService_Accept_generatesWithTheProfilesDifficulty_whenTheSessionHasNoChallenge(t *testing.T) {
+func TestOfferService_Accept_generatesWithTheProfilesDifficulty_whenNoDifficultyIsChosen(t *testing.T) {
 	tests := map[string]domainexercise.Difficulty{
 		"beginner":     domainexercise.DifficultyBeginner,
 		"intermediate": domainexercise.DifficultyIntermediate,
@@ -293,15 +271,14 @@ func TestOfferService_Accept_generatesWithTheProfilesDifficulty_whenTheSessionHa
 			f := newOfferFixture(t)
 			ctx := context.Background()
 			f.expectOffer(ctx)
-			f.challenges.EXPECT().FindLatestBySourceSession(ctx, "session-1").Return(domainexercise.Challenge{}, domainexercise.ErrChallengeNotFound)
 			f.profiles.EXPECT().ReadProfile(ctx).Return(domainexercise.GenerationProfile{ExperienceLevel: level}, nil)
-			f.generator.EXPECT().GenerateChallenge(ctx, "session-1", interviewSpec(want)).Return(testOfferChallenge, nil)
+			f.generator.EXPECT().GenerateChallenge(ctx, "session-1", practiceAt(want)).Return(testOfferChallenge, nil)
 			f.runTx(ctx)
 			f.links.EXPECT().Create(insideTx(), mock.Anything).Return(nil)
 			f.offers.EXPECT().Delete(insideTx(), "offer-1").Return(nil)
 
 			// When accepting
-			view, err := f.service.Accept(ctx, "offer-1", domainexercise.ChallengeSpec{})
+			view, err := f.service.Accept(ctx, "offer-1", practiceChoice())
 
 			// Then the challenge is generated at that difficulty, outside any transaction, and linked
 			require.NoError(t, err)
@@ -315,8 +292,7 @@ func TestOfferService_Accept_generatesAtTheChosenDifficulty_withoutReadingThePro
 	f := newOfferFixture(t)
 	ctx := context.Background()
 	f.expectOffer(ctx)
-	f.challenges.EXPECT().FindLatestBySourceSession(ctx, "session-1").Return(domainexercise.Challenge{}, domainexercise.ErrChallengeNotFound)
-	f.generator.EXPECT().GenerateChallenge(ctx, "session-1", interviewSpec(domainexercise.DifficultyBeginner)).Return(testOfferChallenge, nil)
+	f.generator.EXPECT().GenerateChallenge(ctx, "session-1", practiceAt(domainexercise.DifficultyBeginner)).Return(testOfferChallenge, nil)
 	f.runTx(ctx)
 	f.links.EXPECT().Create(insideTx(), domainexercise.SessionExercise{
 		ID: "generated-id", SessionID: "session-1", ChallengeID: "challenge-1", MessageID: "message-1", CreatedAt: fixedNow,
@@ -324,78 +300,11 @@ func TestOfferService_Accept_generatesAtTheChosenDifficulty_withoutReadingThePro
 	f.offers.EXPECT().Delete(insideTx(), "offer-1").Return(nil)
 
 	// When accepting with a chosen difficulty (no profile call is expected)
-	view, err := f.service.Accept(ctx, "offer-1", interviewSpec(domainexercise.DifficultyBeginner))
+	view, err := f.service.Accept(ctx, "offer-1", practiceAt(domainexercise.DifficultyBeginner))
 
 	// Then the challenge is generated at the chosen difficulty and linked
 	require.NoError(t, err)
 	assert.Equal(t, offerView(), view)
-}
-
-func TestOfferService_Accept_reusesTheLatestChallenge_whenItHasTheChosenDifficulty(t *testing.T) {
-	// Given an unlinked challenge of the session at the chosen difficulty
-	f := newOfferFixture(t)
-	ctx := context.Background()
-	f.expectOffer(ctx)
-	f.challenges.EXPECT().FindLatestBySourceSession(ctx, "session-1").Return(testOfferChallenge, nil)
-	f.links.EXPECT().GetBySessionAndChallenge(ctx, "session-1", "challenge-1").
-		Return(domainexercise.SessionExercise{}, domainexercise.ErrSessionExerciseNotFound)
-	f.runTx(ctx)
-	f.links.EXPECT().Create(insideTx(), domainexercise.SessionExercise{
-		ID: "generated-id", SessionID: "session-1", ChallengeID: "challenge-1", MessageID: "message-1", CreatedAt: fixedNow,
-	}).Return(nil)
-	f.offers.EXPECT().Delete(insideTx(), "offer-1").Return(nil)
-
-	// When accepting at that difficulty (no generator call is expected)
-	view, err := f.service.Accept(ctx, "offer-1", interviewSpec(domainexercise.DifficultyAdvanced))
-
-	// Then the existing challenge is linked
-	require.NoError(t, err)
-	assert.Equal(t, offerView(), view)
-}
-
-func TestOfferService_Accept_generatesANewChallenge_whenTheLatestOneHasAnotherDifficulty(t *testing.T) {
-	// Given an unlinked ADVANCED challenge and a user who chose BEGINNER
-	f := newOfferFixture(t)
-	ctx := context.Background()
-	f.expectOffer(ctx)
-	f.challenges.EXPECT().FindLatestBySourceSession(ctx, "session-1").Return(testOfferChallenge, nil)
-	fresh := domainexercise.Challenge{ID: "challenge-2", Title: "Design a counter", Topic: "counters", Difficulty: domainexercise.DifficultyBeginner}
-	f.generator.EXPECT().GenerateChallenge(ctx, "session-1", interviewSpec(domainexercise.DifficultyBeginner)).Return(fresh, nil)
-	f.runTx(ctx)
-	f.links.EXPECT().Create(insideTx(), domainexercise.SessionExercise{
-		ID: "generated-id", SessionID: "session-1", ChallengeID: "challenge-2", MessageID: "message-1", CreatedAt: fixedNow,
-	}).Return(nil)
-	f.offers.EXPECT().Delete(insideTx(), "offer-1").Return(nil)
-
-	// When accepting
-	view, err := f.service.Accept(ctx, "offer-1", interviewSpec(domainexercise.DifficultyBeginner))
-
-	// Then the old challenge is not reused: the new one is generated and linked
-	require.NoError(t, err)
-	assert.Equal(t, "challenge-2", view.ChallengeID)
-}
-
-func TestOfferService_Accept_withNoDifficulty_doesNotReuseAChallengeOfAnotherLevelThanTheProfiles(t *testing.T) {
-	// Given an unlinked ADVANCED challenge and a beginner profile
-	f := newOfferFixture(t)
-	ctx := context.Background()
-	f.expectOffer(ctx)
-	f.profiles.EXPECT().ReadProfile(ctx).Return(domainexercise.GenerationProfile{ExperienceLevel: "beginner"}, nil)
-	f.challenges.EXPECT().FindLatestBySourceSession(ctx, "session-1").Return(testOfferChallenge, nil)
-	fresh := domainexercise.Challenge{ID: "challenge-2", Title: "Design a counter", Topic: "counters", Difficulty: domainexercise.DifficultyBeginner}
-	f.generator.EXPECT().GenerateChallenge(ctx, "session-1", interviewSpec(domainexercise.DifficultyBeginner)).Return(fresh, nil)
-	f.runTx(ctx)
-	f.links.EXPECT().Create(insideTx(), domainexercise.SessionExercise{
-		ID: "generated-id", SessionID: "session-1", ChallengeID: "challenge-2", MessageID: "message-1", CreatedAt: fixedNow,
-	}).Return(nil)
-	f.offers.EXPECT().Delete(insideTx(), "offer-1").Return(nil)
-
-	// When accepting with no difficulty
-	view, err := f.service.Accept(ctx, "offer-1", domainexercise.ChallengeSpec{})
-
-	// Then the profile's level decides: the advanced challenge is not reused
-	require.NoError(t, err)
-	assert.Equal(t, "challenge-2", view.ChallengeID)
 }
 
 func TestOfferService_Accept_keepsTheOfferAndCreatesNothing_whenGenerationFails(t *testing.T) {
@@ -404,12 +313,11 @@ func TestOfferService_Accept_keepsTheOfferAndCreatesNothing_whenGenerationFails(
 	ctx := context.Background()
 	f.expectOffer(ctx)
 	boom := errors.New("provider down")
-	f.challenges.EXPECT().FindLatestBySourceSession(ctx, "session-1").Return(domainexercise.Challenge{}, domainexercise.ErrChallengeNotFound)
 	f.profiles.EXPECT().ReadProfile(ctx).Return(domainexercise.GenerationProfile{ExperienceLevel: "advanced"}, nil)
-	f.generator.EXPECT().GenerateChallenge(ctx, "session-1", interviewSpec(domainexercise.DifficultyAdvanced)).Return(domainexercise.Challenge{}, boom)
+	f.generator.EXPECT().GenerateChallenge(ctx, "session-1", practiceAt(domainexercise.DifficultyAdvanced)).Return(domainexercise.Challenge{}, boom)
 
 	// When accepting
-	_, err := f.service.Accept(ctx, "offer-1", domainexercise.ChallengeSpec{})
+	_, err := f.service.Accept(ctx, "offer-1", practiceChoice())
 
 	// Then the error comes back; no link is created and the offer is not deleted (strict mocks)
 	assert.ErrorIs(t, err, boom)
@@ -424,22 +332,7 @@ func TestOfferService_Accept_failsWhenTheProfileCannotBeRead(t *testing.T) {
 	f.profiles.EXPECT().ReadProfile(ctx).Return(domainexercise.GenerationProfile{}, boom)
 
 	// When accepting
-	_, err := f.service.Accept(ctx, "offer-1", domainexercise.ChallengeSpec{})
-
-	// Then nothing is generated and the error comes back
-	assert.ErrorIs(t, err, boom)
-}
-
-func TestOfferService_Accept_failsWhenTheChallengeLookupFails(t *testing.T) {
-	// Given a lookup that fails for another reason than "not found"
-	f := newOfferFixture(t)
-	ctx := context.Background()
-	f.expectOffer(ctx)
-	boom := errors.New("db down")
-	f.challenges.EXPECT().FindLatestBySourceSession(ctx, "session-1").Return(domainexercise.Challenge{}, boom)
-
-	// When accepting
-	_, err := f.service.Accept(ctx, "offer-1", interviewSpec(domainexercise.DifficultyAdvanced))
+	_, err := f.service.Accept(ctx, "offer-1", practiceChoice())
 
 	// Then nothing is generated and the error comes back
 	assert.ErrorIs(t, err, boom)
@@ -452,51 +345,10 @@ func TestOfferService_Accept_returnsNotFoundForAnUnknownOffer(t *testing.T) {
 	f.offers.EXPECT().Get(ctx, "offer-1").Return(domainexercise.Offer{}, domainexercise.ErrOfferNotFound)
 
 	// When accepting
-	_, err := f.service.Accept(ctx, "offer-1", interviewSpec(domainexercise.DifficultyAdvanced))
+	_, err := f.service.Accept(ctx, "offer-1", practiceAt(domainexercise.DifficultyAdvanced))
 
 	// Then ErrOfferNotFound is returned
 	assert.ErrorIs(t, err, domainexercise.ErrOfferNotFound)
-}
-
-func TestOfferService_Accept_generatesANewChallenge_whenTheLatestOneIsAlreadyLinked(t *testing.T) {
-	// Given a session whose latest challenge is already taken by another message
-	f := newOfferFixture(t)
-	ctx := context.Background()
-	f.expectOffer(ctx)
-	f.challenges.EXPECT().FindLatestBySourceSession(ctx, "session-1").Return(testOfferChallenge, nil)
-	f.links.EXPECT().GetBySessionAndChallenge(ctx, "session-1", "challenge-1").
-		Return(domainexercise.SessionExercise{ID: "link-1"}, nil)
-	f.profiles.EXPECT().ReadProfile(ctx).Return(domainexercise.GenerationProfile{ExperienceLevel: "advanced"}, nil)
-	fresh := domainexercise.Challenge{ID: "challenge-2", Title: "Design a queue", Topic: "queues", Difficulty: domainexercise.DifficultyAdvanced}
-	f.generator.EXPECT().GenerateChallenge(ctx, "session-1", interviewSpec(domainexercise.DifficultyAdvanced)).Return(fresh, nil)
-	f.runTx(ctx)
-	f.links.EXPECT().Create(insideTx(), domainexercise.SessionExercise{
-		ID: "generated-id", SessionID: "session-1", ChallengeID: "challenge-2", MessageID: "message-1", CreatedAt: fixedNow,
-	}).Return(nil)
-	f.offers.EXPECT().Delete(insideTx(), "offer-1").Return(nil)
-
-	// When accepting
-	view, err := f.service.Accept(ctx, "offer-1", domainexercise.ChallengeSpec{})
-
-	// Then the old challenge is not reused: a new one is generated and linked
-	require.NoError(t, err)
-	assert.Equal(t, "challenge-2", view.ChallengeID)
-}
-
-func TestOfferService_Accept_failsWhenTheLinkLookupFails(t *testing.T) {
-	// Given a failure reading whether the latest challenge is linked
-	f := newOfferFixture(t)
-	ctx := context.Background()
-	f.expectOffer(ctx)
-	boom := errors.New("boom")
-	f.challenges.EXPECT().FindLatestBySourceSession(ctx, "session-1").Return(testOfferChallenge, nil)
-	f.links.EXPECT().GetBySessionAndChallenge(ctx, "session-1", "challenge-1").Return(domainexercise.SessionExercise{}, boom)
-
-	// When accepting
-	_, err := f.service.Accept(ctx, "offer-1", interviewSpec(domainexercise.DifficultyAdvanced))
-
-	// Then the error comes back
-	assert.ErrorIs(t, err, boom)
 }
 
 func TestOfferService_Accept_failsAndKeepsTheOffer_whenTheLinkCannotBeCreated(t *testing.T) {
@@ -505,14 +357,12 @@ func TestOfferService_Accept_failsAndKeepsTheOffer_whenTheLinkCannotBeCreated(t 
 	ctx := context.Background()
 	f.expectOffer(ctx)
 	boom := errors.New("db down")
-	f.challenges.EXPECT().FindLatestBySourceSession(ctx, "session-1").Return(testOfferChallenge, nil)
-	f.links.EXPECT().GetBySessionAndChallenge(ctx, "session-1", "challenge-1").
-		Return(domainexercise.SessionExercise{}, domainexercise.ErrSessionExerciseNotFound)
+	f.generator.EXPECT().GenerateChallenge(ctx, "session-1", practiceAt(domainexercise.DifficultyAdvanced)).Return(testOfferChallenge, nil)
 	f.runTx(ctx)
 	f.links.EXPECT().Create(insideTx(), mock.Anything).Return(boom)
 
 	// When accepting
-	_, err := f.service.Accept(ctx, "offer-1", interviewSpec(domainexercise.DifficultyAdvanced))
+	_, err := f.service.Accept(ctx, "offer-1", practiceAt(domainexercise.DifficultyAdvanced))
 
 	// Then the error comes back and the offer is not deleted (strict mocks)
 	assert.ErrorIs(t, err, boom)
@@ -524,15 +374,13 @@ func TestOfferService_Accept_failsWhenTheOfferCannotBeDeleted(t *testing.T) {
 	ctx := context.Background()
 	f.expectOffer(ctx)
 	boom := errors.New("db down")
-	f.challenges.EXPECT().FindLatestBySourceSession(ctx, "session-1").Return(testOfferChallenge, nil)
-	f.links.EXPECT().GetBySessionAndChallenge(ctx, "session-1", "challenge-1").
-		Return(domainexercise.SessionExercise{}, domainexercise.ErrSessionExerciseNotFound)
+	f.generator.EXPECT().GenerateChallenge(ctx, "session-1", practiceAt(domainexercise.DifficultyAdvanced)).Return(testOfferChallenge, nil)
 	f.runTx(ctx)
 	f.links.EXPECT().Create(insideTx(), mock.Anything).Return(nil)
 	f.offers.EXPECT().Delete(insideTx(), "offer-1").Return(boom)
 
 	// When accepting
-	_, err := f.service.Accept(ctx, "offer-1", interviewSpec(domainexercise.DifficultyAdvanced))
+	_, err := f.service.Accept(ctx, "offer-1", practiceAt(domainexercise.DifficultyAdvanced))
 
 	// Then the error comes back
 	assert.ErrorIs(t, err, boom)
@@ -552,7 +400,7 @@ func TestOfferService_Accept_returnsTheExistingLink_whenAnotherAcceptResolvedThe
 	f.challenges.EXPECT().Get(ctx, "challenge-1").Return(testOfferChallenge, nil)
 
 	// When accepting
-	view, err := f.service.Accept(ctx, "offer-1", domainexercise.ChallengeSpec{})
+	view, err := f.service.Accept(ctx, "offer-1", practiceChoice())
 
 	// Then the link of this offer is returned and nothing is generated or created
 	require.NoError(t, err)
@@ -571,7 +419,7 @@ func TestOfferService_Accept_returnsNotFound_whenTheOfferWasDeclinedAndOnlyOlder
 	}, nil)
 
 	// When accepting
-	_, err := f.service.Accept(ctx, "offer-1", domainexercise.ChallengeSpec{})
+	_, err := f.service.Accept(ctx, "offer-1", practiceChoice())
 
 	// Then ErrOfferNotFound is returned, not the old exercise
 	assert.ErrorIs(t, err, domainexercise.ErrOfferNotFound)
@@ -586,7 +434,7 @@ func TestOfferService_Accept_returnsNotFound_whenTheOfferIsGoneAndTheSessionHasN
 	f.links.EXPECT().ListBySession(ctx, "session-1").Return(nil, nil)
 
 	// When accepting
-	_, err := f.service.Accept(ctx, "offer-1", domainexercise.ChallengeSpec{})
+	_, err := f.service.Accept(ctx, "offer-1", practiceChoice())
 
 	// Then ErrOfferNotFound is returned
 	assert.ErrorIs(t, err, domainexercise.ErrOfferNotFound)
@@ -602,7 +450,7 @@ func TestOfferService_Accept_failsWhenTheLinksCannotBeListedAfterALostRace(t *te
 	f.links.EXPECT().ListBySession(ctx, "session-1").Return(nil, boom)
 
 	// When accepting
-	_, err := f.service.Accept(ctx, "offer-1", domainexercise.ChallengeSpec{})
+	_, err := f.service.Accept(ctx, "offer-1", practiceChoice())
 
 	// Then the error comes back
 	assert.ErrorIs(t, err, boom)
@@ -617,7 +465,7 @@ func TestOfferService_Accept_failsWhenTheOfferReadFailsInsideTheLock(t *testing.
 	f.offers.EXPECT().Get(ctx, "offer-1").Return(domainexercise.Offer{}, boom).Once()
 
 	// When accepting
-	_, err := f.service.Accept(ctx, "offer-1", domainexercise.ChallengeSpec{})
+	_, err := f.service.Accept(ctx, "offer-1", practiceChoice())
 
 	// Then the error comes back
 	assert.ErrorIs(t, err, boom)
@@ -631,7 +479,7 @@ func TestOfferService_Accept_failsWhenTheFirstOfferReadFails(t *testing.T) {
 	f.offers.EXPECT().Get(ctx, "offer-1").Return(domainexercise.Offer{}, boom)
 
 	// When accepting
-	_, err := f.service.Accept(ctx, "offer-1", domainexercise.ChallengeSpec{})
+	_, err := f.service.Accept(ctx, "offer-1", practiceChoice())
 
 	// Then the error comes back
 	assert.ErrorIs(t, err, boom)
@@ -652,16 +500,8 @@ func TestOfferService_Accept_serializesConcurrentAcceptsOfTheSameSession(t *test
 		}
 		return testOffer, nil
 	})
-	f.challenges.EXPECT().FindLatestBySourceSession(ctx, "session-1").RunAndReturn(func(context.Context, string) (domainexercise.Challenge, error) {
-		mu.Lock()
-		defer mu.Unlock()
-		if generated {
-			return testOfferChallenge, nil
-		}
-		return domainexercise.Challenge{}, domainexercise.ErrChallengeNotFound
-	})
 	f.profiles.EXPECT().ReadProfile(ctx).Return(domainexercise.GenerationProfile{ExperienceLevel: "advanced"}, nil).Maybe()
-	f.generator.EXPECT().GenerateChallenge(ctx, "session-1", interviewSpec(domainexercise.DifficultyAdvanced)).
+	f.generator.EXPECT().GenerateChallenge(ctx, "session-1", practiceAt(domainexercise.DifficultyAdvanced)).
 		RunAndReturn(func(context.Context, string, domainexercise.ChallengeSpec) (domainexercise.Challenge, error) {
 			time.Sleep(20 * time.Millisecond)
 			return testOfferChallenge, nil
@@ -689,7 +529,7 @@ func TestOfferService_Accept_serializesConcurrentAcceptsOfTheSameSession(t *test
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			views[i], errs[i] = f.service.Accept(ctx, "offer-1", domainexercise.ChallengeSpec{})
+			views[i], errs[i] = f.service.Accept(ctx, "offer-1", practiceChoice())
 		}()
 	}
 	wg.Wait()
@@ -723,30 +563,6 @@ func TestOfferService_Accept_practiceNeverReusesAnExistingChallenge(t *testing.T
 	assert.Equal(t, "challenge-2", view.ChallengeID)
 }
 
-func TestOfferService_Accept_interviewDoesNotReuseAPracticeChallenge(t *testing.T) {
-	// Given an unlinked PRACTICE challenge of the chosen difficulty and a user who chose an interview
-	f := newOfferFixture(t)
-	ctx := context.Background()
-	f.expectOffer(ctx)
-	practice := testOfferChallenge
-	practice.Kind = domainexercise.ChallengeKindPractice
-	f.challenges.EXPECT().FindLatestBySourceSession(ctx, "session-1").Return(practice, nil)
-	fresh := domainexercise.Challenge{ID: "challenge-2", Kind: domainexercise.ChallengeKindInterview, Title: "Design a counter", Topic: "counters", Difficulty: domainexercise.DifficultyAdvanced}
-	f.generator.EXPECT().GenerateChallenge(ctx, "session-1", interviewSpec(domainexercise.DifficultyAdvanced)).Return(fresh, nil)
-	f.runTx(ctx)
-	f.links.EXPECT().Create(insideTx(), domainexercise.SessionExercise{
-		ID: "generated-id", SessionID: "session-1", ChallengeID: "challenge-2", MessageID: "message-1", CreatedAt: fixedNow,
-	}).Return(nil)
-	f.offers.EXPECT().Delete(insideTx(), "offer-1").Return(nil)
-
-	// When accepting
-	view, err := f.service.Accept(ctx, "offer-1", interviewSpec(domainexercise.DifficultyAdvanced))
-
-	// Then the practice is not reused: an interview is generated
-	require.NoError(t, err)
-	assert.Equal(t, "challenge-2", view.ChallengeID)
-}
-
 func TestOfferService_Accept_refusesAPracticeWithoutAGoal(t *testing.T) {
 	// Given a practice chosen with no goal
 	f := newOfferFixture(t)
@@ -758,4 +574,14 @@ func TestOfferService_Accept_refusesAPracticeWithoutAGoal(t *testing.T) {
 
 	// Then it is refused and the offer stays pending (strict mocks)
 	assert.ErrorIs(t, err, domainexercise.ErrPracticeGoalRequired)
+}
+
+// practiceChoice is what the user sends when accepting an offer without
+// choosing a difficulty: a practice goal only.
+func practiceChoice() domainexercise.ChallengeSpec {
+	return domainexercise.ChallengeSpec{Kind: domainexercise.ChallengeKindPractice, PracticeGoal: "cache aside"}
+}
+
+func practiceAt(difficulty domainexercise.Difficulty) domainexercise.ChallengeSpec {
+	return domainexercise.ChallengeSpec{Difficulty: difficulty, Kind: domainexercise.ChallengeKindPractice, PracticeGoal: "cache aside"}
 }

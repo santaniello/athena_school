@@ -16,7 +16,7 @@ export interface UseChallengeCatalogResult {
 // shown while the next one loads, so the list does not flash empty.
 export function useChallengeCatalog(filter: CatalogFilter): UseChallengeCatalogResult {
   const { t } = useTranslation()
-  const { query, status, difficulty, topic } = filter
+  const { query, status, difficulty, topic, kind } = filter
   const [catalog, setCatalog] = useState<Catalog | null>(null)
   const [loading, setLoading] = useState(true)
   // Only the failure is kept: the message is written at render, in the language of the moment.
@@ -26,7 +26,7 @@ export function useChallengeCatalog(filter: CatalogFilter): UseChallengeCatalogR
 
   useEffect(() => {
     let stale = false
-    listChallengeCatalog({ query, status, difficulty, topic })
+    listChallengeCatalog({ query, status, difficulty, topic, kind })
       .then((result) => {
         if (stale) return
         setCatalog(result)
@@ -42,7 +42,7 @@ export function useChallengeCatalog(filter: CatalogFilter): UseChallengeCatalogR
     return () => {
       stale = true
     }
-  }, [query, status, difficulty, topic, reloadToken])
+  }, [query, status, difficulty, topic, kind, reloadToken])
 
   const reload = useCallback(() => {
     setLoading(true)

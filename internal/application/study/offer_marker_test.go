@@ -23,6 +23,18 @@ func TestBuildSystemPrompt_instructsTheModelToEndWithTheOfferMarker_whenTheUserA
 	assert.Contains(t, prompt, "Never propose an exercise on your own")
 }
 
+func TestBuildSystemPrompt_offersOnlyAPracticeExerciseAndPointsAFullInterviewToTheCatalog(t *testing.T) {
+	// Given any profile
+	profile := domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}
+
+	// When building the system prompt
+	prompt := buildSystemPrompt(profile, "Caching", "Learn caching", true)
+
+	// Then the offer is a practice exercise and a full interview is not offered in the chat
+	assert.Contains(t, prompt, "a short practice exercise on this topic")
+	assert.Contains(t, prompt, "If the user asks for a full system-design interview, do not use that text: reply normally and say that the interviews are in the Architecture Lab catalog.")
+}
+
 func TestBuildSystemPrompt_instructsTheModelToEndWithTheQuizMarker_whenTheUserAsksForAQuiz(t *testing.T) {
 	// Given any profile
 	profile := domainprofile.UserProfile{Name: "Ana", AssistantName: "Atena"}
