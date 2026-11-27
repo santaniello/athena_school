@@ -269,8 +269,10 @@ func TestRequestOpeningTurn_omitsTheExerciseInstruction_inAFolderWithTheLabDisab
 	// When requesting the opening turn
 	err := service.RequestOpeningTurn(context.Background(), "session-1", "Caching", noopChunkHandler, nil, nil)
 
-	// Then the prompt does not teach the exercise marker but keeps the quiz one
+	// Then the prompt does not teach the exercise marker, says exercises are
+	// off in this folder, and keeps the quiz one
 	require.NoError(t, err)
 	require.NotContains(t, system, exerciseOfferMarker)
+	require.Contains(t, system, exerciseUnavailableInstruction)
 	require.Contains(t, system, quizOfferMarker)
 }

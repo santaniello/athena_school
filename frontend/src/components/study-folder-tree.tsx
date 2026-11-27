@@ -86,6 +86,9 @@ interface StudyFolderTreeProps {
   // like AppShell can tell "no folders exist yet" apart from "folders
   // exist but none is selected" without owning this tree's own state.
   onFolderCountChange?: (count: number) => void
+  // Reports a folder action that failed (e.g. toggling the Architecture Lab),
+  // so a parent like AppShell can show it instead of it failing silently.
+  onActionError?: (message: string) => void
 }
 
 // StudyFolderTreeHandle lets a caller outside this tree (e.g. AppShell's
@@ -162,6 +165,7 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
       onSessionDeleted,
       onFolderDeleted,
       onFolderCountChange,
+      onActionError,
     },
     ref,
   ) {
@@ -244,7 +248,16 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
     }
 
     async function handleSetArchLabEnabled(folderId: string, enabled: boolean) {
-      await setFolderArchLabEnabled(folderId, enabled)
+      try {
+        await setFolderArchLabEnabled(folderId, enabled)
+      } catch {
+        onActionError?.(
+          enabled
+            ? 'Could not enable the Architecture Lab for this folder.'
+            : 'Could not disable the Architecture Lab for this folder.',
+        )
+        return
+      }
       setFolders((previous) =>
         previous.map((folder) =>
           folder.id === folderId ? { ...folder, archLabEnabled: enabled } : folder,

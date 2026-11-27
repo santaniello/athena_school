@@ -95,7 +95,8 @@ func (s *Service) SendMessage(
 	}
 
 	var priorContext, newContext domainstudy.ContextUsage
-	var sessionGoal, folderID string
+	var sessionGoal string
+	var archLabEnabled bool
 	err := s.tx.WithinTx(ctx, func(ctx context.Context) error {
 		session, err := s.sessions.GetByID(ctx, sessionID)
 		if err != nil {
@@ -106,7 +107,12 @@ func (s *Service) SendMessage(
 		}
 		priorContext = session.Context
 		sessionGoal = session.Goal
-		folderID = session.FolderID
+		// Read before the user message is persisted: a failed folder lookup
+		// must not leave a user turn (and its context tokens) with no reply.
+		archLabEnabled, err = s.archLabEnabledOf(ctx, session.FolderID)
+		if err != nil {
+			return err
+		}
 
 		if err := s.messages.Append(ctx, userMessage); err != nil {
 			return err
@@ -122,11 +128,6 @@ func (s *Service) SendMessage(
 		return err
 	}
 	emitContextTransition(priorContext, newContext, onContext)
-
-	archLabEnabled, err := s.archLabEnabledOf(ctx, folderID)
-	if err != nil {
-		return err
-	}
 
 	var knowledgeMessage *domainllm.Message
 	var sources []domainknowledge.Source

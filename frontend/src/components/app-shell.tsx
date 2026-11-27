@@ -741,6 +741,12 @@ function AppShell() {
                       onSessionDeleted={handleSessionDeleted}
                       onFolderDeleted={handleFolderDeleted}
                       onFolderCountChange={setStudyFolderCount}
+                      onActionError={(message) =>
+                        setNotices((current) => [
+                          ...current,
+                          { id: crypto.randomUUID(), tone: 'warning', message, durationMs: 10000 },
+                        ])
+                      }
                     />
                   )}
                 </div>

@@ -23,6 +23,17 @@ var exerciseOfferInstruction = fmt.Sprintf(
 	exerciseOfferMarker,
 )
 
+// exerciseUnavailableInstruction replaces exerciseOfferInstruction when the
+// session's folder has the Architecture Lab off: without it, an explicit
+// request for an exercise leaves the model unguided, so it may improvise one,
+// promise an offer that never comes, or answer with the quiz marker instead.
+// It never mentions exerciseOfferMarker. See
+// specs/phases/phase-07-improve-arch-lab/01-arch-lab-per-folder.md.
+var exerciseUnavailableInstruction = "\n- Architecture exercises are turned off in this folder. " +
+	"If the user explicitly asks for an exercise or to practice this topic, say in one short sentence " +
+	"that exercises can be turned on with \"Enable Arch Lab\" in this folder's menu. " +
+	"Do not treat that request as a request for a quiz."
+
 // quizOfferMarker is the fixed token the model ends a reply with when the user
 // explicitly asked for a quiz or a test about the session. It is handled like
 // exerciseOfferMarker. See

@@ -317,13 +317,14 @@ func TestSendMessage_includesTheExerciseInstruction_inAFolderWithTheLabEnabled(t
 }
 
 func TestSendMessage_failsWhenTheSessionsFolderCannotBeRead(t *testing.T) {
-	// Given a folder lookup that fails after the user's message is stored
+	// Given a folder lookup that fails
 	boom := errors.New("db down")
 	sessions := studymocks.NewMockSessionRepository(t)
 	messages := studymocks.NewMockMessageRepository(t)
 	folders := foldermocks.NewMockRepository(t)
-	tx := mockNormalSession(t, sessions, "session-1")
-	messages.EXPECT().Append(context.Background(), mock.MatchedBy(func(m domainstudy.Message) bool { return m.Role == domainstudy.RoleUser })).Return(nil).Once()
+	tx := applicationstudymocks.NewMockTransactor(t)
+	runWithinTx(tx)
+	sessions.EXPECT().GetByID(context.Background(), "session-1").Return(normalSession("session-1"), nil).Once()
 	folders.EXPECT().GetByID(context.Background(), "").Return(domainfolder.Folder{}, boom).Once()
 	service := NewService(sessions, messages, llmmocks.NewMockProvider(t), profilemocks.NewMockStore(t), folders, knowledgemocks.NewMockRetriever(t), tx, nil, nil, nil, nil)
 
@@ -331,6 +332,8 @@ func TestSendMessage_failsWhenTheSessionsFolderCannotBeRead(t *testing.T) {
 	err := service.SendMessage(context.Background(), "session-1", "Caching", "hello", domainknowledge.SourceModeNotes,
 		noopSourcesHandler, noopChunkHandler, nil, nil)
 
-	// Then the failure surfaces and nothing is sent to the model
+	// Then the failure surfaces before the user's message is stored or its
+	// tokens counted (no Append or UpdateContext expected), and nothing is
+	// sent to the model
 	require.ErrorIs(t, err, boom)
 }

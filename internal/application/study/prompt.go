@@ -45,11 +45,12 @@ func buildSystemPrompt(profile domainprofile.UserProfile, topic, sessionGoal str
 	)
 }
 
-// exerciseInstructionFor returns the exercise-offer rule, or "" when the
-// session's folder has the Architecture Lab off.
+// exerciseInstructionFor returns the exercise-offer rule, or the rule that
+// tells the model exercises are unavailable when the session's folder has the
+// Architecture Lab off.
 func exerciseInstructionFor(archLabEnabled bool) string {
 	if !archLabEnabled {
-		return ""
+		return exerciseUnavailableInstruction
 	}
 	return exerciseOfferInstruction
 }

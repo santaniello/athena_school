@@ -79,12 +79,14 @@ function renderTree(props?: {
   onSessionDeleted?: (sessionId: string) => void
   onFolderDeleted?: (folderId: string) => void
   onFolderCountChange?: (count: number) => void
+  onActionError?: (message: string) => void
 }) {
   const onSelectSession = props?.onSelectSession ?? vi.fn()
   const onSessionStarted = props?.onSessionStarted ?? vi.fn()
   const onSessionDeleted = props?.onSessionDeleted ?? vi.fn()
   const onFolderDeleted = props?.onFolderDeleted ?? vi.fn()
   const onFolderCountChange = props?.onFolderCountChange ?? vi.fn()
+  const onActionError = props?.onActionError ?? vi.fn()
   render(
     <StudyFolderTree
       selectedSessionId={props?.selectedSessionId ?? null}
@@ -93,6 +95,7 @@ function renderTree(props?: {
       onSessionDeleted={onSessionDeleted}
       onFolderDeleted={onFolderDeleted}
       onFolderCountChange={onFolderCountChange}
+      onActionError={onActionError}
     />,
   )
   return {
@@ -101,6 +104,7 @@ function renderTree(props?: {
     onSessionDeleted,
     onFolderDeleted,
     onFolderCountChange,
+    onActionError,
   }
 }
 
@@ -514,6 +518,38 @@ describe('StudyFolderTree', () => {
     )
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
   })
+
+  it.each([
+    {
+      from: false,
+      label: 'Enable Arch Lab',
+      message: 'Could not enable the Architecture Lab for this folder.',
+    },
+    {
+      from: true,
+      label: 'Disable Arch Lab',
+      message: 'Could not disable the Architecture Lab for this folder.',
+    },
+  ])(
+    'reports a failed "$label" and keeps the folder as it was',
+    async ({ from, label, message }) => {
+      // Given a folder whose lab change fails
+      vi.mocked(listFolders).mockResolvedValueOnce([{ ...SYSTEM_DESIGN, archLabEnabled: from }])
+      vi.mocked(setFolderArchLabEnabled).mockRejectedValueOnce(new Error('folder not found'))
+      const user = userEvent.setup()
+      const { onActionError } = renderTree()
+      await screen.findByText('System Design')
+
+      // When choosing the toggle in its menu
+      await user.click(screen.getByRole('button', { name: 'System Design options' }))
+      await user.click(await screen.findByText(label))
+
+      // Then the failure is reported and the indicator is unchanged
+      await waitFor(() => expect(onActionError).toHaveBeenCalledWith(message))
+      expect(onActionError).toHaveBeenCalledTimes(1)
+      expect(screen.queryAllByLabelText('Architecture Lab enabled')).toHaveLength(from ? 1 : 0)
+    },
+  )
 
   it('does not submit a rename when the trimmed name is empty', async () => {
     // Given a folder with its rename input open
