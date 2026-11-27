@@ -105,8 +105,14 @@ function catalog(items: CatalogItem[], counts: Partial<Catalog> = {}): Catalog {
 // The screen opens on the Interview tab; the catalog of practice challenges is
 // behind the Practice tab.
 function renderPractice(experienceLevel = 'intermediate') {
-  render(<ArchitectureLabScreen experienceLevel={experienceLevel} onStartExam={onStartExam} />)
-  return userEvent.click(screen.getByRole('tab', { name: 'Practice' }))
+  render(
+    <ArchitectureLabScreen
+      kind="PRACTICE"
+      experienceLevel={experienceLevel}
+      onStartExam={onStartExam}
+    />,
+  )
+  return Promise.resolve()
 }
 
 describe('ArchitectureLabScreen', () => {
@@ -423,15 +429,19 @@ describe('ArchitectureLabScreen', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('opens on the Interview tab, listing the canonical problems and no practice catalog', async () => {
+  it('shows the canonical problems and no practice catalog for the Interview kind', async () => {
     vi.mocked(listCanonicalProblems).mockResolvedValue([
       canonicalProblem('url-shortener', 'URL shortener'),
     ])
 
-    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+    render(
+      <ArchitectureLabScreen
+        kind="INTERVIEW"
+        experienceLevel="intermediate"
+        onStartExam={onStartExam}
+      />,
+    )
 
-    expect(screen.getByRole('tab', { name: 'Interview' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByRole('tab', { name: 'Practice' })).toHaveAttribute('aria-selected', 'false')
     expect(await screen.findByText('URL shortener')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Generate practice' })).not.toBeInTheDocument()
   })
@@ -445,26 +455,18 @@ describe('ArchitectureLabScreen', () => {
     expect(listChallengeCatalog).toHaveBeenCalledWith(expect.objectContaining({ kind: 'PRACTICE' }))
   })
 
-  it('goes back to the Interview tab', async () => {
-    const user = userEvent.setup()
-    vi.mocked(listChallengeCatalog).mockResolvedValue(catalog([]))
-    vi.mocked(listCanonicalProblems).mockResolvedValue([
-      canonicalProblem('url-shortener', 'URL shortener'),
-    ])
-    await renderPractice()
-
-    await user.click(screen.getByRole('tab', { name: 'Interview' }))
-
-    expect(await screen.findByText('URL shortener')).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Interview' })).toHaveAttribute('aria-selected', 'true')
-  })
-
   it('opens the history of a canonical problem', async () => {
     const user = userEvent.setup()
     vi.mocked(listCanonicalProblems).mockResolvedValue([
       { ...canonicalProblem('url-shortener', 'URL shortener'), attempts: 1, hasHistory: true },
     ])
-    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+    render(
+      <ArchitectureLabScreen
+        kind="INTERVIEW"
+        experienceLevel="intermediate"
+        onStartExam={onStartExam}
+      />,
+    )
 
     await user.click(await screen.findByRole('button', { name: 'History' }))
 
@@ -487,7 +489,13 @@ describe('ArchitectureLabScreen', () => {
       difficulty: 'INTERMEDIATE',
       timeLimitMinutes: 45,
     })
-    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+    render(
+      <ArchitectureLabScreen
+        kind="INTERVIEW"
+        experienceLevel="intermediate"
+        onStartExam={onStartExam}
+      />,
+    )
 
     await user.click(await screen.findByRole('button', { name: 'Start' }))
     await user.click(screen.getByRole('button', { name: 'Start' }))
@@ -513,7 +521,13 @@ describe('ArchitectureLabScreen', () => {
       difficulty: 'INTERMEDIATE',
       timeLimitMinutes: 45,
     })
-    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+    render(
+      <ArchitectureLabScreen
+        kind="INTERVIEW"
+        experienceLevel="intermediate"
+        onStartExam={onStartExam}
+      />,
+    )
     await user.click(await screen.findByRole('button', { name: 'Start' }))
     await user.click(screen.getByRole('button', { name: 'Start' }))
 

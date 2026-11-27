@@ -32,6 +32,8 @@ import { useTranslation } from 'react-i18next'
 interface ArchitectureLabScreenProps {
   // The profile's experience level, which preselects the generation difficulty.
   experienceLevel?: string
+  // Which list the screen shows, chosen in the sidebar's Architecture Lab submenu.
+  kind: 'INTERVIEW' | 'PRACTICE'
   // The user confirmed the rules of an exam; the shell opens the exam screen.
   onStartExam: (challenge: ExamToStart) => void
 }
@@ -40,9 +42,7 @@ const ALL = 'all'
 
 const NO_FILTER = { query: '', status: '', difficulty: '', topic: '', kind: 'PRACTICE' } as const
 
-type Tab = 'INTERVIEW' | 'PRACTICE'
-
-// The Architecture Lab's entry screen, in two tabs. Interview lists the
+// The Architecture Lab's entry screen, in two views chosen in the sidebar. Interview lists the
 // canonical problems, with no study session involved. Practice lists the
 // user's practice challenges with search, filters and progress at a glance,
 // plus the Generate practice action. Everything shown, statuses and counts
@@ -51,7 +51,7 @@ type Tab = 'INTERVIEW' | 'PRACTICE'
 // specs/phases/phase-03-architecture-lab/07-challenge-catalog-ui.md,
 // 10-diagram-workspace.md and
 // specs/phases/phase-07-improve-arch-lab/03-canonical-interviews.md.
-function ArchitectureLabScreen({ experienceLevel, onStartExam }: ArchitectureLabScreenProps) {
+function ArchitectureLabScreen({ experienceLevel, kind, onStartExam }: ArchitectureLabScreenProps) {
   const { t } = useTranslation()
   const [filter, setFilter] = useState<Required<CatalogFilter>>({ ...NO_FILTER })
   const { catalog, loading, error, reload } = useChallengeCatalog(filter)
@@ -60,7 +60,6 @@ function ArchitectureLabScreen({ experienceLevel, onStartExam }: ArchitectureLab
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const [pendingExam, setPendingExam] = useState<ExamToStart | null>(null)
   const [historyOf, setHistoryOf] = useState<HistoryChallenge | null>(null)
-  const [tab, setTab] = useState<Tab>('INTERVIEW')
 
   const filtersActive =
     filter.query !== '' || filter.status !== '' || filter.difficulty !== '' || filter.topic !== ''
@@ -96,23 +95,7 @@ function ArchitectureLabScreen({ experienceLevel, onStartExam }: ArchitectureLab
 
   return (
     <div className="flex min-h-0 w-full flex-col gap-4">
-      <div role="tablist" aria-label={t('canonical.tabsLabel')} className="flex gap-1">
-        {(['INTERVIEW', 'PRACTICE'] as const).map((value) => (
-          <Button
-            key={value}
-            type="button"
-            role="tab"
-            aria-selected={tab === value}
-            variant={tab === value ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setTab(value)}
-          >
-            {value === 'INTERVIEW' ? t('canonical.interviewTab') : t('canonical.practiceTab')}
-          </Button>
-        ))}
-      </div>
-
-      {tab === 'INTERVIEW' ? (
+      {kind === 'INTERVIEW' ? (
         <div className="thin-scroll min-h-0 flex-1 overflow-y-auto">
           <CanonicalInterviewTab
             experienceLevel={experienceLevel}
