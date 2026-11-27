@@ -116,4 +116,74 @@ describe('CanonicalInterviewTab', () => {
 
     expect(onHistory).toHaveBeenCalledWith(withHistory)
   })
+
+  it('counts the interviews, the completed ones and the ones in progress', async () => {
+    const done = problem('url-shortener', 'URL shortener')
+    done.difficulties[0] = {
+      difficulty: 'BEGINNER',
+      generated: true,
+      challengeId: 'c1',
+      status: 'COMPLETED',
+    }
+    const running = problem('rate-limiter', 'Rate limiter')
+    running.difficulties[1] = {
+      difficulty: 'INTERMEDIATE',
+      generated: true,
+      challengeId: 'c2',
+      status: 'IN_PROGRESS',
+    }
+    vi.mocked(listCanonicalProblems).mockResolvedValueOnce([
+      done,
+      running,
+      problem('news-feed', 'News feed'),
+    ])
+
+    renderTab()
+
+    expect(await screen.findByText('3 interviews')).toBeInTheDocument()
+    expect(screen.getByText('1 completed')).toBeInTheDocument()
+    expect(screen.getByText('1 in progress')).toBeInTheDocument()
+  })
+
+  it('searches by name or description, and says so when nothing matches', async () => {
+    const user = userEvent.setup()
+    vi.mocked(listCanonicalProblems).mockResolvedValueOnce([
+      problem('url-shortener', 'URL shortener'),
+      problem('rate-limiter', 'Rate limiter'),
+    ])
+    renderTab()
+    await screen.findByText('URL shortener')
+
+    await user.type(screen.getByRole('searchbox', { name: 'Search interviews' }), ' RATE ')
+    expect(screen.queryByText('URL shortener')).not.toBeInTheDocument()
+    expect(screen.getByText('Rate limiter')).toBeInTheDocument()
+
+    await user.type(screen.getByRole('searchbox', { name: 'Search interviews' }), 'zzz')
+    expect(screen.getByText('No challenges match your filters.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }))
+    expect(screen.getAllByRole('listitem')).toHaveLength(2)
+  })
+
+  it('filters by the status of any of the generated difficulties', async () => {
+    const user = userEvent.setup()
+    const done = problem('url-shortener', 'URL shortener')
+    done.difficulties[0] = {
+      difficulty: 'BEGINNER',
+      generated: true,
+      challengeId: 'c1',
+      status: 'COMPLETED',
+    }
+    vi.mocked(listCanonicalProblems).mockResolvedValueOnce([
+      done,
+      problem('rate-limiter', 'Rate limiter'),
+    ])
+    renderTab()
+    await screen.findByText('URL shortener')
+
+    await user.click(screen.getByRole('combobox', { name: 'Status' }))
+    await user.click(await screen.findByRole('option', { name: 'Completed' }))
+
+    expect(screen.getByText('URL shortener')).toBeInTheDocument()
+    expect(screen.queryByText('Rate limiter')).not.toBeInTheDocument()
+  })
 })

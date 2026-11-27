@@ -1,16 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { ChallengeRow } from '@/components/challenge-row'
 import { AttemptHistoryDialog, type HistoryChallenge } from '@/components/attempt-history-dialog'
 import { GenerateChallengeDialog } from '@/components/generate-challenge-dialog'
+import { FilterSelect } from '@/components/lab/filter-select'
 import { CanonicalInterviewTab } from '@/components/lab/canonical-interview-tab'
 import { StartExamDialog, type ExamToStart } from '@/components/lab/start-exam-dialog'
 import { useChallengeCatalog } from '@/hooks/use-challenge-catalog'
@@ -37,8 +31,6 @@ interface ArchitectureLabScreenProps {
   // The user confirmed the rules of an exam; the shell opens the exam screen.
   onStartExam: (challenge: ExamToStart) => void
 }
-
-const ALL = 'all'
 
 const NO_FILTER = { query: '', status: '', difficulty: '', topic: '', kind: 'PRACTICE' } as const
 
@@ -96,15 +88,13 @@ function ArchitectureLabScreen({ experienceLevel, kind, onStartExam }: Architect
   return (
     <div className="flex min-h-0 w-full flex-col gap-4">
       {kind === 'INTERVIEW' ? (
-        <div className="thin-scroll min-h-0 flex-1 overflow-y-auto">
-          <CanonicalInterviewTab
-            experienceLevel={experienceLevel}
-            onReady={setPendingExam}
-            onHistory={(problem: CanonicalProblem) =>
-              setHistoryOf({ id: problem.id, title: problem.name, canonical: true })
-            }
-          />
-        </div>
+        <CanonicalInterviewTab
+          experienceLevel={experienceLevel}
+          onReady={setPendingExam}
+          onHistory={(problem: CanonicalProblem) =>
+            setHistoryOf({ id: problem.id, title: problem.name, canonical: true })
+          }
+        />
       ) : (
         <>
           <div className="flex items-center justify-between gap-4">
@@ -221,43 +211,6 @@ function ArchitectureLabScreen({ experienceLevel, kind, onStartExam }: Architect
         }}
       />
     </div>
-  )
-}
-
-interface FilterSelectProps<T extends string> {
-  label: string
-  allLabel: string
-  value: T | ''
-  options: [T, string][]
-  onChange: (value: T | '') => void
-}
-
-// A filter dropdown whose first option clears the filter. Radix cannot hold an
-// empty item value, so "all" is stood in by a sentinel.
-function FilterSelect<T extends string>({
-  label,
-  allLabel,
-  value,
-  options,
-  onChange,
-}: FilterSelectProps<T>) {
-  return (
-    <Select
-      value={value === '' ? ALL : value}
-      onValueChange={(next) => onChange(next === ALL ? '' : (next as T))}
-    >
-      <SelectTrigger aria-label={label}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={ALL}>{allLabel}</SelectItem>
-        {options.map(([optionValue, optionLabel]) => (
-          <SelectItem key={optionValue} value={optionValue}>
-            {optionLabel}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   )
 }
 
