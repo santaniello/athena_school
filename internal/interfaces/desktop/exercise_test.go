@@ -451,6 +451,7 @@ func TestApp_GenerateChallenge_mapsUseCaseErrorsToCodes(t *testing.T) {
 	}{
 		{"unknown session", fmt.Errorf("wrapped: %w", applicationexercise.ErrSourceSessionNotFound), exerciseCodeSessionNotFound},
 		{"invalid model output", fmt.Errorf("wrapped: %w", applicationexercise.ErrInvalidGeneration), exerciseCodeInvalidGeneration},
+		{"folder with the lab disabled", fmt.Errorf("wrapped: %w", domainexercise.ErrArchLabNotEnabled), exerciseCodeArchLabNotEnabled},
 		{"provider failure", errors.New("openrouter is down"), exerciseCodeInternal},
 	}
 	for _, tt := range tests {

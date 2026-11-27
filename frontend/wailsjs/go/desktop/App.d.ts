@@ -175,6 +175,8 @@ export function SaveProfile(arg1:desktop.UserProfileInput):Promise<void>;
 
 export function SendStudyMessage(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
+export function SetFolderArchLabEnabled(arg1:string,arg2:boolean):Promise<void>;
+
 export function SetPassScore(arg1:number):Promise<void>;
 
 export function StartAttempt(arg1:string,arg2:string,arg3:boolean):Promise<desktop.AttemptDTO>;

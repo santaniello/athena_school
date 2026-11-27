@@ -604,6 +604,7 @@ export namespace desktop {
 	export class FolderResult {
 	    id: string;
 	    name: string;
+	    archLabEnabled: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new FolderResult(source);
@@ -613,6 +614,7 @@ export namespace desktop {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.name = source["name"];
+	        this.archLabEnabled = source["archLabEnabled"];
 	    }
 	}
 	export class FormattingStatsResult {

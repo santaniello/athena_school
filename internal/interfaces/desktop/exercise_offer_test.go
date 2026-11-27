@@ -154,6 +154,7 @@ func TestApp_AcceptOffer_mapsErrors(t *testing.T) {
 	}{
 		{"unknown offer", domainexercise.ErrOfferNotFound, exerciseCodeOfferNotFound},
 		{"invalid generation", fmt.Errorf("x: %w", applicationexercise.ErrInvalidGeneration), exerciseCodeInvalidGeneration},
+		{"folder with the lab disabled", fmt.Errorf("x: %w", domainexercise.ErrArchLabNotEnabled), exerciseCodeArchLabNotEnabled},
 		{"provider failure", errors.New("provider down"), exerciseCodeInternal},
 	}
 	for _, tt := range tests {
