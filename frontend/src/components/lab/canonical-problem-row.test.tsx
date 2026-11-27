@@ -73,4 +73,16 @@ describe('CanonicalProblemRow', () => {
 
     expect(onHistory).toHaveBeenCalledWith(attempted)
   })
+
+  it('shows the three levels, each with its state, dimming the ones not generated', () => {
+    renderRow(attempted)
+
+    const beginner = screen.getByText('Beginner').parentElement
+    const advanced = screen.getByText('Advanced').parentElement
+    expect(screen.getByText('Intermediate')).toBeInTheDocument()
+    expect(beginner).toHaveAttribute('title', 'Completed')
+    expect(beginner).not.toHaveClass('opacity-40')
+    expect(advanced).toHaveAttribute('title', 'Not generated')
+    expect(advanced).toHaveClass('opacity-40')
+  })
 })

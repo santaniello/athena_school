@@ -1,5 +1,6 @@
+import { DifficultyBadge } from '@/components/difficulty-badge'
 import { Button } from '@/components/ui/button'
-import { generatedCount, type CanonicalProblem } from '@/lib/exercise'
+import { difficultyStateLabel, generatedCount, type CanonicalProblem } from '@/lib/exercise'
 import { useTranslation } from 'react-i18next'
 
 interface CanonicalProblemRowProps {
@@ -35,6 +36,18 @@ function CanonicalProblemRow({ problem, onStart, onHistory }: CanonicalProblemRo
         </p>
       </div>
       <div className="flex flex-wrap items-center justify-end gap-3">
+        <div className="flex items-center gap-1.5">
+          {problem.difficulties.map((state) => (
+            // The level of each challenge of the problem; one not generated yet is dimmed.
+            <span
+              key={state.difficulty}
+              title={difficultyStateLabel(state)}
+              className={state.generated ? undefined : 'opacity-40'}
+            >
+              <DifficultyBadge difficulty={state.difficulty} />
+            </span>
+          ))}
+        </div>
         {problem.hasHistory && (
           <Button type="button" variant="outline" size="sm" onClick={() => onHistory(problem)}>
             {t('common.history')}
