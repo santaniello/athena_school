@@ -11,6 +11,7 @@ import {
 import { ChallengeRow } from '@/components/challenge-row'
 import { AttemptHistoryDialog, type HistoryChallenge } from '@/components/attempt-history-dialog'
 import { GenerateChallengeDialog } from '@/components/generate-challenge-dialog'
+import { CanonicalInterviewTab } from '@/components/lab/canonical-interview-tab'
 import { StartExamDialog, type ExamToStart } from '@/components/lab/start-exam-dialog'
 import { useChallengeCatalog } from '@/hooks/use-challenge-catalog'
 import {
@@ -20,6 +21,7 @@ import {
   difficultyLabel,
   statusLabel,
   listChallengeTopics,
+  type CanonicalProblem,
   type CatalogFilter,
   type ChallengeDifficulty,
   type ChallengeStatus,
@@ -36,14 +38,19 @@ interface ArchitectureLabScreenProps {
 
 const ALL = 'all'
 
-const NO_FILTER = { query: '', status: '', difficulty: '', topic: '' } as const
+const NO_FILTER = { query: '', status: '', difficulty: '', topic: '', kind: 'PRACTICE' } as const
 
-// The Architecture Lab's entry screen: the user's challenges with search,
-// filters and progress at a glance, plus the Generate challenge with AI
-// action. Everything shown, statuses and counts included, comes from the
-// backend. Start opens the exam rules; confirming them hands the challenge to
-// the shell. See specs/phases/phase-03-architecture-lab/07-challenge-catalog-ui.md
-// and 10-diagram-workspace.md.
+type Tab = 'INTERVIEW' | 'PRACTICE'
+
+// The Architecture Lab's entry screen, in two tabs. Interview lists the
+// canonical problems, with no study session involved. Practice lists the
+// user's practice challenges with search, filters and progress at a glance,
+// plus the Generate practice action. Everything shown, statuses and counts
+// included, comes from the backend. Start opens the exam rules; confirming
+// them hands the challenge to the shell. See
+// specs/phases/phase-03-architecture-lab/07-challenge-catalog-ui.md,
+// 10-diagram-workspace.md and
+// specs/phases/phase-07-improve-arch-lab/03-canonical-interviews.md.
 function ArchitectureLabScreen({ experienceLevel, onStartExam }: ArchitectureLabScreenProps) {
   const { t } = useTranslation()
   const [filter, setFilter] = useState<Required<CatalogFilter>>({ ...NO_FILTER })
@@ -53,8 +60,10 @@ function ArchitectureLabScreen({ experienceLevel, onStartExam }: ArchitectureLab
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const [pendingExam, setPendingExam] = useState<ExamToStart | null>(null)
   const [historyOf, setHistoryOf] = useState<HistoryChallenge | null>(null)
+  const [tab, setTab] = useState<Tab>('INTERVIEW')
 
-  const filtersActive = Object.values(filter).some((value) => value !== '')
+  const filtersActive =
+    filter.query !== '' || filter.status !== '' || filter.difficulty !== '' || filter.topic !== ''
 
   function loadTopics() {
     listChallengeTopics()
@@ -87,98 +96,128 @@ function ArchitectureLabScreen({ experienceLevel, onStartExam }: ArchitectureLab
 
   return (
     <div className="flex min-h-0 w-full flex-col gap-4">
-      <div className="flex items-center justify-between gap-4">
-        {catalog ? (
-          <p className="flex gap-4 text-sm text-muted-foreground">
-            <span>{t('catalog.challenges', { count: catalog.total })}</span>
-            <span>{t('catalog.completed', { count: catalog.completed })}</span>
-            <span>{t('catalog.inProgress', { count: catalog.inProgress })}</span>
-          </p>
-        ) : (
-          <span />
-        )}
-        <Button type="button" onClick={() => setDialogOpen(true)}>
-          {t('catalog.generate')}
-        </Button>
+      <div role="tablist" aria-label={t('canonical.tabsLabel')} className="flex gap-1">
+        {(['INTERVIEW', 'PRACTICE'] as const).map((value) => (
+          <Button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={tab === value}
+            variant={tab === value ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setTab(value)}
+          >
+            {value === 'INTERVIEW' ? t('canonical.interviewTab') : t('canonical.practiceTab')}
+          </Button>
+        ))}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
-          type="search"
-          aria-label={t('catalog.searchLabel')}
-          placeholder={t('catalog.searchPlaceholder')}
-          className="max-w-64"
-          value={filter.query}
-          onChange={(event) => setFilter({ ...filter, query: event.target.value })}
-        />
-        <FilterSelect
-          label={t('catalog.status')}
-          allLabel={t('catalog.allStatuses')}
-          value={filter.status}
-          options={CHALLENGE_STATUSES.map((value): [ChallengeStatus, string] => [
-            value,
-            statusLabel(value),
-          ])}
-          onChange={(status) => setFilter({ ...filter, status })}
-        />
-        <FilterSelect
-          label={t('catalog.difficulty')}
-          allLabel={t('catalog.allDifficulties')}
-          value={filter.difficulty}
-          options={CHALLENGE_DIFFICULTIES.map((value): [ChallengeDifficulty, string] => [
-            value,
-            difficultyLabel(value),
-          ])}
-          onChange={(difficulty) => setFilter({ ...filter, difficulty })}
-        />
-        <FilterSelect
-          label={t('catalog.topic')}
-          allLabel={t('catalog.allTopics')}
-          value={filter.topic}
-          options={topics.map((topic): [string, string] => [topic, topic])}
-          onChange={(topic) => setFilter({ ...filter, topic })}
-        />
-      </div>
-
-      <div className="thin-scroll min-h-0 flex-1 overflow-y-auto">
-        {error ? (
-          <div role="alert" className="flex items-center gap-3 text-sm">
-            <span className="text-destructive">{error}</span>
-            <Button type="button" variant="outline" size="sm" onClick={reload}>
-              {t('common.retry')}
-            </Button>
-          </div>
-        ) : !catalog && loading ? (
-          <p className="text-sm text-muted-foreground">{t('catalog.loading')}</p>
-        ) : items.length > 0 ? (
-          <ul className="divide-y divide-border rounded-lg border border-border">
-            {items.map((item) => (
-              <ChallengeRow
-                key={item.id}
-                item={item}
-                highlighted={item.id === highlightedId}
-                onStart={setPendingExam}
-                onHistory={setHistoryOf}
-              />
-            ))}
-          </ul>
-        ) : filtersActive ? (
-          <div className="flex flex-col items-center gap-2 py-10 text-center">
-            <p className="text-sm text-muted-foreground">{t('catalog.noMatch')}</p>
-            <Button type="button" variant="outline" onClick={() => setFilter({ ...NO_FILTER })}>
-              {t('catalog.clearFilters')}
-            </Button>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-2 py-10 text-center">
-            <p className="text-sm font-semibold text-foreground">{t('catalog.emptyTitle')}</p>
-            <p className="max-w-80 text-sm text-muted-foreground">{t('catalog.emptyBody')}</p>
+      {tab === 'INTERVIEW' ? (
+        <div className="thin-scroll min-h-0 flex-1 overflow-y-auto">
+          <CanonicalInterviewTab
+            experienceLevel={experienceLevel}
+            onReady={setPendingExam}
+            onHistory={(problem: CanonicalProblem) =>
+              setHistoryOf({ id: problem.id, title: problem.name, canonical: true })
+            }
+          />
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center justify-between gap-4">
+            {catalog ? (
+              <p className="flex gap-4 text-sm text-muted-foreground">
+                <span>{t('catalog.challenges', { count: catalog.total })}</span>
+                <span>{t('catalog.completed', { count: catalog.completed })}</span>
+                <span>{t('catalog.inProgress', { count: catalog.inProgress })}</span>
+              </p>
+            ) : (
+              <span />
+            )}
             <Button type="button" onClick={() => setDialogOpen(true)}>
-              {t('catalog.generateFirst')}
+              {t('catalog.generate')}
             </Button>
           </div>
-        )}
-      </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              type="search"
+              aria-label={t('catalog.searchLabel')}
+              placeholder={t('catalog.searchPlaceholder')}
+              className="max-w-64"
+              value={filter.query}
+              onChange={(event) => setFilter({ ...filter, query: event.target.value })}
+            />
+            <FilterSelect
+              label={t('catalog.status')}
+              allLabel={t('catalog.allStatuses')}
+              value={filter.status}
+              options={CHALLENGE_STATUSES.map((value): [ChallengeStatus, string] => [
+                value,
+                statusLabel(value),
+              ])}
+              onChange={(status) => setFilter({ ...filter, status })}
+            />
+            <FilterSelect
+              label={t('catalog.difficulty')}
+              allLabel={t('catalog.allDifficulties')}
+              value={filter.difficulty}
+              options={CHALLENGE_DIFFICULTIES.map((value): [ChallengeDifficulty, string] => [
+                value,
+                difficultyLabel(value),
+              ])}
+              onChange={(difficulty) => setFilter({ ...filter, difficulty })}
+            />
+            <FilterSelect
+              label={t('catalog.topic')}
+              allLabel={t('catalog.allTopics')}
+              value={filter.topic}
+              options={topics.map((topic): [string, string] => [topic, topic])}
+              onChange={(topic) => setFilter({ ...filter, topic })}
+            />
+          </div>
+
+          <div className="thin-scroll min-h-0 flex-1 overflow-y-auto">
+            {error ? (
+              <div role="alert" className="flex items-center gap-3 text-sm">
+                <span className="text-destructive">{error}</span>
+                <Button type="button" variant="outline" size="sm" onClick={reload}>
+                  {t('common.retry')}
+                </Button>
+              </div>
+            ) : !catalog && loading ? (
+              <p className="text-sm text-muted-foreground">{t('catalog.loading')}</p>
+            ) : items.length > 0 ? (
+              <ul className="divide-y divide-border rounded-lg border border-border">
+                {items.map((item) => (
+                  <ChallengeRow
+                    key={item.id}
+                    item={item}
+                    highlighted={item.id === highlightedId}
+                    onStart={setPendingExam}
+                    onHistory={setHistoryOf}
+                  />
+                ))}
+              </ul>
+            ) : filtersActive ? (
+              <div className="flex flex-col items-center gap-2 py-10 text-center">
+                <p className="text-sm text-muted-foreground">{t('catalog.noMatch')}</p>
+                <Button type="button" variant="outline" onClick={() => setFilter({ ...NO_FILTER })}>
+                  {t('catalog.clearFilters')}
+                </Button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-2 py-10 text-center">
+                <p className="text-sm font-semibold text-foreground">{t('catalog.emptyTitle')}</p>
+                <p className="max-w-80 text-sm text-muted-foreground">{t('catalog.emptyBody')}</p>
+                <Button type="button" onClick={() => setDialogOpen(true)}>
+                  {t('catalog.generateFirst')}
+                </Button>
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       <GenerateChallengeDialog
         open={dialogOpen}

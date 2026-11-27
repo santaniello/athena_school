@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	exercisemocks "github.com/santaniello/athena/internal/application/exercise/mocks"
 	domainexercise "github.com/santaniello/athena/internal/domain/exercise"
 	domainmocks "github.com/santaniello/athena/internal/domain/exercise/mocks"
 )
@@ -18,6 +19,7 @@ type catalogFixture struct {
 	service    *CatalogService
 	challenges *domainmocks.MockChallengeRepository
 	records    *domainmocks.MockAttemptRecordRepository
+	profiles   *exercisemocks.MockProfileReader
 }
 
 func newCatalogFixture(t *testing.T) *catalogFixture {
@@ -25,8 +27,9 @@ func newCatalogFixture(t *testing.T) *catalogFixture {
 	f := &catalogFixture{
 		challenges: domainmocks.NewMockChallengeRepository(t),
 		records:    domainmocks.NewMockAttemptRecordRepository(t),
+		profiles:   exercisemocks.NewMockProfileReader(t),
 	}
-	f.service = NewCatalogService(f.challenges, f.records)
+	f.service = NewCatalogService(f.challenges, f.records, f.profiles)
 	return f
 }
 
@@ -325,4 +328,131 @@ func TestCatalogService_ListCatalog_carriesTheKindAndTheUntimedLimit(t *testing.
 	assert.Equal(t, 0, catalog.Items[0].TimeLimitMinutes)
 	assert.Equal(t, domainexercise.ChallengeKindInterview, catalog.Items[1].Kind)
 	assert.Equal(t, 45, catalog.Items[1].TimeLimitMinutes)
+}
+
+func canonicalChallenge(id, problemID string, difficulty domainexercise.Difficulty) domainexercise.Challenge {
+	return domainexercise.Challenge{
+		ID: id, Kind: domainexercise.ChallengeKindInterview, Title: "t", Topic: "x", Difficulty: difficulty,
+		CanonicalProblemID: problemID, Scenario: "secret scenario",
+	}
+}
+
+func TestCatalogService_ListCatalog_filtersByKindInScopeAndSearch(t *testing.T) {
+	// Given a practice-only catalog with a text search
+	f := newCatalogFixture(t)
+	scope := domainexercise.ChallengeFilter{Kind: domainexercise.ChallengeKindPractice}
+	search := domainexercise.ChallengeFilter{Query: "cache", Kind: domainexercise.ChallengeKindPractice}
+	practice := catalogChallenge("c1", "Cache practice")
+	f.expectScope(scope, practice)
+	f.expectScope(search, practice)
+	f.records.EXPECT().ListByChallenges(context.Background(), []string{"c1"}).Return(nil, nil)
+
+	// When listing it
+	catalog, err := f.service.ListCatalog(context.Background(), CatalogFilter{Kind: domainexercise.ChallengeKindPractice, Query: "cache"})
+
+	// Then the kind is part of both repository filters
+	require.NoError(t, err)
+	require.Len(t, catalog.Items, 1)
+}
+
+func TestCatalogService_ListCanonicalProblems_listsEverySixProblemsInOrderWithNoChallengeGenerated(t *testing.T) {
+	// Given a fresh install: no canonical challenge exists and the profile is Portuguese
+	f := newCatalogFixture(t)
+	ctx := context.Background()
+	f.profiles.EXPECT().ReadProfile(ctx).Return(domainexercise.GenerationProfile{Language: "pt"}, nil)
+	f.challenges.EXPECT().ListCanonical(ctx).Return(nil, nil)
+
+	// When listing the problems (no attempt read is needed: strict mocks)
+	items, err := f.service.ListCanonicalProblems(ctx)
+
+	// Then all six come in order, named in the assistant language, with nothing generated
+	require.NoError(t, err)
+	require.Len(t, items, 6)
+	assert.Equal(t, "url-shortener", items[0].ID)
+	assert.Equal(t, "Encurtador de URL", items[0].Name)
+	assert.Equal(t, "Encurte URLs longas e redirecione os links curtos.", items[0].Summary)
+	assert.Equal(t, 0, items[0].Attempts)
+	assert.False(t, items[0].HasHistory)
+	assert.Equal(t, []DifficultyState{
+		{Difficulty: domainexercise.DifficultyBeginner},
+		{Difficulty: domainexercise.DifficultyIntermediate},
+		{Difficulty: domainexercise.DifficultyAdvanced},
+	}, items[0].Difficulties)
+}
+
+func TestCatalogService_ListCanonicalProblems_derivesTheStatusAndCountsOfEachDifficulty(t *testing.T) {
+	// Given a problem with a passed beginner challenge (two attempts, one finished) and an untouched advanced one
+	f := newCatalogFixture(t)
+	ctx := context.Background()
+	f.profiles.EXPECT().ReadProfile(ctx).Return(domainexercise.GenerationProfile{Language: "en"}, nil)
+	beginner := canonicalChallenge("c-b", "rate-limiter", domainexercise.DifficultyBeginner)
+	advanced := canonicalChallenge("c-a", "rate-limiter", domainexercise.DifficultyAdvanced)
+	f.challenges.EXPECT().ListCanonical(ctx).Return([]domainexercise.Challenge{beginner, advanced}, nil)
+	f.records.EXPECT().ListByChallenges(ctx, []string{"c-b", "c-a"}).Return(map[string][]domainexercise.AttemptRecord{
+		"c-b": {recordIn(domainexercise.AttemptInProgress), passedRecord(88)},
+	}, nil)
+
+	// When listing the problems
+	items, err := f.service.ListCanonicalProblems(ctx)
+
+	// Then the status is derived in the backend and the totals follow the attempts
+	require.NoError(t, err)
+	limiter := items[1]
+	assert.Equal(t, "rate-limiter", limiter.ID)
+	assert.Equal(t, "Rate limiter", limiter.Name)
+	assert.Equal(t, 2, limiter.Attempts)
+	assert.True(t, limiter.HasHistory)
+	assert.Equal(t, []DifficultyState{
+		{Difficulty: domainexercise.DifficultyBeginner, Generated: true, ChallengeID: "c-b", Status: domainexercise.ProgressCompleted},
+		{Difficulty: domainexercise.DifficultyIntermediate},
+		{Difficulty: domainexercise.DifficultyAdvanced, Generated: true, ChallengeID: "c-a", Status: domainexercise.ProgressNotStarted},
+	}, limiter.Difficulties)
+	assert.False(t, items[0].HasHistory)
+}
+
+func TestCatalogService_ListCanonicalProblems_hasNoHistoryWhileEveryAttemptIsUnfinished(t *testing.T) {
+	f := newCatalogFixture(t)
+	ctx := context.Background()
+	f.profiles.EXPECT().ReadProfile(ctx).Return(domainexercise.GenerationProfile{Language: "en"}, nil)
+	f.challenges.EXPECT().ListCanonical(ctx).Return([]domainexercise.Challenge{canonicalChallenge("c1", "url-shortener", domainexercise.DifficultyBeginner)}, nil)
+	f.records.EXPECT().ListByChallenges(ctx, []string{"c1"}).Return(map[string][]domainexercise.AttemptRecord{
+		"c1": {recordIn(domainexercise.AttemptInProgress)},
+	}, nil)
+
+	items, err := f.service.ListCanonicalProblems(ctx)
+
+	require.NoError(t, err)
+	assert.False(t, items[0].HasHistory)
+	assert.Equal(t, 1, items[0].Attempts)
+}
+
+func TestCatalogService_ListCanonicalProblems_failsWhenAReadFails(t *testing.T) {
+	boom := errors.New("boom")
+	t.Run("profile", func(t *testing.T) {
+		f := newCatalogFixture(t)
+		f.profiles.EXPECT().ReadProfile(context.Background()).Return(domainexercise.GenerationProfile{}, boom)
+
+		_, err := f.service.ListCanonicalProblems(context.Background())
+
+		assert.ErrorIs(t, err, boom)
+	})
+	t.Run("challenges", func(t *testing.T) {
+		f := newCatalogFixture(t)
+		f.profiles.EXPECT().ReadProfile(context.Background()).Return(domainexercise.GenerationProfile{}, nil)
+		f.challenges.EXPECT().ListCanonical(context.Background()).Return(nil, boom)
+
+		_, err := f.service.ListCanonicalProblems(context.Background())
+
+		assert.ErrorIs(t, err, boom)
+	})
+	t.Run("attempts", func(t *testing.T) {
+		f := newCatalogFixture(t)
+		f.profiles.EXPECT().ReadProfile(context.Background()).Return(domainexercise.GenerationProfile{}, nil)
+		f.challenges.EXPECT().ListCanonical(context.Background()).Return([]domainexercise.Challenge{canonicalChallenge("c1", "url-shortener", domainexercise.DifficultyBeginner)}, nil)
+		f.records.EXPECT().ListByChallenges(context.Background(), []string{"c1"}).Return(nil, boom)
+
+		_, err := f.service.ListCanonicalProblems(context.Background())
+
+		assert.ErrorIs(t, err, boom)
+	})
 }

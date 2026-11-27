@@ -225,7 +225,7 @@ func main() {
 		sqlite.NewEvaluationRepository(db), sqlite.NewDefenseRepository(db), sqlite.NewHintRepository(db),
 	)
 
-	challengeCatalog := applicationexercise.NewCatalogService(challengeRepo, sqlite.NewAttemptRecordRepository(db))
+	challengeCatalog := applicationexercise.NewCatalogService(challengeRepo, sqlite.NewAttemptRecordRepository(db), exercisesource.NewProfiles(profiles))
 	sessionService := applicationexercise.NewSessionService(sqlite.NewSessionOptionRepository(db))
 
 	progressService := applicationprogress.NewService(

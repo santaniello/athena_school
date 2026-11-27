@@ -77,6 +77,24 @@ describe('useChallengeCatalog', () => {
     expect(listChallengeCatalog).toHaveBeenLastCalledWith({ query: 'two' })
   })
 
+  it('loads again when only the kind changes', async () => {
+    // Given a hook showing the practice catalog
+    vi.mocked(listChallengeCatalog)
+      .mockResolvedValueOnce(catalogOf('c1'))
+      .mockResolvedValueOnce(catalogOf('c2'))
+    const { result, rerender } = renderHook(({ kind }) => useChallengeCatalog({ kind }), {
+      initialProps: { kind: 'PRACTICE' as const },
+    })
+    await waitFor(() => expect(result.current.catalog).toEqual(catalogOf('c1')))
+
+    // When the kind changes
+    rerender({ kind: '' as never })
+
+    // Then the catalog is read again for it
+    await waitFor(() => expect(result.current.catalog).toEqual(catalogOf('c2')))
+    expect(listChallengeCatalog).toHaveBeenLastCalledWith({ kind: '' })
+  })
+
   it('does not load again when it re-renders with an equal filter', async () => {
     // Given a hook that loaded once
     vi.mocked(listChallengeCatalog).mockClear()

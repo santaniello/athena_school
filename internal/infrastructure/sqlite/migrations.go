@@ -256,6 +256,13 @@ var migrations = []func(*sql.DB) error{
 	// from. Challenges stored before it existed open blank. See
 	// specs/phases/phase-03-architecture-lab/19-practice-starter-diagram.md.
 	addChallengesStarterDiagramColumn,
+	// challenges.canonical_problem_id names the canonical problem a generated
+	// interview is about; empty for everything else. The partial unique index
+	// keeps one challenge per problem and difficulty even when two generations
+	// race. See specs/phases/phase-07-improve-arch-lab/03-canonical-interviews.md.
+	addChallengesCanonicalProblemColumn,
+	execSQL(`CREATE UNIQUE INDEX IF NOT EXISTS idx_challenges_canonical
+		ON challenges(canonical_problem_id, difficulty) WHERE canonical_problem_id <> ''`),
 	execSQL(`CREATE TABLE IF NOT EXISTS defense_turns (
 		id           TEXT PRIMARY KEY,
 		attempt_id   TEXT NOT NULL REFERENCES challenge_attempts(id),
@@ -543,6 +550,21 @@ func addChallengesStarterDiagramColumn(db *sql.DB) error {
 		return nil
 	}
 	_, err = db.Exec(`ALTER TABLE challenges ADD COLUMN starter_diagram TEXT NOT NULL DEFAULT ''`)
+	return err
+}
+
+// addChallengesCanonicalProblemColumn adds challenges.canonical_problem_id if
+// it does not already exist (SQLite has no "ADD COLUMN IF NOT EXISTS").
+// Stored challenges get an empty one.
+func addChallengesCanonicalProblemColumn(db *sql.DB) error {
+	has, err := hasColumn(db, "challenges", "canonical_problem_id")
+	if err != nil {
+		return err
+	}
+	if has {
+		return nil
+	}
+	_, err = db.Exec(`ALTER TABLE challenges ADD COLUMN canonical_problem_id TEXT NOT NULL DEFAULT ''`)
 	return err
 }
 

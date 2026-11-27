@@ -69,6 +69,64 @@ func (_c *MockChallengeRepository_Create_Call) RunAndReturn(run func(context.Con
 	return _c
 }
 
+// FindCanonical provides a mock function with given fields: ctx, problemID, difficulty
+func (_m *MockChallengeRepository) FindCanonical(ctx context.Context, problemID string, difficulty exercise.Difficulty) (exercise.Challenge, error) {
+	ret := _m.Called(ctx, problemID, difficulty)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindCanonical")
+	}
+
+	var r0 exercise.Challenge
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, exercise.Difficulty) (exercise.Challenge, error)); ok {
+		return rf(ctx, problemID, difficulty)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string, exercise.Difficulty) exercise.Challenge); ok {
+		r0 = rf(ctx, problemID, difficulty)
+	} else {
+		r0 = ret.Get(0).(exercise.Challenge)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string, exercise.Difficulty) error); ok {
+		r1 = rf(ctx, problemID, difficulty)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockChallengeRepository_FindCanonical_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindCanonical'
+type MockChallengeRepository_FindCanonical_Call struct {
+	*mock.Call
+}
+
+// FindCanonical is a helper method to define mock.On call
+//   - ctx context.Context
+//   - problemID string
+//   - difficulty exercise.Difficulty
+func (_e *MockChallengeRepository_Expecter) FindCanonical(ctx interface{}, problemID interface{}, difficulty interface{}) *MockChallengeRepository_FindCanonical_Call {
+	return &MockChallengeRepository_FindCanonical_Call{Call: _e.mock.On("FindCanonical", ctx, problemID, difficulty)}
+}
+
+func (_c *MockChallengeRepository_FindCanonical_Call) Run(run func(ctx context.Context, problemID string, difficulty exercise.Difficulty)) *MockChallengeRepository_FindCanonical_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(exercise.Difficulty))
+	})
+	return _c
+}
+
+func (_c *MockChallengeRepository_FindCanonical_Call) Return(_a0 exercise.Challenge, _a1 error) *MockChallengeRepository_FindCanonical_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockChallengeRepository_FindCanonical_Call) RunAndReturn(run func(context.Context, string, exercise.Difficulty) (exercise.Challenge, error)) *MockChallengeRepository_FindCanonical_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // FindLatestBySourceSession provides a mock function with given fields: ctx, sessionID
 func (_m *MockChallengeRepository) FindLatestBySourceSession(ctx context.Context, sessionID string) (exercise.Challenge, error) {
 	ret := _m.Called(ctx, sessionID)
@@ -237,6 +295,64 @@ func (_c *MockChallengeRepository_List_Call) Return(_a0 exercise.ChallengePage, 
 }
 
 func (_c *MockChallengeRepository_List_Call) RunAndReturn(run func(context.Context, exercise.ChallengeFilter, exercise.Page) (exercise.ChallengePage, error)) *MockChallengeRepository_List_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListCanonical provides a mock function with given fields: ctx
+func (_m *MockChallengeRepository) ListCanonical(ctx context.Context) ([]exercise.Challenge, error) {
+	ret := _m.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListCanonical")
+	}
+
+	var r0 []exercise.Challenge
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context) ([]exercise.Challenge, error)); ok {
+		return rf(ctx)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context) []exercise.Challenge); ok {
+		r0 = rf(ctx)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]exercise.Challenge)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = rf(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockChallengeRepository_ListCanonical_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListCanonical'
+type MockChallengeRepository_ListCanonical_Call struct {
+	*mock.Call
+}
+
+// ListCanonical is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockChallengeRepository_Expecter) ListCanonical(ctx interface{}) *MockChallengeRepository_ListCanonical_Call {
+	return &MockChallengeRepository_ListCanonical_Call{Call: _e.mock.On("ListCanonical", ctx)}
+}
+
+func (_c *MockChallengeRepository_ListCanonical_Call) Run(run func(ctx context.Context)) *MockChallengeRepository_ListCanonical_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context))
+	})
+	return _c
+}
+
+func (_c *MockChallengeRepository_ListCanonical_Call) Return(_a0 []exercise.Challenge, _a1 error) *MockChallengeRepository_ListCanonical_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockChallengeRepository_ListCanonical_Call) RunAndReturn(run func(context.Context) ([]exercise.Challenge, error)) *MockChallengeRepository_ListCanonical_Call {
 	_c.Call.Return(run)
 	return _c
 }

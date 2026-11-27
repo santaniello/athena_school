@@ -121,6 +121,7 @@ vi.mock('@/lib/exercise', async (importOriginal) => {
   return {
     ...original,
     onExerciseOfferResolved: () => () => {},
+    listCanonicalProblems: vi.fn().mockResolvedValue([]),
     listChallengeCatalog: vi.fn().mockResolvedValue({
       total: 1,
       completed: 0,
@@ -505,6 +506,7 @@ describe('AppShell', () => {
 
     // When selecting Architecture Lab
     await user.click(screen.getByRole('button', { name: 'Architecture Lab' }))
+    await user.click(await screen.findByRole('tab', { name: 'Practice' }))
 
     // Then the topbar names the section and the catalog lists the challenges
     expect(screen.getByRole('heading', { name: 'Architecture Lab', level: 1 })).toBeInTheDocument()
@@ -520,10 +522,11 @@ describe('AppShell', () => {
     renderShell()
     await screen.findByText(/Felipe\./)
     await user.click(screen.getByRole('button', { name: 'Architecture Lab' }))
+    await user.click(await screen.findByRole('tab', { name: 'Practice' }))
     await screen.findByText('Rate limiter for a public API')
 
     // When opening the generation dialog
-    await user.click(screen.getByRole('button', { name: 'Generate challenge with AI' }))
+    await user.click(screen.getByRole('button', { name: 'Generate practice' }))
 
     // Then its difficulty selector starts on the profile's level
     expect(await screen.findByRole('combobox', { name: 'Difficulty' })).toHaveTextContent(
@@ -1817,6 +1820,7 @@ describe('AppShell knowledge index lifecycle', () => {
       renderShell()
       await screen.findByText(/Felipe\./)
       await user.click(screen.getByRole('button', { name: 'Architecture Lab' }))
+      await user.click(await screen.findByRole('tab', { name: 'Practice' }))
       await screen.findByText('Rate limiter for a public API')
       await user.click(screen.getByRole('button', { name: 'Start' }))
       await user.click(await screen.findByRole('button', { name: 'Start exam' }))
@@ -1835,6 +1839,7 @@ describe('AppShell knowledge index lifecycle', () => {
 
       await user.click(screen.getByRole('button', { name: 'finish exam' }))
 
+      await user.click(await screen.findByRole('tab', { name: 'Practice' }))
       expect(await screen.findByText('Rate limiter for a public API')).toBeInTheDocument()
       expect(screen.queryByRole('region', { name: 'Exam' })).not.toBeInTheDocument()
       expect(screen.queryByRole('alert')).not.toBeInTheDocument()
@@ -1937,6 +1942,10 @@ describe('AppShell knowledge index lifecycle', () => {
             latest: null,
           },
         ])
+        await user.type(
+          await screen.findByLabelText('What do you want to practice?'),
+          'cache aside',
+        )
         await user.click(await screen.findByRole('button', { name: 'Accept' }))
         await user.click(await screen.findByRole('button', { name: 'Open in Architecture Lab' }))
         await user.click(await screen.findByRole('button', { name: 'Start exam' }))
@@ -1993,6 +2002,7 @@ describe('AppShell knowledge index lifecycle', () => {
         await screen.findByText('Sure, let us practice.')
 
         await user.click(screen.getByRole('button', { name: 'Architecture Lab' }))
+        await user.click(await screen.findByRole('tab', { name: 'Practice' }))
         await user.click(await screen.findByRole('button', { name: 'Start' }))
         await user.click(await screen.findByRole('button', { name: 'Start exam' }))
 

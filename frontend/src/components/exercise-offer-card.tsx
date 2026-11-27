@@ -11,16 +11,13 @@ import {
 } from '@/components/ui/select'
 import {
   CHALLENGE_DIFFICULTIES,
-  CHALLENGE_KINDS,
   acceptOffer,
   declineOffer,
   difficultyLabel,
   exerciseErrorCode,
   exerciseErrorMessage,
-  kindLabel,
   practiceSuggestions,
   type ChallengeDifficulty,
-  type ChallengeKind,
 } from '@/lib/exercise'
 import { useTranslation } from 'react-i18next'
 
@@ -41,11 +38,12 @@ interface ExerciseOfferCardProps {
 // The tutor's exercise offer, under its reply. Accepting may generate a
 // challenge, so the card shows progress and locks both buttons meanwhile; a
 // failure leaves the offer in place with the error, except when the offer is
-// gone, which hands it back to the chat. The user picks the
-// difficulty, starting from the profile's level, and the kind: an interview, or
-// a practice that needs the concept to train. See
-// specs/phases/phase-03-architecture-lab/14-ai-challenge-generation.md and
-// 18-practice-challenges.md.
+// gone, which hands it back to the chat. The offer is always a practice: the
+// user picks the difficulty, starting from the profile's level, and writes the
+// concept to train. See
+// specs/phases/phase-03-architecture-lab/14-ai-challenge-generation.md,
+// 18-practice-challenges.md and
+// specs/phases/phase-07-improve-arch-lab/03-canonical-interviews.md.
 function ExerciseOfferCard({
   offerId,
   defaultDifficulty,
@@ -55,12 +53,10 @@ function ExerciseOfferCard({
   onGone,
 }: ExerciseOfferCardProps) {
   const [difficulty, setDifficulty] = useState(defaultDifficulty)
-  const [kind, setKind] = useState<ChallengeKind>('INTERVIEW')
   const [goal, setGoal] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { t } = useTranslation()
-  const practice = kind === 'PRACTICE'
   const trimmedGoal = goal.trim()
 
   async function run<T>(action: () => Promise<T>, onDone: (result: T) => void) {
@@ -101,53 +97,32 @@ function ExerciseOfferCard({
           </SelectContent>
         </Select>
       </div>
-      <div className="flex items-center gap-2">
-        <span className="text-muted-foreground">{t('generate.type')}</span>
-        <Select
-          value={kind}
+      <div className="flex flex-col gap-2">
+        <label htmlFor={`practice-goal-${offerId}`} className="text-muted-foreground">
+          {t('generate.goal')}
+        </label>
+        <Textarea
+          id={`practice-goal-${offerId}`}
+          value={goal}
           disabled={busy}
-          onValueChange={(value) => setKind(value as ChallengeKind)}
-        >
-          <SelectTrigger aria-label={t('generate.type')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {CHALLENGE_KINDS.map((value) => (
-              <SelectItem key={value} value={value}>
-                {kindLabel(value)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      {practice && (
-        <div className="flex flex-col gap-2">
-          <label htmlFor={`practice-goal-${offerId}`} className="text-muted-foreground">
-            {t('generate.goal')}
-          </label>
-          <Textarea
-            id={`practice-goal-${offerId}`}
-            value={goal}
-            disabled={busy}
-            placeholder={t('generate.goalPlaceholder')}
-            onChange={(event) => setGoal(event.target.value)}
-          />
-          <div className="flex flex-wrap gap-2">
-            {practiceSuggestions(topic).map((suggestion) => (
-              <Button
-                key={suggestion}
-                type="button"
-                size="xs"
-                variant="outline"
-                disabled={busy}
-                onClick={() => setGoal(suggestion)}
-              >
-                {suggestion}
-              </Button>
-            ))}
-          </div>
+          placeholder={t('generate.goalPlaceholder')}
+          onChange={(event) => setGoal(event.target.value)}
+        />
+        <div className="flex flex-wrap gap-2">
+          {practiceSuggestions(topic).map((suggestion) => (
+            <Button
+              key={suggestion}
+              type="button"
+              size="xs"
+              variant="outline"
+              disabled={busy}
+              onClick={() => setGoal(suggestion)}
+            >
+              {suggestion}
+            </Button>
+          ))}
         </div>
-      )}
+      </div>
       {busy && <p className="text-muted-foreground">{t('offer.preparing')}</p>}
       {error && (
         <Alert variant="destructive">
@@ -157,10 +132,10 @@ function ExerciseOfferCard({
       <div className="flex gap-2">
         <Button
           size="sm"
-          disabled={busy || (practice && trimmedGoal === '')}
+          disabled={busy || trimmedGoal === ''}
           onClick={() =>
             void run(
-              () => acceptOffer(offerId, difficulty, kind, practice ? trimmedGoal : ''),
+              () => acceptOffer(offerId, difficulty, trimmedGoal),
               () => onAccepted(),
             )
           }

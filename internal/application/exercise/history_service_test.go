@@ -288,3 +288,62 @@ func statementWithoutStarter() ChallengeStatement {
 	statement.StarterDiagram = ""
 	return statement
 }
+
+func TestHistoryService_ListCanonicalHistory_spansTheDifficultiesNewestFirstWithTheDifficultyOnEach(t *testing.T) {
+	// Given a problem with a beginner and an advanced challenge (and a challenge of another problem), each with a finished attempt
+	f := newHistoryFixture(t)
+	ctx := context.Background()
+	older := fixedNow.Add(time.Hour)
+	newer := fixedNow.Add(48 * time.Hour)
+	f.challenges.EXPECT().ListCanonical(ctx).Return([]domainexercise.Challenge{
+		{ID: "c-b", CanonicalProblemID: "url-shortener", Difficulty: domainexercise.DifficultyBeginner},
+		{ID: "c-other", CanonicalProblemID: "rate-limiter", Difficulty: domainexercise.DifficultyBeginner},
+		{ID: "c-a", CanonicalProblemID: "url-shortener", Difficulty: domainexercise.DifficultyAdvanced},
+	}, nil)
+	beginnerAttempt := finishedAttempt("old", domainexercise.AttemptFinished)
+	advancedAttempt := finishedAttempt("new", domainexercise.AttemptFinished)
+	f.attempts.EXPECT().ListByChallenge(ctx, "c-b").Return([]domainexercise.ChallengeAttempt{beginnerAttempt}, nil)
+	f.attempts.EXPECT().ListByChallenge(ctx, "c-a").Return([]domainexercise.ChallengeAttempt{advancedAttempt}, nil)
+	f.expectEvaluations(ctx, "old", 90, 85, older)
+	f.expectEvaluations(ctx, "new", 60, 95, newer)
+	f.rubrics.EXPECT().Get(ctx, "rubric-2").Return(defenseRubric(), nil)
+
+	// When listing the history of the problem
+	items, err := f.service.ListCanonicalHistory(ctx, "url-shortener")
+
+	// Then the finished attempts of both difficulties come newest first, each with its difficulty
+	require.NoError(t, err)
+	assert.Equal(t, []CanonicalHistoryItem{
+		{AttemptListItem: AttemptListItem{AttemptID: "new", FinishedAt: newer, DiagramScore: 60, UnderstandingScore: 95, Outcome: domainexercise.ResultFailed}, Difficulty: domainexercise.DifficultyAdvanced},
+		{AttemptListItem: AttemptListItem{AttemptID: "old", FinishedAt: older, DiagramScore: 90, UnderstandingScore: 85, Outcome: domainexercise.ResultPassed}, Difficulty: domainexercise.DifficultyBeginner},
+	}, items)
+}
+
+func TestHistoryService_ListCanonicalHistory_noChallengeIsAnEmptyList(t *testing.T) {
+	f := newHistoryFixture(t)
+	ctx := context.Background()
+	f.challenges.EXPECT().ListCanonical(ctx).Return(nil, nil)
+
+	items, err := f.service.ListCanonicalHistory(ctx, "url-shortener")
+
+	require.NoError(t, err)
+	assert.NotNil(t, items)
+	assert.Empty(t, items)
+}
+
+func TestHistoryService_ListCanonicalHistory_failsForAnUnknownProblemOrAFailingStore(t *testing.T) {
+	f := newHistoryFixture(t)
+	ctx := context.Background()
+	boom := errors.New("boom")
+	f.challenges.EXPECT().ListCanonical(ctx).Return(nil, boom).Once()
+	f.challenges.EXPECT().ListCanonical(ctx).Return([]domainexercise.Challenge{{ID: "c1", CanonicalProblemID: "url-shortener"}}, nil).Once()
+	f.attempts.EXPECT().ListByChallenge(ctx, "c1").Return(nil, boom)
+
+	_, unknown := f.service.ListCanonicalHistory(ctx, "nope")
+	_, storeFails := f.service.ListCanonicalHistory(ctx, "url-shortener")
+	_, attemptsFail := f.service.ListCanonicalHistory(ctx, "url-shortener")
+
+	assert.ErrorIs(t, unknown, domainexercise.ErrCanonicalProblemNotFound)
+	assert.ErrorIs(t, storeFails, boom)
+	assert.ErrorIs(t, attemptsFail, boom)
+}

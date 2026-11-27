@@ -16,7 +16,7 @@ import (
 const challengeTimeLayout = "2006-01-02T15:04:05.000000000Z"
 
 const challengeColumns = `id, type, kind, title, scenario, functional_requirements, non_functional_requirements,
-	constraints, objectives, difficulty, topic, source_session_id, origin, time_limit_minutes, defense_questions, starter_diagram, created_at, updated_at`
+	constraints, objectives, difficulty, topic, source_session_id, origin, time_limit_minutes, defense_questions, starter_diagram, canonical_problem_id, created_at, updated_at`
 
 // ChallengeRepository is the SQLite-backed implementation of
 // exercise.ChallengeRepository.
@@ -41,17 +41,58 @@ func (r *ChallengeRepository) Create(ctx context.Context, challenge exercise.Cha
 		sourceSessionID = challenge.SourceSessionID
 	}
 	_, err = execer(ctx, r.db).ExecContext(ctx,
-		`INSERT INTO challenges (`+challengeColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO challenges (`+challengeColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		challenge.ID, string(challenge.Type), string(challenge.Kind), challenge.Title, challenge.Scenario,
 		lists[0], lists[1], lists[2], lists[3],
 		string(challenge.Difficulty), challenge.Topic, sourceSessionID, string(challenge.Origin),
-		challenge.TimeLimitMinutes, challenge.DefenseQuestions, challenge.StarterDiagram,
+		challenge.TimeLimitMinutes, challenge.DefenseQuestions, challenge.StarterDiagram, challenge.CanonicalProblemID,
 		formatChallengeTime(challenge.CreatedAt), formatChallengeTime(challenge.UpdatedAt),
 	)
+	if isUniqueViolation(err, "challenges.canonical_problem_id") {
+		return exercise.ErrCanonicalChallengeExists
+	}
 	if err != nil {
 		return fmt.Errorf("sqlite: creating challenge: %w", err)
 	}
 	return nil
+}
+
+// FindCanonical returns the challenge of the canonical problem and difficulty,
+// or exercise.ErrChallengeNotFound.
+func (r *ChallengeRepository) FindCanonical(ctx context.Context, problemID string, difficulty exercise.Difficulty) (exercise.Challenge, error) {
+	row := execer(ctx, r.db).QueryRowContext(ctx,
+		`SELECT `+challengeColumns+` FROM challenges WHERE canonical_problem_id = ? AND canonical_problem_id <> '' AND difficulty = ?`,
+		problemID, string(difficulty))
+	challenge, err := scanChallenge(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return exercise.Challenge{}, exercise.ErrChallengeNotFound
+	}
+	if err != nil {
+		return exercise.Challenge{}, fmt.Errorf("sqlite: finding canonical challenge: %w", err)
+	}
+	return challenge, nil
+}
+
+// ListCanonical returns every canonical interview, oldest first.
+func (r *ChallengeRepository) ListCanonical(ctx context.Context) ([]exercise.Challenge, error) {
+	rows, err := execer(ctx, r.db).QueryContext(ctx,
+		`SELECT `+challengeColumns+` FROM challenges WHERE canonical_problem_id <> '' ORDER BY created_at, id`)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: listing canonical challenges: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	challenges := []exercise.Challenge{}
+	for rows.Next() {
+		challenge, err := scanChallenge(rows)
+		if err != nil {
+			return nil, fmt.Errorf("sqlite: scanning canonical challenge: %w", err)
+		}
+		challenges = append(challenges, challenge)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sqlite: iterating canonical challenges: %w", err)
+	}
+	return challenges, nil
 }
 
 // Get returns the challenge with the given id, or exercise.ErrChallengeNotFound.
@@ -149,9 +190,11 @@ func (r *ChallengeRepository) List(ctx context.Context, filter exercise.Challeng
 	return exercise.ChallengePage{Items: items, Total: total}, nil
 }
 
-// ListTopics returns the distinct topics of all challenges, alphabetically.
+// ListTopics returns the distinct topics of the challenges that come from a
+// session, alphabetically: the topics of the Practice tab's filter. A
+// canonical interview has none worth filtering by.
 func (r *ChallengeRepository) ListTopics(ctx context.Context) ([]string, error) {
-	rows, err := execer(ctx, r.db).QueryContext(ctx, `SELECT DISTINCT topic FROM challenges ORDER BY topic`)
+	rows, err := execer(ctx, r.db).QueryContext(ctx, `SELECT DISTINCT topic FROM challenges WHERE canonical_problem_id = '' ORDER BY topic`)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: listing challenge topics: %w", err)
 	}
@@ -193,6 +236,10 @@ func challengeWhere(filter exercise.ChallengeFilter) (string, []any) {
 		conditions = append(conditions, `origin = ?`)
 		args = append(args, string(filter.Origin))
 	}
+	if filter.Kind != "" {
+		conditions = append(conditions, `kind = ?`)
+		args = append(args, string(filter.Kind))
+	}
 	if len(conditions) == 0 {
 		return "", args
 	}
@@ -230,7 +277,7 @@ func scanChallenge(row rowScanner) (exercise.Challenge, error) {
 	var sourceSessionID sql.NullString
 	err := row.Scan(
 		&c.ID, &challengeType, &kind, &c.Title, &c.Scenario, &lists[0], &lists[1], &lists[2], &lists[3],
-		&difficulty, &c.Topic, &sourceSessionID, &origin, &c.TimeLimitMinutes, &c.DefenseQuestions, &c.StarterDiagram, &createdAt, &updatedAt,
+		&difficulty, &c.Topic, &sourceSessionID, &origin, &c.TimeLimitMinutes, &c.DefenseQuestions, &c.StarterDiagram, &c.CanonicalProblemID, &createdAt, &updatedAt,
 	)
 	if err != nil {
 		return exercise.Challenge{}, err

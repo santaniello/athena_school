@@ -15,11 +15,13 @@ import (
 type CatalogService struct {
 	challenges domainexercise.ChallengeRepository
 	records    domainexercise.AttemptRecordRepository
+	profiles   ProfileReader
 }
 
-// NewCatalogService creates a CatalogService backed by the given ports.
-func NewCatalogService(challenges domainexercise.ChallengeRepository, records domainexercise.AttemptRecordRepository) *CatalogService {
-	return &CatalogService{challenges: challenges, records: records}
+// NewCatalogService creates a CatalogService backed by the given ports. The
+// profile gives the language the canonical problems are named in.
+func NewCatalogService(challenges domainexercise.ChallengeRepository, records domainexercise.AttemptRecordRepository, profiles ProfileReader) *CatalogService {
+	return &CatalogService{challenges: challenges, records: records, profiles: profiles}
 }
 
 // CatalogItem is one row of the catalog: what does not give the exam away,
@@ -51,6 +53,7 @@ type CatalogFilter struct {
 	Status     domainexercise.ProgressStatus
 	Difficulty domainexercise.Difficulty
 	Topic      string
+	Kind       domainexercise.ChallengeKind // empty lists every kind
 }
 
 // catalogEntry is a challenge in scope with its derived progress.
@@ -64,7 +67,7 @@ type catalogEntry struct {
 // enough to be held in memory. A challenge with an attempt running comes
 // first; the others keep the repository order, most recently updated first.
 func (s *CatalogService) ListCatalog(ctx context.Context, filter CatalogFilter) (Catalog, error) {
-	scope, err := s.listAll(ctx, domainexercise.ChallengeFilter{Topic: filter.Topic, Difficulty: filter.Difficulty})
+	scope, err := s.listAll(ctx, domainexercise.ChallengeFilter{Topic: filter.Topic, Difficulty: filter.Difficulty, Kind: filter.Kind})
 	if err != nil {
 		return Catalog{}, err
 	}
@@ -122,7 +125,7 @@ func (s *CatalogService) matchingQuery(ctx context.Context, filter CatalogFilter
 	if filter.Query == "" {
 		return nil, nil
 	}
-	found, err := s.listAll(ctx, domainexercise.ChallengeFilter{Query: filter.Query, Topic: filter.Topic, Difficulty: filter.Difficulty})
+	found, err := s.listAll(ctx, domainexercise.ChallengeFilter{Query: filter.Query, Topic: filter.Topic, Difficulty: filter.Difficulty, Kind: filter.Kind})
 	if err != nil {
 		return nil, err
 	}
@@ -190,4 +193,106 @@ func deriveEntry(challenge domainexercise.Challenge, records []domainexercise.At
 			Status: progress.Status, Attempts: progress.Attempts, BestDiagramScore: progress.BestDiagramScore,
 		},
 	}, nil
+}
+
+// DifficultyState is one difficulty of a canonical problem: whether its
+// challenge exists yet and, if so, its id and derived status. Status is empty
+// while the challenge is not generated.
+type DifficultyState struct {
+	Difficulty  domainexercise.Difficulty
+	Generated   bool
+	ChallengeID string
+	Status      domainexercise.ProgressStatus
+}
+
+// CanonicalProblemItem is one row of the Interview tab: the problem named in
+// the profile's language, how each difficulty stands, the attempts over all of
+// them and whether any attempt is finished. It never carries a scenario or a
+// rubric.
+type CanonicalProblemItem struct {
+	ID           string
+	Name         string
+	Summary      string
+	Difficulties []DifficultyState
+	Attempts     int
+	HasHistory   bool
+}
+
+var canonicalDifficulties = []domainexercise.Difficulty{
+	domainexercise.DifficultyBeginner, domainexercise.DifficultyIntermediate, domainexercise.DifficultyAdvanced,
+}
+
+// ListCanonicalProblems lists every canonical problem, in the list's order,
+// with the state of each difficulty. It makes no model call and generates
+// nothing: a problem whose challenges do not exist yet is listed too. See
+// specs/phases/phase-07-improve-arch-lab/03-canonical-interviews.md.
+func (s *CatalogService) ListCanonicalProblems(ctx context.Context) ([]CanonicalProblemItem, error) {
+	profile, err := s.profiles.ReadProfile(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("exercise: reading profile: %w", err)
+	}
+	challenges, err := s.challenges.ListCanonical(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("exercise: listing canonical challenges: %w", err)
+	}
+	records, err := s.canonicalRecords(ctx, challenges)
+	if err != nil {
+		return nil, err
+	}
+	problems := domainexercise.CanonicalProblems()
+	items := make([]CanonicalProblemItem, len(problems))
+	for i, problem := range problems {
+		item := CanonicalProblemItem{ID: problem.ID, Name: problem.Name.For(profile.Language), Summary: problem.Summary.For(profile.Language)}
+		for _, difficulty := range canonicalDifficulties {
+			state, err := canonicalDifficultyState(&item, difficulty, challengeOf(challenges, problem.ID, difficulty), records)
+			if err != nil {
+				return nil, err
+			}
+			item.Difficulties = append(item.Difficulties, state)
+		}
+		items[i] = item
+	}
+	return items, nil
+}
+
+func (s *CatalogService) canonicalRecords(ctx context.Context, challenges []domainexercise.Challenge) (map[string][]domainexercise.AttemptRecord, error) {
+	if len(challenges) == 0 {
+		return nil, nil
+	}
+	ids := make([]string, len(challenges))
+	for i, challenge := range challenges {
+		ids[i] = challenge.ID
+	}
+	records, err := s.records.ListByChallenges(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("exercise: reading attempts of challenges: %w", err)
+	}
+	return records, nil
+}
+
+func challengeOf(challenges []domainexercise.Challenge, problemID string, difficulty domainexercise.Difficulty) *domainexercise.Challenge {
+	for i := range challenges {
+		if challenges[i].CanonicalProblemID == problemID && challenges[i].Difficulty == difficulty {
+			return &challenges[i]
+		}
+	}
+	return nil
+}
+
+// canonicalDifficultyState derives the state of one difficulty and adds its
+// attempts to the item's totals.
+func canonicalDifficultyState(item *CanonicalProblemItem, difficulty domainexercise.Difficulty, challenge *domainexercise.Challenge, records map[string][]domainexercise.AttemptRecord) (DifficultyState, error) {
+	if challenge == nil {
+		return DifficultyState{Difficulty: difficulty}, nil
+	}
+	attempts := records[challenge.ID]
+	entry, err := deriveEntry(*challenge, attempts)
+	if err != nil {
+		return DifficultyState{}, err
+	}
+	item.Attempts += entry.item.Attempts
+	item.HasHistory = item.HasHistory || slices.ContainsFunc(attempts, func(record domainexercise.AttemptRecord) bool {
+		return record.Attempt.State == domainexercise.AttemptFinished
+	})
+	return DifficultyState{Difficulty: difficulty, Generated: true, ChallengeID: challenge.ID, Status: entry.item.Status}, nil
 }

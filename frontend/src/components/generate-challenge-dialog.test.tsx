@@ -160,6 +160,7 @@ describe('GenerateChallengeDialog', () => {
     const user = userEvent.setup()
     renderDialog()
     await screen.findAllByRole('radio')
+    await user.type(screen.getByLabelText('What do you want to practice?'), 'cache aside')
     const generate = screen.getByRole('button', { name: 'Generate' })
     expect(generate).toBeDisabled()
 
@@ -185,29 +186,26 @@ describe('GenerateChallengeDialog', () => {
     await user.click(screen.getByRole('combobox', { name: 'Difficulty' }))
     await user.click(await screen.findByRole('option', { name: 'Advanced' }))
 
+    await user.type(screen.getByLabelText('What do you want to practice?'), 'cache aside')
     await user.click(screen.getByRole('button', { name: 'Generate' }))
 
-    expect(generateChallenge).toHaveBeenCalledWith('s-queue', 'ADVANCED', 'INTERVIEW', '')
+    expect(generateChallenge).toHaveBeenCalledWith('s-queue', 'ADVANCED', 'cache aside')
     await waitFor(() => expect(props.onGenerated).toHaveBeenCalledExactlyOnceWith(created))
   })
 
-  it('starts as an interview with no practice goal asked', async () => {
+  it('has no kind choice: it always asks what to practice', async () => {
     renderDialog()
     await screen.findAllByRole('radio')
 
-    expect(screen.getByRole('combobox', { name: 'Type' })).toHaveTextContent('Interview')
-    expect(screen.queryByLabelText('What do you want to practice?')).not.toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: 'Type' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('What do you want to practice?')).toBeInTheDocument()
   })
 
-  it('asks what to practice for a practice, and Generate waits for it', async () => {
+  it('keeps Generate disabled while the goal is blank', async () => {
     const user = userEvent.setup()
     renderDialog()
     await user.click(await screen.findByRole('radio', { name: /Caching/ }))
 
-    await user.click(screen.getByRole('combobox', { name: 'Type' }))
-    await user.click(await screen.findByRole('option', { name: 'Practice' }))
-
-    expect(screen.getByLabelText('What do you want to practice?')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Generate' })).toBeDisabled()
     await user.type(screen.getByLabelText('What do you want to practice?'), '   ')
     expect(screen.getByRole('button', { name: 'Generate' })).toBeDisabled()
@@ -219,13 +217,11 @@ describe('GenerateChallengeDialog', () => {
     vi.mocked(generateChallenge).mockResolvedValueOnce(practice)
     const props = renderDialog({ defaultDifficulty: 'BEGINNER' })
     await user.click(await screen.findByRole('radio', { name: /Caching/ }))
-    await user.click(screen.getByRole('combobox', { name: 'Type' }))
-    await user.click(await screen.findByRole('option', { name: 'Practice' }))
     await user.type(screen.getByLabelText('What do you want to practice?'), '  cache aside ')
 
     await user.click(screen.getByRole('button', { name: 'Generate' }))
 
-    expect(generateChallenge).toHaveBeenCalledWith('s-cache', 'BEGINNER', 'PRACTICE', 'cache aside')
+    expect(generateChallenge).toHaveBeenCalledWith('s-cache', 'BEGINNER', 'cache aside')
     await waitFor(() => expect(props.onGenerated).toHaveBeenCalledExactlyOnceWith(practice))
   })
 
@@ -233,8 +229,6 @@ describe('GenerateChallengeDialog', () => {
     const user = userEvent.setup()
     renderDialog()
     await user.click(await screen.findByRole('radio', { name: /Message queues/ }))
-    await user.click(screen.getByRole('combobox', { name: 'Type' }))
-    await user.click(await screen.findByRole('option', { name: 'Practice' }))
 
     await user.click(screen.getByRole('button', { name: 'Message queues' }))
 
@@ -242,34 +236,15 @@ describe('GenerateChallengeDialog', () => {
     expect(screen.getByRole('button', { name: 'Generate' })).toBeEnabled()
   })
 
-  it('does not send a goal typed before switching back to an interview', async () => {
-    const user = userEvent.setup()
-    vi.mocked(generateChallenge).mockResolvedValueOnce(created)
-    renderDialog()
-    await user.click(await screen.findByRole('radio', { name: /Caching/ }))
-    await user.click(screen.getByRole('combobox', { name: 'Type' }))
-    await user.click(await screen.findByRole('option', { name: 'Practice' }))
-    await user.type(screen.getByLabelText('What do you want to practice?'), 'cache aside')
-    await user.click(screen.getByRole('combobox', { name: 'Type' }))
-    await user.click(await screen.findByRole('option', { name: 'Interview' }))
-
-    await user.click(screen.getByRole('button', { name: 'Generate' }))
-
-    expect(generateChallenge).toHaveBeenCalledWith('s-cache', 'INTERMEDIATE', 'INTERVIEW', '')
-  })
-
-  it('locks the kind and the goal while generating', async () => {
+  it('locks the goal while generating', async () => {
     const user = userEvent.setup()
     vi.mocked(generateChallenge).mockReturnValueOnce(deferred<GeneratedChallenge>().promise)
     renderDialog()
     await user.click(await screen.findByRole('radio', { name: /Caching/ }))
-    await user.click(screen.getByRole('combobox', { name: 'Type' }))
-    await user.click(await screen.findByRole('option', { name: 'Practice' }))
     await user.type(screen.getByLabelText('What do you want to practice?'), 'cache aside')
 
     await user.click(screen.getByRole('button', { name: 'Generate' }))
 
-    expect(screen.getByRole('combobox', { name: 'Type' })).toBeDisabled()
     expect(screen.getByLabelText('What do you want to practice?')).toBeDisabled()
   })
 
@@ -280,6 +255,7 @@ describe('GenerateChallengeDialog', () => {
     vi.mocked(cancelChallengeGeneration).mockResolvedValueOnce()
     const props = renderDialog()
     await user.click(await screen.findByRole('radio', { name: /Caching/ }))
+    await user.type(screen.getByLabelText('What do you want to practice?'), 'cache aside')
     await user.click(screen.getByRole('button', { name: 'Generate' }))
 
     expect(screen.getByRole('status')).toHaveTextContent('Generating the challenge')
@@ -301,6 +277,7 @@ describe('GenerateChallengeDialog', () => {
     vi.mocked(cancelChallengeGeneration).mockResolvedValueOnce()
     const props = renderDialog()
     await user.click(await screen.findByRole('radio', { name: /Caching/ }))
+    await user.type(screen.getByLabelText('What do you want to practice?'), 'cache aside')
     await user.click(screen.getByRole('button', { name: 'Generate' }))
 
     await user.keyboard('{Escape}')
@@ -327,6 +304,7 @@ describe('GenerateChallengeDialog', () => {
       .mockResolvedValueOnce(created)
     const props = renderDialog()
     await user.click(await screen.findByRole('radio', { name: /Caching/ }))
+    await user.type(screen.getByLabelText('What do you want to practice?'), 'cache aside')
     await user.click(screen.getByRole('button', { name: 'Generate' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -348,6 +326,7 @@ describe('GenerateChallengeDialog', () => {
       .mockReturnValueOnce(deferred<GeneratedChallenge>().promise)
     renderDialog()
     await user.click(await screen.findByRole('radio', { name: /Caching/ }))
+    await user.type(screen.getByLabelText('What do you want to practice?'), 'cache aside')
     await user.click(screen.getByRole('button', { name: 'Generate' }))
     await screen.findByRole('alert')
 
@@ -447,6 +426,7 @@ describe('GenerateChallengeDialog', () => {
     vi.mocked(generateChallenge).mockReturnValueOnce(pending.promise)
     const props = renderDialog()
     await user.click(await screen.findByRole('radio', { name: /Caching/ }))
+    await user.type(screen.getByLabelText('What do you want to practice?'), 'cache aside')
     await user.click(screen.getByRole('button', { name: 'Generate' }))
 
     props.unmount()

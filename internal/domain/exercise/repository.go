@@ -10,6 +10,11 @@ import (
 // ErrChallengeNotFound is returned when no challenge matches the given ID.
 var ErrChallengeNotFound = errors.New("challenge not found")
 
+// ErrCanonicalChallengeExists is returned by ChallengeRepository.Create when a
+// challenge already exists for the canonical problem and difficulty, typically
+// because another generation stored it first.
+var ErrCanonicalChallengeExists = errors.New("a challenge already exists for this canonical problem and difficulty")
+
 // Listing page bounds.
 const (
 	DefaultPageLimit = 50
@@ -43,6 +48,7 @@ type ChallengeFilter struct {
 	Topic      string // exact, on the normalized snapshot
 	Difficulty Difficulty
 	Origin     ChallengeOrigin
+	Kind       ChallengeKind
 }
 
 // ChallengePage is one slice of a listing plus the total matching count.
@@ -54,12 +60,19 @@ type ChallengePage struct {
 // ChallengeRepository persists Challenges. Ordering of List is UpdatedAt
 // descending, then ID, so pages are stable.
 type ChallengeRepository interface {
+	// Create returns ErrCanonicalChallengeExists when the challenge is a
+	// canonical interview and one already exists for its problem and difficulty.
 	Create(ctx context.Context, challenge Challenge) error
 	// Get returns the challenge, or ErrChallengeNotFound.
 	Get(ctx context.Context, id string) (Challenge, error)
 	// FindLatestBySourceSession returns the most recently created challenge
 	// whose source session is sessionID, or ErrChallengeNotFound.
 	FindLatestBySourceSession(ctx context.Context, sessionID string) (Challenge, error)
+	// FindCanonical returns the challenge of the canonical problem and
+	// difficulty, or ErrChallengeNotFound.
+	FindCanonical(ctx context.Context, problemID string, difficulty Difficulty) (Challenge, error)
+	// ListCanonical returns every canonical interview, oldest first.
+	ListCanonical(ctx context.Context) ([]Challenge, error)
 	List(ctx context.Context, filter ChallengeFilter, page Page) (ChallengePage, error)
 	// ListTitlesBySourceSession returns the titles of at most limit
 	// challenges of the given kind created from sessionID, newest first. An

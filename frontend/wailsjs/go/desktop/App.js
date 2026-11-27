@@ -6,8 +6,8 @@ export function AcceptMindMapOffer(arg1) {
   return window['go']['desktop']['App']['AcceptMindMapOffer'](arg1);
 }
 
-export function AcceptOffer(arg1, arg2, arg3, arg4) {
-  return window['go']['desktop']['App']['AcceptOffer'](arg1, arg2, arg3, arg4);
+export function AcceptOffer(arg1, arg2, arg3) {
+  return window['go']['desktop']['App']['AcceptOffer'](arg1, arg2, arg3);
 }
 
 export function AcceptQuizOffer(arg1, arg2, arg3) {
@@ -90,8 +90,12 @@ export function EvaluateDefense(arg1) {
   return window['go']['desktop']['App']['EvaluateDefense'](arg1);
 }
 
-export function GenerateChallenge(arg1, arg2, arg3, arg4) {
-  return window['go']['desktop']['App']['GenerateChallenge'](arg1, arg2, arg3, arg4);
+export function GenerateCanonicalChallenge(arg1, arg2) {
+  return window['go']['desktop']['App']['GenerateCanonicalChallenge'](arg1, arg2);
+}
+
+export function GenerateChallenge(arg1, arg2, arg3) {
+  return window['go']['desktop']['App']['GenerateChallenge'](arg1, arg2, arg3);
 }
 
 export function GenerateMindMap(arg1) {
@@ -212,6 +216,14 @@ export function ListAttemptHistory(arg1) {
 
 export function ListAttempts(arg1) {
   return window['go']['desktop']['App']['ListAttempts'](arg1);
+}
+
+export function ListCanonicalHistory(arg1) {
+  return window['go']['desktop']['App']['ListCanonicalHistory'](arg1);
+}
+
+export function ListCanonicalProblems() {
+  return window['go']['desktop']['App']['ListCanonicalProblems']();
 }
 
 export function ListChallengeCatalog(arg1) {

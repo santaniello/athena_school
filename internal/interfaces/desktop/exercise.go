@@ -19,12 +19,15 @@ func WithAttemptService(service *applicationexercise.AttemptService) Option {
 	return func(a *App) { a.exercise = service }
 }
 
-// challengeGenerator is the use case behind GenerateChallenge (spec 3.6.1).
+// challengeGenerator is the use case behind GenerateChallenge (spec 3.6.1) and
+// GenerateCanonicalChallenge (spec 7.3).
 type challengeGenerator interface {
 	GenerateChallenge(ctx context.Context, sessionID string, spec domainexercise.ChallengeSpec) (domainexercise.Challenge, error)
+	GenerateCanonical(ctx context.Context, problemID string, difficulty domainexercise.Difficulty) (domainexercise.Challenge, error)
 }
 
-// WithGenerationService wires challenge generation from a studied session.
+// WithGenerationService wires challenge generation: practice from a studied
+// session and the canonical interviews.
 func WithGenerationService(generator challengeGenerator) Option {
 	return func(a *App) { a.generator = generator }
 }
@@ -33,6 +36,7 @@ func WithGenerationService(generator challengeGenerator) Option {
 type challengeCatalog interface {
 	ListCatalog(ctx context.Context, filter applicationexercise.CatalogFilter) (applicationexercise.Catalog, error)
 	ListTopics(ctx context.Context) ([]string, error)
+	ListCanonicalProblems(ctx context.Context) ([]applicationexercise.CanonicalProblemItem, error)
 }
 
 // WithCatalogService wires the challenge catalog.
@@ -92,6 +96,7 @@ func WithDefenseService(defense defenseRunner) Option {
 type historyReader interface {
 	ListHistory(ctx context.Context, challengeID string) ([]applicationexercise.AttemptListItem, error)
 	GetAttemptResult(ctx context.Context, attemptID string) (applicationexercise.AttemptResultView, error)
+	ListCanonicalHistory(ctx context.Context, problemID string) ([]applicationexercise.CanonicalHistoryItem, error)
 }
 
 // WithHistoryService wires the history and result of finished attempts.
@@ -156,6 +161,7 @@ const (
 	exerciseCodeOfferNotFound        = "offer_not_found"
 	exerciseCodeOfferPending         = "offer_pending"
 	exerciseCodeArchLabNotEnabled    = "arch_lab_not_enabled"
+	exerciseCodeProblemNotFound      = "canonical_problem_not_found"
 	exerciseCodeInternal             = "internal"
 )
 
@@ -232,6 +238,10 @@ func toExerciseError(err error) *ExerciseError {
 		return &ExerciseError{Code: exerciseCodeOfferNotFound, Message: "the exercise offer is no longer pending"}
 	case errors.Is(err, domainexercise.ErrArchLabNotEnabled):
 		return &ExerciseError{Code: exerciseCodeArchLabNotEnabled, Message: "the architecture lab is not enabled for this session's folder"}
+	case errors.Is(err, domainexercise.ErrCanonicalProblemNotFound):
+		return &ExerciseError{Code: exerciseCodeProblemNotFound, Message: "canonical problem not found"}
+	case errors.Is(err, applicationexercise.ErrInterviewNotGeneratedFromSession):
+		return &ExerciseError{Code: exerciseCodeInvalidInput, Message: "an interview is not generated from a session"}
 	case errors.Is(err, domainexercise.ErrOfferPending):
 		return &ExerciseError{Code: exerciseCodeOfferPending, Message: "an exercise offer is already pending"}
 	case errors.Is(err, context.Canceled):
@@ -454,18 +464,18 @@ type ChallengeSummaryDTO struct {
 	TimeLimitMinutes int `json:"timeLimitMinutes"`
 }
 
-// GenerateChallenge asks the AI for a challenge and its rubric from a studied
-// session and saves them to the catalog; it does not start the exam. The kind
-// is INTERVIEW (empty means the same) or PRACTICE, and a practice needs the
-// goal the user wants to practice. A failure stores nothing and may be
-// retried. See specs/phases/phase-03-architecture-lab/06-01-challenge-generation.md
-// and 18-practice-challenges.md.
-func (a *App) GenerateChallenge(sessionID, difficulty, kind, practiceGoal string) (ChallengeSummaryDTO, error) {
+// GenerateChallenge asks the AI for a practice challenge and its rubric from a
+// studied session and saves them to the catalog; it does not start the exam.
+// The practice goal, what the user wants to train, is required. A failure
+// stores nothing and may be retried. See
+// specs/phases/phase-03-architecture-lab/06-01-challenge-generation.md and
+// 18-practice-challenges.md.
+func (a *App) GenerateChallenge(sessionID, difficulty, practiceGoal string) (ChallengeSummaryDTO, error) {
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
 		return ChallengeSummaryDTO{}, invalidInput("session id is required")
 	}
-	spec, err := parseChallengeSpec(difficulty, kind, practiceGoal, false)
+	spec, err := parseChallengeSpec(difficulty, practiceGoal, false)
 	if err != nil {
 		return ChallengeSummaryDTO{}, err
 	}
@@ -478,6 +488,10 @@ func (a *App) GenerateChallenge(sessionID, difficulty, kind, practiceGoal string
 	if err != nil {
 		return ChallengeSummaryDTO{}, toExerciseError(err)
 	}
+	return toChallengeSummaryDTO(challenge), nil
+}
+
+func toChallengeSummaryDTO(challenge domainexercise.Challenge) ChallengeSummaryDTO {
 	return ChallengeSummaryDTO{
 		ID:               challenge.ID,
 		Kind:             string(challenge.Kind),
@@ -485,7 +499,34 @@ func (a *App) GenerateChallenge(sessionID, difficulty, kind, practiceGoal string
 		Topic:            challenge.Topic,
 		Difficulty:       string(challenge.Difficulty),
 		TimeLimitMinutes: challenge.TimeLimitMinutes,
-	}, nil
+	}
+}
+
+// GenerateCanonicalChallenge returns the interview challenge of a canonical
+// problem at a difficulty, generating it with one model call the first time
+// and reusing the stored one afterwards. It does not start the exam. It shares
+// the one-generation-at-a-time slot and CancelChallengeGeneration with the
+// practice generation. A failure stores nothing and may be retried. See
+// specs/phases/phase-07-improve-arch-lab/03-canonical-interviews.md.
+func (a *App) GenerateCanonicalChallenge(problemID, difficulty string) (ChallengeSummaryDTO, error) {
+	problemID = strings.TrimSpace(problemID)
+	if problemID == "" {
+		return ChallengeSummaryDTO{}, invalidInput("problem id is required")
+	}
+	level := domainexercise.Difficulty(strings.TrimSpace(difficulty))
+	if domainexercise.DefaultTimeLimit(level) == 0 {
+		return ChallengeSummaryDTO{}, invalidInput("difficulty must be BEGINNER, INTERMEDIATE or ADVANCED")
+	}
+	ctx, release, ok := a.challengeGeneration.begin(a.ctx)
+	if !ok {
+		return ChallengeSummaryDTO{}, &ExerciseError{Code: exerciseCodeGenerationInProgress, Message: "a challenge is already being generated"}
+	}
+	defer release()
+	challenge, err := a.generator.GenerateCanonical(ctx, problemID, level)
+	if err != nil {
+		return ChallengeSummaryDTO{}, toExerciseError(err)
+	}
+	return toChallengeSummaryDTO(challenge), nil
 }
 
 // CatalogFilterDTO is the catalog filter the frontend sends. Empty fields do
@@ -495,6 +536,8 @@ type CatalogFilterDTO struct {
 	Status     string `json:"status"`
 	Difficulty string `json:"difficulty"`
 	Topic      string `json:"topic"`
+	// Kind limits the catalog to INTERVIEW or PRACTICE challenges; empty lists both.
+	Kind string `json:"kind"`
 }
 
 // ChallengeCatalogItemDTO is one catalog row. It deliberately has no scenario,
@@ -539,8 +582,12 @@ func (a *App) ListChallengeCatalog(filter CatalogFilterDTO) (ChallengeCatalogDTO
 	if difficulty != "" && domainexercise.DefaultTimeLimit(difficulty) == 0 {
 		return ChallengeCatalogDTO{}, invalidInput("difficulty must be BEGINNER, INTERMEDIATE or ADVANCED")
 	}
+	kind := domainexercise.ChallengeKind(filter.Kind)
+	if kind != "" && kind != domainexercise.ChallengeKindInterview && kind != domainexercise.ChallengeKindPractice {
+		return ChallengeCatalogDTO{}, invalidInput("kind must be INTERVIEW or PRACTICE")
+	}
 	catalog, err := a.catalog.ListCatalog(a.ctx, applicationexercise.CatalogFilter{
-		Query: strings.TrimSpace(filter.Query), Status: status, Difficulty: difficulty, Topic: strings.TrimSpace(filter.Topic),
+		Query: strings.TrimSpace(filter.Query), Status: status, Difficulty: difficulty, Topic: strings.TrimSpace(filter.Topic), Kind: kind,
 	})
 	if err != nil {
 		return ChallengeCatalogDTO{}, toExerciseError(err)
@@ -566,6 +613,50 @@ func isCatalogStatus(status domainexercise.ProgressStatus) bool {
 		return true
 	}
 	return false
+}
+
+// DifficultyStateDTO is one difficulty of a canonical problem. Status is empty
+// while the challenge is not generated.
+type DifficultyStateDTO struct {
+	Difficulty  string `json:"difficulty"`
+	Generated   bool   `json:"generated"`
+	ChallengeID string `json:"challengeId"`
+	Status      string `json:"status"`
+}
+
+// CanonicalProblemDTO is one row of the Interview tab. Like every catalog row
+// it has no scenario, requirements or rubric. Name and Summary are in the
+// profile's language.
+type CanonicalProblemDTO struct {
+	ID           string               `json:"id"`
+	Name         string               `json:"name"`
+	Summary      string               `json:"summary"`
+	Difficulties []DifficultyStateDTO `json:"difficulties"`
+	Attempts     int                  `json:"attempts"`
+	HasHistory   bool                 `json:"hasHistory"`
+}
+
+// ListCanonicalProblems lists the canonical interview problems with the state
+// of each difficulty. It makes no model call and generates nothing.
+func (a *App) ListCanonicalProblems() ([]CanonicalProblemDTO, error) {
+	items, err := a.catalog.ListCanonicalProblems(a.ctx)
+	if err != nil {
+		return nil, toExerciseError(err)
+	}
+	dtos := make([]CanonicalProblemDTO, 0, len(items))
+	for _, item := range items {
+		dto := CanonicalProblemDTO{
+			ID: item.ID, Name: item.Name, Summary: item.Summary, Attempts: item.Attempts, HasHistory: item.HasHistory,
+			Difficulties: make([]DifficultyStateDTO, 0, len(item.Difficulties)),
+		}
+		for _, state := range item.Difficulties {
+			dto.Difficulties = append(dto.Difficulties, DifficultyStateDTO{
+				Difficulty: string(state.Difficulty), Generated: state.Generated, ChallengeID: state.ChallengeID, Status: string(state.Status),
+			})
+		}
+		dtos = append(dtos, dto)
+	}
+	return dtos, nil
 }
 
 // ListChallengeTopics returns the distinct topics present in the catalog, for
@@ -928,6 +1019,39 @@ func (a *App) ListAttemptHistory(challengeID string) ([]AttemptHistoryItemDTO, e
 	return dtos, nil
 }
 
+// CanonicalHistoryItemDTO is one finished attempt in the history of a
+// canonical problem, which spans its difficulties. FinishedAt is RFC 3339.
+type CanonicalHistoryItemDTO struct {
+	AttemptID          string `json:"attemptId"`
+	Difficulty         string `json:"difficulty"`
+	FinishedAt         string `json:"finishedAt"`
+	DiagramScore       int    `json:"diagramScore"`
+	UnderstandingScore int    `json:"understandingScore"`
+	Outcome            string `json:"outcome"`
+}
+
+// ListCanonicalHistory returns the finished attempts of every difficulty of a
+// canonical problem, newest first. Opening one is the usual result view. See
+// specs/phases/phase-07-improve-arch-lab/03-canonical-interviews.md.
+func (a *App) ListCanonicalHistory(problemID string) ([]CanonicalHistoryItemDTO, error) {
+	problemID = strings.TrimSpace(problemID)
+	if problemID == "" {
+		return nil, invalidInput("problem id is required")
+	}
+	items, err := a.history.ListCanonicalHistory(a.ctx, problemID)
+	if err != nil {
+		return nil, toExerciseError(err)
+	}
+	dtos := make([]CanonicalHistoryItemDTO, 0, len(items))
+	for _, item := range items {
+		dtos = append(dtos, CanonicalHistoryItemDTO{
+			AttemptID: item.AttemptID, Difficulty: string(item.Difficulty), FinishedAt: item.FinishedAt.Format(time.RFC3339),
+			DiagramScore: item.DiagramScore, UnderstandingScore: item.UnderstandingScore, Outcome: string(item.Outcome),
+		})
+	}
+	return dtos, nil
+}
+
 // ResultChallengeDTO is the challenge as a finished attempt answered it, with
 // the statement the exam showed.
 type ResultChallengeDTO struct {
@@ -1046,17 +1170,16 @@ func (a *App) GetPendingOffer(sessionID string) (*ExerciseOfferDTO, error) {
 	return &ExerciseOfferDTO{ID: offer.ID, SessionID: offer.SessionID, MessageID: offer.MessageID}, nil
 }
 
-// AcceptOffer links a challenge of the chosen difficulty (BEGINNER,
-// INTERMEDIATE or ADVANCED; empty uses the profile's) and kind (INTERVIEW,
-// empty meaning the same, or PRACTICE with the goal to practice) to the
-// offer's session, generating one when the session has none to reuse, and
-// returns it. On failure the offer stays pending.
-func (a *App) AcceptOffer(offerID, difficulty, kind, practiceGoal string) (SessionExerciseDTO, error) {
+// AcceptOffer generates a practice challenge of the chosen difficulty
+// (BEGINNER, INTERMEDIATE or ADVANCED; empty uses the profile's) on the goal
+// the user wrote, links it to the offer's session and returns it. On failure
+// the offer stays pending.
+func (a *App) AcceptOffer(offerID, difficulty, practiceGoal string) (SessionExerciseDTO, error) {
 	offerID = strings.TrimSpace(offerID)
 	if offerID == "" {
 		return SessionExerciseDTO{}, invalidInput("offer id is required")
 	}
-	wanted, err := parseChallengeSpec(difficulty, kind, practiceGoal, true)
+	wanted, err := parseChallengeSpec(difficulty, practiceGoal, true)
 	if err != nil {
 		return SessionExerciseDTO{}, err
 	}
@@ -1089,13 +1212,13 @@ type ExerciseOfferResolvedEvent struct {
 	OfferID   string `json:"offerId"`
 }
 
-// parseChallengeSpec reads what the user chose when creating a challenge. The
-// kind defaults to INTERVIEW and a practice needs its goal. A blank difficulty
-// is allowed only where the profile's is used (allowBlankDifficulty).
-func parseChallengeSpec(difficulty, kind, practiceGoal string, allowBlankDifficulty bool) (domainexercise.ChallengeSpec, error) {
+// parseChallengeSpec reads what the user chose when creating a practice
+// challenge: the difficulty and the goal, which is required. A blank
+// difficulty is allowed only where the profile's is used (allowBlankDifficulty).
+func parseChallengeSpec(difficulty, practiceGoal string, allowBlankDifficulty bool) (domainexercise.ChallengeSpec, error) {
 	spec := domainexercise.ChallengeSpec{
 		Difficulty:   domainexercise.Difficulty(strings.TrimSpace(difficulty)),
-		Kind:         domainexercise.ChallengeKind(strings.TrimSpace(kind)),
+		Kind:         domainexercise.ChallengeKindPractice,
 		PracticeGoal: practiceGoal,
 	}.Normalized()
 	probe := spec
@@ -1107,8 +1230,6 @@ func parseChallengeSpec(difficulty, kind, practiceGoal string, allowBlankDifficu
 		return spec, nil
 	case errors.Is(err, domainexercise.ErrDifficultyInvalid):
 		return spec, invalidInput("difficulty must be BEGINNER, INTERMEDIATE or ADVANCED")
-	case errors.Is(err, domainexercise.ErrChallengeKindInvalid):
-		return spec, invalidInput("kind must be INTERVIEW or PRACTICE")
 	case errors.Is(err, domainexercise.ErrPracticeGoalRequired):
 		return spec, invalidInput("say what you want to practice")
 	default:

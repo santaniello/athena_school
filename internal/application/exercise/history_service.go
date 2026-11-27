@@ -124,6 +124,41 @@ func (s *HistoryService) ListHistory(ctx context.Context, challengeID string) ([
 	return items, nil
 }
 
+// CanonicalHistoryItem is a finished attempt in the history of a canonical
+// problem, which spans its difficulties.
+type CanonicalHistoryItem struct {
+	AttemptListItem
+	Difficulty domainexercise.Difficulty
+}
+
+// ListCanonicalHistory returns the finished attempts of every difficulty of a
+// canonical problem, newest first, each with its difficulty. It returns
+// domainexercise.ErrCanonicalProblemNotFound for an unknown problem.
+func (s *HistoryService) ListCanonicalHistory(ctx context.Context, problemID string) ([]CanonicalHistoryItem, error) {
+	if _, err := domainexercise.FindCanonicalProblem(problemID); err != nil {
+		return nil, err
+	}
+	challenges, err := s.challenges.ListCanonical(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("exercise: listing canonical challenges: %w", err)
+	}
+	items := []CanonicalHistoryItem{}
+	for _, challenge := range challenges {
+		if challenge.CanonicalProblemID != problemID {
+			continue
+		}
+		attempts, err := s.ListHistory(ctx, challenge.ID)
+		if err != nil {
+			return nil, err
+		}
+		for _, attempt := range attempts {
+			items = append(items, CanonicalHistoryItem{AttemptListItem: attempt, Difficulty: challenge.Difficulty})
+		}
+	}
+	sort.SliceStable(items, func(i, j int) bool { return items[i].FinishedAt.After(items[j].FinishedAt) })
+	return items, nil
+}
+
 func (s *HistoryService) loadEvaluations(ctx context.Context, attempt domainexercise.ChallengeAttempt) (finishedEvaluations, error) {
 	rubric, err := s.rubrics.Get(ctx, attempt.RubricVersionID)
 	if err != nil {

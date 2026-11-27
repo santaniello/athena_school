@@ -2,8 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
+  generateCanonicalChallenge,
+  listCanonicalProblems,
   listChallengeCatalog,
   listChallengeTopics,
+  type CanonicalProblem,
   type Catalog,
   type CatalogItem,
 } from '@/lib/exercise'
@@ -16,13 +19,14 @@ vi.mock('@/lib/passScore', () => ({ getPassScore: vi.fn() }))
 // what the screen hands it.
 vi.mock('@/components/attempt-history-dialog', () => ({
   AttemptHistoryDialog: (props: {
-    challenge: { id: string; title: string } | null
+    challenge: { id: string; title: string; canonical?: boolean } | null
     onClose: () => void
   }) =>
     props.challenge ? (
       <div role="dialog" aria-label="History dialog">
         <span>
           history of {props.challenge.id} {props.challenge.title}
+          {props.challenge.canonical ? ' (canonical)' : ''}
         </span>
         <button onClick={props.onClose}>close history</button>
       </div>
@@ -33,7 +37,13 @@ const onStartExam = vi.fn()
 
 vi.mock('@/lib/exercise', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/exercise')>()
-  return { ...original, listChallengeCatalog: vi.fn(), listChallengeTopics: vi.fn() }
+  return {
+    ...original,
+    listCanonicalProblems: vi.fn(),
+    listChallengeCatalog: vi.fn(),
+    listChallengeTopics: vi.fn(),
+    generateCanonicalChallenge: vi.fn(),
+  }
 })
 
 // The real dialog is covered by its own tests; this stand-in only exposes
@@ -73,13 +83,37 @@ function item(id: string, overrides: Partial<CatalogItem> = {}): CatalogItem {
   }
 }
 
+function canonicalProblem(id: string, name: string): CanonicalProblem {
+  return {
+    id,
+    name,
+    summary: `${name} summary`,
+    attempts: 0,
+    hasHistory: false,
+    difficulties: [
+      { difficulty: 'BEGINNER', generated: false, challengeId: '', status: '' },
+      { difficulty: 'INTERMEDIATE', generated: false, challengeId: '', status: '' },
+      { difficulty: 'ADVANCED', generated: false, challengeId: '', status: '' },
+    ],
+  }
+}
+
 function catalog(items: CatalogItem[], counts: Partial<Catalog> = {}): Catalog {
   return { total: items.length, completed: 0, inProgress: 0, items, ...counts }
+}
+
+// The screen opens on the Interview tab; the catalog of practice challenges is
+// behind the Practice tab.
+function renderPractice(experienceLevel = 'intermediate') {
+  render(<ArchitectureLabScreen experienceLevel={experienceLevel} onStartExam={onStartExam} />)
+  return userEvent.click(screen.getByRole('tab', { name: 'Practice' }))
 }
 
 describe('ArchitectureLabScreen', () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    vi.mocked(listCanonicalProblems).mockResolvedValue([])
+    vi.mocked(listChallengeCatalog).mockResolvedValue(catalog([]))
     vi.mocked(listChallengeTopics).mockResolvedValue(['caching', 'queues'])
     vi.mocked(getPassScore).mockResolvedValue(70)
   })
@@ -96,7 +130,7 @@ describe('ArchitectureLabScreen', () => {
       ),
     )
 
-    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+    await renderPractice()
 
     expect(await screen.findByText('12 challenges')).toBeInTheDocument()
     expect(screen.getByText('3 completed')).toBeInTheDocument()
@@ -108,15 +142,15 @@ describe('ArchitectureLabScreen', () => {
   it('uses the singular for a single challenge', async () => {
     vi.mocked(listChallengeCatalog).mockResolvedValue(catalog([item('c1')]))
 
-    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+    await renderPractice()
 
     expect(await screen.findByText('1 challenge')).toBeInTheDocument()
   })
 
-  it('shows a loading message until the first catalog arrives', () => {
+  it('shows a loading message until the first catalog arrives', async () => {
     vi.mocked(listChallengeCatalog).mockReturnValue(new Promise(() => {}))
 
-    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+    await renderPractice()
 
     expect(screen.getByText('Loading challenges…')).toBeInTheDocument()
   })
@@ -124,7 +158,7 @@ describe('ArchitectureLabScreen', () => {
   it('searches by the typed text', async () => {
     const user = userEvent.setup()
     vi.mocked(listChallengeCatalog).mockResolvedValue(catalog([item('c1')]))
-    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+    await renderPractice()
     await screen.findByText('Challenge c1')
 
     await user.type(screen.getByRole('searchbox', { name: 'Search challenges' }), 'cache')
@@ -139,7 +173,7 @@ describe('ArchitectureLabScreen', () => {
   it('filters by status, difficulty and topic together, and offers the topics present', async () => {
     const user = userEvent.setup()
     vi.mocked(listChallengeCatalog).mockResolvedValue(catalog([item('c1')]))
-    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+    await renderPractice()
     await screen.findByText('Challenge c1')
 
     await user.click(screen.getByRole('combobox', { name: 'Status' }))
@@ -156,6 +190,7 @@ describe('ArchitectureLabScreen', () => {
         status: 'COMPLETED',
         difficulty: 'ADVANCED',
         topic: 'caching',
+        kind: 'PRACTICE',
       }),
     )
   })
@@ -163,7 +198,7 @@ describe('ArchitectureLabScreen', () => {
   it('goes back to every status when "All" is chosen again', async () => {
     const user = userEvent.setup()
     vi.mocked(listChallengeCatalog).mockResolvedValue(catalog([item('c1')]))
-    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+    await renderPractice()
     await screen.findByText('Challenge c1')
     await user.click(screen.getByRole('combobox', { name: 'Status' }))
     await user.click(await screen.findByRole('option', { name: 'Completed' }))
@@ -181,7 +216,7 @@ describe('ArchitectureLabScreen', () => {
   it('explains how to create a challenge when the catalog is empty, and offers to generate one', async () => {
     const user = userEvent.setup()
     vi.mocked(listChallengeCatalog).mockResolvedValue(catalog([]))
-    render(<ArchitectureLabScreen experienceLevel="beginner" onStartExam={onStartExam} />)
+    await renderPractice('beginner')
 
     expect(await screen.findByText('No challenges yet')).toBeInTheDocument()
     expect(screen.getByText(/generate one from a study session/i)).toBeInTheDocument()
@@ -196,7 +231,7 @@ describe('ArchitectureLabScreen', () => {
     vi.mocked(listChallengeCatalog).mockImplementation(async (filter) =>
       filter.query ? catalog([], { total: 4 }) : catalog([item('c1')], { total: 4 }),
     )
-    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+    await renderPractice()
     await screen.findByText('Challenge c1')
     await user.type(screen.getByRole('searchbox', { name: 'Search challenges' }), 'zzz')
 
@@ -212,7 +247,7 @@ describe('ArchitectureLabScreen', () => {
     vi.mocked(listChallengeCatalog)
       .mockRejectedValueOnce(new Error('boom'))
       .mockResolvedValueOnce(catalog([item('c1')]))
-    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+    await renderPractice()
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not load the challenges.')
     await user.click(screen.getByRole('button', { name: 'Retry' }))
@@ -223,11 +258,11 @@ describe('ArchitectureLabScreen', () => {
   it('opens the generation dialog from the header, preselecting the difficulty of the profile', async () => {
     const user = userEvent.setup()
     vi.mocked(listChallengeCatalog).mockResolvedValue(catalog([item('c1')]))
-    render(<ArchitectureLabScreen experienceLevel="advanced" onStartExam={onStartExam} />)
+    await renderPractice('advanced')
     await screen.findByText('Challenge c1')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Generate challenge with AI' }))
+    await user.click(screen.getByRole('button', { name: 'Generate practice' }))
 
     expect(screen.getByText('default ADVANCED')).toBeInTheDocument()
   })
@@ -235,9 +270,9 @@ describe('ArchitectureLabScreen', () => {
   it('closes the dialog without reloading when it is dismissed', async () => {
     const user = userEvent.setup()
     vi.mocked(listChallengeCatalog).mockResolvedValue(catalog([item('c1')]))
-    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+    await renderPractice()
     await screen.findByText('Challenge c1')
-    await user.click(screen.getByRole('button', { name: 'Generate challenge with AI' }))
+    await user.click(screen.getByRole('button', { name: 'Generate practice' }))
 
     await user.click(screen.getByRole('button', { name: 'close dialog' }))
 
@@ -250,11 +285,11 @@ describe('ArchitectureLabScreen', () => {
     vi.mocked(listChallengeCatalog).mockImplementation(async (filter) =>
       filter.query ? catalog([item('c1')]) : catalog([item('c1'), item('c-new')]),
     )
-    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+    await renderPractice()
     await screen.findByText('Challenge c1')
     await user.type(screen.getByRole('searchbox', { name: 'Search challenges' }), 'x')
     await screen.findByText('Challenge c1')
-    await user.click(screen.getByRole('button', { name: 'Generate challenge with AI' }))
+    await user.click(screen.getByRole('button', { name: 'Generate practice' }))
 
     await user.click(screen.getByRole('button', { name: 'finish generation' }))
 
@@ -273,7 +308,7 @@ describe('ArchitectureLabScreen', () => {
     vi.mocked(listChallengeTopics).mockRejectedValue(new Error('boom'))
     vi.mocked(listChallengeCatalog).mockResolvedValue(catalog([item('c1')]))
 
-    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+    await renderPractice()
 
     expect(await screen.findByText('Challenge c1')).toBeInTheDocument()
     await user.click(screen.getByRole('combobox', { name: 'Topic' }))
@@ -284,7 +319,7 @@ describe('ArchitectureLabScreen', () => {
   it('starts with every filter on "All"', async () => {
     vi.mocked(listChallengeCatalog).mockResolvedValue(catalog([item('c1')]))
 
-    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+    await renderPractice()
     await screen.findByText('Challenge c1')
 
     expect(screen.getByRole('combobox', { name: 'Status' })).toHaveTextContent('All statuses')
@@ -297,9 +332,9 @@ describe('ArchitectureLabScreen', () => {
   it('reloads after a generation even when no filter was set', async () => {
     const user = userEvent.setup()
     vi.mocked(listChallengeCatalog).mockResolvedValue(catalog([item('c1')]))
-    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+    await renderPractice()
     await screen.findByText('Challenge c1')
-    await user.click(screen.getByRole('button', { name: 'Generate challenge with AI' }))
+    await user.click(screen.getByRole('button', { name: 'Generate practice' }))
 
     await user.click(screen.getByRole('button', { name: 'finish generation' }))
 
@@ -311,9 +346,9 @@ describe('ArchitectureLabScreen', () => {
     vi.mocked(listChallengeCatalog)
       .mockResolvedValueOnce(catalog([item('c1')]))
       .mockReturnValueOnce(new Promise(() => {}))
-    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+    await renderPractice()
     await screen.findByText('Challenge c1')
-    await user.click(screen.getByRole('button', { name: 'Generate challenge with AI' }))
+    await user.click(screen.getByRole('button', { name: 'Generate practice' }))
 
     await user.click(screen.getByRole('button', { name: 'finish generation' }))
 
@@ -324,10 +359,10 @@ describe('ArchitectureLabScreen', () => {
   it('reloads for a generation that finished after its dialog closed, leaving the screen alone', async () => {
     vi.mocked(listChallengeCatalog).mockResolvedValue(catalog([item('c1')]))
     const user = userEvent.setup()
-    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+    await renderPractice()
     await screen.findByText('Challenge c1')
     await user.type(screen.getByRole('searchbox', { name: 'Search challenges' }), 'cache')
-    await user.click(screen.getByRole('button', { name: 'Generate challenge with AI' }))
+    await user.click(screen.getByRole('button', { name: 'Generate practice' }))
     const callsBefore = vi.mocked(listChallengeCatalog).mock.calls.length
     const topicCallsBefore = vi.mocked(listChallengeTopics).mock.calls.length
 
@@ -345,7 +380,7 @@ describe('ArchitectureLabScreen', () => {
     const user = userEvent.setup()
     onStartExam.mockClear()
     vi.mocked(listChallengeCatalog).mockResolvedValue(catalog([item('c1')]))
-    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+    await renderPractice()
     await screen.findByText('Challenge c1')
 
     await user.click(screen.getByRole('button', { name: 'Start' }))
@@ -363,7 +398,7 @@ describe('ArchitectureLabScreen', () => {
     const user = userEvent.setup()
     onStartExam.mockClear()
     vi.mocked(listChallengeCatalog).mockResolvedValue(catalog([item('c1')]))
-    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+    await renderPractice()
     await screen.findByText('Challenge c1')
     await user.click(screen.getByRole('button', { name: 'Start' }))
 
@@ -378,13 +413,113 @@ describe('ArchitectureLabScreen', () => {
     vi.mocked(listChallengeCatalog).mockResolvedValue(
       catalog([item('c1', { attempts: 2, status: 'COMPLETED', bestDiagramScore: 90 })]),
     )
-    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+    await renderPractice()
     await screen.findByText('Challenge c1')
 
     await user.click(screen.getByRole('button', { name: 'History' }))
     expect(await screen.findByRole('dialog')).toHaveTextContent('history of c1 Challenge c1')
     await user.click(screen.getByRole('button', { name: 'close history' }))
 
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('opens on the Interview tab, listing the canonical problems and no practice catalog', async () => {
+    vi.mocked(listCanonicalProblems).mockResolvedValue([
+      canonicalProblem('url-shortener', 'URL shortener'),
+    ])
+
+    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+
+    expect(screen.getByRole('tab', { name: 'Interview' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Practice' })).toHaveAttribute('aria-selected', 'false')
+    expect(await screen.findByText('URL shortener')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Generate practice' })).not.toBeInTheDocument()
+  })
+
+  it('asks the catalog for practice challenges only', async () => {
+    vi.mocked(listChallengeCatalog).mockResolvedValue(catalog([item('c1', { kind: 'PRACTICE' })]))
+
+    await renderPractice()
+    await screen.findByText('Challenge c1')
+
+    expect(listChallengeCatalog).toHaveBeenCalledWith(expect.objectContaining({ kind: 'PRACTICE' }))
+  })
+
+  it('goes back to the Interview tab', async () => {
+    const user = userEvent.setup()
+    vi.mocked(listChallengeCatalog).mockResolvedValue(catalog([]))
+    vi.mocked(listCanonicalProblems).mockResolvedValue([
+      canonicalProblem('url-shortener', 'URL shortener'),
+    ])
+    await renderPractice()
+
+    await user.click(screen.getByRole('tab', { name: 'Interview' }))
+
+    expect(await screen.findByText('URL shortener')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Interview' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('opens the history of a canonical problem', async () => {
+    const user = userEvent.setup()
+    vi.mocked(listCanonicalProblems).mockResolvedValue([
+      { ...canonicalProblem('url-shortener', 'URL shortener'), attempts: 1, hasHistory: true },
+    ])
+    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+
+    await user.click(await screen.findByRole('button', { name: 'History' }))
+
+    expect(await screen.findByRole('dialog')).toHaveTextContent(
+      'history of url-shortener URL shortener (canonical)',
+    )
+  })
+
+  it('starts a canonical problem: the exam rules open once the challenge is ready, and confirming hands the exam over', async () => {
+    const user = userEvent.setup()
+    onStartExam.mockClear()
+    vi.mocked(listCanonicalProblems).mockResolvedValue([
+      canonicalProblem('url-shortener', 'URL shortener'),
+    ])
+    vi.mocked(generateCanonicalChallenge).mockResolvedValue({
+      id: 'c9',
+      kind: 'INTERVIEW',
+      title: 'URL shortener',
+      topic: 'url shortener',
+      difficulty: 'INTERMEDIATE',
+      timeLimitMinutes: 45,
+    })
+    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+
+    await user.click(await screen.findByRole('button', { name: 'Start' }))
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    await user.click(await screen.findByRole('button', { name: 'Start exam' }))
+
+    expect(generateCanonicalChallenge).toHaveBeenCalledWith('url-shortener', 'INTERMEDIATE')
+    expect(onStartExam).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ id: 'c9', title: 'URL shortener', timeLimitMinutes: 45 }),
+    )
+  })
+
+  it('creates nothing more when the rules of a canonical interview are cancelled', async () => {
+    const user = userEvent.setup()
+    onStartExam.mockClear()
+    vi.mocked(listCanonicalProblems).mockResolvedValue([
+      canonicalProblem('url-shortener', 'URL shortener'),
+    ])
+    vi.mocked(generateCanonicalChallenge).mockResolvedValue({
+      id: 'c9',
+      kind: 'INTERVIEW',
+      title: 'URL shortener',
+      topic: 'url shortener',
+      difficulty: 'INTERMEDIATE',
+      timeLimitMinutes: 45,
+    })
+    render(<ArchitectureLabScreen experienceLevel="intermediate" onStartExam={onStartExam} />)
+    await user.click(await screen.findByRole('button', { name: 'Start' }))
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
+
+    expect(onStartExam).not.toHaveBeenCalled()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })

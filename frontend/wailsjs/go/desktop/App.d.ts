@@ -5,7 +5,7 @@ import {context} from '../models';
 
 export function AcceptMindMapOffer(arg1:string):Promise<desktop.MindMapSummaryDTO>;
 
-export function AcceptOffer(arg1:string,arg2:string,arg3:string,arg4:string):Promise<desktop.SessionExerciseDTO>;
+export function AcceptOffer(arg1:string,arg2:string,arg3:string):Promise<desktop.SessionExerciseDTO>;
 
 export function AcceptQuizOffer(arg1:string,arg2:number,arg3:string):Promise<desktop.QuizSummaryDTO>;
 
@@ -47,7 +47,9 @@ export function EvaluateAttempt(arg1:string):Promise<desktop.EvaluationDTO>;
 
 export function EvaluateDefense(arg1:string):Promise<desktop.OutcomeDTO>;
 
-export function GenerateChallenge(arg1:string,arg2:string,arg3:string,arg4:string):Promise<desktop.ChallengeSummaryDTO>;
+export function GenerateCanonicalChallenge(arg1:string,arg2:string):Promise<desktop.ChallengeSummaryDTO>;
+
+export function GenerateChallenge(arg1:string,arg2:string,arg3:string):Promise<desktop.ChallengeSummaryDTO>;
 
 export function GenerateMindMap(arg1:string):Promise<desktop.MindMapSummaryDTO>;
 
@@ -108,6 +110,10 @@ export function ImportFile(arg1:string,arg2:string):Promise<void>;
 export function ListAttemptHistory(arg1:string):Promise<Array<desktop.AttemptHistoryItemDTO>>;
 
 export function ListAttempts(arg1:string):Promise<Array<desktop.AttemptDTO>>;
+
+export function ListCanonicalHistory(arg1:string):Promise<Array<desktop.CanonicalHistoryItemDTO>>;
+
+export function ListCanonicalProblems():Promise<Array<desktop.CanonicalProblemDTO>>;
 
 export function ListChallengeCatalog(arg1:desktop.CatalogFilterDTO):Promise<desktop.ChallengeCatalogDTO>;
 

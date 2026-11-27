@@ -18,8 +18,9 @@ const exerciseOfferMarker = "[[ATHENA_EXERCISE_OFFER]]"
 var exerciseOfferInstruction = fmt.Sprintf(
 	"\n- If, and only if, the user explicitly asks you for an exercise or to practice this topic "+
 		"(for example \"give me an exercise\" or \"I want to practice this\"), answer in one or two short sentences "+
-		"and end the reply with the exact text %s on its own line. "+
-		"Never propose an exercise on your own, and never write that text in any other case.",
+		"and end the reply with the exact text %s on its own line: it offers a short practice exercise on this topic. "+
+		"Never propose an exercise on your own, and never write that text in any other case. "+
+		"If the user asks for a full system-design interview, do not use that text: reply normally and say that the interviews are in the Architecture Lab catalog.",
 	exerciseOfferMarker,
 )
 

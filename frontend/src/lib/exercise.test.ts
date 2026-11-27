@@ -9,11 +9,14 @@ import {
   DiscardAttempt,
   EvaluateAttempt,
   EvaluateDefense,
+  GenerateCanonicalChallenge,
   GenerateChallenge,
   GetAttempt,
   GetAttemptResult,
   GetEvaluation,
   ListAttemptHistory,
+  ListCanonicalHistory,
+  ListCanonicalProblems,
   ListChallengeCatalog,
   ListChallengeTopics,
   ListHints,
@@ -64,7 +67,12 @@ import {
   getAttempt,
   getAttemptResult,
   getEvaluation,
+  difficultyStateLabel,
+  generateCanonicalChallenge,
+  generatedCount,
   listAttemptHistory,
+  listCanonicalHistory,
+  listCanonicalProblems,
   listChallengeCatalog,
   listChallengeTopics,
   listHints,
@@ -76,6 +84,9 @@ import {
 
 vi.mock('../../wailsjs/go/desktop/App', () => ({
   AcceptOffer: vi.fn(),
+  GenerateCanonicalChallenge: vi.fn(),
+  ListCanonicalHistory: vi.fn(),
+  ListCanonicalProblems: vi.fn(),
   DeclineOffer: vi.fn(),
   GetPendingOffer: vi.fn(),
   ListSessionExercises: vi.fn(),
@@ -129,6 +140,7 @@ describe('exercise bindings', () => {
       status: 'COMPLETED',
       difficulty: 'INTERMEDIATE',
       topic: 'caching',
+      kind: 'PRACTICE',
     })
 
     expect(ListChallengeCatalog).toHaveBeenCalledWith({
@@ -136,6 +148,7 @@ describe('exercise bindings', () => {
       status: 'COMPLETED',
       difficulty: 'INTERMEDIATE',
       topic: 'caching',
+      kind: 'PRACTICE',
     })
     expect(catalog).toEqual({ total: 3, completed: 1, inProgress: 1, items: [item] })
   })
@@ -152,6 +165,7 @@ describe('exercise bindings', () => {
       status: '',
       difficulty: '',
       topic: '',
+      kind: '',
     })
   })
 
@@ -171,29 +185,6 @@ describe('exercise bindings', () => {
     ])
   })
 
-  it('generates a challenge for a session and difficulty', async () => {
-    vi.mocked(GenerateChallenge).mockResolvedValueOnce({
-      id: 'c9',
-      kind: 'INTERVIEW',
-      title: 'New',
-      topic: 'caching',
-      difficulty: 'BEGINNER',
-      timeLimitMinutes: 30,
-    })
-
-    const created = await generateChallenge('s1', 'BEGINNER')
-
-    expect(GenerateChallenge).toHaveBeenCalledWith('s1', 'BEGINNER', 'INTERVIEW', '')
-    expect(created).toEqual({
-      id: 'c9',
-      kind: 'INTERVIEW',
-      title: 'New',
-      topic: 'caching',
-      difficulty: 'BEGINNER',
-      timeLimitMinutes: 30,
-    })
-  })
-
   it('generates a practice with its goal and gets it back untimed', async () => {
     vi.mocked(GenerateChallenge).mockResolvedValueOnce({
       id: 'c10',
@@ -204,10 +195,102 @@ describe('exercise bindings', () => {
       timeLimitMinutes: 0,
     })
 
-    const created = await generateChallenge('s1', 'BEGINNER', 'PRACTICE', 'cache aside')
+    const created = await generateChallenge('s1', 'BEGINNER', 'cache aside')
 
-    expect(GenerateChallenge).toHaveBeenCalledWith('s1', 'BEGINNER', 'PRACTICE', 'cache aside')
-    expect(created).toMatchObject({ kind: 'PRACTICE', timeLimitMinutes: 0 })
+    expect(GenerateChallenge).toHaveBeenCalledWith('s1', 'BEGINNER', 'cache aside')
+    expect(created).toEqual({
+      id: 'c10',
+      kind: 'PRACTICE',
+      title: 'Slow price API',
+      topic: 'caching',
+      difficulty: 'BEGINNER',
+      timeLimitMinutes: 0,
+    })
+  })
+
+  it('lists the canonical problems with every difficulty state', async () => {
+    vi.mocked(ListCanonicalProblems).mockResolvedValueOnce([
+      desktop.CanonicalProblemDTO.createFrom({
+        id: 'url-shortener',
+        name: 'URL shortener',
+        summary: 'Short links.',
+        attempts: 2,
+        hasHistory: true,
+        difficulties: [
+          { difficulty: 'BEGINNER', generated: true, challengeId: 'c1', status: 'COMPLETED' },
+          { difficulty: 'INTERMEDIATE', generated: false, challengeId: '', status: '' },
+        ],
+      }),
+    ])
+
+    const problems = await listCanonicalProblems()
+
+    expect(problems).toEqual([
+      {
+        id: 'url-shortener',
+        name: 'URL shortener',
+        summary: 'Short links.',
+        attempts: 2,
+        hasHistory: true,
+        difficulties: [
+          { difficulty: 'BEGINNER', generated: true, challengeId: 'c1', status: 'COMPLETED' },
+          { difficulty: 'INTERMEDIATE', generated: false, challengeId: '', status: '' },
+        ],
+      },
+    ])
+    expect(generatedCount(problems[0])).toBe(1)
+    expect(difficultyStateLabel(problems[0].difficulties[0])).toBe('Completed')
+    expect(difficultyStateLabel(problems[0].difficulties[1])).toBe('Not generated')
+  })
+
+  it('gets the canonical challenge of a problem and difficulty', async () => {
+    vi.mocked(GenerateCanonicalChallenge).mockResolvedValueOnce({
+      id: 'c9',
+      kind: 'INTERVIEW',
+      title: 'URL shortener',
+      topic: 'url shortener',
+      difficulty: 'ADVANCED',
+      timeLimitMinutes: 60,
+    })
+
+    const created = await generateCanonicalChallenge('url-shortener', 'ADVANCED')
+
+    expect(GenerateCanonicalChallenge).toHaveBeenCalledWith('url-shortener', 'ADVANCED')
+    expect(created).toEqual({
+      id: 'c9',
+      kind: 'INTERVIEW',
+      title: 'URL shortener',
+      topic: 'url shortener',
+      difficulty: 'ADVANCED',
+      timeLimitMinutes: 60,
+    })
+  })
+
+  it('lists the history of a canonical problem with the difficulty of each attempt', async () => {
+    vi.mocked(ListCanonicalHistory).mockResolvedValueOnce([
+      {
+        attemptId: 'a1',
+        difficulty: 'ADVANCED',
+        finishedAt: '2026-11-07T10:00:00Z',
+        diagramScore: 85,
+        understandingScore: 60,
+        outcome: 'FAILED',
+      },
+    ])
+
+    const items = await listCanonicalHistory('url-shortener')
+
+    expect(ListCanonicalHistory).toHaveBeenCalledWith('url-shortener')
+    expect(items).toEqual([
+      {
+        attemptId: 'a1',
+        difficulty: 'ADVANCED',
+        finishedAt: '2026-11-07T10:00:00Z',
+        diagramScore: 85,
+        understandingScore: 60,
+        outcome: 'FAILED',
+      },
+    ])
   })
 
   it('cancels the generation in flight', async () => {
@@ -866,19 +949,9 @@ describe('exercise offer', () => {
       desktop.SessionExerciseDTO.createFrom({ challengeId: 'c1' }),
     )
 
-    await expect(acceptOffer('o1', 'ADVANCED')).resolves.toBeUndefined()
+    await expect(acceptOffer('o1', 'ADVANCED', 'cache aside')).resolves.toBeUndefined()
 
-    expect(AcceptOffer).toHaveBeenCalledWith('o1', 'ADVANCED', 'INTERVIEW', '')
-  })
-
-  it('accepts an offer as a practice with its goal', async () => {
-    vi.mocked(AcceptOffer).mockResolvedValueOnce(
-      desktop.SessionExerciseDTO.createFrom({ challengeId: 'c2' }),
-    )
-
-    await acceptOffer('o1', 'BEGINNER', 'PRACTICE', 'cache aside')
-
-    expect(AcceptOffer).toHaveBeenCalledWith('o1', 'BEGINNER', 'PRACTICE', 'cache aside')
+    expect(AcceptOffer).toHaveBeenCalledWith('o1', 'ADVANCED', 'cache aside')
   })
 
   it('declines an offer', async () => {

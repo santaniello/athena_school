@@ -1028,6 +1028,35 @@ func TestOpen_addsAnEmptyStarterDiagramToExistingChallenges(t *testing.T) {
 	assert.Equal(t, "", diagram)
 }
 
+func TestOpen_addsAnEmptyCanonicalProblemToExistingChallenges(t *testing.T) {
+	// Given a database from before spec 7.3: a challenge stored without the column and its index
+	path := filepath.Join(t.TempDir(), "athena.db")
+	first, err := Open(path)
+	require.NoError(t, err)
+	_, err = first.Exec(`DROP INDEX idx_challenges_canonical`)
+	require.NoError(t, err)
+	_, err = first.Exec(`ALTER TABLE challenges DROP COLUMN canonical_problem_id`)
+	require.NoError(t, err)
+	_, err = first.Exec(`INSERT INTO challenges (id, type, title, scenario, functional_requirements,
+		non_functional_requirements, constraints, objectives, difficulty, topic, origin, created_at, updated_at)
+		VALUES ('legacy', 'ARCHITECTURE', 't', 's', '[]', '[]', '[]', '[]', 'BEGINNER', 'x', 'MANUAL', 'now', 'now')`)
+	require.NoError(t, err)
+	require.NoError(t, first.Close())
+
+	// When opening it again
+	second, err := Open(path)
+	require.NoError(t, err)
+	defer func() { _ = second.Close() }()
+
+	// Then the existing challenge has no canonical problem and the index is back
+	var problem string
+	require.NoError(t, second.QueryRow(`SELECT canonical_problem_id FROM challenges WHERE id = 'legacy'`).Scan(&problem))
+	assert.Equal(t, "", problem)
+	var indexes int
+	require.NoError(t, second.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_challenges_canonical'`).Scan(&indexes))
+	assert.Equal(t, 1, indexes)
+}
+
 func TestOpen_refusesAChallengeKindOtherThanInterviewOrPractice(t *testing.T) {
 	// Given a migrated database
 	db, err := Open(filepath.Join(t.TempDir(), "athena.db"))

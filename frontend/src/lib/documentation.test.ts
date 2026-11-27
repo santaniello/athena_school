@@ -63,7 +63,7 @@ describe('DOCUMENTATION architecture lab', () => {
   it('is available and describes generating a challenge from a studied session', () => {
     expect(lab?.status).toBe('available')
     const text = [...(lab?.body ?? []), ...(lab?.topics.map((topic) => topic.description) ?? [])]
-    expect(text.join('\n')).toContain('Generate challenge with AI')
+    expect(text.join('\n')).toContain('Generate practice')
   })
 
   it('explains how the exam works and that submitting is not the end of it yet', () => {

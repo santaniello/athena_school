@@ -14,9 +14,10 @@ import (
 )
 
 type fakeHistory struct {
-	items  []applicationexercise.AttemptListItem
-	result applicationexercise.AttemptResultView
-	err    error
+	canonical []applicationexercise.CanonicalHistoryItem
+	items     []applicationexercise.AttemptListItem
+	result    applicationexercise.AttemptResultView
+	err       error
 
 	listed, read string
 }
@@ -24,6 +25,11 @@ type fakeHistory struct {
 func (f *fakeHistory) ListHistory(_ context.Context, challengeID string) ([]applicationexercise.AttemptListItem, error) {
 	f.listed = challengeID
 	return f.items, f.err
+}
+
+func (f *fakeHistory) ListCanonicalHistory(_ context.Context, problemID string) ([]applicationexercise.CanonicalHistoryItem, error) {
+	f.listed = problemID
+	return f.canonical, f.err
 }
 
 func (f *fakeHistory) GetAttemptResult(_ context.Context, attemptID string) (applicationexercise.AttemptResultView, error) {
@@ -235,4 +241,36 @@ func TestApp_GetAttemptResult_codesAnAttemptThatIsNotFinished(t *testing.T) {
 	var exerciseErr *ExerciseError
 	require.ErrorAs(t, err, &exerciseErr)
 	assert.Equal(t, exerciseCodeAttemptNotFinished, exerciseErr.Code)
+}
+
+func TestApp_ListCanonicalHistory_returnsTheAttemptsWithTheirDifficulty(t *testing.T) {
+	// Given a problem with one finished attempt
+	history := &fakeHistory{canonical: []applicationexercise.CanonicalHistoryItem{{
+		AttemptListItem: applicationexercise.AttemptListItem{
+			AttemptID: "attempt-1", FinishedAt: defenseBindingTime, DiagramScore: 85, UnderstandingScore: 60, Outcome: domainexercise.ResultFailed,
+		},
+		Difficulty: domainexercise.DifficultyAdvanced,
+	}}}
+
+	// When the frontend lists it with a padded id
+	got, err := newHistoryApp(history).ListCanonicalHistory(" url-shortener ")
+
+	// Then each item carries its difficulty
+	require.NoError(t, err)
+	assert.Equal(t, "url-shortener", history.listed)
+	assert.Equal(t, []CanonicalHistoryItemDTO{{
+		AttemptID: "attempt-1", Difficulty: "ADVANCED", FinishedAt: "2026-11-07T10:00:00Z", DiagramScore: 85, UnderstandingScore: 60, Outcome: "FAILED",
+	}}, got)
+}
+
+func TestApp_ListCanonicalHistory_anEmptyHistoryIsAnEmptyListAndErrorsAreCoded(t *testing.T) {
+	empty, err := newHistoryApp(&fakeHistory{}).ListCanonicalHistory("url-shortener")
+	_, blank := newHistoryApp(&fakeHistory{}).ListCanonicalHistory("  ")
+	_, unknown := newHistoryApp(&fakeHistory{err: domainexercise.ErrCanonicalProblemNotFound}).ListCanonicalHistory("nope")
+
+	require.NoError(t, err)
+	assert.NotNil(t, empty)
+	assert.Empty(t, empty)
+	assert.Equal(t, exerciseCodeInvalidInput, codeOf(t, blank).Code)
+	assert.Equal(t, exerciseCodeProblemNotFound, codeOf(t, unknown).Code)
 }
