@@ -38,7 +38,7 @@ func (r *FolderRepository) Create(ctx context.Context, f folder.Folder) error {
 // if it does not exist.
 func (r *FolderRepository) GetByID(ctx context.Context, id string) (folder.Folder, error) {
 	var f folder.Folder
-	err := r.db.QueryRowContext(ctx,
+	err := execer(ctx, r.db).QueryRowContext(ctx,
 		`SELECT id, name, arch_lab_enabled, created_at FROM folders WHERE id = ?`, id,
 	).Scan(&f.ID, &f.Name, &f.ArchLabEnabled, &f.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
