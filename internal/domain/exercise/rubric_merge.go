@@ -26,12 +26,23 @@ var (
 	ErrWeightsCannotSum = errors.New("rubric weights cannot sum to 100")
 )
 
+// Shares of an interview rubric and the floor of a challenge criterion.
+const (
+	interviewBaseShare      = 50
+	interviewChallengeShare = 50
+	challengeCriterionFloor = 5
+)
+
 // MergeRubric returns the final criteria list: the base criteria first, then
 // the challenge criteria, in the given order, with the challenge criteria
-// marked CriterionSourceChallenge. The input weights are relative; they are
-// scaled to whole numbers that sum to exactly 100, the rounding remainder
-// going to the largest fractional parts first and, on a tie, to the earliest
-// position. The inputs are not modified.
+// marked CriterionSourceChallenge. A non-empty base means an interview split:
+// the base criteria take 50 points between them by their own weights and the
+// challenge criteria the other 50. An empty base means the lean rubric: the
+// challenge criteria take all 100. The challenge weights are relative, so the
+// scale used does not matter: every challenge criterion first receives
+// challengeCriterionFloor points and the rest of the share is spread by the
+// weights. Rounding remainders go to the largest fractional parts first and,
+// on a tie, to the earliest position. The inputs are not modified.
 func MergeRubric(base, challenge []RubricCriterion) ([]RubricCriterion, error) {
 	if len(challenge) == 0 || len(challenge) > MaxChallengeCriteria {
 		return nil, ErrChallengeCriteriaCount
@@ -45,7 +56,15 @@ func MergeRubric(base, challenge []RubricCriterion) ([]RubricCriterion, error) {
 	if err := checkMergeInput(merged); err != nil {
 		return nil, err
 	}
-	if err := scaleWeights(merged); err != nil {
+
+	challengeShare := rubricTotalWeight
+	if len(base) > 0 {
+		challengeShare = interviewChallengeShare
+		if err := assignShare(merged[:len(base)], interviewBaseShare, 0); err != nil {
+			return nil, err
+		}
+	}
+	if err := assignShare(merged[len(base):], challengeShare, challengeCriterionFloor); err != nil {
 		return nil, err
 	}
 	return merged, nil
@@ -65,9 +84,15 @@ func checkMergeInput(criteria []RubricCriterion) error {
 	return nil
 }
 
-// scaleWeights rewrites the weights in place so they sum to 100 (largest
-// remainder method). The criteria are a private copy owned by MergeRubric.
-func scaleWeights(criteria []RubricCriterion) error {
+// assignShare rewrites the weights in place so they sum to share: each
+// criterion gets floor points, and the rest is spread by the relative weights
+// (largest remainder method). The criteria are a private copy owned by
+// MergeRubric. A criterion that would end below one point is an error.
+func assignShare(criteria []RubricCriterion, share, floor int) error {
+	distributable := share - floor*len(criteria)
+	if distributable < 0 {
+		return ErrWeightsCannotSum
+	}
 	total := 0
 	for _, criterion := range criteria {
 		total += criterion.Weight
@@ -75,7 +100,7 @@ func scaleWeights(criteria []RubricCriterion) error {
 	remainders := make([]int, len(criteria))
 	assigned := 0
 	for i := range criteria {
-		scaled := criteria[i].Weight * rubricTotalWeight
+		scaled := criteria[i].Weight * distributable
 		criteria[i].Weight = scaled / total
 		remainders[i] = scaled % total
 		assigned += criteria[i].Weight
@@ -86,14 +111,33 @@ func scaleWeights(criteria []RubricCriterion) error {
 		order[i] = i
 	}
 	sort.SliceStable(order, func(a, b int) bool { return remainders[order[a]] > remainders[order[b]] })
-	for _, index := range order[:rubricTotalWeight-assigned] {
+	for _, index := range order[:distributable-assigned] {
 		criteria[index].Weight++
 	}
 
-	for _, criterion := range criteria {
-		if criterion.Weight < 1 {
+	for i := range criteria {
+		criteria[i].Weight += floor
+		if criteria[i].Weight < 1 {
 			return ErrWeightsCannotSum
 		}
 	}
 	return nil
+}
+
+// MaxChallengeCriteriaFor is the most challenge criteria a generated rubric
+// may have: 3 for a practice, and 3, 4 or 6 for an interview by difficulty.
+// RubricVersion.Validate keeps the wider MaxChallengeCriteria limit so stored
+// rubrics stay valid.
+func MaxChallengeCriteriaFor(kind ChallengeKind, difficulty Difficulty) int {
+	if kind == ChallengeKindPractice {
+		return MaxPracticeCriteria
+	}
+	switch difficulty {
+	case DifficultyBeginner:
+		return 3
+	case DifficultyIntermediate:
+		return 4
+	default:
+		return MaxChallengeCriteria
+	}
 }

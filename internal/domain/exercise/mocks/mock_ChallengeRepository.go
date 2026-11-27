@@ -241,6 +241,67 @@ func (_c *MockChallengeRepository_List_Call) RunAndReturn(run func(context.Conte
 	return _c
 }
 
+// ListTitlesBySourceSession provides a mock function with given fields: ctx, sessionID, kind, limit
+func (_m *MockChallengeRepository) ListTitlesBySourceSession(ctx context.Context, sessionID string, kind exercise.ChallengeKind, limit int) ([]string, error) {
+	ret := _m.Called(ctx, sessionID, kind, limit)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListTitlesBySourceSession")
+	}
+
+	var r0 []string
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, exercise.ChallengeKind, int) ([]string, error)); ok {
+		return rf(ctx, sessionID, kind, limit)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string, exercise.ChallengeKind, int) []string); ok {
+		r0 = rf(ctx, sessionID, kind, limit)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string, exercise.ChallengeKind, int) error); ok {
+		r1 = rf(ctx, sessionID, kind, limit)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockChallengeRepository_ListTitlesBySourceSession_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListTitlesBySourceSession'
+type MockChallengeRepository_ListTitlesBySourceSession_Call struct {
+	*mock.Call
+}
+
+// ListTitlesBySourceSession is a helper method to define mock.On call
+//   - ctx context.Context
+//   - sessionID string
+//   - kind exercise.ChallengeKind
+//   - limit int
+func (_e *MockChallengeRepository_Expecter) ListTitlesBySourceSession(ctx interface{}, sessionID interface{}, kind interface{}, limit interface{}) *MockChallengeRepository_ListTitlesBySourceSession_Call {
+	return &MockChallengeRepository_ListTitlesBySourceSession_Call{Call: _e.mock.On("ListTitlesBySourceSession", ctx, sessionID, kind, limit)}
+}
+
+func (_c *MockChallengeRepository_ListTitlesBySourceSession_Call) Run(run func(ctx context.Context, sessionID string, kind exercise.ChallengeKind, limit int)) *MockChallengeRepository_ListTitlesBySourceSession_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(exercise.ChallengeKind), args[3].(int))
+	})
+	return _c
+}
+
+func (_c *MockChallengeRepository_ListTitlesBySourceSession_Call) Return(_a0 []string, _a1 error) *MockChallengeRepository_ListTitlesBySourceSession_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockChallengeRepository_ListTitlesBySourceSession_Call) RunAndReturn(run func(context.Context, string, exercise.ChallengeKind, int) ([]string, error)) *MockChallengeRepository_ListTitlesBySourceSession_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListTopics provides a mock function with given fields: ctx
 func (_m *MockChallengeRepository) ListTopics(ctx context.Context) ([]string, error) {
 	ret := _m.Called(ctx)

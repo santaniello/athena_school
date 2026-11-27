@@ -55,16 +55,23 @@ func newGenerationFixture(t *testing.T) *generationFixture {
 	rubricService.now = func() time.Time { return fixedNow }
 	ids := 0
 	rubricService.newID = func() string { ids++; return fmt.Sprintf("id-%d", ids) }
-	f.service = NewGenerationService(f.sessions, f.summaries, f.profiles, f.notes, f.llm, f.renderer, challengeService, rubricService, f.tx)
+	f.service = NewGenerationService(f.sessions, f.summaries, f.profiles, f.notes, f.challenges, f.llm, f.renderer, challengeService, rubricService, f.tx)
 	return f
 }
 
 // expectContextPieces sets up the session, summary, profile and notes reads.
 func (f *generationFixture) expectContextPieces(ctx context.Context) {
+	f.expectContextPiecesFor(ctx, domainexercise.ChallengeKindInterview, nil)
+}
+
+// expectContextPiecesFor is expectContextPieces for a challenge kind whose
+// session already has the given titles.
+func (f *generationFixture) expectContextPiecesFor(ctx context.Context, kind domainexercise.ChallengeKind, titles []string) {
 	f.sessions.EXPECT().ReadSession(ctx, "session-1").Return(testSession, nil).Once()
 	f.summaries.EXPECT().ReadSummary(ctx, "session-1").Return("We covered eviction.", nil)
 	f.profiles.EXPECT().ReadProfile(ctx).Return(testProfile, nil)
 	f.notes.EXPECT().SearchNotes(ctx, "session-1", "Distributed Caching").Return(nil, nil)
+	f.challenges.EXPECT().ListTitlesBySourceSession(ctx, "session-1", kind, 10).Return(titles, nil)
 }
 
 func (f *generationFixture) expectChat(ctx context.Context, content string, err error) {
@@ -307,12 +314,14 @@ func TestGenerationService_GenerateChallenge_practiceSavesAnUntimedChallengeWith
 	f := newGenerationFixture(t)
 	ctx := context.Background()
 	spec := practiceSpec("cache aside")
-	f.expectContextPieces(ctx)
+	f.expectContextPiecesFor(ctx, domainexercise.ChallengeKindPractice, []string{"Cache-Aside basics"})
 	f.sessions.EXPECT().ReadSession(insideTx(), "session-1").Return(testSession, nil).Once()
+	gc := generationContextOf()
+	gc.ExistingTitles = []string{"Cache-Aside basics"}
 	f.llm.EXPECT().Chat(ctx, domainllm.ChatRequest{
 		SessionID: "session-1",
 		Task:      domainllm.TaskArchitectureLab,
-		Messages:  buildGenerationPrompt(generationContextOf(), spec),
+		Messages:  buildGenerationPrompt(gc, spec),
 	}).Return(domainllm.ChatResponse{Content: encode(t, practiceOutput())}, nil).Once()
 	f.renderer.EXPECT().Render([]byte(encode(t, starterStructureOutput()))).Return("<mxGraphModel>drawn</mxGraphModel>", nil).Once()
 	f.runTx(ctx)

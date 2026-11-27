@@ -122,6 +122,7 @@ func main() {
 		exercisesource.NewSummaries(sqlite.NewConversationSummaryRepository(db)),
 		exercisesource.NewProfiles(profiles),
 		exercisesource.NewNotes(knowledgeService),
+		challengeRepo,
 		llmClient,
 		applicationarchitecture.StarterDiagramRenderer{},
 		applicationexercise.NewChallengeService(challengeRepo, sessionTopics),

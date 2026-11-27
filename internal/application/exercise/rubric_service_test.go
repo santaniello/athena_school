@@ -356,7 +356,7 @@ func TestRubricService_SetChallengeRubric_practiceStoresALeanRubricWithoutBaseCr
 	assert.Equal(t, stored, got)
 	assert.Equal(t, domainexercise.NoBaseRubricVersion, got.BaseVersion)
 	require.Len(t, got.Criteria, 2)
-	assert.Equal(t, []int{75, 25}, weightsOfCriteria(got.Criteria))
+	assert.Equal(t, []int{73, 27}, weightsOfCriteria(got.Criteria))
 	for _, criterion := range got.Criteria {
 		assert.Equal(t, domainexercise.CriterionSourceChallenge, criterion.Source)
 	}

@@ -339,7 +339,7 @@ func TestParseGeneration_practiceRejectsMoreThanThreeCriteria(t *testing.T) {
 
 	// When it is parsed as a practice and as an interview
 	_, practiceErr := parseGeneration(content, "caching", practiceSpec("cache aside"), rendererReturning(t, "<mxGraphModel/>", nil))
-	_, interviewErr := parseGeneration(content, "caching", interviewSpec(domainexercise.DifficultyBeginner), nil)
+	_, interviewErr := parseGeneration(content, "caching", interviewSpec(domainexercise.DifficultyIntermediate), nil)
 
 	// Then only the practice is refused
 	assert.ErrorIs(t, practiceErr, ErrInvalidGeneration)
@@ -354,4 +354,38 @@ func TestParseGeneration_interviewIsAnInterview(t *testing.T) {
 	// Then the kind is interview
 	require.NoError(t, err)
 	assert.Equal(t, domainexercise.ChallengeKindInterview, got.Challenge.Kind)
+}
+
+func TestParseGeneration_interviewRejectsMoreCriteriaThanItsDifficultyAllows(t *testing.T) {
+	tests := []struct {
+		difficulty domainexercise.Difficulty
+		cap        int
+	}{
+		{domainexercise.DifficultyBeginner, 3},
+		{domainexercise.DifficultyIntermediate, 4},
+		{domainexercise.DifficultyAdvanced, 6},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.difficulty), func(t *testing.T) {
+			// Given outputs with exactly the cap and with one criterion more
+			build := func(count int) string {
+				output := validOutput()
+				criteria := make([]any, count)
+				for i := range criteria {
+					criteria[i] = criterionJSON(fmt.Sprintf("Criterion %c", rune('A'+i)), 10)
+				}
+				output["criteria"] = criteria
+				return encode(t, output)
+			}
+
+			// When parsing both
+			_, atCap := parseGeneration(build(tt.cap), "caching", interviewSpec(tt.difficulty), nil)
+			_, overCap := parseGeneration(build(tt.cap+1), "caching", interviewSpec(tt.difficulty), nil)
+
+			// Then only the one above the cap is an invalid generation
+			assert.NoError(t, atCap)
+			assert.ErrorIs(t, overCap, ErrInvalidGeneration)
+			assert.ErrorIs(t, overCap, domainexercise.ErrChallengeCriteriaCount)
+		})
+	}
 }

@@ -486,3 +486,53 @@ func TestChallengeRepository_ListTopics_returnsAnEmptyListWithoutChallenges(t *t
 	assert.NotNil(t, topics)
 	assert.Empty(t, topics)
 }
+
+func TestChallengeRepository_ListTitlesBySourceSession_returnsTheKindsTitlesNewestFirstUpToTheLimit(t *testing.T) {
+	// Given three interviews of session-1 created an hour apart, a practice of it, and an interview of another session
+	repo, db := newTestChallengeRepository(t)
+	ctx := context.Background()
+	insertTestSession(t, db, "session-2", "queues")
+	base := newTestChallenge("seed").CreatedAt
+	create := func(id, title string, kind exercise.ChallengeKind, session string, hours int) {
+		c := newTestChallenge(id)
+		c.Title, c.Kind, c.SourceSessionID = title, kind, session
+		c.CreatedAt = base.Add(time.Duration(hours) * time.Hour)
+		c.UpdatedAt = c.CreatedAt
+		require.NoError(t, repo.Create(ctx, c))
+	}
+	create("a", "First", exercise.ChallengeKindInterview, "session-1", 1)
+	create("b", "Second", exercise.ChallengeKindInterview, "session-1", 2)
+	create("c", "Third", exercise.ChallengeKindInterview, "session-1", 3)
+	create("d", "Practice one", exercise.ChallengeKindPractice, "session-1", 4)
+	create("e", "Other session", exercise.ChallengeKindInterview, "session-2", 5)
+
+	// When listing the interview titles of session-1 with a limit of 2 and of 10
+	limited, err := repo.ListTitlesBySourceSession(ctx, "session-1", exercise.ChallengeKindInterview, 2)
+	require.NoError(t, err)
+	all, err := repo.ListTitlesBySourceSession(ctx, "session-1", exercise.ChallengeKindInterview, 10)
+	require.NoError(t, err)
+	practice, err := repo.ListTitlesBySourceSession(ctx, "session-1", exercise.ChallengeKindPractice, 10)
+	require.NoError(t, err)
+
+	// Then only that session and kind come back, newest first, within the limit
+	assert.Equal(t, []string{"Third", "Second"}, limited)
+	assert.Equal(t, []string{"Third", "Second", "First"}, all)
+	assert.Equal(t, []string{"Practice one"}, practice)
+}
+
+func TestChallengeRepository_ListTitlesBySourceSession_returnsNoneForAnEmptySessionOrLimit(t *testing.T) {
+	// Given a stored challenge that has a source session
+	repo, _ := newTestChallengeRepository(t)
+	ctx := context.Background()
+	require.NoError(t, repo.Create(ctx, newTestChallenge("a")))
+
+	// When listing with an empty session id and with a zero limit
+	noSession, err := repo.ListTitlesBySourceSession(ctx, "", exercise.ChallengeKindInterview, 10)
+	require.NoError(t, err)
+	noLimit, err := repo.ListTitlesBySourceSession(ctx, "session-1", exercise.ChallengeKindInterview, 0)
+	require.NoError(t, err)
+
+	// Then nothing comes back
+	assert.Empty(t, noSession)
+	assert.Empty(t, noLimit)
+}

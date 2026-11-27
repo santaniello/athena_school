@@ -61,6 +61,10 @@ type ChallengeRepository interface {
 	// whose source session is sessionID, or ErrChallengeNotFound.
 	FindLatestBySourceSession(ctx context.Context, sessionID string) (Challenge, error)
 	List(ctx context.Context, filter ChallengeFilter, page Page) (ChallengePage, error)
+	// ListTitlesBySourceSession returns the titles of at most limit
+	// challenges of the given kind created from sessionID, newest first. An
+	// empty session id returns none.
+	ListTitlesBySourceSession(ctx context.Context, sessionID string, kind ChallengeKind, limit int) ([]string, error)
 	// ListTopics returns the distinct topics of all challenges, alphabetically.
 	ListTopics(ctx context.Context) ([]string, error)
 }
