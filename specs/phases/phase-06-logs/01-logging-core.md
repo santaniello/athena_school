@@ -7,6 +7,11 @@ Build the centralized, file-only logging infrastructure as a self-contained pack
 module uses it yet, so the app behaves exactly as before. Config wiring is 6.2 and module migration
 is 6.3.
 
+> Context: the lack of any readable log was what made a silent deadlock in the study chat and the
+> Architecture Lab (2026-11-27) hard to diagnose; see the incident section of
+> [6.3](03-module-migration.md). This increment only builds the file; the events that make hangs
+> visible are in 6.3.
+
 ## Decisions
 
 1. **Standard library only** (`log/slog`, `os`, `path/filepath`, `time`, `io`, `sync`). No external
