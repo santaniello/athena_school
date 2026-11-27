@@ -42,6 +42,7 @@ Payments         Paddle
 | [3](phase-03-architecture-lab/) | Architecture Lab | Challenges, diagram whiteboard, rubric evaluation, oral defense | Phase 2 |
 | [4](phase-04-tutor/) | Adaptive Tutor | One adaptive study tutor with a persisted pedagogical state | Phase 2 |
 | [5](phase-05-progress/) | Progress | Per-folder learning progress: each session is a topic, with quiz and lab results, evidence and insights | Phases 3, 4 |
+| [6](phase-06-logs/) | Logs | Centralized structured file logging (JSONL, rotation, retention, redaction) used by every module | Phase 5 |
 | [7](phase-07-improve-arch-lab/) | Improve Arch Lab | Architecture Lab per folder, higher-quality generated challenges, canonical session-free interviews | Phase 3 |
 
 ---
@@ -175,6 +176,19 @@ pure `progress` domain package and a read adapter; no event bus, no topic classi
 
 ---
 
+## Phase 6 — Logs
+
+Centralized application logging with `log/slog`: one JSON Lines file per execution in
+`~/.athena/logs/`, size-based segmentation, automatic retention and defensive redaction of secrets.
+File-only: no viewer, no frontend change, no external services. Every module logs through an
+injected, module-scoped `*slog.Logger`.
+
+| Spec | Description |
+|---|---|
+| [01-logging-core.md](phase-06-logs/01-logging-core.md) | `infrastructure/logging`: JSONL handler, file writer with rotation, retention, redaction, stderr fallback; no behavior change yet |
+| [02-config-and-bootstrap.md](phase-06-logs/02-config-and-bootstrap.md) | `logging:` section in `config.yaml`, logger started in `main.go`, application lifecycle events, close on shutdown |
+| [03-module-migration.md](phase-06-logs/03-module-migration.md) | Inject module loggers, replace every `log.Printf`, add AI Engine and Storage events, forbid the standard `log` package |
+
 ## Phase 7 — Improve Architecture Lab
 
 Three improvements to the Architecture Lab, found by comparing it with a market tool and by reading
@@ -209,5 +223,6 @@ Phase 4 (Adaptive Tutor)
     ↓
 Phase 5 (Progress)
     ↓
+Phase 6 (Logs)
 Phase 7 (Improve Architecture Lab, depends on Phase 3)
 ```
