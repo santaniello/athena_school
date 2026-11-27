@@ -198,7 +198,7 @@ classic system-design problems chosen from a fixed list, with no session involve
 
 | Spec | Description |
 |---|---|
-| [01-arch-lab-per-folder.md](phase-07-improve-arch-lab/01-arch-lab-per-folder.md) | A per-folder **Enable Architecture Lab** switch gates generating challenges from a session, in the catalog and in the chat; enforced in the backend |
+| [01-arch-lab-per-folder.md](phase-07-improve-arch-lab/01-arch-lab-per-folder.md) | A per-folder **Enable Arch Lab** switch gates generating challenges from a session, in the catalog and in the chat; enforced in the backend |
 | [02-generation-quality.md](phase-07-improve-arch-lab/02-generation-quality.md) | Fixed 50/50 rubric shares with a per-criterion floor, a criteria cap by difficulty, solution-free statements and no repeated practice topics in a session |
 | [03-canonical-interviews.md](phase-07-improve-arch-lab/03-canonical-interviews.md) | Interview = a fixed list of classic problems, generated on first use, one per problem and difficulty; practice stays session-based |
 

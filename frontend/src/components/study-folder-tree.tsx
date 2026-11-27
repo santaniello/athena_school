@@ -457,9 +457,7 @@ const StudyFolderTree = forwardRef<StudyFolderTreeHandle, StudyFolderTreeProps>(
                       }
                     >
                       <FlaskConical aria-hidden="true" />
-                      {folder.archLabEnabled
-                        ? 'Disable Architecture Lab'
-                        : 'Enable Architecture Lab'}
+                      {folder.archLabEnabled ? 'Disable Arch Lab' : 'Enable Arch Lab'}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem

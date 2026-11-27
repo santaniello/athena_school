@@ -480,9 +480,9 @@ describe('StudyFolderTree', () => {
     await screen.findByText('System Design')
     expect(screen.queryByLabelText('Architecture Lab enabled')).not.toBeInTheDocument()
 
-    // When choosing Enable Architecture Lab in its menu
+    // When choosing Enable Arch Lab in its menu
     await user.click(screen.getByRole('button', { name: 'System Design options' }))
-    await user.click(await screen.findByText('Enable Architecture Lab'))
+    await user.click(await screen.findByText('Enable Arch Lab'))
 
     // Then the change was stored for that folder only and the indicator shows
     expect(setFolderArchLabEnabled).toHaveBeenCalledWith('folder-1', true)
@@ -491,8 +491,8 @@ describe('StudyFolderTree', () => {
 
     // And the menu now offers to disable it
     await user.click(screen.getByRole('button', { name: 'System Design options' }))
-    expect(await screen.findByText('Disable Architecture Lab')).toBeInTheDocument()
-    expect(screen.queryByText('Enable Architecture Lab')).not.toBeInTheDocument()
+    expect(await screen.findByText('Disable Arch Lab')).toBeInTheDocument()
+    expect(screen.queryByText('Enable Arch Lab')).not.toBeInTheDocument()
   })
 
   it('disables the Architecture Lab from the folder menu, without a confirmation, and hides the indicator', async () => {
@@ -503,9 +503,9 @@ describe('StudyFolderTree', () => {
     renderTree()
     expect(await screen.findByLabelText('Architecture Lab enabled')).toBeInTheDocument()
 
-    // When choosing Disable Architecture Lab in its menu
+    // When choosing Disable Arch Lab in its menu
     await user.click(screen.getByRole('button', { name: 'System Design options' }))
-    await user.click(await screen.findByText('Disable Architecture Lab'))
+    await user.click(await screen.findByText('Disable Arch Lab'))
 
     // Then it is stored as off right away and the indicator is gone
     expect(setFolderArchLabEnabled).toHaveBeenCalledWith('folder-1', false)
